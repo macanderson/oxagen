@@ -1,40 +1,55 @@
 "use client";
 /**
- * use-session-settings-data.ts — the branch-list fetch shared by every
- * `SessionSettings` host (mobile drawer, desktop rail panel, mid-width
- * slide-over). Resolves the session's selected repo, lazily fetches and
- * caches its branch list via `listRepoBranchesAction`, and hands back exactly
- * the `branches`/`branchesLoading`/`onLoadBranches`/`defaultBranch` shape
- * `SessionSettings` expects — one implementation instead of three copies of
- * the same cache-plus-in-flight-guard logic.
+ * use-session-settings-data.ts — the branch-list fetch shared by every surface
+ * that lets a user choose a branch: the `SessionSettings` hosts (mobile drawer,
+ * desktop rail panel, mid-width slide-over) and the agent picker's code-agent
+ * setup step.
+ *
+ * Two layers, because the hosts differ in where the repo comes from:
+ *
+ *   - `useRepoBranches` takes a repo DIRECTLY. It owns the cache, the in-flight
+ *     guard, and the `listRepoBranchesAction` call. The agent picker's setup
+ *     step uses this one: its repo is a local pending choice, and the panel can
+ *     render outside a `ChatSessionProvider`, so it cannot read the store.
+ *   - `useSessionSettingsData` resolves the repo from the session store and
+ *     delegates to `useRepoBranches`, handing back exactly the
+ *     `branches`/`branchesLoading`/`onLoadBranches`/`defaultBranch` shape
+ *     `SessionSettings` expects.
+ *
+ * One implementation of the cache-plus-in-flight-guard logic, not several
+ * copies.
  */
 import * as React from "react";
 import { useChatSession } from "./session-store";
 import { listRepoBranchesAction } from "./branch-actions";
 import type { RepoOption } from "../repo-selector";
 
-export interface SessionSettingsData {
-  selectedRepo: RepoOption | null;
+export interface RepoBranchesData {
   branches: string[] | null;
   branchesLoading: boolean;
   defaultBranch: string | null;
   onLoadBranches: () => void;
 }
 
-export function useSessionSettingsData({
-  repos,
+export interface SessionSettingsData extends RepoBranchesData {
+  selectedRepo: RepoOption | null;
+}
+
+/**
+ * Lazily fetch (and cache) the branch list for `repo`. Inert — `onLoadBranches`
+ * is a no-op and `branches` stays null — when there is no repo or no org/
+ * workspace scope to fetch under, so a caller that lacks slugs degrades to "no
+ * branch list" instead of throwing.
+ */
+export function useRepoBranches({
+  repo,
   orgSlug,
   workspaceSlug,
 }: {
-  repos: RepoOption[];
-  orgSlug: string;
-  workspaceSlug: string;
-}): SessionSettingsData {
-  const { state } = useChatSession();
-  const selectedRepo = state.repoKey
-    ? (repos.find((r) => r.key === state.repoKey) ?? null)
-    : null;
-
+  repo: RepoOption | null;
+  orgSlug: string | undefined;
+  workspaceSlug: string | undefined;
+}): RepoBranchesData {
   const [branchCache, setBranchCache] = React.useState<
     Record<string, { branches: string[]; defaultBranch: string | null }>
   >({});
@@ -42,20 +57,20 @@ export function useSessionSettingsData({
   const loadingRepoKeyRef = React.useRef<string | null>(null);
 
   const onLoadBranches = React.useCallback(() => {
-    if (!selectedRepo) return;
-    if (branchCache[selectedRepo.key]) return; // cached — no refetch
-    if (loadingRepoKeyRef.current === selectedRepo.key) return; // in flight
-    loadingRepoKeyRef.current = selectedRepo.key;
+    if (!repo || !orgSlug || !workspaceSlug) return;
+    if (branchCache[repo.key]) return; // cached — no refetch
+    if (loadingRepoKeyRef.current === repo.key) return; // in flight
+    loadingRepoKeyRef.current = repo.key;
     setBranchesLoading(true);
     void listRepoBranchesAction(
       { orgSlug, workspaceSlug },
-      { owner: selectedRepo.owner, repo: selectedRepo.name },
+      { owner: repo.owner, repo: repo.name },
     )
       .then((result) => {
         if ("error" in result) return;
         setBranchCache((prev) => ({
           ...prev,
-          [selectedRepo.key]: {
+          [repo.key]: {
             branches: result.branches.map((b) => b.name),
             defaultBranch: result.defaultBranch,
           },
@@ -72,12 +87,34 @@ export function useSessionSettingsData({
         setBranchesLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- branchCache is read for its CURRENT snapshot to skip a refetch; including it would re-create this callback (and re-arm the in-flight guard) on every cache write
-  }, [selectedRepo, orgSlug, workspaceSlug]);
+  }, [repo, orgSlug, workspaceSlug]);
 
-  const cached = selectedRepo ? branchCache[selectedRepo.key] : undefined;
+  const cached = repo ? branchCache[repo.key] : undefined;
   const branches = cached ? cached.branches : null;
-  const defaultBranch =
-    cached?.defaultBranch ?? selectedRepo?.defaultBranch ?? null;
+  const defaultBranch = cached?.defaultBranch ?? repo?.defaultBranch ?? null;
 
-  return { selectedRepo, branches, branchesLoading, defaultBranch, onLoadBranches };
+  return { branches, branchesLoading, defaultBranch, onLoadBranches };
+}
+
+export function useSessionSettingsData({
+  repos,
+  orgSlug,
+  workspaceSlug,
+}: {
+  repos: RepoOption[];
+  orgSlug: string;
+  workspaceSlug: string;
+}): SessionSettingsData {
+  const { state } = useChatSession();
+  const selectedRepo = state.repoKey
+    ? (repos.find((r) => r.key === state.repoKey) ?? null)
+    : null;
+
+  const branchData = useRepoBranches({
+    repo: selectedRepo,
+    orgSlug,
+    workspaceSlug,
+  });
+
+  return { selectedRepo, ...branchData };
 }

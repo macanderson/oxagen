@@ -52,15 +52,20 @@ export function useSessionSelectionBridge(): ChatSelectionStore | null {
     return {
       selectedAgentId: state.agentId,
       selectedRepoKey: state.repoKey,
+      selectedBranch: state.branch,
       selectedEnvId: state.envId,
       selectionLocked: locks.code,
       setSelectedAgentId: (id) => updateSession({ agentId: id }),
       setSelectedRepoKey: (key) => updateSession({ repoKey: key }),
       setSelectedEnvId: (id) => updateSession({ envId: id }),
+      // One patch, so `applySessionPatch` sees repo and branch together: its
+      // repo→branch cascade only resets the branch when the patch doesn't
+      // carry one, which is exactly the "explicit branch wins" semantic.
       applyAgentSelection: (sel: AgentSelectionApply) =>
         updateSession({
           agentId: sel.agentId,
           ...(sel.repoKey !== undefined ? { repoKey: sel.repoKey } : {}),
+          ...(sel.branch !== undefined ? { branch: sel.branch } : {}),
           ...(sel.envId !== undefined ? { envId: sel.envId } : {}),
         }),
       lockSelection: () => noteMessageSent(null),

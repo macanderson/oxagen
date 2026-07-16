@@ -562,6 +562,7 @@ export function MessageComposer({
   const {
     selectedAgentId,
     selectedRepoKey,
+    selectedBranch,
     selectedEnvId,
     selectionLocked,
     setSelectedRepoKey,
@@ -648,11 +649,6 @@ export function MessageComposer({
   const v2Active = chatSession !== null;
   const v2Mobile = isMobile && v2Active;
   const v2Desktop = !isMobile && v2Active;
-  // The conversation's branch, for the READ-ONLY code-context row in the
-  // composer-options sheet. Only the unified session store tracks a branch;
-  // without it (legacy tree) the row simply shows the repository alone rather
-  // than inventing a value.
-  const conversationBranch = chatSession?.state.branch ?? null;
 
   // v2 wallet gate: a per-turn cap the wallet can't cover blocks sending —
   // the fix is the user's (add funds, or lower the cap in session settings),
@@ -2224,8 +2220,11 @@ export function MessageComposer({
                         selectedAgentId={selectedAgentId}
                         selectedRepoKey={selectedRepoKey}
                         selectedEnvId={selectedEnvId}
+                        selectedBranch={selectedBranch}
                         onApply={applyAgentSelection}
                         locked={selectionLocked}
+                        orgSlug={orgSlug}
+                        workspaceSlug={workspaceSlug}
                       />
                       {showEffortControl && effortSelect}
                     </>
@@ -2412,11 +2411,15 @@ export function MessageComposer({
               </SheetDescription>
             </SheetHeader>
             <SheetPanel className="gap-1">
-              {/* Read-only code context: the repository (and branch, when the
-                conversation is bound to one) this chat is grounded in. It is
-                NOT editable here — the target is chosen once with the agent and
-                is immutable for the conversation — so this row exists to answer
-                "what am I on?", which used to require the composer's selector. */}
+              {/* Read-only code context: the repository (and branch, when one
+                was chosen over the repo's default) this chat is grounded in. It
+                is NOT editable here — the target is chosen once with the agent
+                and is immutable for the conversation — so this row exists to
+                answer "what am I on?", which used to require the composer's
+                selector. Branch comes from the SELECTION store, not the session
+                store: this sheet only renders when the session store is absent
+                (see the `!v2Mobile` gate below), so reading the session here
+                could only ever yield null. */}
               {selectedRepo ? (
                 <div
                   className="flex min-h-11 items-center justify-between gap-2"
@@ -2425,7 +2428,7 @@ export function MessageComposer({
                   <span className="text-sm">Repository</span>
                   <span className="truncate text-sm text-muted-foreground">
                     {selectedRepo.owner}/{selectedRepo.name}
-                    {conversationBranch ? ` · ${conversationBranch}` : ""}
+                    {selectedBranch ? ` · ${selectedBranch}` : ""}
                   </span>
                 </div>
               ) : null}

@@ -29,6 +29,7 @@ function makeSelection(over: Partial<ChatSelectionStore> = {}): ChatSelectionSto
   return {
     selectedAgentId: null,
     selectedRepoKey: null,
+    selectedBranch: null,
     selectedEnvId: null,
     selectionLocked: false,
     setSelectedAgentId: () => {},

@@ -30,6 +30,8 @@ export interface AgentContextChipProps {
   selectedAgentId: string | null;
   selectedRepoKey: string | null;
   selectedEnvId: string | null;
+  /** Current branch (null = the repo's default) — preselects the setup step. */
+  selectedBranch?: string | null;
   onApply: (sel: AgentSelectionApply) => void;
   /**
    * When true the conversation's agent is LOCKED (its coding target was claimed
@@ -37,6 +39,9 @@ export interface AgentContextChipProps {
    * shown but the picker can't be opened. Start a new conversation to change.
    */
   locked?: boolean;
+  /** Scope for the picker's branch fetch. Omit ⇒ the setup step has no branch row. */
+  orgSlug?: string;
+  workspaceSlug?: string;
   className?: string;
 }
 
@@ -55,8 +60,11 @@ export function AgentContextChip({
   selectedAgentId,
   selectedRepoKey,
   selectedEnvId,
+  selectedBranch = null,
   onApply,
   locked = false,
+  orgSlug,
+  workspaceSlug,
   className,
 }: AgentContextChipProps) {
   const [open, setOpen] = React.useState(false);
@@ -145,8 +153,11 @@ export function AgentContextChip({
           selectedAgentId={selectedAgentId}
           selectedRepoKey={selectedRepoKey}
           selectedEnvId={selectedEnvId}
+          selectedBranch={selectedBranch}
           onApply={onApply}
           onDismiss={() => setOpen(false)}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
         />
       </PopoverPopup>
     </Popover>

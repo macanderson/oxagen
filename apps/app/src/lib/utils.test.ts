@@ -1,6 +1,7 @@
 /**
  * utils.test.ts — unit tests for cn, formatCents, formatDate, formatDateTime,
- * formatDateTimeWithSeconds, formatBytes, truncate, formatDuration.
+ * formatDateTimeWithSeconds, formatBytes, firstNameOf, truncate,
+ * formatDuration.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -11,6 +12,7 @@ import {
   formatDateTime,
   formatDateTimeWithSeconds,
   formatBytes,
+  firstNameOf,
   truncate,
   formatDuration,
 } from "./utils";
@@ -224,6 +226,48 @@ describe("formatBytes", () => {
   it("returns '—' for NaN/Infinity instead of 'NaN GB'", () => {
     expect(formatBytes(NaN)).toBe("—");
     expect(formatBytes(Infinity)).toBe("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// firstNameOf — the chat empty state's "Welcome, {firstName}!" greeting
+// ---------------------------------------------------------------------------
+
+describe("firstNameOf", () => {
+  it("returns the first whitespace-separated token of a full name", () => {
+    expect(firstNameOf("Mac Anderson")).toBe("Mac");
+  });
+
+  it("returns a single-token name unchanged", () => {
+    expect(firstNameOf("Mac")).toBe("Mac");
+  });
+
+  it("takes only the first token of a multi-part name", () => {
+    expect(firstNameOf("Ada King Lovelace")).toBe("Ada");
+  });
+
+  it("trims surrounding whitespace and collapses runs between tokens", () => {
+    expect(firstNameOf("   Mac   Anderson  ")).toBe("Mac");
+    expect(firstNameOf("\n\tMac\tAnderson")).toBe("Mac");
+  });
+
+  it("returns null for a missing name", () => {
+    expect(firstNameOf(null)).toBeNull();
+    expect(firstNameOf(undefined)).toBeNull();
+  });
+
+  it("returns null for an empty or whitespace-only name", () => {
+    expect(firstNameOf("")).toBeNull();
+    expect(firstNameOf("   ")).toBeNull();
+  });
+
+  it("returns null for an email — greeting someone by their address is worse than no name", () => {
+    expect(firstNameOf("mac@oxagen.sh")).toBeNull();
+    expect(firstNameOf("mac@oxagen.sh extra")).toBeNull();
+  });
+
+  it("keeps a real name even when a later token looks like an email", () => {
+    expect(firstNameOf("Mac mac@oxagen.sh")).toBe("Mac");
   });
 });
 
