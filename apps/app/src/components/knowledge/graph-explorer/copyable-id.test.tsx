@@ -69,4 +69,31 @@ describe("CopyableId", () => {
     // truncate("hello world", 6) → "hello…"
     expect(screen.getByText("hello…")).toBeInTheDocument();
   });
+
+  it("truncates in the middle when ellipsis='middle', preserving the tail", () => {
+    render(
+      <CopyableId
+        value="oxagen.default.qa-chat-assistant"
+        max={16}
+        ellipsis="middle"
+      />,
+    );
+    // truncateMiddle keeps head + tail with a central ellipsis, so the
+    // distinguishing suffix survives and the clip never reads as a typo.
+    const shown = screen.getByText(/…/);
+    expect(shown.textContent).toContain("…");
+    // Head (namespace) and the value's real tail both survive the clip.
+    expect(shown.textContent).toMatch(/^oxagen/);
+    expect(shown.textContent!.endsWith("ant")).toBe(true);
+    // Full value is still copied verbatim.
+    fireEvent.click(screen.getByRole("button"));
+    expect(writeText).toHaveBeenCalledWith("oxagen.default.qa-chat-assistant");
+  });
+
+  it("shows a short value verbatim in middle mode (no clip, no typo look)", () => {
+    render(
+      <CopyableId value="oxagen.default.qa-chat" max={28} ellipsis="middle" />,
+    );
+    expect(screen.getByText("oxagen.default.qa-chat")).toBeInTheDocument();
+  });
 });

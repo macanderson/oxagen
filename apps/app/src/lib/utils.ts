@@ -127,6 +127,20 @@ export function truncate(value: string, max: number): string {
 }
 
 /**
+ * Truncate the MIDDLE of a string so both the meaningful prefix and suffix
+ * survive ("oxagen.default.qa-chat-assistant" → "oxagen.defa…-assistant").
+ * Preferred for dotted identifiers/keys, where a plain end-ellipsis drops the
+ * distinguishing tail and reads like a typo. Head gets ~60% of the budget.
+ */
+export function truncateMiddle(value: string, max: number): string {
+  if (value.length <= max) return value;
+  if (max <= 1) return "…";
+  const head = Math.ceil((max - 1) * 0.6);
+  const tail = max - 1 - head;
+  return `${value.slice(0, head)}…${tail > 0 ? value.slice(value.length - tail) : ""}`;
+}
+
+/**
  * Human duration from milliseconds: "800ms", "1.5s", "2m 5s".
  *
  * The canonical duration formatter (chat tool cards, traces, trays).

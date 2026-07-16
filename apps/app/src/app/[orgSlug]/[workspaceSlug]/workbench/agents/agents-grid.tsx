@@ -299,7 +299,15 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                 </div>
 
                 {agent.agentKey ? (
-                  <CopyableId value={agent.agentKey} label="key" max={40} />
+                  // Dotted keys (oxagen.<ws>.<agent>) truncate in the MIDDLE so
+                  // the distinguishing tail survives and a clip never reads as a
+                  // typo; the full key stays in the title + copy affordance.
+                  <CopyableId
+                    value={agent.agentKey}
+                    label="key"
+                    max={28}
+                    ellipsis="middle"
+                  />
                 ) : null}
               </article>
             );
