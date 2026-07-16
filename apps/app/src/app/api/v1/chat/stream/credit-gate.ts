@@ -35,7 +35,7 @@
  * The route maps `{ ok: false }` to a structured HTTP 402 (Payment Required)
  * before any streaming begins. This module keeps the classify-and-map logic
  * testable in isolation (route.ts is excluded from coverage), mirroring
- * turn-budget-policy.ts and page-context.ts.
+ * page-context.ts.
  */
 
 import {

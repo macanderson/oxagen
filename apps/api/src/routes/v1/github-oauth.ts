@@ -28,6 +28,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
 import { upsertGithubInstallation } from "./github-installations";
+import { logger } from "../../middleware/logger";
 
 /**
  * Authenticated github-oauth sub-routes.
@@ -469,6 +470,9 @@ async function fetchAllInstallations(accessToken: string): Promise<FetchInstalla
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "oxagen-ingestion/1.0",
         },
+        // Paged do/while — without a timeout one stalled GitHub page hangs
+        // the whole request, not just this page.
+        signal: AbortSignal.timeout(10_000),
       },
     );
     if (!resp.ok) return { ok: false, status: resp.status };
@@ -613,6 +617,7 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
         Accept: "application/vnd.github.v3+json",
         "User-Agent": "oxagen-ingestion/1.0",
       },
+      signal: AbortSignal.timeout(10_000),
     },
   );
 
@@ -797,7 +802,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       // attach enrich + bind it). A completed install means it is live → reactivate.
       if (installationId) {
         await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
-          console.warn("github_installations registry upsert failed (no-state install leg)", err),
+          logger.warn(
+            { err: String(err), installationId },
+            "github_installations registry upsert failed (no-state install leg) — relying on App-webhook backstop",
+          ),
         );
       }
       return c.redirect(`${appBaseUrl}/?github_installed=1`, 302);
@@ -896,6 +904,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
       body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
@@ -955,6 +964,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "oxagen-ingestion/1.0",
         },
+        signal: AbortSignal.timeout(10_000),
       });
       if (userResp.ok) {
         const userData = (await userResp.json()) as {
@@ -1025,7 +1035,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // install/approval means the installation is live, so reactivate.
   if (installationId) {
     await upsertGithubInstallation({ installationId, reactivate: true }).catch((err) =>
-      console.warn("github_installations registry upsert failed (callback install leg)", err),
+      logger.warn(
+        { err: String(err), installationId },
+        "github_installations registry upsert failed (callback install leg) — relying on App-webhook backstop",
+      ),
     );
   }
 
@@ -1059,21 +1072,24 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   }
 
   // Determine org and workspace slugs from the state-encoded IDs.
-  // We need slugs for the redirect URL; fetch them from Postgres.
-  const orgSlugRows = await withSystemDb((tx) =>
-    tx
-      .select({ slug: schema.organizations.slug })
-      .from(schema.organizations)
-      .where(eq(schema.organizations.id, orgId))
-      .limit(1),
-  );
-  const wsSlugRows = await withSystemDb((tx) =>
-    tx
-      .select({ slug: schema.workspaces.slug })
-      .from(schema.workspaces)
-      .where(and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.orgId, orgId)))
-      .limit(1),
-  );
+  // We need slugs for the redirect URL; fetch them from Postgres. The two
+  // lookups are independent, so run them concurrently rather than serially.
+  const [orgSlugRows, wsSlugRows] = await Promise.all([
+    withSystemDb((tx) =>
+      tx
+        .select({ slug: schema.organizations.slug })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, orgId))
+        .limit(1),
+    ),
+    withSystemDb((tx) =>
+      tx
+        .select({ slug: schema.workspaces.slug })
+        .from(schema.workspaces)
+        .where(and(eq(schema.workspaces.id, workspaceId), eq(schema.workspaces.orgId, orgId)))
+        .limit(1),
+    ),
+  ]);
   const orgSlug = orgSlugRows[0]?.slug ?? orgId;
   const wsSlug = wsSlugRows[0]?.slug ?? workspaceId;
 

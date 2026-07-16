@@ -174,6 +174,10 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
+  // The real invoke() is async — a bare vi.fn() returning undefined would make
+  // call sites that chain on its result throw synchronously instead of
+  // exercising their fail-open paths.
+  mocks.invoke.mockResolvedValue(undefined);
   mocks.selectModel.mockReturnValue("balanced-model");
   mocks.modelIdOf.mockReturnValue("anthropic/claude-sonnet");
   mocks.supportsReasoning.mockReturnValue(false);
@@ -676,5 +680,91 @@ describe("chat stream: error handling", () => {
     expect(logged).toBe(true);
 
     consoleErrorSpy.mockRestore();
+  });
+});
+
+// ── Per-turn budget & workspace governance ────────────────────────────────────
+//
+// The pure precedence/merge logic (override wins; workspace ceiling clamps;
+// default seeds) is unit-tested in @oxagen/billing (turn-budget-policy.test.ts,
+// turn-budget.test.ts). These tests pin the ROUTE's wiring of that logic: the
+// body schema accepts/rejects the budget field, the governance read goes
+// through invoke() with the right capability + surface, and a failed
+// governance read fails OPEN (the turn still streams).
+
+describe("chat stream: per-turn budget & workspace governance", () => {
+  it("returns 400 for a nonsense budget override (enabled with null limit)", async () => {
+    const res = await app.fetch(
+      post({
+        content: "Hello",
+        budget: { enabled: true, limitUsd: null, mode: "enforce", graceOveragePct: 0.25 },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a valid per-turn budget override and still streams", async () => {
+    const res = await app.fetch(
+      post({
+        content: "Hello",
+        budget: { enabled: true, limitUsd: 2, mode: "enforce", graceOveragePct: 0.25 },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const events = await readSseEvents(res);
+    expect(
+      events.some((e) => (e as { type: string }).type === "text"),
+    ).toBe(true);
+  });
+
+  it("reads workspace budget governance via invoke(get_budget_policy, surface: agent)", async () => {
+    const res = await app.fetch(post({ content: "Hello" }));
+    expect(res.status).toBe(200);
+    await res.text(); // drain so the stream body (where the read runs) completes
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_budget_policy",
+      {},
+      expect.anything(),
+      { surface: "agent" },
+    );
+  });
+
+  it("fails open (turn still streams) when the governance read rejects", async () => {
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    mocks.invoke.mockImplementation(async (name: string) => {
+      if (name === "get_budget_policy") throw new Error("governance down");
+      return undefined;
+    });
+
+    const res = await app.fetch(post({ content: "Hello" }));
+    expect(res.status).toBe(200);
+    const events = await readSseEvents(res);
+    expect(
+      events.some((e) => (e as { type: string }).type === "text"),
+    ).toBe(true);
+    // Fail-open is logged, never silent.
+    expect(
+      consoleWarnSpy.mock.calls.some((c) =>
+        String(c[0]).includes("workspace budget governance read failed"),
+      ),
+    ).toBe(true);
+
+    consoleWarnSpy.mockRestore();
+  });
+});
+
+// ── Content ingress cap ───────────────────────────────────────────────────────
+
+describe("chat stream: content ingress cap", () => {
+  it("returns 400 when content exceeds the shared CHAT_CONTENT_MAX_CHARS cap", async () => {
+    const res = await app.fetch(post({ content: "x".repeat(32_768 + 1) }));
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts content exactly at the cap", async () => {
+    const res = await app.fetch(post({ content: "x".repeat(32_768) }));
+    expect(res.status).toBe(200);
   });
 });

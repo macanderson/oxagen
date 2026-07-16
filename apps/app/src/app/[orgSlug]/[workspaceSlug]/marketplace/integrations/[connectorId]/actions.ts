@@ -9,7 +9,7 @@
  * client-side fetch waterfall / flash of loading skeleton, and an unknown
  * connectorId surfaces as a proper 404 from the page rather than an inline
  * "couldn't load" client error. Same pattern as
- * knowledge/memories/actions.ts: session guard → resolveOrg/resolveWorkspace
+ * knowledge/memory/actions.ts: session guard → resolveOrg/resolveWorkspace
  * (IDOR-safe slug resolution) → assertOrgMember → assertWorkspaceMember
  * (apps/app does not bootstrap IAM, so invoke() skips role checks — this
  * re-derives the caller's workspace role from Postgres before invoking) →
@@ -31,7 +31,7 @@
 
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: binds every handler so invoke() can resolve
-// "get_plugin_schema" (same pattern as knowledge/memories/actions.ts).
+// "get_plugin_schema" (same pattern as knowledge/memory/actions.ts).
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -53,7 +53,7 @@ export type ConnectorSetupSchemaResult =
 // Shared IAM helper — apps/app never bootstraps IAM, so invoke() skips role
 // checks in the app surface. Re-read the caller's workspace role from
 // Postgres before returning schema/config data (same gate
-// knowledge/memories/actions.ts uses, lowered to "member" since reading a
+// knowledge/memory/actions.ts uses, lowered to "member" since reading a
 // connector schema to drive the setup form only requires workspace
 // membership, not admin/owner).
 // ---------------------------------------------------------------------------

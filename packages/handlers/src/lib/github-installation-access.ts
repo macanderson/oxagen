@@ -105,6 +105,9 @@ async function userCanReachInstallation(
           Accept: "application/vnd.github.v3+json",
           "User-Agent": "oxagen-ingestion/1.0",
         },
+        // This runs in a paged do/while — without a timeout one stalled
+        // GitHub page hangs the whole capability, not just one request.
+        signal: AbortSignal.timeout(10_000),
       },
     );
 

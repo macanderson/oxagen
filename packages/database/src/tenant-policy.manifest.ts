@@ -145,8 +145,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "ingestion.deletion_jobs", policyClass: "standard" },
   { table: "ingestion.oauth_accounts", policyClass: "org_only" },
 
-  // ── mcp.* — all three tables are now tenant-owned (workspace-scoped).
-  //   catalog_servers was removed in the 2026-06-17 workspace-scoping rebuild.
+  // ── mcp.* — all three tables below are tenant-owned (workspace-scoped).
+  //   catalog_servers still exists (schema/mcp.ts) but is deliberately NOT
+  //   listed here: it is a global catalog with no org_id/workspace_id column,
+  //   so no tenant policy class applies to it.
   //   registries changed from org_or_global (nullable org_id) to standard
   //   (org_id + workspace_id both NOT NULL).
   { table: "mcp.credentials", policyClass: "standard" },

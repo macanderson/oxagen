@@ -134,10 +134,9 @@ function repoRow(entry: RepoEntry): ReferenceResultRow {
 
 async function searchRepositories(
   args: SearchArgs,
-  orgId: string,
-  workspaceId: string,
+  entriesPromise: Promise<RepoEntry[]>,
 ): Promise<ReferenceResultRow[]> {
-  const entries = await loadRepoEntries(orgId, workspaceId);
+  const entries = await entriesPromise;
   const matched = args.slug
     ? entries.filter((e) => e.connectionId === args.slug)
     : entries.filter(
@@ -153,10 +152,9 @@ async function searchRepositories(
  */
 async function searchBranches(
   args: SearchArgs,
-  orgId: string,
-  workspaceId: string,
+  entriesPromise: Promise<RepoEntry[]>,
 ): Promise<ReferenceResultRow[]> {
-  const entries = (await loadRepoEntries(orgId, workspaceId)).filter(
+  const entries = (await entriesPromise).filter(
     (e): e is RepoEntry & { defaultBranch: string } => e.defaultBranch !== null,
   );
   const matched = args.slug
@@ -588,6 +586,14 @@ export const referenceSearchHandler: CapabilityHandler<typeof referenceSearch> =
   };
   const want = (t: ReferenceType) => !input.types || input.types.includes(t);
 
+  // The repository and branch arms both derive from the same sourceConnections
+  // SELECT. Memoize it per request (lazily — only triggered when either arm is
+  // actually requested) so the identical query runs at most once when both are
+  // wanted (the default). No module-level state; this closure dies with the call.
+  let repoEntriesPromise: Promise<RepoEntry[]> | undefined;
+  const repoEntries = () =>
+    (repoEntriesPromise ??= loadRepoEntries(orgId, workspaceId));
+
   // Every arm is best-effort — a failing store yields zero rows for its types.
   const safe = async (
     type: ReferenceType,
@@ -606,8 +612,8 @@ export const referenceSearchHandler: CapabilityHandler<typeof referenceSearch> =
   };
 
   const resultsByType = await Promise.all([
-    safe("repository", () => searchRepositories(args, orgId, workspaceId)),
-    safe("branch", () => searchBranches(args, orgId, workspaceId)),
+    safe("repository", () => searchRepositories(args, repoEntries())),
+    safe("branch", () => searchBranches(args, repoEntries())),
     safe("file", () => graphNodeRows(args, ctx, { type: "file", labels: ["SourceFile"] })),
     safe("directory", () => graphNodeRows(args, ctx, { type: "directory", labels: ["Directory"] })),
     safe("agent", () => searchAgents(args, orgId, workspaceId)),

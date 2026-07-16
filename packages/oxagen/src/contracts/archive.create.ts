@@ -57,7 +57,11 @@ export const archiveCreate = registerCapability({
           text: z.string().optional(),
         }),
       )
-      .min(1, "At least one entry is required"),
+      .min(1, "At least one entry is required")
+      // Capacity guard: the handler resolves every entry concurrently, holds
+      // all bytes in memory, and zips synchronously — an unbounded array is a
+      // memory/event-loop DoS vector for a single authed request.
+      .max(100, "At most 100 entries per archive"),
   }),
   output: z.object({
     assetId: z.string(),

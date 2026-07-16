@@ -3,7 +3,7 @@
 // by publicId), inline base64 blobs, or UTF-8 text. The archive is uploaded via
 // persistGeneratedAsset() and served through the access-controlled asset route.
 
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -14,6 +14,36 @@ import { persistGeneratedAsset } from "./generated-asset.persist";
 // ── Entry resolution ──────────────────────────────────────────────────────────
 
 /**
+ * Batch-fetch the storage metadata for every referenced asset in ONE query.
+ * System bypass — no kernel scope at this layer; per-entry org authz is enforced
+ * by resolveEntry against each row's orgId. The row type is inferred from this
+ * select so it always matches the real drizzle column types.
+ */
+async function fetchAssetRows(assetIds: string[]) {
+  return withSystemDb((tx) =>
+    tx
+      .select({
+        publicId: schema.generatedAssets.publicId,
+        storageKey: schema.generatedAssets.storageKey,
+        orgId: schema.generatedAssets.orgId,
+        status: schema.generatedAssets.status,
+        deletedAt: schema.generatedAssets.deletedAt,
+      })
+      .from(schema.generatedAssets)
+      .where(inArray(schema.generatedAssets.publicId, assetIds)),
+  );
+}
+
+type AssetRow = Awaited<ReturnType<typeof fetchAssetRows>>[number];
+
+/** Load all referenced assets up front, keyed by publicId. */
+async function loadAssets(assetIds: string[]): Promise<Map<string, AssetRow>> {
+  if (assetIds.length === 0) return new Map();
+  const rows = await fetchAssetRows(assetIds);
+  return new Map(rows.map((r) => [r.publicId, r]));
+}
+
+/**
  * Resolve a single archive entry to its raw bytes.
  *
  * Priority: assetId > contentBase64 > text. An entry must provide at least one.
@@ -21,28 +51,13 @@ import { persistGeneratedAsset } from "./generated-asset.persist";
 async function resolveEntry(
   entry: { name: string; assetId?: string; contentBase64?: string; text?: string },
   orgId: string,
+  assetsById: Map<string, AssetRow>,
 ): Promise<Uint8Array> {
   if (entry.assetId) {
-    // entry.assetId is narrowed to string here by the `if` guard.
-    const assetPublicId: string = entry.assetId;
-    // Fetch the blob for an existing generated asset. We look up the storage key
-    // via the DB (system bypass — no kernel scope at this layer) and then fetch
-    // the blob bytes directly. Authz: only assets belonging to the caller's org
-    // are accessible (orgId guard enforced below).
-    const rows = await withSystemDb((tx) =>
-      tx
-        .select({
-          storageKey: schema.generatedAssets.storageKey,
-          orgId: schema.generatedAssets.orgId,
-          status: schema.generatedAssets.status,
-          deletedAt: schema.generatedAssets.deletedAt,
-        })
-        .from(schema.generatedAssets)
-        .where(eq(schema.generatedAssets.publicId, assetPublicId))
-        .limit(1),
-    );
-
-    const asset = rows[0];
+    // The asset row was batch-loaded up front (one query for all entries).
+    // Authz: only assets belonging to the caller's org are accessible (orgId
+    // guard enforced below), identical to the prior per-entry lookup.
+    const asset = assetsById.get(entry.assetId);
     if (
       !asset ||
       asset.deletedAt !== null ||
@@ -116,10 +131,17 @@ export const archiveCreateHandler: CapabilityHandler<typeof archiveCreate> = asy
     "archive.create: starting",
   );
 
-  // Resolve all entries in parallel — independent fetches.
+  // Batch-load every referenced asset in ONE query (was one SELECT per entry).
+  // Blob fetches still run per-entry in parallel below.
+  const assetIds = [
+    ...new Set(entries.map((e) => e.assetId).filter((id): id is string => Boolean(id))),
+  ];
+  const assetsById = await loadAssets(assetIds);
+
+  // Resolve all entries in parallel — independent blob fetches.
   const resolved = await Promise.all(
     entries.map(async (entry) => {
-      const bytes = await resolveEntry(entry, ctx.orgId);
+      const bytes = await resolveEntry(entry, ctx.orgId, assetsById);
       return { name: entry.name, bytes };
     }),
   );

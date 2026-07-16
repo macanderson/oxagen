@@ -37,10 +37,11 @@ import {
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { parseMentions } from "@oxagen/ai/mentions";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke, isCodeAgentType } from "@oxagen/oxagen";
+import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
@@ -100,15 +101,13 @@ import {
   formatBudgetUsd,
   resolveEffectiveTurnBudget,
   TURN_BUDGET_OFF,
-} from "@oxagen/billing";
-import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
-import {
   requestTurnBudgetSchema,
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
   governedBudgetFromRead,
   type SavedWorkspaceGovernance,
-} from "./turn-budget-policy";
+} from "@oxagen/billing";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import {
   isCurrentUserTurnAtHead,
   CHAT_MAX_RETRIES,
@@ -122,11 +121,10 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
 const BodySchema = z.object({
-  // Bound the message body: an unbounded `content` lets a single authed request
-  // forward an arbitrarily large prompt to the LLM, driving unbounded metering
-  // cost and blowing the per-turn token budget. 32 KiB is generous for a chat
-  // turn while capping abuse.
-  content: z.string().min(1).max(32_768),
+  // Bound the message body — the shared per-message ingress cap (see
+  // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
+  // surface rejects oversized prompts identically.
+  content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   orgSlug: z.string().min(1),
@@ -208,7 +206,8 @@ const BodySchema = z.object({
   // default (budget.policy.read). An explicit object always wins, including
   // an explicit `{ enabled: false }` that turns OFF a saved default for one
   // turn. Schema (incl. the "positive limitUsd when enabled" refinement)
-  // lives in turn-budget-policy.ts so it is unit-testable in isolation.
+  // lives in @oxagen/billing (turn-budget-policy) so every chat surface
+  // validates and resolves budgets identically.
   budget: requestTurnBudgetSchema.nullable().default(null),
   // Code mode (forced repo + environment selection in the composer). When
   // present, the turn runs the coding engine against a durable sandbox with the
@@ -291,15 +290,6 @@ const ATTACHMENT_VISION_TIER_FALLBACK = [
   "fast",
   "precise",
 ] as const;
-
-// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
-// ends naturally the moment the model returns a step with no tool call (its
-// final answer); this cap only fires if the model loops on tools without ever
-// settling — e.g. retrying a failing tool forever — so it bounds billed LLM
-// calls (each step is one) before a stuck loop burns unbounded credits. Set
-// high enough to never be hit in normal chat/coding use. Matches the CLI loop
-// (loop.ts) and agent-engine (engine.ts) defaults. `stopWhen: stepCountIs(...)`.
-const MAX_AGENT_STEPS = 256;
 
 // POST /api/v1/chat/stream
 //
@@ -1657,10 +1647,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           }),
           model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          // Runaway backstop for the agentic tool loop (matches the old
-          // stopWhen: stepCountIs(MAX_AGENT_STEPS)). Loop ends naturally on the
-          // model's final answer.
-          maxSteps: MAX_AGENT_STEPS,
+          // Runaway backstop for the agentic tool loop, NOT a functional limit.
+          // Loop ends naturally on the model's final answer.
+          maxSteps: DEFAULT_MAX_AGENT_STEPS,
           // Resilience: allow a small number of transient retries so a single
           // 429/5xx from the gateway does not kill the whole turn, and re-enable
           // the engine's context-overflow compaction retry (engine.ts:372) so an

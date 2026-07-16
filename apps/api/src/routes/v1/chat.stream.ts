@@ -16,11 +16,12 @@ import {
   waitForApproval,
 } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { CHAT_CONTENT_MAX_CHARS } from "@oxagen/oxagen/contracts/chat.message.send";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the hooks to its own
@@ -28,7 +29,13 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import {
   createTurnBudgetGuard,
   formatBudgetUsd,
+  governedBudgetFromRead,
+  requestTurnBudgetSchema,
+  resolveEffectiveTurnBudget,
+  resolveTurnBudgetPolicy,
+  turnBudgetPolicyFromSaved,
   TURN_BUDGET_OFF,
+  type SavedWorkspaceGovernance,
   type TurnBudgetPolicy,
 } from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
@@ -45,7 +52,10 @@ import {
 } from "./chat-memory";
 
 const BodySchema = z.object({
-  content: z.string().min(1),
+  // Bound the message body — the shared per-message ingress cap (see
+  // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
+  // surface rejects oversized prompts identically.
+  content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
   conversationId: z.string().nullable().default(null),
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
@@ -54,38 +64,23 @@ const BodySchema = z.object({
   tier: z.enum(["fast", "balanced", "precise"]).nullable().default(null),
   model: z.string().min(1).nullable().default(null),
   effort: z.enum(["low", "medium", "high"]).nullable().default(null),
+  // Per-turn dollar-budget override. `null`/omitted means "no override for
+  // this turn" — the route falls back to the caller's saved default
+  // (budget.policy.read). An explicit object always wins, including an
+  // explicit `{ enabled: false }` that turns OFF a saved default for one
+  // turn. Same schema + precedence as the app chat route (@oxagen/billing).
+  budget: requestTurnBudgetSchema.nullable().default(null),
 });
 
 const HISTORY_LIMIT = 50;
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
-
-// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
-// ends naturally the moment the model returns a step with no tool call (its
-// final answer); this cap only fires if the model loops on tools without ever
-// settling. Matches the app chat route + agent-engine defaults.
-const MAX_AGENT_STEPS = 256;
-
-/** Convert the budget.policy.read output to the engine's TurnBudgetPolicy shape. */
-function turnBudgetPolicyFromSaved(saved: {
-  enabled: boolean;
-  limitUsd: number | null;
-  mode: TurnBudgetPolicy["mode"];
-  graceOveragePct: number;
-}): TurnBudgetPolicy {
-  return {
-    enabled: saved.enabled,
-    limitUsd: saved.limitUsd ?? 0,
-    mode: saved.mode,
-    graceOveragePct: saved.graceOveragePct,
-  };
-}
 
 export const chatStreamRoute = new Hono<AppEnv>();
 
 // POST /:org_slug/:workspace_slug/chat/stream
 //
 // Streams the agent reply as text/event-stream (SSE). Body: { content,
-// conversationId?, activeServerIds?, tier?, model?, effort? }.
+// conversationId?, activeServerIds?, tier?, model?, effort?, budget? }.
 // Each SSE line: `data: <JSON ApiStreamEvent>\n\n`
 // Terminal: `event: done\ndata: [DONE]\n\n`
 //
@@ -111,8 +106,15 @@ chatStreamRoute.post("/", async (c) => {
     );
   }
 
-  const { content, conversationId, activeServerIds, tier, model, effort } =
-    parsed.data;
+  const {
+    content,
+    conversationId,
+    activeServerIds,
+    tier,
+    model,
+    effort,
+    budget,
+  } = parsed.data;
   const ctx = capabilityContext(c);
   // A stable per-turn UUID: execution_step_id / reference_id in the metered AI
   // port, executionRef for memory recall, and messageId in telemetry.
@@ -310,15 +312,59 @@ chatStreamRoute.post("/", async (c) => {
             ]),
         );
 
-        // Per-turn dollar budget (OXA — turn-budget). Resolve the caller's saved
+        // Per-turn dollar budget (OXA — turn-budget). Precedence is identical
+        // to the app chat route (the adapters are the SAME @oxagen/billing
+        // module): an explicit per-turn `budget` in the request body always
+        // wins (no DB round-trip); otherwise fall back to the caller's saved
         // default via budget.policy.read (user-scoped; direct handler call, no
-        // kernel). A missing user (API-key-only auth) or a failed read degrades
-        // to TURN_BUDGET_OFF so a broken preferences row never blocks a turn.
-        const turnBudgetPolicy: TurnBudgetPolicy = ctx.userId
-          ? await budgetPolicyReadHandler({}, capCtx)
-              .then(turnBudgetPolicyFromSaved)
-              .catch(() => TURN_BUDGET_OFF)
-          : TURN_BUDGET_OFF;
+        // kernel). A missing user (API-key-only auth) or a failed read
+        // degrades to TURN_BUDGET_OFF so a broken preferences row never blocks
+        // a turn. Workspace governance (OXA-2081) is read concurrently via
+        // invoke() — the metering/IAM chokepoint, `surface: "agent"` because
+        // the contract's surfaces are ["api","mcp","agent"] — and merged on
+        // top by resolveEffectiveTurnBudget, so a workspace ceiling binds
+        // API-key turns exactly like app turns. FAIL-OPEN but never silent: a
+        // governance read failure warns and resolves to null (the member's
+        // policy applies unchanged) — a broken governance row must never block
+        // a turn from running.
+        const readMemberPolicy = async (): Promise<TurnBudgetPolicy> => {
+          if (budget) return resolveTurnBudgetPolicy(budget, TURN_BUDGET_OFF);
+          if (!ctx.userId) return TURN_BUDGET_OFF;
+          try {
+            return turnBudgetPolicyFromSaved(
+              await budgetPolicyReadHandler({}, capCtx),
+            );
+          } catch (err) {
+            // FAIL-OPEN but never silent: a persistent read failure disables
+            // per-turn spend enforcement — that must be observable in logs.
+            console.warn(
+              "[chat/stream] budget.policy.read failed — failing open to TURN_BUDGET_OFF:",
+              String(err),
+            );
+            return TURN_BUDGET_OFF;
+          }
+        };
+        const readWorkspaceGovernance = async () => {
+          try {
+            const raw = await invoke("get_budget_policy", {}, capCtx, {
+              surface: "agent",
+            });
+            return governedBudgetFromRead(raw as SavedWorkspaceGovernance);
+          } catch (err) {
+            console.warn(
+              "[chat/stream] workspace budget governance read failed — failing open to member policy:",
+              String(err),
+            );
+            return null;
+          }
+        };
+        const [memberTurnBudgetPolicy, workspaceBudgetGovernance] =
+          await Promise.all([readMemberPolicy(), readWorkspaceGovernance()]);
+        const turnBudgetPolicy: TurnBudgetPolicy = resolveEffectiveTurnBudget(
+          memberTurnBudgetPolicy,
+          null,
+          workspaceBudgetGovernance,
+        );
 
         // createTurnBudgetGuard returns undefined when the policy is off, so an
         // unbudgeted turn passes no guard at all (unbounded, byte-identical to
@@ -409,7 +455,8 @@ chatStreamRoute.post("/", async (c) => {
           }),
           model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          maxSteps: MAX_AGENT_STEPS,
+          // Runaway backstop for the agentic tool loop, NOT a functional limit.
+          maxSteps: DEFAULT_MAX_AGENT_STEPS,
           // Byte-identical client behaviour: no step retries (a retry would
           // re-forward a step's already-streamed parts) and no context-overflow
           // re-run — an overflow surfaces via the catch as a single `error` event,

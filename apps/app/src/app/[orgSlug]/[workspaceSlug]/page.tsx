@@ -34,9 +34,12 @@ interface PageProps {
 
 export default async function WorkspaceOverviewPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  const session = await getSessionOrRedirect();
-
-  const org = await resolveOrg(orgSlug);
+  // Session and org resolution are independent DB round-trips — overlap them
+  // on this hottest-path page (same pattern as billing/revenue/page.tsx).
+  const [session, org] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
   if (!org) notFound();
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   if (!ws) notFound();

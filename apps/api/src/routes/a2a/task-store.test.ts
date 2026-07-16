@@ -254,18 +254,10 @@ describe("task store CRUD", () => {
     expect(row).toBeNull();
   });
 
-  it("flattens message history across a context", async () => {
+  it("flattens message history across a context, restoring oldest → newest from the newest-first query", async () => {
+    // The bounded query returns tasks newest-first (desc + limit); the loader
+    // must reverse back to chronological order for the model.
     enqueue([
-      {
-        messageHistory: [
-          {
-            kind: "message",
-            role: "user",
-            parts: [{ kind: "text", text: "a" }],
-            messageId: "m1",
-          },
-        ],
-      },
       {
         messageHistory: [
           {
@@ -276,8 +268,33 @@ describe("task store CRUD", () => {
           },
         ],
       },
+      {
+        messageHistory: [
+          {
+            kind: "message",
+            role: "user",
+            parts: [{ kind: "text", text: "a" }],
+            messageId: "m1",
+          },
+        ],
+      },
     ]);
     const history = await loadContextHistory(CTX, "ctx_1");
     expect(history.map((m) => m.messageId)).toEqual(["m1", "m2"]);
+  });
+
+  it("caps the returned history to the most recent 50 messages", async () => {
+    const messages = Array.from({ length: 60 }, (_, i) => ({
+      kind: "message",
+      role: "user",
+      parts: [{ kind: "text", text: `t${i}` }],
+      messageId: `m${i}`,
+    }));
+    enqueue([{ messageHistory: messages }]);
+    const history = await loadContextHistory(CTX, "ctx_1");
+    expect(history).toHaveLength(50);
+    // The TAIL survives (m10..m59) — old messages are trimmed, not new ones.
+    expect(history[0]?.messageId).toBe("m10");
+    expect(history[49]?.messageId).toBe("m59");
   });
 });

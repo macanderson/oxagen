@@ -314,20 +314,24 @@ export const connectionMappingsSetHandler: CapabilityHandler<
         );
       }
 
-      for (const { owner, repo } of repos) {
-        await eventClient.send({
-          name: "ingestion/github.initial-sync",
-          data: {
-            connectionId: conn.id,
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            owner,
-            repo,
-            defaultBranch,
-            syncDepthDays,
-          },
-        });
-      }
+      // One sync per selected repo — the events are independent (no ordering
+      // dependency), so fan them out in parallel instead of awaiting serially.
+      await Promise.all(
+        repos.map(({ owner, repo }) =>
+          eventClient.send({
+            name: "ingestion/github.initial-sync",
+            data: {
+              connectionId: conn.id,
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              owner,
+              repo,
+              defaultBranch,
+              syncDepthDays,
+            },
+          }),
+        ),
+      );
 
       logger.info(
         { connectionId: conn.id, repoCount: repos.length, orgId: ctx.orgId },

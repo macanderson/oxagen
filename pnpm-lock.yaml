@@ -264,9 +264,6 @@ importers:
       '@uiw/react-codemirror':
         specifier: ^4.25.10
         version: 4.25.10(@babel/runtime@7.29.7)(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.1)(@codemirror/state@6.7.0)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.43.4)(codemirror@6.0.2)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@vis.gl/react-google-maps':
-        specifier: 1.8.3
-        version: 1.8.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)
@@ -898,6 +895,9 @@ importers:
       stripe:
         specifier: 17.7.0
         version: 17.7.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -2632,11 +2632,11 @@ packages:
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -3307,9 +3307,6 @@ packages:
 
   '@gar/promisify@1.1.3':
     resolution: {integrity: sha512-k2Ty1JcVojjJFwrg/ThKi2ujJ7XNLYaFGNB/bWT9wGR+oSMJHMa5w+CUq6p/pVrKeNNgA7pCqEcjSnHVoqJQFw==}
-
-  '@googlemaps/js-api-loader@2.1.1':
-    resolution: {integrity: sha512-yUpAwksbHrlZIWD49JmveNSfBG4oAK0AwMknfSaPMnP5N7UT8oFRVCqwjGb1XQovi//7KLbPQKZpbofiLGzpDw==}
 
   '@grpc/grpc-js@1.14.4':
     resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
@@ -6113,12 +6110,6 @@ packages:
 
   '@vercel/sandbox@2.0.2':
     resolution: {integrity: sha512-Kd1gqvV4rjziFqLZMEJ7lJRZtskRohrCxkqueKY8rXO2MSGK8zSdp6/T5xApljnhDusEwEQ4+vi8e3dzFvnezg==}
-
-  '@vis.gl/react-google-maps@1.8.3':
-    resolution: {integrity: sha512-DW7nEuvOJ299DmdBnvGiUARrgS/+sTEO1iJgG9J8YaErZqLoq7S4TJ22f3EjJvR4dti4L4gft43JEK77nnKXDw==}
-    peerDependencies:
-      react: '>=16.8.0 || ^19.0 || ^19.0.0-rc'
-      react-dom: '>=16.8.0 || ^19.0 || ^19.0.0-rc'
 
   '@vitejs/plugin-react@4.7.0':
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -13633,10 +13624,6 @@ snapshots:
   '@gar/promisify@1.1.3':
     optional: true
 
-  '@googlemaps/js-api-loader@2.1.1':
-    dependencies:
-      '@types/google.maps': 3.58.1
-
   '@grpc/grpc-js@1.14.4':
     dependencies:
       '@grpc/proto-loader': 0.8.1
@@ -16659,14 +16646,6 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
       - react-native-b4a
-
-  '@vis.gl/react-google-maps@1.8.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
-    dependencies:
-      '@googlemaps/js-api-loader': 2.1.1
-      '@types/google.maps': 3.58.1
-      fast-deep-equal: 3.1.3
-      react: 19.2.6
-      react-dom: 19.2.6(react@19.2.6)
 
   '@vitejs/plugin-react@4.7.0(vite@6.4.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))':
     dependencies:
