@@ -22,6 +22,8 @@ const totals = z.object({
   costMicros: z.number().int().nonnegative(),
   /** Number of metered LLM calls (token_usage rows). */
   executions: z.number().int().nonnegative(),
+  /** Distinct chat-turn count (execution_step_id); <= executions. */
+  messages: z.number().int().nonnegative(),
 });
 
 const breakdownRow = totals.extend({
@@ -36,6 +38,11 @@ const principalRow = totals.extend({
   principalId: z.string(),
   /** "human" | "agent" | "service", or "" for unattributed rows. */
   principalKind: z.string(),
+});
+
+const userRow = totals.extend({
+  /** Acting user uuid; the nil UUID groups unattributed (non-human/system) rows. */
+  userId: z.string(),
 });
 
 // A one-year ceiling bounds the ClickHouse scan and the payload's series length.
@@ -64,7 +71,7 @@ export const billingUsageBreakdown = registerCapability({
   name: "get_usage_breakdown",
   domain: "billing",
   description:
-    "Aggregated usage for a time window broken down by model, surface, workspace, capability, and acting principal, plus a daily time series of tokens and cost. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard and per-seat/per-agent metering.",
+    "Aggregated usage for a time window broken down by model, surface, workspace, capability, acting principal, and user, plus a daily time series of tokens, cost, and chat-turn (message) counts. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard and per-seat/per-agent metering.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -89,13 +96,16 @@ export const billingUsageBreakdown = registerCapability({
       path: ["end"],
     })
     .refine(
-      (v) => new Date(v.end).getTime() - new Date(v.start).getTime() <= MAX_RANGE_MS,
+      (v) =>
+        new Date(v.end).getTime() - new Date(v.start).getTime() <= MAX_RANGE_MS,
       { message: "range must not exceed 366 days", path: ["end"] },
     ),
   output: z.object({
     range: z.object({ start: z.string(), end: z.string() }),
     totals,
-    series: z.array(totals.extend({ day: z.string().describe("YYYY-MM-DD (UTC)") })),
+    series: z.array(
+      totals.extend({ day: z.string().describe("YYYY-MM-DD (UTC)") }),
+    ),
     byModel: z.array(breakdownRow),
     bySurface: z.array(breakdownRow),
     byWorkspace: z.array(breakdownRow),
@@ -103,8 +113,14 @@ export const billingUsageBreakdown = registerCapability({
     byCapability: z.array(breakdownRow),
     /** Per-principal spend — who spent it (human | agent | service). */
     byPrincipal: z.array(principalRow),
+    /** Per-user spend — seat-level "who used it" view keyed on token_usage.user_id. */
+    byUser: z.array(userRow),
   }),
 });
 
-export type BillingUsageBreakdownInput = z.output<typeof billingUsageBreakdown.input>;
-export type BillingUsageBreakdownOutput = z.output<typeof billingUsageBreakdown.output>;
+export type BillingUsageBreakdownInput = z.output<
+  typeof billingUsageBreakdown.input
+>;
+export type BillingUsageBreakdownOutput = z.output<
+  typeof billingUsageBreakdown.output
+>;

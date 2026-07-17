@@ -59,7 +59,11 @@ import {
 } from "./conversation-actions";
 
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 import { revalidatePath } from "next/cache";
 
@@ -77,7 +81,13 @@ import { conversationList } from "@oxagen/oxagen/contracts/conversation.list";
 const ctx: ConversationActionCtx = { orgSlug: "acme", workspaceSlug: "prod" };
 const mockSession = { user: { id: "user-1" } };
 const mockOrg = { id: "org-1", publicId: "pub-1", name: "Acme", slug: "acme" };
-const mockWs = { id: "ws-1", publicId: "pub-ws-1", orgId: "org-1", name: "Prod", slug: "prod" };
+const mockWs = {
+  id: "ws-1",
+  publicId: "pub-ws-1",
+  orgId: "org-1",
+  name: "Prod",
+  slug: "prod",
+};
 
 function setupHappyPath() {
   vi.mocked(getSessionOrRedirect).mockResolvedValue(mockSession as never);
@@ -108,7 +118,11 @@ describe("archiveConversationsAction", () => {
 
   it("valid ids → invoke called with conversationArchive.name (config-derived)", async () => {
     vi.mocked(invoke).mockResolvedValue({ updated: 2 });
-    const result = await archiveConversationsAction(ctx, ["id-1", "id-2"], true);
+    const result = await archiveConversationsAction(
+      ctx,
+      ["id-1", "id-2"],
+      true,
+    );
     expect(invoke).toHaveBeenCalledOnce();
     const [capabilityName] = vi.mocked(invoke).mock.calls[0]!;
     // Config-derived: use the imported contract name, not a hardcoded string.
@@ -133,7 +147,11 @@ describe("archiveConversationsAction", () => {
 describe("deleteConversationsAction", () => {
   it("valid ids → invoke called with conversationDelete.name (config-derived)", async () => {
     vi.mocked(invoke).mockResolvedValue({ deleted: 3 });
-    const result = await deleteConversationsAction(ctx, ["id-1", "id-2", "id-3"]);
+    const result = await deleteConversationsAction(ctx, [
+      "id-1",
+      "id-2",
+      "id-3",
+    ]);
     expect(invoke).toHaveBeenCalledOnce();
     const [capabilityName] = vi.mocked(invoke).mock.calls[0]!;
     expect(capabilityName).toBe(conversationDelete.name);
@@ -162,11 +180,11 @@ describe("purgeArchivedConversationsAction", () => {
     expect(input).toEqual({});
   });
 
-  it("revalidatePath called for the /ask surface", async () => {
+  it("revalidatePath called for the /sessions surface", async () => {
     vi.mocked(invoke).mockResolvedValue({ deleted: 0 });
     await purgeArchivedConversationsAction(ctx);
     const paths = vi.mocked(revalidatePath).mock.calls.map(([p]) => p);
-    expect(paths).toContain("/acme/prod/ask");
+    expect(paths).toContain("/acme/prod/sessions");
   });
 
   it("returns {ok:true, count} on success", async () => {
@@ -255,7 +273,10 @@ describe("renameConversationAction", () => {
 
 describe("listConversationsAction", () => {
   it("valid filter → invoke called with conversationList.name", async () => {
-    vi.mocked(invoke).mockResolvedValue({ conversations: [], nextCursor: null });
+    vi.mocked(invoke).mockResolvedValue({
+      conversations: [],
+      nextCursor: null,
+    });
     const result = await listConversationsAction(ctx, { filter: "active" });
     expect(invoke).toHaveBeenCalledOnce();
     const [capabilityName] = vi.mocked(invoke).mock.calls[0]!;

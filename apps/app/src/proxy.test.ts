@@ -14,7 +14,10 @@ import { proxy } from "./proxy";
 
 const ORIGIN = "https://app.test";
 
-function req(path: string, { authed = true }: { authed?: boolean } = {}): NextRequest {
+function req(
+  path: string,
+  { authed = true }: { authed?: boolean } = {},
+): NextRequest {
   const headers: Record<string, string> = {};
   if (authed) headers.cookie = "better-auth.session_token=tok";
   return new NextRequest(new URL(`${ORIGIN}${path}`), { headers });
@@ -29,10 +32,23 @@ function status(path: string, opts?: { authed?: boolean }): number {
 }
 
 describe("proxy — IA realignment redirects (§16)", () => {
-  it("301s legacy /chat → /ask (tail collapses)", () => {
-    expect(location("/acme/prod/chat")).toBe(`${ORIGIN}/acme/prod/ask`);
+  it("301s legacy /chat → /sessions (tail collapses)", () => {
+    expect(location("/acme/prod/chat")).toBe(`${ORIGIN}/acme/prod/sessions`);
     expect(status("/acme/prod/chat")).toBe(301);
-    expect(location("/acme/prod/chat/anything")).toBe(`${ORIGIN}/acme/prod/ask`);
+    expect(location("/acme/prod/chat/anything")).toBe(
+      `${ORIGIN}/acme/prod/sessions`,
+    );
+  });
+
+  it("301s legacy /ask → /sessions (rename; tail collapses, query preserved)", () => {
+    expect(location("/acme/prod/ask")).toBe(`${ORIGIN}/acme/prod/sessions`);
+    expect(status("/acme/prod/ask")).toBe(301);
+    expect(location("/acme/prod/ask/anything")).toBe(
+      `${ORIGIN}/acme/prod/sessions`,
+    );
+    expect(location("/acme/prod/ask?c=cnv_1")).toBe(
+      `${ORIGIN}/acme/prod/sessions?c=cnv_1`,
+    );
   });
 
   it("301s /studio/* → /workbench/* preserving the tail (1:1 section rename)", () => {
@@ -136,7 +152,7 @@ describe("proxy — IA realignment redirects (§16)", () => {
 
   it("preserves the query string across a rename redirect", () => {
     expect(location("/acme/prod/chat?c=thread_1")).toBe(
-      `${ORIGIN}/acme/prod/ask?c=thread_1`,
+      `${ORIGIN}/acme/prod/sessions?c=thread_1`,
     );
   });
 
@@ -158,19 +174,21 @@ describe("proxy — IA realignment redirects (§16)", () => {
 
 describe("proxy — chat_ux_v2 flag override", () => {
   it("persists ?chat_ux_v2=1 as a cookie and redirects to the cleaned URL", () => {
-    const res = proxy(req("/acme/prod/ask?chat_ux_v2=1&c=cnv_1"));
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/acme/prod/ask?c=cnv_1`);
+    const res = proxy(req("/acme/prod/sessions?chat_ux_v2=1&c=cnv_1"));
+    expect(res.headers.get("location")).toBe(
+      `${ORIGIN}/acme/prod/sessions?c=cnv_1`,
+    );
     expect(res.cookies.get("chat_ux_v2")?.value).toBe("1");
   });
 
   it("persists the off override too", () => {
-    const res = proxy(req("/acme/prod/ask?chat_ux_v2=0"));
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/acme/prod/ask`);
+    const res = proxy(req("/acme/prod/sessions?chat_ux_v2=0"));
+    expect(res.headers.get("location")).toBe(`${ORIGIN}/acme/prod/sessions`);
     expect(res.cookies.get("chat_ux_v2")?.value).toBe("0");
   });
 
   it("ignores garbage values — no cookie, no redirect", () => {
-    const res = proxy(req("/acme/prod/ask?chat_ux_v2=yes"));
+    const res = proxy(req("/acme/prod/sessions?chat_ux_v2=yes"));
     expect(res.cookies.get("chat_ux_v2")).toBeUndefined();
     expect(res.headers.get("location")).toBeNull();
   });
@@ -191,7 +209,9 @@ describe("proxy — no redirect loop", () => {
 
 describe("proxy — auth boundary", () => {
   it("redirects unauthenticated page requests to /login", () => {
-    expect(location("/acme/prod/ask", { authed: false })).toBe(`${ORIGIN}/login`);
+    expect(location("/acme/prod/sessions", { authed: false })).toBe(
+      `${ORIGIN}/login`,
+    );
   });
 
   it("allows public auth pages without a session", () => {

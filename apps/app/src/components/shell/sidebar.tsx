@@ -100,7 +100,7 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
   };
 
   const homeHref = effectiveCtx.workspaceSlug
-    ? `/${effectiveCtx.orgSlug}/${effectiveCtx.workspaceSlug}/ask`
+    ? `/${effectiveCtx.orgSlug}/${effectiveCtx.workspaceSlug}/sessions`
     : `/${effectiveCtx.orgSlug}`;
 
   return (

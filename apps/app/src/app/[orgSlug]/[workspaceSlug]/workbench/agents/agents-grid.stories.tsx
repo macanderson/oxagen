@@ -8,7 +8,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function agent(overrides: Partial<AgentGridRow> & { slug: string }): AgentGridRow {
+function agent(
+  overrides: Partial<AgentGridRow> & { slug: string },
+): AgentGridRow {
   return {
     agentId: `id-${overrides.slug}`,
     publicId: `agt_${overrides.slug}`,
@@ -42,7 +44,7 @@ export const AllStates: Story = {
         status: "active",
         deploymentStatus: "active",
         latestVersion: 4,
-        launchHref: "/acme/default/ask?agent=agt_ds-drift-auditor",
+        launchHref: "/acme/default/sessions?agent=agt_ds-drift-auditor",
       }),
       agent({
         slug: "release-notes",

@@ -28,14 +28,23 @@ vi.mock("./clickhouse", async (importOriginal) => {
 import { readUsageBreakdown } from "./usage-analytics";
 
 // Classify a query by its projection so returns don't depend on call ordering.
-type Kind = "series" | "model" | "surface" | "workspace" | "capability" | "principal";
+type Kind =
+  | "series"
+  | "model"
+  | "surface"
+  | "workspace"
+  | "capability"
+  | "principal"
+  | "user";
 function classify(query: string): Kind {
   if (query.includes("toDate(created_at)")) return "series";
   if (query.includes("any(provider)")) return "model";
   if (query.includes("SELECT surface AS group_key")) return "surface";
   if (query.includes("SELECT workspace_id AS group_key")) return "workspace";
-  if (query.includes("SELECT capability_name AS group_key")) return "capability";
+  if (query.includes("SELECT capability_name AS group_key"))
+    return "capability";
   if (query.includes("toString(principal_id) AS group_key")) return "principal";
+  if (query.includes("toString(user_id) AS group_key")) return "user";
   throw new Error(`unclassified query: ${query.slice(0, 120)}`);
 }
 
@@ -55,6 +64,7 @@ const agg = (o: Partial<Record<string, string>>) => ({
   cached_tokens: "0",
   cost_micros: "0",
   executions: "0",
+  messages: "0",
   ...o,
 });
 
@@ -71,26 +81,87 @@ describe("readUsageBreakdown", () => {
   it("parses grouped rows and derives totals from byModel", async () => {
     mockRows({
       series: [
-        agg({ input_tokens: "100", output_tokens: "40", cached_tokens: "10", cost_micros: "5000", executions: "3" }),
+        agg({
+          input_tokens: "100",
+          output_tokens: "40",
+          cached_tokens: "10",
+          cost_micros: "5000",
+          executions: "3",
+        }),
       ],
       model: [
-        { group_key: "claude-sonnet-5", provider: "anthropic", ...agg({ input_tokens: "80", output_tokens: "30", cached_tokens: "8", cost_micros: "4000", executions: "2" }) },
-        { group_key: "gpt-5.5-pro", provider: "openai", ...agg({ input_tokens: "20", output_tokens: "10", cached_tokens: "2", cost_micros: "1000", executions: "1" }) },
+        {
+          group_key: "claude-sonnet-5",
+          provider: "anthropic",
+          ...agg({
+            input_tokens: "80",
+            output_tokens: "30",
+            cached_tokens: "8",
+            cost_micros: "4000",
+            executions: "2",
+            messages: "2",
+          }),
+        },
+        {
+          group_key: "gpt-5.5-pro",
+          provider: "openai",
+          ...agg({
+            input_tokens: "20",
+            output_tokens: "10",
+            cached_tokens: "2",
+            cost_micros: "1000",
+            executions: "1",
+            messages: "1",
+          }),
+        },
       ],
       surface: [
-        { group_key: "api", ...agg({ input_tokens: "100", output_tokens: "40", cached_tokens: "10", cost_micros: "5000", executions: "3" }) },
+        {
+          group_key: "api",
+          ...agg({
+            input_tokens: "100",
+            output_tokens: "40",
+            cached_tokens: "10",
+            cost_micros: "5000",
+            executions: "3",
+          }),
+        },
       ],
       workspace: [
-        { group_key: "ws-a", ...agg({ input_tokens: "100", output_tokens: "40", cached_tokens: "10", cost_micros: "5000", executions: "3" }) },
+        {
+          group_key: "ws-a",
+          ...agg({
+            input_tokens: "100",
+            output_tokens: "40",
+            cached_tokens: "10",
+            cost_micros: "5000",
+            executions: "3",
+          }),
+        },
       ],
       capability: [
-        { group_key: "query_ontology", ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }) },
+        {
+          group_key: "query_ontology",
+          ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }),
+        },
       ],
       principal: [
         {
           group_key: "00000000-0000-0000-0000-0000000000e5",
           provider: "agent",
           ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }),
+        },
+      ],
+      user: [
+        {
+          group_key: "00000000-0000-0000-0000-0000000000a1",
+          ...agg({
+            input_tokens: "100",
+            output_tokens: "40",
+            cost_micros: "5000",
+            executions: "3",
+            messages: "3",
+          }),
         },
       ],
     });
@@ -104,6 +175,7 @@ describe("readUsageBreakdown", () => {
       cachedTokens: 10,
       costMicros: 5000,
       executions: 3,
+      messages: 3,
     });
     expect(out.byModel[0]).toEqual({
       key: "claude-sonnet-5",
@@ -113,8 +185,13 @@ describe("readUsageBreakdown", () => {
       cachedTokens: 8,
       costMicros: 4000,
       executions: 2,
+      messages: 2,
     });
-    expect(out.bySurface[0]).toMatchObject({ key: "api", provider: "", costMicros: 5000 });
+    expect(out.bySurface[0]).toMatchObject({
+      key: "api",
+      provider: "",
+      costMicros: 5000,
+    });
     expect(out.byWorkspace[0]).toMatchObject({ key: "ws-a", provider: "" });
     // Principal-spine dimensions (migration 0023).
     expect(out.byCapability[0]).toMatchObject({
@@ -131,20 +208,53 @@ describe("readUsageBreakdown", () => {
       cachedTokens: 0,
       costMicros: 3000,
       executions: 2,
+      messages: 0,
+    });
+    // Per-user (seat-level) dimension keyed on token_usage.user_id.
+    expect(out.byUser[0]).toEqual({
+      userId: "00000000-0000-0000-0000-0000000000a1",
+      inputTokens: 100,
+      outputTokens: 40,
+      cachedTokens: 0,
+      costMicros: 5000,
+      executions: 3,
+      messages: 3,
     });
   });
 
   it("maps the daily series with its day key", async () => {
     mockRows({
       series: [
-        { day: "2026-06-01", ...agg({ input_tokens: "5", cost_micros: "70", executions: "1" }) },
-        { day: "2026-06-02", ...agg({ input_tokens: "7", cost_micros: "90", executions: "2" }) },
+        {
+          day: "2026-06-01",
+          ...agg({ input_tokens: "5", cost_micros: "70", executions: "1" }),
+        },
+        {
+          day: "2026-06-02",
+          ...agg({ input_tokens: "7", cost_micros: "90", executions: "2" }),
+        },
       ],
     });
     const out = await readUsageBreakdown(WINDOW);
     expect(out.series).toEqual([
-      { day: "2026-06-01", inputTokens: 5, outputTokens: 0, cachedTokens: 0, costMicros: 70, executions: 1 },
-      { day: "2026-06-02", inputTokens: 7, outputTokens: 0, cachedTokens: 0, costMicros: 90, executions: 2 },
+      {
+        day: "2026-06-01",
+        inputTokens: 5,
+        outputTokens: 0,
+        cachedTokens: 0,
+        costMicros: 70,
+        executions: 1,
+        messages: 0,
+      },
+      {
+        day: "2026-06-02",
+        inputTokens: 7,
+        outputTokens: 0,
+        cachedTokens: 0,
+        costMicros: 90,
+        executions: 2,
+        messages: 0,
+      },
     ]);
   });
 
@@ -154,11 +264,18 @@ describe("readUsageBreakdown", () => {
     // `null`/`undefined` to callers.
     mockRows({
       model: [
-        { group_key: "unknown-model", provider: null, ...agg({ input_tokens: "1", executions: "1" }) },
+        {
+          group_key: "unknown-model",
+          provider: null,
+          ...agg({ input_tokens: "1", executions: "1" }),
+        },
       ],
     });
     const out = await readUsageBreakdown(WINDOW);
-    expect(out.byModel[0]).toMatchObject({ key: "unknown-model", provider: "" });
+    expect(out.byModel[0]).toMatchObject({
+      key: "unknown-model",
+      provider: "",
+    });
   });
 
   it("groups the model breakdown by key only (provider is an aggregate, not a GROUP BY column)", async () => {
@@ -180,7 +297,9 @@ describe("readUsageBreakdown", () => {
     for (const call of queryMock.mock.calls) {
       const { query, query_params } = call[0];
       expect(query).toContain("org_id = {orgId:UUID}");
-      expect(query).toMatch(/GROUP BY group_key(?!\s*,\s*provider)|GROUP BY day/);
+      expect(query).toMatch(
+        /GROUP BY group_key(?!\s*,\s*provider)|GROUP BY day/,
+      );
       expect(query).toContain("created_at >= {start:DateTime64(3)}");
       expect(query).toContain("created_at <  {end:DateTime64(3)}");
       expect(query).toContain("GROUP BY");
@@ -215,6 +334,7 @@ describe("readUsageBreakdown", () => {
       cachedTokens: 0,
       costMicros: 0,
       executions: 0,
+      messages: 0,
     });
     expect(out.series).toEqual([]);
     expect(out.byModel).toEqual([]);

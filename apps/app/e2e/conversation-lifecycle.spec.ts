@@ -4,18 +4,18 @@
  * list, rename, archive, delete, and purge-all-archived.
  *
  * Real UI, real DB writes, mocked LLM turn only:
- *   - sendMessageAction (apps/app/src/app/[orgSlug]/[workspaceSlug]/ask/actions.ts)
+ *   - sendMessageAction (apps/app/src/app/[orgSlug]/[workspaceSlug]/sessions/actions.ts)
  *     is a REAL server action — it inserts the conversation + user message rows
  *     into Postgres before the stream starts. Only the SSE reply
  *     (POST /api/v1/chat/stream) is intercepted via interceptAgentStream, so a
  *     conversation created this way is a real, listable row — no title is ever
  *     generated (that would need a real LLM call), so every fresh conversation
- *     falls back to "New conversation" until renamed. We rename conversation A
+ *     falls back to "No session" until renamed. We rename conversation A
  *     immediately so its title stays a unique anchor for the rest of the test,
  *     distinguishing it from conversation B's untouched fallback title.
  *   - allowConversationNavigation: true on every interceptAgentStream call so
  *     the nav's client-side navigations (archiving the open conversation routes
- *     away; "New conversation" pushes `?new=1`) are NOT held by the mock's
+ *     away; "No session" pushes `?new=1`) are NOT held by the mock's
  *     RSC-refresh guard — each one re-renders from the DB with live data,
  *     which is what the nav's `initialActive`/`initialArchived` reseed relies
  *     on to reflect a just-created or just-archived conversation.
@@ -77,7 +77,9 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
 
     // ── 1. Send the first message → conversation A is created & listed ──────
     await interceptAgentStream(page, {
-      events: [{ type: "text", messageId: "e2e-lifecycle-msg-a", text: "Reply A" }],
+      events: [
+        { type: "text", messageId: "e2e-lifecycle-msg-a", text: "Reply A" },
+      ],
       delayMs: 50,
       allowConversationNavigation: true,
     });
@@ -93,19 +95,25 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
     await page.reload();
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
-    const rowA = nav.getByRole("button", { name: "Actions for New conversation" });
+    const rowA = nav.getByRole("button", { name: "Actions for No session" });
     await expect(rowA).toBeVisible({ timeout: 10_000 });
     await shot(page, "01-conversation-a-listed");
 
     // ── 2. Rename conversation A ──────────────────────────────────────────
     await rowA.click();
     await page.getByRole("menuitem", { name: "Rename" }).click();
-    const renameDialog = page.getByRole("dialog", { name: "Rename conversation" });
+    const renameDialog = page.getByRole("dialog", {
+      name: "Rename conversation",
+    });
     await expect(renameDialog).toBeVisible();
-    await renameDialog.getByPlaceholder("Conversation title").fill("Renamed E2E Conversation");
+    await renameDialog
+      .getByPlaceholder("Conversation title")
+      .fill("Renamed E2E Conversation");
     await renameDialog.getByRole("button", { name: "Save" }).click();
     await expect(renameDialog).not.toBeVisible();
-    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({ timeout: 10_000 });
+    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({
+      timeout: 10_000,
+    });
     await shot(page, "02-conversation-a-renamed");
 
     // ── 3. Archive conversation A (it's the currently-open conversation, so
@@ -114,20 +122,26 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
       .getByRole("button", { name: "Actions for Renamed E2E Conversation" })
       .click();
     await page.getByRole("menuitem", { name: "Archive" }).click();
-    await page.waitForURL((url) => !url.searchParams.get("c"), { timeout: 10_000 });
+    await page.waitForURL((url) => !url.searchParams.get("c"), {
+      timeout: 10_000,
+    });
     await expect(nav.getByText("Renamed E2E Conversation")).not.toBeVisible({
       timeout: 10_000,
     });
 
     await ensureArchivedOpen(nav);
-    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({ timeout: 10_000 });
+    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({
+      timeout: 10_000,
+    });
     await shot(page, "03-conversation-a-archived");
 
     // ── 4. Second conversation (conversation B) ─────────────────────────────
-    await nav.getByRole("button", { name: "New conversation" }).click();
+    await nav.getByRole("button", { name: "No session" }).click();
     await expect(composer).toBeVisible({ timeout: 10_000 });
     await interceptAgentStream(page, {
-      events: [{ type: "text", messageId: "e2e-lifecycle-msg-b", text: "Reply B" }],
+      events: [
+        { type: "text", messageId: "e2e-lifecycle-msg-b", text: "Reply B" },
+      ],
       delayMs: 50,
       allowConversationNavigation: true,
     });
@@ -141,7 +155,7 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
     await page.reload();
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
-    const rowB = nav.getByRole("button", { name: "Actions for New conversation" });
+    const rowB = nav.getByRole("button", { name: "Actions for No session" });
     await expect(rowB).toBeVisible({ timeout: 10_000 });
     await shot(page, "04-conversation-b-listed");
 
@@ -149,12 +163,16 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
     // enough to exercise both a single delete and a bulk purge below.
     await rowB.click();
     await page.getByRole("menuitem", { name: "Archive" }).click();
-    await page.waitForURL((url) => !url.searchParams.get("c"), { timeout: 10_000 });
+    await page.waitForURL((url) => !url.searchParams.get("c"), {
+      timeout: 10_000,
+    });
 
     await ensureArchivedOpen(nav);
-    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({ timeout: 10_000 });
+    await expect(nav.getByText("Renamed E2E Conversation")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
-      nav.getByRole("button", { name: "Actions for New conversation" }),
+      nav.getByRole("button", { name: "Actions for No session" }),
     ).toBeVisible({ timeout: 10_000 });
     await shot(page, "05-both-archived");
 
@@ -163,7 +181,9 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
       .getByRole("button", { name: "Actions for Renamed E2E Conversation" })
       .click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
-    const deleteDialog = page.getByRole("dialog", { name: "Delete conversation?" });
+    const deleteDialog = page.getByRole("dialog", {
+      name: "Delete conversation?",
+    });
     await expect(deleteDialog).toBeVisible();
     await deleteDialog.getByRole("button", { name: "Delete" }).click();
     await expect(deleteDialog).not.toBeVisible();
@@ -172,7 +192,7 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
     });
     // Conversation B (still archived) survives the single delete.
     await expect(
-      nav.getByRole("button", { name: "Actions for New conversation" }),
+      nav.getByRole("button", { name: "Actions for No session" }),
     ).toBeVisible();
     await shot(page, "06-conversation-a-deleted");
 
@@ -180,7 +200,9 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
     const purgeButton = nav.getByRole("button", { name: "Delete all" });
     await expect(purgeButton).toBeVisible({ timeout: 10_000 });
     await purgeButton.click();
-    const purgeDialog = page.getByRole("dialog", { name: "Delete all archived?" });
+    const purgeDialog = page.getByRole("dialog", {
+      name: "Delete all archived?",
+    });
     await expect(purgeDialog).toBeVisible();
     await purgeDialog.getByRole("button", { name: "Delete all" }).click();
     await expect(purgeDialog).not.toBeVisible();
@@ -188,7 +210,7 @@ test.describe("conversation lifecycle — list, rename, archive, delete, purge",
       timeout: 10_000,
     });
     await expect(
-      nav.getByRole("button", { name: "Actions for New conversation" }),
+      nav.getByRole("button", { name: "Actions for No session" }),
     ).not.toBeVisible();
     await shot(page, "07-archived-purged-empty");
   });

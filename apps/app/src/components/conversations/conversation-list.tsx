@@ -61,7 +61,9 @@ export function ConversationList({
   // an identity-only prop change doesn't clobber optimistic state. This is the
   // "adjust state during render" pattern (react.dev) — not an effect — so it
   // settles before paint and satisfies the React Compiler lint.
-  const serverKey = initialActive.map((c) => `${c.publicId}:${c.updatedAt}`).join("|");
+  const serverKey = initialActive
+    .map((c) => `${c.publicId}:${c.updatedAt}`)
+    .join("|");
   const [seededKey, setSeededKey] = useState(serverKey);
   if (serverKey !== seededKey) {
     setSeededKey(serverKey);
@@ -69,7 +71,10 @@ export function ConversationList({
     setActiveCursor(initialActiveNextCursor);
   }
 
-  const hrefFor = useCallback((id: string) => `${pathname}?c=${id}`, [pathname]);
+  const hrefFor = useCallback(
+    (id: string) => `${pathname}?c=${id}`,
+    [pathname],
+  );
 
   // When the open conversation leaves the active list (archived or deleted),
   // route to the newest remaining one, or a fresh new-conversation state.
@@ -100,7 +105,11 @@ export function ConversationList({
     const res = await actions.list({ filter: "active", cursor: activeCursor });
     setLoadingMore(false);
     if (!res.ok) {
-      toast({ title: "Couldn’t load more", description: res.error, type: "error" });
+      toast({
+        title: "Couldn’t load more",
+        description: res.error,
+        type: "error",
+      });
       return;
     }
     setActive((prev) => [...prev, ...res.conversations]);
@@ -115,7 +124,11 @@ export function ConversationList({
       const res = await actions.list({ filter: "archived" });
       setArchivedLoading(false);
       if (!res.ok) {
-        toast({ title: "Couldn’t load archived", description: res.error, type: "error" });
+        toast({
+          title: "Couldn’t load archived",
+          description: res.error,
+          type: "error",
+        });
         setArchived([]);
         return;
       }
@@ -127,10 +140,17 @@ export function ConversationList({
   const loadMoreArchived = useCallback(async () => {
     if (!archivedCursor || archivedLoading) return;
     setArchivedLoading(true);
-    const res = await actions.list({ filter: "archived", cursor: archivedCursor });
+    const res = await actions.list({
+      filter: "archived",
+      cursor: archivedCursor,
+    });
     setArchivedLoading(false);
     if (!res.ok) {
-      toast({ title: "Couldn’t load archived", description: res.error, type: "error" });
+      toast({
+        title: "Couldn’t load archived",
+        description: res.error,
+        type: "error",
+      });
       return;
     }
     setArchived((prev) => [...(prev ?? []), ...res.conversations]);
@@ -148,7 +168,11 @@ export function ConversationList({
       setArchived((prev) => (prev ? prev.map(patch) : prev));
       const res = await actions.rename(id, title);
       if (!res.ok) {
-        toast({ title: "Rename failed", description: res.error, type: "error" });
+        toast({
+          title: "Rename failed",
+          description: res.error,
+          type: "error",
+        });
         router.refresh();
       }
     },
@@ -178,7 +202,11 @@ export function ConversationList({
       }
       const res = await actions.archive([id], archive);
       if (!res.ok) {
-        toast({ title: "Couldn’t update", description: res.error, type: "error" });
+        toast({
+          title: "Couldn’t update",
+          description: res.error,
+          type: "error",
+        });
         router.refresh();
       }
     },
@@ -193,7 +221,11 @@ export function ConversationList({
       routeAwayIfOpen([id], remaining);
       const res = await actions.delete([id]);
       if (!res.ok) {
-        toast({ title: "Delete failed", description: res.error, type: "error" });
+        toast({
+          title: "Delete failed",
+          description: res.error,
+          type: "error",
+        });
         router.refresh();
       }
     },
@@ -207,13 +239,19 @@ export function ConversationList({
     setPurgePending(false);
     setPurgeOpen(false);
     if (!res.ok) {
-      toast({ title: "Couldn’t delete archived", description: res.error, type: "error" });
+      toast({
+        title: "Couldn’t delete archived",
+        description: res.error,
+        type: "error",
+      });
       return;
     }
     setArchived([]);
     setArchivedCursor(null);
     routeAwayIfOpen(purgedIds, active);
-    toast({ title: `Deleted ${res.count} archived conversation${res.count === 1 ? "" : "s"}` });
+    toast({
+      title: `Deleted ${res.count} archived conversation${res.count === 1 ? "" : "s"}`,
+    });
   }, [actions, archived, active, routeAwayIfOpen, toast]);
 
   const archivedCount = archived?.length ?? 0;
@@ -228,7 +266,7 @@ export function ConversationList({
           onClick={newConversation}
         >
           <Plus className="size-4" />
-          New conversation
+          No session
         </Button>
       </div>
 
@@ -262,7 +300,11 @@ export function ConversationList({
             onClick={loadMoreActive}
             disabled={loadingMore}
           >
-            {loadingMore ? <Loader2 className="size-4 animate-spin" /> : "Load more"}
+            {loadingMore ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              "Load more"
+            )}
           </Button>
         ) : null}
 
@@ -282,7 +324,9 @@ export function ConversationList({
               )}
               Archived
               {archived !== null ? (
-                <span className="text-muted-foreground/70">({archivedCount})</span>
+                <span className="text-muted-foreground/70">
+                  ({archivedCount})
+                </span>
               ) : null}
             </button>
             {archivedOpen && archivedCount > 0 ? (
@@ -330,7 +374,11 @@ export function ConversationList({
                   onClick={loadMoreArchived}
                   disabled={archivedLoading}
                 >
-                  {archivedLoading ? <Loader2 className="size-4 animate-spin" /> : "Load more"}
+                  {archivedLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    "Load more"
+                  )}
                 </Button>
               ) : null}
             </div>

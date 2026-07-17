@@ -323,7 +323,7 @@ export async function wandSendAction(formData: FormData): Promise<
         };
       });
 
-      revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/sessions`);
       return {
         ok: true,
         conversationId: convId,
@@ -471,7 +471,7 @@ export async function wandResolveApprovalAction(
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
     );
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     return {
@@ -528,7 +528,7 @@ export async function wandResolveConsentAction(
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
     );
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     return {
@@ -593,7 +593,7 @@ export async function wandResolvePlanAction(
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },
     );
-    revalidatePath(`/${orgSlug}/${workspaceSlug}/ask`);
+    revalidatePath(`/${orgSlug}/${workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     return {

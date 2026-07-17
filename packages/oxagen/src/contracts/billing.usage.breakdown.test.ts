@@ -70,39 +70,135 @@ describe("billing.usage.breakdown capability", () => {
   it("parses a fully-populated output", () => {
     const parsed = billingUsageBreakdown.output.parse({
       range: validInput,
-      totals: { inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
+      totals: {
+        inputTokens: 100,
+        outputTokens: 40,
+        cachedTokens: 10,
+        costMicros: 5000,
+        executions: 3,
+        messages: 2,
+      },
       series: [
-        { day: "2026-06-01", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
+        {
+          day: "2026-06-01",
+          inputTokens: 100,
+          outputTokens: 40,
+          cachedTokens: 10,
+          costMicros: 5000,
+          executions: 3,
+          messages: 2,
+        },
       ],
       byModel: [
-        { key: "claude-sonnet-5", provider: "anthropic", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
+        {
+          key: "claude-sonnet-5",
+          provider: "anthropic",
+          inputTokens: 100,
+          outputTokens: 40,
+          cachedTokens: 10,
+          costMicros: 5000,
+          executions: 3,
+          messages: 2,
+        },
       ],
       bySurface: [
-        { key: "api", provider: "", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
+        {
+          key: "api",
+          provider: "",
+          inputTokens: 100,
+          outputTokens: 40,
+          cachedTokens: 10,
+          costMicros: 5000,
+          executions: 3,
+          messages: 2,
+        },
       ],
       byWorkspace: [],
       byCapability: [
-        { key: "query_ontology", provider: "", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
+        {
+          key: "query_ontology",
+          provider: "",
+          inputTokens: 60,
+          outputTokens: 20,
+          cachedTokens: 5,
+          costMicros: 3000,
+          executions: 2,
+          messages: 1,
+        },
       ],
       byPrincipal: [
-        { principalId: "00000000-0000-0000-0000-0000000000e5", principalKind: "agent", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
+        {
+          principalId: "00000000-0000-0000-0000-0000000000e5",
+          principalKind: "agent",
+          inputTokens: 60,
+          outputTokens: 20,
+          cachedTokens: 5,
+          costMicros: 3000,
+          executions: 2,
+          messages: 1,
+        },
+      ],
+      byUser: [
+        {
+          userId: "00000000-0000-0000-0000-0000000000e5",
+          inputTokens: 60,
+          outputTokens: 20,
+          cachedTokens: 5,
+          costMicros: 3000,
+          executions: 2,
+          messages: 1,
+        },
       ],
     });
     expect(parsed.byModel[0]?.provider).toBe("anthropic");
     expect(parsed.byPrincipal[0]?.principalKind).toBe("agent");
+    expect(parsed.byUser[0]?.userId).toBe(
+      "00000000-0000-0000-0000-0000000000e5",
+    );
+    expect(parsed.totals.messages).toBe(2);
   });
 
   it("rejects a negative token count in the output", () => {
     expect(() =>
       billingUsageBreakdown.output.parse({
         range: validInput,
-        totals: { inputTokens: -1, outputTokens: 0, cachedTokens: 0, costMicros: 0, executions: 0 },
+        totals: {
+          inputTokens: -1,
+          outputTokens: 0,
+          cachedTokens: 0,
+          costMicros: 0,
+          executions: 0,
+          messages: 0,
+        },
         series: [],
         byModel: [],
         bySurface: [],
         byWorkspace: [],
         byCapability: [],
         byPrincipal: [],
+        byUser: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an output missing the messages count", () => {
+    expect(() =>
+      billingUsageBreakdown.output.parse({
+        range: validInput,
+        totals: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedTokens: 0,
+          costMicros: 0,
+          executions: 0,
+        },
+        series: [],
+        byModel: [],
+        bySurface: [],
+        byWorkspace: [],
+        byCapability: [],
+        byPrincipal: [],
+        byUser: [],
       }),
     ).toThrow();
   });

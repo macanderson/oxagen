@@ -20,7 +20,7 @@ afterEach(cleanup);
 // Mock: next/navigation
 // ---------------------------------------------------------------------------
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/acme/prod/ask",
+  usePathname: () => "/acme/prod/sessions",
 }));
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,11 @@ vi.mock("@/components/ui/button", () => ({
   }: {
     children?: React.ReactNode;
     [key: string]: unknown;
-  }) => <button {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}>{children}</button>,
+  }) => (
+    <button {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}>
+      {children}
+    </button>
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -101,15 +105,28 @@ vi.mock("@/components/ui/button", () => ({
 // ---------------------------------------------------------------------------
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children, render: renderProp }: { children?: React.ReactNode; render?: React.ReactElement }) => {
+  TooltipTrigger: ({
+    children,
+    render: renderProp,
+  }: {
+    children?: React.ReactNode;
+    render?: React.ReactElement;
+  }) => {
     // The ShellFrame passes a render prop with the Button already configured;
     // we need to render it to make the toggle button appear in the DOM.
     if (renderProp) {
-      return <>{renderProp}{children}</>;
+      return (
+        <>
+          {renderProp}
+          {children}
+        </>
+      );
     }
     return <>{children}</>;
   },
-  TooltipPopup: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  TooltipPopup: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -137,10 +154,32 @@ vi.mock("lucide-react", () => ({
 // ---------------------------------------------------------------------------
 import { ShellFrame } from "./shell-frame";
 
-const org = { id: "org-id-1", slug: "acme", name: "Acme Corp", publicId: "org_1" };
-const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "", avatarUrl: null };
-const user = { id: "u1", name: "Alice", email: "alice@example.com", image: null };
-const navDataPromise: Promise<ShellNavData> = Promise.resolve({ availableOrgs: [], availableWorkspaces: [], balance: null });
+const org = {
+  id: "org-id-1",
+  slug: "acme",
+  name: "Acme Corp",
+  publicId: "org_1",
+};
+const workspace = {
+  id: "ws-id-1",
+  orgId: "org-id-1",
+  slug: "prod",
+  name: "Production",
+  publicId: "ws_1",
+  description: "",
+  avatarUrl: null,
+};
+const user = {
+  id: "u1",
+  name: "Alice",
+  email: "alice@example.com",
+  image: null,
+};
+const navDataPromise: Promise<ShellNavData> = Promise.resolve({
+  availableOrgs: [],
+  availableWorkspaces: [],
+  balance: null,
+});
 
 function renderShellFrame(children?: React.ReactNode) {
   return render(
@@ -180,7 +219,9 @@ describe("ShellFrame — accessibility", () => {
 describe("ShellFrame — sidebar toggle", () => {
   it("renders a button with aria-label='Toggle sidebar'", () => {
     renderShellFrame();
-    expect(screen.getByRole("button", { name: /toggle sidebar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /toggle sidebar/i }),
+    ).toBeInTheDocument();
   });
 });
 

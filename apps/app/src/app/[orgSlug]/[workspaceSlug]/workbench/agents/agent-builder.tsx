@@ -217,7 +217,9 @@ export function AgentBuilder({
     initialAgent?.description ?? "",
   );
   // Avatar value (photo URL or designed spec string) — persisted with the draft.
-  const [avatarUrl, setAvatarUrl] = React.useState(initialAgent?.avatarUrl ?? "");
+  const [avatarUrl, setAvatarUrl] = React.useState(
+    initialAgent?.avatarUrl ?? "",
+  );
   const [codeFeatures, setCodeFeatures] = React.useState(
     (initialAgent?.agentType ?? DEFAULT_AGENT_TYPE) === CODING_AGENT_TYPE,
   );
@@ -657,8 +659,8 @@ export function AgentBuilder({
               />
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-sm font-medium text-foreground">
-                  Configuration generated from your description — review and edit
-                  anything before saving.
+                  Configuration generated from your description — review and
+                  edit anything before saving.
                 </p>
                 {prefillMeta.rationale.trim() ? (
                   <div>
@@ -774,7 +776,9 @@ export function AgentBuilder({
                   type="button"
                   variant="gradient"
                   size="sm"
-                  disabled={disabled || suggesting || describeText.trim().length < 10}
+                  disabled={
+                    disabled || suggesting || describeText.trim().length < 10
+                  }
                   onClick={onGenerate}
                   startIcon={
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
@@ -858,12 +862,15 @@ export function AgentBuilder({
               </div>
               <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 px-3 py-3">
                 <div>
-                  <Label htmlFor="agent-code-features" className="text-sm font-medium">
+                  <Label
+                    htmlFor="agent-code-features"
+                    className="text-sm font-medium"
+                  >
                     Code features
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Enables the sandboxed coding path (file edits, terminal, repo
-                    tools). Off is a plain conversational / tool agent.
+                    Enables the sandboxed coding path (file edits, terminal,
+                    repo tools). Off is a plain conversational / tool agent.
                   </p>
                 </div>
                 <Switch
@@ -948,8 +955,8 @@ export function AgentBuilder({
           {step.key === "ground" ? (
             <div className="flex flex-col gap-5" data-testid="step-ground">
               <p className="text-sm text-muted-foreground">
-                Bind the agent to an ontology and bound its graph pulls. Defaults
-                are safe — you can skip this.
+                Bind the agent to an ontology and bound its graph pulls.
+                Defaults are safe — you can skip this.
               </p>
               <div className="space-y-1">
                 <Label htmlFor="agent-ontology">Ontology id</Label>
@@ -1002,9 +1009,15 @@ export function AgentBuilder({
                 <Label>Retrieval strategy</Label>
                 <Select
                   value={strategy}
-                  onValueChange={(v) => setStrategy(v as GraphRetrievalStrategy)}
+                  onValueChange={(v) =>
+                    setStrategy(v as GraphRetrievalStrategy)
+                  }
                 >
-                  <SelectTrigger size="sm" className="w-full" disabled={disabled}>
+                  <SelectTrigger
+                    size="sm"
+                    className="w-full"
+                    disabled={disabled}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectPopup>
@@ -1029,7 +1042,9 @@ export function AgentBuilder({
                     value={maxHops}
                     onChange={(e) => {
                       const n = Number(e.target.value);
-                      setMaxHops(Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0);
+                      setMaxHops(
+                        Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0,
+                      );
                     }}
                     data-testid="agent-max-hops-input"
                   />
@@ -1046,7 +1061,9 @@ export function AgentBuilder({
                     value={maxNodes}
                     onChange={(e) => {
                       const n = Number(e.target.value);
-                      setMaxNodes(Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1);
+                      setMaxNodes(
+                        Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1,
+                      );
                     }}
                     data-testid="agent-max-nodes-input"
                   />
@@ -1090,14 +1107,11 @@ export function AgentBuilder({
                 </p>
               </div>
 
-              <fieldset
-                className="space-y-3 border-t pt-4"
-                disabled={disabled}
-              >
+              <fieldset className="space-y-3 border-t pt-4" disabled={disabled}>
                 <legend className="text-sm font-medium">Event trigger</legend>
                 <p className="text-xs text-muted-foreground">
-                  Fires when something happens in a connected source. Both source
-                  and type are required, or the event trigger is dropped.
+                  Fires when something happens in a connected source. Both
+                  source and type are required, or the event trigger is dropped.
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
@@ -1233,7 +1247,9 @@ export function AgentBuilder({
                     size="sm"
                     disabled={disabled || !canSaveIdentity}
                     onClick={onSaveDraft}
-                    startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
+                    startIcon={
+                      <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                    }
                     data-testid="agent-save-draft"
                   >
                     Save draft
@@ -1244,7 +1260,9 @@ export function AgentBuilder({
                     size="sm"
                     disabled={disabled || !canSaveIdentity}
                     onClick={onPublish}
-                    startIcon={<Send className="h-3.5 w-3.5" aria-hidden="true" />}
+                    startIcon={
+                      <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                    }
                     data-testid="agent-publish"
                   >
                     Publish
@@ -1255,18 +1273,21 @@ export function AgentBuilder({
                     size="sm"
                     disabled={disabled || !canSaveIdentity}
                     onClick={onPublishDeploy}
-                    startIcon={<Rocket className="h-3.5 w-3.5" aria-hidden="true" />}
+                    startIcon={
+                      <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
+                    }
                     data-testid="agent-publish-deploy"
                   >
                     Publish & deploy
                   </Button>
                   {deployed && agentId ? (
                     <a
-                      href={`${workspace.ask(routeCtx)}?agent=${encodeURIComponent(agentId)}`}
+                      href={`${workspace.sessions(routeCtx)}?agent=${encodeURIComponent(agentId)}`}
                       className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
                       data-testid="agent-launch-link"
                     >
-                      Launch <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
+                      Launch{" "}
+                      <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
                     </a>
                   ) : null}
                 </div>
@@ -1318,8 +1339,12 @@ export function AgentBuilder({
               variant="secondary"
               size="sm"
               className="max-md:h-11 max-md:flex-1"
-              onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))}
-              endIcon={<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={() =>
+                setStepIdx((i) => Math.min(steps.length - 1, i + 1))
+              }
+              endIcon={
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              }
               data-testid="builder-next"
             >
               Next

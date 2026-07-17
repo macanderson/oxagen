@@ -3,7 +3,7 @@
  * conversation-list.test.tsx — render tests for ConversationList.
  *
  * Covers:
- *   - Renders "New conversation" button
+ *   - Renders "No session" button
  *   - Renders each conversation title from initialActive
  *   - Shows empty state (just the new-conversation button) when no conversations
  *   - Shows the "Archived" toggle section
@@ -21,7 +21,7 @@ afterEach(cleanup);
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  usePathname: () => "/acme/prod/ask",
+  usePathname: () => "/acme/prod/sessions",
 }));
 
 vi.mock("@/components/ui/toast", () => ({
@@ -29,8 +29,18 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={href} {...rest}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
@@ -45,21 +55,37 @@ const makeActions = (): ConversationNavActions => ({
 const now = new Date().toISOString();
 
 const conversations = [
-  { publicId: "c-1", title: "Alpha chat", archivedAt: null, updatedAt: now, createdAt: now, status: "active" },
-  { publicId: "c-2", title: "Beta chat", archivedAt: null, updatedAt: now, createdAt: now, status: "active" },
+  {
+    publicId: "c-1",
+    title: "Alpha chat",
+    archivedAt: null,
+    updatedAt: now,
+    createdAt: now,
+    status: "active",
+  },
+  {
+    publicId: "c-2",
+    title: "Beta chat",
+    archivedAt: null,
+    updatedAt: now,
+    createdAt: now,
+    status: "active",
+  },
 ];
 
 describe("ConversationList — rendering", () => {
-  it("renders 'New conversation' button", () => {
+  it("renders 'No session' button", () => {
     render(
       <ConversationList
         currentPublicId={null}
         initialActive={[]}
         initialActiveNextCursor={null}
         actions={makeActions()}
-      />
+      />,
     );
-    expect(screen.getByRole("button", { name: /new conversation/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /no session/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders each conversation from initialActive", () => {
@@ -69,7 +95,7 @@ describe("ConversationList — rendering", () => {
         initialActive={conversations}
         initialActiveNextCursor={null}
         actions={makeActions()}
-      />
+      />,
     );
     expect(screen.getByText("Alpha chat")).toBeInTheDocument();
     expect(screen.getByText("Beta chat")).toBeInTheDocument();
@@ -82,12 +108,12 @@ describe("ConversationList — rendering", () => {
         initialActive={conversations}
         initialActiveNextCursor={null}
         actions={makeActions()}
-      />
+      />,
     );
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
-    expect(hrefs).toContain("/acme/prod/ask?c=c-1");
-    expect(hrefs).toContain("/acme/prod/ask?c=c-2");
+    expect(hrefs).toContain("/acme/prod/sessions?c=c-1");
+    expect(hrefs).toContain("/acme/prod/sessions?c=c-2");
   });
 
   it("renders 'Archived' toggle button", () => {
@@ -97,9 +123,11 @@ describe("ConversationList — rendering", () => {
         initialActive={[]}
         initialActiveNextCursor={null}
         actions={makeActions()}
-      />
+      />,
     );
-    expect(screen.getByRole("button", { name: /archived/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /archived/i }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -111,12 +139,12 @@ describe("ConversationList — active state", () => {
         initialActive={conversations}
         initialActiveNextCursor={null}
         actions={makeActions()}
-      />
+      />,
     );
     // The active item swaps in the semantic highlight styling (`bg-accent`)
     // instead of the transparent hover-only state — see conversation-item.tsx.
-    const activeItem = Array.from(container.querySelectorAll("div")).find((el) =>
-      el.className.includes("bg-accent"),
+    const activeItem = Array.from(container.querySelectorAll("div")).find(
+      (el) => el.className.includes("bg-accent"),
     );
     expect(activeItem).toBeInTheDocument();
   });

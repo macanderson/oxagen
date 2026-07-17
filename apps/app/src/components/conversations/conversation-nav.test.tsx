@@ -43,7 +43,7 @@ afterEach(() => {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
-  usePathname: () => "/acme/prod/ask",
+  usePathname: () => "/acme/prod/sessions",
 }));
 
 vi.mock("@/components/ui/toast", () => ({

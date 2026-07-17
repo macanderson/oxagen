@@ -90,11 +90,13 @@ export function ShellFrame({
     workspaceSlug: workspace?.slug,
   });
 
-  // The conversation page (/{org}/{workspace}/ask) treats the transcript as
-  // the page's primary real estate, so the shell's standard content padding
+  // The conversation page (/{org}/{workspace}/sessions) treats the transcript
+  // as the page's primary real estate, so the shell's standard content padding
   // shrinks to a slim gutter there — the conversation reaches (nearly) to the
   // panel edges on every side. All other routes keep the roomier default.
-  const isConversationRoute = /^\/[^/]+\/[^/]+\/ask(?:\/|$)/.test(pathname);
+  const isConversationRoute = /^\/[^/]+\/[^/]+\/sessions(?:\/|$)/.test(
+    pathname,
+  );
 
   return (
     <div className="relative isolate flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">

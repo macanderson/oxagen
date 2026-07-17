@@ -45,7 +45,9 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
       workspaces: breakdown.byWorkspace.length,
       capabilities: breakdown.byCapability.length,
       principals: breakdown.byPrincipal.length,
+      users: breakdown.byUser.length,
       executions: breakdown.totals.executions,
+      messages: breakdown.totals.messages,
     },
     "billing.usage.breakdown: returned usage breakdown",
   );
@@ -59,5 +61,6 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
     byWorkspace: breakdown.byWorkspace,
     byCapability: breakdown.byCapability,
     byPrincipal: breakdown.byPrincipal,
+    byUser: breakdown.byUser,
   };
 };

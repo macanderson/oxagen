@@ -39,12 +39,12 @@ export interface SupportMenuProps {
 export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
   const router = useRouter();
 
-  // "Chat with the AI assistant" routes to the workspace Ask surface (the
+  // "Chat with the AI assistant" routes to the workspace Sessions surface (the
   // product's AI agent). Fall back to the org root, then app root, so the
   // item is always actionable regardless of where it's opened from.
   const chatHref =
     orgSlug && workspaceSlug
-      ? workspace.ask({ orgSlug, workspaceSlug })
+      ? workspace.sessions({ orgSlug, workspaceSlug })
       : orgSlug
         ? `/${orgSlug}`
         : "/";

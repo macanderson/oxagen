@@ -50,9 +50,12 @@ test("org workspaces listing: cards with avatars link into the workspace", async
   const newWs = page.getByRole("link", { name: /New workspace/i }).first();
   await expect(newWs).toHaveAttribute("href", `/${user.orgSlug}/new-workspace`);
 
-  // ── 3. Clicking a card enters the workspace (lands on Ask, no error) ──────
+  // ── 3. Clicking a card enters the workspace (lands on Sessions, no error) ──────
   await card.click();
-  await expect(page).toHaveURL(new RegExp(`/${user.orgSlug}/default/ask`), {
-    timeout: 20_000,
-  });
+  await expect(page).toHaveURL(
+    new RegExp(`/${user.orgSlug}/default/sessions`),
+    {
+      timeout: 20_000,
+    },
+  );
 });

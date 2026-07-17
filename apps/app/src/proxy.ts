@@ -26,7 +26,9 @@ const PUBLIC_PATHS = [
 // a `__Secure-` prefix over HTTPS. Match any *session_token cookie so the
 // guard is robust to the prefix and to the secure variant.
 function hasSession(request: NextRequest): boolean {
-  return request.cookies.getAll().some((c) => c.name.endsWith("session_token") && c.value !== "");
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.endsWith("session_token") && c.value !== "");
 }
 
 export function proxy(request: NextRequest): NextResponse {
@@ -99,28 +101,98 @@ export function proxy(request: NextRequest): NextResponse {
       preserveTail: boolean;
       exact?: boolean;
     }[] = [
-      { from: "chat", to: "ask", preserveTail: false },
+      // web-app: the workspace chat surface was renamed Ask → Sessions. Old
+      // /chat and /ask links (and their tails) 301 to /sessions.
+      { from: "chat", to: "sessions", preserveTail: false },
+      { from: "ask", to: "sessions", preserveTail: false },
       { from: "studio", to: "workbench", preserveTail: true },
-      { from: "workbench/skills", to: "workbench/tools/skills", preserveTail: true },
-      { from: "settings/skills", to: "workbench/tools/skills", preserveTail: true },
-      { from: "settings/plugins", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
-      { from: "settings/environments", to: "workbench/environments", preserveTail: false, exact: true },
-      { from: "settings/knowledge", to: "knowledge/ontology", preserveTail: false, exact: true },
+      {
+        from: "workbench/skills",
+        to: "workbench/tools/skills",
+        preserveTail: true,
+      },
+      {
+        from: "settings/skills",
+        to: "workbench/tools/skills",
+        preserveTail: true,
+      },
+      {
+        from: "settings/plugins",
+        to: "workbench/tools/capabilities",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/environments",
+        to: "workbench/environments",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/knowledge",
+        to: "knowledge/ontology",
+        preserveTail: false,
+        exact: true,
+      },
       // web-app-2.0 Phase 2 Settings consolidation: Models·Budget·Prompts·
       // Memory-policy merged into Agent Defaults; Members folded into General.
-      { from: "settings/models", to: "settings/agent-defaults", preserveTail: false, exact: true },
-      { from: "settings/budget", to: "settings/agent-defaults", preserveTail: false, exact: true },
-      { from: "settings/prompts", to: "settings/agent-defaults", preserveTail: false, exact: true },
-      { from: "settings/memory", to: "settings/agent-defaults", preserveTail: false, exact: true },
-      { from: "settings/members", to: "settings/general", preserveTail: false, exact: true },
-      { from: "marketplace/browse", to: "marketplace/agent-tools", preserveTail: false, exact: true },
-      { from: "marketplace/installed", to: "workbench/tools/capabilities", preserveTail: false, exact: true },
-      { from: "marketplace/mcp", to: "workbench/tools/mcp", preserveTail: false, exact: true },
+      {
+        from: "settings/models",
+        to: "settings/agent-defaults",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/budget",
+        to: "settings/agent-defaults",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/prompts",
+        to: "settings/agent-defaults",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/memory",
+        to: "settings/agent-defaults",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "settings/members",
+        to: "settings/general",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "marketplace/browse",
+        to: "marketplace/agent-tools",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "marketplace/installed",
+        to: "workbench/tools/capabilities",
+        preserveTail: false,
+        exact: true,
+      },
+      {
+        from: "marketplace/mcp",
+        to: "workbench/tools/mcp",
+        preserveTail: false,
+        exact: true,
+      },
       // Knowledge renames. `knowledge/nodes/{id}` must precede the bare-index
       // entry: preserveTail moves the node id onto the Graph child route.
       { from: "knowledge/repos", to: "knowledge/sources", preserveTail: true },
       { from: "knowledge/explore", to: "knowledge/graph", preserveTail: true },
-      { from: "knowledge/memories", to: "knowledge/memory", preserveTail: true },
+      {
+        from: "knowledge/memories",
+        to: "knowledge/memory",
+        preserveTail: true,
+      },
       { from: "knowledge/nodes", to: "knowledge/graph", preserveTail: true },
     ];
     const wsRouteMove = pathname.match(/^(\/[^/]+\/[^/]+)\/(.*)$/);
@@ -131,7 +203,8 @@ export function proxy(request: NextRequest): NextResponse {
         const exactHit = rest === r.from;
         const prefixHit = !r.exact && rest.startsWith(`${r.from}/`);
         if (exactHit || prefixHit) {
-          const tail = r.preserveTail && prefixHit ? rest.slice(r.from.length) : "";
+          const tail =
+            r.preserveTail && prefixHit ? rest.slice(r.from.length) : "";
           return NextResponse.redirect(
             new URL(`${wsBase}/${r.to}${tail}${search}`, request.url),
             301,
@@ -146,7 +219,10 @@ export function proxy(request: NextRequest): NextResponse {
   //    natively — the slug-history resolver (OXA-1779) needs them to build a
   //    redirect URL that preserves the rest of the path and the query.
   const downstreamHeaders = new Headers(request.headers);
-  downstreamHeaders.set("x-url", request.nextUrl.pathname + request.nextUrl.search);
+  downstreamHeaders.set(
+    "x-url",
+    request.nextUrl.pathname + request.nextUrl.search,
+  );
 
   // 4. Public pages need no session.
   if (PUBLIC_PATHS.some((re) => re.test(pathname))) {

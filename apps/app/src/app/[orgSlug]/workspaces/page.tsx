@@ -103,11 +103,14 @@ function WorkspaceCard({
   orgSlug: string;
   workspace: WorkspaceCardData;
 }) {
-  // Link straight to the workspace's Ask surface — its front door. Linking to
-  // the workspace root ({org}/{ws}) would rely on that page's server-side
-  // redirect() to /ask, which doesn't chain on a client soft-navigation
-  // (the router lands on /{ws} and stops). Going direct avoids the extra hop.
-  const href = workspaceRoutes.ask({ orgSlug, workspaceSlug: workspace.slug });
+  // Link straight to the workspace's Sessions surface — the chat front door.
+  // Linking to the workspace root ({org}/{ws}) lands on the Overview instead;
+  // going direct to Sessions preserves the "open a workspace → start chatting"
+  // intent of the picker.
+  const href = workspaceRoutes.sessions({
+    orgSlug,
+    workspaceSlug: workspace.slug,
+  });
 
   return (
     <Card

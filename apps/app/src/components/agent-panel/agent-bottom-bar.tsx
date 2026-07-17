@@ -27,17 +27,18 @@ import type { AgentStatus } from "./use-agent-panel-store";
 // ---------------------------------------------------------------------------
 
 /**
- * The canonical full-page agent conversation surface is `/{org}/{ws}/ask` (the
- * legacy `/chat` route now 308-redirects here). On that surface the user is
- * already inside the agent, so the docked launcher would let them open a second
- * floating agent panel on top of the first — an "agent on top of another agent".
- * Match on the trailing path segment so this is exact: an org/workspace literally
- * named "ask" earlier in the path never triggers a false positive.
+ * The canonical full-page agent conversation surface is `/{org}/{ws}/sessions`
+ * (the legacy `/chat` and `/ask` routes now 301-redirect here). On that surface
+ * the user is already inside the agent, so the docked launcher would let them
+ * open a second floating agent panel on top of the first — an "agent on top of
+ * another agent". Match on the trailing path segment so this is exact: an
+ * org/workspace literally named "sessions" earlier in the path never triggers a
+ * false positive.
  */
 function isConversationSurface(pathname: string | null): boolean {
   if (!pathname) return false;
   const segments = pathname.split("/").filter(Boolean);
-  return segments[segments.length - 1] === "ask";
+  return segments[segments.length - 1] === "sessions";
 }
 
 // ---------------------------------------------------------------------------

@@ -212,7 +212,7 @@ export async function sendMessageAction(
             };
           });
 
-        revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+        revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
         return {
           ok: true,
           conversationId,
@@ -285,7 +285,7 @@ export async function resolveApprovalAction(
       }),
       { surface: "agent" },
     );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     logger.error(
@@ -330,7 +330,7 @@ export async function resolveConsentAction(
       }),
       { surface: "agent" },
     );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     logger.error(
@@ -389,7 +389,7 @@ export async function resolvePlanAction(
       }),
       { surface: "agent" },
     );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     logger.error(
@@ -429,7 +429,7 @@ export async function cancelBackgroundTaskAction(
       }),
       { surface: "agent" },
     );
-    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+    revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
     return { ok: true };
   } catch (err) {
     return {
