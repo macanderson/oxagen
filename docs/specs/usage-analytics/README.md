@@ -6,9 +6,10 @@
 
 ## The ask, in one line
 
-Surface Oxagen's metered usage as first-class, drill-in stat boxes in three places: on a
-**user's profile** (new *Usage* tab), on the **workspace overview** (already partly there),
-and on a brand-new **org dashboard** at `/{org-slug}` → `/{org-slug}/dashboard`. Make it
+Surface Oxagen's metered usage as first-class, drill-in stat boxes: a **summary box on the
+user's profile** plus a new *Usage* tab (`/account/usage`) for the drill-down, an enhanced
+**workspace overview** (already partly there), and a brand-new **org dashboard** at
+`/{org-slug}` → `/{org-slug}/dashboard`. Make it
 sexy, make it honest, and let a human slice usage by org, workspace, user, model, provider,
 surface, agent, repo, environment, capability, and timeframe.
 

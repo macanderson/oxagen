@@ -67,7 +67,24 @@ is the power-user drill-down (reusing `billing/usage/*` components — `usage-ch
 `usage-breakdown-view.tsx`, `usage-range-picker.tsx`). Default org scope: **all workspaces, this
 month**, org timezone.
 
-## 3. Surface B — user Usage tab at `/account/usage`
+## 3. Surface B — the user's usage (two placements)
+
+The user named **three** summary placements — *profile*, *workspace overview*, and the *deep
+usage tab* ("a stat box … on a users profile … **also** surfacing on the … workspace [overview]
+… **whereas** on the users usage tab I should be able to drill in"). The "whereas" contrasts the
+at-a-glance summaries against the drill-down. So the account surface is **two** things:
+
+### 3a. Profile summary box — `/account/profile` (compact, links out)
+
+The existing profile page (`apps/app/src/app/account/profile/page.tsx`) gains a **compact
+`UsageStatCard` strip at the top** — the same summary a workspace overview shows, but scoped to
+*me this month across all my orgs* (fed by `get_my_usage`, §02 §2.2): Executions · Chat turns ·
+Tokens · Cost(if visible) · a couple of activity counts. It is **summary-only** — every card and
+a "View full usage →" affordance deep-links to `/account/usage` with the filter pre-seeded.
+Placement: above the profile form, as a new `_overview`-style tile. This is the literal "stat box
+on a user's profile."
+
+### 3b. Usage tab (deep drill-down) — `/account/usage`
 
 The account section is **global / user-scoped** (outside `[orgSlug]`). Its "tabs" *are* the
 `accountConfig` sidebar items. Four edits + one page:

@@ -54,11 +54,14 @@ and the surface the user described in most detail:
 - **Breakdown tables + charts:** daily series (stacked bar), top models (bar list), by
   surface, by workspace, by user, by capability.
 
-### 2. User Usage tab — **new** — `/account/usage`
+### 2. User usage — **new** — a profile summary box + a deep Usage tab
 
-The account section is global (cross-org). A new *Usage* sidebar item gives a user their own
-footprint **across every org they belong to**, defaulting the view to the current workspace but
-letting them drill by **org → workspace → model → timeframe → repo → environment → agent**.
+Two placements (the user named both): a **compact summary stat box on `/account/profile`** that
+deep-links out, and a new **`/account/usage`** Usage tab for the drill-down (see
+[`03`](./03-information-architecture.md) §3). The account section is global (cross-org). The
+Usage tab gives a user their own footprint **across every org they belong to**, defaulting the
+view to the current workspace but letting them drill by **org → workspace → model → timeframe →
+repo → environment → agent**.
 Because this crosses tenancy, it uses a **self-scoped** contract (`get_my_usage`) whose sole
 guard is `user_id = the authenticated session identity` — see the security invariant in
 [`02`](./02-data-model-and-metrics.md) §2.2. Same activity metrics as the org page: memories

@@ -42,7 +42,9 @@ Work:
    `apps/app/src/app/account/usage/page.tsx` + `routes.ts`/`sidebar.ts` account tab.
 3. Workspace overview: swap `MeteringKpiStrip` onto `UsageStatCard`, add the new stats + "vs org"
    delta.
-4. Proof: e2e for `/account/usage` showing self-scoped, cross-org data; a security test asserting
+4. Profile summary box: add a compact `UsageStatCard` strip to `account/profile/page.tsx` (fed by
+   `get_my_usage`, summary-only, "View full usage →" deep-links to `/account/usage`).
+5. Proof: e2e for `/account/usage` showing self-scoped, cross-org data; a security test asserting
    user A cannot see user B's rows; `capability-ui-map` binding for `get_my_usage`.
 
 **Model:** **Opus** for the `get_my_usage` handler/contract (it deliberately breaks tenancy —
