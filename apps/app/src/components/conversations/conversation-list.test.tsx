@@ -21,7 +21,7 @@ afterEach(cleanup);
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  usePathname: () => "/acme/prod/ask",
+  usePathname: () => "/acme/prod/sessions",
 }));
 
 vi.mock("@/components/ui/toast", () => ({
@@ -112,8 +112,8 @@ describe("ConversationList — rendering", () => {
     );
     const links = screen.getAllByRole("link");
     const hrefs = links.map((l) => l.getAttribute("href"));
-    expect(hrefs).toContain("/acme/prod/ask?c=c-1");
-    expect(hrefs).toContain("/acme/prod/ask?c=c-2");
+    expect(hrefs).toContain("/acme/prod/sessions?c=c-1");
+    expect(hrefs).toContain("/acme/prod/sessions?c=c-2");
   });
 
   it("renders 'Archived' toggle button", () => {

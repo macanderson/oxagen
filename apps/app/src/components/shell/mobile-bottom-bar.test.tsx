@@ -27,7 +27,7 @@ import userEvent from "@testing-library/user-event";
 // usePathname is read on every render; a hoisted ref lets individual tests
 // point the component at a different route (drives mode + active detection).
 const { pathnameRef } = vi.hoisted(() => ({
-  pathnameRef: { current: "/acme/prod/ask" },
+  pathnameRef: { current: "/acme/prod/sessions" },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -83,21 +83,21 @@ const user = { id: "u1", name: "Jane", email: "jane@example.com", image: null };
 
 afterEach(() => {
   cleanup();
-  pathnameRef.current = "/acme/prod/ask";
+  pathnameRef.current = "/acme/prod/sessions";
 });
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has twelve nav items in raw declaration order (ask,
-    // overview, knowledge, automations, agents, evals, agent-tools,
+    // Workspace mode has twelve nav items in raw declaration order (overview,
+    // sessions, knowledge, automations, agents, evals, agent-tools,
     // environments, sandboxes, repos, marketplace, settings); only the first
     // four (MAX_BAR_ITEMS) fit the bar — everything from Agents onward
     // overflows into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
-    expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Sessions" })).toHaveAttribute(
       "href",
-      "/acme/prod/ask",
+      "/acme/prod/sessions",
     );
     expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute(
       "href",
@@ -113,7 +113,7 @@ describe("MobileBottomBar — primary tabs", () => {
 
   it("marks the current destination with aria-current=page", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    expect(screen.getByRole("link", { name: "Ask" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Sessions" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -128,7 +128,7 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(
       screen.getByRole("button", { name: /more navigation/i }),
     ).toBeInTheDocument();
-    // The first four (Ask, Overview, Knowledge, Automations) stay in the bar.
+    // The first four (Overview, Sessions, Knowledge, Automations) stay in the bar.
     expect(
       within(nav).getByRole("link", { name: "Automations" }),
     ).toBeInTheDocument();
@@ -224,14 +224,18 @@ describe("MobileBottomBar — chat_ux_v2 auto-hide", () => {
 
     fireEvent(
       window,
-      new CustomEvent("oxagen:mobile-nav-visibility", { detail: { hidden: true } }),
+      new CustomEvent("oxagen:mobile-nav-visibility", {
+        detail: { hidden: true },
+      }),
     );
     expect(nav.className).toContain("translate-y-full");
     expect(nav).toHaveAttribute("data-hidden", "true");
 
     fireEvent(
       window,
-      new CustomEvent("oxagen:mobile-nav-visibility", { detail: { hidden: false } }),
+      new CustomEvent("oxagen:mobile-nav-visibility", {
+        detail: { hidden: false },
+      }),
     );
     expect(nav.className).not.toContain("translate-y-full");
     expect(nav).not.toHaveAttribute("data-hidden");
@@ -240,7 +244,10 @@ describe("MobileBottomBar — chat_ux_v2 auto-hide", () => {
   it("ignores an event with a malformed detail payload", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
-    fireEvent(window, new CustomEvent("oxagen:mobile-nav-visibility", { detail: {} }));
+    fireEvent(
+      window,
+      new CustomEvent("oxagen:mobile-nav-visibility", { detail: {} }),
+    );
     expect(nav.className).not.toContain("translate-y-full");
   });
 });

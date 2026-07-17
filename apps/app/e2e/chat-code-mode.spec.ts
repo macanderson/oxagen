@@ -42,7 +42,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 /**
  * Create a code agent through the builder deterministically: skip the AI
@@ -60,7 +63,9 @@ async function createCodeAgent(
   opts: { name: string; slug: string },
 ): Promise<string> {
   await page.goto(`/${orgSlug}/default/workbench/agents/new`);
-  await expect(page.getByTestId("step-describe")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("step-describe")).toBeVisible({
+    timeout: 20_000,
+  });
   await page.getByTestId("agent-describe-skip").click();
   await expect(page.getByTestId("step-identity")).toBeVisible();
   await page.getByTestId("agent-name-input").fill(opts.name);
@@ -93,7 +98,9 @@ async function createCodeAgent(
   const segments = new URL(page.url()).pathname.split("/").filter(Boolean);
   const agentId = segments[segments.length - 1];
   if (!agentId || agentId === "new") {
-    throw new Error(`createCodeAgent: could not resolve the agent id from URL "${page.url()}"`);
+    throw new Error(
+      `createCodeAgent: could not resolve the agent id from URL "${page.url()}"`,
+    );
   }
   return agentId;
 }
@@ -138,7 +145,7 @@ test.describe("chat.code-mode", () => {
       // one path that turns code mode on WITHOUT going through the picker's
       // own repo+environment setup step, so the composer's own gate is
       // exercised.
-      await page.goto(`/${orgSlug}/default/ask?agent=${agentId}`);
+      await page.goto(`/${orgSlug}/default/sessions?agent=${agentId}`);
 
       const composer = page.getByPlaceholder(/send a message/i);
       await expect(composer).toBeVisible({ timeout: 10_000 });
@@ -146,8 +153,12 @@ test.describe("chat.code-mode", () => {
       const chip = page.getByRole("button", { name: "Agent: Repo Coder" });
       await expect(chip).toBeVisible();
 
-      const repoTrigger = page.getByRole("combobox", { name: "Select repository" });
-      const envTrigger = page.getByRole("combobox", { name: "Select environment" });
+      const repoTrigger = page.getByRole("combobox", {
+        name: "Select repository",
+      });
+      const envTrigger = page.getByRole("combobox", {
+        name: "Select environment",
+      });
       await expect(repoTrigger).toBeVisible();
       await expect(envTrigger).toBeVisible();
 
@@ -158,18 +169,27 @@ test.describe("chat.code-mode", () => {
       // TWO candidate repos there is no sole option to auto-select, so the
       // repo stays unpicked and send stays gated.
       await expect(sendBtn).toBeDisabled();
-      await expect(gateHint).toContainText("Select a repository and environment to start coding.");
-      await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-gate-blocked.png") });
+      await expect(gateHint).toContainText(
+        "Select a repository and environment to start coding.",
+      );
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, "code-mode-gate-blocked.png"),
+      });
 
       // Select repo A.
       await repoTrigger.click();
       await page
-        .getByRole("option", { name: `${repoA.owner}/${repoA.repo}`, exact: true })
+        .getByRole("option", {
+          name: `${repoA.owner}/${repoA.repo}`,
+          exact: true,
+        })
         .click();
 
       await expect(sendBtn).toBeEnabled();
       await expect(gateHint).toHaveCount(0);
-      await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-gate-open.png") });
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, "code-mode-gate-open.png"),
+      });
 
       // Capture the outgoing POST body. Registered AFTER interceptAgentStream
       // so it runs FIRST (Playwright routes are LIFO) and hands off via
@@ -177,11 +197,16 @@ test.describe("chat.code-mode", () => {
       // without disturbing the mocked stream response.
       let capturedBody: Record<string, unknown> | null = null;
       await interceptAgentStream(page, {
-        events: [{ type: "text", messageId: "e2e-code-mode-msg", text: "Done." }],
+        events: [
+          { type: "text", messageId: "e2e-code-mode-msg", text: "Done." },
+        ],
         delayMs: 30,
       });
       await page.route("**/api/v1/chat/stream", async (route: Route) => {
-        capturedBody = route.request().postDataJSON() as Record<string, unknown>;
+        capturedBody = route.request().postDataJSON() as Record<
+          string,
+          unknown
+        >;
         await route.fallback();
       });
 
@@ -198,7 +223,9 @@ test.describe("chat.code-mode", () => {
         environmentId: repoA.environmentId,
         sandboxSessionId: null,
       });
-      await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-sent.png") });
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, "code-mode-sent.png"),
+      });
 
       // The conversation's coding target is now LOCKED for its lifetime
       // (lockSelection() fires synchronously in onSubmit — no reload
@@ -213,9 +240,14 @@ test.describe("chat.code-mode", () => {
 
       const lockedChip = page.getByTestId("agent-context-chip-locked");
       await expect(lockedChip).toBeVisible();
-      await expect(lockedChip).toHaveAttribute("aria-label", "Agent locked: Repo Coder");
+      await expect(lockedChip).toHaveAttribute(
+        "aria-label",
+        "Agent locked: Repo Coder",
+      );
       await expect(chip).toHaveCount(0);
-      await page.screenshot({ path: path.join(SCREENSHOT_DIR, "code-mode-locked.png") });
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, "code-mode-locked.png"),
+      });
     } finally {
       await repoA.cleanup();
       await repoB.cleanup();
@@ -223,7 +255,9 @@ test.describe("chat.code-mode", () => {
   });
 
   test("sends code: null when code mode is off", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "code-mode-off" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "code-mode-off",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     const composer = page.getByPlaceholder(/send a message/i);

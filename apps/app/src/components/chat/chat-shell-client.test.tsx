@@ -54,9 +54,15 @@ vi.mock("@/components/ui/sheet", () => ({
     side?: string;
     "data-testid"?: string;
   }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  SheetDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 
 // SessionSettings stub — the real component pulls in the full picker suite
@@ -72,14 +78,25 @@ const mockReplace = vi.fn();
 const mockRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, refresh: mockRefresh }),
-  usePathname: () => "/test-org/test-ws/ask",
+  usePathname: () => "/test-org/test-ws/sessions",
 }));
 
 // Mock next/link — render the href as a plain <a> for testability (same
 // pattern as balance-pill.test.tsx).
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [key: string]: unknown }) =>
-    <a href={href} {...props}>{children}</a>,
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 // ── Streaming hook stub ──────────────────────────────────────────────────────
@@ -127,7 +144,9 @@ vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 // composer), so there is no gallery to stub here. SuggestedPromptChips is
 // still mounted — as the single dismissable next-step pill AFTER the first
 // message — and stays stubbed.
-vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
+vi.mock("./suggested-prompt-chips", () => ({
+  SuggestedPromptChips: () => null,
+}));
 vi.mock("./coding-trace-panel", () => ({
   // The AgentActivityRail's ProgressCard renders CodingTraceStages (driven by
   // groupCodingTraceStages), not CodingTracePanel — so stub all three exports
@@ -158,12 +177,18 @@ vi.mock("./workspace-context-panel", () => ({
   WorkspaceContextTabs: () => <div data-testid="workspace-context-panel" />,
 }));
 vi.mock("./activity-timeline", () => ({
-  ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ActivityTimeline: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   // Forward `id` so tests can assert the `#turn-entry-<key>` deep-link anchor
   // the coding-trace-panel rail relies on actually lands on the DOM node.
-  TimelineItem: ({ children, id }: { children: React.ReactNode; id?: string }) => (
-    <div id={id}>{children}</div>
-  ),
+  TimelineItem: ({
+    children,
+    id,
+  }: {
+    children: React.ReactNode;
+    id?: string;
+  }) => <div id={id}>{children}</div>,
 }));
 vi.mock("./chat-component-registry", () => ({
   CHAT_COMPONENTS: {},
@@ -193,7 +218,9 @@ vi.mock("./message-footer", () => ({ MessageFooter: () => null }));
 // mounting behavior (gated on chatUxV2) is exercised by the mobile-chrome
 // describe block further down.
 vi.mock("./session/branch-actions", () => ({
-  listRepoBranchesAction: vi.fn().mockResolvedValue({ branches: [], defaultBranch: null }),
+  listRepoBranchesAction: vi
+    .fn()
+    .mockResolvedValue({ branches: [], defaultBranch: null }),
 }));
 vi.mock("@/components/shell/notifications-bell", () => ({
   NotificationsBell: () => <div data-testid="notifications-bell-stub" />,
@@ -239,10 +266,12 @@ function makeServer(overrides?: Partial<McpServerSummary>): McpServerSummary {
   };
 }
 
-async function renderClient(props: Partial<{
-  availableMcpServers: McpServerSummary[];
-  userFirstName: string | null;
-}> = {}) {
+async function renderClient(
+  props: Partial<{
+    availableMcpServers: McpServerSummary[];
+    userFirstName: string | null;
+  }> = {},
+) {
   const { ChatShellClient } = await import("./chat-shell-client");
   return render(
     <ChatShellClient
@@ -345,7 +374,9 @@ describe("ChatShellClient — new-conversation empty state", () => {
 });
 
 describe("ChatShellClient — availableMcpServers prop forwarding", () => {
-  beforeEach(() => { capturedComposerProps = {}; });
+  beforeEach(() => {
+    capturedComposerProps = {};
+  });
 
   it("passes undefined availableMcpServers to MessageComposer when not provided", async () => {
     await renderClient();
@@ -382,19 +413,22 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
   beforeEach(() => {
     capturedFetchBody = null;
     capturedComposerProps = {};
-    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = init?.body as string;
-      capturedFetchBody = JSON.parse(body) as Record<string, unknown>;
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-            controller.close();
-          },
-        }),
-        { status: 200 },
-      );
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = init?.body as string;
+        capturedFetchBody = JSON.parse(body) as Record<string, unknown>;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
   });
 
   afterEach(() => {
@@ -404,9 +438,13 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
   async function submitWithFormData(fd: FormData) {
     await renderClient();
     // Retrieve the action prop captured on MessageComposer and call it.
-    const action = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const action = capturedComposerProps.action as (
+      fd: FormData,
+    ) => Promise<unknown>;
     // Simulate sendAction returning a conversationId so streaming begins.
-    const { ChatShellClient: _mod, ..._ } = await import("./chat-shell-client").catch(() => ({ ChatShellClient: null }));
+    const { ChatShellClient: _mod, ..._ } = await import(
+      "./chat-shell-client"
+    ).catch(() => ({ ChatShellClient: null }));
     void _mod; // suppress unused
     // Call wrappedSendAction directly via the captured action prop.
     // We need sendAction to return a conversationId to trigger the fetch.
@@ -434,7 +472,9 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
         modelConfig={modelConfig}
       />,
     );
-    const action2 = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const action2 = capturedComposerProps.action as (
+      fd: FormData,
+    ) => Promise<unknown>;
     await action2(fd);
     // Give async fetch a tick to complete.
     await new Promise((r) => setTimeout(r, 10));
@@ -446,7 +486,10 @@ describe("ChatShellClient — activeServerIds in stream request body", () => {
     fd.set("activeServerIds", JSON.stringify(["mcs_test1", "mcs_test2"]));
     await submitWithFormData(fd);
     expect(capturedFetchBody).not.toBeNull();
-    expect(capturedFetchBody!.activeServerIds).toEqual(["mcs_test1", "mcs_test2"]);
+    expect(capturedFetchBody!.activeServerIds).toEqual([
+      "mcs_test1",
+      "mcs_test2",
+    ]);
   });
 
   it("sends empty array when activeServerIds field is absent", async () => {
@@ -476,7 +519,9 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
     vi.unstubAllGlobals();
   });
 
-  async function renderAndSubmit(fetchImpl: (url: string, init?: RequestInit) => Promise<Response>) {
+  async function renderAndSubmit(
+    fetchImpl: (url: string, init?: RequestInit) => Promise<Response>,
+  ) {
     vi.stubGlobal("fetch", vi.fn(fetchImpl));
     cleanup();
     capturedComposerProps = {};
@@ -501,7 +546,9 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
         modelConfig={modelConfig}
       />,
     );
-    const action = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const action = capturedComposerProps.action as (
+      fd: FormData,
+    ) => Promise<unknown>;
     const fd = new FormData();
     fd.set("content", "Hello");
     await action(fd);
@@ -510,24 +557,30 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
   }
 
   it("renders stream-error-banner when SSE endpoint returns 500", async () => {
-    await renderAndSubmit(async () =>
-      new Response(null, { status: 500, statusText: "Internal Server Error" }),
+    await renderAndSubmit(
+      async () =>
+        new Response(null, {
+          status: 500,
+          statusText: "Internal Server Error",
+        }),
     );
     expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
     expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("500");
   });
 
   it("renders stream-error-banner when SSE endpoint returns 401", async () => {
-    await renderAndSubmit(async () =>
-      new Response(null, { status: 401, statusText: "Unauthorized" }),
+    await renderAndSubmit(
+      async () =>
+        new Response(null, { status: 401, statusText: "Unauthorized" }),
     );
     expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
     expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("401");
   });
 
   it("renders stream-error-banner when SSE endpoint returns 429", async () => {
-    await renderAndSubmit(async () =>
-      new Response(null, { status: 429, statusText: "Too Many Requests" }),
+    await renderAndSubmit(
+      async () =>
+        new Response(null, { status: 429, statusText: "Too Many Requests" }),
     );
     expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
   });
@@ -535,11 +588,12 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
   it("surfaces the server's JSON error message on a 422 (attachment resolve failure)", async () => {
     const serverMessage =
       "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the file, then try again.";
-    await renderAndSubmit(async () =>
-      new Response(JSON.stringify({ error: serverMessage }), {
-        status: 422,
-        headers: { "content-type": "application/json" },
-      }),
+    await renderAndSubmit(
+      async () =>
+        new Response(JSON.stringify({ error: serverMessage }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        }),
     );
     const banner = screen.getByTestId("stream-error-banner");
     expect(banner).toBeInTheDocument();
@@ -549,11 +603,12 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
   });
 
   it("falls back to the status message when a non-2xx body carries no error field", async () => {
-    await renderAndSubmit(async () =>
-      new Response(JSON.stringify({ notError: "x" }), {
-        status: 422,
-        headers: { "content-type": "application/json" },
-      }),
+    await renderAndSubmit(
+      async () =>
+        new Response(JSON.stringify({ notError: "x" }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        }),
     );
     const banner = screen.getByTestId("stream-error-banner");
     expect(banner).toHaveTextContent("422");
@@ -571,16 +626,17 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
   });
 
   it("does NOT render stream-error-banner on a clean 200 response", async () => {
-    await renderAndSubmit(async () =>
-      new Response(
-        new ReadableStream({
-          start(c) {
-            c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-            c.close();
-          },
-        }),
-        { status: 200 },
-      ),
+    await renderAndSubmit(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              c.close();
+            },
+          }),
+          { status: 200 },
+        ),
     );
     expect(screen.queryByTestId("stream-error-banner")).not.toBeInTheDocument();
   });
@@ -609,16 +665,17 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
   function stubCleanStream() {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
-          new ReadableStream({
-            start(c) {
-              c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              c.close();
-            },
-          }),
-          { status: 200 },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+                c.close();
+              },
+            }),
+            { status: 200 },
+          ),
       ),
     );
   }
@@ -649,7 +706,9 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
         {...extra}
       />,
     );
-    const action = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const action = capturedComposerProps.action as (
+      fd: FormData,
+    ) => Promise<unknown>;
     const fd = new FormData();
     fd.set("content", "Recent activity?");
     await action(fd);
@@ -658,15 +717,24 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
 
   it("calls onConversationCreated with the new ids and does NOT pin the URL", async () => {
     const onConversationCreated = vi.fn();
-    await renderEmbeddedAndSubmit({ onConversationCreated, reloadMessages: vi.fn() });
-    expect(onConversationCreated).toHaveBeenCalledWith("conv-embed", "conv_pub_embed");
+    await renderEmbeddedAndSubmit({
+      onConversationCreated,
+      reloadMessages: vi.fn(),
+    });
+    expect(onConversationCreated).toHaveBeenCalledWith(
+      "conv-embed",
+      "conv_pub_embed",
+    );
     // The floating panel has no route to pin — router.replace must not fire.
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it("calls reloadMessages after the turn instead of router.refresh()", async () => {
     const reloadMessages = vi.fn();
-    await renderEmbeddedAndSubmit({ reloadMessages, onConversationCreated: vi.fn() });
+    await renderEmbeddedAndSubmit({
+      reloadMessages,
+      onConversationCreated: vi.fn(),
+    });
     expect(reloadMessages).toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
   });
@@ -697,7 +765,9 @@ describe("ChatShellClient — embedded mode (in-app panel)", () => {
       />,
     );
     expect(screen.queryByTestId("coding-trace-panel")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("workspace-context-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("workspace-context-panel"),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -724,13 +794,17 @@ describe("ChatShellClient — turn-entry deep-link anchors", () => {
       order: ["tool:tc1"],
     };
     await renderClient();
-    expect(document.querySelector("#turn-entry-tool\\:tc1")).toBeInTheDocument();
+    expect(
+      document.querySelector("#turn-entry-tool\\:tc1"),
+    ).toBeInTheDocument();
   });
 
   it("wraps the turn-result footer in a `#turn-result` anchor once turnUsage lands", async () => {
     mockStream.overrides = {
       order: ["text:m1:0"],
-      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Done." } },
+      textSegments: {
+        "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Done." },
+      },
       turnUsage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
     };
     await renderClient();
@@ -740,7 +814,9 @@ describe("ChatShellClient — turn-entry deep-link anchors", () => {
   it("does not render the `#turn-result` anchor while the turn is still in flight", async () => {
     mockStream.overrides = {
       order: ["text:m1:0"],
-      textSegments: { "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Working…" } },
+      textSegments: {
+        "text:m1:0": { key: "text:m1:0", messageId: "m1", text: "Working…" },
+      },
       turnUsage: undefined,
     };
     await renderClient();
@@ -785,7 +861,8 @@ describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", ()
     mockStream.overrides = {
       turnError: {
         code: "insufficient_credits",
-        message: "Insufficient credits: your balance is empty. Please add credits to continue.",
+        message:
+          "Insufficient credits: your balance is empty. Please add credits to continue.",
       },
     };
     await renderClient();
@@ -847,7 +924,9 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
     expect(
       document.querySelector('[data-component="chat-header-mobile"]'),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId("chat-mobile-rail-trigger")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("chat-mobile-rail-trigger"),
+    ).not.toBeInTheDocument();
     expect(typeof capturedComposerProps.onOpenSessionSettings).toBe("function");
   });
 
@@ -873,7 +952,9 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
   it("opens the session-settings drawer when the header's center summary is tapped", async () => {
     mockViewport.isMobile = true;
     await renderMobileChrome({ chatUxV2: true });
-    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("session-settings-stub"),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Session settings" }));
     expect(screen.getByTestId("session-settings-stub")).toBeInTheDocument();
   });
@@ -881,7 +962,9 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
   it("opens the session-settings drawer via the composer's wired onOpenSessionSettings callback", async () => {
     mockViewport.isMobile = true;
     await renderMobileChrome({ chatUxV2: true });
-    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("session-settings-stub"),
+    ).not.toBeInTheDocument();
     (capturedComposerProps.onOpenSessionSettings as () => void)();
     await screen.findByTestId("session-settings-stub");
   });
@@ -889,7 +972,9 @@ describe("ChatShellClient — chat_ux_v2 mobile chrome", () => {
   it("opens the Activity bottom sheet via the header's activity button", async () => {
     mockViewport.isMobile = true;
     await renderMobileChrome({ chatUxV2: true });
-    expect(screen.queryByTestId("chat-mobile-rail-sheet")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("chat-mobile-rail-sheet"),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Activity" }));
     expect(screen.getByTestId("chat-mobile-rail-sheet")).toBeInTheDocument();
   });
@@ -925,7 +1010,9 @@ describe("ChatShellClient — chat_ux_v2 desktop rail vs. mid-width cog", () => 
     await renderMobileChrome({ chatUxV2: true });
     expect(capturedComposerProps.showComposerCog).toBe(true);
     expect(typeof capturedComposerProps.onOpenSessionSettings).toBe("function");
-    expect(screen.queryByTestId("session-settings-stub")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("session-settings-stub"),
+    ).not.toBeInTheDocument();
     (capturedComposerProps.onOpenSessionSettings as () => void)();
     await screen.findByTestId("session-settings-stub");
   });

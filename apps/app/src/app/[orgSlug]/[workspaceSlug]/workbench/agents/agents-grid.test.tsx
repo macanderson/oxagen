@@ -74,7 +74,7 @@ describe("AgentsGrid", () => {
             summary: "Answers billing questions from Stripe data.",
             status: "active",
             deploymentStatus: "active",
-            launchHref: "/acme/default/ask?agent=agt_billing-bot",
+            launchHref: "/acme/default/sessions?agent=agt_billing-bot",
           }),
           agent({
             slug: "qa-chat",
@@ -184,7 +184,9 @@ describe("AgentsGrid", () => {
     );
 
     // Counts are rendered into the segmented control up front.
-    expect(screen.getByTestId("agents-filter-all")).toHaveTextContent("All (3)");
+    expect(screen.getByTestId("agents-filter-all")).toHaveTextContent(
+      "All (3)",
+    );
     expect(screen.getByTestId("agents-filter-deployed")).toHaveTextContent(
       "Deployed (1)",
     );
@@ -230,7 +232,10 @@ describe("AgentsGrid", () => {
 describe("matchesStatusFilter", () => {
   const live = { status: "active", deploymentStatus: "active" } as const;
   const draft = { status: "draft", deploymentStatus: "inactive" } as const;
-  const archived = { status: "archived", deploymentStatus: "inactive" } as const;
+  const archived = {
+    status: "archived",
+    deploymentStatus: "inactive",
+  } as const;
   // A published-but-not-deployed agent: active lifecycle, inactive deployment.
   const published = { status: "active", deploymentStatus: "inactive" } as const;
 

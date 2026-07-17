@@ -193,7 +193,7 @@ test.describe("coding-agent-trace", () => {
       orgPrefix: "coding-trace",
     });
 
-    await page.goto(`/${orgSlug}/default/ask`);
+    await page.goto(`/${orgSlug}/default/sessions`);
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
@@ -278,7 +278,7 @@ test.describe("coding-agent-trace", () => {
       orgPrefix: "coding-trace-ws",
     });
 
-    await page.goto(`/${orgSlug}/default/ask`);
+    await page.goto(`/${orgSlug}/default/sessions`);
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 

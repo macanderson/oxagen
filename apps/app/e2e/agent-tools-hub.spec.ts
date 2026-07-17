@@ -23,7 +23,11 @@ import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "agent-tools-hub");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "agent-tools-hub",
+);
 
 test.beforeAll(async () => {
   await rm(SCREENSHOTS_DIR, { recursive: true, force: true });
@@ -31,10 +35,14 @@ test.beforeAll(async () => {
 });
 
 test.describe("Agent Tools consolidated IA", () => {
-  test("hub tabs, two-sided marketplace, legacy redirects", async ({ page }) => {
+  test("hub tabs, two-sided marketplace, legacy redirects", async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "agent-tools" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "agent-tools",
+    });
     const ws = `/${orgSlug}/default`;
 
     // ── 1. Agent Tools hub ───────────────────────────────────────────────────
@@ -42,9 +50,17 @@ test.describe("Agent Tools consolidated IA", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     // Sub-tabs of the hub.
-    for (const label of ["All Tools", "Skills", "MCP Servers", "Capabilities"]) {
+    for (const label of [
+      "All Tools",
+      "Skills",
+      "MCP Servers",
+      "Capabilities",
+    ]) {
       await expect(
-        page.getByRole("tab", { name: label }).or(page.getByRole("link", { name: label })).first(),
+        page
+          .getByRole("tab", { name: label })
+          .or(page.getByRole("link", { name: label }))
+          .first(),
       ).toBeVisible({ timeout: 15_000 });
     }
     await page.screenshot({
@@ -54,7 +70,9 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // Skills tab renders the skills panel (creation lives here now).
     await gotoStable(page, `${ws}/workbench/tools/skills`);
-    await expect(page.getByTestId("new-skill-btn")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("new-skill-btn")).toBeVisible({
+      timeout: 20_000,
+    });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-agent-tools-skills.png"),
       fullPage: true,
@@ -62,7 +80,9 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // MCP Servers tab renders installed list + install surfaces + snippets.
     await gotoStable(page, `${ws}/workbench/tools/mcp`);
-    await expect(page.getByText("Installed MCP servers")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Installed MCP servers")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByText("Install from the marketplace")).toBeVisible();
     await expect(page.getByText("Connect manually")).toBeVisible();
     // Registry administration must NOT render here — it lives in Settings.
@@ -74,7 +94,9 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // Capabilities tab renders the installed-plugins panel.
     await gotoStable(page, `${ws}/workbench/tools/capabilities`);
-    await expect(page.getByText(/installed plugins/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/installed plugins/i).first()).toBeVisible({
+      timeout: 20_000,
+    });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "04-agent-tools-capabilities.png"),
       fullPage: true,
@@ -82,14 +104,28 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // ── 2. Marketplace: two sides ───────────────────────────────────────────
     await gotoStable(page, `${ws}/marketplace`);
-    await expect(page).toHaveURL(/\/marketplace\/agent-tools$/, { timeout: 20_000 });
-    await expect(page.getByTestId("marketplace-browse-tab-bar")).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/marketplace\/agent-tools$/, {
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("marketplace-browse-tab-bar")).toBeVisible({
+      timeout: 20_000,
+    });
     // Agent-tool type chips only — no knowledge-source tab anywhere.
-    await expect(page.getByTestId("marketplace-browse-tab-agent_skill")).toBeVisible();
-    await expect(page.getByTestId("marketplace-browse-tab-mcp_server")).toBeVisible();
-    await expect(page.getByTestId("marketplace-browse-tab-agent_capability")).toBeVisible();
-    await expect(page.getByTestId("marketplace-browse-tab-knowledge_source")).toHaveCount(0);
-    await expect(page.getByTestId("marketplace-browse-tab-integration")).toHaveCount(0);
+    await expect(
+      page.getByTestId("marketplace-browse-tab-agent_skill"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("marketplace-browse-tab-mcp_server"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("marketplace-browse-tab-agent_capability"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("marketplace-browse-tab-knowledge_source"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByTestId("marketplace-browse-tab-integration"),
+    ).toHaveCount(0);
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "05-marketplace-agent-tools.png"),
       fullPage: true,
@@ -97,7 +133,9 @@ test.describe("Agent Tools consolidated IA", () => {
 
     // Integrations side lists real connectors from the ingestion registry.
     await gotoStable(page, `${ws}/marketplace/integrations`);
-    await expect(page.getByTestId("integrations-grid")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("integrations-grid")).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByTestId("integration-connect-github")).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "06-marketplace-integrations.png"),
@@ -126,10 +164,14 @@ test.describe("Agent Tools consolidated IA", () => {
     }
   });
 
-  test("builder Equip step installs inline from the marketplace modal", async ({ page }) => {
+  test("builder Equip step installs inline from the marketplace modal", async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "equip-inline" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "equip-inline",
+    });
     const ws = `/${orgSlug}/default`;
 
     await gotoStable(page, `${ws}/workbench/agents/new`);
@@ -145,21 +187,29 @@ test.describe("Agent Tools consolidated IA", () => {
     await browseBtn.click();
 
     // The Agent Tools Marketplace modal opens with the three-tab taxonomy.
-    await expect(page.getByText("Agent Tools Marketplace")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Agent Tools Marketplace")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("marketplace-tab-agent_skill")).toBeVisible();
     await expect(page.getByTestId("marketplace-tab-mcp_server")).toBeVisible();
-    await expect(page.getByTestId("marketplace-tab-agent_capability")).toBeVisible();
+    await expect(
+      page.getByTestId("marketplace-tab-agent_capability"),
+    ).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "07-equip-inline-marketplace.png"),
       fullPage: true,
     });
   });
 
-  test("mobile: bottom bar + thumb-reachable builder step nav @ 390px", async ({ page }) => {
+  test("mobile: bottom bar + thumb-reachable builder step nav @ 390px", async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mobile-tools" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mobile-tools",
+    });
     const ws = `/${orgSlug}/default`;
 
     // Mobile bottom bar shows the primary destinations (Ask/Overview/
@@ -170,7 +220,7 @@ test.describe("Agent Tools consolidated IA", () => {
     const nav = page.getByRole("navigation", { name: /mobile navigation/i });
     await expect(nav).toBeVisible({ timeout: 20_000 });
     // A primary destination renders directly in the bar.
-    await expect(nav.getByRole("link", { name: "Ask" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Sessions" })).toBeVisible();
     // Agents is reachable via the "More" sheet.
     await nav.getByRole("button", { name: /more navigation/i }).click();
     const moreNav = page.getByRole("navigation", {
