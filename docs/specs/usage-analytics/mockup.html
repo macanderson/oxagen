@@ -1,0 +1,500 @@
+<meta charset="utf-8" />
+<title>Oxagen — Org Usage Dashboard (mockup)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* ─── Instrument-panel token system ─────────────────────────────── */
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+    /* light instrument ground (cool-biased neutral) */
+    --ground:      #eef0f4;
+    --surface:     #ffffff;
+    --surface-2:   #f4f6f9;
+    --hairline:    #dde1e8;
+    --hairline-2:  #e8ebf0;
+    --text:        #171a21;
+    --text-2:      #414855;
+    --muted:       #6b7383;
+    --faint:       #98a0b0;
+
+    --accent:      #c47a09;   /* signal amber, deepened for light-ground contrast */
+    --accent-soft: #f6a72322;
+    --pos:         #058a5a;   /* semantic — deltas only */
+    --neg:         #cf3636;
+    --pos-soft:    #058a5a18;
+    --neg-soft:    #cf363618;
+
+    --c1: #c47a09;  /* chart series (CVD-aware) */
+    --c2: #0f9488;
+    --c3: #7c5cd6;
+    --c4: #64748b;
+
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(20,24,33,.04), 0 8px 24px -16px rgba(20,24,33,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:    #0b0d12;
+      --surface:   #14171e;
+      --surface-2: #1a1e27;
+      --hairline:  #272c37;
+      --hairline-2:#20242e;
+      --text:      #e9ebf1;
+      --text-2:    #b9c0cd;
+      --muted:     #868e9f;
+      --faint:     #5b6373;
+
+      --accent:      #f5a623;
+      --accent-soft: #f5a62319;
+      --pos:         #34d399;
+      --neg:         #f87171;
+      --pos-soft:    #34d39916;
+      --neg-soft:    #f8717118;
+
+      --c1: #f5a623;
+      --c2: #2dd4bf;
+      --c3: #a78bfa;
+      --c4: #94a3b8;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.7);
+    }
+  }
+  /* explicit toggle wins in both directions */
+  :root[data-theme="light"] {
+    --ground:#eef0f4; --surface:#fff; --surface-2:#f4f6f9; --hairline:#dde1e8; --hairline-2:#e8ebf0;
+    --text:#171a21; --text-2:#414855; --muted:#6b7383; --faint:#98a0b0;
+    --accent:#c47a09; --accent-soft:#f6a72322; --pos:#058a5a; --neg:#cf3636; --pos-soft:#058a5a18; --neg-soft:#cf363618;
+    --c1:#c47a09; --c2:#0f9488; --c3:#7c5cd6; --c4:#64748b;
+    --shadow:0 1px 2px rgba(20,24,33,.04), 0 8px 24px -16px rgba(20,24,33,.18);
+  }
+  :root[data-theme="dark"] {
+    --ground:#0b0d12; --surface:#14171e; --surface-2:#1a1e27; --hairline:#272c37; --hairline-2:#20242e;
+    --text:#e9ebf1; --text-2:#b9c0cd; --muted:#868e9f; --faint:#5b6373;
+    --accent:#f5a623; --accent-soft:#f5a62319; --pos:#34d399; --neg:#f87171; --pos-soft:#34d39916; --neg-soft:#f8717118;
+    --c1:#f5a623; --c2:#2dd4bf; --c3:#a78bfa; --c4:#94a3b8;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -18px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--text);
+    font-family: var(--font-sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .shell { max-width: 1200px; margin: 0 auto; padding: 0 24px 64px; }
+
+  /* ─── command bar ─────────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--ground) 86%, transparent);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar-inner { max-width: 1200px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  .mark { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.02em; }
+  .mark .glyph {
+    width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #d9542a));
+    color: #1a1204; font-family: var(--font-mono); font-weight: 800; font-size: 15px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 6px 16px -8px var(--accent);
+  }
+  .orgswitch {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; font-weight: 550; cursor: pointer;
+  }
+  .orgswitch .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .orgswitch .car { color: var(--faint); font-size: 11px; }
+  .spacer { flex: 1; }
+  .iconbtn {
+    width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--hairline);
+    background: var(--surface); color: var(--text-2); cursor: pointer; display: grid; place-items: center;
+    font-size: 15px; transition: border-color .15s, color .15s;
+  }
+  .iconbtn:hover { border-color: var(--faint); color: var(--text); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  /* ─── tabs ────────────────────────────────────────────────────── */
+  .crumbs { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 20px 0 6px; }
+  .crumbs b { color: var(--text); font-weight: 600; }
+  .crumbs .sep { color: var(--faint); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--hairline); margin-bottom: 18px; }
+  .tab {
+    appearance: none; border: 0; background: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 550;
+    color: var(--muted); padding: 9px 12px; position: relative; border-radius: 8px 8px 0 0;
+  }
+  .tab[aria-selected="true"] { color: var(--text); }
+  .tab[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--accent); border-radius: 2px;
+  }
+  .tab:hover:not([aria-selected="true"]) { color: var(--text-2); }
+
+  /* ─── filter bar (controls) ───────────────────────────────────── */
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 22px; }
+  .seg {
+    display: inline-flex; background: var(--surface-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 3px;
+  }
+  .seg button {
+    appearance: none; border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 550; color: var(--muted);
+    padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: color .12s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .seg button:hover:not([aria-pressed="true"]) { color: var(--text-2); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; font-size: 12.5px; font-weight: 550;
+    border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface); color: var(--text-2); cursor: pointer;
+    transition: border-color .12s;
+  }
+  .chip:hover { border-color: var(--faint); }
+  .chip .k { color: var(--faint); font-weight: 500; }
+  .chip .car { color: var(--faint); font-size: 10px; }
+  .chip.soon { opacity: .55; cursor: not-allowed; border-style: dashed; }
+  .chip.soon .tagx { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .ctl-sep { width: 1px; height: 20px; background: var(--hairline); margin: 0 2px; }
+
+  /* ─── section headers ─────────────────────────────────────────── */
+  .sec-h { display: flex; align-items: baseline; gap: 10px; margin: 26px 2px 12px; }
+  .sec-h h2 { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .sec-h .note { font-size: 11.5px; color: var(--faint); }
+
+  /* ─── stat grid + card ────────────────────────────────────────── */
+  .grid { display: grid; gap: 12px; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g2 { grid-template-columns: 1.55fr 1fr; }
+  @media (max-width: 880px) { .g4 { grid-template-columns: repeat(2, 1fr); } .g2 { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .g4 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: 15px 16px 13px;
+    box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .stat { display: flex; flex-direction: column; gap: 9px; min-height: 118px; }
+  .stat.link { cursor: pointer; transition: border-color .14s, transform .14s; }
+  .stat.link:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline)); transform: translateY(-1px); }
+  .stat .lab { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .stat .lab .i { color: var(--faint); font-size: 13px; line-height: 1; }
+  .stat .lab .car { margin-left: auto; color: var(--faint); font-size: 11px; opacity: 0; transition: opacity .14s; }
+  .stat.link:hover .lab .car { opacity: 1; }
+  .stat .val { font-size: 30px; font-weight: 600; line-height: 1; color: var(--text); }
+  .stat .val .suf { font-size: 15px; color: var(--muted); font-weight: 500; margin-left: 3px; }
+  .stat .foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; }
+  .stat .sub { font-size: 11.5px; color: var(--muted); }
+  .stat .sub .num { color: var(--text-2); }
+
+  .delta { display: inline-flex; align-items: center; gap: 3px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+  .delta.up { color: var(--pos); background: var(--pos-soft); }
+  .delta.down { color: var(--neg); background: var(--neg-soft); }
+  .delta.flat { color: var(--muted); background: var(--surface-2); }
+  .delta .ar { font-size: 9px; }
+
+  .spark { width: 100%; height: 30px; display: block; }
+  .miniset { display: flex; align-items: flex-end; gap: 12px; }
+
+  /* capability strip cards a touch smaller */
+  .cap .stat { min-height: 100px; }
+  .cap .val { font-size: 26px; }
+
+  /* activity tile */
+  .tile .stat { min-height: 96px; }
+  .tile .val { font-size: 24px; }
+  .tile .store { font-size: 10.5px; color: var(--faint); font-family: var(--font-mono); }
+  .tile.disabled { opacity: .45; }
+  .tile .notfilt { font-size: 10.5px; color: var(--accent); background: var(--accent-soft); padding: 2px 6px; border-radius: 5px; font-weight: 600; }
+  .split { display: flex; align-items: baseline; gap: 8px; }
+  .split .up { color: var(--pos); } .split .dn { color: var(--neg); }
+
+  /* ─── charts ──────────────────────────────────────────────────── */
+  .chart-card { padding: 16px 18px 14px; }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .chart-head h3 { margin: 0; font-size: 14px; font-weight: 620; }
+  .chart-head .leg { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+  .chart-head .leg span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  #dailyChart { width: 100%; height: 190px; display: block; }
+  .axis { font-size: 10px; fill: var(--faint); font-family: var(--font-mono); }
+
+  .barlist { display: flex; flex-direction: column; gap: 11px; margin-top: 4px; }
+  .barrow { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; }
+  .barrow .nm { color: var(--text-2); font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bartrack { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+  .barfill { height: 100%; border-radius: 999px; transform-origin: left; }
+  .barrow .amt { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+
+  .footer { margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--hairline); color: var(--faint); font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+  .footer code { font-family: var(--font-mono); color: var(--muted); }
+  .footer .pill { border: 1px solid var(--hairline); border-radius: 999px; padding: 2px 9px; font-size: 11px; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="mark"><span class="glyph">O</span> Oxagen</div>
+    <button class="orgswitch"><span class="dot"></span> Acme Inc <span class="car">▾</span></button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle light / dark">◐</button>
+  </div>
+</header>
+
+<div class="shell">
+  <div class="crumbs"><b>Acme Inc</b> <span class="sep">›</span> Dashboard <span class="sep">›</span> <b>Overview</b></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" aria-selected="false">Usage</button>
+  </div>
+
+  <!-- controls -->
+  <div class="controls">
+    <div class="seg" id="rangeSeg" role="group" aria-label="Timeframe">
+      <button>Today</button>
+      <button>This week</button>
+      <button aria-pressed="true">This month</button>
+      <button>This quarter</button>
+      <button>Custom</button>
+    </div>
+    <div class="ctl-sep"></div>
+    <button class="chip"><span class="k">Workspace</span> All <span class="car">▾</span></button>
+    <button class="chip"><span class="k">User</span> All <span class="car">▾</span></button>
+    <button class="chip"><span class="k">Model</span> All <span class="car">▾</span></button>
+    <button class="chip"><span class="k">Provider</span> All <span class="car">▾</span></button>
+    <button class="chip"><span class="k">Surface</span> All <span class="car">▾</span></button>
+    <div class="ctl-sep"></div>
+    <span class="chip soon" title="Available after the metering-enrichment phase (Phase 3)"><span class="k">Agent</span> <span class="tagx">soon</span></span>
+    <span class="chip soon" title="Available after the metering-enrichment phase (Phase 3)"><span class="k">Repo</span> <span class="tagx">soon</span></span>
+    <span class="chip soon" title="Available after the metering-enrichment phase (Phase 3)"><span class="k">Env</span> <span class="tagx">soon</span></span>
+  </div>
+
+  <!-- CORE -->
+  <div class="sec-h"><h2>Core</h2><span class="note">this month · all workspaces · Acme timezone</span></div>
+  <div class="grid g4" id="coreGrid"></div>
+
+  <!-- CAPABILITY PACKS -->
+  <div class="sec-h"><h2>Capability packs</h2><span class="note">counts derive from the distinct capabilities used — no names hard-coded</span></div>
+  <div class="grid g4 cap" id="capGrid"></div>
+
+  <!-- CHARTS -->
+  <div class="sec-h"><h2>Trend</h2></div>
+  <div class="grid g2">
+    <div class="card chart-card">
+      <div class="chart-head">
+        <h3>Daily usage</h3>
+        <div class="seg" id="metricSeg" role="group" aria-label="Metric">
+          <button aria-pressed="true" data-m="tokens">Tokens</button>
+          <button data-m="cost">Cost</button>
+        </div>
+      </div>
+      <div class="chart-head" style="margin-top:2px">
+        <div class="leg" id="chartLeg"></div>
+        <span class="note" id="chartTotal" style="font-size:11.5px;color:var(--muted)"></span>
+      </div>
+      <svg id="dailyChart" viewBox="0 0 720 190" preserveAspectRatio="none" role="img" aria-label="Daily usage bar chart"></svg>
+    </div>
+    <div class="card chart-card">
+      <div class="chart-head"><h3>Top models</h3><span class="note" style="font-size:11px;color:var(--faint)">by tokens</span></div>
+      <div class="barlist" id="modelBars"></div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY -->
+  <div class="sec-h"><h2>Activity</h2><span class="note">one fail-open tile per store — ClickHouse · Postgres · Neo4j</span></div>
+  <div class="grid g4" id="activityGrid"></div>
+
+  <div class="footer">
+    <span class="pill">Mockup</span>
+    <span>Numbers are illustrative. Every metric traces to a typed contract —</span>
+    <code>docs/specs/usage-analytics</code>
+    <span>·</span>
+    <span>reads ClickHouse <code>token_usage</code> via <code>get_usage_breakdown</code>, not PostHog.</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* seeded pseudo-random so bars are stable across reloads (no Math.random reliance for layout) */
+  let seed = 20260717;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const series = (n, base, amp, drift) => Array.from({length:n}, (_,i) => Math.max(1, Math.round(base + Math.sin(i/3)*amp*.4 + (rnd()-0.5)*amp + i*drift)));
+
+  const fmtInt = v => Math.round(v).toLocaleString("en-US");
+  const fmtCompact = v => v >= 1e6 ? (v/1e6).toFixed(1).replace(/\.0$/,"")+"M" : v >= 1e3 ? (v/1e3).toFixed(1).replace(/\.0$/,"")+"k" : ""+Math.round(v);
+  const fmtUsd = v => "$" + Math.round(v).toLocaleString("en-US");
+
+  /* ── sparkline ── */
+  function spark(values, color) {
+    const w = 120, h = 30, pad = 2;
+    const min = Math.min(...values), max = Math.max(...values), rng = (max-min)||1;
+    const step = (w - pad*2) / (values.length - 1);
+    const pts = values.map((v,i) => [pad + i*step, h - pad - ((v-min)/rng)*(h - pad*2)]);
+    const line = pts.map((p,i)=> (i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+    const area = line + ` L ${pts[pts.length-1][0].toFixed(1)} ${h} L ${pts[0][0].toFixed(1)} ${h} Z`;
+    const gid = "g"+Math.abs(values[0]*7+values.length);
+    const [ex,ey] = pts[pts.length-1];
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${color}" stop-opacity=".22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="${area}" fill="url(#${gid})"/>
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2.1" fill="${color}"/>
+    </svg>`;
+  }
+  const cvar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  /* ── card factory ── */
+  function statCard(o) {
+    const d = o.delta;
+    const dcls = d == null ? "flat" : d > 0 ? (o.goodDown ? "down":"up") : d < 0 ? (o.goodDown ? "up":"down") : "flat";
+    const ar = d > 0 ? "▲" : d < 0 ? "▼" : "•";
+    const dtxt = d == null ? "new" : (d>0?"+":"") + d + "%";
+    return `<div class="card stat ${o.link!==false?'link':''}">
+      <div class="lab"><span class="i">${o.icon||""}</span>${o.label}<span class="car">↗</span></div>
+      <div class="val"><span class="cnt" data-to="${o.value}" data-fmt="${o.fmt||'int'}">0</span>${o.suf?`<span class="suf">${o.suf}</span>`:""}</div>
+      <div class="foot">
+        <span class="delta ${dcls}"><span class="ar">${ar}</span>${dtxt}</span>
+        ${o.spark ? spark(o.spark, o.color||cvar('--accent')) : `<span class="sub">${o.sub||""}</span>`}
+      </div>
+      ${o.spark && o.sub ? `<div class="sub" style="margin-top:2px">${o.sub}</div>`:""}
+    </div>`;
+  }
+
+  const c1 = cvar('--c1'), c2 = cvar('--c2'), c3 = cvar('--c3'), c4 = cvar('--c4'), muted = cvar('--muted');
+
+  /* ── data ── */
+  const days = 30;
+  const tokIn = series(days, 900000, 320000, 8000);
+  const tokOut = series(days, 460000, 150000, 3000);
+  const dailyTok = tokIn.map((v,i)=> v + tokOut[i]);
+  const dailyCost = dailyTok.map(v => v/1e6 * 9.4);
+
+  const core = [
+    {label:"Executions", icon:"⚡", value:12480, fmt:"int", delta:18, spark:series(30,300,120,4), color:c1, sub:'agent runs · <span class="num">1,204</span> today'},
+    {label:"Chat turns", icon:"💬", value:8932, fmt:"int", delta:12, spark:series(30,230,90,2), color:c2, sub:'distinct message steps'},
+    {label:"Total tokens", icon:"◈", value:47.2, fmt:"m", suf:"M", delta:22, spark:dailyTok, color:c3, sub:'in + out + cache'},
+    {label:"Cost", icon:"◎", value:2318, fmt:"usd", delta:9, spark:dailyCost, color:c1, sub:'metered spend, this month'},
+    {label:"Tokens in", icon:"→", value:31.9, fmt:"m", suf:"M", delta:20, spark:tokIn, color:c2, sub:'prompt tokens'},
+    {label:"Tokens out", icon:"←", value:15.3, fmt:"m", suf:"M", delta:16, spark:tokOut, color:c3, sub:'completion tokens'},
+    {label:"Cache-read share", icon:"◱", value:64, fmt:"pct", suf:"%", delta:5, spark:series(30,55,12,.5), color:c1, sub:'cached ÷ input tokens'},
+    {label:"PRs · Commits", icon:"⎇", value:84, fmt:"int", delta:-4, goodDown:false, spark:series(30,3,3,0), color:c4, sub:'<span class="num">84</span> PRs · <span class="num">512</span> commits'},
+  ];
+  const caps = [
+    {label:"Documents", icon:"▤", value:1204, delta:14, color:c2, sub:'generated_assets · <span class="num">kind=document</span>'},
+    {label:"Images", icon:"▨", value:3908, delta:31, color:c1, sub:'incl. <span class="num">412</span> svg'},
+    {label:"Videos", icon:"▷", value:212, delta:48, color:c3, sub:'gateway: bfl · google'},
+    {label:"PDFs · other", icon:"◫", value:664, delta:7, color:c4, sub:'pdf · mermaid · markdown'},
+  ];
+
+  document.getElementById("coreGrid").innerHTML = core.map(statCard).join("");
+  document.getElementById("capGrid").innerHTML = caps.map(o=>statCard({...o, fmt:"int"})).join("");
+
+  /* activity tiles (per store) — dedicated renderer (not string-surgery) */
+  function tileCard(o) {
+    const ar = o.delta > 0 ? "▲" : o.delta < 0 ? "▼" : "•";
+    const dcls = o.delta > 0 ? "up" : o.delta < 0 ? "down" : "flat";
+    return `<div class="card stat tile${o.disabled?' disabled':''}">
+      <div class="lab"><span class="i">${o.icon}</span>${o.label}
+        ${o.notFilt?'<span class="notfilt" style="margin-left:auto">surface ✕</span>':'<span class="car"></span>'}</div>
+      <div class="val"><span class="cnt" data-to="${o.value}" data-fmt="int">0</span></div>
+      <div class="foot"><span class="delta ${dcls}"><span class="ar">${ar}</span>${(o.delta>0?"+":"")+o.delta}%</span>
+        <span class="store">${o.store}</span></div>
+      <div class="sub" style="margin-top:2px">${o.sub||""}</div>
+    </div>`;
+  }
+  const activityHtml =
+    tileCard({store:"Postgres · agent_executions", label:"Agent runs", icon:"⚙", value:1043, delta:15, sub:'completed · failed · cancelled'}) +
+    tileCard({store:"Neo4j · AgentMemory", label:"Memories created", icon:"◆", value:318, delta:27, sub:'per-user via created_by'}) +
+    `<div class="card stat tile"><div class="lab"><span class="i">◇</span>Graph nodes<span class="car"></span></div>
+       <div class="val split"><span class="up num">+2,146</span><span class="dn num" style="font-size:18px">−140</span></div>
+       <div class="foot"><span class="delta up"><span class="ar">▲</span>+19%</span><span class="store">graph.stats · tool_invocations</span></div>
+       <div class="sub" style="margin-top:2px">created · deleted &nbsp;(updates: <span class="num" style="color:var(--accent)">soon</span>)</div></div>` +
+    tileCard({store:"Postgres · playbooks", label:"Automations", icon:"◐", value:47, delta:6, notFilt:true, sub:'created this month'});
+  document.getElementById("activityGrid").innerHTML = activityHtml;
+
+  /* ── daily bar chart (stacked in / out) ── */
+  const svg = document.getElementById("dailyChart");
+  const legEl = document.getElementById("chartLeg");
+  const totEl = document.getElementById("chartTotal");
+  const W = 720, H = 190, ML = 6, MR = 6, MT = 10, MB = 22;
+  let metric = "tokens";
+
+  function drawChart() {
+    const inA = tokIn, outA = tokOut;
+    const tot = metric === "tokens" ? dailyTok : dailyCost;
+    const max = Math.max(...tot) * 1.12;
+    const bw = (W - ML - MR) / days;
+    const barW = bw * 0.62, off = (bw - barW)/2;
+    const y = v => H - MB - (v/max)*(H - MT - MB);
+    const c1c = cvar('--c1'), c2c = cvar('--c2'), hl = cvar('--hairline');
+    let g = "";
+    // gridlines
+    for (let i=1;i<=3;i++){ const gy = MT + (H-MT-MB)*i/4; g += `<line x1="${ML}" y1="${gy}" x2="${W-MR}" y2="${gy}" stroke="${hl}" stroke-width="1"/>`; }
+    for (let i=0;i<days;i++){
+      const x = ML + i*bw + off;
+      if (metric === "tokens") {
+        const hIn = (inA[i]/max)*(H-MT-MB), hOut = (outA[i]/max)*(H-MT-MB);
+        g += `<rect x="${x.toFixed(1)}" y="${(H-MB-hIn).toFixed(1)}" width="${barW.toFixed(1)}" height="${hIn.toFixed(1)}" rx="1.5" fill="${c2c}"><animate attributeName="height" from="0" to="${hIn.toFixed(1)}" dur="${reduce?0:.5}s" fill="freeze"/><animate attributeName="y" from="${H-MB}" to="${(H-MB-hIn).toFixed(1)}" dur="${reduce?0:.5}s" fill="freeze"/></rect>`;
+        g += `<rect x="${x.toFixed(1)}" y="${(H-MB-hIn-hOut).toFixed(1)}" width="${barW.toFixed(1)}" height="${hOut.toFixed(1)}" rx="1.5" fill="${c1c}"/>`;
+      } else {
+        const hc = (dailyCost[i]/max)*(H-MT-MB);
+        g += `<rect x="${x.toFixed(1)}" y="${(H-MB-hc).toFixed(1)}" width="${barW.toFixed(1)}" height="${hc.toFixed(1)}" rx="1.5" fill="${c1c}"><animate attributeName="height" from="0" to="${hc.toFixed(1)}" dur="${reduce?0:.5}s" fill="freeze"/><animate attributeName="y" from="${H-MB}" to="${(H-MB-hc).toFixed(1)}" dur="${reduce?0:.5}s" fill="freeze"/></rect>`;
+      }
+    }
+    // x labels every ~7d
+    for (let i=0;i<days;i+=7){ const x = ML + i*bw + bw/2; g += `<text class="axis" x="${x.toFixed(1)}" y="${H-6}" text-anchor="middle">${i+1}</text>`; }
+    svg.innerHTML = g;
+    legEl.innerHTML = metric === "tokens"
+      ? `<span><i class="swatch" style="background:${cvar('--c2')}"></i>Tokens in</span><span><i class="swatch" style="background:${cvar('--c1')}"></i>Tokens out</span>`
+      : `<span><i class="swatch" style="background:${cvar('--c1')}"></i>Cost / day</span>`;
+    totEl.textContent = metric === "tokens"
+      ? fmtCompact(dailyTok.reduce((a,b)=>a+b,0)) + " tokens"
+      : fmtUsd(dailyCost.reduce((a,b)=>a+b,0)) + " total";
+  }
+
+  document.getElementById("metricSeg").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    [...e.currentTarget.children].forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true"); metric = b.dataset.m; drawChart();
+  });
+
+  /* top models bar list */
+  const models = [
+    {nm:"Claude Fable 5", v:19.4, c:c1}, {nm:"Claude Opus 4.8", v:12.1, c:c3},
+    {nm:"GPT-5", v:8.6, c:c2}, {nm:"Gemini 3 Pro", v:4.9, c:c4}, {nm:"Claude Haiku 4.5", v:2.2, c:muted},
+  ];
+  const mmax = Math.max(...models.map(m=>m.v));
+  document.getElementById("modelBars").innerHTML = models.map(m=>`
+    <div class="barrow"><span class="nm">${m.nm}</span>
+      <span class="bartrack"><span class="barfill" style="background:${m.c};width:${(m.v/mmax*100).toFixed(1)}%"></span></span>
+      <span class="amt">${m.v}M</span></div>`).join("");
+
+  /* ── count-up ── */
+  function countUp() {
+    document.querySelectorAll(".cnt").forEach(el => {
+      const to = parseFloat(el.dataset.to), fmt = el.dataset.fmt;
+      const render = v => el.textContent = fmt==="usd"?fmtUsd(v):fmt==="pct"?v.toFixed(0):fmt==="m"?v.toFixed(1):fmtInt(v);
+      if (reduce) { render(to); return; }
+      const dur = 850, t0 = performance.now();
+      const tick = t => { const p = Math.min(1,(t-t0)/dur); const e = 1-Math.pow(1-p,3); render(to*e); if(p<1) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /* ── theme toggle ── */
+  const root = document.documentElement;
+  document.getElementById("themeBtn").addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark":"light");
+    root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    // recolor JS-drawn graphics for the new theme tokens
+    requestAnimationFrame(() => { drawChart();
+      document.getElementById("coreGrid").innerHTML = core.map(statCard).join("");
+      document.getElementById("capGrid").innerHTML = caps.map(o=>statCard({...o,fmt:"int"})).join("");
+      countUp();
+    });
+  });
+
+  drawChart(); countUp();
+})();
+</script>
