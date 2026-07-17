@@ -2,8 +2,9 @@
 //
 // Grouped aggregates over the ClickHouse `token_usage` table for the usage
 // dashboard (billing.usage.breakdown capability). Answers "where did my spend
-// go?" along three dimensions — model, surface, workspace — plus a daily time
-// series, for a single org over a bounded time window.
+// go?" along several dimensions — model, surface, workspace, capability,
+// principal, user — plus a daily time series, for a single org over a
+// bounded time window.
 //
 // Design:
 //   - Every query filters by `org_id` (mandatory) and, when supplied, a single
@@ -30,6 +31,12 @@ export interface UsageTotals {
   costMicros: number;
   /** Number of token_usage rows (LLM calls) in scope. */
   executions: number;
+  /**
+   * Distinct chat-turn (execution_step_id) count in scope — "how many messages",
+   * as opposed to `executions` ("how many LLM calls"); one turn can drive
+   * several model calls (tool loops, retries), so messages <= executions.
+   */
+  messages: number;
 }
 
 /** One point of the daily time series. `day` is a `YYYY-MM-DD` calendar date (UTC). */
@@ -53,6 +60,12 @@ export interface UsagePrincipalRow extends UsageTotals {
   principalKind: string;
 }
 
+/** One grouped row of the per-user breakdown (seat-level "who used it" view). */
+export interface UserUsageRow extends UsageTotals {
+  /** Acting user uuid; the nil UUID groups unattributed (non-human/system) rows. */
+  userId: string;
+}
+
 export interface UsageBreakdown {
   totals: UsageTotals;
   series: UsageTimePoint[];
@@ -70,6 +83,15 @@ export interface UsageBreakdown {
    * the nil UUID.
    */
   byPrincipal: UsagePrincipalRow[];
+  /**
+   * Per-user spend — the seat-level dimension keyed on `token_usage.user_id`
+   * (populated via the ambient principal stamp, same column as byPrincipal
+   * but scoped to the human account rather than the acting principal, which
+   * may be an agent/service acting on the user's behalf). Rows written before
+   * the principal spine landed, or driven by a non-human writer, group under
+   * the nil UUID.
+   */
+  byUser: UserUsageRow[];
 }
 
 /** Raw JSONEachRow shape: ClickHouse serializes UInt64 sums as decimal strings. */
@@ -79,6 +101,7 @@ interface RawAgg {
   cached_tokens: string;
   cost_micros: string;
   executions: string;
+  messages: string;
 }
 
 const EMPTY_TOTALS: UsageTotals = {
@@ -87,6 +110,7 @@ const EMPTY_TOTALS: UsageTotals = {
   cachedTokens: 0,
   costMicros: 0,
   executions: 0,
+  messages: 0,
 };
 
 function toTotals(r: RawAgg): UsageTotals {
@@ -96,18 +120,25 @@ function toTotals(r: RawAgg): UsageTotals {
     cachedTokens: Number(r.cached_tokens),
     costMicros: Number(r.cost_micros),
     executions: Number(r.executions),
+    messages: Number(r.messages),
   };
 }
 
 // The aggregate projection is identical across every query; only the grouping
 // key column and GROUP BY clause change. Keeping it in one place guarantees the
-// four breakdowns and the series compute the same measures the same way.
+// breakdowns and the series compute the same measures the same way.
+//
+// `messages` counts distinct chat turns (execution_step_id) rather than rows:
+// a single turn can drive several token_usage rows (tool loops, retries), so
+// this is strictly <= executions and answers "how many turns" not "how many
+// LLM calls".
 const AGG_SELECT = `
-  sum(input_tokens)    AS input_tokens,
-  sum(output_tokens)   AS output_tokens,
-  sum(cached_tokens)   AS cached_tokens,
-  sum(cost_usd_micros) AS cost_micros,
-  count()              AS executions`;
+  sum(input_tokens)                        AS input_tokens,
+  sum(output_tokens)                       AS output_tokens,
+  sum(cached_tokens)                       AS cached_tokens,
+  sum(cost_usd_micros)                     AS cost_micros,
+  count()                                  AS executions,
+  count(DISTINCT execution_step_id)        AS messages`;
 
 /**
  * Aggregate `token_usage` for one org over `[start, end)`, grouped along model,
@@ -194,6 +225,7 @@ export async function readUsageBreakdown(args: {
     workspaceRows,
     capabilityRows,
     principalRows,
+    userRows,
   ] = await Promise.all([
     seriesPromise,
     // `any(provider)` is exact here: a given model id maps to exactly one provider.
@@ -204,6 +236,7 @@ export async function readUsageBreakdown(args: {
     // principal_kind rides along like provider does for models: a principal
     // uuid maps to exactly one kind, so `any()` is exact per group.
     runGrouped("toString(principal_id)", "any(principal_kind) AS provider"),
+    runGrouped("toString(user_id)"),
   ]);
 
   const byModel: UsageBreakdownRow[] = modelRows.map((r) => ({
@@ -231,6 +264,10 @@ export async function readUsageBreakdown(args: {
     principalKind: r.provider ?? "",
     ...toTotals(r),
   }));
+  const byUser: UserUsageRow[] = userRows.map((r) => ({
+    userId: r.group_key,
+    ...toTotals(r),
+  }));
 
   const totals = byModel.reduce<UsageTotals>(
     (acc, r) => ({
@@ -239,6 +276,12 @@ export async function readUsageBreakdown(args: {
       cachedTokens: acc.cachedTokens + r.cachedTokens,
       costMicros: acc.costMicros + r.costMicros,
       executions: acc.executions + r.executions,
+      // `messages` is a DISTINCT count, not additive: summing per-model rows
+      // upper-bounds the true turn count (a turn spanning two models is counted
+      // in each). Exact for the common single-model turn; a small over-count in
+      // the rare cross-model case. Chat-turns is a grain-approximate dashboard
+      // metric (see docs/specs/usage-analytics §02), not a billed figure.
+      messages: acc.messages + r.messages,
     }),
     { ...EMPTY_TOTALS },
   );
@@ -251,6 +294,7 @@ export async function readUsageBreakdown(args: {
     byWorkspace,
     byCapability,
     byPrincipal,
+    byUser,
   };
 }
 

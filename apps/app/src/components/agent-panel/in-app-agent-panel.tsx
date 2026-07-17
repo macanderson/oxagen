@@ -119,7 +119,7 @@ export function InAppAgentPanel({
     if (!conversationPublicId || !activeWorkspaceSlug) return;
     close();
     router.push(
-      `/${orgSlug}/${activeWorkspaceSlug}/ask?c=${conversationPublicId}`,
+      `/${orgSlug}/${activeWorkspaceSlug}/sessions?c=${conversationPublicId}`,
     );
   };
 
@@ -243,10 +243,7 @@ function PanelHeader({
         </MenuTrigger>
         <MenuPortal>
           <MenuPopup className="min-w-[200px]">
-            <MenuItem
-              onClick={onContinueInPage}
-              disabled={!canContinueInPage}
-            >
+            <MenuItem onClick={onContinueInPage} disabled={!canContinueInPage}>
               <SquareArrowOutUpRight className="mr-2 h-4 w-4" />
               Open in conversations
             </MenuItem>
@@ -363,13 +360,15 @@ function AgentChatShell({
   // user's prompt and the assistant reply stay on screen and survive the next
   // send (previously this shell was stateless, so the prompt never rendered and
   // each turn wiped the last one).
-  const [conversationId, setConversationId] = React.useState<string | null>(null);
-  const [conversationPublicId, setConversationPublicId] = React.useState<string | null>(
+  const [conversationId, setConversationId] = React.useState<string | null>(
     null,
   );
-  const [activeLeafMessageId, setActiveLeafMessageId] = React.useState<string | null>(
-    null,
-  );
+  const [conversationPublicId, setConversationPublicId] = React.useState<
+    string | null
+  >(null);
+  const [activeLeafMessageId, setActiveLeafMessageId] = React.useState<
+    string | null
+  >(null);
   const [messages, setMessages] = React.useState<ChatMessage[]>(EMPTY_MESSAGES);
 
   // Mirror messages into the shared ref so the header's "Copy as markdown" sees
@@ -390,7 +389,11 @@ function AgentChatShell({
   const reloadMessages = React.useCallback(async () => {
     const publicId = conversationPublicIdRef.current;
     if (!publicId) return;
-    const result = await loadAgentConversationAction(orgSlug, workspaceSlug, publicId);
+    const result = await loadAgentConversationAction(
+      orgSlug,
+      workspaceSlug,
+      publicId,
+    );
     if (result.ok) {
       setMessages(result.messages);
       setActiveLeafMessageId(result.activeLeafMessageId);

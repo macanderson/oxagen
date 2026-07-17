@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 // Hoisted mutable store state + pathname so the (hoisted) vi.mock factories can
-// read them. `pathname` defaults to a non-`/ask` route so the bar renders in the
+// read them. `pathname` defaults to a non-`/sessions` route so the bar renders in the
 // existing suites; the route-suppression suite overrides it per test.
 const h = vi.hoisted(() => ({
   state: {
@@ -53,7 +53,9 @@ afterEach(cleanup);
 describe("AgentBottomBar — always-present chrome", () => {
   it("renders the agent toolbar", () => {
     render(<AgentBottomBar />);
-    expect(screen.getByRole("toolbar", { name: /agent toolbar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: /agent toolbar/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the 'Open AI agent' launch button with the Ask Oxagen label", () => {
@@ -79,46 +81,58 @@ describe("AgentBottomBar — always-present chrome", () => {
 });
 
 describe("AgentBottomBar — route suppression", () => {
-  it("renders nothing on the /ask conversation surface", () => {
-    h.pathname = "/acme/prod/ask";
+  it("renders nothing on the /sessions conversation surface", () => {
+    h.pathname = "/acme/prod/sessions";
     const { container } = render(<AgentBottomBar />);
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole("toolbar", { name: /agent toolbar/i })).toBeNull();
+    expect(
+      screen.queryByRole("toolbar", { name: /agent toolbar/i }),
+    ).toBeNull();
   });
 
-  it("still renders on a non-/ask route", () => {
+  it("still renders on a non-/sessions route", () => {
     h.pathname = "/acme/prod/knowledge";
     render(<AgentBottomBar />);
-    expect(screen.getByRole("toolbar", { name: /agent toolbar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: /agent toolbar/i }),
+    ).toBeInTheDocument();
   });
 
-  it("does not false-positive on a route where an earlier segment is 'ask'", () => {
-    // An org/workspace literally named "ask" must not suppress the bar on its
-    // other pages — only the trailing `/ask` segment counts.
-    h.pathname = "/ask/prod/knowledge";
+  it("does not false-positive on a route where an earlier segment is 'sessions'", () => {
+    // An org/workspace literally named "sessions" must not suppress the bar on
+    // its other pages — only the trailing `/sessions` segment counts.
+    h.pathname = "/sessions/prod/knowledge";
     render(<AgentBottomBar />);
-    expect(screen.getByRole("toolbar", { name: /agent toolbar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: /agent toolbar/i }),
+    ).toBeInTheDocument();
   });
 });
 
 describe("AgentBottomBar — collapsed conversation tab", () => {
   it("is hidden when the panel is closed (default)", () => {
     render(<AgentBottomBar />);
-    expect(screen.queryByRole("button", { name: /resume conversation/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /resume conversation/i }),
+    ).toBeNull();
   });
 
   it("is hidden when collapsed but there is no conversation title", () => {
     h.state.visibility = "collapsed";
     h.state.conversationTitle = null;
     render(<AgentBottomBar />);
-    expect(screen.queryByRole("button", { name: /resume conversation/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /resume conversation/i }),
+    ).toBeNull();
   });
 
   it("shows the conversation title when collapsed with a title", () => {
     h.state.visibility = "collapsed";
     h.state.conversationTitle = "Deploy plan";
     render(<AgentBottomBar />);
-    const resume = screen.getByRole("button", { name: /resume conversation: deploy plan/i });
+    const resume = screen.getByRole("button", {
+      name: /resume conversation: deploy plan/i,
+    });
     expect(resume).toBeInTheDocument();
     expect(resume).toHaveTextContent("Deploy plan");
   });
@@ -127,7 +141,9 @@ describe("AgentBottomBar — collapsed conversation tab", () => {
     h.state.visibility = "collapsed";
     h.state.conversationTitle = "Deploy plan";
     render(<AgentBottomBar />);
-    fireEvent.click(screen.getByRole("button", { name: /resume conversation: deploy plan/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /resume conversation: deploy plan/i }),
+    );
     expect(h.state.open).toHaveBeenCalledTimes(1);
   });
 });

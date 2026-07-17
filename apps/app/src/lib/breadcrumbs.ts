@@ -24,6 +24,6 @@ export async function workspaceCrumb(
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   return {
     label: ws.name,
-    href: workspace.ask({ orgSlug, workspaceSlug }),
+    href: workspace.sessions({ orgSlug, workspaceSlug }),
   };
 }

@@ -20,7 +20,10 @@ import type { ScopeContext } from "./scope";
 // ---------------------------------------------------------------------------
 
 const orgCtx: ScopeContext = { orgSlug: "acme" };
-const wsCtx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
+const wsCtx: Required<ScopeContext> = {
+  orgSlug: "acme",
+  workspaceSlug: "prod",
+};
 
 // ---------------------------------------------------------------------------
 // 1. defaultTab — CONFIG-DERIVED completeness
@@ -89,11 +92,14 @@ describe("defaultTab — value format", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultTab — known mappings", () => {
-  it("knowledge → sources", () => expect(defaultTab["knowledge"]).toBe("sources"));
-  it("settings → general", () => expect(defaultTab["settings"]).toBe("general"));
+  it("knowledge → sources", () =>
+    expect(defaultTab["knowledge"]).toBe("sources"));
+  it("settings → general", () =>
+    expect(defaultTab["settings"]).toBe("general"));
   it("access → sessions", () => expect(defaultTab["access"]).toBe("sessions"));
   it("security → audit", () => expect(defaultTab["security"]).toBe("audit"));
-  it("billing → subscription", () => expect(defaultTab["billing"]).toBe("subscription"));
+  it("billing → subscription", () =>
+    expect(defaultTab["billing"]).toBe("subscription"));
   it("developer → mcp", () => expect(defaultTab["developer"]).toBe("mcp"));
 });
 
@@ -103,9 +109,12 @@ describe("defaultTab — known mappings", () => {
 
 describe("account route builders", () => {
   it("root → /account", () => expect(account.root()).toBe("/account"));
-  it("profile → /account/profile", () => expect(account.profile()).toBe("/account/profile"));
-  it("preferences → /account/preferences", () => expect(account.preferences()).toBe("/account/preferences"));
-  it("security → /account/security", () => expect(account.security()).toBe("/account/security"));
+  it("profile → /account/profile", () =>
+    expect(account.profile()).toBe("/account/profile"));
+  it("preferences → /account/preferences", () =>
+    expect(account.preferences()).toBe("/account/preferences"));
+  it("security → /account/security", () =>
+    expect(account.security()).toBe("/account/security"));
 });
 
 // ---------------------------------------------------------------------------
@@ -114,13 +123,22 @@ describe("account route builders", () => {
 
 describe("org route builders", () => {
   it("root → /{org}", () => expect(org.root(orgCtx)).toBe("/acme"));
-  it("members → /{org}/members", () => expect(org.members(orgCtx)).toBe("/acme/members"));
-  it("access.root → /{org}/access", () => expect(org.access.root(orgCtx)).toBe("/acme/access"));
-  it("access.sessions → /{org}/access/sessions", () => expect(org.access.sessions(orgCtx)).toBe("/acme/access/sessions"));
-  it("security.audit → /{org}/security/audit", () => expect(org.security.audit(orgCtx)).toBe("/acme/security/audit"));
-  it("billing.subscription → /{org}/billing/subscription", () => expect(org.billing.subscription(orgCtx)).toBe("/acme/billing/subscription"));
-  it("developer.mcp → /{org}/developer/mcp", () => expect(org.developer.mcp(orgCtx)).toBe("/acme/developer/mcp"));
-  it("settings.general → /{org}/settings/general", () => expect(org.settings.general(orgCtx)).toBe("/acme/settings/general"));
+  it("members → /{org}/members", () =>
+    expect(org.members(orgCtx)).toBe("/acme/members"));
+  it("access.root → /{org}/access", () =>
+    expect(org.access.root(orgCtx)).toBe("/acme/access"));
+  it("access.sessions → /{org}/access/sessions", () =>
+    expect(org.access.sessions(orgCtx)).toBe("/acme/access/sessions"));
+  it("security.audit → /{org}/security/audit", () =>
+    expect(org.security.audit(orgCtx)).toBe("/acme/security/audit"));
+  it("billing.subscription → /{org}/billing/subscription", () =>
+    expect(org.billing.subscription(orgCtx)).toBe(
+      "/acme/billing/subscription",
+    ));
+  it("developer.mcp → /{org}/developer/mcp", () =>
+    expect(org.developer.mcp(orgCtx)).toBe("/acme/developer/mcp"));
+  it("settings.general → /{org}/settings/general", () =>
+    expect(org.settings.general(orgCtx)).toBe("/acme/settings/general"));
 });
 
 // ---------------------------------------------------------------------------
@@ -128,19 +146,52 @@ describe("org route builders", () => {
 // ---------------------------------------------------------------------------
 
 describe("workspace route builders", () => {
-  it("ask → /{org}/{ws}/ask", () => expect(workspace.ask(wsCtx)).toBe("/acme/prod/ask"));
-  it("knowledge.root → /{org}/{ws}/knowledge", () => expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
-  it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
-  it("knowledge.sourcesConnect → /{org}/{ws}/knowledge/sources/connect", () => expect(workspace.knowledge.sourcesConnect(wsCtx)).toBe("/acme/prod/knowledge/sources/connect"));
-  it("knowledge.graph → /{org}/{ws}/knowledge/graph", () => expect(workspace.knowledge.graph(wsCtx)).toBe("/acme/prod/knowledge/graph"));
-  it("knowledge.ontology → /{org}/{ws}/knowledge/ontology", () => expect(workspace.knowledge.ontology(wsCtx)).toBe("/acme/prod/knowledge/ontology"));
-  it("knowledge.memory → /{org}/{ws}/knowledge/memory", () => expect(workspace.knowledge.memory(wsCtx)).toBe("/acme/prod/knowledge/memory"));
-  it("knowledge.node → /{org}/{ws}/knowledge/graph/{id}", () => expect(workspace.knowledge.node(wsCtx, "n_1")).toBe("/acme/prod/knowledge/graph/n_1"));
-  it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
-  it("settings.agentDefaults → /{org}/{ws}/settings/agent-defaults", () => expect(workspace.settings.agentDefaults(wsCtx)).toBe("/acme/prod/settings/agent-defaults"));
-  it("settings.members folds into General (?tab=members)", () => expect(workspace.settings.members(wsCtx)).toBe("/acme/prod/settings/general?tab=members"));
-  it("settings.models (deprecated alias) → agent-defaults", () => expect(workspace.settings.models(wsCtx)).toBe("/acme/prod/settings/agent-defaults"));
-  it("settings.knowledge (deprecated alias) → knowledge/ontology", () => expect(workspace.settings.knowledge(wsCtx)).toBe("/acme/prod/knowledge/ontology"));
+  it("sessions → /{org}/{ws}/sessions", () =>
+    expect(workspace.sessions(wsCtx)).toBe("/acme/prod/sessions"));
+  it("knowledge.root → /{org}/{ws}/knowledge", () =>
+    expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
+  it("knowledge.sources → /{org}/{ws}/knowledge/sources", () =>
+    expect(workspace.knowledge.sources(wsCtx)).toBe(
+      "/acme/prod/knowledge/sources",
+    ));
+  it("knowledge.sourcesConnect → /{org}/{ws}/knowledge/sources/connect", () =>
+    expect(workspace.knowledge.sourcesConnect(wsCtx)).toBe(
+      "/acme/prod/knowledge/sources/connect",
+    ));
+  it("knowledge.graph → /{org}/{ws}/knowledge/graph", () =>
+    expect(workspace.knowledge.graph(wsCtx)).toBe(
+      "/acme/prod/knowledge/graph",
+    ));
+  it("knowledge.ontology → /{org}/{ws}/knowledge/ontology", () =>
+    expect(workspace.knowledge.ontology(wsCtx)).toBe(
+      "/acme/prod/knowledge/ontology",
+    ));
+  it("knowledge.memory → /{org}/{ws}/knowledge/memory", () =>
+    expect(workspace.knowledge.memory(wsCtx)).toBe(
+      "/acme/prod/knowledge/memory",
+    ));
+  it("knowledge.node → /{org}/{ws}/knowledge/graph/{id}", () =>
+    expect(workspace.knowledge.node(wsCtx, "n_1")).toBe(
+      "/acme/prod/knowledge/graph/n_1",
+    ));
+  it("settings.root → /{org}/{ws}/settings", () =>
+    expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
+  it("settings.agentDefaults → /{org}/{ws}/settings/agent-defaults", () =>
+    expect(workspace.settings.agentDefaults(wsCtx)).toBe(
+      "/acme/prod/settings/agent-defaults",
+    ));
+  it("settings.members folds into General (?tab=members)", () =>
+    expect(workspace.settings.members(wsCtx)).toBe(
+      "/acme/prod/settings/general?tab=members",
+    ));
+  it("settings.models (deprecated alias) → agent-defaults", () =>
+    expect(workspace.settings.models(wsCtx)).toBe(
+      "/acme/prod/settings/agent-defaults",
+    ));
+  it("settings.knowledge (deprecated alias) → knowledge/ontology", () =>
+    expect(workspace.settings.knowledge(wsCtx)).toBe(
+      "/acme/prod/knowledge/ontology",
+    ));
 });
 
 // ---------------------------------------------------------------------------

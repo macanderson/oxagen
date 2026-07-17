@@ -43,7 +43,7 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
     detailHref: workspace.workbench.agent(routeCtx, agent.publicId),
     launchHref:
       agent.deploymentStatus === "active"
-        ? `${workspace.ask(routeCtx)}?agent=${encodeURIComponent(agent.publicId)}`
+        ? `${workspace.sessions(routeCtx)}?agent=${encodeURIComponent(agent.publicId)}`
         : null,
   }));
 

@@ -99,7 +99,7 @@ describe("resolveSidebarMode", () => {
 //       removed; "Workflows" is gone too (banned term). The Activity run-trace
 //       section was removed as well — agent runs are inspected in context
 //       (chat, evals) rather than in a standalone list.
-//   org:       7 items (Workspaces, Members, Access, Security, Billing, Developer, Settings)
+//   org:       8 items (Dashboard, Workspaces, Members, Governance, Security, Billing, Developer, Settings)
 //   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
@@ -113,17 +113,18 @@ describe("getSidebarConfig item counts", () => {
     expect(config.items).toHaveLength(12);
   });
 
-  it("org config has 7 items by default (access filtered for non-enterprise)", () => {
+  it("org config has 8 items by default (access filtered for non-enterprise)", () => {
     const config = getSidebarConfig("org");
     expect(config.mode).toBe("org");
-    // web-app-2.0 added Governance to the 6-item non-enterprise base.
-    expect(config.items).toHaveLength(7);
+    // web-app-2.0 added Governance; the usage-analytics work added Dashboard as
+    // the first org item (the org home / redirect target of `/{org}`).
+    expect(config.items).toHaveLength(8);
   });
 
-  it("org config has 8 items for enterprise", () => {
+  it("org config has 9 items for enterprise", () => {
     const config = getSidebarConfig("org", "enterprise");
     expect(config.mode).toBe("org");
-    expect(config.items).toHaveLength(8);
+    expect(config.items).toHaveLength(9);
   });
 
   it("account config has exactly 5 items", () => {
@@ -168,8 +169,8 @@ describe("getSidebarConfig item counts", () => {
     // promotes all four build destinations (Agents, Agent Tools, Environments,
     // Sandboxes) to the sidebar.
     expect(ids).toEqual([
-      "ask",
       "overview",
+      "sessions",
       "knowledge",
       "automations",
       "agents",
@@ -218,8 +219,10 @@ describe("href builders produce correct paths", () => {
     const config = getSidebarConfig("workspace");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
-    it("ask -> /{org}/{ws}/ask", () => {
-      expect(findItem("ask").href(wsCtx)).toBe("/acme/production/ask");
+    it("sessions -> /{org}/{ws}/sessions", () => {
+      expect(findItem("sessions").href(wsCtx)).toBe(
+        "/acme/production/sessions",
+      );
     });
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
@@ -328,8 +331,8 @@ describe("href builders produce correct paths", () => {
     const config = getSidebarConfig("account");
     const findItem = (id: string) => config.items.find((i) => i.id === id)!;
 
-    it("back with workspaceSlug -> /{org}/{ws}/ask", () => {
-      expect(findItem("back").href(wsCtx)).toBe("/acme/production/ask");
+    it("back with workspaceSlug -> /{org}/{ws}/sessions", () => {
+      expect(findItem("back").href(wsCtx)).toBe("/acme/production/sessions");
     });
 
     it("back without workspaceSlug -> /{org}", () => {
@@ -352,7 +355,7 @@ describe("enumerateNavTargets", () => {
     const hrefs = targets.map((t) => t.href);
 
     // Spot-check a workspace path and a tab path
-    expect(hrefs).toContain("/acme/production/ask");
+    expect(hrefs).toContain("/acme/production/sessions");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
     expect(hrefs).toContain("/acme/production/settings");
 
@@ -393,7 +396,7 @@ describe("enumerateNavTargets", () => {
     const targets = enumerateNavTargets(orgCtx);
     const hrefs = targets.map((t) => t.href);
 
-    expect(hrefs).not.toContain("/acme/production/ask");
+    expect(hrefs).not.toContain("/acme/production/sessions");
     expect(hrefs).not.toContain("/acme/production/knowledge/sources");
   });
 

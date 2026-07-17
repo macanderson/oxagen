@@ -8,7 +8,7 @@ import {
   sendMessageAction,
 } from "./actions";
 
-export default async function AskPage({
+export default async function SessionsPage({
   params,
   searchParams,
 }: {

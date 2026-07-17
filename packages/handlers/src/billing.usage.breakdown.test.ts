@@ -19,13 +19,96 @@ import { billingUsageBreakdownHandler } from "./billing.usage.breakdown";
 import { TEST_CTX } from "./test-utils/fixtures";
 
 const BREAKDOWN = {
-  totals: { inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
-  series: [{ day: "2026-06-01", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 }],
-  byModel: [{ key: "claude-sonnet-5", provider: "anthropic", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 }],
-  bySurface: [{ key: "api", provider: "", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 }],
-  byWorkspace: [{ key: "ws-a", provider: "", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 }],
-  byCapability: [{ key: "query_ontology", provider: "", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 }],
-  byPrincipal: [{ principalId: "00000000-0000-0000-0000-0000000000e5", principalKind: "agent", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 }],
+  totals: {
+    inputTokens: 100,
+    outputTokens: 40,
+    cachedTokens: 10,
+    costMicros: 5000,
+    executions: 3,
+    messages: 2,
+  },
+  series: [
+    {
+      day: "2026-06-01",
+      inputTokens: 100,
+      outputTokens: 40,
+      cachedTokens: 10,
+      costMicros: 5000,
+      executions: 3,
+      messages: 2,
+    },
+  ],
+  byModel: [
+    {
+      key: "claude-sonnet-5",
+      provider: "anthropic",
+      inputTokens: 100,
+      outputTokens: 40,
+      cachedTokens: 10,
+      costMicros: 5000,
+      executions: 3,
+      messages: 2,
+    },
+  ],
+  bySurface: [
+    {
+      key: "api",
+      provider: "",
+      inputTokens: 100,
+      outputTokens: 40,
+      cachedTokens: 10,
+      costMicros: 5000,
+      executions: 3,
+      messages: 2,
+    },
+  ],
+  byWorkspace: [
+    {
+      key: "ws-a",
+      provider: "",
+      inputTokens: 100,
+      outputTokens: 40,
+      cachedTokens: 10,
+      costMicros: 5000,
+      executions: 3,
+      messages: 2,
+    },
+  ],
+  byCapability: [
+    {
+      key: "query_ontology",
+      provider: "",
+      inputTokens: 60,
+      outputTokens: 20,
+      cachedTokens: 5,
+      costMicros: 3000,
+      executions: 2,
+      messages: 1,
+    },
+  ],
+  byPrincipal: [
+    {
+      principalId: "00000000-0000-0000-0000-0000000000e5",
+      principalKind: "agent",
+      inputTokens: 60,
+      outputTokens: 20,
+      cachedTokens: 5,
+      costMicros: 3000,
+      executions: 2,
+      messages: 1,
+    },
+  ],
+  byUser: [
+    {
+      userId: "00000000-0000-0000-0000-0000000000e5",
+      inputTokens: 60,
+      outputTokens: 20,
+      cachedTokens: 5,
+      costMicros: 3000,
+      executions: 2,
+      messages: 1,
+    },
+  ],
 };
 
 const INPUT = {
@@ -55,12 +138,16 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
     expect(out.byWorkspace).toEqual(BREAKDOWN.byWorkspace);
     expect(out.byCapability).toEqual(BREAKDOWN.byCapability);
     expect(out.byPrincipal).toEqual(BREAKDOWN.byPrincipal);
+    expect(out.byUser).toEqual(BREAKDOWN.byUser);
     expect(out.series).toEqual(BREAKDOWN.series);
   });
 
   it("threads input.workspaceId to narrow within the org", async () => {
     const wsId = "22222222-2222-2222-2222-222222222222";
-    await billingUsageBreakdownHandler({ ...INPUT, workspaceId: wsId }, TEST_CTX);
+    await billingUsageBreakdownHandler(
+      { ...INPUT, workspaceId: wsId },
+      TEST_CTX,
+    );
     const arg = mocks.readUsageBreakdown.mock.calls[0]![0];
     expect(arg.orgId).toBe(TEST_CTX.orgId);
     expect(arg.workspaceId).toBe(wsId);

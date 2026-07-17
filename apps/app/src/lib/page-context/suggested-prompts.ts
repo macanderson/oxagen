@@ -90,7 +90,8 @@ export function classifyRoute(pathname: string): RouteSection {
   const p = pathname.toLowerCase();
   if (p.includes("/billing")) return "billing";
   if (p.includes("/settings")) return "settings";
-  if (p.includes("/ask") || p.includes("/chat")) return "conversation";
+  if (p.includes("/sessions") || p.includes("/ask") || p.includes("/chat"))
+    return "conversation";
   if (p.includes("/knowledge")) return "knowledge";
   if (p.startsWith("/account")) return "account";
   if (p.includes("/members")) return "members";
@@ -204,7 +205,7 @@ export function hashString(input: string): number {
   let h = 5381;
   for (let i = 0; i < input.length; i++) {
     // h * 33 + charCode, kept in the 32-bit unsigned range.
-    h = (((h << 5) + h) + input.charCodeAt(i)) >>> 0;
+    h = ((h << 5) + h + input.charCodeAt(i)) >>> 0;
   }
   return h;
 }
@@ -329,12 +330,14 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     case "settings":
       suggestions.push({
         label: "Review My Settings",
-        prompt: "Review the current settings on this page and suggest optimal values based on best practices.",
+        prompt:
+          "Review the current settings on this page and suggest optimal values based on best practices.",
       });
       if (!fillableForm) {
         suggestions.push({
           label: "Explain These Settings",
-          prompt: "Explain what each setting on this page does and how it affects my workspace.",
+          prompt:
+            "Explain what each setting on this page does and how it affects my workspace.",
         });
       }
       break;
@@ -342,11 +345,13 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     case "billing":
       suggestions.push({
         label: "Summarize Usage",
-        prompt: "Summarize my current usage and costs. Flag any unusual spend or optimization opportunities.",
+        prompt:
+          "Summarize my current usage and costs. Flag any unusual spend or optimization opportunities.",
       });
       suggestions.push({
         label: "Explain My Plan",
-        prompt: "Explain my current billing plan, what is included, and whether I should consider upgrading or downgrading.",
+        prompt:
+          "Explain my current billing plan, what is included, and whether I should consider upgrading or downgrading.",
       });
       break;
 
@@ -366,44 +371,52 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     case "knowledge":
       suggestions.push({
         label: "Explore Knowledge",
-        prompt: "What integrations are connected to this workspace? Show me the most recently updated ones.",
+        prompt:
+          "What integrations are connected to this workspace? Show me the most recently updated ones.",
       });
       suggestions.push({
         label: "Find Gaps",
-        prompt: "Identify any gaps or stale information in this workspace's knowledge base.",
+        prompt:
+          "Identify any gaps or stale information in this workspace's knowledge base.",
       });
       break;
 
     case "account":
       suggestions.push({
         label: "Optimize Preferences",
-        prompt: "Review my account preferences and suggest optimal settings for a productive experience.",
+        prompt:
+          "Review my account preferences and suggest optimal settings for a productive experience.",
       });
       suggestions.push({
         label: "Security Check",
-        prompt: "Review my account security settings and flag any risks or best-practice gaps.",
+        prompt:
+          "Review my account security settings and flag any risks or best-practice gaps.",
       });
       break;
 
     case "members":
       suggestions.push({
         label: "Review Access",
-        prompt: "Review the members list and flag any unusual permission assignments or inactive accounts.",
+        prompt:
+          "Review the members list and flag any unusual permission assignments or inactive accounts.",
       });
       suggestions.push({
         label: "Invite Guide",
-        prompt: "Walk me through inviting a new team member with the correct permissions for their role.",
+        prompt:
+          "Walk me through inviting a new team member with the correct permissions for their role.",
       });
       break;
 
     case "developer":
       suggestions.push({
         label: "MCP Setup Guide",
-        prompt: "Walk me through connecting to the Oxagen MCP server from my local development environment.",
+        prompt:
+          "Walk me through connecting to the Oxagen MCP server from my local development environment.",
       });
       suggestions.push({
         label: "API Key Review",
-        prompt: "Review my API tokens and webhooks. Flag any that are unused, expired, or overly permissive.",
+        prompt:
+          "Review my API tokens and webhooks. Flag any that are unused, expired, or overly permissive.",
       });
       break;
 
@@ -411,11 +424,13 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
       // Workspace overview fallback
       suggestions.push({
         label: "What Can I Do Here?",
-        prompt: "I'm on the Oxagen dashboard. What can I do from here? Give me a quick orientation.",
+        prompt:
+          "I'm on the Oxagen dashboard. What can I do from here? Give me a quick orientation.",
       });
       suggestions.push({
         label: "Recent Changes",
-        prompt: "What's changed in this workspace recently? Show me recent activity and updates.",
+        prompt:
+          "What's changed in this workspace recently? Show me recent activity and updates.",
       });
       break;
   }
@@ -430,15 +445,18 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
   const fallbacks: SuggestedPrompt[] = [
     {
       label: "What Can I Do Here?",
-      prompt: "I'm on the Oxagen dashboard. What can I do from here? Give me a quick orientation.",
+      prompt:
+        "I'm on the Oxagen dashboard. What can I do from here? Give me a quick orientation.",
     },
     {
       label: "Recent Activity",
-      prompt: "What has happened in this workspace recently? Summarize any notable activity.",
+      prompt:
+        "What has happened in this workspace recently? Summarize any notable activity.",
     },
     {
       label: "Help Me Optimize",
-      prompt: "Review my current configuration and suggest ways to optimize my setup.",
+      prompt:
+        "Review my current configuration and suggest ways to optimize my setup.",
     },
   ];
 
@@ -480,5 +498,10 @@ export function useSuggestedPrompts(
 ): SuggestedPrompt[] {
   const { entity, fillableForm } = usePageContext();
   const pathname = usePathname();
-  return deriveSuggestions({ pathname, entity, fillableForm, conversationHistory });
+  return deriveSuggestions({
+    pathname,
+    entity,
+    fillableForm,
+    conversationHistory,
+  });
 }

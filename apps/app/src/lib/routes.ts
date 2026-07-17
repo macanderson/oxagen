@@ -31,8 +31,11 @@ export const account = {
 // ---------------------------------------------------------------------------
 
 export const org = {
-  /** Workspace picker — also the Org mode root. */
+  /** Org root — redirects to the dashboard. */
   root: (ctx: ScopeContext): string => `/${ctx.orgSlug}`,
+
+  /** Org dashboard — the usage/metering home (redirect target of the org root). */
+  dashboard: (ctx: ScopeContext): string => `/${ctx.orgSlug}/dashboard`,
 
   /** Org workspaces listing — cards for every workspace in the org. */
   workspaces: (ctx: ScopeContext): string => `/${ctx.orgSlug}/workspaces`,
@@ -110,8 +113,8 @@ const wsBase = (ctx: Required<ScopeContext>): string =>
 export const workspace = {
   root: (ctx: Required<ScopeContext>): string => wsBase(ctx),
 
-  // Ask — the front door (full-page ask/chat surface).
-  ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
+  // Sessions — the chat front door (full-page conversation-sessions surface).
+  sessions: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/sessions`,
 
   // Workbench — build interactive agents. Four first-class pages, each a
   // sidebar destination: Agents (the builder), Agent Tools (the single home

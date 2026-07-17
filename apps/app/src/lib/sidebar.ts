@@ -21,6 +21,7 @@ import {
   GitBranch,
   KeyRound,
   Layers,
+  LayoutDashboard,
   LayoutGrid,
   Lock,
   MessageSquare,
@@ -85,31 +86,32 @@ const workspaceConfig: SidebarConfig = {
   toolsLabel: "Workbench",
   items: [
     {
-      id: "ask",
-      label: "Ask",
-      icon: MessageSquare,
-      // Ask is the front door. Uses workspace route; falls back gracefully
-      // when workspaceSlug is absent (should not happen in workspace mode).
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.ask(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-      external: true,
-    },
-    {
       id: "overview",
       label: "Overview",
       icon: Gauge,
       // Metering-forward workspace home (web-app-2.0): the HUD at the workspace
       // root (`/{org}/{ws}`) — spend/tokens/runs, knowledge-graph grounding,
-      // activity, automations, memory, and source health. Ask stays the default
-      // conversational front door via the entry below.
+      // activity, automations, memory, and source health. Now the FIRST tab and
+      // the default workspace landing; Sessions (the chat front door) is second.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
+    },
+    {
+      id: "sessions",
+      label: "Sessions",
+      icon: MessageSquare,
+      // Sessions — the conversational front door (chat sessions). Uses the
+      // workspace route; falls back gracefully when workspaceSlug is absent
+      // (should not happen in workspace mode).
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.sessions(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+      external: true,
     },
     {
       id: "knowledge",
@@ -255,6 +257,15 @@ const orgConfig: SidebarConfig = {
   groupLabel: "Organization",
   items: [
     {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      // Org home — the usage/metering dashboard (redirect target of the org
+      // root `/{org}`). First item so it is the default org landing.
+      href: (ctx) => org.dashboard(ctx),
+      group: "primary",
+    },
+    {
       id: "workspaces",
       label: "Workspaces",
       icon: LayoutGrid,
@@ -333,11 +344,11 @@ const accountConfig: SidebarConfig = {
       id: "back",
       label: "Back to app",
       icon: ArrowLeft,
-      // Returns to the workspace Ask surface when a workspace is known,
+      // Returns to the workspace Sessions surface when a workspace is known,
       // otherwise the org root or app root.
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.ask(ctx as Required<ScopeContext>)
+          ? workspace.sessions(ctx as Required<ScopeContext>)
           : ctx.orgSlug
             ? `/${ctx.orgSlug}`
             : "/",
@@ -384,6 +395,7 @@ const accountConfig: SidebarConfig = {
 // ---------------------------------------------------------------------------
 
 export const ORG_SCOPE_ROUTES = new Set([
+  "dashboard",
   "workspaces",
   "new-workspace",
   "members",
@@ -531,11 +543,15 @@ export function enumerateNavTargets(
     const wsCtx = ctx as Required<ScopeContext>;
 
     // Sidebar-level items
-    targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
     targets.push({
       label: "Overview",
       href: workspace.root(wsCtx),
       parent: "overview",
+    });
+    targets.push({
+      label: "Sessions",
+      href: workspace.sessions(wsCtx),
+      parent: "sessions",
     });
     targets.push({
       label: "Knowledge",
@@ -656,6 +672,11 @@ export function enumerateNavTargets(
   }
 
   // -- Org mode --
+  targets.push({
+    label: "Dashboard",
+    href: org.dashboard(ctx),
+    parent: "dashboard",
+  });
   targets.push({
     label: "Workspaces",
     href: org.root(ctx),

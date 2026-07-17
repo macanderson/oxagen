@@ -67,7 +67,7 @@ export function ConversationItem({
   onDelete,
 }: ConversationItemProps) {
   const archived = conversation.archivedAt != null;
-  const title = conversation.title?.trim() || "New conversation";
+  const title = conversation.title?.trim() || "No session";
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -159,7 +159,11 @@ export function ConversationItem({
               <Pencil className="size-4" />
               Rename
             </MenuItem>
-            <MenuItem onClick={() => void onArchiveToggle(conversation.publicId, !archived)}>
+            <MenuItem
+              onClick={() =>
+                void onArchiveToggle(conversation.publicId, !archived)
+              }
+            >
               {archived ? (
                 <>
                   <ArchiveRestore className="size-4" />

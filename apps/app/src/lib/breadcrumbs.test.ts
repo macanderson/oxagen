@@ -41,6 +41,6 @@ describe("workspaceCrumb", () => {
 
     expect(crumb.label).toBe("Default");
     expect(mockResolveWorkspace).toHaveBeenCalledWith("org-1", "default");
-    expect(crumb.href).toBe("/acme/default/ask");
+    expect(crumb.href).toBe("/acme/default/sessions");
   });
 });

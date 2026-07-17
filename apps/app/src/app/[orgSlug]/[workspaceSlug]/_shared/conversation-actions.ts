@@ -20,11 +20,13 @@ import { conversationRename } from "@oxagen/oxagen/contracts/conversation.rename
 import { conversationArchive } from "@oxagen/oxagen/contracts/conversation.archive";
 import { conversationDelete } from "@oxagen/oxagen/contracts/conversation.delete";
 import { conversationPurge } from "@oxagen/oxagen/contracts/conversation.purge";
-import type {
-  ConversationListOutput,
-} from "@oxagen/oxagen/contracts/conversation.list";
+import type { ConversationListOutput } from "@oxagen/oxagen/contracts/conversation.list";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 /** Slug context the client carries from the URL; org/workspace ids resolve server-side. */
 export interface ConversationActionCtx {
@@ -33,7 +35,11 @@ export interface ConversationActionCtx {
 }
 
 export type ListConversationsResult =
-  | { ok: true; conversations: ConversationListOutput["conversations"]; nextCursor: string | null }
+  | {
+      ok: true;
+      conversations: ConversationListOutput["conversations"];
+      nextCursor: string | null;
+    }
   | { ok: false; error: string };
 
 export type MutationResult =
@@ -65,7 +71,7 @@ async function resolveScope(ctx: ConversationActionCtx) {
 function revalidateConversationSurfaces(ctx: ConversationActionCtx) {
   // /ask is the canonical full-page conversation surface; revalidate it so the
   // nav list is fresh after a mutation. (Legacy /chat is now a redirect to /ask.)
-  revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`);
+  revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
 }
 
 export async function listConversationsAction(
@@ -76,15 +82,29 @@ export async function listConversationsAction(
     filter: args.filter,
     cursor: args.cursor ?? null,
   });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     const { capabilityCtx } = await resolveScope(ctx);
-    const out = (await invoke(conversationList.name, parsed.data, capabilityCtx, {
-      surface: "agent",
-    })) as ConversationListOutput;
-    return { ok: true, conversations: out.conversations, nextCursor: out.nextCursor };
+    const out = (await invoke(
+      conversationList.name,
+      parsed.data,
+      capabilityCtx,
+      {
+        surface: "agent",
+      },
+    )) as ConversationListOutput;
+    return {
+      ok: true,
+      conversations: out.conversations,
+      nextCursor: out.nextCursor,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to load conversations" };
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Failed to load conversations",
+    };
   }
 }
 
@@ -94,14 +114,24 @@ export async function renameConversationAction(
   title: string,
 ): Promise<MutationResult> {
   const parsed = conversationRename.input.safeParse({ conversationId, title });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid title" };
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid title",
+    };
   try {
     const { capabilityCtx } = await resolveScope(ctx);
-    await invoke(conversationRename.name, parsed.data, capabilityCtx, { surface: "agent" });
+    await invoke(conversationRename.name, parsed.data, capabilityCtx, {
+      surface: "agent",
+    });
     revalidateConversationSurfaces(ctx);
     return { ok: true, count: 1 };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to rename conversation" };
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Failed to rename conversation",
+    };
   }
 }
 
@@ -110,17 +140,29 @@ export async function archiveConversationsAction(
   conversationIds: string[],
   archived: boolean,
 ): Promise<MutationResult> {
-  const parsed = conversationArchive.input.safeParse({ conversationIds, archived });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const parsed = conversationArchive.input.safeParse({
+    conversationIds,
+    archived,
+  });
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     const { capabilityCtx } = await resolveScope(ctx);
-    const out = (await invoke(conversationArchive.name, parsed.data, capabilityCtx, {
-      surface: "agent",
-    })) as { updated: number };
+    const out = (await invoke(
+      conversationArchive.name,
+      parsed.data,
+      capabilityCtx,
+      {
+        surface: "agent",
+      },
+    )) as { updated: number };
     revalidateConversationSurfaces(ctx);
     return { ok: true, count: out.updated };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to archive" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to archive",
+    };
   }
 }
 
@@ -129,16 +171,25 @@ export async function deleteConversationsAction(
   conversationIds: string[],
 ): Promise<MutationResult> {
   const parsed = conversationDelete.input.safeParse({ conversationIds });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     const { capabilityCtx } = await resolveScope(ctx);
-    const out = (await invoke(conversationDelete.name, parsed.data, capabilityCtx, {
-      surface: "agent",
-    })) as { deleted: number };
+    const out = (await invoke(
+      conversationDelete.name,
+      parsed.data,
+      capabilityCtx,
+      {
+        surface: "agent",
+      },
+    )) as { deleted: number };
     revalidateConversationSurfaces(ctx);
     return { ok: true, count: out.deleted };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to delete" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to delete",
+    };
   }
 }
 
@@ -153,6 +204,9 @@ export async function purgeArchivedConversationsAction(
     revalidateConversationSurfaces(ctx);
     return { ok: true, count: out.deleted };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to purge archived" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to purge archived",
+    };
   }
 }

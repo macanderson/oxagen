@@ -11,21 +11,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { z } from "zod";
 
-const { mockGetSession, mockInvoke, parseState, mockLoggerError, mockAssertWorkspaceMember } =
-  vi.hoisted(() => ({
-    mockGetSession: vi.fn(),
-    mockInvoke: vi.fn(),
-    parseState: { ok: true as boolean, message: "Invalid task id" },
-    mockLoggerError: vi.fn(),
-    mockAssertWorkspaceMember: vi.fn(),
-  }));
+const {
+  mockGetSession,
+  mockInvoke,
+  parseState,
+  mockLoggerError,
+  mockAssertWorkspaceMember,
+} = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+  mockInvoke: vi.fn(),
+  parseState: { ok: true as boolean, message: "Invalid task id" },
+  mockLoggerError: vi.fn(),
+  mockAssertWorkspaceMember: vi.fn(),
+}));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
-vi.mock("@/lib/resolve-org", () => ({ assertWorkspaceMember: mockAssertWorkspaceMember }));
+vi.mock("@/lib/resolve-org", () => ({
+  assertWorkspaceMember: mockAssertWorkspaceMember,
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: (_s: unknown, fn: () => unknown) => fn() }));
+vi.mock("@oxagen/tenancy", () => ({
+  runInTenantScope: (_s: unknown, fn: () => unknown) => fn(),
+}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/database", () => ({
   withTenantDb: vi.fn(),
@@ -37,18 +46,41 @@ vi.mock("@oxagen/handlers/logger", () => ({
 }));
 
 // Only the background.read contract is exercised here; stub the rest minimally.
-vi.mock("@oxagen/oxagen/contracts/chat.message.send", () => ({ chatMessageSend: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({ agentApprovalResolve: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({ agentMcpConsentResolve: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({ agentPlanApprove: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.background_task.cancel", () => ({ agentTaskBackgroundCancel: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
+vi.mock("@oxagen/oxagen/contracts/chat.message.send", () => ({
+  chatMessageSend: {
+    input: { safeParse: () => ({ success: true, data: {} }) },
+  },
+}));
+vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({
+  agentApprovalResolve: {
+    input: { safeParse: () => ({ success: true, data: {} }) },
+  },
+}));
+vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({
+  agentMcpConsentResolve: {
+    input: { safeParse: () => ({ success: true, data: {} }) },
+  },
+}));
+vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
+  agentPlanApprove: {
+    input: { safeParse: () => ({ success: true, data: {} }) },
+  },
+}));
+vi.mock("@oxagen/oxagen/contracts/agent.background_task.cancel", () => ({
+  agentTaskBackgroundCancel: {
+    input: { safeParse: () => ({ success: true, data: {} }) },
+  },
+}));
 vi.mock("@oxagen/oxagen/contracts/agent.background_task.read", () => ({
   agentTaskBackgroundRead: {
     input: {
       safeParse: (raw: { taskId: string }) =>
         parseState.ok
           ? { success: true, data: raw }
-          : { success: false, error: { issues: [{ message: parseState.message }] } },
+          : {
+              success: false,
+              error: { issues: [{ message: parseState.message }] },
+            },
     },
   },
 }));
@@ -139,7 +171,9 @@ describe("readBackgroundTaskAction", () => {
     // The gate runs before the try/catch, so it propagates (a non-member must
     // get 404, not a fabricated 'failed' snapshot).
     mockAssertWorkspaceMember.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
-    await expect(readBackgroundTaskAction(CTX, "task-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(readBackgroundTaskAction(CTX, "task-1")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 });
@@ -159,9 +193,17 @@ describe("parseAttachmentsField", () => {
 
   it("parses a valid JSON array of attachment refs", () => {
     const attachments = [
-      { publicId: "gen_abc", kind: "image", name: "photo.png", mimeType: "image/png", url: "/api/v1/assets/gen_abc" },
+      {
+        publicId: "gen_abc",
+        kind: "image",
+        name: "photo.png",
+        mimeType: "image/png",
+        url: "/api/v1/assets/gen_abc",
+      },
     ];
-    expect(parseAttachmentsField(JSON.stringify(attachments))).toEqual(attachments);
+    expect(parseAttachmentsField(JSON.stringify(attachments))).toEqual(
+      attachments,
+    );
   });
 
   it("returns [] for a non-string FormDataEntryValue (e.g. a File)", () => {

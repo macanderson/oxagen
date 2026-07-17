@@ -22,7 +22,7 @@ afterEach(cleanup);
 // Mock: next/navigation
 // ---------------------------------------------------------------------------
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/acme/prod/ask",
+  usePathname: () => "/acme/prod/sessions",
 }));
 
 // ---------------------------------------------------------------------------
@@ -54,11 +54,11 @@ vi.mock("@/lib/sidebar", () => ({
   getSidebarConfig: vi.fn(() => ({
     items: [
       {
-        id: "ask",
-        label: "Ask",
+        id: "sessions",
+        label: "Sessions",
         icon: (): null => null,
         href: (ctx: { orgSlug: string; workspaceSlug?: string }) =>
-          `/${ctx.orgSlug}/${ctx.workspaceSlug}/ask`,
+          `/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`,
         group: "primary" as const,
       },
       {
@@ -187,7 +187,7 @@ describe("Sidebar — brand link", () => {
   it("brand link href points to workspace ask URL", () => {
     render(<Sidebar ctx={ctx} user={user} />);
     const link = screen.getByRole("link", { name: /oxagen home/i });
-    expect(link).toHaveAttribute("href", "/acme/prod/ask");
+    expect(link).toHaveAttribute("href", "/acme/prod/sessions");
   });
 
   it("shows BrandMark", () => {
@@ -211,10 +211,10 @@ describe("Sidebar — wordmark visibility", () => {
 });
 
 describe("Sidebar — nav items", () => {
-  it("renders primary nav item 'Ask'", () => {
+  it("renders primary nav item 'Sessions'", () => {
     render(<Sidebar ctx={ctx} user={user} />);
-    expect(screen.getByTestId("sidebar-item-ask")).toBeInTheDocument();
-    expect(screen.getByText("Ask")).toBeInTheDocument();
+    expect(screen.getByTestId("sidebar-item-sessions")).toBeInTheDocument();
+    expect(screen.getByText("Sessions")).toBeInTheDocument();
   });
 });
 
