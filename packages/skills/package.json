@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/skills",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Agent skill definitions for the Oxagen CLI — run `npx @oxagen/skills install` to add them to ~/.oxagen/skills",
   "type": "module",
   "main": "./src/index.ts",
