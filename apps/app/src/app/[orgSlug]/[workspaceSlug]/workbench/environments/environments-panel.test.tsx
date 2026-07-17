@@ -343,6 +343,26 @@ describe("EnvironmentsPanel", () => {
     ).toBeInTheDocument();
   });
 
+  // (b2) The workspace-root value column is "Fallback", so it never collides
+  // with an environment whose slug is literally "default".
+  it("labels the workspace-root value column 'Fallback', distinct from a default-slugged env", () => {
+    const props = makeDefaultProps({
+      environments: [makeEnv({ id: "env-d", name: "Default", slug: "default" })],
+    });
+    render(<EnvironmentsPanel {...props} />);
+    expect(
+      screen.getByRole("columnheader", { name: "Fallback" }),
+    ).toBeInTheDocument();
+    // The default environment still gets its own distinct slug header.
+    expect(
+      screen.getByRole("columnheader", { name: "default" }),
+    ).toBeInTheDocument();
+    // The old ambiguous capital-D "Default" header is gone.
+    expect(
+      screen.queryByRole("columnheader", { name: "Default" }),
+    ).not.toBeInTheDocument();
+  });
+
   // (c) canManage:false hides management controls
   it("hides 'Paste .env' and '+ Add key' buttons when canManage=false", () => {
     render(<EnvironmentsPanel {...makeDefaultProps({ canManage: false })} />);

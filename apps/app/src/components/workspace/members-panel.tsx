@@ -2,6 +2,7 @@
 import * as React from "react";
 import {
   UserPlus,
+  Users,
   Mail,
   AlertCircle,
   CheckCircle2,
@@ -12,6 +13,7 @@ import type { OrgSeatUsage } from "@oxagen/billing";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Panel } from "@/components/ui/panel";
 import {
   Dialog,
@@ -625,7 +627,16 @@ export function MembersPanel({
         }
       >
         {members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No members yet.</p>
+          <EmptyState
+            icon={<Users />}
+            title="No members yet"
+            description="Invite teammates to collaborate in this organization."
+            action={
+              canManage ? (
+                <AddMemberDialog orgSlug={orgSlug} seatUsage={seatUsage} />
+              ) : undefined
+            }
+          />
         ) : (
           <ul className="divide-y divide-border/60">
             {members.map((m) => (

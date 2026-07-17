@@ -10,6 +10,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { EvalRunGetOutput } from "@oxagen/oxagen/contracts/eval.run.get";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { RunDetailClient } from "./run-detail-client";
 
 interface RunDetailSectionProps {
@@ -36,6 +37,7 @@ export async function RunDetailSection({
   };
 
   let run: EvalRunGetOutput | null = null;
+  let loadFailed = false;
   try {
     run = (await runInTenantScope({ orgId, workspaceId }, () =>
       // get_eval_run exposes surfaces ["api","mcp","cli"] — passing a surface
@@ -44,7 +46,18 @@ export async function RunDetailSection({
     )) as EvalRunGetOutput;
   } catch (e) {
     console.error("eval.run.get failed:", e);
-    // Render empty state on failure — never throw from RSC.
+    // A failed read (including "run not found") is an error, not empty data —
+    // surface it rather than throwing from RSC or rendering a bare client.
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load this run"
+        description="This eval run could not be loaded. It may have been deleted, or something went wrong — reload the page to try again."
+      />
+    );
   }
 
   return (

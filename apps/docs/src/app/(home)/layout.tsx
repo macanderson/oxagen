@@ -94,7 +94,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             </Link>
             <a
               href={APP_URL}
-              className="lp-grad-surface inline-flex h-9 items-center rounded-lg px-4 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.03] active:scale-100"
+              className="lp-grad-surface inline-flex h-9 items-center rounded-lg px-4 text-sm font-semibold text-ink-dark shadow-sm transition-transform hover:scale-[1.03] active:scale-100"
             >
               Open Oxagen
             </a>

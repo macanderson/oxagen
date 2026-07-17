@@ -38,6 +38,23 @@ export function formatCentsCompact(cents: number, currency = "USD"): string {
   }).format(dollars);
 }
 
+/**
+ * Whole-dollar currency for width-starved surfaces (the phone-width nav credit
+ * pill). Drops cents ("$1,003") below the compact threshold and defers to
+ * `formatCentsCompact` above it, so large balances still abbreviate. Pair with
+ * the precise `formatCents` in an aria-label wherever the exact figure matters.
+ */
+export function formatCentsWhole(cents: number, currency = "USD"): string {
+  if (!Number.isFinite(cents)) return formatCents(0, currency);
+  const dollars = cents / 100;
+  if (Math.abs(dollars) >= 10_000) return formatCentsCompact(cents, currency);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(dollars);
+}
+
 export function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
@@ -107,6 +124,20 @@ export function firstNameOf(name: string | null | undefined): string | null {
 export function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 1)}…`;
+}
+
+/**
+ * Truncate the MIDDLE of a string so both the meaningful prefix and suffix
+ * survive ("oxagen.default.qa-chat-assistant" → "oxagen.defa…-assistant").
+ * Preferred for dotted identifiers/keys, where a plain end-ellipsis drops the
+ * distinguishing tail and reads like a typo. Head gets ~60% of the budget.
+ */
+export function truncateMiddle(value: string, max: number): string {
+  if (value.length <= max) return value;
+  if (max <= 1) return "…";
+  const head = Math.ceil((max - 1) * 0.6);
+  const tail = max - 1 - head;
+  return `${value.slice(0, head)}…${tail > 0 ? value.slice(value.length - tail) : ""}`;
 }
 
 /**

@@ -83,12 +83,15 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
       {/* Ember gradient CTA — the brand's primary call-to-action treatment
           (matches the docs landing page). `.ox-grad-surface` paints the
           gold→flame→crimson fill over the button; the DS button keeps its
-          hover-scale motion. */}
+          hover-scale motion. Ink text, not white: the gold stop of the ember
+          sweep is far too light for white 14px text (≈2.1:1 vs the required
+          4.5:1), while ink holds ≥4.9:1 across every stop — the same
+          ink-on-brand pairing every primary button in the DS uses. */}
       <Button
         type="submit"
         variant="gradient"
         size="lg"
-        className="ox-grad-surface w-full border-0 text-white shadow-sm"
+        className="ox-grad-surface w-full border-0 text-primary-foreground shadow-sm"
         disabled={pending}
       >
         {pending ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}

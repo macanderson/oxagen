@@ -14,12 +14,16 @@ import type { GraphNodeSearchOutput } from "@oxagen/oxagen/contracts/graph.node.
 import type { GraphSearchOutput } from "@oxagen/oxagen/contracts/graph.search";
 import type { OntologyNeighborsOutput } from "@oxagen/oxagen/contracts/ontology.neighbors";
 import type { OntologyQueryOutput } from "@oxagen/oxagen/contracts/ontology.query";
+import { primaryLabel } from "@/components/knowledge/graph-explorer/lib/transform";
 
 /** graph.node.list ("list_nodes") row → citation. */
 export function fromListNode(node: GraphNodeListOutput["nodes"][number]): KnowledgeNodeRef {
   return {
     id: node.id,
-    label: node.labels[0] ?? "Node",
+    // list_nodes returns labels as [base "KnowledgeNode", domain] — cite by the
+    // domain label, never the base marker (matches the canvas/table adapter's
+    // primaryLabel, so `labels[0]` doesn't paint every chip "KnowledgeNode").
+    label: primaryLabel(node.labels),
     displayName: node.displayName,
     properties: node.properties ?? {},
   };

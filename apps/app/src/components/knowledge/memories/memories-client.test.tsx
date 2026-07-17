@@ -280,6 +280,22 @@ describe("MemoriesClient — empty state", () => {
       screen.queryByText("Always run pnpm i"),
     ).not.toBeInTheDocument();
   });
+
+  it("hides the stats row and filter/sort controls when there are no memories", () => {
+    render(<MemoriesClient {...baseProps} initialRecords={[]} total={0} />);
+    // Nothing to filter yet — the control bar stays hidden so the empty state
+    // sits directly under the header.
+    expect(screen.queryByTestId("memory-stats-row")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Search memories")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Sort memories")).not.toBeInTheDocument();
+  });
+
+  it("shows the stats row and filter controls once a memory exists", () => {
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
+    expect(screen.getByTestId("memory-stats-row")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search memories")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sort memories")).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------

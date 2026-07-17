@@ -10,7 +10,7 @@
 // Re-exported so the module's existing consumers (copyable-id, edge-hover-popover,
 // graph-canvas-view) don't need an import-path change — the shared @/lib/utils
 // implementation is byte-identical to this module's former local definition.
-export { truncate } from "@/lib/utils";
+export { truncate, truncateMiddle } from "@/lib/utils";
 
 export type PropertyKind =
   | "null"

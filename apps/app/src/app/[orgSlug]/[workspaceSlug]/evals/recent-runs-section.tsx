@@ -11,6 +11,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { EvalRunListOutput } from "@oxagen/oxagen/contracts/eval.run.list";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { RecentRunsClient } from "./recent-runs-client";
 
 interface RecentRunsSectionProps {
@@ -40,6 +41,7 @@ export async function RecentRunsSection({
 
   let runs: EvalRunListOutput["runs"] = [];
   let allTimeTotal = 0;
+  let loadFailed = false;
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
       // list_eval_runs exposes surfaces ["api","mcp","cli"] — passing a surface
@@ -54,7 +56,19 @@ export async function RecentRunsSection({
     allTimeTotal = result.allTimeTotal;
   } catch (e) {
     console.error("eval.run.list failed:", e);
-    // Render empty state on failure — never throw from RSC.
+    // A fetch failure is not "no runs yet" — surface it as an error (never
+    // throw from RSC, which would blank the streamed header) rather than
+    // masquerading the failure as the client's empty state.
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load recent runs"
+        description="Something went wrong loading your eval runs. Reload the page to try again."
+      />
+    );
   }
 
   return (

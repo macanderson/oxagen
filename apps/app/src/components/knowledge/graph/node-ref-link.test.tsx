@@ -18,6 +18,18 @@ vi.mock("./node-ref", () => ({
   NodeRef: ({ node }: { node: { displayName: string } }) => (
     <span data-testid="node-ref">{node.displayName}</span>
   ),
+  // Mirror the real (pure) citation-label helper — its own behavior is covered
+  // by node-ref.test.tsx; here it only needs to feed NodeRefLink's aria-label.
+  nodeCitationLabel: (node: {
+    displayName?: string;
+    label?: string;
+    id?: string | null;
+  }) => {
+    const name = node.displayName?.trim();
+    if (name && name !== node.id) return name;
+    if (node.label && node.label !== "Node") return node.label;
+    return node.label || "Unknown node";
+  },
 }));
 
 vi.mock("next/link", () => ({

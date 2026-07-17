@@ -33,6 +33,18 @@ describe("fromListNode", () => {
     });
     expect(ref.label).toBe("Node");
   });
+
+  it("cites the domain label, not the base 'KnowledgeNode' marker", () => {
+    // graph.node.list returns [base "KnowledgeNode", domain]; the citation chip
+    // must surface the domain label so it isn't painted "KnowledgeNode".
+    const ref = fromListNode({
+      id: "pub-2b",
+      labels: ["KnowledgeNode", "Issue"],
+      properties: {},
+      displayName: "Login bug",
+    });
+    expect(ref.label).toBe("Issue");
+  });
 });
 
 describe("fromSearchNode", () => {

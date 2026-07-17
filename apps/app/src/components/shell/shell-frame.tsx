@@ -151,7 +151,10 @@ export function ShellFrame({
           {/* Top-left: org / workspace pickers (org ▾ / workspace ▾). Stream in
               from navDataPromise so the header paints without waiting on the
               org-list join. */}
-          <div className="flex min-w-0 shrink items-center gap-2">
+          {/* overflow-x-clip: when the header genuinely runs out of width
+              (≤320px), clip the pickers at the cluster edge instead of letting
+              the opaque right cluster paint over their overflowing text. */}
+          <div className="flex min-w-0 shrink items-center gap-2 overflow-x-clip">
             <Suspense fallback={<OrgSwitcherFallback />}>
               <OrgSwitcherSlot org={org} navDataPromise={navDataPromise} />
             </Suspense>

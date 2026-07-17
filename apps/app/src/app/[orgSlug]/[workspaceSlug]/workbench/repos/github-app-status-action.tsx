@@ -23,11 +23,19 @@ import { workspace } from "@/lib/routes";
 export interface GithubAppStatusActionProps {
   orgSlug: string;
   workspaceSlug: string;
+  /**
+   * Variant for the "Connect GitHub App" button. Defaults to `outline` (the
+   * compact header treatment); the zero-repo empty state passes `default` so
+   * Connect reads as the guided primary action. The connected "Manage" state
+   * always stays `ghost` regardless — managing is never the primary path.
+   */
+  connectVariant?: "default" | "outline";
 }
 
 export function GithubAppStatusAction({
   orgSlug,
   workspaceSlug,
+  connectVariant = "outline",
 }: GithubAppStatusActionProps) {
   const [status, setStatus] = React.useState<GithubStatusResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -78,7 +86,7 @@ export function GithubAppStatusAction({
   if (!status.connected) {
     return (
       <Button
-        variant="outline"
+        variant={connectVariant}
         size="sm"
         data-testid="repos-connect-github-btn"
         render={<a href={status.identityUrl} />}

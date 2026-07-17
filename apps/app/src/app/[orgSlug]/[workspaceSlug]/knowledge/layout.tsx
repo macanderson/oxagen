@@ -3,6 +3,7 @@ import { PageTabs } from "@/components/ui/page-tabs";
 import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { workspace } from "@/lib/routes";
+import { workspaceCrumb } from "@/lib/breadcrumbs";
 import type { ScopeContext } from "@/lib/scope";
 
 export default async function KnowledgeLayout({
@@ -14,6 +15,7 @@ export default async function KnowledgeLayout({
 }) {
   const { orgSlug, workspaceSlug } = await params;
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+  const wsCrumb = await workspaceCrumb(orgSlug, workspaceSlug);
 
   const tabs = [
     { label: "Sources", href: workspace.knowledge.sources(ctx) },
@@ -31,10 +33,7 @@ export default async function KnowledgeLayout({
           description="Sources, graph, inference, ontology, and agent memory."
           breadcrumb={
             <Breadcrumb
-              items={[
-                { label: workspaceSlug, href: workspace.ask(ctx) },
-                { label: "Knowledge" },
-              ]}
+              items={[wsCrumb, { label: "Knowledge" }]}
             />
           }
         />

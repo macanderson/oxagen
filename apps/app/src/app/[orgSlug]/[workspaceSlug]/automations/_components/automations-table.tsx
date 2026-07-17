@@ -42,6 +42,7 @@ import { workspace } from "@/lib/routes";
 import type { AutomationListOutput } from "@oxagen/oxagen/contracts/automation.list";
 import { EnableConfirmDialog } from "./enable-confirm-dialog";
 import { TriggerNowDialog } from "./trigger-now-dialog";
+import { NewAutomationButton } from "./new-automation-button";
 import {
   enableAutomationAction,
   disableAutomationAction,
@@ -134,6 +135,11 @@ export function AutomationsTable({
         icon={Zap}
         title="No automations yet"
         description="Create an automation to run a playbook on a graph event, a schedule, or on demand. Nothing fires until you enable it."
+        action={
+          canManage ? (
+            <NewAutomationButton orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+          ) : undefined
+        }
       />
     );
   }

@@ -53,12 +53,21 @@ export function targetNodeRef(edge: SemanticEdge): KnowledgeNodeRef {
   );
 }
 
-/** The best human label for a node — never an empty string. */
-function nodeLabel(node: KnowledgeNodeRef): string {
+/**
+ * The best human label for a node — never an empty string, and never the raw
+ * id. A `displayName` that is exactly the node's own id is the server's
+ * last-resort coalesce fallback (`displayName → name → publicId`), not a human
+ * name — skip it and cite by the domain label instead, so a UUID is never the
+ * primary on-screen identifier (the id still lives in the copyable secondary).
+ */
+export function nodeCitationLabel(node: KnowledgeNodeRef): string {
   const name = node.displayName?.trim();
-  if (name) return name;
+  if (name && name !== node.id) return name;
   if (node.label && node.label !== "Node") return node.label;
-  return node.id ?? "Unknown node";
+  // No human name and no domain label — prefer even the generic base label over
+  // the raw id. A UUID is never the primary identifier; it lives only in the
+  // copyable secondary (`??` would also leak the id, or an empty displayName).
+  return node.label || "Unknown node";
 }
 
 export interface NodeRefProps {
@@ -73,7 +82,7 @@ export interface NodeRefProps {
  * node's domain label, copyable id, and full property list.
  */
 export function NodeRef({ node, emphasis = "default", className }: NodeRefProps) {
-  const label = nodeLabel(node);
+  const label = nodeCitationLabel(node);
   const properties = node.properties ?? {};
   const color = colorForLabel(node.label);
 

@@ -11,6 +11,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { EvalDatasetListOutput } from "@oxagen/oxagen/contracts/eval.dataset.list";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { DatasetsClient } from "./datasets-client";
 
 interface DatasetsSectionProps {
@@ -39,6 +40,7 @@ export async function DatasetsSection({
   };
 
   let datasets: EvalDatasetListOutput["datasets"] = [];
+  let loadFailed = false;
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
       // list_datasets exposes surfaces ["api","mcp","cli"] — passing a surface
@@ -48,7 +50,19 @@ export async function DatasetsSection({
     datasets = result.datasets;
   } catch (e) {
     console.error("eval.dataset.list failed:", e);
-    // Render empty state on failure — never throw from RSC.
+    // A fetch failure is not "no datasets yet" — surface it as an error (never
+    // throw from RSC, which would blank the streamed header) rather than
+    // masquerading the failure as the client's empty state.
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load datasets"
+        description="Something went wrong loading your eval datasets. Reload the page to try again."
+      />
+    );
   }
 
   return <DatasetsClient datasets={datasets} orgSlug={orgSlug} workspaceSlug={workspaceSlug} />;

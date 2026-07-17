@@ -3,7 +3,7 @@
  * invoice-list.test.tsx — render tests for InvoiceList.
  *
  * Covers:
- *   - Empty state: renders "No invoices yet."
+ *   - Empty state: renders the "No invoices yet" title + explanation
  *   - Renders invoice number
  *   - Renders period dates
  *   - Renders amount
@@ -46,9 +46,12 @@ const unpaidInvoice: Invoice = {
 };
 
 describe("InvoiceList — empty state", () => {
-  it("renders 'No invoices yet.' when empty", () => {
+  it("renders the empty state (title + explanation) when there are no invoices", () => {
     render(<InvoiceList invoices={[]} />);
-    expect(screen.getByText("No invoices yet.")).toBeInTheDocument();
+    expect(screen.getByText("No invoices yet")).toBeInTheDocument();
+    expect(
+      screen.getByText("Invoices appear here after your first billing cycle."),
+    ).toBeInTheDocument();
   });
 });
 

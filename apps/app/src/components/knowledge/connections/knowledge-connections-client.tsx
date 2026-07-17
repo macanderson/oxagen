@@ -29,6 +29,7 @@ import {
   type DeleteSourceTarget,
 } from "./delete-source-dialog";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Menu,
   MenuTrigger,
@@ -247,40 +248,6 @@ function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing 
   );
 }
 
-// ── Empty State ────────────────────────────────────────────────────────────────
-
-interface EmptyStateProps {
-  onConnect: () => void;
-}
-
-function EmptyState({ onConnect }: EmptyStateProps) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-12 text-center"
-      data-testid="connections-empty-state"
-    >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <Database className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">No sources connected</p>
-        <p className="text-xs text-muted-foreground max-w-xs">
-          Connect a data source to give your agents access to your code, docs, and project data.
-        </p>
-      </div>
-      <button
-        type="button"
-        className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-        onClick={onConnect}
-        data-testid="connect-github-btn"
-      >
-        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-        Connect GitHub
-      </button>
-    </div>
-  );
-}
-
 // ── Main client component ──────────────────────────────────────────────────────
 
 export interface KnowledgeConnectionsClientProps {
@@ -440,7 +407,23 @@ export function KnowledgeConnectionsClient({
 
       {/* Connection list or empty state */}
       {activeConnections.length === 0 ? (
-        <EmptyState onConnect={() => setWizardOpen(true)} />
+        <EmptyState
+          variant="dashed"
+          icon={<Database />}
+          title="No sources connected"
+          description="Connect a data source to give your agents access to your code, docs, and project data."
+          action={
+            <Button
+              size="sm"
+              onClick={() => setWizardOpen(true)}
+              data-testid="connect-github-btn"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Connect GitHub
+            </Button>
+          }
+          data-testid="connections-empty-state"
+        />
       ) : (
         <div className="rounded-lg border border-border/60">
           <ul>

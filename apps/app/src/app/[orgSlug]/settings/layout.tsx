@@ -22,7 +22,7 @@ export default async function OrgSettingsLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Organization Settings"
-        description="Configure your organization, manage plugins, and govern third-party integrations."
+        description="Configure your organization's general details and privacy controls."
       />
       {/* Desktop: fixed sidebar. Mobile: full-width content + MobileSettingsNav,
           a thumb-reachable bottom-sheet switcher (same items — parity per ADR-026). */}

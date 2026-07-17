@@ -9,6 +9,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { KnowledgeConnectionsClient } from "@/components/knowledge/connections/knowledge-connections-client";
 
 interface ConnectionsSectionProps {
@@ -41,6 +42,7 @@ export async function ConnectionsSection({
   };
 
   let connections: ConnectionListOutput["connections"] = [];
+  let loadFailed = false;
   try {
     const result = (await runInTenantScope({ orgId, workspaceId }, () =>
       invoke("list_connections", {}, ctx, { surface: "agent" }),
@@ -48,7 +50,19 @@ export async function ConnectionsSection({
     connections = result.connections;
   } catch (e) {
     console.error("connection.list failed:", e);
-    // Render empty state on failure — never throw from RSC
+    // A fetch failure is distinct from "no sources yet" — surface it as an
+    // error (never throw from RSC, which would blank the streamed header)
+    // rather than masquerading the failure as the client's empty state.
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load sources"
+        description="Something went wrong loading your connected sources. Reload the page to try again."
+      />
+    );
   }
 
   return (

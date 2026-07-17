@@ -9,9 +9,17 @@
  */
 
 import { useEffect, useState } from "react";
-import { StackedBarChart, StackedBarSeries, BarList, BarListSeries } from "reaviz";
+import {
+  StackedBarChart,
+  StackedBarSeries,
+  BarList,
+  BarListSeries,
+  LinearYAxis,
+  LinearYAxisTickSeries,
+  LinearYAxisTickLabel,
+} from "reaviz";
 import type { UsageTimePoint, UsageBreakdownRow } from "@oxagen/telemetry";
-import { formatDayShort } from "./usage-format";
+import { formatDayShort, formatTokens } from "./usage-format";
 
 export type UsageMetric = "cost" | "tokens";
 
@@ -74,6 +82,16 @@ export function DailyUsageChart({
 
   const colorScheme = metric === "tokens" ? [...colors] : [colors[0]];
 
+  // Format y-axis ticks so labels never collide. reaviz spaces ticks evenly by
+  // pixel; over a small cost range (e.g. $0–$0.35) a 1-decimal default renders
+  // duplicate rounded labels (0.3, 0.3, 0.3…). Cost ticks get 2-decimal dollars
+  // (always unique), tokens get the compact "1.2K" form.
+  const formatTick = (value: number | string): string => {
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(n)) return String(value);
+    return metric === "cost" ? `$${n.toFixed(2)}` : formatTokens(n);
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {metric === "tokens" ? (
@@ -94,6 +112,17 @@ export function DailyUsageChart({
           height={260}
           data={data}
           series={<StackedBarSeries colorScheme={colorScheme} />}
+          yAxis={
+            <LinearYAxis
+              type="value"
+              tickSeries={
+                <LinearYAxisTickSeries
+                  tickSize={45}
+                  label={<LinearYAxisTickLabel format={formatTick} />}
+                />
+              }
+            />
+          }
         />
       </div>
     </div>

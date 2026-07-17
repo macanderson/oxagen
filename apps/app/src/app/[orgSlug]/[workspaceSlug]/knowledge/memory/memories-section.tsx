@@ -16,6 +16,7 @@ import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
+import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { MemoriesClient } from "@/components/knowledge/memories/memories-client";
 import {
   createMemoryAction,
@@ -43,6 +44,7 @@ export async function MemoriesSection({
 }: MemoriesSectionProps) {
   let memories: AgentMemoryRecord[] = [];
   let total = 0;
+  let loadFailed = false;
 
   try {
     const result = (await runInTenantScope(
@@ -67,7 +69,19 @@ export async function MemoriesSection({
     total = result.total;
   } catch (e) {
     console.error("agent.memory.list failed:", e);
-    // Render empty state on failure — never throw from RSC
+    // A fetch failure is not "no memories yet" — surface it as an error (never
+    // throw from RSC, which would blank the streamed header) rather than
+    // masquerading the failure as the client's empty state.
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <ErrorState
+        title="Couldn't load memory"
+        description="Something went wrong loading agent memory. Reload the page to try again."
+      />
+    );
   }
 
   return (

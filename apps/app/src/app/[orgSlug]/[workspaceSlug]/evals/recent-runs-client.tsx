@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { FlaskConical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { workspace } from "@/lib/routes";
 import type { EvalRunListOutput } from "@oxagen/oxagen/contracts/eval.run.list";
 
@@ -132,28 +133,20 @@ export function RecentRunsClient({
   );
 
   if (runs.length === 0) {
+    // Runs aren't launched from this surface — they're created inside a dataset
+    // (dataset detail → launch), whose action isn't reachable from here — so
+    // there's no run-creating CTA to offer. The empty state points there
+    // instead, using the shared EmptyState for consistency with the rest of app.
     return (
       <section className="flex flex-col gap-4" data-testid="evals-recent-runs">
         {header}
-        <div
-          className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border/60 bg-card/50 px-8 py-12 text-center"
+        <EmptyState
+          variant="dashed"
+          icon={<FlaskConical aria-hidden="true" />}
+          title="No eval runs yet"
+          description="Open a dataset and launch one."
           data-testid="evals-recent-runs-empty-state"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <FlaskConical
-              className="h-6 w-6 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-foreground">
-              No eval runs yet
-            </p>
-            <p className="max-w-xs text-xs text-muted-foreground">
-              No eval runs yet — open a dataset and launch one.
-            </p>
-          </div>
-        </div>
+        />
       </section>
     );
   }

@@ -169,59 +169,65 @@ export function ReposClient({
 
   return (
     <div className="flex flex-col gap-4" data-testid="repos-client">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <GithubAppStatusAction
-          orgSlug={orgSlug}
-          workspaceSlug={workspaceSlug}
-        />
-        {canManage && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void refresh()}
-              disabled={refreshing}
-              data-testid="repos-refresh-btn"
-            >
-              <RefreshCw
-                className={refreshing ? "animate-spin" : undefined}
-                aria-hidden="true"
-              />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setEditLauncherOpen(true)}
-              data-testid="repos-edit-file-btn"
-            >
-              <Sparkles aria-hidden="true" />
-              Edit file &amp; open PR
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setForkOpen(true)}
-              data-testid="repos-fork-btn"
-            >
-              <GitFork aria-hidden="true" />
-              Fork
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-              data-testid="repos-create-btn"
-            >
-              <Plus aria-hidden="true" />
-              Create repo
-            </Button>
-          </div>
-        )}
-      </div>
+      {/* Header actions only make sense once repos exist — Refresh / Edit /
+          Fork are all inoperable with zero repos, so we hide the whole toolbar
+          in the empty state and surface the guided actions (Connect, Create)
+          inside the empty-state card instead. */}
+      {repos.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <GithubAppStatusAction
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+          />
+          {canManage && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void refresh()}
+                disabled={refreshing}
+                data-testid="repos-refresh-btn"
+              >
+                <RefreshCw
+                  className={refreshing ? "animate-spin" : undefined}
+                  aria-hidden="true"
+                />
+                Refresh
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditLauncherOpen(true)}
+                data-testid="repos-edit-file-btn"
+              >
+                <Sparkles aria-hidden="true" />
+                Edit file &amp; open PR
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setForkOpen(true)}
+                data-testid="repos-fork-btn"
+              >
+                <GitFork aria-hidden="true" />
+                Fork
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+                data-testid="repos-create-btn"
+              >
+                <Plus aria-hidden="true" />
+                Create repo
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {unavailable ? (
         <ErrorState
@@ -236,6 +242,29 @@ export function ReposClient({
           description="Install the Oxagen GitHub App, then connect a repository, to see it here."
           variant="dashed"
           data-testid="repos-empty-state"
+          action={
+            <>
+              {/* Guided primary: connect the GitHub App (filled). Create repo
+                  sits beside it as the secondary path. */}
+              <GithubAppStatusAction
+                orgSlug={orgSlug}
+                workspaceSlug={workspaceSlug}
+                connectVariant="default"
+              />
+              {canManage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateOpen(true)}
+                  data-testid="repos-empty-create-btn"
+                >
+                  <Plus aria-hidden="true" />
+                  Create repo
+                </Button>
+              )}
+            </>
+          }
         />
       ) : (
         <Table data-testid="repos-table">

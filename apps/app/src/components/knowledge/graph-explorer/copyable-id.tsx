@@ -13,7 +13,7 @@ import * as React from "react";
 import { Check, Copy } from "lucide-react";
 import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
-import { truncate } from "./lib/format";
+import { truncate, truncateMiddle } from "./lib/format";
 
 export interface CopyableIdProps {
   /** Full identifier (copied verbatim). */
@@ -22,12 +22,26 @@ export interface CopyableIdProps {
   label?: string;
   /** Max visible characters before truncation. */
   max?: number;
+  /**
+   * Where the ellipsis lands. `end` (default) suits opaque ids. `middle`
+   * suits dotted identifiers/keys (e.g. `oxagen.default.qa-chat`) where the
+   * distinguishing tail must survive so a clip never reads as a typo.
+   */
+  ellipsis?: "end" | "middle";
   className?: string;
 }
 
-export function CopyableId({ value, label, max = 16, className }: CopyableIdProps) {
+export function CopyableId({
+  value,
+  label,
+  max = 16,
+  ellipsis = "end",
+  className,
+}: CopyableIdProps) {
   const { copied, copy } = useCopyToClipboard({ timeout: 1400 });
   const onCopy = React.useCallback(() => void copy(value), [copy, value]);
+  const shown =
+    ellipsis === "middle" ? truncateMiddle(value, max) : truncate(value, max);
 
   return (
     <button
@@ -43,7 +57,7 @@ export function CopyableId({ value, label, max = 16, className }: CopyableIdProp
       )}
     >
       {label && <span className="shrink-0 font-sans font-medium text-muted-foreground/80">{label}</span>}
-      <span className="truncate">{truncate(value, max)}</span>
+      <span className="truncate">{shown}</span>
       {copied ? (
         <Check className="size-3 shrink-0 text-success" aria-hidden="true" />
       ) : (

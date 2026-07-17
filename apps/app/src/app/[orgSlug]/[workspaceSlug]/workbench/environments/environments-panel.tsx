@@ -358,7 +358,10 @@ function SecretsSection({
               <th className="px-3 py-2 text-left font-medium">Key</th>
               <th className="px-2 py-2 text-left font-medium">Sens</th>
               <th className="px-3 py-2 text-left font-medium">Memo</th>
-              <th className="px-3 py-2 text-left font-medium">Default</th>
+              {/* Workspace-root value used when an environment has no override.
+                  Named "Fallback" (not "Default") so it never collides with an
+                  environment whose slug is literally "default". */}
+              <th className="px-3 py-2 text-left font-medium">Fallback</th>
               {environments.map((env) => (
                 <th key={env.id} className="px-3 py-2 text-left font-medium">
                   {env.slug}
@@ -483,7 +486,7 @@ function SecretsSection({
       </div>
       <p className="text-xs text-muted-foreground">
         ● sensitive (encrypted) · ○ plain config · ‹inherit› falls back to the
-        Default value. Reveal/export a plaintext value via the API or{" "}
+        Fallback value. Reveal/export a plaintext value via the API or{" "}
         <code>oxagen secret reveal</code> (audited).
       </p>
 

@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { MobileSettingsNav, SettingsNav } from "@/components/ui/settings-nav";
 import { workspace } from "@/lib/routes";
+import { workspaceCrumb } from "@/lib/breadcrumbs";
 import type { ScopeContext } from "@/lib/scope";
 
 export default async function SettingsLayout({
@@ -13,6 +14,7 @@ export default async function SettingsLayout({
 }) {
   const { orgSlug, workspaceSlug } = await params;
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+  const wsCrumb = await workspaceCrumb(orgSlug, workspaceSlug);
 
   // Workspace configuration only. Anything about BUILDING with agents —
   // agents, tools, MCP servers, environments, sandboxes — lives in the
@@ -38,10 +40,7 @@ export default async function SettingsLayout({
         description="Workspace configuration, members, and models."
         breadcrumb={
           <Breadcrumb
-            items={[
-              { label: workspaceSlug, href: workspace.ask(ctx) },
-              { label: "Settings" },
-            ]}
+            items={[wsCrumb, { label: "Settings" }]}
           />
         }
       />

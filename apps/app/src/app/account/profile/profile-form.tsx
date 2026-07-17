@@ -159,32 +159,24 @@ export function ProfileForm({
           />
         </div>
 
-        {/* Timezone + language — display only; edited on Preferences page */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-timezone">Timezone</Label>
-            <Input
-              id="profile-timezone"
-              type="text"
-              value={timezone.replace(/_/g, " ")}
-              readOnly
-              disabled
-              aria-readonly="true"
-              className="cursor-not-allowed opacity-60"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="profile-language">Language</Label>
-            <Input
-              id="profile-language"
-              type="text"
-              value={language}
-              readOnly
-              disabled
-              aria-readonly="true"
-              className="cursor-not-allowed opacity-60"
-            />
-          </div>
+        {/* Timezone + language — read-only key/value, not editable inputs. These
+            are owned by the Preferences page, so we show the current values as
+            plain text (a disabled input reads as "editable but broken") and link
+            out to where they're actually changed. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-foreground">Regional</span>
+          <dl className="divide-y divide-border rounded-md border border-border">
+            <div className="flex items-center justify-between gap-4 px-3 py-2">
+              <dt className="text-sm text-muted-foreground">Timezone</dt>
+              <dd className="text-sm font-medium tabular-nums text-foreground">
+                {timezone.replace(/_/g, " ")}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-3 py-2">
+              <dt className="text-sm text-muted-foreground">Language</dt>
+              <dd className="text-sm font-medium text-foreground">{language}</dd>
+            </div>
+          </dl>
           <p className="text-xs text-muted-foreground">
             Timezone and language can be changed in{" "}
             <Link href={account.preferences()} className="underline underline-offset-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bot } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +71,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
   } | null>(null);
   const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [showOnboarding, setShowOnboarding] = React.useState(false);
+  // The AI recommendation flow fetches (and shows loading skeletons) on mount,
+  // so it is gated behind an explicit CTA in the empty state — never auto-
+  // mounted, which used to leave two ghost skeleton cards under the empty state.
+  const [recommendationsOpen, setRecommendationsOpen] = React.useState(false);
 
   const loadRegistry = React.useCallback(
     async (vid?: string) => {
@@ -262,19 +266,33 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
         <div className="space-y-4">
           {registry.schemas.length === 0 && showOnboarding ? (
             <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium">No schemas defined</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Use AI recommendations to get started with a starter schema.
+                    Use AI recommendations to draft a starter schema from your
+                    graph.
                   </p>
                 </div>
+                {!recommendationsOpen && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="max-md:h-11 shrink-0"
+                    onClick={() => setRecommendationsOpen(true)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                    Use AI recommendations
+                  </Button>
+                )}
               </div>
-              <OnboardingRecommendation
-                slugs={slugs}
-                onApply={handleOnboardingApply}
-                onDiscard={() => setShowOnboarding(false)}
-              />
+              {recommendationsOpen && (
+                <OnboardingRecommendation
+                  slugs={slugs}
+                  onApply={handleOnboardingApply}
+                  onDiscard={() => setRecommendationsOpen(false)}
+                />
+              )}
             </div>
           ) : (
             <SchemaList
