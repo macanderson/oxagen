@@ -19,7 +19,8 @@ traffic on the platform, with resolve-rate ≥ baseline and cost/turn ≤ baseli
      (code_graph is a workspace tool, not a kernel capability).
 2. **Guard tool-call parallelism.** Confirmed: the AI SDK executes all tool
    calls in a step concurrently, unawaited, uncapped, including mutating tools
-   (`ai@6.0.224` `run-tools-transformation.ts:351-386`). Interim guard in
+   (`ai@7.0.14` `execute-tools-from-stream.ts:200-205`; same in `ai@6`
+   `run-tools-transformation.ts`). Interim guard in
    `engine.ts`/tool wrapping: concurrency cap (8) + serialize
    `MUTATING_TOOL_NAMES` behind a barrier (Stella dispatch semantics,
    `driver.rs:702-759`). This becomes engine-owned in Phase 3.
