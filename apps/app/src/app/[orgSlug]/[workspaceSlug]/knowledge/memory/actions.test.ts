@@ -57,6 +57,9 @@ import {
   listMemoryCitationsAction,
   attachMemoryEvidenceAction,
   promoteMemoryAction,
+  dismissPromotionAction,
+  demoteMemoryAction,
+  suggestRationalesAction,
 } from "./actions";
 
 const BASE = { orgSlug: "oxagen", workspaceSlug: "main" };
@@ -68,22 +71,36 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue({ id: "org-1" });
   mockResolveWorkspace.mockResolvedValue({ id: "ws-1" });
   mockAssertOrgMember.mockResolvedValue(undefined);
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
   mockWithTenantDb.mockImplementation(async () => [{ role: dbState.role }]);
 });
 
 describe("listMemoryCitationsAction", () => {
   it("rejects a blank execution id without calling invoke", async () => {
-    const res = await listMemoryCitationsAction({ ...BASE, executionId: "   " });
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("execution id") });
+    const res = await listMemoryCitationsAction({
+      ...BASE,
+      executionId: "   ",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("execution id"),
+    });
     expect(mockResolveOrg).not.toHaveBeenCalled();
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("denies a caller who is not a workspace member", async () => {
     dbState.role = "viewer";
-    const res = await listMemoryCitationsAction({ ...BASE, executionId: "exec-1" });
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("workspace member") });
+    const res = await listMemoryCitationsAction({
+      ...BASE,
+      executionId: "exec-1",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -133,7 +150,10 @@ describe("listMemoryCitationsAction", () => {
 
   it("returns ok:false with the error message when invoke throws", async () => {
     mockInvoke.mockRejectedValue(new Error("neo4j down"));
-    const res = await listMemoryCitationsAction({ ...BASE, executionId: "exec-1" });
+    const res = await listMemoryCitationsAction({
+      ...BASE,
+      executionId: "exec-1",
+    });
     expect(res).toEqual({ ok: false, error: "neo4j down" });
   });
 });
@@ -147,15 +167,27 @@ describe("attachMemoryEvidenceAction", () => {
   };
 
   it("rejects a blank memory id without calling invoke", async () => {
-    const res = await attachMemoryEvidenceAction({ ...validInput, memoryId: "  " });
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("memory") });
+    const res = await attachMemoryEvidenceAction({
+      ...validInput,
+      memoryId: "  ",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("memory"),
+    });
     expect(mockResolveOrg).not.toHaveBeenCalled();
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("rejects a strength outside 0-1 without calling invoke", async () => {
-    const res = await attachMemoryEvidenceAction({ ...validInput, strength: 1.5 });
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("between 0 and 1") });
+    const res = await attachMemoryEvidenceAction({
+      ...validInput,
+      strength: 1.5,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("between 0 and 1"),
+    });
     expect(mockResolveOrg).not.toHaveBeenCalled();
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -163,7 +195,10 @@ describe("attachMemoryEvidenceAction", () => {
   it("denies a caller who is not a workspace member", async () => {
     dbState.role = "";
     const res = await attachMemoryEvidenceAction(validInput);
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("workspace member") });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -185,7 +220,9 @@ describe("attachMemoryEvidenceAction", () => {
       refutes: false,
     });
     expect(opts).toEqual({ surface: "agent" });
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memory");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/oxagen/main/knowledge/memory",
+    );
   });
 
   it("omits detail from the invoke input when blank", async () => {
@@ -221,7 +258,10 @@ describe("promoteMemoryAction", () => {
   it("denies a caller who is not a workspace member (never invokes promote_memory)", async () => {
     dbState.role = "viewer";
     const res = await promoteMemoryAction(promoteInput);
-    expect(res).toEqual({ ok: false, error: expect.stringContaining("workspace member") });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
     expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
@@ -239,10 +279,16 @@ describe("promoteMemoryAction", () => {
         rationale: "Confirmed by two independent runs",
         basedOnEvidenceIds: ["ev-1", "ev-2"],
       },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memory");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/oxagen/main/knowledge/memory",
+    );
     expect(res).toEqual({ ok: true, memory: promoted });
   });
 
@@ -267,5 +313,227 @@ describe("promoteMemoryAction", () => {
     const res = await promoteMemoryAction(promoteInput);
     expect(res).toEqual({ ok: false, error: "promotion rejected" });
     expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("omits rationale from the invoke input entirely when not supplied (rationale is optional)", async () => {
+    mockInvoke.mockResolvedValue({ id: "mem-1" });
+    await promoteMemoryAction({ ...BASE, memoryId: "mem-1", toClass: "RULE" });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "promote_memory",
+      { memoryId: "mem-1", toClass: "RULE" },
+      expect.any(Object),
+      { surface: "agent" },
+    );
+  });
+
+  it("omits rationale when it is blank after trimming", async () => {
+    mockInvoke.mockResolvedValue({ id: "mem-1" });
+    await promoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "RULE",
+      rationale: "   ",
+    });
+    const [, callInput] = mockInvoke.mock.calls[0] ?? [];
+    expect(callInput).toEqual({ memoryId: "mem-1", toClass: "RULE" });
+  });
+});
+
+describe("dismissPromotionAction", () => {
+  it("denies a caller who is not a workspace member", async () => {
+    dbState.role = "viewer";
+    const res = await dismissPromotionAction({ ...BASE, memoryId: "mem-1" });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("invokes dismiss_memory_promotion, revalidates, and returns the dismissed flag", async () => {
+    mockInvoke.mockResolvedValue({ memoryId: "mem-1", dismissed: true });
+    const res = await dismissPromotionAction({ ...BASE, memoryId: "mem-1" });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "dismiss_memory_promotion",
+      { memoryId: "mem-1" },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
+      { surface: "agent" },
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/oxagen/main/knowledge/memory",
+    );
+    expect(res).toEqual({ ok: true, memoryId: "mem-1", dismissed: true });
+  });
+
+  it("passes restore:true through to the invoke input when undoing a dismissal", async () => {
+    mockInvoke.mockResolvedValue({ memoryId: "mem-1", dismissed: false });
+    const res = await dismissPromotionAction({
+      ...BASE,
+      memoryId: "mem-1",
+      restore: true,
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "dismiss_memory_promotion",
+      { memoryId: "mem-1", restore: true },
+      expect.any(Object),
+      { surface: "agent" },
+    );
+    expect(res).toEqual({ ok: true, memoryId: "mem-1", dismissed: false });
+  });
+
+  it("returns ok:false when invoke throws and does not revalidate", async () => {
+    mockInvoke.mockRejectedValue(new Error("dismiss failed"));
+    const res = await dismissPromotionAction({ ...BASE, memoryId: "mem-1" });
+    expect(res).toEqual({ ok: false, error: "dismiss failed" });
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("demoteMemoryAction", () => {
+  it("denies a caller who is not a workspace member (never invokes demote_memory)", async () => {
+    dbState.role = "viewer";
+    const res = await demoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "OBSERVATION",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("invokes demote_memory with enforcement + rationale for a RULE target, and revalidates", async () => {
+    const demoted = { id: "mem-1", memoryClass: "RULE" };
+    mockInvoke.mockResolvedValue(demoted);
+    const res = await demoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "RULE",
+      enforcementScore: 40,
+      rationale: "No longer holds broadly.",
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "demote_memory",
+      {
+        memoryId: "mem-1",
+        toClass: "RULE",
+        enforcementScore: 40,
+        rationale: "No longer holds broadly.",
+      },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
+      { surface: "agent" },
+    );
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/oxagen/main/knowledge/memory",
+    );
+    expect(res).toEqual({ ok: true, memory: demoted });
+  });
+
+  it("omits enforcementScore for an OBSERVATION target even if supplied", async () => {
+    mockInvoke.mockResolvedValue({ id: "mem-1", memoryClass: "OBSERVATION" });
+    await demoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "OBSERVATION",
+      enforcementScore: 40,
+    });
+    const [, callInput] = mockInvoke.mock.calls[0] ?? [];
+    expect(callInput).toEqual({ memoryId: "mem-1", toClass: "OBSERVATION" });
+  });
+
+  it("omits rationale when not supplied", async () => {
+    mockInvoke.mockResolvedValue({ id: "mem-1" });
+    await demoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "OBSERVATION",
+    });
+    const [, callInput] = mockInvoke.mock.calls[0] ?? [];
+    expect(callInput).toEqual({ memoryId: "mem-1", toClass: "OBSERVATION" });
+  });
+
+  it("returns ok:false when invoke throws and does not revalidate", async () => {
+    mockInvoke.mockRejectedValue(new Error("demotion rejected"));
+    const res = await demoteMemoryAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "OBSERVATION",
+    });
+    expect(res).toEqual({ ok: false, error: "demotion rejected" });
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("suggestRationalesAction", () => {
+  it("denies a caller who is not a workspace member", async () => {
+    dbState.role = "";
+    const res = await suggestRationalesAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "RULE",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: expect.stringContaining("workspace member"),
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("invokes suggest_promotion_rationales and does not revalidate (read-only)", async () => {
+    mockInvoke.mockResolvedValue({
+      rationales: ["Cited five times.", "Consistent across sessions."],
+    });
+    const res = await suggestRationalesAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "FACT",
+      count: 3,
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "suggest_promotion_rationales",
+      { memoryId: "mem-1", toClass: "FACT", count: 3 },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
+      { surface: "agent" },
+    );
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+    expect(res).toEqual({
+      ok: true,
+      rationales: ["Cited five times.", "Consistent across sessions."],
+    });
+  });
+
+  it("omits count from the invoke input when not supplied", async () => {
+    mockInvoke.mockResolvedValue({ rationales: ["A reason."] });
+    await suggestRationalesAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "OBSERVATION",
+    });
+    const [, callInput] = mockInvoke.mock.calls[0] ?? [];
+    expect(callInput).toEqual({ memoryId: "mem-1", toClass: "OBSERVATION" });
+  });
+
+  it("returns ok:false when invoke throws", async () => {
+    mockInvoke.mockRejectedValue(new Error("ai gateway down"));
+    const res = await suggestRationalesAction({
+      ...BASE,
+      memoryId: "mem-1",
+      toClass: "RULE",
+    });
+    expect(res).toEqual({ ok: false, error: "ai gateway down" });
   });
 });

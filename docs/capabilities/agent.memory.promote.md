@@ -20,7 +20,7 @@ requires human confirmation. See `docs/specs/two-axis-memory/DESIGN.md` §4.
 | `memoryId`           | `string`              | The AgentMemory node id to promote.                          |
 | `toClass`            | `"RULE" \| "FACT"`    | Target class (OBSERVATION is not a promotion target).        |
 | `enforcementScore`   | `int 1–100`?          | Enforcement for a RULE; ignored for FACT (forced 100).       |
-| `rationale`          | `string` (1–1000)     | Why the memory is being promoted.                            |
+| `rationale`          | `string` (1–1000)?    | Optional: why the memory is being promoted.                  |
 | `basedOnEvidenceIds` | `string[]`? (≤50)     | Evidence node ids → `:BASED_ON` edges.                       |
 
 ## Output

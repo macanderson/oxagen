@@ -23,6 +23,10 @@ import {
   applyDecayToMemory,
   listMemories,
   promoteMemory,
+  demoteMemory,
+  dismissPromotion,
+  readCitationStats,
+  MemoryDemotionDirectionError,
   listPromotionCandidates,
   recordExecution,
   recordCitation,
@@ -105,7 +109,10 @@ describe("recallMemories", () => {
   it("leaves memoryClass/minEnforcement null when omitted", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() =>
-      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit: 5 }),
+      recallMemories({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 5,
+      }),
     );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.memoryClass).toBeNull();
@@ -139,7 +146,10 @@ describe("recallMemories — recallThreshold filtering", () => {
   it("defaults recallThreshold to 0 when not supplied", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() =>
-      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit: 5 }),
+      recallMemories({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 5,
+      }),
     );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.recallThreshold).toBe(0);
@@ -189,7 +199,10 @@ describe("recallPeerResults", () => {
   it("defaults recallThreshold to 0 when not supplied", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() =>
-      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+      recallPeerResults({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 4,
+      }),
     );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.recallThreshold).toBe(0);
@@ -206,11 +219,16 @@ describe("ANN tenant-filter over-sampling", () => {
   it("recallMemories over-fetches the index by 3x but trims to the requested limit", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() =>
-      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit: 10 }),
+      recallMemories({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 10,
+      }),
     );
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     // The index is queried with the over-sampled $k, not the raw limit.
-    expect(cypher).toContain("db.index.vector.queryNodes('memory_embedding_index', $k");
+    expect(cypher).toContain(
+      "db.index.vector.queryNodes('memory_embedding_index', $k",
+    );
     // The final result set is trimmed back to the requested limit after filtering.
     expect(cypher).toContain("LIMIT $limit");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -221,10 +239,15 @@ describe("ANN tenant-filter over-sampling", () => {
   it("recallPeerResults over-fetches the index by 3x but trims to the requested limit", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() =>
-      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+      recallPeerResults({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 4,
+      }),
     );
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain("db.index.vector.queryNodes('execution_embedding_index', $k");
+    expect(cypher).toContain(
+      "db.index.vector.queryNodes('execution_embedding_index', $k",
+    );
     expect(cypher).toContain("LIMIT $limit");
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.k).toBe(BigInt(12)); // 4 x 3
@@ -294,8 +317,12 @@ describe("multi-tenant recall regression (OXA-1929)", () => {
     // tenant would get zero results. oversampledLimit(10) = 30, which reaches
     // rank 29 and surfaces the first 10 target-tenant rows.
     const globalPool = [
-      ...Array.from({ length: 20 }, (_, i) => seedMemoryRow("org-noise", 1 - i * 0.001, i)),
-      ...Array.from({ length: 30 }, (_, i) => seedMemoryRow("org-target", 0.5 - i * 0.001, i)),
+      ...Array.from({ length: 20 }, (_, i) =>
+        seedMemoryRow("org-noise", 1 - i * 0.001, i),
+      ),
+      ...Array.from({ length: 30 }, (_, i) =>
+        seedMemoryRow("org-target", 0.5 - i * 0.001, i),
+      ),
     ];
 
     // Sanity check the scenario is a genuine regression case: an unfixed
@@ -356,7 +383,10 @@ describe("multi-tenant recall regression (OXA-1929)", () => {
     });
 
     const rows = await withTestScope(() =>
-      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit }),
+      recallPeerResults({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit,
+      }),
     );
 
     expect(rows).toHaveLength(limit);
@@ -392,7 +422,9 @@ describe("writeMemory", () => {
     expect(cypher).toContain("nodeRef: $nodeRef");
     // The optional REMEMBERS source match must be tenant-scoped so a
     // user-supplied nodeRef can never reach another tenant's node.
-    expect(cypher).toContain("OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })");
+    expect(cypher).toContain(
+      "OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })",
+    );
     // The edge-count must live in a CALL subquery so an empty relatedNodeIds
     // list (UNWIND []) does not collapse the outer m row to zero records.
     expect(cypher).toContain("CALL {");
@@ -551,7 +583,10 @@ describe("listMemories", () => {
     sessionClose.mockClear();
   });
 
-  function mockCountThenPage(total: number, pageRecords: ReturnType<typeof fakeRecord>[]) {
+  function mockCountThenPage(
+    total: number,
+    pageRecords: ReturnType<typeof fakeRecord>[],
+  ) {
     sessionRun
       .mockResolvedValueOnce({ records: [fakeRecord({ total })] })
       .mockResolvedValueOnce({ records: pageRecords });
@@ -586,7 +621,9 @@ describe("listMemories", () => {
       }),
     ]);
 
-    const out = await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+    const out = await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0 }),
+    );
 
     expect(out.total).toBe(2);
     expect(out.memories).toHaveLength(1);
@@ -600,9 +637,13 @@ describe("listMemories", () => {
     // newest-first and paginate with SKIP/LIMIT.
     const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
-    expect(countCypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
+    expect(countCypher).toContain(
+      "MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})",
+    );
     expect(countCypher).toContain("count(m) AS total");
-    expect(pageCypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
+    expect(pageCypher).toContain(
+      "MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})",
+    );
     expect(pageCypher).toContain("ORDER BY m.createdAt DESC");
     expect(pageCypher).toContain("SKIP $offset");
     expect(pageCypher).toContain("LIMIT $limit");
@@ -635,7 +676,10 @@ describe("listMemories", () => {
         nodeRef: "user:mac-anderson",
       }),
     );
-    const countParams = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    const countParams = sessionRun.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(countParams.memoryClass).toBe("RULE");
     expect(countParams.memoryKind).toBe("gotcha");
     expect(countParams.minEnforcement).toBe(60);
@@ -656,7 +700,10 @@ describe("listMemories", () => {
       "$minCitations IS NULL OR coalesce(m.citation_count, 0) >= $minCitations",
     );
     expect(pageCypher).toContain("$minCitations IS NULL OR");
-    const countParams = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    const countParams = sessionRun.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(countParams.minCitations).toBe(3);
   });
 
@@ -696,7 +743,9 @@ describe("listMemories", () => {
 
   it("returns an empty page and total 0 when the tenant has no memories", async () => {
     mockCountThenPage(0, []);
-    const out = await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+    const out = await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0 }),
+    );
     expect(out.total).toBe(0);
     expect(out.memories).toEqual([]);
     expect(sessionClose).toHaveBeenCalledTimes(1);
@@ -763,7 +812,9 @@ describe("promoteMemory", () => {
 
   it("forces enforcement 100 and confirmed_by_kind USER when promoting to FACT", async () => {
     sessionRun.mockResolvedValueOnce({
-      records: [fakeRecord({ id: "m_1", memoryClass: "FACT", enforcementScore: 100 })],
+      records: [
+        fakeRecord({ id: "m_1", memoryClass: "FACT", enforcementScore: 100 }),
+      ],
     });
     await withTestScope(() =>
       promoteMemory({
@@ -818,15 +869,422 @@ describe("listPromotionCandidates", () => {
         }),
       ],
     });
-    const candidates = await withTestScope(() => listPromotionCandidates({ limit: 3 }));
+    const candidates = await withTestScope(() =>
+      listPromotionCandidates({ limit: 3 }),
+    );
     expect(candidates).toHaveLength(1);
     expect(candidates[0]!.citationCount).toBe(5);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain("coalesce(m.memory_class, 'OBSERVATION') = 'OBSERVATION'");
-    expect(cypher).toContain("ORDER BY citationCount DESC, influenceCount DESC");
+    expect(cypher).toContain(
+      "coalesce(m.memory_class, 'OBSERVATION') = 'OBSERVATION'",
+    );
+    // The dismissal predicate is what makes a promotion-queue dismiss
+    // durable — without it a dismissed memory reappears in the candidate
+    // list on the next fetch.
+    expect(cypher).toContain("m.promotion_dismissed_at IS NULL");
+    expect(cypher).toContain(
+      "ORDER BY citationCount DESC, influenceCount DESC",
+    );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.limit).toBe(BigInt(3));
     expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("demoteMemory", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  function mockCurrentClass(fromClass: string) {
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ fromClass })],
+    });
+  }
+
+  it("FACT → OBSERVATION clears enforcement + confirmation and writes a :Demotion", async () => {
+    mockCurrentClass("FACT");
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({
+          id: "m_1",
+          publicId: "pub_1",
+          memoryClass: "OBSERVATION",
+          enforcementScore: null,
+        }),
+      ],
+    });
+    const result = await withTestScope(() =>
+      demoteMemory({
+        memoryId: "m_1",
+        toClass: "OBSERVATION",
+        demotedByKind: "USER",
+        demotedById: "u_1",
+        rationale: "no longer confirmed",
+      }),
+    );
+    expect(result?.memoryClass).toBe("OBSERVATION");
+    // Second call is the write: it creates the audit node and clears fields.
+    const writeCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(writeCypher).toContain("CREATE (d:Demotion {");
+    expect(writeCypher).toContain("CREATE (d)-[:DEMOTED]->(m)");
+    expect(writeCypher).toContain("m.confirmed_by_kind = null");
+    expect(writeCypher).toContain("m.confirmed_by_id = null");
+    const writeParams = sessionRun.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
+    // OBSERVATION forces enforcement null even when a score was omitted.
+    expect(writeParams.enforcement).toBeNull();
+    expect(writeParams.fromClass).toBe("FACT");
+    expect(writeParams.toClass).toBe("OBSERVATION");
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("RULE → OBSERVATION forces enforcement null even when a score is supplied", async () => {
+    mockCurrentClass("RULE");
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({
+          id: "m_1",
+          memoryClass: "OBSERVATION",
+          enforcementScore: null,
+        }),
+      ],
+    });
+    await withTestScope(() =>
+      demoteMemory({
+        memoryId: "m_1",
+        toClass: "OBSERVATION",
+        enforcementScore: 90,
+        demotedByKind: "AGENT",
+        demotedById: null,
+        rationale: null,
+      }),
+    );
+    const writeParams = sessionRun.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(writeParams.enforcement).toBeNull();
+    expect(writeParams.rationale).toBeNull();
+  });
+
+  it("FACT → RULE defaults enforcement to 50 when omitted", async () => {
+    mockCurrentClass("FACT");
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({ id: "m_1", memoryClass: "RULE", enforcementScore: 50 }),
+      ],
+    });
+    await withTestScope(() =>
+      demoteMemory({
+        memoryId: "m_1",
+        toClass: "RULE",
+        demotedByKind: "USER",
+        demotedById: "u_1",
+        rationale: null,
+      }),
+    );
+    const writeParams = sessionRun.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(writeParams.enforcement).toBe(50);
+  });
+
+  it("FACT → RULE honours an explicit enforcement score", async () => {
+    mockCurrentClass("FACT");
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({ id: "m_1", memoryClass: "RULE", enforcementScore: 30 }),
+      ],
+    });
+    await withTestScope(() =>
+      demoteMemory({
+        memoryId: "m_1",
+        toClass: "RULE",
+        enforcementScore: 30,
+        demotedByKind: "USER",
+        demotedById: "u_1",
+        rationale: null,
+      }),
+    );
+    const writeParams = sessionRun.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(writeParams.enforcement).toBe(30);
+  });
+
+  it("throws MemoryDemotionDirectionError on an upward target (OBSERVATION → RULE)", async () => {
+    mockCurrentClass("OBSERVATION");
+    await expect(
+      withTestScope(() =>
+        demoteMemory({
+          memoryId: "m_1",
+          toClass: "RULE",
+          demotedByKind: "USER",
+          demotedById: "u_1",
+          rationale: null,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(MemoryDemotionDirectionError);
+    // Only the class-read query ran; no write was attempted.
+    expect(sessionRun).toHaveBeenCalledTimes(1);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws MemoryDemotionDirectionError on a same-class target (RULE → RULE)", async () => {
+    mockCurrentClass("RULE");
+    await expect(
+      withTestScope(() =>
+        demoteMemory({
+          memoryId: "m_1",
+          toClass: "RULE",
+          demotedByKind: "USER",
+          demotedById: "u_1",
+          rationale: null,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(MemoryDemotionDirectionError);
+    expect(sessionRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when no memory matched (not a direction error)", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    const result = await withTestScope(() =>
+      demoteMemory({
+        memoryId: "missing",
+        toClass: "OBSERVATION",
+        demotedByKind: "AGENT",
+        demotedById: null,
+        rationale: null,
+      }),
+    );
+    expect(result).toBeNull();
+    expect(sessionRun).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("dismissPromotion", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("stamps promotion_dismissed_at and reports dismissed=true", async () => {
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ id: "m_1", dismissed: true })],
+    });
+    const result = await withTestScope(() =>
+      dismissPromotion({ memoryId: "m_1", restore: false }),
+    );
+    expect(result).toEqual({ memoryId: "m_1", dismissed: true });
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(cypher).toContain(
+      "m.promotion_dismissed_at = CASE WHEN $restore THEN null ELSE datetime() END",
+    );
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.restore).toBe(false);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the marker on restore and reports dismissed=false", async () => {
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ id: "m_1", dismissed: false })],
+    });
+    const result = await withTestScope(() =>
+      dismissPromotion({ memoryId: "m_1", restore: true }),
+    );
+    expect(result).toEqual({ memoryId: "m_1", dismissed: false });
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.restore).toBe(true);
+  });
+
+  it("returns null when no memory matched", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    const result = await withTestScope(() =>
+      dismissPromotion({ memoryId: "missing", restore: false }),
+    );
+    expect(result).toBeNull();
+  });
+});
+
+describe("readCitationStats", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("aggregates totals, breakdowns, daily series, memory lists, and resolved nodes", async () => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    // The six queries run in a fixed order (totals, influence, compliance,
+    // daily, per-memory, nodes) on the one session — mock them in that order.
+    sessionRun
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({
+            citations: 20,
+            executions: 4,
+            memoriesCited: 3,
+            nodesCited: 1,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({ influence: "DECISIVE", n: 6 }),
+          fakeRecord({ influence: "IGNORED", n: 3 }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({ compliance: "COMPLIED", n: 15 }),
+          fakeRecord({ compliance: "VIOLATION", n: 2 }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        records: [fakeRecord({ day: todayKey, citations: 5, violations: 2 })],
+      })
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({
+            memoryId: "m_top",
+            publicId: "pub_top",
+            lesson: "always batch writes",
+            memoryClass: "OBSERVATION",
+            memoryKind: "performance",
+            citationCount: 10,
+            decisiveCount: 5,
+            contributingCount: 2,
+            consideredCount: 3,
+            ignoredCount: 0,
+            violationCount: 0,
+          }),
+          fakeRecord({
+            memoryId: "m_useless",
+            publicId: "pub_useless",
+            lesson: "recalled but never used",
+            memoryClass: "OBSERVATION",
+            memoryKind: "gotcha",
+            citationCount: 4,
+            decisiveCount: 0,
+            contributingCount: 0,
+            consideredCount: 1,
+            ignoredCount: 3,
+            violationCount: 0,
+          }),
+          fakeRecord({
+            memoryId: "m_rule",
+            publicId: "pub_rule",
+            lesson: "never skip auth",
+            memoryClass: "RULE",
+            memoryKind: "constraint",
+            citationCount: 6,
+            decisiveCount: 1,
+            contributingCount: 0,
+            consideredCount: 0,
+            ignoredCount: 0,
+            violationCount: 2,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({
+            id: "pub_node",
+            label: "Repository",
+            displayName: "oxagen-platform",
+            properties: '{"team":"platform"}',
+            citationCount: 7,
+            decisiveCount: 2,
+            ignoredCount: 1,
+          }),
+        ],
+      });
+
+    const stats = await withTestScope(() =>
+      readCitationStats({ days: 30, limit: 10 }),
+    );
+
+    expect(stats.totals).toEqual({
+      citations: 20,
+      executions: 4,
+      memoriesCited: 3,
+      nodesCited: 1,
+    });
+    expect(stats.byInfluence).toEqual({ DECISIVE: 6, IGNORED: 3 });
+    expect(stats.byCompliance).toEqual({ COMPLIED: 15, VIOLATION: 2 });
+
+    // Daily is zero-filled to the window length; the seeded day carries through.
+    expect(stats.daily).toHaveLength(30);
+    expect(stats.daily.at(-1)).toEqual({
+      date: todayKey,
+      citations: 5,
+      violations: 2,
+    });
+
+    // topMemories ranked by citation count desc.
+    expect(stats.topMemories.map((m) => m.memoryId)).toEqual([
+      "m_top",
+      "m_rule",
+      "m_useless",
+    ]);
+    // leastUseful: cited >= 3 with zero decisive AND zero contributing.
+    expect(stats.leastUsefulMemories.map((m) => m.memoryId)).toEqual([
+      "m_useless",
+    ]);
+    // mostViolated: RULE/FACT memories with >= 1 violation.
+    expect(stats.mostViolatedRules.map((m) => m.memoryId)).toEqual(["m_rule"]);
+
+    // topNodes resolved to the friendly ref shape (never a bare id), properties parsed.
+    expect(stats.topNodes).toEqual([
+      {
+        node: {
+          id: "pub_node",
+          label: "Repository",
+          displayName: "oxagen-platform",
+          properties: { team: "platform" },
+        },
+        citationCount: 7,
+        decisiveCount: 2,
+        ignoredCount: 1,
+      },
+    ]);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters memory targets from graph-node targets by the :AgentMemory label", async () => {
+    sessionRun
+      .mockResolvedValueOnce({
+        records: [
+          fakeRecord({
+            citations: 0,
+            executions: 0,
+            memoriesCited: 0,
+            nodesCited: 0,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({ records: [] })
+      .mockResolvedValueOnce({ records: [] });
+
+    await withTestScope(() => readCitationStats({ days: 7, limit: 5 }));
+
+    const totalsCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    const nodesCypher = String(sessionRun.mock.calls[5]?.[0] ?? "");
+    // AgentMemory ALSO carries :GraphNode, so node counting must exclude it.
+    expect(totalsCypher).toContain(
+      "target:GraphNode AND NOT target:AgentMemory",
+    );
+    expect(nodesCypher).toContain("NOT n:AgentMemory");
+    // Window is applied on the citation retrieval timestamp.
+    expect(totalsCypher).toContain("c.retrieved_at >= datetime($since)");
   });
 });
 
@@ -837,9 +1295,15 @@ describe("recordExecution", () => {
   });
 
   it("MERGEs an :Execution by id and returns its id", async () => {
-    sessionRun.mockResolvedValueOnce({ records: [fakeRecord({ id: "exec_1" })] });
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ id: "exec_1" })],
+    });
     const result = await withTestScope(() =>
-      recordExecution({ executionRef: "exec_1", agentId: "agent_1", runId: "run_1" }),
+      recordExecution({
+        executionRef: "exec_1",
+        agentId: "agent_1",
+        runId: "run_1",
+      }),
     );
     expect(result.executionId).toBe("exec_1");
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
@@ -855,7 +1319,9 @@ describe("recordCitation", () => {
   });
 
   it("creates a :Citation and returns its id", async () => {
-    sessionRun.mockResolvedValueOnce({ records: [fakeRecord({ id: "cit_1" })] });
+    sessionRun.mockResolvedValueOnce({
+      records: [fakeRecord({ id: "cit_1" })],
+    });
     const result = await withTestScope(() =>
       recordCitation({
         executionId: "exec_1",
@@ -869,7 +1335,9 @@ describe("recordCitation", () => {
     expect(result?.citationId).toBe("cit_1");
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(cypher).toContain("CREATE (c:Citation {");
-    expect(cypher).toContain("m.citation_count = coalesce(m.citation_count, 0) + 1");
+    expect(cypher).toContain(
+      "m.citation_count = coalesce(m.citation_count, 0) + 1",
+    );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.isInfluential).toBe(true);
     expect(params.isViolation).toBe(false);
@@ -915,7 +1383,10 @@ describe("listExecutionCitations", () => {
       ],
     });
     const citations = await withTestScope(() =>
-      listExecutionCitations({ executionId: "exec_1", compliance: "VIOLATION" }),
+      listExecutionCitations({
+        executionId: "exec_1",
+        compliance: "VIOLATION",
+      }),
     );
     expect(citations).toHaveLength(1);
     expect(citations[0]!.compliance).toBe("VIOLATION");
@@ -936,7 +1407,11 @@ describe("attachEvidence", () => {
       records: [fakeRecord({ evidenceId: "ev_1", confidenceScore: 90 })],
     });
     const result = await withTestScope(() =>
-      attachEvidence({ memoryId: "m_1", sourceKind: "HUMAN_CONFIRM", strength: 0.2 }),
+      attachEvidence({
+        memoryId: "m_1",
+        sourceKind: "HUMAN_CONFIRM",
+        strength: 0.2,
+      }),
     );
     expect(result?.evidenceId).toBe("ev_1");
     expect(result?.confidenceScore).toBe(90);
@@ -952,7 +1427,12 @@ describe("attachEvidence", () => {
       records: [fakeRecord({ evidenceId: "ev_2", confidenceScore: 50 })],
     });
     await withTestScope(() =>
-      attachEvidence({ memoryId: "m_1", sourceKind: "CODE_SCAN", strength: 0.3, refutes: true }),
+      attachEvidence({
+        memoryId: "m_1",
+        sourceKind: "CODE_SCAN",
+        strength: 0.3,
+        refutes: true,
+      }),
     );
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(cypher).toContain(":REFUTES");
@@ -963,7 +1443,11 @@ describe("attachEvidence", () => {
   it("returns null when no memory matched", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     const result = await withTestScope(() =>
-      attachEvidence({ memoryId: "missing", sourceKind: "AGENT_JUDGE", strength: 0.1 }),
+      attachEvidence({
+        memoryId: "missing",
+        sourceKind: "AGENT_JUDGE",
+        strength: 0.1,
+      }),
     );
     expect(result).toBeNull();
   });

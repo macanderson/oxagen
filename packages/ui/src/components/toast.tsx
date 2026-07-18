@@ -57,27 +57,38 @@ function ToastList() {
   return toasts.map((toast) => {
     const Icon = toast.type ? TOAST_ICONS[toast.type] : undefined;
     return (
-    <ToastPrimitive.Root
-      key={toast.id}
-      toast={toast}
-      className={cn(
-        "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
-        (toast.type && TOAST_VARIANTS[toast.type]) ?? TOAST_DEFAULT_VARIANT,
-        "transition-[opacity,transform,translate,scale] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
-      )}
-    >
-      {Icon && <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
-      <div className="grid flex-1 gap-1">
-        <ToastPrimitive.Title className="text-sm font-semibold" />
-        <ToastPrimitive.Description className="text-sm opacity-90" />
-      </div>
-      <ToastPrimitive.Close
-        className="absolute right-2 top-2 rounded-md p-1 text-current opacity-50 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 group-hover:opacity-70"
-        aria-label="Close"
+      <ToastPrimitive.Root
+        key={toast.id}
+        toast={toast}
+        className={cn(
+          "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-md border p-4 pr-8 shadow-lg",
+          (toast.type && TOAST_VARIANTS[toast.type]) ?? TOAST_DEFAULT_VARIANT,
+          "transition-[opacity,transform,translate,scale] duration-[var(--motion-base)] ease-[var(--ease-entry)] data-[starting-style]:opacity-0 data-[starting-style]:translate-x-full data-[ending-style]:opacity-0",
+        )}
       >
-        <X className="h-4 w-4" />
-      </ToastPrimitive.Close>
-    </ToastPrimitive.Root>
+        {Icon && <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
+        <div className="grid flex-1 gap-1">
+          <ToastPrimitive.Title className="text-sm font-semibold" />
+          <ToastPrimitive.Description className="text-sm opacity-90" />
+          {toast.actionProps && (
+            // ToastAction reads toast.actionProps from context itself (for
+            // onClick/children/etc.) — do not also spread it here, or its
+            // onClick fires twice.
+            <ToastPrimitive.Action
+              className={cn(
+                "mt-1 w-fit text-sm font-semibold underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-1 focus:ring-current rounded-sm",
+                toast.actionProps.className,
+              )}
+            />
+          )}
+        </div>
+        <ToastPrimitive.Close
+          className="absolute right-2 top-2 rounded-md p-1 text-current opacity-50 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 group-hover:opacity-70"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </ToastPrimitive.Close>
+      </ToastPrimitive.Root>
     );
   });
 }

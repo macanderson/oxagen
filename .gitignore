@@ -154,3 +154,4 @@ tools/eval-out/
 # never be committed — one leaked into #807 as page.tsx.tmp.45759.f25485f00a57.
 *.tmp.*
 *.tmp
+Icon

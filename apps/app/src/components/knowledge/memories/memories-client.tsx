@@ -26,6 +26,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowDownCircle,
   ArrowUpCircle,
   Bug,
   BrainCircuit,
@@ -56,6 +57,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import {
   Sheet,
   SheetContent,
@@ -67,6 +69,7 @@ import { MarkdownCodeEditor } from "@/components/ui/markdown-code-editor";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { MemoriesBulkImport, type DraftMemory } from "./memories-bulk-import";
+import { RationalePicker, type SuggestRationalesFn } from "./rationale-picker";
 // Shared kind/weight/class taxonomy lives in its own lightweight module (see
 // memory-kinds.ts) so the bulk-import grid can reuse it without importing this
 // CodeMirror-laden component. Re-exported here for existing consumers.
@@ -161,7 +164,24 @@ type PromoteMemoryInput = {
   memoryId: string;
   toClass: "RULE" | "FACT";
   enforcementScore?: number;
-  rationale: string;
+  rationale?: string;
+};
+
+type DismissPromotionResult =
+  | { ok: true; memoryId: string; dismissed: boolean }
+  | { ok: false; error: string };
+
+type DemoteMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
+type DemoteMemoryInput = {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  toClass: "RULE" | "OBSERVATION";
+  enforcementScore?: number;
+  rationale?: string;
 };
 
 type PromotionCandidatesResult =
@@ -223,6 +243,29 @@ interface MemoriesClientProps {
    * affordance is not rendered.
    */
   promoteMemory?: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  /**
+   * Server action for dismissing (or, with restore:true, restoring) a
+   * candidate from the "suggested to promote" panel. When absent no Dismiss
+   * affordance is rendered on candidate rows.
+   */
+  dismissPromotion?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+    restore?: boolean;
+  }) => Promise<DismissPromotionResult>;
+  /**
+   * Server action for demoting a memory down the confidence ladder
+   * (FACT → RULE/OBSERVATION, RULE → OBSERVATION). When absent the Demote
+   * affordance is not rendered in the detail sheet.
+   */
+  demoteMemory?: (input: DemoteMemoryInput) => Promise<DemoteMemoryResult>;
+  /**
+   * Server action drafting candidate rationales for the RationalePicker
+   * select used by the promote/demote flows. When absent every rationale
+   * field falls back to a plain optional textarea.
+   */
+  suggestRationales?: SuggestRationalesFn;
   /**
    * Server action for the "suggested to promote" panel — the top OBSERVATIONs
    * by citation pressure. When absent the panel is not rendered.
@@ -358,6 +401,15 @@ export function getKindConfig(kind: string): (typeof KIND_CONFIG)[string] {
 function nextClassTargets(current: MemoryClass): Array<"RULE" | "FACT"> {
   if (current === "OBSERVATION") return ["RULE", "FACT"];
   if (current === "RULE") return ["FACT"];
+  return [];
+}
+
+/** The rung(s) down the confidence ladder a memory can be demoted to. */
+function nextDemoteTargets(
+  current: MemoryClass,
+): Array<"RULE" | "OBSERVATION"> {
+  if (current === "FACT") return ["RULE", "OBSERVATION"];
+  if (current === "RULE") return ["OBSERVATION"];
   return [];
 }
 
@@ -802,6 +854,7 @@ function PromoteFlow({
   orgSlug,
   workspaceSlug,
   promoteMemory,
+  suggestRationales,
   onPromoted,
   onCancelAll,
 }: {
@@ -810,6 +863,7 @@ function PromoteFlow({
   orgSlug: string;
   workspaceSlug: string;
   promoteMemory: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  suggestRationales?: SuggestRationalesFn;
   onPromoted: (updated: AgentMemoryRecord) => void;
   /** Called when the whole flow is dismissed without promoting (candidates panel removes its inline form). */
   onCancelAll?: () => void;
@@ -818,6 +872,7 @@ function PromoteFlow({
   const [target, setTarget] = React.useState<"RULE" | "FACT" | null>(null);
   const [enforcementScore, setEnforcementScore] = React.useState(50);
   const [rationale, setRationale] = React.useState("");
+  const [factConfirmed, setFactConfirmed] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
@@ -831,18 +886,19 @@ function PromoteFlow({
 
   function cancel() {
     setTarget(null);
+    setFactConfirmed(false);
     setError(null);
     onCancelAll?.();
   }
 
   function confirmPromote() {
     if (!target) return;
-    const trimmedRationale = rationale.trim();
-    if (trimmedRationale.length === 0) {
-      setError("Explain why this memory is being promoted.");
+    if (target === "FACT" && !factConfirmed) {
+      setError("Confirm this is a durable, org-wide fact before promoting.");
       return;
     }
     setError(null);
+    const trimmedRationale = rationale.trim();
     startTransition(async () => {
       const result = await promoteMemory({
         orgSlug,
@@ -850,7 +906,7 @@ function PromoteFlow({
         memoryId,
         toClass: target,
         ...(target === "RULE" ? { enforcementScore } : {}),
-        rationale: trimmedRationale,
+        ...(trimmedRationale ? { rationale: trimmedRationale } : {}),
       });
       if (result.ok) {
         onPromoted(result.memory);
@@ -872,6 +928,7 @@ function PromoteFlow({
               setTarget(t);
               setEnforcementScore(50);
               setRationale("");
+              setFactConfirmed(false);
               setError(null);
             }}
           >
@@ -911,30 +968,37 @@ function PromoteFlow({
           />
         </div>
       ) : (
-        <p className="text-[10px] text-muted-foreground">
-          Facts are always fully enforced (100) and represent a human-confirmed
-          truth, not just policy.
-        </p>
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+          <input
+            id={`promote-fact-confirm-${memoryId}`}
+            type="checkbox"
+            checked={factConfirmed}
+            onChange={(e) => setFactConfirmed(e.target.checked)}
+            disabled={isPending}
+            className="mt-0.5"
+          />
+          <label
+            htmlFor={`promote-fact-confirm-${memoryId}`}
+            className="text-[11px] text-foreground"
+          >
+            I confirm this is a durable, org-wide fact — always fully enforced
+            (100) and human-confirmed, not just policy. This cannot be casually
+            undone.
+          </label>
+        </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor={`promote-rationale-${memoryId}`}
-          className="text-[11px] text-muted-foreground"
-        >
-          Rationale
-        </label>
-        <textarea
-          id={`promote-rationale-${memoryId}`}
-          rows={2}
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          disabled={isPending}
-          maxLength={1000}
-          placeholder="Why is this memory ready to promote?"
-          className={FIELD_INPUT_CLS}
-        />
-      </div>
+      <RationalePicker
+        idPrefix={`promote-${memoryId}`}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        memoryId={memoryId}
+        toClass={target}
+        value={rationale}
+        onChange={setRationale}
+        disabled={isPending}
+        suggestRationales={suggestRationales}
+      />
 
       {error && (
         <p role="alert" className="text-xs text-destructive">
@@ -947,11 +1011,162 @@ function PromoteFlow({
           size="sm"
           variant="gradient"
           onClick={confirmPromote}
-          disabled={isPending}
+          disabled={isPending || (target === "FACT" && !factConfirmed)}
         >
           {isPending
             ? "Promoting…"
             : `Confirm promote to ${CLASS_CONFIG[target].label}`}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={cancel} disabled={isPending}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Demote flow — the inverse of PromoteFlow. Lives only in the detail sheet
+// (FACT/RULE memories), so unlike PromoteFlow it doesn't need an
+// onCancelAll — there's no inline candidates-panel equivalent for demotion.
+// ---------------------------------------------------------------------------
+
+function DemoteFlow({
+  memoryId,
+  currentClass,
+  orgSlug,
+  workspaceSlug,
+  demoteMemory,
+  suggestRationales,
+  onDemoted,
+}: {
+  memoryId: string;
+  currentClass: MemoryClass;
+  orgSlug: string;
+  workspaceSlug: string;
+  demoteMemory: (input: DemoteMemoryInput) => Promise<DemoteMemoryResult>;
+  suggestRationales?: SuggestRationalesFn;
+  onDemoted: (updated: AgentMemoryRecord) => void;
+}) {
+  const targets = nextDemoteTargets(currentClass);
+  const [target, setTarget] = React.useState<"RULE" | "OBSERVATION" | null>(
+    null,
+  );
+  const [enforcementScore, setEnforcementScore] = React.useState(50);
+  const [rationale, setRationale] = React.useState("");
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  if (targets.length === 0) return null;
+
+  function cancel() {
+    setTarget(null);
+    setError(null);
+  }
+
+  function confirmDemote() {
+    if (!target) return;
+    setError(null);
+    const trimmedRationale = rationale.trim();
+    startTransition(async () => {
+      const result = await demoteMemory({
+        orgSlug,
+        workspaceSlug,
+        memoryId,
+        toClass: target,
+        ...(target === "RULE" ? { enforcementScore } : {}),
+        ...(trimmedRationale ? { rationale: trimmedRationale } : {}),
+      });
+      if (result.ok) {
+        setTarget(null);
+        onDemoted(result.memory);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  if (!target) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        {targets.map((t) => (
+          <Button
+            key={t}
+            size="sm"
+            variant="outline"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              setTarget(t);
+              setEnforcementScore(50);
+              setRationale("");
+              setError(null);
+            }}
+          >
+            <ArrowDownCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
+            Demote to {CLASS_CONFIG[t].label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+      <p className="text-xs font-medium text-foreground">
+        Demote to {CLASS_CONFIG[target].label}
+      </p>
+
+      {target === "RULE" && (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`demote-enforcement-${memoryId}`}
+            className="text-[11px] text-muted-foreground"
+          >
+            Enforcement:{" "}
+            <span className="tabular-nums">{enforcementScore}</span>
+          </label>
+          <input
+            id={`demote-enforcement-${memoryId}`}
+            type="range"
+            min="1"
+            max="100"
+            value={enforcementScore}
+            onChange={(e) => setEnforcementScore(Number(e.target.value))}
+            disabled={isPending}
+            aria-label="Enforcement score"
+            className="h-1 w-full cursor-pointer accent-primary"
+          />
+        </div>
+      )}
+
+      <RationalePicker
+        idPrefix={`demote-${memoryId}`}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        memoryId={memoryId}
+        toClass={target}
+        value={rationale}
+        onChange={setRationale}
+        disabled={isPending}
+        suggestRationales={suggestRationales}
+      />
+
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={confirmDemote}
+          disabled={isPending}
+        >
+          {isPending
+            ? "Demoting…"
+            : `Confirm demote to ${CLASS_CONFIG[target].label}`}
         </Button>
         <Button size="sm" variant="ghost" onClick={cancel} disabled={isPending}>
           Cancel
@@ -970,13 +1185,20 @@ function PromotionCandidatesPanel({
   orgSlug,
   workspaceSlug,
   promoteMemory,
+  dismissPromotion,
+  suggestRationales,
   onPromoted,
+  onDismissed,
 }: {
   candidates: PromotionCandidate[];
   orgSlug: string;
   workspaceSlug: string;
   promoteMemory: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  dismissPromotion?: MemoriesClientProps["dismissPromotion"];
+  suggestRationales?: SuggestRationalesFn;
   onPromoted: (updated: AgentMemoryRecord) => void;
+  /** Bubble a dismiss up to MemoriesClient, which owns candidate state + the undo toast. */
+  onDismissed?: (candidate: PromotionCandidate) => void;
 }) {
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
@@ -1006,18 +1228,30 @@ function PromotionCandidatesPanel({
                 className="text-xs text-foreground flex-1"
               />
               {expandedId !== c.id && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setExpandedId(c.id)}
-                  aria-label={`Promote candidate: ${c.lesson}`}
-                >
-                  <ArrowUpCircle
-                    className="h-3 w-3 mr-1.5"
-                    aria-hidden="true"
-                  />
-                  Promote
-                </Button>
+                <div className="flex flex-shrink-0 items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setExpandedId(c.id)}
+                    aria-label={`Promote candidate: ${c.lesson}`}
+                  >
+                    <ArrowUpCircle
+                      className="h-3 w-3 mr-1.5"
+                      aria-hidden="true"
+                    />
+                    Promote
+                  </Button>
+                  {dismissPromotion && onDismissed && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onDismissed(c)}
+                      aria-label={`Dismiss candidate: ${c.lesson}`}
+                    >
+                      Dismiss
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -1039,6 +1273,7 @@ function PromotionCandidatesPanel({
                 orgSlug={orgSlug}
                 workspaceSlug={workspaceSlug}
                 promoteMemory={promoteMemory}
+                suggestRationales={suggestRationales}
                 onPromoted={(updated) => {
                   setExpandedId(null);
                   onPromoted(updated);
@@ -1084,6 +1319,8 @@ function MemoryDetail({
   updateMemory,
   deleteMemory,
   promoteMemory,
+  demoteMemory,
+  suggestRationales,
 }: {
   record: AgentMemoryRecord;
   orgSlug: string;
@@ -1096,6 +1333,8 @@ function MemoryDetail({
   updateMemory?: MemoriesClientProps["updateMemory"];
   deleteMemory?: MemoriesClientProps["deleteMemory"];
   promoteMemory?: MemoriesClientProps["promoteMemory"];
+  demoteMemory?: MemoriesClientProps["demoteMemory"];
+  suggestRationales?: SuggestRationalesFn;
 }) {
   // Local record state — updated optimistically on a successful save.
   const [record, setRecord] = React.useState(initialRecord);
@@ -1222,6 +1461,11 @@ function MemoryDetail({
     onUpdated(updated);
   }
 
+  function handleDemoted(updated: AgentMemoryRecord) {
+    setRecord(updated);
+    onUpdated(updated);
+  }
+
   return (
     <Sheet
       open
@@ -1295,7 +1539,24 @@ function MemoryDetail({
                   orgSlug={orgSlug}
                   workspaceSlug={workspaceSlug}
                   promoteMemory={promoteMemory}
+                  suggestRationales={suggestRationales}
                   onPromoted={handlePromoted}
+                />
+              </div>
+            )}
+
+            {/* Demote — RULE and FACT only; OBSERVATION is the bottom rung */}
+            {demoteMemory && record.memoryClass !== "OBSERVATION" && (
+              <div className="flex flex-col gap-2">
+                <h3 className={SECTION_LABEL_CLS}>Demote</h3>
+                <DemoteFlow
+                  memoryId={record.id}
+                  currentClass={record.memoryClass}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                  demoteMemory={demoteMemory}
+                  suggestRationales={suggestRationales}
+                  onDemoted={handleDemoted}
                 />
               </div>
             )}
@@ -1777,11 +2038,15 @@ export function MemoriesClient({
   updateMemory,
   deleteMemory,
   promoteMemory,
+  dismissPromotion,
+  demoteMemory,
+  suggestRationales,
   promotionCandidates,
   parseImport,
   commitImport,
 }: MemoriesClientProps) {
   const router = useRouter();
+  const toast = useToast();
   const [records, setRecords] =
     React.useState<AgentMemoryRecord[]>(initialRecords);
   const [candidates, setCandidates] = React.useState<PromotionCandidate[]>([]);
@@ -1859,6 +2124,62 @@ export function MemoriesClient({
   function handleMemoryDeleted(memoryId: string) {
     setRecords((prev) => prev.filter((r) => r.id !== memoryId));
     router.refresh();
+  }
+
+  // Optimistic removal + durable dismiss for the inline "suggested to
+  // promote" panel, with an Undo toast that restores the candidate (calling
+  // dismiss again with restore:true). On a failed dismiss the card returns.
+  function handleCandidateDismissed(candidate: PromotionCandidate) {
+    if (!dismissPromotion) return;
+    setCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+
+    void dismissPromotion({
+      orgSlug,
+      workspaceSlug,
+      memoryId: candidate.id,
+    }).then((result) => {
+      if (!result.ok) {
+        setCandidates((prev) =>
+          prev.some((c) => c.id === candidate.id) ? prev : [candidate, ...prev],
+        );
+        toast.add({
+          title: "Couldn't dismiss",
+          description: result.error,
+          type: "error",
+        });
+        return;
+      }
+      toast.add({
+        title: "Dismissed from promotion queue",
+        description: candidate.lesson,
+        type: "success",
+        actionProps: {
+          children: "Undo",
+          onClick: () => {
+            void dismissPromotion({
+              orgSlug,
+              workspaceSlug,
+              memoryId: candidate.id,
+              restore: true,
+            }).then((restoreResult) => {
+              if (restoreResult.ok) {
+                setCandidates((prev) =>
+                  prev.some((c) => c.id === candidate.id)
+                    ? prev
+                    : [candidate, ...prev],
+                );
+              } else {
+                toast.add({
+                  title: "Couldn't restore",
+                  description: restoreResult.error,
+                  type: "error",
+                });
+              }
+            });
+          },
+        },
+      });
+    });
   }
 
   // Client-side filtering + sorting
@@ -1982,7 +2303,10 @@ export function MemoriesClient({
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
           promoteMemory={promoteMemory}
+          dismissPromotion={dismissPromotion}
+          suggestRationales={suggestRationales}
           onPromoted={handleMemoryUpdated}
+          onDismissed={handleCandidateDismissed}
         />
       )}
 
@@ -1992,7 +2316,10 @@ export function MemoriesClient({
       {records.length > 0 && (
         <>
           {/* Stats row — per-class counts, the primary epistemic axis */}
-          <div className="grid grid-cols-3 gap-2" data-testid="memory-stats-row">
+          <div
+            className="grid grid-cols-3 gap-2"
+            data-testid="memory-stats-row"
+          >
             {ALL_CLASSES.map((cls) => {
               const cfg = CLASS_CONFIG[cls];
               const Icon = cfg.icon;
@@ -2101,6 +2428,8 @@ export function MemoriesClient({
           updateMemory={updateMemory}
           deleteMemory={deleteMemory}
           promoteMemory={promoteMemory}
+          demoteMemory={demoteMemory}
+          suggestRationales={suggestRationales}
         />
       )}
 

@@ -38,7 +38,11 @@ export type EvidenceSourceKind =
  */
 export type MemoryKind = string;
 
-export const MEMORY_CLASSES: readonly MemoryClass[] = ["OBSERVATION", "RULE", "FACT"];
+export const MEMORY_CLASSES: readonly MemoryClass[] = [
+  "OBSERVATION",
+  "RULE",
+  "FACT",
+];
 
 export const RECOMMENDED_MEMORY_KINDS = [
   "FEEDBACK",
@@ -88,7 +92,11 @@ export interface MemoryListResult {
 
 export interface RememberResult {
   memory: MemoryRecord;
-  inferred: { memoryClass: MemoryClass; memoryKind: MemoryKind; classified: boolean };
+  inferred: {
+    memoryClass: MemoryClass;
+    memoryKind: MemoryKind;
+    classified: boolean;
+  };
 }
 
 export interface ListMemoriesOptions {
@@ -134,7 +142,9 @@ export interface RememberOptions {
 }
 
 /** Capture a free-text memory; the server infers class+kind unless pinned. */
-export async function rememberMemory(opts: RememberOptions): Promise<RememberResult> {
+export async function rememberMemory(
+  opts: RememberOptions,
+): Promise<RememberResult> {
   return apiPostOrThrow<RememberResult>("agent/memory/remember", opts);
 }
 
@@ -203,7 +213,9 @@ export interface UpdateMemoryOptions {
 }
 
 /** Edit a memory's lesson, kind, source, confidence/enforcement, or status. */
-export async function updateMemory(opts: UpdateMemoryOptions): Promise<MemoryRecord> {
+export async function updateMemory(
+  opts: UpdateMemoryOptions,
+): Promise<MemoryRecord> {
   return apiPostOrThrow<MemoryRecord>("agent/memory/update", opts);
 }
 
@@ -211,16 +223,20 @@ export async function updateMemory(opts: UpdateMemoryOptions): Promise<MemoryRec
 export async function deleteMemory(
   memoryId: string,
 ): Promise<{ deleted: boolean; memoryId: string }> {
-  return apiPostOrThrow<{ deleted: boolean; memoryId: string }>("agent/memory/delete", {
-    memoryId,
-  });
+  return apiPostOrThrow<{ deleted: boolean; memoryId: string }>(
+    "agent/memory/delete",
+    {
+      memoryId,
+    },
+  );
 }
 
 export interface PromoteMemoryOptions {
   memoryId: string;
   toClass: "RULE" | "FACT";
   enforcementScore?: number;
-  rationale: string;
+  /** Optional — a rationale is no longer required to promote. */
+  rationale?: string;
   basedOnEvidenceIds?: string[];
 }
 
@@ -229,8 +245,51 @@ export interface PromoteMemoryOptions {
  * recording an auditable :Promotion event. FACT requires human confirmation
  * server-side and forces enforcement 100.
  */
-export async function promoteMemory(opts: PromoteMemoryOptions): Promise<MemoryRecord> {
+export async function promoteMemory(
+  opts: PromoteMemoryOptions,
+): Promise<MemoryRecord> {
   return apiPostOrThrow<MemoryRecord>("agent/memory/promote", opts);
+}
+
+export interface DemoteMemoryOptions {
+  memoryId: string;
+  toClass: "RULE" | "OBSERVATION";
+  enforcementScore?: number;
+  rationale?: string;
+}
+
+/**
+ * Demote a memory down the confidence ladder (FACT → RULE → OBSERVATION),
+ * recording an auditable :Demotion event. Demoting to OBSERVATION clears
+ * enforcement; leaving FACT clears human confirmation. The server rejects a
+ * non-downward target.
+ */
+export async function demoteMemory(
+  opts: DemoteMemoryOptions,
+): Promise<MemoryRecord> {
+  return apiPostOrThrow<MemoryRecord>("agent/memory/demote", opts);
+}
+
+export interface DismissPromotionResult {
+  memoryId: string;
+  dismissed: boolean;
+}
+
+/**
+ * Dismiss a memory from the promotion-candidate queue (or restore it), freeing
+ * the slot for the next candidate without archiving the memory.
+ */
+export async function dismissPromotion(opts: {
+  memoryId: string;
+  restore?: boolean;
+}): Promise<DismissPromotionResult> {
+  return apiPostOrThrow<DismissPromotionResult>(
+    "agent/memory/promotion/dismiss",
+    {
+      memoryId: opts.memoryId,
+      restore: opts.restore ?? false,
+    },
+  );
 }
 
 export interface PromotionCandidate {
@@ -251,9 +310,12 @@ export interface PromotionCandidatesResult {
 export async function promotionCandidates(
   opts: { limit?: number } = {},
 ): Promise<PromotionCandidatesResult> {
-  return apiPostOrThrow<PromotionCandidatesResult>("agent/memory/promotion/candidates", {
-    limit: opts.limit ?? 3,
-  });
+  return apiPostOrThrow<PromotionCandidatesResult>(
+    "agent/memory/promotion/candidates",
+    {
+      limit: opts.limit ?? 3,
+    },
+  );
 }
 
 // ── Agent-runtime verbs (cite/evidence) — lightweight wrappers ───────────────
@@ -289,7 +351,9 @@ export interface CiteMemoriesResult {
 }
 
 /** Record citations of memories within an agent execution. */
-export async function citeMemories(opts: CiteMemoriesOptions): Promise<CiteMemoriesResult> {
+export async function citeMemories(
+  opts: CiteMemoriesOptions,
+): Promise<CiteMemoriesResult> {
   return apiPostOrThrow<CiteMemoriesResult>("agent/memory/cite", opts);
 }
 
@@ -335,7 +399,69 @@ export interface ListCitationsResult {
 export async function listCitations(
   opts: ListCitationsOptions,
 ): Promise<ListCitationsResult> {
-  return apiPostOrThrow<ListCitationsResult>("agent/memory/citations/list", opts);
+  return apiPostOrThrow<ListCitationsResult>(
+    "agent/memory/citations/list",
+    opts,
+  );
+}
+
+/** One cited-memory row in the citation-stats rollup. */
+export interface CitedMemoryStat {
+  memoryId: string;
+  publicId: string;
+  lesson: string;
+  memoryClass: MemoryClass;
+  memoryKind: string;
+  citationCount: number;
+  decisiveCount: number;
+  contributingCount: number;
+  consideredCount: number;
+  ignoredCount: number;
+  violationCount: number;
+}
+
+/** One cited-node row (resolved to a friendly ref) in the citation-stats rollup. */
+export interface CitedNodeStat {
+  node: {
+    id: string | null;
+    label: string;
+    displayName: string;
+    properties: Record<string, unknown>;
+  };
+  citationCount: number;
+  decisiveCount: number;
+  ignoredCount: number;
+}
+
+/** Output of `agent.memory.citations.stats` — the workspace citation rollup. */
+export interface CitationStatsResult {
+  totals: {
+    citations: number;
+    executions: number;
+    memoriesCited: number;
+    nodesCited: number;
+  };
+  byInfluence: Record<string, number>;
+  byCompliance: Record<string, number>;
+  daily: Array<{ date: string; citations: number; violations: number }>;
+  topMemories: CitedMemoryStat[];
+  leastUsefulMemories: CitedMemoryStat[];
+  mostViolatedRules: CitedMemoryStat[];
+  topNodes: CitedNodeStat[];
+}
+
+/**
+ * Workspace-wide citation analytics across all executions: totals, influence /
+ * compliance breakdowns, a daily series, and the most-cited / least-useful /
+ * most-violated memories plus most-cited graph nodes.
+ */
+export async function citationStats(
+  opts: { days?: number; limit?: number } = {},
+): Promise<CitationStatsResult> {
+  return apiPostOrThrow<CitationStatsResult>("agent/memory/citations/stats", {
+    days: opts.days ?? 30,
+    limit: opts.limit ?? 10,
+  });
 }
 
 // ── Formatters (shared by the CLI subcommands and the REPL slash commands) ──────
@@ -360,7 +486,7 @@ function fmtEnforcement(enforcementScore: number | null): string {
  */
 export function formatMemoryLines(result: MemoryListResult): string {
   if (result.memories.length === 0) {
-    return "No memories yet. Capture one with `/remember <text>` (or `oxagen remember \"…\"`).";
+    return 'No memories yet. Capture one with `/remember <text>` (or `oxagen remember "…"`).';
   }
   const rows = result.memories.map((m) => {
     const id = m.id.slice(0, 8);
@@ -415,8 +541,73 @@ export function formatPromoteResult(m: MemoryRecord): string {
   );
 }
 
+/** Render the result of a demotion. */
+export function formatDemoteResult(m: MemoryRecord): string {
+  return (
+    `✓ Demoted to ${m.memoryClass} — enforcement ${fmtEnforcement(m.enforcementScore)} (${m.id}).\n` +
+    `  ${truncate(m.lesson, 100)}`
+  );
+}
+
+/** Render the result of a promotion-candidate dismissal (or restore). */
+export function formatDismissResult(r: DismissPromotionResult): string {
+  return r.dismissed
+    ? `✓ Dismissed ${r.memoryId} from the promotion queue.`
+    : `✓ Restored ${r.memoryId} to the promotion queue.`;
+}
+
+/** Render the citation-stats rollup as a compact multi-section summary. */
+export function formatCitationStats(result: CitationStatsResult): string {
+  const { totals } = result;
+  const lines: string[] = [
+    `Citations: ${totals.citations} across ${totals.executions} execution${totals.executions === 1 ? "" : "s"} — ${totals.memoriesCited} memories, ${totals.nodesCited} nodes cited.`,
+  ];
+
+  const influence = Object.entries(result.byInfluence);
+  if (influence.length > 0) {
+    lines.push(
+      `  influence: ${influence.map(([k, v]) => `${k} ${v}`).join(", ")}`,
+    );
+  }
+  const compliance = Object.entries(result.byCompliance);
+  if (compliance.length > 0) {
+    lines.push(
+      `  compliance: ${compliance.map(([k, v]) => `${k} ${v}`).join(", ")}`,
+    );
+  }
+
+  const memRow = (m: CitedMemoryStat): string =>
+    `    ${m.memoryId.slice(0, 8)}  cites:${String(m.citationCount).padStart(3)} dec:${String(m.decisiveCount).padStart(3)} viol:${String(m.violationCount).padStart(3)}  ${truncate(m.lesson, 48)}`;
+
+  if (result.topMemories.length > 0) {
+    lines.push("\nMost-cited memories:");
+    lines.push(...result.topMemories.map(memRow));
+  }
+  if (result.leastUsefulMemories.length > 0) {
+    lines.push("\nLeast-useful (cited but never influential):");
+    lines.push(...result.leastUsefulMemories.map(memRow));
+  }
+  if (result.mostViolatedRules.length > 0) {
+    lines.push("\nMost-violated rules:");
+    lines.push(...result.mostViolatedRules.map(memRow));
+  }
+  if (result.topNodes.length > 0) {
+    lines.push("\nMost-cited graph nodes:");
+    lines.push(
+      ...result.topNodes.map(
+        (n) =>
+          `    ${n.node.displayName} [${n.node.label}]  cites:${String(n.citationCount).padStart(3)} dec:${String(n.decisiveCount).padStart(3)}`,
+      ),
+    );
+  }
+
+  return lines.join("\n");
+}
+
 /** Render the promotion-candidates list as an aligned table string. */
-export function formatPromotionCandidates(result: PromotionCandidatesResult): string {
+export function formatPromotionCandidates(
+  result: PromotionCandidatesResult,
+): string {
   if (result.candidates.length === 0) {
     return "No promotion candidates right now — no OBSERVATIONs have enough citation pressure yet.";
   }
@@ -504,7 +695,9 @@ export async function parseImportMemories(
 export async function commitImportMemories(
   drafts: MemoryImportDraftInput[],
 ): Promise<CommitImportOutput> {
-  return apiPostOrThrow<CommitImportOutput>("agent/memory/import/commit", { drafts });
+  return apiPostOrThrow<CommitImportOutput>("agent/memory/import/commit", {
+    drafts,
+  });
 }
 
 /**

@@ -209,6 +209,11 @@ export const workspace = {
       `${wsBase(ctx)}/knowledge/ontology`,
     memory: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/memory`,
+    // Citation analytics dashboard — which memories and graph nodes agents
+    // actually cite, how useful those citations were, and where rules get
+    // violated. Backed by agent.memory_citation.stats (get_citation_stats).
+    citations: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/citations`,
     // Inspectable detail page for a single KnowledgeNode, now nested under
     // Graph. Mirrors capability-meta RECORD_LINK_ROUTES["graph.node"] so chat
     // deep-links and in-app navigation resolve to the same URL.

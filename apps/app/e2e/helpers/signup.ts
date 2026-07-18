@@ -61,13 +61,15 @@ export async function signUpFreshUser(
   // Better Auth sets the session cookies and the client calls
   // router.push("/new-organization") directly (signup path). This is a
   // client-side History API navigation — Playwright observes it reliably.
-  await page.waitForURL(
-    (url) => url.pathname === "/new-organization",
-    { timeout: 20_000 },
-  );
+  await page.waitForURL((url) => url.pathname === "/new-organization", {
+    timeout: 20_000,
+  });
 
   // ── 3. Complete org onboarding ───────────────────────────────────────────
-  await page.waitForSelector('input[name="name"]', { state: "visible", timeout: 10_000 });
+  await page.waitForSelector('input[name="name"]', {
+    state: "visible",
+    timeout: 10_000,
+  });
   await page.fill('input[name="name"]', orgName);
 
   const slugInput = page.locator('input[name="slug"]');
@@ -97,7 +99,9 @@ export async function signUpFreshUser(
   try {
     await page.waitForFunction(
       () => {
-        const btn = document.querySelector<HTMLButtonElement>('button[type="submit"]');
+        const btn = document.querySelector<HTMLButtonElement>(
+          'button[type="submit"]',
+        );
         if (!btn) return true; // Button gone — component unmounted (success).
         // Action completed when text is no longer the pending indicator.
         return !(btn.textContent ?? "").includes("Creating");
@@ -116,7 +120,14 @@ export async function signUpFreshUser(
   const hasError = await errorEl.isVisible().catch(() => false);
   if (hasError) {
     const errText = await errorEl.innerText().catch(() => "unknown error");
-    throw new Error(`signUpFreshUser: org creation failed — ${errText}`);
+    // Dev-only race: an HMR remount mid-submit (a parallel worker compiling a
+    // fresh route triggers Fast Refresh) can replay the form action — the
+    // first submit created the org and the replay reports "already taken".
+    // The slug is randomBytes-fresh, so "taken" here means OUR submit landed;
+    // fall through to the navigation below and let the auth gate verify it.
+    if (!/already taken/i.test(errText)) {
+      throw new Error(`signUpFreshUser: org creation failed — ${errText}`);
+    }
   }
 
   // Navigate to the ask page. /{orgSlug}/default redirects to
@@ -132,6 +143,23 @@ export async function signUpFreshUser(
     throw new Error(
       `signUpFreshUser: session not valid after signup (redirected to /login from /${orgSlug}/default/ask)`,
     );
+  }
+
+  // Verify the org route actually resolves. Under dev-server contention the
+  // org-create action can still be in flight when we navigate (the button
+  // poll above times out and falls through), so the first hit can 404 before
+  // the transaction commits. Retry the navigation briefly before failing.
+  const notFound = page.getByRole("heading", { name: "Page not found" });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const is404 = await notFound.isVisible().catch(() => false);
+    if (!is404) break;
+    if (attempt === 4) {
+      throw new Error(
+        `signUpFreshUser: org route /${orgSlug}/default/ask still 404s after signup — org creation did not land`,
+      );
+    }
+    await page.waitForTimeout(2_000);
+    await gotoStable(page, `/${orgSlug}/default/ask`);
   }
 
   return { email, password, name, orgSlug };

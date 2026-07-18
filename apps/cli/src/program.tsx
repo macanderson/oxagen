@@ -243,7 +243,9 @@ export function buildProgram(): Command {
           // engine, and native DuckDB/onnxruntime modules — seconds cold, far
           // longer on a loaded machine — during which nothing else paints, so
           // animate a dependency-free splash until the REPL can own the screen.
-          const { startStartupSplash } = await import("./tui/startup-splash.js");
+          const { startStartupSplash } = await import(
+            "./tui/startup-splash.js"
+          );
           const splash = startStartupSplash();
           let repl: typeof import("./repl/interactive.js");
           try {
@@ -1040,7 +1042,7 @@ export function buildProgram(): Command {
       "--enforcement <n>",
       "Enforcement 1–100 to set for a RULE (ignored for FACT, forced 100)",
     )
-    .requiredOption("--rationale <text>", "Why this memory is being promoted")
+    .option("--rationale <text>", "Optional: why this memory is being promoted")
     .option("--json", "Output JSON")
     .action(
       async (
@@ -1057,6 +1059,43 @@ export function buildProgram(): Command {
       },
     );
   memory
+    .command("demote <id>")
+    .description(
+      "Demote a memory to RULE or OBSERVATION, recording an auditable demotion event (target must be below the current class)",
+    )
+    .requiredOption("--to <class>", "Target class: rule|observation")
+    .option(
+      "--enforcement <n>",
+      "Enforcement 1–100 to set when demoting to RULE (ignored for OBSERVATION, forced null)",
+    )
+    .option("--rationale <text>", "Optional: why this memory is being demoted")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        id: string,
+        opts: {
+          to?: string;
+          enforcement?: string;
+          rationale?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { handleMemoryDemote } = await import("./commands/memory.js");
+        await handleMemoryDemote(id, opts);
+      },
+    );
+  memory
+    .command("dismiss <id>")
+    .description(
+      "Dismiss a memory from the promotion candidate queue (or restore it with --restore)",
+    )
+    .option("--restore", "Restore a previously dismissed memory to the queue")
+    .option("--json", "Output JSON")
+    .action(async (id: string, opts: { restore?: boolean; json?: boolean }) => {
+      const { handleMemoryDismiss } = await import("./commands/memory.js");
+      await handleMemoryDismiss(id, opts);
+    });
+  memory
     .command("candidates")
     .description(
       "List the top OBSERVATION memories by citation pressure ripe for promotion",
@@ -1066,6 +1105,18 @@ export function buildProgram(): Command {
     .action(async (opts: { limit?: string; json?: boolean }) => {
       const { handleMemoryCandidates } = await import("./commands/memory.js");
       await handleMemoryCandidates(opts);
+    });
+  memory
+    .command("citations")
+    .description(
+      "Workspace citation analytics: totals, influence/compliance, most-cited / least-useful / most-violated memories and nodes",
+    )
+    .option("--days <n>", "Window in days (default 30)")
+    .option("--limit <n>", "Max entries per top-N list (default 10)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { days?: string; limit?: string; json?: boolean }) => {
+      const { handleMemoryCitations } = await import("./commands/memory.js");
+      await handleMemoryCitations(opts);
     });
   memory
     .command("rm <id>")

@@ -78,10 +78,14 @@ import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory_policy.wri
 import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory_import.parse";
 import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory_import.commit";
 import { agentMemoryPromoteRoute } from "./routes/v1/agent.memory.promote";
+import { agentMemoryDemoteRoute } from "./routes/v1/agent.memory.demote";
 import { agentMemoryPromotionCandidatesRoute } from "./routes/v1/agent.memory_promotion.list";
+import { agentMemoryPromotionDismissRoute } from "./routes/v1/agent.memory_promotion.dismiss";
+import { agentMemoryPromotionRationalesRoute } from "./routes/v1/agent.memory_promotion.rationales";
 import { agentMemoryCiteRoute } from "./routes/v1/agent.memory.cite";
 import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory_evidence.attach";
 import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory_citation.list";
+import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation.stats";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
@@ -503,9 +507,18 @@ orgScoped.route("/agent/memory/policy", agentMemoryPolicyWriteRoute);
 orgScoped.route("/agent/memory/import/parse", agentMemoryImportParseRoute);
 orgScoped.route("/agent/memory/import/commit", agentMemoryImportCommitRoute);
 orgScoped.route("/agent/memory/promote", agentMemoryPromoteRoute);
+orgScoped.route("/agent/memory/demote", agentMemoryDemoteRoute);
 orgScoped.route(
   "/agent/memory/promotion/candidates",
   agentMemoryPromotionCandidatesRoute,
+);
+orgScoped.route(
+  "/agent/memory/promotion/dismiss",
+  agentMemoryPromotionDismissRoute,
+);
+orgScoped.route(
+  "/agent/memory/promotion/rationales",
+  agentMemoryPromotionRationalesRoute,
 );
 orgScoped.route("/agent/memory/cite", agentMemoryCiteRoute);
 orgScoped.route(
@@ -513,6 +526,7 @@ orgScoped.route(
   agentMemoryEvidenceAttachRoute,
 );
 orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
+orgScoped.route("/agent/memory/citations/stats", agentMemoryCitationStatsRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);

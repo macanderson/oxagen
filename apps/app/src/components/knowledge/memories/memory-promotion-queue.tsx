@@ -24,8 +24,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpCircle, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/toast";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
 import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
 import {
@@ -33,6 +32,7 @@ import {
   ErrorState,
 } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { CLASS_CONFIG } from "./memory-kinds";
+import { RationalePicker, type SuggestRationalesFn } from "./rationale-picker";
 
 // ---------------------------------------------------------------------------
 // Structural mirrors of the server action types (this is a "use client" file
@@ -55,6 +55,10 @@ type PromoteMemoryResult =
   | { ok: true; memory: unknown }
   | { ok: false; error: string };
 
+type DismissPromotionResult =
+  | { ok: true; memoryId: string; dismissed: boolean }
+  | { ok: false; error: string };
+
 export interface MemoryPromotionQueueProps {
   initialCandidates: PromotionCandidate[];
   loadError: string | null;
@@ -66,9 +70,18 @@ export interface MemoryPromotionQueueProps {
     memoryId: string;
     toClass: PromoteTarget;
     enforcementScore?: number;
-    rationale: string;
+    rationale?: string;
     basedOnEvidenceIds?: string[];
   }) => Promise<PromoteMemoryResult>;
+  /** Durably removes (or, with restore:true, restores) a candidate from the queue. */
+  dismissPromotion: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+    restore?: boolean;
+  }) => Promise<DismissPromotionResult>;
+  /** Drafts candidate rationales for the RationalePicker select. */
+  suggestRationales: SuggestRationalesFn;
 }
 
 function candidateNodeRef(candidate: PromotionCandidate): KnowledgeNodeRef {
@@ -92,8 +105,11 @@ export function MemoryPromotionQueue({
   orgSlug,
   workspaceSlug,
   promoteMemory,
+  dismissPromotion,
+  suggestRationales,
 }: MemoryPromotionQueueProps) {
   const router = useRouter();
+  const toast = useToast();
   const [candidates, setCandidates] = React.useState(initialCandidates);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
@@ -103,10 +119,72 @@ export function MemoryPromotionQueue({
     router.refresh();
   }
 
+  // Optimistic removal + durable dismiss, with an Undo toast that restores
+  // the candidate (calling dismiss again with restore:true) if the human
+  // changes their mind. On a failed dismiss call the card comes right back.
+  function handleDismissed(candidate: PromotionCandidate) {
+    setCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+    setExpandedId(null);
+
+    void dismissPromotion({
+      orgSlug,
+      workspaceSlug,
+      memoryId: candidate.id,
+    }).then((result) => {
+      if (!result.ok) {
+        setCandidates((prev) =>
+          prev.some((c) => c.id === candidate.id) ? prev : [candidate, ...prev],
+        );
+        toast.add({
+          title: "Couldn't dismiss",
+          description: result.error,
+          type: "error",
+        });
+        return;
+      }
+      toast.add({
+        title: "Dismissed from promotion queue",
+        description: candidate.lesson,
+        type: "success",
+        actionProps: {
+          children: "Undo",
+          onClick: () => {
+            void dismissPromotion({
+              orgSlug,
+              workspaceSlug,
+              memoryId: candidate.id,
+              restore: true,
+            }).then((restoreResult) => {
+              if (restoreResult.ok) {
+                setCandidates((prev) =>
+                  prev.some((c) => c.id === candidate.id)
+                    ? prev
+                    : [candidate, ...prev],
+                );
+              } else {
+                toast.add({
+                  title: "Couldn't restore",
+                  description: restoreResult.error,
+                  type: "error",
+                });
+              }
+            });
+          },
+        },
+      });
+    });
+  }
+
   return (
-    <section aria-labelledby="memory-promotion-queue-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="memory-promotion-queue-heading"
+      className="flex flex-col gap-4"
+    >
       <div className="flex items-center gap-2">
-        <ListChecks className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <ListChecks
+          className="h-4 w-4 text-muted-foreground"
+          aria-hidden="true"
+        />
         <h2
           id="memory-promotion-queue-heading"
           className="text-sm font-semibold text-foreground"
@@ -120,9 +198,9 @@ export function MemoryPromotionQueue({
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Memories flagged as promotion-worthy by citation pressure, awaiting review. Promoting to
-        Fact requires explicit confirmation — it represents a human-confirmed, org-wide truth,
-        not just policy.
+        Memories flagged as promotion-worthy by citation pressure, awaiting
+        review. Promoting to Fact requires explicit confirmation — it represents
+        a human-confirmed, org-wide truth, not just policy.
       </p>
 
       {loadError && (
@@ -157,14 +235,18 @@ export function MemoryPromotionQueue({
                     onClick={() => setExpandedId(candidate.id)}
                     aria-label={`Review promotion candidate: ${candidate.lesson}`}
                   >
-                    <ArrowUpCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                    <ArrowUpCircle
+                      className="h-3 w-3 mr-1.5"
+                      aria-hidden="true"
+                    />
                     Review
                   </Button>
                 )}
               </div>
               <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
                 <span>
-                  {candidate.citationCount} citation{candidate.citationCount === 1 ? "" : "s"}
+                  {candidate.citationCount} citation
+                  {candidate.citationCount === 1 ? "" : "s"}
                 </span>
                 <span>{candidate.influenceCount} influential</span>
                 <span>{Math.round(candidate.confidenceScore)}% confidence</span>
@@ -175,8 +257,10 @@ export function MemoryPromotionQueue({
                   orgSlug={orgSlug}
                   workspaceSlug={workspaceSlug}
                   promoteMemory={promoteMemory}
+                  suggestRationales={suggestRationales}
                   onPromoted={() => handlePromoted(candidate.id)}
                   onCancel={() => setExpandedId(null)}
+                  onDismiss={() => handleDismissed(candidate)}
                 />
               )}
             </li>
@@ -198,15 +282,20 @@ function PromotionConfirmFlow({
   orgSlug,
   workspaceSlug,
   promoteMemory,
+  suggestRationales,
   onPromoted,
   onCancel,
+  onDismiss,
 }: {
   candidate: PromotionCandidate;
   orgSlug: string;
   workspaceSlug: string;
   promoteMemory: MemoryPromotionQueueProps["promoteMemory"];
+  suggestRationales: SuggestRationalesFn;
   onPromoted: () => void;
   onCancel: () => void;
+  /** Durably removes this candidate from the queue (distinct from onCancel, which just collapses this form). */
+  onDismiss: () => void;
 }) {
   const [target, setTarget] = React.useState<PromoteTarget | null>(null);
   const [enforcementScore, setEnforcementScore] = React.useState(50);
@@ -225,16 +314,12 @@ function PromotionConfirmFlow({
 
   function confirmPromote() {
     if (!target) return;
-    const trimmedRationale = rationale.trim();
-    if (trimmedRationale.length === 0) {
-      setError("Explain why this memory is ready to promote.");
-      return;
-    }
     if (target === "FACT" && !factConfirmed) {
       setError("Confirm this is a durable, org-wide fact before promoting.");
       return;
     }
     setError(null);
+    const trimmedRationale = rationale.trim();
     startTransition(async () => {
       const result = await promoteMemory({
         orgSlug,
@@ -242,7 +327,7 @@ function PromotionConfirmFlow({
         memoryId: candidate.id,
         toClass: target,
         ...(target === "RULE" ? { enforcementScore } : {}),
-        rationale: trimmedRationale,
+        ...(trimmedRationale ? { rationale: trimmedRationale } : {}),
       });
       if (result.ok) {
         onPromoted();
@@ -263,7 +348,7 @@ function PromotionConfirmFlow({
           <ArrowUpCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
           Promote to {CLASS_CONFIG.FACT.label}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+        <Button size="sm" variant="ghost" onClick={onDismiss}>
           Dismiss
         </Button>
       </div>
@@ -282,7 +367,8 @@ function PromotionConfirmFlow({
             htmlFor={`queue-promote-enforcement-${candidate.id}`}
             className="text-[11px] text-muted-foreground"
           >
-            Enforcement: <span className="tabular-nums">{enforcementScore}</span>
+            Enforcement:{" "}
+            <span className="tabular-nums">{enforcementScore}</span>
           </label>
           <input
             id={`queue-promote-enforcement-${candidate.id}`}
@@ -310,24 +396,24 @@ function PromotionConfirmFlow({
             htmlFor={`queue-promote-fact-confirm-${candidate.id}`}
             className="text-[11px] text-foreground"
           >
-            I confirm this is a durable, org-wide fact — always fully enforced (100) and
-            human-confirmed, not just policy. This cannot be casually undone.
+            I confirm this is a durable, org-wide fact — always fully enforced
+            (100) and human-confirmed, not just policy. This cannot be casually
+            undone.
           </label>
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`queue-promote-rationale-${candidate.id}`}>Rationale</Label>
-        <Textarea
-          id={`queue-promote-rationale-${candidate.id}`}
-          rows={2}
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          disabled={isPending}
-          maxLength={1000}
-          placeholder="Why is this memory ready to promote?"
-        />
-      </div>
+      <RationalePicker
+        idPrefix={`queue-promote-${candidate.id}`}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        memoryId={candidate.id}
+        toClass={target}
+        value={rationale}
+        onChange={setRationale}
+        disabled={isPending}
+        suggestRationales={suggestRationales}
+      />
 
       {error && (
         <p role="alert" className="text-xs text-destructive">
@@ -342,7 +428,9 @@ function PromotionConfirmFlow({
           onClick={confirmPromote}
           disabled={isPending || (target === "FACT" && !factConfirmed)}
         >
-          {isPending ? "Promoting…" : `Confirm promote to ${CLASS_CONFIG[target].label}`}
+          {isPending
+            ? "Promoting…"
+            : `Confirm promote to ${CLASS_CONFIG[target].label}`}
         </Button>
         <Button size="sm" variant="ghost" onClick={cancel} disabled={isPending}>
           Cancel

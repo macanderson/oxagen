@@ -5,7 +5,14 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -22,13 +29,15 @@ describe("ReviewLinks", () => {
 
     expect(screen.getByTestId("overview-review-links")).toBeInTheDocument();
 
-    const inference = screen.getByRole("link", { name: /review inferred edges/i });
+    const inference = screen.getByRole("link", {
+      name: /review inferred edges/i,
+    });
     expect(inference).toHaveAttribute("href", "/acme/prod/knowledge/inference");
 
     const memories = screen.getByRole("link", { name: /review memories/i });
     expect(memories).toHaveAttribute("href", "/acme/prod/knowledge/memory");
 
-    const ask = screen.getByRole("link", { name: /open ask/i });
-    expect(ask).toHaveAttribute("href", "/acme/prod/ask");
+    const sessions = screen.getByRole("link", { name: /open sessions/i });
+    expect(sessions).toHaveAttribute("href", "/acme/prod/sessions");
   });
 });

@@ -100,7 +100,9 @@ function rowFromRecord(r: { get: (k: string) => unknown }): MemoryRecord {
     source: r.get("source") as string,
     confidenceScore: Number(r.get("confidenceScore") ?? 100),
     enforcementScore:
-      r.get("enforcementScore") == null ? null : Number(r.get("enforcementScore")),
+      r.get("enforcementScore") == null
+        ? null
+        : Number(r.get("enforcementScore")),
     status: r.get("status") as MemoryStatus,
     subjectHint: (r.get("subjectHint") as string) ?? "",
     halfLifeDays: Number(r.get("halfLifeDays") ?? 30),
@@ -332,7 +334,8 @@ export async function writeMemory(
   args: WriteMemoryArgs,
 ): Promise<{ memoryId: string; edgesCreated: number }> {
   const s = scopedSession();
-  const halfLifeDays = args.halfLifeDays ?? HALF_LIFE_BY_CLASS[args.memoryClass];
+  const halfLifeDays =
+    args.halfLifeDays ?? HALF_LIFE_BY_CLASS[args.memoryClass];
   try {
     const result = await s.run(
       /* cypher */ `
@@ -637,9 +640,7 @@ export async function reinforceMemory(args: {
       { memoryId: args.memoryId, amount: args.reinforcementAmount },
     );
     return {
-      confidenceScore: Number(
-        result.records[0]?.get("confidenceScore") ?? 100,
-      ),
+      confidenceScore: Number(result.records[0]?.get("confidenceScore") ?? 100),
     };
   } finally {
     await s.close();
@@ -654,7 +655,8 @@ export interface PromoteMemoryArgs {
   enforcementScore: number | null;
   promotedByKind: ActorKind;
   promotedById: string | null;
-  rationale: string;
+  /** Optional free-text reason; stored as null on the :Promotion node when absent. */
+  rationale: string | null;
   confirmedById?: string | null;
   basedOnEvidenceIds?: string[];
 }
@@ -669,8 +671,7 @@ export async function promoteMemory(
   args: PromoteMemoryArgs,
 ): Promise<MemoryListRow | null> {
   const s = scopedSession();
-  const enforcement =
-    args.toClass === "FACT" ? 100 : args.enforcementScore;
+  const enforcement = args.toClass === "FACT" ? 100 : args.enforcementScore;
   const confirmedByKind = args.toClass === "FACT" ? "USER" : null;
   try {
     const result = await s.run(
@@ -725,6 +726,157 @@ export async function promoteMemory(
   }
 }
 
+// ── Demotion (FACT → RULE / OBSERVATION, RULE → OBSERVATION) ─────────────────
+
+/**
+ * Thrown when a demotion is not strictly downward on the confidence ladder
+ * (FACT > RULE > OBSERVATION). Surfaces (api/mcp) should map this to a 400/422,
+ * NOT a 500 — it's a caller error, not a fault.
+ */
+export class MemoryDemotionDirectionError extends Error {
+  readonly code = "invalid_demotion_direction";
+  readonly fromClass: MemoryClass;
+  readonly toClass: MemoryClass;
+  constructor(fromClass: MemoryClass, toClass: MemoryClass) {
+    super(
+      `Cannot demote a ${fromClass} to ${toClass}: demotion must move strictly down the ladder (FACT → RULE → OBSERVATION).`,
+    );
+    this.name = "MemoryDemotionDirectionError";
+    this.fromClass = fromClass;
+    this.toClass = toClass;
+  }
+}
+
+/** The rank of each class on the confidence ladder; higher = more confident. */
+const CLASS_RANK: Record<MemoryClass, number> = {
+  OBSERVATION: 0,
+  RULE: 1,
+  FACT: 2,
+};
+
+export interface DemoteMemoryArgs {
+  memoryId: string;
+  toClass: Exclude<MemoryClass, "FACT">;
+  /** Enforcement to set when demoting to RULE; defaults to 50. Ignored for OBSERVATION. */
+  enforcementScore?: number | null;
+  demotedByKind: ActorKind;
+  demotedById: string | null;
+  /** Optional free-text reason; stored as null on the :Demotion node when absent. */
+  rationale: string | null;
+}
+
+/**
+ * Demote a memory down the confidence ladder (FACT → RULE / OBSERVATION,
+ * RULE → OBSERVATION), recording an auditable :Demotion event — the inverse of
+ * promoteMemory (docs/specs/two-axis-memory §4). Enforces:
+ *   - direction is strictly downward (throws MemoryDemotionDirectionError otherwise);
+ *   - toClass OBSERVATION ⟹ enforcement_score = null;
+ *   - toClass RULE ⟹ enforcement_score = provided ?? 50;
+ *   - leaving FACT clears the human-confirmation fields.
+ * Returns the updated record, or null when no node matched in this workspace.
+ */
+export async function demoteMemory(
+  args: DemoteMemoryArgs,
+): Promise<MemoryListRow | null> {
+  const s = scopedSession();
+  try {
+    // Direction depends on the memory's CURRENT class, which isn't in the
+    // contract input — read it first, distinguishing "not found" (null) from
+    // "illegal direction" (typed throw).
+    const currentResult = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        RETURN coalesce(m.memory_class, 'OBSERVATION') AS fromClass
+      `,
+      { memoryId: args.memoryId },
+    );
+    const currentRec = currentResult.records[0];
+    if (!currentRec) return null;
+    const fromClass = currentRec.get("fromClass") as MemoryClass;
+
+    if (CLASS_RANK[args.toClass] >= CLASS_RANK[fromClass]) {
+      throw new MemoryDemotionDirectionError(fromClass, args.toClass);
+    }
+
+    // Class invariants on the way down.
+    const enforcement =
+      args.toClass === "OBSERVATION" ? null : (args.enforcementScore ?? 50);
+
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        CREATE (d:Demotion {
+          id: randomUUID(),
+          orgId: $orgId,
+          workspaceId: $workspaceId,
+          from_class: $fromClass,
+          to_class: $toClass,
+          enforcement_score_set: $enforcement,
+          rationale: $rationale,
+          created_by_kind: $demotedByKind,
+          created_by_id: $demotedById,
+          created_at: datetime()
+        })
+        CREATE (d)-[:DEMOTED]->(m)
+        SET m.memory_class = $toClass,
+            m.enforcement_score = $enforcement,
+            m.confirmed_by_kind = null,
+            m.confirmed_by_id = null,
+            m.updatedAt = datetime()
+        ${MEMORY_RETURN}
+      `,
+      {
+        memoryId: args.memoryId,
+        fromClass,
+        toClass: args.toClass,
+        enforcement,
+        rationale: args.rationale,
+        demotedByKind: args.demotedByKind,
+        demotedById: args.demotedById ?? null,
+      },
+    );
+    const rec = result.records[0];
+    return rec ? rowFromRecord(rec) : null;
+  } finally {
+    await s.close();
+  }
+}
+
+// ── Promotion dismissal (silence a candidate without archiving) ─────────────
+
+/**
+ * Stamp (or clear) `promotion_dismissed_at` on an :AgentMemory node so it drops
+ * out of the promotion-candidate window — the next-highest OBSERVATION takes its
+ * slot. The memory itself stays ACTIVE and recallable; only the suggestion is
+ * silenced. Pass `restore: true` to clear the marker. Returns whether the memory
+ * is now dismissed, or null when no node matched in this workspace.
+ */
+export async function dismissPromotion(args: {
+  memoryId: string;
+  restore: boolean;
+}): Promise<{ memoryId: string; dismissed: boolean } | null> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        SET m.promotion_dismissed_at = CASE WHEN $restore THEN null ELSE datetime() END,
+            m.updatedAt = datetime()
+        RETURN m.id AS id, m.promotion_dismissed_at IS NOT NULL AS dismissed
+      `,
+      { memoryId: args.memoryId, restore: args.restore },
+    );
+    const rec = result.records[0];
+    if (!rec) return null;
+    return {
+      memoryId: rec.get("id") as string,
+      dismissed: Boolean(rec.get("dismissed")),
+    };
+  } finally {
+    await s.close();
+  }
+}
+
 export interface PromotionCandidate {
   id: string;
   publicId: string;
@@ -749,6 +901,7 @@ export async function listPromotionCandidates(args: {
         MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
         WHERE coalesce(m.memory_class, 'OBSERVATION') = 'OBSERVATION'
           AND coalesce(m.status, 'ACTIVE') = 'ACTIVE'
+          AND m.promotion_dismissed_at IS NULL
         RETURN
           m.id AS id,
           coalesce(m.publicId, m.id) AS publicId,
@@ -1005,6 +1158,328 @@ export async function listExecutionCitations(args: {
   }
 }
 
+// ── Citation analytics (cross-execution rollup, schema §6/§7) ───────────────
+
+/** One cited-memory row with its per-influence / compliance breakdown. */
+export interface CitedMemoryStat {
+  memoryId: string;
+  publicId: string;
+  lesson: string;
+  memoryClass: MemoryClass;
+  memoryKind: string;
+  citationCount: number;
+  decisiveCount: number;
+  contributingCount: number;
+  consideredCount: number;
+  ignoredCount: number;
+  violationCount: number;
+}
+
+/** A cited non-memory graph node, resolved to the friendly citation ref shape. */
+export interface CitedNodeStat {
+  node: {
+    id: string | null;
+    label: string;
+    displayName: string;
+    properties: Record<string, unknown>;
+  };
+  citationCount: number;
+  decisiveCount: number;
+  ignoredCount: number;
+}
+
+/** The full workspace citation-analytics rollup (mirrors get_citation_stats). */
+export interface CitationStats {
+  totals: {
+    citations: number;
+    executions: number;
+    memoriesCited: number;
+    nodesCited: number;
+  };
+  byInfluence: Record<string, number>;
+  byCompliance: Record<string, number>;
+  daily: Array<{ date: string; citations: number; violations: number }>;
+  topMemories: CitedMemoryStat[];
+  leastUsefulMemories: CitedMemoryStat[];
+  mostViolatedRules: CitedMemoryStat[];
+  topNodes: CitedNodeStat[];
+}
+
+/** Start of a UTC calendar day, offset by `dayOffset` days (negative = earlier). */
+function startOfUtcDay(now: Date, dayOffset = 0): Date {
+  return new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() + dayOffset,
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+}
+
+/** UTC calendar day key (YYYY-MM-DD) for the start-of-day offset from `now`. */
+function utcDayKey(now: Date, dayOffset = 0): string {
+  return startOfUtcDay(now, dayOffset).toISOString().slice(0, 10);
+}
+
+/**
+ * Parse a graph node's stored property bag. Neo4j persists it as a JSON string
+ * (see graph.node.list / the semantic-edge ref resolver); tolerate an already-
+ * parsed object or a null/absent value so this is safe across drivers.
+ */
+function parseNodeProps(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    if (raw.length === 0) return {};
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return parsed != null &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return {};
+}
+
+function memoryStatFromRecord(r: {
+  get: (k: string) => unknown;
+}): CitedMemoryStat {
+  return {
+    memoryId: r.get("memoryId") as string,
+    publicId: r.get("publicId") as string,
+    lesson: r.get("lesson") as string,
+    memoryClass: r.get("memoryClass") as MemoryClass,
+    memoryKind: r.get("memoryKind") as string,
+    citationCount: Number(r.get("citationCount") ?? 0),
+    decisiveCount: Number(r.get("decisiveCount") ?? 0),
+    contributingCount: Number(r.get("contributingCount") ?? 0),
+    consideredCount: Number(r.get("consideredCount") ?? 0),
+    ignoredCount: Number(r.get("ignoredCount") ?? 0),
+    violationCount: Number(r.get("violationCount") ?? 0),
+  };
+}
+
+/**
+ * Cross-execution citation analytics for the active workspace (the rollup
+ * per-execution `listExecutionCitations` can't answer). Aggregates the
+ * (:Execution)-[:CITED]->(:Citation)-[:OF]->(:AgentMemory | :GraphNode) graph
+ * over a rolling `days` window on `c.retrieved_at`. Note :AgentMemory nodes ALSO
+ * carry the :GraphNode label, so node-scoped queries filter `NOT n:AgentMemory`.
+ *
+ * Runs several small, scope-indexed queries SEQUENTIALLY on the one scoped
+ * session — never Promise.all(): a Neo4j session permits only one in-flight
+ * query at a time.
+ */
+export async function readCitationStats(args: {
+  days: number;
+  limit: number;
+}): Promise<CitationStats> {
+  const now = new Date();
+  const since = startOfUtcDay(now, -(args.days - 1)).toISOString();
+  const limit = BigInt(args.limit);
+  const s = scopedSession();
+  try {
+    // 1. Totals + distinct counts. AgentMemory carries :GraphNode too, so a
+    //    node target is a :GraphNode that is NOT an :AgentMemory.
+    const totalsRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE c.retrieved_at >= datetime($since)
+        OPTIONAL MATCH (e:Execution)-[:CITED]->(c)
+        OPTIONAL MATCH (c)-[:OF]->(target)
+        RETURN
+          count(c) AS citations,
+          count(DISTINCT e) AS executions,
+          count(DISTINCT CASE WHEN target:AgentMemory THEN target END) AS memoriesCited,
+          count(DISTINCT CASE WHEN target:GraphNode AND NOT target:AgentMemory THEN target END) AS nodesCited
+      `,
+      { since },
+    );
+    const totalsRec = totalsRes.records[0];
+    const totals = {
+      citations: Number(totalsRec?.get("citations") ?? 0),
+      executions: Number(totalsRec?.get("executions") ?? 0),
+      memoriesCited: Number(totalsRec?.get("memoriesCited") ?? 0),
+      nodesCited: Number(totalsRec?.get("nodesCited") ?? 0),
+    };
+
+    // 2. byInfluence — count over ALL citations (mentions included), so
+    //    totals.citations == sum(byInfluence) == sum(byCompliance).
+    const influenceRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE c.retrieved_at >= datetime($since)
+        RETURN c.influence AS influence, count(c) AS n
+      `,
+      { since },
+    );
+    const byInfluence: Record<string, number> = {};
+    for (const r of influenceRes.records) {
+      const k = r.get("influence") as string | null;
+      if (k != null) byInfluence[k] = Number(r.get("n") ?? 0);
+    }
+
+    // 3. byCompliance.
+    const complianceRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE c.retrieved_at >= datetime($since)
+        RETURN c.compliance AS compliance, count(c) AS n
+      `,
+      { since },
+    );
+    const byCompliance: Record<string, number> = {};
+    for (const r of complianceRes.records) {
+      const k = r.get("compliance") as string | null;
+      if (k != null) byCompliance[k] = Number(r.get("n") ?? 0);
+    }
+
+    // 4. Daily series, grouped by UTC calendar day; zero-filled in JS.
+    const dailyRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE c.retrieved_at >= datetime($since)
+        RETURN
+          toString(date(c.retrieved_at)) AS day,
+          count(c) AS citations,
+          count(CASE WHEN c.compliance = 'VIOLATION' THEN 1 END) AS violations
+      `,
+      { since },
+    );
+    const dailyByDay = new Map<
+      string,
+      { citations: number; violations: number }
+    >();
+    for (const r of dailyRes.records) {
+      const day = r.get("day") as string | null;
+      if (day != null) {
+        dailyByDay.set(day, {
+          citations: Number(r.get("citations") ?? 0),
+          violations: Number(r.get("violations") ?? 0),
+        });
+      }
+    }
+    const daily: CitationStats["daily"] = [];
+    for (let offset = -(args.days - 1); offset <= 0; offset += 1) {
+      const key = utcDayKey(now, offset);
+      const hit = dailyByDay.get(key);
+      daily.push({
+        date: key,
+        citations: hit?.citations ?? 0,
+        violations: hit?.violations ?? 0,
+      });
+    }
+
+    // 5. Per-memory aggregation over the window — computed ONCE and sliced in JS
+    //    into the three memory lists, so they can never disagree on a memory's
+    //    numbers.
+    const memRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})-[:OF]->(m:AgentMemory)
+        WHERE c.retrieved_at >= datetime($since)
+        RETURN
+          m.id AS memoryId,
+          coalesce(m.publicId, m.id) AS publicId,
+          m.lesson AS lesson,
+          coalesce(m.memory_class, 'OBSERVATION') AS memoryClass,
+          coalesce(m.memory_kind, m.kind, 'constraint') AS memoryKind,
+          count(c) AS citationCount,
+          count(CASE WHEN c.influence = 'DECISIVE' THEN 1 END) AS decisiveCount,
+          count(CASE WHEN c.influence = 'CONTRIBUTING' THEN 1 END) AS contributingCount,
+          count(CASE WHEN c.influence = 'CONSIDERED' THEN 1 END) AS consideredCount,
+          count(CASE WHEN c.influence = 'IGNORED' THEN 1 END) AS ignoredCount,
+          count(CASE WHEN c.compliance = 'VIOLATION' THEN 1 END) AS violationCount
+      `,
+      { since },
+    );
+    const memStats = memRes.records.map(memoryStatFromRecord);
+    const take = args.limit;
+
+    const topMemories = [...memStats]
+      .sort(
+        (a, b) =>
+          b.citationCount - a.citationCount ||
+          b.decisiveCount - a.decisiveCount,
+      )
+      .slice(0, take);
+
+    const leastUsefulMemories = memStats
+      .filter(
+        (m) =>
+          m.citationCount >= 3 &&
+          m.decisiveCount === 0 &&
+          m.contributingCount === 0,
+      )
+      .sort((a, b) => b.citationCount - a.citationCount)
+      .slice(0, take);
+
+    const mostViolatedRules = memStats
+      .filter(
+        (m) =>
+          (m.memoryClass === "RULE" || m.memoryClass === "FACT") &&
+          m.violationCount >= 1,
+      )
+      .sort((a, b) => b.violationCount - a.violationCount)
+      .slice(0, take);
+
+    // 6. Top non-memory graph nodes, resolved server-side to the friendly ref
+    //    shape (never a bare id).
+    const nodeRes = await s.run(
+      /* cypher */ `
+        MATCH (c:Citation {orgId: $orgId, workspaceId: $workspaceId})-[:OF]->(n:GraphNode)
+        WHERE c.retrieved_at >= datetime($since) AND NOT n:AgentMemory
+        WITH n,
+          count(c) AS citationCount,
+          count(CASE WHEN c.influence = 'DECISIVE' THEN 1 END) AS decisiveCount,
+          count(CASE WHEN c.influence = 'IGNORED' THEN 1 END) AS ignoredCount
+        RETURN
+          coalesce(n.publicId, n.id) AS id,
+          coalesce(n.label, n.type, 'Node') AS label,
+          coalesce(n.displayName, n.name, n.publicId, n.id) AS displayName,
+          n.properties AS properties,
+          citationCount, decisiveCount, ignoredCount
+        ORDER BY citationCount DESC
+        LIMIT $limit
+      `,
+      { since, limit },
+    );
+    const topNodes: CitedNodeStat[] = nodeRes.records.map((r) => ({
+      node: {
+        id: (r.get("id") as string | null) ?? null,
+        label: (r.get("label") as string) ?? "Node",
+        displayName: (r.get("displayName") as string) ?? "",
+        properties: parseNodeProps(r.get("properties")),
+      },
+      citationCount: Number(r.get("citationCount") ?? 0),
+      decisiveCount: Number(r.get("decisiveCount") ?? 0),
+      ignoredCount: Number(r.get("ignoredCount") ?? 0),
+    }));
+
+    return {
+      totals,
+      byInfluence,
+      byCompliance,
+      daily,
+      topMemories,
+      leastUsefulMemories,
+      mostViolatedRules,
+      topNodes,
+    };
+  } finally {
+    await s.close();
+  }
+}
+
 // ── Evidence (confidence recovery / refutation, schema §5/§7b) ──────────────
 
 export interface AttachEvidenceArgs {
@@ -1105,7 +1580,9 @@ export interface ExecutionLineageResult {
  * `:SourceFile` neighbours are org-scoped (not workspace-scoped), reached only
  * via the tenant-scoped execution's edges, per docs/specs on file lineage.
  */
-export async function getExecutionLineage(executionId: string): Promise<ExecutionLineageResult> {
+export async function getExecutionLineage(
+  executionId: string,
+): Promise<ExecutionLineageResult> {
   const s = scopedSession();
   try {
     const execResult = await s.run(

@@ -34,7 +34,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
 - [agent.memory.cite](agent.memory.cite.md) — Record memory citations within an execution (influence + rule compliance); maintains citation/influence/violation counters
 - [agent.memory.citations.list](agent.memory.citations.list.md) — List an execution's memory citations, filterable by compliance (violations) or influence (what shaped output)
+- [agent.memory.citations.stats](agent.memory_citation.stats.md) — Workspace-wide citation analytics across executions: totals, influence/compliance breakdowns, a daily series, and top / least-useful / most-violated memories plus most-cited graph nodes
 - [agent.memory.delete](agent.memory.delete.md) — Permanently delete an AgentMemory node and its edges by id (destructive; prefer update to lower salience)
+- [agent.memory.demote](agent.memory.demote.md) — Demote a memory down the confidence ladder (FACT→RULE→OBSERVATION) with an auditable demotion event; clears enforcement on OBSERVATION and human confirmation when leaving FACT
 - [agent.memory.evidence.attach](agent.memory.evidence.attach.md) — Attach supporting/refuting evidence to a memory, adjusting confidence and refreshing the decay clock
 - [agent.memory.import.commit](agent.memory.import.commit.md) — Write confirmed two-axis draft memories into the workspace AgentMemory Neo4j graph; per-item error capture enables partial success on batch writes
 - [agent.memory.import.parse](agent.memory.import.parse.md) — Extract and classify atomic memories (class + kind) from markdown documents using the AI gateway; returns editable drafts without persisting
@@ -43,6 +45,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.memory.policy.write](agent.memory.policy.write.md) — Update the workspace memory decay policy (partial update of half-lives, thresholds, and decay floor)
 - [agent.memory.promote](agent.memory.promote.md) — Promote a memory up the confidence ladder (OBSERVATION→RULE→FACT) with an auditable promotion event; FACT requires human confirmation
 - [agent.memory.promotion.candidates](agent.memory.promotion.candidates.md) — Top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT
+- [agent.memory.promotion.dismiss](agent.memory_promotion.dismiss.md) — Dismiss a memory from the promotion-candidate queue (or restore it) so the next candidate fills the slot, without archiving the memory
+- [agent.memory.promotion.rationales](agent.memory_promotion.rationales.md) — Draft short, context-grounded rationales for a promotion/demotion via a low-cost model, with a deterministic fallback built from citation signals
 - [agent.memory.recall](agent.memory.recall.md) — Query ACTIVE AgentMemory nodes by semantic similarity with optional class/enforcement filters; recovers confidence on recall
 - [agent.memory.remember](agent.memory.remember.md) — Capture a free-text memory, inferring its kind and class unless pinned, then embed and write it to the workspace AgentMemory graph
 - [agent.memory.update](agent.memory.update.md) — Edit an AgentMemory in place (lesson, kind, source, confidence/enforcement, status), re-embedding when the lesson changes

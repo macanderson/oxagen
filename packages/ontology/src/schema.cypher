@@ -35,6 +35,7 @@ CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId I
 // already has execution_public_id above; these three are new node types.
 CREATE CONSTRAINT citation_id IF NOT EXISTS FOR (n:Citation) REQUIRE n.id IS UNIQUE;
 CREATE CONSTRAINT promotion_id IF NOT EXISTS FOR (n:Promotion) REQUIRE n.id IS UNIQUE;
+CREATE CONSTRAINT demotion_id IF NOT EXISTS FOR (n:Demotion) REQUIRE n.id IS UNIQUE;
 CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNIQUE;
 
 // New edge types (no Cypher DDL required; documented here for the registry):
@@ -42,6 +43,8 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 //   LOADED_SKILL         :AgentVersion -> :SkillVersion
 //   BRANCHED_TO_SUBAGENT :Message -> :Message (parent fanout to child)
 //   APPROVED_BY          :Execution -> :User (approval audit)
+//   PROMOTED             :Promotion -> :Memory (auditable class promotion)
+//   DEMOTED              :Demotion -> :Memory (auditable class demotion)
 
 // --- Org-scope range indexes for fast filtering ---
 // Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts
@@ -61,8 +64,12 @@ CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgI
 CREATE INDEX agent_memory_class_kind IF NOT EXISTS FOR (n:AgentMemory) ON (n.memory_class, n.memory_kind);
 CREATE INDEX agent_memory_status IF NOT EXISTS FOR (n:AgentMemory) ON (n.status);
 CREATE INDEX agent_memory_promotion_pressure IF NOT EXISTS FOR (n:AgentMemory) ON (n.memory_class, n.citation_count);
+// Dismissed candidates are excluded from the promotion window (listPromotionCandidates
+// filters `promotion_dismissed_at IS NULL`); index the marker so that filter is cheap.
+CREATE INDEX agent_memory_promotion_dismissed IF NOT EXISTS FOR (n:AgentMemory) ON (n.promotion_dismissed_at);
 CREATE INDEX citation_org IF NOT EXISTS FOR (n:Citation) ON (n.orgId);
 CREATE INDEX promotion_org IF NOT EXISTS FOR (n:Promotion) ON (n.orgId);
+CREATE INDEX demotion_org IF NOT EXISTS FOR (n:Demotion) ON (n.orgId);
 CREATE INDEX evidence_org IF NOT EXISTS FOR (n:Evidence) ON (n.orgId);
 
 // --- Ingestion pipeline — SourceConnection (fixed system node) ---
