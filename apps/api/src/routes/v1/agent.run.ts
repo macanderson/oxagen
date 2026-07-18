@@ -240,15 +240,30 @@ agentRunRoute.get("/:publicId/events", async (c) => {
         );
       }
 
-      try {
-        let lastSeq = after;
-        const initial = await runInTenantScope(scope, () =>
-          runStore.readEventsSince(run.runId, lastSeq),
-        );
-        for (const evt of initial) {
-          emitEvent(evt);
-          lastSeq = evt.seq;
+      // Drain every event after `fromSeq`, emitting each and returning the
+      // new last-seen seq. A single `readEventsSince` is page-capped
+      // (DEFAULT_READ_EVENTS_LIMIT rows), so one read only sees the whole
+      // backlog when it fits in a page — a long turn's text-delta stream can
+      // easily exceed that. Loop until a read comes back empty (each call
+      // advances the cursor) so replay/drain never silently truncate.
+      const runId = run.runId;
+      async function drainSince(fromSeq: number): Promise<number> {
+        let seq = fromSeq;
+        while (!closed) {
+          const batch = await runInTenantScope(scope, () =>
+            runStore.readEventsSince(runId, seq),
+          );
+          if (batch.length === 0) break;
+          for (const evt of batch) {
+            emitEvent(evt);
+            seq = evt.seq;
+          }
         }
+        return seq;
+      }
+
+      try {
+        let lastSeq = await drainSince(after);
 
         let status = run.status;
         let finalSummary: RunSummary | null = TERMINAL_RUN_STATUSES.has(status)
@@ -260,14 +275,9 @@ agentRunRoute.get("/:publicId/events", async (c) => {
           await sleep(ssePollIntervalMs, signal);
           if (closed) break;
 
-          const more = await runInTenantScope(scope, () =>
-            runStore.readEventsSince(run.runId, lastSeq),
-          );
-          for (const evt of more) {
-            emitEvent(evt);
-            lastSeq = evt.seq;
-          }
-          if (more.length > 0) lastActivityAt = Date.now();
+          const beforeSeq = lastSeq;
+          lastSeq = await drainSince(lastSeq);
+          if (lastSeq > beforeSeq) lastActivityAt = Date.now();
 
           const latest = await runInTenantScope(scope, () =>
             runStore.getRunByPublicId(publicId),
@@ -293,13 +303,10 @@ agentRunRoute.get("/:publicId/events", async (c) => {
           // tick status flips terminal). One more read, taken strictly after
           // the terminal observation, is guaranteed to see everything —
           // nothing is appended to agent_run_events after a terminal write.
-          const remaining = await runInTenantScope(scope, () =>
-            runStore.readEventsSince(run.runId, lastSeq),
-          );
-          for (const evt of remaining) {
-            emitEvent(evt);
-            lastSeq = evt.seq;
-          }
+          // `drainSince` loops until a read returns empty, so a terminal run
+          // with a >1-page backlog is fully emitted before `done` closes the
+          // stream (the client won't reconnect once it sees `done`).
+          lastSeq = await drainSince(lastSeq);
           write(`event: done\ndata: ${JSON.stringify(finalSummary)}\n\n`);
         }
       } catch (err) {
