@@ -1,6 +1,7 @@
 import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { buildWorkspaceTools } from "./tools";
 import { wrapToolsWithSpeculation } from "./speculate/index";
+import { wrapToolsWithDispatchGuard } from "./dispatch-guard";
 import { buildCodingCorePrompt } from "./prompt/system-prompt";
 import type {
   RunCodingAgentOptions,
@@ -205,6 +206,22 @@ export async function runCodingAgent(
   // what lets a SINGLE loop replace the old duplicate legacy loop: every entry
   // point injects its safety wiring here instead of maintaining a second engine.
   if (opts.extraTools) tools = { ...tools, ...opts.extraTools };
+  // Partitioned dispatch guard (agent-engine v2 Phase 0): the AI SDK runs a
+  // step's tool calls concurrently, unawaited and uncapped — this gate caps
+  // non-mutating concurrency at 8 and makes every mutating call an exclusive
+  // FIFO barrier (Stella driver semantics). Wrapped AFTER extraTools so
+  // mutating capability/MCP tools fence too, and BEFORE speculation so cache
+  // hits bypass the gate while real prefetch reads count against the cap.
+  // Default ON; option wins over the env kill switch.
+  const dispatchGuardEnabled =
+    opts.dispatchGuard ??
+    (process.env["OXAGEN_DISPATCH_GUARD"] !== "0" &&
+      process.env["OXAGEN_DISPATCH_GUARD"] !== "false");
+  if (dispatchGuardEnabled) {
+    tools = wrapToolsWithDispatchGuard(tools, {
+      mutatingToolNames: opts.mutatingToolNames,
+    });
+  }
   // Speculative tool execution (ADR-030): prefetch likely next reads into a
   // per-turn cache. Wrapped AFTER extraTools so a mutating MCP tool also
   // invalidates the cache, and BEFORE wrapTools so the caller's permission

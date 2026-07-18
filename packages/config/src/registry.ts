@@ -1866,6 +1866,23 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "1",
   },
+  OXAGEN_DISPATCH_GUARD: {
+    group: "CLI",
+    description:
+      "Partitioned tool dispatch kill switch (agent-engine v2 Phase 0 — ON by default). " +
+      "The engine gates a step's tool executions through a fair FIFO shared/exclusive gate: " +
+      "non-mutating tools run concurrently capped at 8, mutating tools " +
+      "(bash/write_file/edit_file plus MaterializedTools.mutatingToolNames) run as exclusive " +
+      "barriers in call order — instead of the AI SDK's unawaited, uncapped execution of every " +
+      "call. Set to '0'/'false' to disable. The RunCodingAgentOptions.dispatchGuard option " +
+      "wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
   OXAGEN_ALLOW_STDIO_MCP: {
     group: "CLI",
     description:

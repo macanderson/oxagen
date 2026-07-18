@@ -156,6 +156,12 @@ export interface MaterializedTools {
   // "agent_code_execute" → "agent.code.execute"). The route translates
   // tool-call stream events back to the real name for the UI.
   nameMap: Record<string, string>;
+  // Model-safe aliases of capabilities the engine's dispatch guard must
+  // serialize behind the exclusive barrier (see isMutatingCapability). Pass
+  // through to RunCodingAgentOptions.mutatingToolNames. External plugin/MCP
+  // tools are NOT classified here yet (unknown semantics ⇒ they keep the
+  // shared lane, the pre-guard status quo).
+  mutatingToolNames: string[];
 }
 
 // Provider tool-name constraint enforced by the Vercel AI Gateway (and the
@@ -263,6 +269,24 @@ function passesRisk(
   return (RISK_ORDER[capRisk] ?? 0) <= (RISK_ORDER[ceiling] ?? 0);
 }
 
+/**
+ * Concurrency class for the engine's dispatch guard (agent-engine v2
+ * Phase 0): a capability classified MUTATING runs behind the exclusive
+ * barrier instead of the shared (capped) read lane. Contracts have no
+ * first-class "mutates" flag yet — that is the Phase-3 `read_only` schema
+ * bit — so this is a conservative proxy over existing metadata: destructive
+ * sensitivity, high agent risk, or an approval requirement. Misclassifying a
+ * read as mutating only costs parallelism; the reverse costs correctness, so
+ * the proxy errs toward mutating.
+ */
+function isMutatingCapability(cap: AnyCapability): boolean {
+  return (
+    cap.sensitivity === "destructive" ||
+    cap.agent?.riskLevel === "high" ||
+    cap.agent?.requiresApproval === true
+  );
+}
+
 // Build the Vercel AI SDK tool map for a workspace turn. Filters by
 // allowlist + risk policy, never crosses tenant boundaries (the handler
 // itself enforces scope from CapabilityContext).
@@ -315,11 +339,15 @@ export async function materializeTools(
   const out: Record<string, Tool> = {};
   const nameMap: Record<string, string> = {};
 
+  const mutatingToolNames: string[] = [];
+
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in
   // principle map to one alias; disambiguate deterministically with a numeric
   // suffix so every tool stays addressable and the reverse map is exact.
-  function register(realName: string, toolDef: Tool): void {
+  // Returns the alias so callers can attach per-tool metadata (e.g. the
+  // dispatch guard's mutating classification) keyed the way the model calls it.
+  function register(realName: string, toolDef: Tool): string {
     let alias = toModelToolName(realName);
     if (nameMap[alias] !== undefined && nameMap[alias] !== realName) {
       let n = 2;
@@ -329,6 +357,7 @@ export async function materializeTools(
     }
     out[alias] = toolDef;
     nameMap[alias] = realName;
+    return alias;
   }
   // This is the tool-LIST filter only (UX layer). The kernel gate is the real
   // security enforcement boundary.
@@ -375,7 +404,7 @@ export async function materializeTools(
     }
     const riskLevel: "low" | "medium" | "high" = cap.agent?.riskLevel ?? "low";
     const requiresApproval = cap.agent?.requiresApproval === true;
-    register(
+    const alias = register(
       cap.name,
       tool({
         description: cap.description,
@@ -498,6 +527,7 @@ export async function materializeTools(
         },
       }),
     );
+    if (isMutatingCapability(cap)) mutatingToolNames.push(alias);
   }
   // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
@@ -788,5 +818,5 @@ export async function materializeTools(
   }
   // ── End installable-plugin tools ────────────────────────────────────────────
 
-  return { tools: out, nameMap };
+  return { tools: out, nameMap, mutatingToolNames };
 }

@@ -39,7 +39,10 @@ function makeTools(overrides: Partial<Record<string, Exec>> = {}): {
     },
   });
   const tools = {
-    read_file: make("read_file", async (i) => `content of ${(i as { path: string }).path}`),
+    read_file: make(
+      "read_file",
+      async (i) => `content of ${(i as { path: string }).path}`,
+    ),
     grep: make("grep", async () => "src/a.ts:1:hit\nsrc/b.ts:2:hit"),
     glob: make("glob", async () => "src/a.ts\nsrc/b.ts"),
     bash: make("bash", async () => "ok"),
@@ -57,12 +60,17 @@ describe("wrapToolsWithSpeculation — prediction and cache hits", () => {
   it("speculates grep hit files and serves the real follow-up from cache", async () => {
     const { tools, calls } = makeTools();
     let last: SpeculationStats | undefined;
-    const wrapped = wrapToolsWithSpeculation(tools, { onStats: (s) => (last = s) });
+    const wrapped = wrapToolsWithSpeculation(tools, {
+      onStats: (s) => (last = s),
+    });
 
     await run(wrapped, "grep", { pattern: "hit" });
     await settle();
     // Both hit files were prefetched against the raw executes.
-    expect(calls["read_file"]).toEqual([{ path: "src/a.ts" }, { path: "src/b.ts" }]);
+    expect(calls["read_file"]).toEqual([
+      { path: "src/a.ts" },
+      { path: "src/b.ts" },
+    ]);
 
     const result = await run(wrapped, "read_file", { path: "src/a.ts" });
     expect(result).toBe("content of src/a.ts");
@@ -89,7 +97,9 @@ describe("wrapToolsWithSpeculation — prediction and cache hits", () => {
       // Predict only from grep: an unconditional predictor would re-speculate
       // the same path AFTER the hit consumes its entry, double-counting reads.
       predictor: (obs) =>
-        obs.tool === "grep" ? [{ tool: "read_file", input: { path: "slow.ts" } }] : [],
+        obs.tool === "grep"
+          ? [{ tool: "read_file", input: { path: "slow.ts" } }]
+          : [],
     });
 
     await run(wrapped, "grep", { pattern: "hit" }); // launches the speculation
@@ -107,7 +117,9 @@ describe("wrapToolsWithSpeculation — prediction and cache hits", () => {
     });
     const wrapped = wrapToolsWithSpeculation(tools, {
       predictor: (obs) =>
-        obs.tool === "grep" ? [{ tool: "read_file", input: { path: "x.ts" } }] : [],
+        obs.tool === "grep"
+          ? [{ tool: "read_file", input: { path: "x.ts" } }]
+          : [],
     });
     await run(wrapped, "grep", { pattern: "hit" });
     await settle();
@@ -124,7 +136,10 @@ describe("wrapToolsWithSpeculation — prediction and cache hits", () => {
     const wrapped = wrapToolsWithSpeculation(tools, { predictor });
     await run(wrapped, "read_file", { path: "seed.ts" });
     await settle();
-    expect(calls["read_file"]).toEqual([{ path: "seed.ts" }, { path: "predicted.ts" }]);
+    expect(calls["read_file"]).toEqual([
+      { path: "seed.ts" },
+      { path: "predicted.ts" },
+    ]);
   });
 
   it("never speculates tools off the read-only allowlist", async () => {
@@ -147,7 +162,9 @@ describe("wrapToolsWithSpeculation — invalidation", () => {
   it("drops the whole cache when a mutating tool runs", async () => {
     const { tools, calls } = makeTools();
     let last: SpeculationStats | undefined;
-    const wrapped = wrapToolsWithSpeculation(tools, { onStats: (s) => (last = s) });
+    const wrapped = wrapToolsWithSpeculation(tools, {
+      onStats: (s) => (last = s),
+    });
 
     await run(wrapped, "grep", { pattern: "hit" });
     await settle(); // two entries cached
@@ -164,7 +181,9 @@ describe("wrapToolsWithSpeculation — invalidation", () => {
     const bashGate = new Promise<string>((r) => (releaseBash = r));
     const { tools, calls } = makeTools({ bash: () => bashGate });
     let last: SpeculationStats | undefined;
-    const wrapped = wrapToolsWithSpeculation(tools, { onStats: (s) => (last = s) });
+    const wrapped = wrapToolsWithSpeculation(tools, {
+      onStats: (s) => (last = s),
+    });
 
     const bashPending = run(wrapped, "bash", { command: "slow-mutation" });
     await run(wrapped, "grep", { pattern: "hit" }); // completes mid-mutation
@@ -236,15 +255,90 @@ describe("wrapToolsWithSpeculation — caps", () => {
     });
     await run(wrapped, "read_file", { path: "seed.ts" });
     await settle();
-    expect(calls["read_file"]).toEqual([{ path: "seed.ts" }, { path: "same.ts" }]);
+    expect(calls["read_file"]).toEqual([
+      { path: "seed.ts" },
+      { path: "same.ts" },
+    ]);
+  });
+});
+
+describe("wrapToolsWithSpeculation — code_graph (agent-engine v2 Phase 0)", () => {
+  // Self-contained ToolSet: code_graph answers in the platform row format so
+  // the default predictor can mine follow-up reads from it.
+  function makeGraphTools(): {
+    tools: ToolSet;
+    calls: Record<string, unknown[]>;
+  } {
+    const calls: Record<string, unknown[]> = { read_file: [], code_graph: [] };
+    const make = (name: string, fallback: Exec): { execute: Exec } => ({
+      execute: async (input: unknown, options: unknown) => {
+        calls[name]!.push(input);
+        return fallback(input, options);
+      },
+    });
+    const tools = {
+      read_file: make(
+        "read_file",
+        async (i) => `content of ${(i as { path: string }).path}`,
+      ),
+      code_graph: make(
+        "code_graph",
+        async () =>
+          "src/dep1.ts:5: function useA\nsrc/dep2.ts:9: function useB",
+      ),
+    } as unknown as ToolSet;
+    return { tools, calls };
+  }
+
+  it("prefetches the dependents query after a read and serves the model's follow-up from cache", async () => {
+    const { tools, calls } = makeGraphTools();
+    const wrapped = wrapToolsWithSpeculation(tools);
+
+    await run(wrapped, "read_file", { path: "src/a.ts" });
+    await settle();
+    // Deterministic impact prefetch — and ONLY that; semantic_search is never
+    // speculated (predictor-level exclusion, see predictor.test.ts).
+    expect(calls["code_graph"]).toEqual([
+      { operation: "dependents", query: "src/a.ts" },
+    ]);
+
+    const result = await run(wrapped, "code_graph", {
+      operation: "dependents",
+      query: "src/a.ts",
+    });
+    expect(result).toContain("src/dep1.ts");
+    expect(calls["code_graph"]).toHaveLength(1); // served from cache
+
+    // The served graph answer feeds the predictor in turn: the listed
+    // dependents get prefetched as reads (read → graph → read chaining).
+    await settle();
+    expect(calls["read_file"]).toEqual([
+      { path: "src/a.ts" },
+      { path: "src/dep1.ts" },
+      { path: "src/dep2.ts" },
+    ]);
+  });
+
+  it("does not invalidate the cache on a code_graph call (no longer treated as a mutation)", async () => {
+    const { tools, calls } = makeGraphTools();
+    const wrapped = wrapToolsWithSpeculation(tools);
+    await run(wrapped, "read_file", { path: "src/a.ts" }); // caches the dependents prefetch
+    await settle();
+    await run(wrapped, "code_graph", { operation: "search", query: "useA" }); // miss — executes
+    const before = calls["code_graph"]!.length;
+    await run(wrapped, "code_graph", {
+      operation: "dependents",
+      query: "src/a.ts",
+    });
+    expect(calls["code_graph"]).toHaveLength(before); // still a cache hit — nothing was dropped
   });
 });
 
 describe("speculationKey", () => {
   it("canonicalizes key order and drops undefined values", () => {
-    expect(speculationKey("read_file", { path: "a.ts", offset: undefined })).toBe(
-      speculationKey("read_file", { path: "a.ts" }),
-    );
+    expect(
+      speculationKey("read_file", { path: "a.ts", offset: undefined }),
+    ).toBe(speculationKey("read_file", { path: "a.ts" }));
     expect(speculationKey("grep", { pattern: "x", path: "src" })).toBe(
       speculationKey("grep", { path: "src", pattern: "x" }),
     );
