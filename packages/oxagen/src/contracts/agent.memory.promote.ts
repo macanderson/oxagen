@@ -40,20 +40,27 @@ export const agentMemoryPromote = registerCapability({
       .min(1)
       .max(100)
       .optional()
-      .describe("Enforcement (1-100) to set for a RULE; ignored for FACT (forced 100)"),
+      .describe(
+        "Enforcement (1-100) to set for a RULE; ignored for FACT (forced 100)",
+      ),
     rationale: z
       .string()
       .min(1)
       .max(1000)
-      .describe("Why this memory is being promoted"),
+      .optional()
+      .describe("Optional: why this memory is being promoted"),
     basedOnEvidenceIds: z
       .array(z.string())
       .max(50)
       .optional()
-      .describe("Evidence node ids supporting the promotion — creates :BASED_ON edges"),
+      .describe(
+        "Evidence node ids supporting the promotion — creates :BASED_ON edges",
+      ),
   }),
   output: agentMemoryRecordSchema,
 });
 
 export type AgentMemoryPromoteInput = z.output<typeof agentMemoryPromote.input>;
-export type AgentMemoryPromoteOutput = z.output<typeof agentMemoryPromote.output>;
+export type AgentMemoryPromoteOutput = z.output<
+  typeof agentMemoryPromote.output
+>;

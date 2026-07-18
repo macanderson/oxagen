@@ -82,6 +82,10 @@ import { agentMemoryPromotionCandidates } from "./agent.memory_promotion.list";
 import { agentMemoryCite } from "./agent.memory.cite";
 import { agentMemoryEvidenceAttach } from "./agent.memory_evidence.attach";
 import { agentMemoryCitationsList } from "./agent.memory_citation.list";
+import { agentMemoryCitationStats } from "./agent.memory_citation.stats";
+import { agentMemoryDemote } from "./agent.memory.demote";
+import { agentMemoryPromotionDismiss } from "./agent.memory_promotion.dismiss";
+import { agentMemoryPromotionRationales } from "./agent.memory_promotion.rationales";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
 import { agentPlanGet } from "./agent.plan.get";
@@ -590,6 +594,10 @@ export {
   agentMemoryCite,
   agentMemoryEvidenceAttach,
   agentMemoryCitationsList,
+  agentMemoryCitationStats,
+  agentMemoryDemote,
+  agentMemoryPromotionDismiss,
+  agentMemoryPromotionRationales,
   agentPlanApprove,
   agentPlanCreate,
   agentPlanGet,
@@ -939,6 +947,10 @@ export const contracts = [
   agentMemoryCite,
   agentMemoryEvidenceAttach,
   agentMemoryCitationsList,
+  agentMemoryCitationStats,
+  agentMemoryDemote,
+  agentMemoryPromotionDismiss,
+  agentMemoryPromotionRationales,
   agentPlanApprove,
   agentPlanCreate,
   agentPlanGet,
