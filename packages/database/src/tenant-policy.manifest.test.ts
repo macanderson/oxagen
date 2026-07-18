@@ -198,7 +198,10 @@ describe("tenant policy manifest", () => {
     //      billing.invoice_line_items. Lowering the pin for REMOVED tables is
     //      the legitimate direction — the ratchet exists to stop tables gaining
     //      org_id without a policy entry, not to keep dead tables alive.
-    expect(POLICY_MANIFEST.length).toBe(92);
+    // 94 = 92 + agent.agent_runs + agent.agent_run_events (durable-run schema,
+    //      agent-engine v2 Phase 2a: orgScopeMixin + forced tenant_isolation
+    //      RLS, 20260804100000_agent_runs_durable_schema.sql).
+    expect(POLICY_MANIFEST.length).toBe(94);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

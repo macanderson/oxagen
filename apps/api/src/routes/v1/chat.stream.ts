@@ -16,7 +16,7 @@ import {
   waitForApproval,
 } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -268,7 +268,7 @@ chatStreamRoute.post("/", async (c) => {
         // recalled block is injected per-turn by the engine AFTER the cached
         // system prefix (ADR-021 §2/§8), never into the system block.
         const [
-          { tools: agentTools, nameMap: toolNameMap },
+          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
           recalledMemory,
         ] = await runInTenantScope(
@@ -439,7 +439,7 @@ chatStreamRoute.post("/", async (c) => {
         // attribute to the API surface, matching the prior telemetry.
         const ai = createPlatformAgentAi(capCtx, messageId, "api");
 
-        const result = await runCodingAgent({
+        const result = await executeTurn("api-chat", {
           ai,
           instruction: content,
           history: historyForEngine,
@@ -466,6 +466,9 @@ chatStreamRoute.post("/", async (c) => {
           // No `workspace` ⇒ conversational mode: no filesystem tools; the
           // materialized invoke()-gated capability ToolSet is injected here.
           extraTools: agentTools,
+          // Mutating capability aliases serialize behind the engine's
+          // dispatch barrier (agent-engine v2 Phase 0).
+          mutatingToolNames,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency).
           memory: createRecalledMemoryProvider({

@@ -18,6 +18,7 @@
   "dependencies": {
     "@oxagen/agent": "workspace:*",
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/agent-runner": "workspace:*",
     "@oxagen/ai": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/code-graph": "workspace:*",

@@ -303,6 +303,22 @@ export interface RunCodingAgentOptions {
    */
   speculativeTools?: boolean;
   /**
+   * Partitioned tool dispatch (agent-engine v2 Phase 0): cap non-mutating
+   * tool concurrency at 8 and serialize mutating tools behind an exclusive
+   * FIFO barrier, instead of the AI SDK's unawaited, uncapped execution of
+   * every call in a step. Default ON; this option wins over the
+   * OXAGEN_DISPATCH_GUARD kill switch (env value "0"/"false" disables).
+   */
+  dispatchGuard?: boolean;
+  /**
+   * Tool names serialized behind the exclusive barrier IN ADDITION to the
+   * built-in workspace mutators (bash/write_file/edit_file). Callers that
+   * materialize capability tools pass their mutating capability aliases here
+   * (`MaterializedTools.mutatingToolNames`); MCP extras a caller knows to
+   * mutate belong here too. Unlisted tools keep shared (capped) concurrency.
+   */
+  mutatingToolNames?: readonly string[];
+  /**
    * Observer for speculation cache stats (predicted/hits/misses/wasted/
    * invalidations), fired with a snapshot after every cache event. For trace
    * and eval wiring; omitted ⇒ no observation overhead.

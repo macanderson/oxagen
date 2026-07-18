@@ -63,3 +63,7 @@ export * from "./verify";
 // reads while it thinks; read-only allowlist, whole-cache invalidation on
 // any mutation. Exported so surfaces can inject predictors / observe stats.
 export * from "./speculate/index";
+
+// Partitioned tool dispatch (agent-engine v2 Phase 0) — capped shared
+// concurrency for reads, exclusive FIFO barrier for mutating tools.
+export * from "./dispatch-guard";

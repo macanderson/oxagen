@@ -25,6 +25,7 @@ import { resellerRoute } from "./routes/v1/reseller";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
+import { agentRunRoute } from "./routes/v1/agent.run";
 import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
 import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
@@ -437,6 +438,11 @@ orgScoped.route("/conversations/attachments", conversationAttachmentAddRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
+// Durable-run API (agent-engine v2 Phase 2 integration) — flag-gated behind
+// OXAGEN_DURABLE_RUNS; every route under /runs 404s until that var is "1"/
+// "true" (packages/config/src/registry.ts). Enqueue/status/resumable-SSE/
+// cancel over @oxagen/agent-runner's RunStore, not the capability kernel.
+orgScoped.route("/runs", agentRunRoute);
 // Durable sandbox sessions (clone → build → snapshot → PR), org+workspace scoped.
 orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
 orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);

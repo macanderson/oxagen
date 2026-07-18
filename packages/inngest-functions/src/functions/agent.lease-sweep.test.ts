@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   // Per-test canned SELECT results, keyed by a marker in the SQL text.
   expiredRuns: [] as unknown[],
   expiredSteps: [] as unknown[],
+  expiredAgentRuns: [] as unknown[],
   stuckFanouts: [] as unknown[],
   stuckExecutions: [] as unknown[],
   executedSql: [] as string[],
@@ -50,7 +51,11 @@ vi.mock("../logger", () => ({
 // the executor module's full dependency chain (kernel, tenancy, drizzle ops).
 vi.mock("./agent.execute-subagent", () => ({
   deriveFanoutStatus: (completed: number, total: number, anyFailed: boolean) =>
-    completed === total ? "completed" : anyFailed && completed === 0 ? "failed" : "partial",
+    completed === total
+      ? "completed"
+      : anyFailed && completed === 0
+        ? "failed"
+        : "partial",
 }));
 
 // ── Capture handler ───────────────────────────────────────────────────────────
@@ -59,7 +64,10 @@ type StepCtx = {
   sendEvent: ReturnType<typeof vi.fn>;
 };
 
-type HandlerFn = (ctx: { step: StepCtx; event: { data: unknown } }) => Promise<unknown>;
+type HandlerFn = (ctx: {
+  step: StepCtx;
+  event: { data: unknown };
+}) => Promise<unknown>;
 
 let sweepHandler: HandlerFn | null = null;
 
@@ -78,11 +86,20 @@ function makeFakeTx() {
     execute: vi.fn().mockImplementation((query: { text: string }) => {
       mocks.executedSql.push(query.text);
       const text = query.text;
-      if (text.includes("FROM agent.subagent_runs") && text.includes("SELECT")) {
+      if (
+        text.includes("FROM agent.subagent_runs") &&
+        text.includes("SELECT")
+      ) {
         return Promise.resolve(mocks.expiredRuns);
       }
-      if (text.includes("FROM agent.agent_execution_steps") && text.includes("SELECT")) {
+      if (
+        text.includes("FROM agent.agent_execution_steps") &&
+        text.includes("SELECT")
+      ) {
         return Promise.resolve(mocks.expiredSteps);
+      }
+      if (text.includes("FROM agent.agent_runs") && text.includes("SELECT")) {
+        return Promise.resolve(mocks.expiredAgentRuns);
       }
       if (text.includes("FROM agent.subagent_fanouts f")) {
         return Promise.resolve(mocks.stuckFanouts);
@@ -90,7 +107,10 @@ function makeFakeTx() {
       if (text.includes("FROM agent.agent_executions e")) {
         return Promise.resolve(mocks.stuckExecutions);
       }
-      if (text.includes("UPDATE agent.subagent_fanouts") || text.includes("UPDATE agent.agent_executions")) {
+      if (
+        text.includes("UPDATE agent.subagent_fanouts") ||
+        text.includes("UPDATE agent.agent_executions")
+      ) {
         return Promise.resolve([{ id: "finalized" }]);
       }
       return Promise.resolve([]);
@@ -129,6 +149,21 @@ function expiredStep(id: string, attempts: number) {
   };
 }
 
+function expiredAgentRun(
+  id: string,
+  attempts: number,
+  cancelRequested = false,
+) {
+  return {
+    id,
+    org_id: "org-1",
+    workspace_id: "ws-1",
+    attempts,
+    claimed_by: "dead-worker",
+    cancel_requested: cancelRequested,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("agentLeaseSweep handler", () => {
@@ -136,23 +171,32 @@ describe("agentLeaseSweep handler", () => {
     vi.clearAllMocks();
     mocks.expiredRuns = [];
     mocks.expiredSteps = [];
+    mocks.expiredAgentRuns = [];
     mocks.stuckFanouts = [];
     mocks.stuckExecutions = [];
     mocks.executedSql.length = 0;
     mocks.insertEvents.mockResolvedValue(undefined);
     mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 0 });
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(makeFakeTx()));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(makeFakeTx()),
+    );
   });
 
   it("no-ops cleanly on an empty sweep", async () => {
     const step = makeStep();
-    const result = (await sweepHandler!({ step, event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step,
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result).toMatchObject({
       runsRequeued: 0,
       runsFailedAtCap: 0,
       stepsRequeued: 0,
       stepsFailedAtCap: 0,
+      agentRunsRequeued: 0,
+      agentRunsFailedAtCap: 0,
+      agentRunsCancelled: 0,
       fanoutsFinalized: 0,
       executionsFinalized: 0,
       fileLocksSwept: 0,
@@ -166,7 +210,10 @@ describe("agentLeaseSweep handler", () => {
   it("sweeps expired agent file locks and reports the count", async () => {
     mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 3 });
 
-    const result = (await sweepHandler!({ step: makeStep(), event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(mocks.sweepExpiredFileLocks).toHaveBeenCalledOnce();
     expect(result.fileLocksSwept).toBe(3);
@@ -175,7 +222,10 @@ describe("agentLeaseSweep handler", () => {
   it("swallows a sweepExpiredFileLocks failure without failing the rest of the sweep", async () => {
     mocks.sweepExpiredFileLocks.mockRejectedValue(new Error("neo4j down"));
 
-    const result = (await sweepHandler!({ step: makeStep(), event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result.fileLocksSwept).toBe(0);
     expect(mocks.logger.warn).toHaveBeenCalledWith(
@@ -187,12 +237,20 @@ describe("agentLeaseSweep handler", () => {
   it("requeues expired runs below the cap and fails runs at the cap", async () => {
     mocks.expiredRuns = [expiredRun("r-1", 1), expiredRun("r-2", 3)];
 
-    const result = (await sweepHandler!({ step: makeStep(), event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result.runsRequeued).toBe(1);
     expect(result.runsFailedAtCap).toBe(1);
-    const requeueSql = mocks.executedSql.find((s) => s.includes("SET status = 'pending'") && s.includes("subagent_runs"));
-    const failSql = mocks.executedSql.find((s) => s.includes("lease expired after") && s.includes("subagent_runs"));
+    const requeueSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'pending'") && s.includes("subagent_runs"),
+    );
+    const failSql = mocks.executedSql.find(
+      (s) => s.includes("lease expired after") && s.includes("subagent_runs"),
+    );
     expect(requeueSql).toBeTruthy();
     expect(failSql).toBeTruthy();
   });
@@ -235,11 +293,21 @@ describe("agentLeaseSweep handler", () => {
 
   it("backstop-finalizes a stuck fanout and emits the completion event", async () => {
     mocks.stuckFanouts = [
-      { id: "fan-9", org_id: "org-1", workspace_id: "ws-1", total: 2, completed: 1, failed: 1 },
+      {
+        id: "fan-9",
+        org_id: "org-1",
+        workspace_id: "ws-1",
+        total: 2,
+        completed: 1,
+        failed: 1,
+      },
     ];
 
     const step = makeStep();
-    const result = (await sweepHandler!({ step, event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step,
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result.fanoutsFinalized).toBe(1);
     expect(step.sendEvent).toHaveBeenCalledWith("backstop-fanout-completed", [
@@ -251,9 +319,14 @@ describe("agentLeaseSweep handler", () => {
   });
 
   it("backstop-finalizes a quiescent execution", async () => {
-    mocks.stuckExecutions = [{ id: "exec-9", org_id: "org-1", workspace_id: "ws-1", completed: 3 }];
+    mocks.stuckExecutions = [
+      { id: "exec-9", org_id: "org-1", workspace_id: "ws-1", completed: 3 },
+    ];
 
-    const result = (await sweepHandler!({ step: makeStep(), event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result.executionsFinalized).toBe(1);
   });
@@ -264,9 +337,14 @@ describe("agentLeaseSweep handler", () => {
     await sweepHandler!({ step: makeStep(), event: { data: {} } });
 
     expect(mocks.insertEvents).toHaveBeenCalledTimes(1);
-    const rows = mocks.insertEvents.mock.calls[0]![0] as Array<{ event_type: string; payload: string }>;
+    const rows = mocks.insertEvents.mock.calls[0]![0] as Array<{
+      event_type: string;
+      payload: string;
+    }>;
     const expired = rows.filter((r) => r.event_type === "agent.lease.expired");
-    const reclaimed = rows.filter((r) => r.event_type === "agent.task.reclaimed");
+    const reclaimed = rows.filter(
+      (r) => r.event_type === "agent.task.reclaimed",
+    );
     expect(expired).toHaveLength(2);
     expect(reclaimed).toHaveLength(1);
     expect(JSON.parse(reclaimed[0]!.payload)).toMatchObject({
@@ -282,9 +360,144 @@ describe("agentLeaseSweep handler", () => {
     mocks.expiredRuns = [expiredRun("r-1", 1)];
     mocks.insertEvents.mockRejectedValue(new Error("clickhouse down"));
 
-    const result = (await sweepHandler!({ step: makeStep(), event: { data: {} } })) as Record<string, number>;
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
 
     expect(result.runsRequeued).toBe(1);
     expect(mocks.logger.warn).toHaveBeenCalled();
+  });
+
+  // ── agent.agent_runs (agent-engine v2 Phase 2 durable-run worker pool) ──────
+
+  it("requeues expired agent_runs below the cap and fails agent_runs at the cap", async () => {
+    mocks.expiredAgentRuns = [
+      expiredAgentRun("ar-1", 1),
+      expiredAgentRun("ar-2", 3),
+    ];
+
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.agentRunsRequeued).toBe(1);
+    expect(result.agentRunsFailedAtCap).toBe(1);
+    expect(result.agentRunsCancelled).toBe(0);
+    const requeueSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'pending'") && s.includes("agent.agent_runs"),
+    );
+    const failSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("lease expired after") && s.includes("agent.agent_runs"),
+    );
+    expect(requeueSql).toBeTruthy();
+    expect(failSql).toBeTruthy();
+  });
+
+  // A run can be both lease-expired AND cancel_requested (the caller cancelled
+  // while the worker holding it had already died). It must resolve to
+  // 'cancelled', never 'pending' — requeuing it would resurrect a run the
+  // caller already gave up on.
+  it("sweeps a cancel_requested expired agent_run to cancelled instead of requeuing or failing it", async () => {
+    mocks.expiredAgentRuns = [expiredAgentRun("ar-3", 1, true)];
+
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.agentRunsCancelled).toBe(1);
+    expect(result.agentRunsRequeued).toBe(0);
+    expect(result.agentRunsFailedAtCap).toBe(0);
+    const cancelSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'cancelled'") &&
+        s.includes("agent.agent_runs"),
+    );
+    expect(cancelSql).toBeTruthy();
+    expect(cancelSql).toContain("error = NULL");
+  });
+
+  // A row that revived mid-sweep (a live worker renewed the lease, or a
+  // cancel landed between the SELECT snapshot and the write) must not be
+  // clobbered — every UPDATE re-guards on the exact predicate that put the
+  // row in its bucket.
+  it("re-guards every agent_runs UPDATE on status/lease/cancel_requested", async () => {
+    mocks.expiredAgentRuns = [
+      expiredAgentRun("ar-1", 1),
+      expiredAgentRun("ar-2", 3),
+      expiredAgentRun("ar-3", 1, true),
+    ];
+
+    await sweepHandler!({ step: makeStep(), event: { data: {} } });
+
+    const requeueSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'pending'") && s.includes("agent.agent_runs"),
+    )!;
+    const failSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("lease expired after") && s.includes("agent.agent_runs"),
+    )!;
+    const cancelSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'cancelled'") &&
+        s.includes("agent.agent_runs"),
+    )!;
+
+    for (const guarded of [requeueSql, failSql]) {
+      expect(guarded).toContain("status = 'running'");
+      expect(guarded).toContain("lease_expires_at < now()");
+      expect(guarded).toContain("cancel_requested = false");
+    }
+    expect(cancelSql).toContain("status = 'running'");
+    expect(cancelSql).toContain("lease_expires_at < now()");
+    expect(cancelSql).toContain("cancel_requested = true");
+  });
+
+  it("emits agent.lease.expired for every expired agent_run and agent.task.reclaimed only for the requeued one", async () => {
+    mocks.expiredAgentRuns = [
+      expiredAgentRun("ar-1", 1),
+      expiredAgentRun("ar-2", 3),
+      expiredAgentRun("ar-3", 1, true),
+    ];
+
+    await sweepHandler!({ step: makeStep(), event: { data: {} } });
+
+    expect(mocks.insertEvents).toHaveBeenCalledTimes(1);
+    const rows = mocks.insertEvents.mock.calls[0]![0] as Array<{
+      event_type: string;
+      payload: string;
+    }>;
+    const agentRunRows = rows.filter(
+      (r) => (JSON.parse(r.payload) as { kind: string }).kind === "agent_run",
+    );
+    const expired = agentRunRows.filter(
+      (r) => r.event_type === "agent.lease.expired",
+    );
+    const reclaimed = agentRunRows.filter(
+      (r) => r.event_type === "agent.task.reclaimed",
+    );
+    expect(expired).toHaveLength(3);
+    expect(reclaimed).toHaveLength(1);
+    expect(JSON.parse(reclaimed[0]!.payload)).toMatchObject({
+      kind: "agent_run",
+      runId: "ar-1",
+      attempts: 1,
+    });
+  });
+
+  it("no-ops the agent_runs sweep cleanly when nothing is expired", async () => {
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.agentRunsRequeued).toBe(0);
+    expect(result.agentRunsFailedAtCap).toBe(0);
+    expect(result.agentRunsCancelled).toBe(0);
   });
 });

@@ -37,7 +37,7 @@ import {
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { parseMentions } from "@oxagen/ai/mentions";
-import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke, isCodeAgentType } from "@oxagen/oxagen";
@@ -971,7 +971,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
         const [
-          { tools: agentTools, nameMap: toolNameMap },
+          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
           skillIndex,
           pinnedSkillBodies,
@@ -1576,7 +1576,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
 
-        const result = await runCodingAgent({
+        const result = await executeTurn("chat", {
           ai,
           instruction: content,
           ...(codeWorkspace ? { workspace: codeWorkspace } : {}),
@@ -1659,6 +1659,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           maxRetries: CHAT_MAX_RETRIES,
           maxOverflowRetries: CHAT_MAX_OVERFLOW_RETRIES,
           extraTools: allTools,
+          // Mutating capability aliases run behind the engine's exclusive
+          // dispatch barrier (agent-engine v2 Phase 0) instead of the AI SDK's
+          // unbounded parallel execution.
+          mutatingToolNames,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency — C3). The
           // engine prepends its own "## Recalled context" heading before the

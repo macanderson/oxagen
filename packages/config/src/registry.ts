@@ -850,6 +850,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OXAGEN_WORKER_CONCURRENCY: {
+    group: "Inngest",
+    description:
+      "Simultaneous durable runs one @oxagen/agent-worker process drives (agent-engine v2 " +
+      "Phase 2c — docs/specs/agent-engine-v2/plan.md 'Phase 2 — Durable runs'). Grouped with " +
+      "Inngest: the worker pool claims runs via FOR UPDATE SKIP LOCKED + lease heartbeat while " +
+      "Inngest keeps dispatch/cancelOn/lease-sweep — the two jointly implement the durable-run " +
+      "system. Defaults to 2 (createAgentWorker's WorkerOptions.concurrency default) when unset " +
+      "or not a positive integer.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "2",
+  },
+  OXAGEN_WORKER_ID: {
+    group: "Inngest",
+    description:
+      "Claim/lease owner identity for one @oxagen/agent-worker process (agent-engine v2 Phase " +
+      "2c). Stamped as `claimed_by` on the durable-run row so a crashed worker's runs are " +
+      "identifiable and reclaimable. Defaults to `${os.hostname()}:${process.pid}` when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "worker-1:12345",
+  },
 
   // ── AI providers ──────────────────────────────────────────────────────────────
   BLOB_READ_WRITE_TOKEN: {
@@ -1311,6 +1340,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { "*": "true" },
+  },
+  OXAGEN_DURABLE_RUNS: {
+    group: "Observability",
+    description:
+      'Feature flag — set "1" or "true" to mount the durable-run API (POST /runs, ' +
+      "GET /runs/:publicId, GET /runs/:publicId/events resumable SSE, POST /runs/:publicId/cancel) " +
+      "under apps/api's /v1/:org_slug/:workspace_slug scope (agent-engine v2 Phase 2 integration, " +
+      "docs/specs/agent-engine-v2/plan.md). OFF by default: every route under /runs 404s until this " +
+      "is set. Enqueues via @oxagen/agent-runner's RunStore (agent.agent_runs / agent.agent_run_events) " +
+      "— the durable worker that actually executes a claimed run is separate, dispatch-only wiring.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "false" },
   },
   MCP_PORT: {
     group: "Observability",
@@ -1859,6 +1904,23 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "re-doing the I/O. Read-only allowlist (read_file/grep/glob/list_dir); ANY other tool " +
       "call invalidates the whole cache. Set to '0'/'false' to disable. The " +
       "RunCodingAgentOptions.speculativeTools option wins over this var.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_DISPATCH_GUARD: {
+    group: "CLI",
+    description:
+      "Partitioned tool dispatch kill switch (agent-engine v2 Phase 0 — ON by default). " +
+      "The engine gates a step's tool executions through a fair FIFO shared/exclusive gate: " +
+      "non-mutating tools run concurrently capped at 8, mutating tools " +
+      "(bash/write_file/edit_file plus MaterializedTools.mutatingToolNames) run as exclusive " +
+      "barriers in call order — instead of the AI SDK's unawaited, uncapped execution of every " +
+      "call. Set to '0'/'false' to disable. The RunCodingAgentOptions.dispatchGuard option " +
+      "wins over this var.",
     secret: false,
     clientExposed: false,
     services: [],

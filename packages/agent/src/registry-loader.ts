@@ -21,6 +21,12 @@ export interface RegistryCapability {
     category?: string;
     requiresApproval?: boolean;
   };
+  /**
+   * Required on the underlying CapabilityDeclaration; optional here because
+   * this is a decoupled structural view. Read by the dispatch guard's
+   * mutating classification (materialize-tools isMutatingCapability).
+   */
+  sensitivity?: "low" | "medium" | "high" | "destructive";
   /** Zod schema or equivalent — typed as unknown to avoid coupling. */
   input?: unknown;
   surfaces?: readonly ("api" | "mcp" | "agent")[];

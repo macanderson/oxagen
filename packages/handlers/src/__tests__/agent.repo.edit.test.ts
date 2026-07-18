@@ -37,9 +37,9 @@ const mocks = vi.hoisted(() => {
   };
 
   // Controllable changedFiles stub — tests override this per-case
-  const changedFilesFn = vi.fn().mockReturnValue([
-    { path: "src/a.ts", content: "export const a = 1;" },
-  ]);
+  const changedFilesFn = vi
+    .fn()
+    .mockReturnValue([{ path: "src/a.ts", content: "export const a = 1;" }]);
 
   const GitHubWorkspaceMock = vi.fn().mockImplementation(() => ({
     changedFiles: changedFilesFn,
@@ -121,8 +121,13 @@ vi.mock("@oxagen/github", () => ({
   GitHubWorkspace: mocks.GitHubWorkspaceMock,
 }));
 
-vi.mock("@oxagen/agent-engine", () => ({
-  runTurn: mocks.runTurnFn,
+vi.mock("@oxagen/agent-runner", () => ({
+  // The handler enters the pipeline through the executePipelineTurn seam
+  // (agent-engine v2 Phase 1); the double keeps runTurn's one-argument
+  // contract by dropping the surface tag.
+  executePipelineTurn: vi.fn((_surface: string, opts: unknown) =>
+    mocks.runTurnFn(opts),
+  ),
 }));
 
 // PR #637 (modal-sandbox-workspace) rerouted the handler through a durable
@@ -143,7 +148,8 @@ vi.mock("@oxagen/sandbox", async (importOriginal) => {
 // their real (construction-only, no-network) implementations while the AI port
 // stays a fake to avoid selectModel/AI Gateway env deps.
 vi.mock("@oxagen/agent/adapters", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@oxagen/agent/adapters")>();
+  const actual =
+    await importOriginal<typeof import("@oxagen/agent/adapters")>();
   return { ...actual, createPlatformAgentAi: mocks.createPlatformAgentAiFn };
 });
 
@@ -250,7 +256,11 @@ describe("agent.repo.edit contract validation", () => {
       ],
     });
     expect(parsed.diffs).toHaveLength(1);
-    expect(parsed.diffs?.[0]).toMatchObject({ path: "src/a.ts", additions: 1, deletions: 1 });
+    expect(parsed.diffs?.[0]).toMatchObject({
+      path: "src/a.ts",
+      additions: 1,
+      deletions: 1,
+    });
   });
 
   it("output schema rejects a diffs entry missing required fields", () => {
@@ -272,8 +282,14 @@ describe("agent.repo.edit contract validation", () => {
 
 describe("agentRepoEditHandler — pipeline (runTurn)", () => {
   beforeEach(() => {
-    mocks.createBranch.mockResolvedValue({ ref: "refs/heads/oxagen-agent-12345678", sha: "abc" });
-    mocks.putFile.mockResolvedValue({ commitSha: "sha1", htmlUrl: "https://github.com/file" });
+    mocks.createBranch.mockResolvedValue({
+      ref: "refs/heads/oxagen-agent-12345678",
+      sha: "abc",
+    });
+    mocks.putFile.mockResolvedValue({
+      commitSha: "sha1",
+      htmlUrl: "https://github.com/file",
+    });
     mocks.openPullRequest.mockResolvedValue({
       number: 42,
       htmlUrl: "https://github.com/myorg/myrepo/pull/42",
@@ -357,8 +373,14 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
 
 describe("agentRepoEditHandler — happy path", () => {
   beforeEach(() => {
-    mocks.createBranch.mockResolvedValue({ ref: "refs/heads/oxagen-agent-12345678", sha: "abc" });
-    mocks.putFile.mockResolvedValue({ commitSha: "sha1", htmlUrl: "https://github.com/file" });
+    mocks.createBranch.mockResolvedValue({
+      ref: "refs/heads/oxagen-agent-12345678",
+      sha: "abc",
+    });
+    mocks.putFile.mockResolvedValue({
+      commitSha: "sha1",
+      htmlUrl: "https://github.com/file",
+    });
     mocks.openPullRequest.mockResolvedValue({
       number: 42,
       htmlUrl: "https://github.com/myorg/myrepo/pull/42",
@@ -383,7 +405,10 @@ describe("agentRepoEditHandler — happy path", () => {
   });
 
   it("uses a caller-supplied branchName when provided", async () => {
-    await agentRepoEditHandler({ ...BASE_INPUT, branchName: "my-custom-branch" }, ctx);
+    await agentRepoEditHandler(
+      { ...BASE_INPUT, branchName: "my-custom-branch" },
+      ctx,
+    );
 
     expect(mocks.createBranch).toHaveBeenCalledWith(
       expect.objectContaining({ branch: "my-custom-branch" }),
@@ -400,10 +425,18 @@ describe("agentRepoEditHandler — happy path", () => {
 
     expect(mocks.putFile).toHaveBeenCalledTimes(2);
     expect(mocks.putFile).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "src/a.ts", content: "// a", branch: "oxagen-agent-12345678" }),
+      expect.objectContaining({
+        path: "src/a.ts",
+        content: "// a",
+        branch: "oxagen-agent-12345678",
+      }),
     );
     expect(mocks.putFile).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "src/b.ts", content: "// b", branch: "oxagen-agent-12345678" }),
+      expect.objectContaining({
+        path: "src/b.ts",
+        content: "// b",
+        branch: "oxagen-agent-12345678",
+      }),
     );
   });
 
@@ -426,7 +459,11 @@ describe("agentRepoEditHandler — happy path", () => {
     // On the GitHub-API fallback path (no sandbox driver) PR #637 adds
     // execBackend: "github-api" plus a warning that shell execution was
     // unavailable — the sandbox path returns execBackend: "sandbox" and no warning.
-    const expectedDiff = diffFileContents("src/a.ts", "", "export const a = 1;");
+    const expectedDiff = diffFileContents(
+      "src/a.ts",
+      "",
+      "export const a = 1;",
+    );
     expect(result).toEqual({
       prNumber: 42,
       prUrl: "https://github.com/myorg/myrepo/pull/42",
@@ -435,9 +472,7 @@ describe("agentRepoEditHandler — happy path", () => {
       summary: "Refactored src/a.ts as requested.",
       execBackend: "github-api",
       diffs: [expectedDiff],
-      warnings: [
-        expect.stringContaining("Shell execution was unavailable"),
-      ],
+      warnings: [expect.stringContaining("Shell execution was unavailable")],
     });
   });
 
@@ -448,7 +483,9 @@ describe("agentRepoEditHandler — happy path", () => {
   // agent's final content.
   describe("diffs output", () => {
     it("fetches prior content from the base branch and computes real patch text + counts", async () => {
-      mocks.ghClient.getFileContent.mockResolvedValueOnce("export const a = 0;");
+      mocks.ghClient.getFileContent.mockResolvedValueOnce(
+        "export const a = 0;",
+      );
 
       const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
@@ -478,11 +515,16 @@ describe("agentRepoEditHandler — happy path", () => {
       const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
       expect(result.diffs).toHaveLength(2);
-      expect(result.diffs?.map((d) => d.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
+      expect(result.diffs?.map((d) => d.path).sort()).toEqual([
+        "src/a.ts",
+        "src/b.ts",
+      ]);
     });
 
     it("omits diffs (falls back to path-only) when diff computation throws", async () => {
-      mocks.ghClient.getFileContent.mockRejectedValueOnce(new Error("network blip"));
+      mocks.ghClient.getFileContent.mockRejectedValueOnce(
+        new Error("network blip"),
+      );
 
       const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
@@ -511,14 +553,20 @@ describe("agentRepoEditHandler — happy path", () => {
   it("creates the AgentAi port with messageId from ctx.messageId when available", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);
 
-    expect(mocks.createPlatformAgentAiFn).toHaveBeenCalledWith(ctx, ctx.messageId);
+    expect(mocks.createPlatformAgentAiFn).toHaveBeenCalledWith(
+      ctx,
+      ctx.messageId,
+    );
   });
 
   it("falls back to ctx.requestId when ctx.messageId is null", async () => {
     const ctxNoMessage: CapabilityContext = { ...ctx, messageId: null };
     await agentRepoEditHandler(BASE_INPUT, ctxNoMessage);
 
-    expect(mocks.createPlatformAgentAiFn).toHaveBeenCalledWith(ctxNoMessage, ctx.requestId);
+    expect(mocks.createPlatformAgentAiFn).toHaveBeenCalledWith(
+      ctxNoMessage,
+      ctx.requestId,
+    );
   });
 });
 

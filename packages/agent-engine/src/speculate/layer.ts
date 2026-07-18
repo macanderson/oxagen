@@ -37,10 +37,19 @@ export const SPECULATABLE_TOOLS = new Set([
   "grep",
   "glob",
   "list_dir",
+  // code_graph reads the code-graph index, not the live filesystem, so it is
+  // cache-safe under the same conservative rule as the reads above (any
+  // mutation drops the whole cache; the index itself only re-syncs between
+  // turns). Prefetch discipline lives in the predictor: only deterministic
+  // operations are ever PREDICTED — `semantic_search` is never speculated
+  // (each prefetch would spend an embedding on a prediction that may never be
+  // consumed) — though a repeated identical model-issued call of any
+  // operation may still be served from cache.
+  "code_graph",
 ]);
 
 /** Known-pure tools that neither mutate the filesystem nor get speculated. */
-const PURE_TOOLS = new Set(["ask_user", "code_graph"]);
+const PURE_TOOLS = new Set(["ask_user"]);
 
 export interface SpeculationStats {
   /** Speculative executions launched. */
@@ -77,7 +86,8 @@ export function speculationKey(tool: string, input: unknown): string {
 }
 
 function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "undefined";
+  if (value === null || typeof value !== "object")
+    return JSON.stringify(value) ?? "undefined";
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, v]) => v !== undefined)
@@ -135,7 +145,10 @@ export function wrapToolsWithSpeculation(
       .then(() => execute(input, {}))
       // Tools resolve error STRINGS rather than throwing; a throw here would
       // be a wrapper bug — surface it in-band exactly like the tools do.
-      .catch((err: unknown) => `Error: ${err instanceof Error ? err.message : String(err)}`);
+      .catch(
+        (err: unknown) =>
+          `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
     void run.then(() => {
       speculationsInFlight--;
     });
