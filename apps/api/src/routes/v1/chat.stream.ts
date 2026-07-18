@@ -16,7 +16,7 @@ import {
   waitForApproval,
 } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -439,7 +439,7 @@ chatStreamRoute.post("/", async (c) => {
         // attribute to the API surface, matching the prior telemetry.
         const ai = createPlatformAgentAi(capCtx, messageId, "api");
 
-        const result = await runCodingAgent({
+        const result = await executeTurn("api-chat", {
           ai,
           instruction: content,
           history: historyForEngine,

@@ -2,11 +2,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { createGitHubClient, GitHubWorkspace } from "@oxagen/github";
 import { isSandboxAvailable } from "@oxagen/sandbox";
-import { runTurn } from "@oxagen/agent-engine";
-import type {
-  MarketRoutingPolicy,
-  RoutingStatRow,
-} from "@oxagen/agent-engine";
+import { executePipelineTurn } from "@oxagen/agent-runner";
+import type { MarketRoutingPolicy, RoutingStatRow } from "@oxagen/agent-engine";
 import { readRoutingStats, recordRouterOutcome } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
@@ -20,13 +17,16 @@ import {
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
 import { loadEffectiveRoutingPolicy } from "./lib/routing-policy";
-import { diffFileContents, splitCombinedDiff, type FileDiff } from "./lib/unified-diff";
+import {
+  diffFileContents,
+  splitCombinedDiff,
+  type FileDiff,
+} from "./lib/unified-diff";
 import { logger } from "./logger";
 
-export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = async (
-  input,
-  ctx,
-) => {
+export const agentRepoEditHandler: CapabilityHandler<
+  typeof agentRepoEdit
+> = async (input, ctx) => {
   // 1. Resolve the GitHub token for this workspace.
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
@@ -99,7 +99,7 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
   //    instead of a BYOK gateway key.
   // The kernel wraps this handler in runInTenantScope so Neo4j / embed calls
   // inside the adapters inherit the active tenant scope via AsyncLocalStorage.
-  const result = await runTurn({
+  const result = await executePipelineTurn("repo-edit", {
     prompt: input.instruction,
     workspace: ws,
     ai,
@@ -144,7 +144,10 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     // telemetry event for its own recall failures; this is the belt for any
     // engine-level failure that reaches the injected sink.
     onError: ({ phase, error }) =>
-      logger.error({ err: error, phase, orgId: ctx.orgId }, "agent-engine non-fatal error"),
+      logger.error(
+        { err: error, phase, orgId: ctx.orgId },
+        "agent-engine non-fatal error",
+      ),
     // Market-router policy + pre-fetched stats (flag-gated; undefined ⇒ off).
     routingPolicy,
     routingStats,
@@ -197,8 +200,12 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     try {
       if (sandboxWs) {
         const rawDiff = await sandboxWs.diff();
-        const byPath = new Map(splitCombinedDiff(rawDiff).map((d) => [d.path, d]));
-        diffs = changed.map((f) => byPath.get(f.path)).filter((d): d is FileDiff => d !== undefined);
+        const byPath = new Map(
+          splitCombinedDiff(rawDiff).map((d) => [d.path, d]),
+        );
+        diffs = changed
+          .map((f) => byPath.get(f.path))
+          .filter((d): d is FileDiff => d !== undefined);
       } else {
         diffs = await Promise.all(
           changed.map(async (f) => {
@@ -221,7 +228,8 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     }
 
     // 8. Derive the branch name (provided or auto-generated from the request id).
-    const branch = input.branchName ?? `oxagen-agent-${ctx.requestId.slice(0, 8)}`;
+    const branch =
+      input.branchName ?? `oxagen-agent-${ctx.requestId.slice(0, 8)}`;
 
     // 9. Create the branch on GitHub.
     await gh.createBranch({
