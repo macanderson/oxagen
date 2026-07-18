@@ -12,8 +12,30 @@
 
 import * as React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import {
+  render as rtlRender,
+  screen,
+  fireEvent,
+  cleanup,
+} from "@testing-library/react";
+import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { MemoriesClient } from "./memories-client";
+
+// MemoriesClient calls useToast() unconditionally (the dismiss-candidate
+// undo flow), which throws outside a <Toast.Provider>. Every render in this
+// file goes through this wrapper instead of the bare RTL render — RTL's
+// `wrapper` option re-applies automatically on `rerender()` too, so none of
+// the many call sites below need to know about toasts.
+function render(ui: React.ReactElement) {
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <ToastProvider>
+        {children}
+        <ToastViewport />
+      </ToastProvider>
+    ),
+  });
+}
 
 // next/navigation is not available in jsdom — stub useRouter so the component
 // mounts without throwing.
@@ -185,7 +207,9 @@ describe("MemoriesClient — initial render", () => {
       />,
     );
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Never commit directly to main — always open a PR."),
@@ -219,38 +243,25 @@ describe("MemoriesClient — initial render", () => {
   });
 
   it("renders a confidence meter with the correct aria-valuenow", () => {
-    render(
-      <MemoriesClient
-        {...baseProps}
-        initialRecords={[routineRecord]}
-      />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     // routineRecord confidenceScore = 90
     const meters = screen.getAllByRole("meter");
     expect(meters.length).toBeGreaterThan(0);
     // At least one meter has aria-valuenow of 90
-    const meter90 = meters.find((m) => m.getAttribute("aria-valuenow") === "90");
+    const meter90 = meters.find(
+      (m) => m.getAttribute("aria-valuenow") === "90",
+    );
     expect(meter90).toBeDefined();
   });
 
   it("renders the confidence percentage text", () => {
-    render(
-      <MemoriesClient
-        {...baseProps}
-        initialRecords={[routineRecord]}
-      />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     // confidenceScore = 90 → "90%"
     expect(screen.getAllByText("90%").length).toBeGreaterThan(0);
   });
 
   it("renders the nodeRef for a record", () => {
-    render(
-      <MemoriesClient
-        {...baseProps}
-        initialRecords={[routineRecord]}
-      />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     expect(screen.getByText("user:mac-anderson")).toBeInTheDocument();
   });
 });
@@ -261,9 +272,7 @@ describe("MemoriesClient — initial render", () => {
 
 describe("MemoriesClient — empty state", () => {
   it("renders the empty state when initialRecords is []", () => {
-    render(
-      <MemoriesClient {...baseProps} initialRecords={[]} total={0} />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[]} total={0} />);
     expect(screen.getByText("No memories yet")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -273,12 +282,8 @@ describe("MemoriesClient — empty state", () => {
   });
 
   it("does not render any record rows when initialRecords is []", () => {
-    render(
-      <MemoriesClient {...baseProps} initialRecords={[]} total={0} />,
-    );
-    expect(
-      screen.queryByText("Always run pnpm i"),
-    ).not.toBeInTheDocument();
+    render(<MemoriesClient {...baseProps} initialRecords={[]} total={0} />);
+    expect(screen.queryByText("Always run pnpm i")).not.toBeInTheDocument();
   });
 
   it("hides the stats row and filter/sort controls when there are no memories", () => {
@@ -311,7 +316,9 @@ describe("MemoriesClient — class filter", () => {
       />,
     );
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Never commit directly to main — always open a PR."),
@@ -338,7 +345,9 @@ describe("MemoriesClient — class filter", () => {
 
     // routineRecord (RULE) lesson should be hidden
     expect(
-      screen.queryByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.queryByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -356,7 +365,9 @@ describe("MemoriesClient — class filter", () => {
     fireEvent.click(factChip);
 
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Never commit directly to main — always open a PR."),
@@ -385,7 +396,9 @@ describe("MemoriesClient — kind filter", () => {
       screen.getByText("Never commit directly to main — always open a PR."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.queryByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).not.toBeInTheDocument();
   });
 });
@@ -408,12 +421,16 @@ describe("MemoriesClient — confidence filter", () => {
 
     // routineRecord confidenceScore = 90 → should remain visible
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
 
     // gotchaRecord confidenceScore = 45 → should be hidden
     expect(
-      screen.queryByText("tsx --env-file does NOT override a shell-exported DATABASE_URL."),
+      screen.queryByText(
+        "tsx --env-file does NOT override a shell-exported DATABASE_URL.",
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -425,10 +442,14 @@ describe("MemoriesClient — confidence filter", () => {
       />,
     );
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("tsx --env-file does NOT override a shell-exported DATABASE_URL."),
+      screen.getByText(
+        "tsx --env-file does NOT override a shell-exported DATABASE_URL.",
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -539,7 +560,9 @@ describe("MemoriesClient — text search filter", () => {
     fireEvent.change(searchInput, { target: { value: "pnpm" } });
 
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("Never commit directly to main — always open a PR."),
@@ -559,7 +582,9 @@ describe("MemoriesClient — text search filter", () => {
     fireEvent.change(searchInput, { target: { value: "agent-session-001" } });
 
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("Never commit directly to main — always open a PR."),
@@ -579,7 +604,9 @@ describe("MemoriesClient — text search filter", () => {
     fireEvent.change(searchInput, { target: { value: "mac-anderson" } });
 
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("Never commit directly to main — always open a PR."),
@@ -587,12 +614,7 @@ describe("MemoriesClient — text search filter", () => {
   });
 
   it("shows the 'no match' empty state when search yields zero results", () => {
-    render(
-      <MemoriesClient
-        {...baseProps}
-        initialRecords={[routineRecord]}
-      />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     const searchInput = screen.getByPlaceholderText(
       "Search lesson, source, or node ref...",
     );
@@ -617,7 +639,11 @@ describe("MemoriesClient — stats row", () => {
           routineRecord,
           constraintRecord,
           // A second OBSERVATION with a distinct id (real Neo4j ids are unique).
-          { ...routineRecord, id: `${routineRecord.id}-2`, publicId: `${routineRecord.publicId}-2` },
+          {
+            ...routineRecord,
+            id: `${routineRecord.id}-2`,
+            publicId: `${routineRecord.publicId}-2`,
+          },
         ]}
       />,
     );
@@ -653,7 +679,9 @@ describe("MemoriesClient — edit/delete action prop smoke tests", () => {
     );
 
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Never commit directly to main — always open a PR."),
@@ -661,14 +689,11 @@ describe("MemoriesClient — edit/delete action prop smoke tests", () => {
   });
 
   it("renders the lesson list normally when neither action prop is provided", () => {
-    render(
-      <MemoriesClient
-        {...baseProps}
-        initialRecords={[routineRecord]}
-      />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     expect(
-      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+      screen.getByText(
+        "Always run pnpm i --no-frozen-lockfile after adding a dep.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -729,7 +754,11 @@ describe("MemoriesClient — create memory UI", () => {
 
   it("renders the Bulk Import button only when both parseImport and commitImport are provided", () => {
     const { rerender } = render(
-      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} createMemory={vi.fn()} />,
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+      />,
     );
     expect(
       screen.queryByRole("button", { name: "Bulk Import" }),
@@ -799,9 +828,9 @@ describe("MemoriesClient — create memory UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
 
     const classSelect = screen.getByLabelText("Memory class");
-    const optionLabels = Array.from(
-      classSelect.querySelectorAll("option"),
-    ).map((o) => o.textContent);
+    const optionLabels = Array.from(classSelect.querySelectorAll("option")).map(
+      (o) => o.textContent,
+    );
     expect(optionLabels).toEqual(["Auto-detect", "Observation", "Rule"]);
   });
 
@@ -873,7 +902,9 @@ describe("MemoriesClient — create memory UI", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
-    expect(screen.queryByLabelText("Enforcement level")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Enforcement level"),
+    ).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Memory class"), {
       target: { value: "RULE" },
@@ -906,7 +937,10 @@ describe("MemoriesClient — create memory UI", () => {
   it("shows an error and keeps the sheet open when create fails", async () => {
     const mockCreate = vi
       .fn()
-      .mockResolvedValue({ ok: false, error: "You must be a workspace member to add memories." });
+      .mockResolvedValue({
+        ok: false,
+        error: "You must be a workspace member to add memories.",
+      });
     render(
       <MemoriesClient
         {...baseProps}
@@ -947,9 +981,7 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
   });
 
   it("opens the detail sheet when a row is clicked", () => {
-    render(
-      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     const row = screen
       .getByText(routineRecord.lesson)
       .closest('[role="button"]') as HTMLElement;
@@ -962,9 +994,7 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
   });
 
   it("opens the detail sheet when Enter is pressed on a focused row (keyboard equivalent of click)", () => {
-    render(
-      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} />,
-    );
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
     const row = screen
       .getByText(routineRecord.lesson)
       .closest('[role="button"]') as HTMLElement;
@@ -1115,9 +1145,13 @@ describe("MemoriesClient — promote flow", () => {
   it("does not render Promote controls when promoteMemory is absent", () => {
     render(<MemoriesClient {...baseProps} initialRecords={[gotchaRecord]} />);
     fireEvent.click(
-      screen.getByText(gotchaRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(gotchaRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
-    expect(screen.queryByRole("button", { name: "Promote to Rule" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Promote to Rule" }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers both Rule and Fact promote targets for an OBSERVATION", () => {
@@ -1129,10 +1163,16 @@ describe("MemoriesClient — promote flow", () => {
       />,
     );
     fireEvent.click(
-      screen.getByText(gotchaRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(gotchaRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
-    expect(screen.getByRole("button", { name: "Promote to Rule" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Promote to Fact" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Promote to Rule" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Promote to Fact" }),
+    ).toBeInTheDocument();
   });
 
   it("only offers Fact as a promote target for a RULE", () => {
@@ -1144,29 +1184,45 @@ describe("MemoriesClient — promote flow", () => {
       />,
     );
     fireEvent.click(
-      screen.getByText(routineRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
-    expect(screen.queryByRole("button", { name: "Promote to Rule" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Promote to Fact" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Promote to Rule" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Promote to Fact" }),
+    ).toBeInTheDocument();
   });
 
-  it("requires a rationale before confirming a promotion", () => {
+  it("confirms a promotion without a rationale (rationale is optional)", async () => {
+    const mockPromote = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: { ...gotchaRecord, memoryClass: "RULE" },
+    });
     render(
       <MemoriesClient
         {...baseProps}
         initialRecords={[gotchaRecord]}
-        promoteMemory={vi.fn()}
+        promoteMemory={mockPromote}
       />,
     );
     fireEvent.click(
-      screen.getByText(gotchaRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(gotchaRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
     fireEvent.click(screen.getByRole("button", { name: "Promote to Rule" }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm promote to rule/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm promote to rule/i }),
+    );
 
-    expect(
-      screen.getByText("Explain why this memory is being promoted."),
-    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(mockPromote).toHaveBeenCalledTimes(1));
+    expect(mockPromote).toHaveBeenCalledWith(
+      expect.objectContaining({ memoryId: gotchaRecord.id, toClass: "RULE" }),
+    );
+    expect(mockPromote.mock.calls[0]?.[0]).not.toHaveProperty("rationale");
   });
 
   it("calls promoteMemory with the target class, enforcement, and rationale", async () => {
@@ -1182,13 +1238,17 @@ describe("MemoriesClient — promote flow", () => {
       />,
     );
     fireEvent.click(
-      screen.getByText(gotchaRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(gotchaRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
     fireEvent.click(screen.getByRole("button", { name: "Promote to Rule" }));
     fireEvent.change(screen.getByLabelText(/rationale/i), {
       target: { value: "Cited three times with consistent outcomes." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /confirm promote to rule/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm promote to rule/i }),
+    );
 
     await vi.waitFor(() => expect(mockPromote).toHaveBeenCalledTimes(1));
     expect(mockPromote).toHaveBeenCalledWith(
@@ -1209,11 +1269,70 @@ describe("MemoriesClient — promote flow", () => {
       />,
     );
     fireEvent.click(
-      screen.getByText(constraintRecord.lesson).closest('[role="button"]') as HTMLElement,
+      screen
+        .getByText(constraintRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
     );
-    expect(
-      screen.getByText(/nothing left to promote to/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/nothing left to promote to/i)).toBeInTheDocument();
+  });
+
+  it("keeps the confirm button disabled for a FACT target until the acknowledgement checkbox is checked, even with no rationale", () => {
+    const mockPromote = vi.fn();
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        promoteMemory={mockPromote}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Promote to Fact" }));
+
+    const confirmButton = screen.getByRole("button", {
+      name: /^confirm promote to fact/i,
+    });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.click(confirmButton);
+    expect(mockPromote).not.toHaveBeenCalled();
+  });
+
+  it("promotes to FACT only after the acknowledgement checkbox is checked", async () => {
+    const mockPromote = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: { ...routineRecord, memoryClass: "FACT", enforcementScore: 100 },
+    });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        promoteMemory={mockPromote}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Promote to Fact" }));
+    fireEvent.click(
+      screen.getByLabelText(/I confirm this is a durable, org-wide fact/i),
+    );
+
+    const confirmButton = screen.getByRole("button", {
+      name: /^confirm promote to fact/i,
+    });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+
+    await vi.waitFor(() => expect(mockPromote).toHaveBeenCalledTimes(1));
+    expect(mockPromote).toHaveBeenCalledWith(
+      expect.objectContaining({ memoryId: routineRecord.id, toClass: "FACT" }),
+    );
   });
 });
 
@@ -1233,12 +1352,20 @@ describe("MemoriesClient — suggested to promote panel", () => {
   };
 
   it("does not render when promotionCandidates is absent", () => {
-    render(<MemoriesClient {...baseProps} initialRecords={[gotchaRecord]} promoteMemory={vi.fn()} />);
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[gotchaRecord]}
+        promoteMemory={vi.fn()}
+      />,
+    );
     expect(screen.queryByText("Suggested to promote")).not.toBeInTheDocument();
   });
 
   it("renders the top candidates once fetched", async () => {
-    const mockCandidates = vi.fn().mockResolvedValue({ ok: true, candidates: [candidate] });
+    const mockCandidates = vi
+      .fn()
+      .mockResolvedValue({ ok: true, candidates: [candidate] });
     render(
       <MemoriesClient
         {...baseProps}
@@ -1255,12 +1382,16 @@ describe("MemoriesClient — suggested to promote panel", () => {
     });
     expect(await screen.findByText("Suggested to promote")).toBeInTheDocument();
     expect(
-      screen.getByText("Always echo the target DB URL before a mutation script."),
+      screen.getByText(
+        "Always echo the target DB URL before a mutation script.",
+      ),
     ).toBeInTheDocument();
   });
 
   it("promotes a candidate inline from the panel", async () => {
-    const mockCandidates = vi.fn().mockResolvedValue({ ok: true, candidates: [candidate] });
+    const mockCandidates = vi
+      .fn()
+      .mockResolvedValue({ ok: true, candidates: [candidate] });
     const mockPromote = vi.fn().mockResolvedValue({
       ok: true,
       memory: { ...gotchaRecord, id: candidate.id, memoryClass: "RULE" },
@@ -1280,11 +1411,285 @@ describe("MemoriesClient — suggested to promote panel", () => {
     fireEvent.change(screen.getByLabelText(/rationale/i), {
       target: { value: "High citation pressure." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /confirm promote to rule/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm promote to rule/i }),
+    );
 
     await vi.waitFor(() => expect(mockPromote).toHaveBeenCalledTimes(1));
     expect(mockPromote).toHaveBeenCalledWith(
       expect.objectContaining({ memoryId: candidate.id, toClass: "RULE" }),
+    );
+  });
+
+  it("does not render a Dismiss affordance when dismissPromotion is absent", async () => {
+    const mockCandidates = vi
+      .fn()
+      .mockResolvedValue({ ok: true, candidates: [candidate] });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[gotchaRecord]}
+        promoteMemory={vi.fn()}
+        promotionCandidates={mockCandidates}
+      />,
+    );
+    await screen.findByText("Suggested to promote");
+    expect(
+      screen.queryByRole("button", { name: /dismiss candidate/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("dismisses a candidate from the panel (optimistic removal) and offers an Undo toast", async () => {
+    const mockCandidates = vi
+      .fn()
+      .mockResolvedValue({ ok: true, candidates: [candidate] });
+    const mockDismiss = vi
+      .fn()
+      .mockResolvedValue({ ok: true, memoryId: candidate.id, dismissed: true });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[gotchaRecord]}
+        promoteMemory={vi.fn()}
+        promotionCandidates={mockCandidates}
+        dismissPromotion={mockDismiss}
+      />,
+    );
+    await screen.findByText("Suggested to promote");
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss candidate/i }));
+
+    // Optimistic: the panel is gone immediately.
+    expect(screen.queryByText("Suggested to promote")).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(mockDismiss).toHaveBeenCalledTimes(1));
+    expect(mockDismiss).toHaveBeenCalledWith({
+      orgSlug: "oxagen",
+      workspaceSlug: "main",
+      memoryId: candidate.id,
+    });
+
+    const undoButton = await screen.findByRole("button", { name: "Undo" });
+    fireEvent.click(undoButton);
+    await vi.waitFor(() => expect(mockDismiss).toHaveBeenCalledTimes(2));
+    expect(mockDismiss).toHaveBeenNthCalledWith(2, {
+      orgSlug: "oxagen",
+      workspaceSlug: "main",
+      memoryId: candidate.id,
+      restore: true,
+    });
+    expect(await screen.findByText("Suggested to promote")).toBeInTheDocument();
+  });
+
+  it("restores the candidate and shows an error toast when the dismiss call fails", async () => {
+    const mockCandidates = vi
+      .fn()
+      .mockResolvedValue({ ok: true, candidates: [candidate] });
+    const mockDismiss = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "concurrent update" });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[gotchaRecord]}
+        promoteMemory={vi.fn()}
+        promotionCandidates={mockCandidates}
+        dismissPromotion={mockDismiss}
+      />,
+    );
+    await screen.findByText("Suggested to promote");
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss candidate/i }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("Couldn't dismiss")).toBeInTheDocument(),
+    );
+    expect(await screen.findByText("Suggested to promote")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Demote flow
+// ---------------------------------------------------------------------------
+
+describe("MemoriesClient — demote flow", () => {
+  it("does not render Demote controls when demoteMemory is absent", () => {
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    expect(
+      screen.queryByRole("button", { name: /demote to observation/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render Demote controls for an OBSERVATION (bottom of the ladder)", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[gotchaRecord]}
+        demoteMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(gotchaRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    expect(screen.queryByText("Demote")).not.toBeInTheDocument();
+  });
+
+  it("offers only Observation as a demote target for a RULE", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        demoteMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    expect(
+      screen.getByRole("button", { name: /demote to observation/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /demote to rule/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Rule and Observation as demote targets for a FACT", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[constraintRecord]}
+        demoteMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(constraintRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    expect(
+      screen.getByRole("button", { name: /demote to rule/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /demote to observation/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("demotes a RULE to Observation without a rationale, using a destructive-styled confirm button", async () => {
+    const mockDemote = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: {
+        ...routineRecord,
+        memoryClass: "OBSERVATION",
+        enforcementScore: null,
+      },
+    });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        demoteMemory={mockDemote}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /demote to observation/i }),
+    );
+
+    const confirmButton = screen.getByRole("button", {
+      name: /confirm demote to observation/i,
+    });
+    fireEvent.click(confirmButton);
+
+    await vi.waitFor(() => expect(mockDemote).toHaveBeenCalledTimes(1));
+    expect(mockDemote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryId: routineRecord.id,
+        toClass: "OBSERVATION",
+      }),
+    );
+    expect(mockDemote.mock.calls[0]?.[0]).not.toHaveProperty("rationale");
+    expect(mockDemote.mock.calls[0]?.[0]).not.toHaveProperty(
+      "enforcementScore",
+    );
+  });
+
+  it("demotes a FACT to Rule with an enforcement score and a typed rationale", async () => {
+    const mockDemote = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: {
+        ...constraintRecord,
+        memoryClass: "RULE",
+        enforcementScore: 30,
+      },
+    });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[constraintRecord]}
+        demoteMemory={mockDemote}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(constraintRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /demote to rule/i }));
+
+    fireEvent.change(screen.getByLabelText(/rationale/i), {
+      target: { value: "No longer holds broadly." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm demote to rule/i }),
+    );
+
+    await vi.waitFor(() => expect(mockDemote).toHaveBeenCalledTimes(1));
+    expect(mockDemote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryId: constraintRecord.id,
+        toClass: "RULE",
+        rationale: "No longer holds broadly.",
+      }),
+    );
+  });
+
+  it("shows the demote error inline and stays on the confirm step on failure", async () => {
+    const mockDemote = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "demotion rejected" });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        demoteMemory={mockDemote}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /demote to observation/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /confirm demote to observation/i }),
+    );
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("demotion rejected")).toBeInTheDocument(),
     );
   });
 });
