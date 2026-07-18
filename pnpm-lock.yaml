@@ -780,6 +780,25 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/agent-worker:
+    dependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      eslint:
+        specifier: 9.39.4
+        version: 9.39.4(jiti@2.7.0)
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/ai:
     dependencies:
       '@ai-sdk/gateway':
