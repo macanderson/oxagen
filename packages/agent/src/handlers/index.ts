@@ -72,6 +72,10 @@ const LOADERS: Record<string, LoaderEntry> = {
   // Two-axis memory: confidence ladder promotion + the citation/evidence
   // mechanism that drives it (docs/specs/two-axis-memory).
   promote_memory: () => import("./agent.memory.promote"),
+  demote_memory: () => import("./agent.memory.demote"),
+  dismiss_memory_promotion: () => import("./agent.memory_promotion.dismiss"),
+  suggest_promotion_rationales: () =>
+    import("./agent.memory_promotion.rationales"),
   list_memory_promotions: () => import("./agent.memory_promotion.list"),
   cite_memory: () => import("./agent.memory.cite"),
   // @-mention citations: any :GraphNode a user references in chat gets the
@@ -79,6 +83,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   cite_reference: () => import("./reference.cite"),
   attach_memory_evidence: () => import("./agent.memory_evidence.attach"),
   list_memory_citations: () => import("./agent.memory_citation.list"),
+  get_citation_stats: () => import("./agent.memory_citation.stats"),
   resolve_approval: () => import("./agent.approval.resolve"),
   list_agent_skills: () => import("./agent.skill.list"),
   load_skill: () => import("./agent.skill.load"),

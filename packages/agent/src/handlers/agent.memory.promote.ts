@@ -41,7 +41,8 @@ export async function agentMemoryPromoteHandler(
     // caller (no userId in scope) records AGENT.
     promotedByKind: ctx.userId ? "USER" : "AGENT",
     promotedById: ctx.userId,
-    rationale: input.rationale,
+    // Rationale is optional on the contract; store null on the :Promotion when absent.
+    rationale: input.rationale ?? null,
     confirmedById: invariants.confirmedById,
     basedOnEvidenceIds: input.basedOnEvidenceIds,
   });
