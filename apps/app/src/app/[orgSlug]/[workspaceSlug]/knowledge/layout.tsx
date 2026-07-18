@@ -23,6 +23,7 @@ export default async function KnowledgeLayout({
     { label: "Inference", href: workspace.knowledge.inference(ctx) },
     { label: "Ontology", href: workspace.knowledge.ontology(ctx) },
     { label: "Memory", href: workspace.knowledge.memory(ctx) },
+    { label: "Citations", href: workspace.knowledge.citations(ctx) },
   ];
 
   return (
@@ -31,11 +32,7 @@ export default async function KnowledgeLayout({
         <PageHeader
           title="Knowledge"
           description="Sources, graph, inference, ontology, and agent memory."
-          breadcrumb={
-            <Breadcrumb
-              items={[wsCrumb, { label: "Knowledge" }]}
-            />
-          }
+          breadcrumb={<Breadcrumb items={[wsCrumb, { label: "Knowledge" }]} />}
         />
       </div>
       <PageTabs tabs={tabs} className="mb-6 max-md:hidden" />
