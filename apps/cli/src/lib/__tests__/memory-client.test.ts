@@ -10,14 +10,22 @@ import {
   formatMemoryDetail,
   formatRememberResult,
   formatPromoteResult,
+  formatDemoteResult,
+  formatDismissResult,
+  formatCitationStats,
   formatPromotionCandidates,
   listMemories,
+  demoteMemory,
+  dismissPromotion,
+  citationStats,
   RECOMMENDED_MEMORY_KINDS,
   MEMORY_CLASSES,
   type MemoryRecord,
   type MemoryListResult,
   type RememberResult,
   type PromotionCandidatesResult,
+  type DismissPromotionResult,
+  type CitationStatsResult,
 } from "../memory-client.js";
 
 const REC: MemoryRecord = {
@@ -53,7 +61,11 @@ describe("listMemories transport", () => {
   });
 
   it("forwards the citation sort axis and minCitations floor in the request body", async () => {
-    await listMemories({ minCitations: 3, sort: "citationCount", sortDir: "desc" });
+    await listMemories({
+      minCitations: 3,
+      sort: "citationCount",
+      sortDir: "desc",
+    });
     expect(apiPostOrThrow).toHaveBeenCalledWith(
       "agent/memory/list",
       expect.objectContaining({
@@ -70,6 +82,106 @@ describe("listMemories transport", () => {
       "agent/memory/list",
       expect.objectContaining({ limit: 100, offset: 0, sort: undefined }),
     );
+  });
+});
+
+describe("demoteMemory transport", () => {
+  beforeEach(() => {
+    apiPostOrThrow.mockReset();
+    apiPostOrThrow.mockResolvedValue(REC);
+  });
+
+  it("forwards the memoryId, target class, and rationale in the request body", async () => {
+    await demoteMemory({
+      memoryId: "m_1",
+      toClass: "OBSERVATION",
+      rationale: "no longer holds",
+    });
+    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/demote", {
+      memoryId: "m_1",
+      toClass: "OBSERVATION",
+      rationale: "no longer holds",
+    });
+  });
+
+  it("unwraps the response to the updated memory record", async () => {
+    const result = await demoteMemory({ memoryId: "m_1", toClass: "RULE" });
+    expect(result).toBe(REC);
+  });
+});
+
+describe("dismissPromotion transport", () => {
+  beforeEach(() => {
+    apiPostOrThrow.mockReset();
+    apiPostOrThrow.mockResolvedValue({ memoryId: "m_1", dismissed: true });
+  });
+
+  it("defaults restore to false when omitted", async () => {
+    await dismissPromotion({ memoryId: "m_1" });
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/promotion/dismiss",
+      { memoryId: "m_1", restore: false },
+    );
+  });
+
+  it("forwards an explicit restore flag and unwraps the result", async () => {
+    apiPostOrThrow.mockResolvedValueOnce({ memoryId: "m_1", dismissed: false });
+    const result = await dismissPromotion({ memoryId: "m_1", restore: true });
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/promotion/dismiss",
+      { memoryId: "m_1", restore: true },
+    );
+    expect(result).toEqual({ memoryId: "m_1", dismissed: false });
+  });
+});
+
+describe("citationStats transport", () => {
+  beforeEach(() => {
+    apiPostOrThrow.mockReset();
+  });
+
+  it("defaults days to 30 and limit to 10 when unset", async () => {
+    apiPostOrThrow.mockResolvedValueOnce({
+      totals: { citations: 0, executions: 0, memoriesCited: 0, nodesCited: 0 },
+      byInfluence: {},
+      byCompliance: {},
+      daily: [],
+      topMemories: [],
+      leastUsefulMemories: [],
+      mostViolatedRules: [],
+      topNodes: [],
+    });
+    await citationStats();
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/citations/stats",
+      {
+        days: 30,
+        limit: 10,
+      },
+    );
+  });
+
+  it("forwards explicit days/limit and unwraps the totals", async () => {
+    const payload = {
+      totals: { citations: 5, executions: 2, memoriesCited: 3, nodesCited: 1 },
+      byInfluence: { DECISIVE: 2 },
+      byCompliance: { COMPLIED: 3 },
+      daily: [{ date: "2026-07-18", citations: 5, violations: 0 }],
+      topMemories: [],
+      leastUsefulMemories: [],
+      mostViolatedRules: [],
+      topNodes: [],
+    };
+    apiPostOrThrow.mockResolvedValueOnce(payload);
+    const result = await citationStats({ days: 7, limit: 5 });
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/citations/stats",
+      {
+        days: 7,
+        limit: 5,
+      },
+    );
+    expect(result).toEqual(payload);
   });
 });
 
@@ -124,7 +236,11 @@ describe("formatMemoryLines", () => {
   });
 
   it("shows an em dash for a null enforcement score (OBSERVATION)", () => {
-    const observation: MemoryRecord = { ...REC, memoryClass: "OBSERVATION", enforcementScore: null };
+    const observation: MemoryRecord = {
+      ...REC,
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+    };
     const out = formatMemoryLines({ memories: [observation], total: 1 });
     expect(out).toContain("—");
   });
@@ -163,7 +279,11 @@ describe("formatRememberResult", () => {
   it("reports inferred class/kind when the model classified", () => {
     const r: RememberResult = {
       memory: REC,
-      inferred: { memoryClass: "RULE", memoryKind: "constraint", classified: true },
+      inferred: {
+        memoryClass: "RULE",
+        memoryKind: "constraint",
+        classified: true,
+      },
     };
     const out = formatRememberResult(r);
     expect(out).toContain("✓ Remembered");
@@ -176,7 +296,11 @@ describe("formatRememberResult", () => {
   it("reports 'set' rather than 'inferred' when the caller pinned the values", () => {
     const r: RememberResult = {
       memory: REC,
-      inferred: { memoryClass: "OBSERVATION", memoryKind: "gotcha", classified: false },
+      inferred: {
+        memoryClass: "OBSERVATION",
+        memoryKind: "gotcha",
+        classified: false,
+      },
     };
     expect(formatRememberResult(r)).toContain("(set)");
   });
@@ -184,7 +308,11 @@ describe("formatRememberResult", () => {
 
 describe("formatPromoteResult", () => {
   it("reports the new class and enforcement", () => {
-    const promoted: MemoryRecord = { ...REC, memoryClass: "FACT", enforcementScore: 100 };
+    const promoted: MemoryRecord = {
+      ...REC,
+      memoryClass: "FACT",
+      enforcementScore: 100,
+    };
     const out = formatPromoteResult(promoted);
     expect(out).toContain("✓ Promoted to FACT");
     expect(out).toContain("enforcement 100");
@@ -192,10 +320,113 @@ describe("formatPromoteResult", () => {
   });
 });
 
+describe("formatDemoteResult", () => {
+  it("reports the new (lower) class and enforcement", () => {
+    const demoted: MemoryRecord = {
+      ...REC,
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+    };
+    const out = formatDemoteResult(demoted);
+    expect(out).toContain("✓ Demoted to OBSERVATION");
+    expect(out).toContain("enforcement —");
+    expect(out).toContain(demoted.id);
+  });
+});
+
+describe("formatDismissResult", () => {
+  it("reports a dismissal", () => {
+    const r: DismissPromotionResult = { memoryId: "m_1", dismissed: true };
+    const out = formatDismissResult(r);
+    expect(out).toContain("✓ Dismissed m_1");
+    expect(out).toContain("from the promotion queue");
+  });
+
+  it("reports a restore when dismissed is false", () => {
+    const r: DismissPromotionResult = { memoryId: "m_1", dismissed: false };
+    const out = formatDismissResult(r);
+    expect(out).toContain("✓ Restored m_1");
+    expect(out).toContain("to the promotion queue");
+  });
+});
+
+describe("formatCitationStats", () => {
+  const EMPTY: CitationStatsResult = {
+    totals: { citations: 0, executions: 0, memoriesCited: 0, nodesCited: 0 },
+    byInfluence: {},
+    byCompliance: {},
+    daily: [],
+    topMemories: [],
+    leastUsefulMemories: [],
+    mostViolatedRules: [],
+    topNodes: [],
+  };
+
+  it("renders just the totals line when every breakdown/list is empty", () => {
+    const out = formatCitationStats(EMPTY);
+    expect(out).toContain("Citations: 0 across 0 executions");
+    expect(out).not.toContain("influence:");
+    expect(out).not.toContain("compliance:");
+    expect(out).not.toContain("Most-cited memories:");
+    expect(out).not.toContain("Least-useful");
+    expect(out).not.toContain("Most-violated rules:");
+    expect(out).not.toContain("Most-cited graph nodes:");
+  });
+
+  it("renders totals, breakdowns, and every memory/node section when populated", () => {
+    const stat = {
+      memoryId: "m_1",
+      publicId: "pub_1",
+      lesson: "Always validate the session cookie prefix in production.",
+      memoryClass: "RULE" as const,
+      memoryKind: "constraint",
+      citationCount: 5,
+      decisiveCount: 3,
+      contributingCount: 1,
+      consideredCount: 1,
+      ignoredCount: 0,
+      violationCount: 1,
+    };
+    const result: CitationStatsResult = {
+      totals: { citations: 5, executions: 2, memoriesCited: 1, nodesCited: 1 },
+      byInfluence: { DECISIVE: 3, CONTRIBUTING: 1 },
+      byCompliance: { COMPLIED: 4, VIOLATION: 1 },
+      daily: [{ date: "2026-07-18", citations: 5, violations: 1 }],
+      topMemories: [stat],
+      leastUsefulMemories: [stat],
+      mostViolatedRules: [stat],
+      topNodes: [
+        {
+          node: {
+            id: "n_1",
+            label: "Function",
+            displayName: "auth#validate",
+            properties: {},
+          },
+          citationCount: 5,
+          decisiveCount: 3,
+          ignoredCount: 0,
+        },
+      ],
+    };
+    const out = formatCitationStats(result);
+    expect(out).toContain("Citations: 5 across 2 executions");
+    expect(out).toContain("influence: DECISIVE 3, CONTRIBUTING 1");
+    expect(out).toContain("compliance: COMPLIED 4, VIOLATION 1");
+    expect(out).toContain("Most-cited memories:");
+    expect(out).toContain("Least-useful (cited but never influential):");
+    expect(out).toContain("Most-violated rules:");
+    expect(out).toContain("Most-cited graph nodes:");
+    expect(out).toContain("auth#validate [Function]");
+  });
+});
+
 describe("formatPromotionCandidates", () => {
   it("renders an empty-state hint when there are no candidates", () => {
     const result: PromotionCandidatesResult = { candidates: [] };
-    expect(formatPromotionCandidates(result)).toContain("No promotion candidates");
+    expect(formatPromotionCandidates(result)).toContain(
+      "No promotion candidates",
+    );
   });
 
   it("renders id, kind, citation/influence counts, and confidence", () => {

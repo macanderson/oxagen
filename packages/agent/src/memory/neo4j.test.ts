@@ -878,6 +878,10 @@ describe("listPromotionCandidates", () => {
     expect(cypher).toContain(
       "coalesce(m.memory_class, 'OBSERVATION') = 'OBSERVATION'",
     );
+    // The dismissal predicate is what makes a promotion-queue dismiss
+    // durable — without it a dismissed memory reappears in the candidate
+    // list on the next fetch.
+    expect(cypher).toContain("m.promotion_dismissed_at IS NULL");
     expect(cypher).toContain(
       "ORDER BY citationCount DESC, influenceCount DESC",
     );

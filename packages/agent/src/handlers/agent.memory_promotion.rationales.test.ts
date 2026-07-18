@@ -129,6 +129,65 @@ describe("agent.memory.promotion.rationales handler", () => {
     expect(out.rationales.some((r) => r.includes("7"))).toBe(true);
   });
 
+  it("falls back to demotion-specific rationales (violation branch) when demoting a RULE to OBSERVATION", async () => {
+    isKnowledgeGraphEnabledMock.mockReturnValue(true);
+    const ruleMemory = {
+      ...(MEMORY as unknown as Record<string, unknown>),
+      memoryClass: "RULE",
+      violationCount: 2,
+    } as never;
+    getMemoryByIdMock.mockResolvedValueOnce(ruleMemory);
+    generateObjectForMock.mockRejectedValueOnce(new Error("gateway down"));
+
+    const out = await agentMemoryPromotionRationalesHandler(
+      { memoryId: "m_1", toClass: "OBSERVATION", count: 4 },
+      CTX,
+    );
+
+    expect(out.rationales.length).toBeGreaterThanOrEqual(1);
+    expect(out.rationales.every((r) => r.length > 0 && r.length <= 200)).toBe(
+      true,
+    );
+    // Demotion branch: "an observation" (the article flips for the vowel).
+    expect(
+      out.rationales.some((r) =>
+        r.includes("better tracked as an observation"),
+      ),
+    ).toBe(true);
+    // Violation branch only fires when violationCount > 0.
+    expect(
+      out.rationales.some((r) => r.includes("2 recorded violations")),
+    ).toBe(true);
+  });
+
+  it("falls back to the FACT-specific rationale (human-confirmed) when promoting to FACT", async () => {
+    isKnowledgeGraphEnabledMock.mockReturnValue(true);
+    // MEMORY is OBSERVATION, so toClass FACT is a promotion, not a demotion.
+    getMemoryByIdMock.mockResolvedValueOnce(MEMORY);
+    generateObjectForMock.mockRejectedValueOnce(new Error("gateway down"));
+
+    const out = await agentMemoryPromotionRationalesHandler(
+      { memoryId: "m_1", toClass: "FACT", count: 4 },
+      CTX,
+    );
+
+    expect(out.rationales.length).toBeGreaterThanOrEqual(1);
+    expect(out.rationales.every((r) => r.length > 0 && r.length <= 200)).toBe(
+      true,
+    );
+    expect(
+      out.rationales.some((r) =>
+        r.includes("Human-confirmed and heavily cited"),
+      ),
+    ).toBe(true);
+    // The RULE-specific fallback line must not appear for a FACT target.
+    expect(
+      out.rationales.some((r) =>
+        r.includes("supports enforcing this as a rule"),
+      ),
+    ).toBe(false);
+  });
+
   it("falls back when the model returns only empty/blank rationales", async () => {
     isKnowledgeGraphEnabledMock.mockReturnValue(true);
     getMemoryByIdMock.mockResolvedValueOnce(MEMORY);
