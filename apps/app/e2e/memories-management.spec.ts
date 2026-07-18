@@ -1,22 +1,33 @@
 /**
  * memories-management.spec.ts — end-to-end coverage for Knowledge → Memories
  * management controls: edit (lesson, kind, confidence), delete with confirm,
- * and promote (two-axis memory model — OBSERVATION → RULE/FACT).
+ * promote (two-axis memory model — OBSERVATION → RULE/FACT), demote (the
+ * inverse), and dismissing a promotion candidate.
  *
  * Tests:
- *   1. Empty state: fresh workspace shows "No memories yet" with the expected
- *      UI structure (header, class stats row, filter bar).
+ *   1. Empty state: fresh workspace shows the header and "No memories yet";
+ *      the class stats row and filter bar are intentionally absent (they
+ *      only render once at least one memory exists).
  *   2. Edit/delete affordances: when a memory row is present, clicking it
  *      opens the detail sheet with Edit + Delete buttons; Edit mode renders
  *      the edit form; Delete shows a two-step confirm.
  *   3. Promote affordance: the detail sheet offers a "Promote to …" control
- *      for the current class, and the inline flow requires a rationale.
+ *      for the current class; the rationale is optional — confirming with it
+ *      left blank succeeds. FACT is the exception: it still requires the
+ *      explicit "I confirm…" acknowledgement checkbox before the confirm
+ *      button enables, regardless of rationale.
+ *   4. Demote affordance: once a memory is above OBSERVATION, the detail
+ *      sheet offers a "Demote to …" control; opening it renders a confirm +
+ *      cancel step (validated without committing, since exercising it would
+ *      undo the promote step's assertions on the same record).
+ *   5. Dismiss: the inline "Suggested to promote" panel's Dismiss affordance
+ *      removes a candidate and shows an Undo toast.
  *
- * Tests 2 and 3 require Neo4j to be running and the app to have written at
- * least one memory to the workspace. If no memories are present (Neo4j not
- * running or fresh workspace), those tests log a skip-like message and exit
- * gracefully rather than failing — the happy-path gate is CI-gated when Neo4j
- * is up.
+ * Tests 2-5 require Neo4j to be running and the app to have written at
+ * least one memory to the workspace. If no memories/candidates are present
+ * (Neo4j not running or fresh workspace), those tests log a skip-like
+ * message and exit gracefully rather than failing — the happy-path gate is
+ * CI-gated when Neo4j is up.
  *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored, recreated each run).
  */
@@ -65,23 +76,22 @@ test.describe("memories management — empty state and UI structure", () => {
 
     // The BrainCircuit heading / "Agent Memories" label should be visible —
     // this comes from the MemoriesClient header section.
-    await expect(
-      page.getByText("Agent Memories", { exact: true }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Agent Memories", { exact: true })).toBeVisible(
+      { timeout: 15_000 },
+    );
 
-    // The 3-column stats row (one per epistemic class) always renders even
-    // when the list is empty. Scope to the stats row — these class labels
-    // also appear in the filter bar, so a page-wide getByText would match two
-    // elements (strict-mode violation).
-    const statsRow = page.getByTestId("memory-stats-row");
-    await expect(statsRow.getByText("Observation")).toBeVisible();
-    await expect(statsRow.getByText("Rule")).toBeVisible();
-    await expect(statsRow.getByText("Fact")).toBeVisible();
+    // The 3-column stats row (one per epistemic class) is intentionally
+    // hidden on a genuinely empty workspace — it (and the filter bar) only
+    // renders once at least one memory exists, so the empty state sits
+    // directly under the header instead of below a full but inert control
+    // bar (see the "Stats + filters" comment in memories-client.tsx).
+    await expect(page.getByTestId("memory-stats-row")).toHaveCount(0);
 
-    // Filter bar elements (search input and confidence slider) are present.
+    // The filter bar is gated behind the same records.length > 0 check as the
+    // stats row — also hidden on a genuinely empty workspace.
     await expect(
       page.getByPlaceholder("Search lesson, source, or node ref..."),
-    ).toBeVisible();
+    ).toHaveCount(0);
 
     // Empty state copy appears for a workspace with no memories.
     await expect(page.getByText("No memories yet")).toBeVisible();
@@ -108,7 +118,7 @@ test.describe("memories management — edit and delete affordances", () => {
     // for why), so scope the selector accordingly.
     // If the list is empty (fresh workspace, no agent sessions), we assert on
     // the empty state and skip the interactive affordance checks.
-    const hasRows = await page.locator('[role="button"].group').count() > 0;
+    const hasRows = (await page.locator('[role="button"].group').count()) > 0;
     if (!hasRows) {
       // Fresh workspace with no memories — assert the empty state is correct
       // and skip the sheet interaction test. The edit/delete UI is exercised
@@ -147,9 +157,7 @@ test.describe("memories management — edit and delete affordances", () => {
     await expect(
       page.getByRole("button", { name: /save changes/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /cancel/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /cancel/i })).toBeVisible();
     await shot(page, "04-edit-mode-fields");
 
     // Cancel returns to view mode (Edit/Delete buttons reappear).
@@ -160,32 +168,69 @@ test.describe("memories management — edit and delete affordances", () => {
     await shot(page, "05-back-to-view-mode");
 
     // ── Promote flow ─────────────────────────────────────────────────────────
-    // A non-FACT memory offers at least one "Promote to …" target. Open the
-    // first one, confirm the rationale is required, then fill it in and
-    // confirm — this exercises the two-axis model's confidence-ladder move.
-    const promoteButton = page.getByRole("button", { name: /^promote to /i }).first();
+    // A non-FACT memory offers at least one "Promote to …" target. Rationale
+    // is optional — confirming with it left blank must succeed (promote_memory
+    // no longer requires one; see agent.memory.promote.ts). FACT is the
+    // exception: it still requires the explicit "I confirm…" acknowledgement
+    // (a RULE record's only target is FACT, so this branch is reachable).
+    const promoteButton = page
+      .getByRole("button", { name: /^promote to /i })
+      .first();
     if (await promoteButton.isVisible().catch(() => false)) {
+      const isFactTarget =
+        (await promoteButton.textContent())?.toLowerCase().includes("fact") ??
+        false;
       await promoteButton.click();
       await shot(page, "06-promote-form-open");
 
-      // Confirming without a rationale surfaces the validation message.
-      const confirmPromote = page.getByRole("button", { name: /^confirm promote to /i });
-      await confirmPromote.click();
-      await expect(
-        page.getByText("Explain why this memory is being promoted."),
-      ).toBeVisible({ timeout: 5_000 });
-
-      // Fill the rationale and confirm.
-      await page.getByLabel(/rationale/i).fill("Cited consistently across sessions.");
+      const confirmPromote = page.getByRole("button", {
+        name: /^confirm promote to /i,
+      });
+      if (isFactTarget) {
+        await expect(confirmPromote).toBeDisabled();
+        await page
+          .getByLabel(/I confirm this is a durable, org-wide fact/i)
+          .check();
+        await expect(confirmPromote).toBeEnabled();
+      }
       await confirmPromote.click();
       await shot(page, "07-promote-confirmed");
 
-      // The class badge in the sheet header updates on success.
-      await expect(page.getByRole("button", { name: /^promote to /i }).first()).toBeVisible({
-        timeout: 10_000,
-      }).catch(() => {
-        // FACT (top of the ladder) has no further promote target — acceptable.
-      });
+      // The class badge in the sheet header updates on success — either a
+      // further promote target appears, or (FACT, top of the ladder) it
+      // doesn't; either is an acceptable post-promote state.
+      await expect(page.getByRole("button", { name: /^promote to /i }).first())
+        .toBeVisible({
+          timeout: 10_000,
+        })
+        .catch(() => {
+          // FACT (top of the ladder) has no further promote target — acceptable.
+        });
+    }
+
+    // ── Demote flow ──────────────────────────────────────────────────────────
+    // A memory above OBSERVATION offers at least one "Demote to …" target
+    // (RULE/FACT → the inverse of promote). Validate the flow opens with a
+    // confirm + cancel step without committing — completing it would undo the
+    // promote assertions above on the same record.
+    const demoteButton = page
+      .getByRole("button", { name: /^demote to /i })
+      .first();
+    if (await demoteButton.isVisible().catch(() => false)) {
+      await demoteButton.click();
+      await shot(page, "07b-demote-form-open");
+
+      await expect(
+        page.getByRole("button", { name: /^confirm demote to /i }),
+      ).toBeVisible({ timeout: 5_000 });
+      await expect(
+        page.getByRole("button", { name: /^cancel$/i }),
+      ).toBeVisible();
+
+      // Cancel out — this test validates the flow opens, not the mutation.
+      await page.getByRole("button", { name: /^cancel$/i }).click();
+      await expect(demoteButton).toBeVisible({ timeout: 5_000 });
+      await shot(page, "07c-demote-form-cancelled");
     }
 
     // ── Delete confirm two-step ──────────────────────────────────────────────
@@ -199,9 +244,7 @@ test.describe("memories management — edit and delete affordances", () => {
       page.getByRole("button", { name: /confirm delete memory/i }),
     ).toBeVisible();
     // Cancel is also present in confirm step.
-    await expect(
-      page.getByRole("button", { name: /^cancel$/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^cancel$/i })).toBeVisible();
     await shot(page, "08-delete-confirm-step");
 
     // Cancel the confirm — returns to the regular Delete button.
@@ -210,5 +253,46 @@ test.describe("memories management — edit and delete affordances", () => {
       page.getByRole("button", { name: /delete memory/i }),
     ).toBeVisible({ timeout: 5_000 });
     await shot(page, "09-confirm-cancelled");
+  });
+});
+
+test.describe("memories management — dismiss a promotion candidate", () => {
+  test("dismisses a candidate from the inline suggested-to-promote panel and offers an Undo toast", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mem-dismiss",
+    });
+    const ws = "default";
+
+    await page.goto(`/${orgSlug}/${ws}/knowledge/memories`);
+    await expect(page).not.toHaveURL(/\/login/);
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // The inline "Suggested to promote" panel only renders once
+    // agent.memory.promotion.candidates returns at least one row — requires
+    // Neo4j with citation-pressure data. If it's absent (fresh workspace or
+    // Neo4j not running), skip gracefully rather than failing.
+    const panelHeading = page.getByText("Suggested to promote");
+    if (
+      !(await panelHeading.isVisible({ timeout: 5_000 }).catch(() => false))
+    ) {
+      return;
+    }
+    await shot(page, "10-suggested-panel-visible");
+
+    const dismissButton = page
+      .getByRole("button", { name: /^dismiss candidate/i })
+      .first();
+    if (!(await dismissButton.isVisible().catch(() => false))) {
+      return;
+    }
+    await dismissButton.click();
+
+    // Optimistic removal — the Undo toast appears.
+    await expect(page.getByRole("button", { name: "Undo" })).toBeVisible({
+      timeout: 5_000,
+    });
+    await shot(page, "11-dismiss-undo-toast");
   });
 });

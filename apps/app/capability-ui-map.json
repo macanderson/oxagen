@@ -433,6 +433,33 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
+    "dismiss_memory_promotion": {
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
+      "page": "apps/app/src/components/knowledge/memories/memory-promotion-queue.tsx",
+      "entry": "\"Dismiss\" on a promotion candidate (queue + inline suggested-to-promote panel) → dismissPromotionAction",
+      "testid": null,
+      "proof": "apps/app/e2e/memories-management.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    },
+    "demote_memory": {
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
+      "page": "apps/app/src/components/knowledge/memories/memories-client.tsx",
+      "entry": "\"Demote\" in the memory detail sheet (RULE/FACT) → demoteMemoryAction",
+      "testid": null,
+      "proof": "apps/app/e2e/memories-management.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    },
+    "suggest_promotion_rationales": {
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/memory",
+      "page": "apps/app/src/components/knowledge/memories/rationale-picker.tsx",
+      "entry": "RationalePicker select, opened from any promote/demote flow → suggestRationalesAction",
+      "testid": null,
+      "proof": "apps/app/e2e/memories-management.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "session_01LvTjUhzMz5nF1WWPn6K7N5"
+    },
     "get_eval_run": {
       "route": "/[orgSlug]/[workspaceSlug]/evals/runs/[runId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/runs/[runId]/page.tsx",
