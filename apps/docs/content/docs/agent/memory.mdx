@@ -64,6 +64,19 @@ Memories are scoped to the workspace. They are not shared across workspaces, and
 
 ## The promotion lifecycle
 
+<Mermaid
+  chart="
+stateDiagram-v2
+  [*] --> OBSERVATION
+  OBSERVATION --> RULE: promote
+  RULE --> FACT: promote (human confirms)
+  RULE --> OBSERVATION: demote
+  FACT --> RULE: demote
+  OBSERVATION --> [*]: dismiss (leaves queue)"
+/>
+
+*Promotion moves a memory up the ladder and requires a human-confirmed gate at FACT; demotion is the audited inverse; dismissal removes a candidate from the queue without changing its class.*
+
 Observations that keep proving useful surface as **promotion candidates** — a ranked queue (by citation pressure) on the Memory page. For each candidate you can:
 
 - **Promote** it to RULE or FACT. A written rationale is *optional* — the human gate for FACT is the confirmation checkbox, which locks enforcement at 100 and records you as the confirmer. When you do want a rationale on record, the promote dialog offers a short list of AI-drafted, context-grounded reasons (built from the memory's lesson and its citation history by a low-cost model) — pick one, or choose "Write my own…".

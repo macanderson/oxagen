@@ -30,6 +30,19 @@ The period switcher (7d / 30d / 90d) sets the analysis window for everything on 
 - **Most violated rules** — RULE/FACT memories ranked by `VIOLATION` citations. Either the rule needs stronger enforcement, or it's wrong and should be demoted.
 - **Top cited nodes** — the non-memory graph entities agents lean on most. Each is shown by its human label; hover or click the chip to inspect the full property bag.
 
+<Mermaid
+  chart="
+flowchart LR
+  A[Agent grounds an answer] --> B[Recall or @-mention]
+  B --> C[Citation: influence + compliance]
+  C --> D[Citations dashboard]
+  D --> E[Promote what works]
+  D --> F[Demote what doesn't]
+  D --> G[Fix violated rules]"
+/>
+
+*Citations accrue automatically as agents ground answers; the dashboard rolls them up into the promote/demote/fix loop below.*
+
 ## Acting on the numbers
 
 The dashboard is designed to close the loop on memory quality:

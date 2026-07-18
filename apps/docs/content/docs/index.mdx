@@ -23,6 +23,19 @@ Your teams get capable AI. Your security and compliance teams get the controls t
 
 Every capability — model call, tool invocation, code execution, memory write — passes through a single `invoke()` kernel boundary. That boundary enforces IAM, meters credits, instruments latency, and writes an immutable audit record. There is no alternate path. A developer writing a new integration cannot accidentally bypass it; the enforcement is structural.
 
+<Mermaid
+  chart="
+flowchart LR
+  I[Identity] --> C[Capability contract]
+  C --> K[invoke]
+  K --> IAM[IAM check]
+  IAM --> B[Meter and bill]
+  B --> H[Handler runs]
+  H --> A[Audit record]"
+/>
+
+*Every action carries identity through one contract-bound chokepoint — no capability reaches a handler without IAM, metering, and an audit record.*
+
 ### Tenant isolation with row-level security
 
 Every row in every tenant-scoped table carries `org_id` and `workspace_id` columns, and Postgres row-level security (RLS) is enforced by the database itself — not by application-layer predicates a developer might forget. The non-superuser `oxagen_app` role has no `BYPASSRLS` privilege. A query without an active tenant scope returns zero rows, not another tenant's rows.

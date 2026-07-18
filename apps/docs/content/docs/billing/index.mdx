@@ -5,6 +5,18 @@ description: Plans, usage credits, metered consumption, per-turn budgets, and re
 
 Everything an agent, API call, or MCP tool does in Oxagen is metered at the `invoke()` boundary, so billing is a direct readout of governed activity — not a separate estimate. Org admins manage it under **Organization → Billing**.
 
+<Mermaid
+  chart="
+flowchart LR
+  A[Agent / API / MCP call] --> B[invoke boundary]
+  B --> C[(ClickHouse usage event)]
+  B --> D[Credits debited]
+  C --> E[Usage dashboard]
+  D --> F[Stripe]"
+/>
+
+*Every metered call writes a ClickHouse usage event and debits credits in the same boundary — the usage dashboard and Stripe both read off that one ledger.*
+
 ## Subscription
 
 Each organization has a plan with monthly or yearly intervals. Plan changes go through Stripe Checkout: Oxagen returns a checkout URL, the user completes payment there, and the subscription updates on webhook confirmation. The current plan and period bounds are visible on **Billing → Subscription**.

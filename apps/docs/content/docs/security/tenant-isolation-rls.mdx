@@ -9,19 +9,18 @@ Tenant isolation at Oxagen is a database-enforced property, not an application-l
 
 All three data stores share a single identity seam (`@oxagen/tenancy`). The seam is entered exactly once — inside `kernel.invoke()` — and propagates automatically via `AsyncLocalStorage` to every data accessor downstream. No tenant IDs are threaded by hand through function signatures.
 
-```
-Request → CapabilityContext { orgId, workspaceId }
-               │
-         kernel.invoke()
-               │  runInTenantScope(scope, handler)
-               ▼
-        AsyncLocalStorage<TenantScope>
-               │
-    ┌──────────┼──────────┐
-    ▼          ▼          ▼
-withTenantDb  scopedSession  chInsert/chSelect
-(Postgres)    (Neo4j)        (ClickHouse)
-```
+<Mermaid
+  chart="
+flowchart TD
+  R[Request] --> CC[CapabilityContext: orgId, workspaceId]
+  CC --> K[kernel.invoke]
+  K --> ALS[AsyncLocalStorage TenantScope]
+  ALS --> PG[withTenantDb - Postgres]
+  ALS --> N4[scopedSession - Neo4j]
+  ALS --> CH[chInsert / chSelect - ClickHouse]"
+/>
+
+*One seam, entered once inside `kernel.invoke()`, propagates tenant scope to all three stores — no tenant ID is ever threaded by hand.*
 
 `runInTenantScope` validates that both `orgId` and `workspaceId` are valid UUIDs before entering scope. An empty or missing ID throws a `TenantScopeError` immediately — **fail closed, not fail open**.
 
