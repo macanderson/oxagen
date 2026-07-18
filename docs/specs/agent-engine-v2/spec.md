@@ -339,10 +339,12 @@ while (true) {
 
 ## 8. Open questions
 
-1. Worker substrate: dedicated pool (Fly/Railway/ECS) vs. Inngest
-   step-per-engine-step. Recommendation: dedicated pool (per-step serverless
-   fights the in-process engine and adds cold-start latency per step); Inngest
-   keeps dispatch/cancel/sweep. Needs an infra decision.
+1. **DECIDED:** dedicated long-lived worker pool (Phase 2a,
+   `agent.agent_runs` + `agent.agent_run_events`). Per-step Inngest was
+   rejected: it re-serializes full engine state every step (the state-
+   serialization tax), drops the ADR-030 speculation cache across step
+   boundaries, and adds per-step serde pressure the Phase-3 Rust core
+   shouldn't have to pay for. Inngest keeps dispatch/cancel/sweep.
 2. Does fleet subagent fanout move onto `stella-fleet`'s wave scheduler, or
    stay on graph-mediated Inngest fanout? (Default: stay; revisit after Track 2.)
 3. Public npm (`@stella/engine-node`) vs. private registry for the binding.

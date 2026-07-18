@@ -825,3 +825,105 @@ export const fileLockFences = agentSchema.table(
     orgIdx: index("file_lock_fences_org_idx").on(t.orgId, t.workspaceId),
   }),
 );
+
+// ── Durable agent runs (agent-engine v2 Phase 2a; docs/specs/agent-engine-v2)
+//
+// The run row that packages/agent-runner's executeTurn persists to starting
+// in Phase 2 (plan.md): one row per turn, across every surface. `surface`
+// mirrors agent-runner's PlatformSurface union (execute-turn.ts) so the row
+// and the seam can never drift into two vocabularies for the same thing.
+//
+// Durable claim/lease trio (claimedBy/leaseExpiresAt/attempts) is the same
+// discipline as subagentRuns above: claimedBy is the owning worker's identity,
+// a null lease means unclaimed-or-terminal, and the lease sweeper requeues
+// expired-lease rows until the attempt cap so a killed worker's run is
+// reclaimed without a coordinator. One deliberate difference from
+// subagentRuns: the claim query here is cross-org — a small dedicated worker
+// pool claims ANY pending run via withSystemDb + FOR UPDATE SKIP LOCKED, not
+// one org's queue — so agent_runs_claim_idx (below) carries no org_id prefix.
+//
+// `spec` is the serialized RunSpec (instruction, model, option snapshot) —
+// data only, never the live engine ports/callbacks a worker constructs
+// in-process from it. `checkpoint`/`checkpointSeq` hold the LATEST checkpoint
+// only (messages digest + budget/oracle/loop state, one transaction with the
+// event append per plan.md Phase 2); the full history is agent_run_events.
+export const agentRuns = agentSchema.table(
+  "agent_runs",
+  {
+    ...idMixin("arun"),
+    ...orgScopeMixin(),
+    ...auditMixin(),
+    surface: text("surface").notNull(),
+    status: text("status").notNull().default("pending"),
+    spec: jsonb("spec").notNull(),
+    // Durable claim/lease — see module comment above.
+    claimedBy: text("claimed_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    attempts: integer("attempts").notNull().default(0),
+    // Latest checkpoint only; append-only history lives in agent_run_events.
+    checkpoint: jsonb("checkpoint"),
+    checkpointSeq: integer("checkpoint_seq").notNull().default(0),
+    result: jsonb("result"),
+    error: text("error"),
+    // Set by the cancel path; the worker observes this and drops the run
+    // future (Stella-style structured cancellation, spec.md §4.2) instead of
+    // being torn down out-of-band.
+    cancelRequested: boolean("cancel_requested").notNull().default(false),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    completedAt: timestamp("completed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    orgIdx: index("agent_runs_org_idx").on(t.orgId, t.workspaceId),
+    // Cross-org on purpose (see module comment): the claim UPDATE and the
+    // lease sweeper scan across every tenant, so org_id would only shrink this
+    // index without ever appearing in their WHERE clause.
+    claimIdx: index("agent_runs_claim_idx")
+      .on(t.status, t.createdAt)
+      .where(sql`${t.status} IN ('pending', 'running')`),
+    surfaceCheck: check(
+      "agent_runs_surface_check",
+      sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit')`,
+    ),
+    statusCheck: check(
+      "agent_runs_status_check",
+      sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
+  }),
+);
+
+// Append-only event log for agent_runs — the canonical source for resumable
+// SSE subscriptions, ClickHouse ingestion, and ADR-028 replay (spec.md §4.2:
+// "the event log is canonical"). Immutable child, same shape discipline as
+// file_lock_fences above: bare uuid pk (no idMixin/public_id — nothing
+// external addresses one event row directly) and no updatedAt. `seq` is
+// app-assigned and monotonic per run starting at 1 — deliberately NOT a
+// serial/identity column, so the worker can assert the exact next value in
+// the same transaction as the checkpoint write (`UNIQUE(run_id, seq)` below
+// turns a racing double-append into a constraint violation, not silent
+// duplication).
+export const agentRunEvents = agentSchema.table(
+  "agent_run_events",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    // No cross-schema FK to agent_runs — app-enforced per CLAUDE.md storage
+    // rules (same convention as fileLocks.executionId etc. above).
+    runId: uuid("run_id").notNull(),
+    seq: integer("seq").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    runSeqUniq: uniqueIndex("agent_run_events_run_seq_uq").on(t.runId, t.seq),
+    orgIdx: index("agent_run_events_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);

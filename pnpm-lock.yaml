@@ -763,6 +763,15 @@ importers:
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../agent-engine
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
       typescript:
         specifier: 6.0.3
         version: 6.0.3

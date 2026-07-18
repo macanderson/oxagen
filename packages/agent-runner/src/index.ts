@@ -13,6 +13,20 @@ export {
   type PlatformSurface,
 } from "./execute-turn";
 
+// Phase 2b — durable-run persistence (docs/specs/agent-engine-v2/plan.md,
+// Phase 2). run-store.ts is the only writer of agent.agent_runs /
+// agent.agent_run_events; surfaces and the worker pool both go through this
+// seam rather than issuing their own SQL against those tables.
+export {
+  createPostgresRunStore,
+  MAX_RUN_ATTEMPTS,
+  RUN_LEASE_SECONDS,
+  type RunStore,
+  type EnqueueRunInput,
+  type ClaimedRun,
+  type RunEventRecord,
+} from "./run-store";
+
 // Re-exports so surfaces don't need a second engine-facing import. Types are
 // pass-throughs; the constants are advertised limits, not engine behavior.
 export {
