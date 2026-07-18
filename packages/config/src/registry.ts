@@ -850,6 +850,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OXAGEN_WORKER_CONCURRENCY: {
+    group: "Inngest",
+    description:
+      "Simultaneous durable runs one @oxagen/agent-worker process drives (agent-engine v2 " +
+      "Phase 2c — docs/specs/agent-engine-v2/plan.md 'Phase 2 — Durable runs'). Grouped with " +
+      "Inngest: the worker pool claims runs via FOR UPDATE SKIP LOCKED + lease heartbeat while " +
+      "Inngest keeps dispatch/cancelOn/lease-sweep — the two jointly implement the durable-run " +
+      "system. Defaults to 2 (createAgentWorker's WorkerOptions.concurrency default) when unset " +
+      "or not a positive integer.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "2",
+  },
+  OXAGEN_WORKER_ID: {
+    group: "Inngest",
+    description:
+      "Claim/lease owner identity for one @oxagen/agent-worker process (agent-engine v2 Phase " +
+      "2c). Stamped as `claimed_by` on the durable-run row so a crashed worker's runs are " +
+      "identifiable and reclaimable. Defaults to `${os.hostname()}:${process.pid}` when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "worker-1:12345",
+  },
 
   // ── AI providers ──────────────────────────────────────────────────────────────
   BLOB_READ_WRITE_TOKEN: {
