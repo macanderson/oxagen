@@ -659,6 +659,9 @@ importers:
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../agent-engine
+      '@oxagen/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
@@ -791,6 +794,12 @@ importers:
 
   packages/agent-worker:
     dependencies:
+      '@oxagen/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@oxagen/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       typescript:
         specifier: 6.0.3
         version: 6.0.3
