@@ -24,23 +24,23 @@
  *
  * withTenantDb vs withSystemDb — which methods use which, and why:
  *
- *   - `enqueueRun`, `requestCancel`, `isCancelRequested`, `readEventsSince`
- *     use withTenantDb. Their signatures carry NO org/workspace args beyond
- *     what `enqueueRun`'s input already needs for the row itself
- *     (`requestCancel(runId)` and `isCancelRequested(runId)` take a bare run
- *     id) — there is no scope for this module to construct even if it wanted
- *     to. These are called from a request-handling surface that already runs
- *     inside a tenant ALS scope (the platform's CapabilityHandler middleware,
- *     same precondition every `withTenantDb` caller in packages/handlers
- *     relies on); this module never calls `runInTenantScope` itself, it just
- *     assumes the caller holds scope, exactly like
- *     packages/handlers/src/connection.delete.ts. (`@oxagen/tenancy` is a
- *     declared package dependency for this reason — `withTenantDb` requires
- *     an active ALS scope from *somewhere* — but this module never imports
- *     `runInTenantScope` itself, unlike lease.ts's tenant-scoped functions,
- *     which take orgId/workspaceId and open their own scope. It can't:
- *     `requestCancel`/`isCancelRequested`/`readEventsSince` take a bare run
- *     id, with no org/workspace to construct a scope from.)
+ *   - `enqueueRun`, `requestCancel`, `isCancelRequested`, `readEventsSince`,
+ *     `getRunByPublicId` use withTenantDb. Their signatures carry NO
+ *     org/workspace args beyond what `enqueueRun`'s input already needs for
+ *     the row itself (`requestCancel(runId)`, `isCancelRequested(runId)`, and
+ *     `getRunByPublicId(publicId)` take a bare id) — there is no scope for
+ *     this module to construct even if it wanted to. These are called from a
+ *     request-handling surface that already runs inside a tenant ALS scope
+ *     (the platform's CapabilityHandler middleware, same precondition every
+ *     `withTenantDb` caller in packages/handlers relies on); this module
+ *     never calls `runInTenantScope` itself, it just assumes the caller
+ *     holds scope, exactly like packages/handlers/src/connection.delete.ts.
+ *     (This module does NOT depend on `@oxagen/tenancy` — `withTenantDb`
+ *     only requires an active ALS scope from *somewhere*, established by the
+ *     caller, unlike lease.ts's tenant-scoped functions, which take
+ *     orgId/workspaceId and open their own scope. It can't: the bare-id
+ *     methods above have no org/workspace to construct a scope from even if
+ *     this module wanted to call `runInTenantScope` itself.)
  *   - `claimNextRun`, `renewLease`, `appendEvents`, `saveCheckpoint`,
  *     `completeRun`, `failRun`, `cancelRun` use withSystemDb. These run on the
  *     WORKER, which has no tenant ALS scope at all — it is a small pool
@@ -112,6 +112,28 @@ export interface RunEventRecord {
   payload: unknown;
 }
 
+/**
+ * Public, tenant-facing run status — the shape the durable-run API surface
+ * (apps/api's `/v1/.../runs` routes, Phase 2 integration) hands back for
+ * GET /runs/:publicId and the SSE `done` terminal event. Deliberately NOT
+ * `ClaimedRun` (which is a worker-internal shape carrying `spec`/checkpoint
+ * state a caller never needs and org/workspace ids that RLS already scopes
+ * away): this is the read-side projection callers poll/subscribe against.
+ */
+export interface RunSummary {
+  runId: string;
+  publicId: string;
+  surface: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  result: unknown | null;
+  error: string | null;
+  checkpointSeq: number;
+  attempts: number;
+  createdAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+}
+
 export interface RunStore {
   enqueueRun(
     input: EnqueueRunInput,
@@ -144,6 +166,16 @@ export interface RunStore {
   cancelRun(runId: string, workerId: string): Promise<boolean>;
   requestCancel(runId: string): Promise<void>;
   isCancelRequested(runId: string): Promise<boolean>;
+  /**
+   * Look up a run's public status by its externally-addressable `public_id`
+   * (the `arun_…` id `enqueueRun` mints). Tenant-scoped via `withTenantDb`
+   * exactly like `readEventsSince`/`requestCancel` above — no explicit
+   * org/workspace filter in the SQL, RLS does that from the caller's ALS
+   * scope, so a cross-tenant publicId resolves to `null`, never another
+   * org's row. Returns `null` for an unknown or cross-tenant publicId — the
+   * durable-run API route maps that to a clean 404.
+   */
+  getRunByPublicId(publicId: string): Promise<RunSummary | null>;
 }
 
 // ── Pure helpers — id generation + row mapping ──────────────────────────────
@@ -203,6 +235,42 @@ export function mapRunEventRow(
       row.created_at instanceof Date
         ? row.created_at
         : new Date(row.created_at),
+  };
+}
+
+type RunSummaryRow = {
+  id: string;
+  public_id: string;
+  surface: string;
+  status: string;
+  result: unknown | null;
+  error: string | null;
+  checkpoint_seq: number | string;
+  attempts: number | string;
+  created_at: string | Date;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+};
+
+function toDateOrNull(value: string | Date | null): Date | null {
+  if (value === null) return null;
+  return value instanceof Date ? value : new Date(value);
+}
+
+/** Map an agent_runs row (snake_case, driver-typed) to the public RunSummary. */
+export function mapRunSummaryRow(row: RunSummaryRow): RunSummary {
+  return {
+    runId: row.id,
+    publicId: row.public_id,
+    surface: row.surface,
+    status: row.status as RunSummary["status"],
+    result: row.result ?? null,
+    error: row.error ?? null,
+    checkpointSeq: Number(row.checkpoint_seq),
+    attempts: Number(row.attempts),
+    createdAt: toDateOrNull(row.created_at) as Date,
+    startedAt: toDateOrNull(row.started_at),
+    completedAt: toDateOrNull(row.completed_at),
   };
 }
 
@@ -392,6 +460,19 @@ export function buildIsCancelRequestedSql(runId: string): SQL {
   `;
 }
 
+/**
+ * Look up the public status projection by `public_id`. No org/workspace
+ * filter — RLS scopes the read from the caller's tenant ALS session, exactly
+ * like `buildReadEventsSinceSql`/`buildIsCancelRequestedSql` above.
+ */
+export function buildGetRunByPublicIdSql(publicId: string): SQL {
+  return sql`
+    SELECT id, public_id, surface, status, result, error, checkpoint_seq, attempts, created_at, started_at, completed_at
+    FROM agent.agent_runs
+    WHERE public_id = ${publicId}
+  `;
+}
+
 // ── The store ────────────────────────────────────────────────────────────────
 
 export function createPostgresRunStore(): RunStore {
@@ -489,6 +570,16 @@ export function createPostgresRunStore(): RunStore {
           buildIsCancelRequestedSql(runId),
         )) as unknown as Array<{ cancel_requested: boolean }>;
         return Boolean(rows[0]?.cancel_requested);
+      });
+    },
+
+    async getRunByPublicId(publicId) {
+      return withTenantDb(async (tx: Tx) => {
+        const rows = (await tx.execute(
+          buildGetRunByPublicIdSql(publicId),
+        )) as unknown as RunSummaryRow[];
+        const row = rows[0];
+        return row ? mapRunSummaryRow(row) : null;
       });
     },
   };

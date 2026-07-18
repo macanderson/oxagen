@@ -25,6 +25,7 @@ export {
   type EnqueueRunInput,
   type ClaimedRun,
   type RunEventRecord,
+  type RunSummary,
 } from "./run-store";
 
 // Re-exports so surfaces don't need a second engine-facing import. Types are
