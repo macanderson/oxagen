@@ -132,8 +132,14 @@ vi.mock("@oxagen/agent", () => ({
 vi.mock("@oxagen/agent/adapters", () => ({
   createPlatformAgentAi: vi.fn(() => ({})),
 }));
-vi.mock("@oxagen/agent-engine", () => ({
-  runCodingAgent: h.runCodingAgent,
+vi.mock("@oxagen/agent-runner", () => ({
+  // The bridge enters the engine through the executeTurn seam (agent-engine
+  // v2 Phase 1); the double keeps runCodingAgent's one-argument contract by
+  // dropping the surface tag.
+  executeTurn: vi.fn(
+    (_surface: string, opts: Parameters<typeof h.runCodingAgent>[0]) =>
+      h.runCodingAgent(opts),
+  ),
   // The bridge imports DEFAULT_MAX_AGENT_STEPS for the maxSteps backstop; a
   // factory mock must declare every named export the source touches or Vitest
   // throws on access. The value is inert here (the runCodingAgent double ignores

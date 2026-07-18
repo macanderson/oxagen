@@ -7,7 +7,7 @@ import {
 } from "@oxagen/ai";
 import { materializeTools, resolveAgentForA2A } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
-import { runCodingAgent, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-engine";
+import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertEvents, captureError } from "@oxagen/telemetry";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -514,7 +514,7 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     // status events via `onStreamPart`, preserving the JSON-RPC wire format.
     const ai = createPlatformAgentAi(ctx, ctx.requestId, "api");
 
-    const result = await runCodingAgent({
+    const result = await executeTurn("a2a", {
       ai,
       instruction,
       history: historyForEngine,
