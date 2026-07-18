@@ -30,7 +30,11 @@ import type { AgentMemoryCitationsListOutput } from "@oxagen/oxagen/contracts/ag
 import type { AgentMemoryEvidenceAttachOutput } from "@oxagen/oxagen/contracts/agent.memory_evidence.attach";
 import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Result types (exported for client prop typing)
@@ -44,12 +48,22 @@ export type UpdateMemoryResult =
   | { ok: true; memory: AgentMemoryRecord }
   | { ok: false; error: string };
 
-export type DeleteMemoryResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type DeleteMemoryResult = { ok: true } | { ok: false; error: string };
 
 export type PromoteMemoryResult =
   | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
+export type DismissPromotionResult =
+  | { ok: true; memoryId: string; dismissed: boolean }
+  | { ok: false; error: string };
+
+export type DemoteMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
+export type SuggestRationalesResult =
+  | { ok: true; rationales: string[] }
   | { ok: false; error: string };
 
 export type PromotionCandidatesResult =
@@ -121,7 +135,14 @@ export async function createMemoryAction(input: {
   enforcementScore?: number;
 }): Promise<CreateMemoryResult> {
   const session = await getSessionOrRedirect();
-  const { orgSlug, workspaceSlug, text, memoryKind, memoryClass, enforcementScore } = input;
+  const {
+    orgSlug,
+    workspaceSlug,
+    text,
+    memoryKind,
+    memoryClass,
+    enforcementScore,
+  } = input;
 
   const trimmed = text.trim();
   if (trimmed.length === 0) {
@@ -219,7 +240,10 @@ export async function updateMemoryAction(input: {
     // Workspace membership gate — apps/app skips IAM, so enforce here.
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to edit memories." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to edit memories.",
+      };
     }
 
     const ctx = {
@@ -277,7 +301,10 @@ export async function deleteMemoryAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to delete memories." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to delete memories.",
+      };
     }
 
     const ctx = {
@@ -291,12 +318,7 @@ export async function deleteMemoryAction(input: {
     };
 
     try {
-      await invoke(
-        "delete_memory",
-        { memoryId },
-        ctx,
-        { surface: "agent" },
-      );
+      await invoke("delete_memory", { memoryId }, ctx, { surface: "agent" });
 
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return { ok: true };
@@ -317,6 +339,10 @@ export async function deleteMemoryAction(input: {
 // Moves a memory up the confidence ladder (OBSERVATION → RULE/FACT, or
 // RULE → FACT), recording an auditable :Promotion event. Backs the "Promote"
 // affordance in the memory detail sheet and the "suggested to promote" panel.
+//
+// `rationale` is optional (promote_memory's schema — see
+// agent.memory.promote.ts). Omitted or blank rationale is simply left off the
+// invoke input rather than sent as an empty string.
 // ---------------------------------------------------------------------------
 
 export async function promoteMemoryAction(input: {
@@ -325,12 +351,19 @@ export async function promoteMemoryAction(input: {
   memoryId: string;
   toClass: "RULE" | "FACT";
   enforcementScore?: number;
-  rationale: string;
+  rationale?: string;
   basedOnEvidenceIds?: string[];
 }): Promise<PromoteMemoryResult> {
   const session = await getSessionOrRedirect();
-  const { orgSlug, workspaceSlug, memoryId, toClass, enforcementScore, rationale, basedOnEvidenceIds } =
-    input;
+  const {
+    orgSlug,
+    workspaceSlug,
+    memoryId,
+    toClass,
+    enforcementScore,
+    rationale,
+    basedOnEvidenceIds,
+  } = input;
 
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -340,7 +373,10 @@ export async function promoteMemoryAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to promote memories." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to promote memories.",
+      };
     }
 
     const ctx = {
@@ -353,6 +389,8 @@ export async function promoteMemoryAction(input: {
       messageId: null as string | null,
     };
 
+    const trimmedRationale = rationale?.trim();
+
     try {
       const memory = (await invoke(
         "promote_memory",
@@ -360,7 +398,7 @@ export async function promoteMemoryAction(input: {
           memoryId,
           toClass,
           ...(enforcementScore != null ? { enforcementScore } : {}),
-          rationale,
+          ...(trimmedRationale ? { rationale: trimmedRationale } : {}),
           ...(basedOnEvidenceIds && basedOnEvidenceIds.length > 0
             ? { basedOnEvidenceIds }
             : {}),
@@ -378,6 +416,221 @@ export async function promoteMemoryAction(input: {
       );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to promote memory." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// dismissPromotionAction
+//
+// Durably removes (or restores) a memory from the promotion candidate queue —
+// dismiss_memory_promotion stamps promotion_dismissed_at rather than touching
+// the memory itself, so the underlying AgentMemory stays ACTIVE and
+// recallable. Backs the "Dismiss" affordance in both the dedicated promotion
+// queue and the inline "suggested to promote" panel.
+// ---------------------------------------------------------------------------
+
+export async function dismissPromotionAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  restore?: boolean;
+}): Promise<DismissPromotionResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, memoryId, restore } = input;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return {
+        ok: false,
+        error:
+          "You must be a workspace member to dismiss promotion candidates.",
+      };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const out = (await invoke(
+        "dismiss_memory_promotion",
+        { memoryId, ...(restore != null ? { restore } : {}) },
+        ctx,
+        { surface: "agent" },
+      )) as { memoryId: string; dismissed: boolean };
+
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
+      return { ok: true, memoryId: out.memoryId, dismissed: out.dismissed };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId },
+        "knowledge.memory: dismissPromotionAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return {
+        ok: false,
+        error: message || "Failed to dismiss promotion candidate.",
+      };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// demoteMemoryAction
+//
+// Moves a memory down the confidence ladder (FACT → RULE/OBSERVATION, or
+// RULE → OBSERVATION), recording an auditable :Demotion event — the inverse
+// of promoteMemoryAction. Backs the "Demote" affordance in the memory detail
+// sheet for RULE and FACT memories.
+// ---------------------------------------------------------------------------
+
+export async function demoteMemoryAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  toClass: "RULE" | "OBSERVATION";
+  enforcementScore?: number;
+  rationale?: string;
+}): Promise<DemoteMemoryResult> {
+  const session = await getSessionOrRedirect();
+  const {
+    orgSlug,
+    workspaceSlug,
+    memoryId,
+    toClass,
+    enforcementScore,
+    rationale,
+  } = input;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return {
+        ok: false,
+        error: "You must be a workspace member to demote memories.",
+      };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    const trimmedRationale = rationale?.trim();
+
+    try {
+      const memory = (await invoke(
+        "demote_memory",
+        {
+          memoryId,
+          toClass,
+          ...(toClass === "RULE" && enforcementScore != null
+            ? { enforcementScore }
+            : {}),
+          ...(trimmedRationale ? { rationale: trimmedRationale } : {}),
+        },
+        ctx,
+        { surface: "agent" },
+      )) as AgentMemoryRecord;
+
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
+      return { ok: true, memory };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId, toClass },
+        "knowledge.memory: demoteMemoryAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to demote memory." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// suggestRationalesAction
+//
+// Read-only: drafts candidate rationales for a promotion/demotion so the
+// human can pick one instead of typing. Backs the RationalePicker select
+// (rationale-picker.tsx) used by every promote/demote flow. No
+// revalidatePath — this never mutates a memory.
+// ---------------------------------------------------------------------------
+
+export async function suggestRationalesAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  toClass: "RULE" | "FACT" | "OBSERVATION";
+  count?: number;
+}): Promise<SuggestRationalesResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, memoryId, toClass, count } = input;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return {
+        ok: false,
+        error: "You must be a workspace member to view rationale suggestions.",
+      };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const out = (await invoke(
+        "suggest_promotion_rationales",
+        { memoryId, toClass, ...(count != null ? { count } : {}) },
+        ctx,
+        { surface: "agent" },
+      )) as { rationales: string[] };
+
+      return { ok: true, rationales: out.rationales };
+    } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, memoryId, toClass },
+        "knowledge.memory: suggestRationalesAction failed",
+      );
+      const message = err instanceof Error ? err.message : "";
+      return {
+        ok: false,
+        error: message || "Failed to load rationale suggestions.",
+      };
     }
   });
 }
@@ -405,7 +658,10 @@ export async function promotionCandidatesAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to view memories." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to view memories.",
+      };
     }
 
     const ctx = {
@@ -433,7 +689,10 @@ export async function promotionCandidatesAction(input: {
         "knowledge.memory: promotionCandidatesAction failed",
       );
       const message = err instanceof Error ? err.message : "";
-      return { ok: false, error: message || "Failed to load promotion candidates." };
+      return {
+        ok: false,
+        error: message || "Failed to load promotion candidates.",
+      };
     }
   });
 }
@@ -458,7 +717,8 @@ export async function listMemoryCitationsAction(input: {
   influenceIn?: Array<"DECISIVE" | "CONTRIBUTING" | "CONSIDERED" | "IGNORED">;
 }): Promise<ListMemoryCitationsResult> {
   const session = await getSessionOrRedirect();
-  const { orgSlug, workspaceSlug, executionId, compliance, influenceIn } = input;
+  const { orgSlug, workspaceSlug, executionId, compliance, influenceIn } =
+    input;
 
   const trimmedExecutionId = executionId.trim();
   if (trimmedExecutionId.length === 0) {
@@ -475,7 +735,10 @@ export async function listMemoryCitationsAction(input: {
     // Workspace membership gate — apps/app skips IAM, so enforce here.
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to view citations." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to view citations.",
+      };
     }
 
     const ctx = {
@@ -503,7 +766,12 @@ export async function listMemoryCitationsAction(input: {
       return { ok: true, citations: out.citations };
     } catch (err) {
       logger.error(
-        { err, orgId: org.id, workspaceId: ws.id, executionId: trimmedExecutionId },
+        {
+          err,
+          orgId: org.id,
+          workspaceId: ws.id,
+          executionId: trimmedExecutionId,
+        },
         "knowledge.memory: listMemoryCitationsAction failed",
       );
       const message = err instanceof Error ? err.message : "";
@@ -537,11 +805,22 @@ export async function attachMemoryEvidenceAction(input: {
   refutes?: boolean;
 }): Promise<AttachMemoryEvidenceResult> {
   const session = await getSessionOrRedirect();
-  const { orgSlug, workspaceSlug, memoryId, sourceKind, strength, detail, refutes } = input;
+  const {
+    orgSlug,
+    workspaceSlug,
+    memoryId,
+    sourceKind,
+    strength,
+    detail,
+    refutes,
+  } = input;
 
   const trimmedMemoryId = memoryId.trim();
   if (trimmedMemoryId.length === 0) {
-    return { ok: false, error: "Enter the id of the memory to attach evidence to." };
+    return {
+      ok: false,
+      error: "Enter the id of the memory to attach evidence to.",
+    };
   }
   if (!Number.isFinite(strength) || strength < 0 || strength > 1) {
     return { ok: false, error: "Strength must be between 0 and 1." };
@@ -557,7 +836,10 @@ export async function attachMemoryEvidenceAction(input: {
     // Workspace membership gate — apps/app skips IAM, so enforce here.
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to attach evidence." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to attach evidence.",
+      };
     }
 
     const ctx = {
@@ -588,7 +870,11 @@ export async function attachMemoryEvidenceAction(input: {
       // Confidence moved — revalidate the list so the row's confidence bar
       // reflects the new score on next visit.
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
-      return { ok: true, evidenceId: out.evidenceId, confidenceScore: out.confidenceScore };
+      return {
+        ok: true,
+        evidenceId: out.evidenceId,
+        confidenceScore: out.confidenceScore,
+      };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, memoryId: trimmedMemoryId },
