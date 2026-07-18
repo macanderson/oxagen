@@ -971,7 +971,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         }
 
         const [
-          { tools: agentTools, nameMap: toolNameMap },
+          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
           skillIndex,
           pinnedSkillBodies,
@@ -1659,6 +1659,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           maxRetries: CHAT_MAX_RETRIES,
           maxOverflowRetries: CHAT_MAX_OVERFLOW_RETRIES,
           extraTools: allTools,
+          // Mutating capability aliases run behind the engine's exclusive
+          // dispatch barrier (agent-engine v2 Phase 0) instead of the AI SDK's
+          // unbounded parallel execution.
+          mutatingToolNames,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency — C3). The
           // engine prepends its own "## Recalled context" heading before the

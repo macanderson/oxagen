@@ -430,7 +430,7 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
     // (no serial latency before the first token). The recalled block is injected
     // per-turn by the engine AFTER the cached system prefix (ADR-021 §2/§8).
     const [
-      { tools: agentTools, nameMap: toolNameMap },
+      { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
       promptConfig,
       recalled,
     ] = await runInTenantScope(scope, () =>
@@ -531,6 +531,9 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       maxRetries: 0,
       maxOverflowRetries: 0,
       extraTools: agentTools,
+      // Mutating capability aliases serialize behind the engine's dispatch
+      // barrier (agent-engine v2 Phase 0).
+      mutatingToolNames,
       memory: createRecalledMemoryProvider({
         recalledPromise: Promise.resolve(recalled),
       }),

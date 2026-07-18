@@ -268,7 +268,7 @@ chatStreamRoute.post("/", async (c) => {
         // recalled block is injected per-turn by the engine AFTER the cached
         // system prefix (ADR-021 §2/§8), never into the system block.
         const [
-          { tools: agentTools, nameMap: toolNameMap },
+          { tools: agentTools, nameMap: toolNameMap, mutatingToolNames },
           promptConfig,
           recalledMemory,
         ] = await runInTenantScope(
@@ -466,6 +466,9 @@ chatStreamRoute.post("/", async (c) => {
           // No `workspace` ⇒ conversational mode: no filesystem tools; the
           // materialized invoke()-gated capability ToolSet is injected here.
           extraTools: agentTools,
+          // Mutating capability aliases serialize behind the engine's
+          // dispatch barrier (agent-engine v2 Phase 0).
+          mutatingToolNames,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency).
           memory: createRecalledMemoryProvider({
