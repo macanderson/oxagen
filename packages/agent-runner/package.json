@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/database": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
+    "drizzle-orm": "0.45.2",
     "typescript": "6.0.3"
   },
   "devDependencies": {
