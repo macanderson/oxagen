@@ -68,19 +68,51 @@ oxagen memory list --class RULE --sort citations   # rules, most-cited first
 oxagen memory show mem_01H…                         # one memory in full
 oxagen memory edit mem_01H… --lesson "…"            # revise (re-embeds)
 oxagen memory candidates                            # observations ripe to promote
+oxagen memory dismiss mem_01H…                      # drop one from the candidate queue
+oxagen memory demote mem_01H… --to observation      # walk a rule/fact back down
+oxagen memory citations --days 30                   # workspace citation analytics
 oxagen memory rm mem_01H…                           # delete
 ```
 
 ### Promote up the ladder
 
-When an observation has proven itself, promote it — this records an auditable event:
+When an observation has proven itself, promote it — this records an auditable event. The `--rationale` flag is optional; promotion needs nothing beyond the command itself:
 
 ```bash
-oxagen memory promote mem_01H… --to rule --enforcement 80 \
+oxagen memory promote mem_01H… --to rule --enforcement 80
+oxagen memory promote mem_01H… --to fact \
   --rationale "cited in three reviews; team agreed to enforce"
 ```
 
 `--to fact` requires human confirmation. `oxagen memory salience` adjusts confidence, enforcement, or lifecycle status (`ACTIVE`/`SUPERSEDED`/`RETRACTED`/`ARCHIVED`) without changing the class.
+
+### Demote back down
+
+The audited inverse of promote — for rules that stopped earning their citations or facts that turned out to be wrong. Direction is strictly downward; demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
+
+```bash
+oxagen memory demote mem_01H… --to observation
+oxagen memory demote mem_01H… --to rule --enforcement 60 \
+  --rationale "still useful context, no longer binding"
+```
+
+### Dismiss a promotion suggestion
+
+`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable — the memory stays active and recallable, but it leaves the queue permanently and the next candidate takes its slot:
+
+```bash
+oxagen memory dismiss mem_01H…            # silence the suggestion
+oxagen memory dismiss mem_01H… --restore  # let it re-qualify later
+```
+
+### Citation analytics
+
+A workspace-wide rollup of which memories and graph nodes agents actually cite, how useful those citations were, and where promoted rules get violated — the terminal view of the **Knowledge → Citations** dashboard:
+
+```bash
+oxagen memory citations                   # 30-day window, top 10 per list
+oxagen memory citations --days 90 --limit 25
+```
 
 ### Import existing docs
 

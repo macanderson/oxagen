@@ -33,6 +33,42 @@ is silenced. See `docs/specs/two-axis-memory/DESIGN.md` §7c.
 
 - Neo4j: set (or clear on `restore`) `promotion_dismissed_at` on the `:AgentMemory` node. `listPromotionCandidates` filters `promotion_dismissed_at IS NULL`.
 
+## Examples
+
+API — dismiss a suggestion (the next-highest candidate takes the freed slot):
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/promotion/dismiss" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": "mem_01H…"}'
+```
+
+API — restore a dismissed memory so it can re-qualify as a candidate:
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/promotion/dismiss" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": "mem_01H…", "restore": true}'
+```
+
+MCP — tool `dismiss_memory_promotion`:
+
+```json
+{ "memoryId": "mem_01H…" }
+```
+
+CLI:
+
+```bash
+oxagen memory dismiss mem_01H…            # silence the suggestion
+oxagen memory dismiss mem_01H… --restore  # let it re-qualify
+```
+
+App: Knowledge → Memory → **Dismiss** on a promotion-candidate card (an Undo
+toast calls `restore: true`).
+
 ## SPEC references
 
 - `docs/specs/two-axis-memory/DESIGN.md` §7c

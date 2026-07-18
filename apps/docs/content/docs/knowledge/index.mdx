@@ -41,6 +41,10 @@ Oxagen can infer relationships across sources with an LLM pass — for example l
 
 Inference prompts are configurable per source — see [Inference prompts](/docs/connections/inference-prompts).
 
+## Citation analytics
+
+Every grounded answer records which memories and graph nodes it cited, and how much they mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard — most-cited and least-useful memories, violated rules, top cited entities — so you can promote what works and demote what doesn't. See [Citations](/docs/knowledge/citations).
+
 ## Governing the graph's shape
 
 The graph's vocabulary — which entity types, properties, and relationship types are allowed — is governed by the workspace [schema registry](/docs/knowledge/schema-registry).

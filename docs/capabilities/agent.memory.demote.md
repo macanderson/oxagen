@@ -37,6 +37,41 @@ The target class must be strictly below the memory's current class. See
 
 - Neo4j: create `(:Demotion)-[:DEMOTED]->(:AgentMemory)`; update class/enforcement/confirmation.
 
+## Examples
+
+API — demote a rule back to an observation (rationale optional):
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/demote" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": "mem_01H…", "toClass": "OBSERVATION", "rationale": "never influential in 30 days of citations"}'
+```
+
+API — demote a FACT to a RULE with explicit enforcement (omitting `enforcementScore` defaults it to 50):
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/demote" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": "mem_01H…", "toClass": "RULE", "enforcementScore": 60}'
+```
+
+MCP — tool `demote_memory` with the same input shape:
+
+```json
+{ "memoryId": "mem_01H…", "toClass": "RULE", "enforcementScore": 60 }
+```
+
+CLI:
+
+```bash
+oxagen memory demote mem_01H… --to observation
+oxagen memory demote mem_01H… --to rule --enforcement 60 --rationale "still useful, no longer binding"
+```
+
+App: Knowledge → Memory → open a RULE/FACT memory → **Demote** in the detail sheet.
+
 ## SPEC references
 
 - `docs/specs/two-axis-memory/DESIGN.md` §4

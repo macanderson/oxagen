@@ -51,14 +51,35 @@ Each written memory includes:
 
 ## Viewing and managing memories
 
-All workspace memories are visible in **Workspace → Knowledge → Memories**. You can:
+All workspace memories are visible in **Workspace → Knowledge → Memory**. You have the full lifecycle from that page:
 
-- Browse and filter memories by kind
-- Edit or delete individual memories
+- Browse and filter memories by class, kind, confidence, and text
+- Create, edit, and delete individual memories
+- Promote a memory up the ladder, demote it back down, or change its lifecycle status (`ACTIVE` / `SUPERSEDED` / `RETRACTED` / `ARCHIVED`)
+- Dismiss promotion suggestions you don't want to see again
 - See which agent or user created each memory and when
-- Review agent-proposed memories before accepting them
+- Attach evidence and review agent-proposed memories before accepting them
 
 Memories are scoped to the workspace. They are not shared across workspaces, and they are not visible to other organizations.
+
+## The promotion lifecycle
+
+Observations that keep proving useful surface as **promotion candidates** — a ranked queue (by citation pressure) on the Memory page. For each candidate you can:
+
+- **Promote** it to RULE or FACT. A written rationale is *optional* — the human gate for FACT is the confirmation checkbox, which locks enforcement at 100 and records you as the confirmer. When you do want a rationale on record, the promote dialog offers a short list of AI-drafted, context-grounded reasons (built from the memory's lesson and its citation history by a low-cost model) — pick one, or choose "Write my own…".
+- **Dismiss** the suggestion. Dismissal is durable: the memory stays active and recallable, but it leaves the candidate queue permanently and the next-highest-signal observation takes its slot. An Undo toast lets you restore it immediately, and `restore: true` on the capability reverses it later.
+- **Demote** a RULE or FACT that no longer deserves its standing (from its detail sheet). Demotion is the audited inverse of promotion: direction is strictly downward, demoting to OBSERVATION clears enforcement, and leaving FACT clears the human confirmation. The same optional-rationale picker applies.
+
+Every promotion and demotion is recorded as an auditable event node in the graph, so a memory's class history is always reconstructable.
+
+## Citation analytics
+
+**Workspace → Knowledge → Citations** shows how memories (and graph nodes) actually get used: every time an agent's answer is grounded by a recall or an `@`-mention, a citation is recorded with an *influence* level (`DECISIVE` / `CONTRIBUTING` / `CONSIDERED` / `IGNORED`) and, for rules, a *compliance* outcome (`COMPLIED` / `DISCRETION` / `VIOLATION`). The dashboard aggregates these over a 7/30/90-day window:
+
+- **Most cited** — the memories carrying the most weight.
+- **Least useful** — recalled repeatedly but never influential; prime candidates to demote or retire.
+- **Most violated rules** — where agents break promoted rules; tighten enforcement or demote the rule.
+- **Top cited nodes** — the graph entities agents lean on most.
 
 ## Memory in the knowledge graph
 
