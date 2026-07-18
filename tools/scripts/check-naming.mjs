@@ -42,36 +42,141 @@ const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 // `domain.X` is either verb-elision or a subject read with an implied `get`.)
 const ACTIONS = new Set([
   // read / list
-  "list", "get", "read", "query", "search", "preview", "browse", "fetch",
-  "summarize", "recommend", "recall", "trace", "debug",
+  "list",
+  "get",
+  "read",
+  "query",
+  "search",
+  "preview",
+  "browse",
+  "fetch",
+  "summarize",
+  "recommend",
+  "recall",
+  "trace",
+  "debug",
   // create / write
-  "create", "update", "write", "upsert", "add", "put", "record", "author",
-  "compose", "generate", "render", "remember", "cite", "attach", "import",
-  "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
-  "save", "post", "draft", "revise",
+  "create",
+  "update",
+  "write",
+  "upsert",
+  "add",
+  "put",
+  "record",
+  "author",
+  "compose",
+  "generate",
+  "render",
+  "remember",
+  "cite",
+  "attach",
+  "import",
+  "ingest",
+  "commit",
+  "publish",
+  "snapshot",
+  "fork",
+  "rename",
+  "edit",
+  "export",
+  "save",
+  "post",
+  "draft",
+  "revise",
   // delete / lifecycle
-  "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
-  "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",
-  "aggregate", "promote", "acquire", "release", "push",
+  "delete",
+  "remove",
+  "purge",
+  "erase",
+  "archive",
+  "cancel",
+  "stop",
+  "start",
+  "run",
+  "execute",
+  "exec",
+  "deploy",
+  "resume",
+  "pause",
+  "trigger",
+  "dispatch",
+  "aggregate",
+  "promote",
+  "demote",
+  "dismiss",
+  "acquire",
+  "release",
+  "push",
   // config / toggles / auth
-  "set", "unset", "enable", "disable", "toggle", "configure", "setup",
-  "activate", "install", "uninstall", "register", "reauth", "rotate", "revoke",
-  "reveal", "pin", "purchase", "load", "map", "diff", "patch", "sync",
-  "reconcile", "approve", "decline", "accept", "resolve", "suggest", "infer",
-  "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
-  "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
-  "fill", "click", "navigate",
+  "set",
+  "unset",
+  "enable",
+  "disable",
+  "toggle",
+  "configure",
+  "setup",
+  "activate",
+  "install",
+  "uninstall",
+  "register",
+  "reauth",
+  "rotate",
+  "revoke",
+  "reveal",
+  "pin",
+  "purchase",
+  "load",
+  "map",
+  "diff",
+  "patch",
+  "sync",
+  "reconcile",
+  "approve",
+  "decline",
+  "accept",
+  "resolve",
+  "suggest",
+  "infer",
+  "check",
+  "verify",
+  "validate",
+  "analyze",
+  "chat",
+  "change",
+  "mark",
+  "send",
+  "open",
+  "format",
+  "parse",
+  "upload",
+  "refresh",
+  "screenshot",
+  "submit",
+  "fill",
+  "click",
+  "navigate",
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
-  "bind", "unbind",
+  "bind",
+  "unbind",
   // imperative verbs used by shipped capabilities that predate this list
   // (draft_skill, save_memory, post_conversation_message, debug_execution,
   // revise_agent_def, revise_skill) — renaming a shipped capability requires
   // the seed-then-deploy runbook (docs/specs/adr025-reland-runbook.md), so the
   // verbs are admitted instead.
-  "draft", "save", "post", "debug", "revise",
+  "draft",
+  "save",
+  "post",
+  "debug",
+  "revise",
   // snake_case compound actions
-  "set_enabled", "set_default", "set_secret", "set_auth_alerts", "set_tools",
-  "import_env", "install_bulk", "from_traces",
+  "set_enabled",
+  "set_default",
+  "set_secret",
+  "set_auth_alerts",
+  "set_tools",
+  "import_env",
+  "install_bulk",
+  "from_traces",
 ]);
 
 // ── Grandfather list (emptied by ADR-025) ────────────────────────────────────
@@ -91,12 +196,20 @@ function readRealCapabilityNames() {
   }
   const names = [];
   for (const file of readdirSync(CAP_DIR)) {
-    if (!file.endsWith(".ts") || file.endsWith(".test.ts") || file === "index.ts") continue;
+    if (
+      !file.endsWith(".ts") ||
+      file.endsWith(".test.ts") ||
+      file === "index.ts"
+    )
+      continue;
     const src = readFileSync(join(CAP_DIR, file), "utf8");
     if (!/registerCapability\s*\(/.test(src)) continue; // shared modules skipped
     // Capture the capability name from inside the registerCapability(...) block,
     // so an earlier `name:` zod field in an input schema can't be mistaken for it.
-    const block = src.split(/registerCapability\s*\(/).slice(1).join("");
+    const block = src
+      .split(/registerCapability\s*\(/)
+      .slice(1)
+      .join("");
     const m = block.match(/name:\s*["'`]([^"'`]+)["'`]/);
     if (m) names.push({ name: m[1], file });
   }
@@ -106,18 +219,26 @@ function readRealCapabilityNames() {
 function validate(name) {
   const problems = [];
   const warnings = [];
-  if (name.includes(".")) problems.push("dots are illegal (ADR-025 supersedes the dotted form — use verb_noun snake_case)");
-  if (name.includes("-")) problems.push("kebab-case is illegal (use snake_case)");
+  if (name.includes("."))
+    problems.push(
+      "dots are illegal (ADR-025 supersedes the dotted form — use verb_noun snake_case)",
+    );
+  if (name.includes("-"))
+    problems.push("kebab-case is illegal (use snake_case)");
   if (!NAME_RE.test(name)) {
     problems.push("must be 2+ lowercase [a-z0-9] words joined by '_'");
     return { problems, warnings }; // charset failure — later checks would be noise
   }
   const words = name.split("_");
   if (!ACTIONS.has(words[0])) {
-    problems.push(`first word "${words[0]}" is not an imperative verb (name must be verb-first)`);
+    problems.push(
+      `first word "${words[0]}" is not an imperative verb (name must be verb-first)`,
+    );
   }
   if (words.length > 3) {
-    warnings.push(`${words.length} words — keep names to 2-3 words unless uniqueness truly demands a 4th`);
+    warnings.push(
+      `${words.length} words — keep names to 2-3 words unless uniqueness truly demands a 4th`,
+    );
   }
   return { problems, warnings };
 }
@@ -143,19 +264,25 @@ function main() {
   }
   const dupes = [...byName.entries()].filter(([, files]) => files.length > 1);
 
-  console.log(`check-naming: validated ${caps.length} capabilities against ADR-025 (verb-first snake_case).`);
+  console.log(
+    `check-naming: validated ${caps.length} capabilities against ADR-025 (verb-first snake_case).`,
+  );
 
   if (warnings.length) {
     console.warn(`\nWORD-COUNT WARNINGS (${warnings.length}, non-blocking):`);
-    for (const { name, file, msg } of warnings) console.warn(`  ! ${name}  [${file}] — ${msg}`);
+    for (const { name, file, msg } of warnings)
+      console.warn(`  ! ${name}  [${file}] — ${msg}`);
   }
 
   let failed = false;
 
   if (dupes.length) {
     failed = true;
-    console.error(`\nDUPLICATE CAPABILITY NAMES — global uniqueness violated (${dupes.length}):`);
-    for (const [name, files] of dupes) console.error(`  ✗ "${name}": ${files.join(", ")}`);
+    console.error(
+      `\nDUPLICATE CAPABILITY NAMES — global uniqueness violated (${dupes.length}):`,
+    );
+    for (const [name, files] of dupes)
+      console.error(`  ✗ "${name}": ${files.join(", ")}`);
   }
 
   if (violations.length) {
@@ -167,12 +294,14 @@ function main() {
     }
     console.error(
       `\nFix the name to verb-first snake_case (see ADR-025). ` +
-      `A non-conforming name is a bug, not a grandfather entry.`,
+        `A non-conforming name is a bug, not a grandfather entry.`,
     );
   }
 
   if (failed) process.exit(1);
-  console.log("All capability names conform to ADR-025 and are globally unique.");
+  console.log(
+    "All capability names conform to ADR-025 and are globally unique.",
+  );
 }
 
 main();
