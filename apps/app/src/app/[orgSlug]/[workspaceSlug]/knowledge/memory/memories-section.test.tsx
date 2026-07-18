@@ -28,6 +28,9 @@ vi.mock("./actions", () => ({
   updateMemoryAction: vi.fn(),
   deleteMemoryAction: vi.fn(),
   promoteMemoryAction: vi.fn(),
+  dismissPromotionAction: vi.fn(),
+  demoteMemoryAction: vi.fn(),
+  suggestRationalesAction: vi.fn(),
   promotionCandidatesAction: vi.fn(),
 }));
 vi.mock("./bulk-import-actions", () => ({
@@ -52,7 +55,9 @@ import { MemoriesSection } from "./memories-section";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -65,16 +70,25 @@ const BASE = {
 
 describe("MemoriesSection", () => {
   it("renders the client with memories on success", async () => {
-    mockInvoke.mockResolvedValue({ memories: [{ id: "m1" }, { id: "m2" }], total: 2 });
+    mockInvoke.mockResolvedValue({
+      memories: [{ id: "m1" }, { id: "m2" }],
+      total: 2,
+    });
     render(await MemoriesSection(BASE));
-    expect(screen.getByTestId("memories-client")).toHaveAttribute("data-count", "2");
+    expect(screen.getByTestId("memories-client")).toHaveAttribute(
+      "data-count",
+      "2",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 
   it("renders the empty client — not an error — when there are genuinely no memories", async () => {
     mockInvoke.mockResolvedValue({ memories: [], total: 0 });
     render(await MemoriesSection(BASE));
-    expect(screen.getByTestId("memories-client")).toHaveAttribute("data-count", "0");
+    expect(screen.getByTestId("memories-client")).toHaveAttribute(
+      "data-count",
+      "0",
+    );
     expect(screen.queryByTestId("error-state")).toBeNull();
   });
 

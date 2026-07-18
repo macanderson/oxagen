@@ -23,7 +23,11 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
-vi.mock("../actions", () => ({ promoteMemoryAction: vi.fn() }));
+vi.mock("../actions", () => ({
+  promoteMemoryAction: vi.fn(),
+  dismissPromotionAction: vi.fn(),
+  suggestRationalesAction: vi.fn(),
+}));
 
 vi.mock("@/components/knowledge/memories/memory-promotion-queue", () => ({
   MemoryPromotionQueue: ({
@@ -46,7 +50,9 @@ import { PromotionQueueSection } from "./promotion-queue-section";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -59,14 +65,20 @@ const BASE = {
 
 describe("PromotionQueueSection", () => {
   it("invokes list_memory_promotions with the capped limit and passes candidates down", async () => {
-    mockInvoke.mockResolvedValue({ candidates: [{ id: "mem-1" }, { id: "mem-2" }] });
+    mockInvoke.mockResolvedValue({
+      candidates: [{ id: "mem-1" }, { id: "mem-2" }],
+    });
     const element = await PromotionQueueSection(BASE);
     render(element);
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "list_memory_promotions",
       { limit: 25 },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
     const el = screen.getByTestId("promotion-queue");

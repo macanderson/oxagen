@@ -23,6 +23,9 @@ import {
   updateMemoryAction,
   deleteMemoryAction,
   promoteMemoryAction,
+  dismissPromotionAction,
+  demoteMemoryAction,
+  suggestRationalesAction,
   promotionCandidatesAction,
 } from "./actions";
 import { parseImportAction, commitImportAction } from "./bulk-import-actions";
@@ -47,23 +50,21 @@ export async function MemoriesSection({
   let loadFailed = false;
 
   try {
-    const result = (await runInTenantScope(
-      { orgId, workspaceId },
-      () =>
-        invoke(
-          "list_memories",
-          { limit: 100, offset: 0 },
-          {
-            orgId,
-            workspaceId,
-            userId,
-            apiKeyId: null as string | null,
-            requestId: crypto.randomUUID(),
-            surface: "app" as const,
-            messageId: null as string | null,
-          },
-          { surface: "agent" },
-        ),
+    const result = (await runInTenantScope({ orgId, workspaceId }, () =>
+      invoke(
+        "list_memories",
+        { limit: 100, offset: 0 },
+        {
+          orgId,
+          workspaceId,
+          userId,
+          apiKeyId: null as string | null,
+          requestId: crypto.randomUUID(),
+          surface: "app" as const,
+          messageId: null as string | null,
+        },
+        { surface: "agent" },
+      ),
     )) as { memories: AgentMemoryRecord[]; total: number };
     memories = result.memories;
     total = result.total;
@@ -96,6 +97,9 @@ export async function MemoriesSection({
       updateMemory={updateMemoryAction}
       deleteMemory={deleteMemoryAction}
       promoteMemory={promoteMemoryAction}
+      dismissPromotion={dismissPromotionAction}
+      demoteMemory={demoteMemoryAction}
+      suggestRationales={suggestRationalesAction}
       promotionCandidates={promotionCandidatesAction}
       parseImport={parseImportAction}
       commitImport={commitImportAction}

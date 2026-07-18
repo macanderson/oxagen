@@ -20,7 +20,11 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { MemoryPromotionQueue } from "@/components/knowledge/memories/memory-promotion-queue";
-import { promoteMemoryAction } from "../actions";
+import {
+  promoteMemoryAction,
+  dismissPromotionAction,
+  suggestRationalesAction,
+} from "../actions";
 
 interface PromotionQueueSectionProps {
   orgId: string;
@@ -44,28 +48,27 @@ export async function PromotionQueueSection({
   let loadError: string | null = null;
 
   try {
-    const result = (await runInTenantScope(
-      { orgId, workspaceId },
-      () =>
-        invoke(
-          "list_memory_promotions",
-          { limit: QUEUE_LIMIT },
-          {
-            orgId,
-            workspaceId,
-            userId,
-            apiKeyId: null as string | null,
-            requestId: crypto.randomUUID(),
-            surface: "app" as const,
-            messageId: null as string | null,
-          },
-          { surface: "agent" },
-        ),
+    const result = (await runInTenantScope({ orgId, workspaceId }, () =>
+      invoke(
+        "list_memory_promotions",
+        { limit: QUEUE_LIMIT },
+        {
+          orgId,
+          workspaceId,
+          userId,
+          apiKeyId: null as string | null,
+          requestId: crypto.randomUUID(),
+          surface: "app" as const,
+          messageId: null as string | null,
+        },
+        { surface: "agent" },
+      ),
     )) as AgentMemoryPromotionCandidatesOutput;
     candidates = result.candidates;
   } catch (e) {
     console.error("agent.memory.promotion.candidates failed:", e);
-    loadError = e instanceof Error ? e.message : "Failed to load promotion candidates.";
+    loadError =
+      e instanceof Error ? e.message : "Failed to load promotion candidates.";
   }
 
   return (
@@ -75,6 +78,8 @@ export async function PromotionQueueSection({
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
       promoteMemory={promoteMemoryAction}
+      dismissPromotion={dismissPromotionAction}
+      suggestRationales={suggestRationalesAction}
     />
   );
 }
