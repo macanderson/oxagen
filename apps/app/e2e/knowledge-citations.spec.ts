@@ -31,6 +31,12 @@ function shot(page: import("@playwright/test").Page, name: string) {
   });
 }
 
+// Serial: two concurrent fresh signups on the local dev server race org
+// creation (HMR remounts can replay/starve the form action) — one worker's
+// org intermittently never lands. CI already runs workers:1, so this only
+// changes local behavior.
+test.describe.configure({ mode: "serial" });
+
 test.describe("Knowledge → Citations", () => {
   test.beforeAll(() => {
     if (fs.existsSync(SCREENSHOT_DIR)) {
@@ -42,6 +48,10 @@ test.describe("Knowledge → Citations", () => {
   test("Citations tab navigates to the dashboard, which renders without error", async ({
     page,
   }) => {
+    // Fresh signup + first compile of two routes under a parallel worker can
+    // exceed the 60s default on the local dev server.
+    test.setTimeout(120_000);
+
     const { orgSlug } = await signUpFreshUser(page, {
       orgPrefix: "citations-nav",
     });
@@ -51,8 +61,12 @@ test.describe("Knowledge → Citations", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     await page.getByRole("tab", { name: "Citations" }).click();
+    // Cold dev-server compiles of a fresh route can exceed 30s; the default
+    // 5s toHaveURL timeout flakes on first navigation (matches the 20s
+    // networkidle allowance below).
     await expect(page).toHaveURL(
       new RegExp(`/${orgSlug}/${ws}/knowledge/citations$`),
+      { timeout: 45_000 },
     );
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
 
@@ -67,7 +81,11 @@ test.describe("Knowledge → Citations", () => {
     // populated dashboard is acceptable — never a crash or blank panel.
     const emptyState = page.getByText("No citations yet");
     const statTiles = page.getByText("Citations", { exact: true }).first();
-    await expect(emptyState.or(statTiles)).toBeVisible({ timeout: 15_000 });
+    // Both can match at once (the tab label is also exact-text "Citations"),
+    // so collapse the or-locator to its first hit to satisfy strict mode.
+    await expect(emptyState.or(statTiles).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     await shot(page, "01-dashboard-loaded");
   });
@@ -75,6 +93,8 @@ test.describe("Knowledge → Citations", () => {
   test("period switcher changes the ?days= window without erroring", async ({
     page,
   }) => {
+    test.setTimeout(120_000);
+
     const { orgSlug } = await signUpFreshUser(page, {
       orgPrefix: "citations-period",
     });
@@ -94,7 +114,11 @@ test.describe("Knowledge → Citations", () => {
 
     const emptyState = page.getByText("No citations yet");
     const statTiles = page.getByText("Citations", { exact: true }).first();
-    await expect(emptyState.or(statTiles)).toBeVisible({ timeout: 15_000 });
+    // Both can match at once (the tab label is also exact-text "Citations"),
+    // so collapse the or-locator to its first hit to satisfy strict mode.
+    await expect(emptyState.or(statTiles).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     await shot(page, "02-period-7d");
   });
