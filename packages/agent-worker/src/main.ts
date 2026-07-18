@@ -24,6 +24,7 @@
 import { createPostgresRunStore } from "@oxagen/agent-runner";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
+import { bootstrap } from "./bootstrap";
 
 function readConcurrency(): number | undefined {
   const raw = process.env.OXAGEN_WORKER_CONCURRENCY;
@@ -32,7 +33,15 @@ function readConcurrency(): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function main(): void {
+async function main(): Promise<void> {
+  // Kernel wiring MUST precede the first claim: handler registration + the
+  // IAM/billing/entitlement gate injection + engram backends + the security
+  // audit emitter (see ./bootstrap.ts). Without it, every capability tool the
+  // driver materializes resolves to `no_handler` and the kernel's gates are
+  // inert. Fail fast on boot errors — a worker that cannot enforce must not
+  // claim runs.
+  await bootstrap();
+
   const store = createPostgresRunStore();
   const driveTurn = createPlatformTurnDriver();
 
@@ -68,4 +77,7 @@ function main(): void {
   worker.start();
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error("@oxagen/agent-worker: bootstrap failed, exiting.", err);
+  process.exit(1);
+});

@@ -797,6 +797,33 @@ importers:
       '@oxagen/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oxagen/database':
+        specifier: workspace:*
+        version: link:../database
+      '@oxagen/handlers':
+        specifier: workspace:*
+        version: link:../handlers
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../iam
+      '@oxagen/inngest-functions':
+        specifier: workspace:*
+        version: link:../inngest-functions
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      '@oxagen/plugins':
+        specifier: workspace:*
+        version: link:../plugins
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       typescript:
         specifier: 6.0.3
         version: 6.0.3
