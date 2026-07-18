@@ -35,6 +35,7 @@ import {
   generateRunPublicId,
   mapClaimedRunRow,
   mapRunEventRow,
+  mapRunSummaryRow,
   buildEnqueueRunSql,
   buildClaimNextRunSql,
   buildRenewLeaseSql,
@@ -46,6 +47,7 @@ import {
   buildCancelRunSql,
   buildRequestCancelSql,
   buildIsCancelRequestedSql,
+  buildGetRunByPublicIdSql,
   createPostgresRunStore,
   type EnqueueRunInput,
 } from "./run-store";
@@ -153,6 +155,75 @@ describe("mapRunEventRow", () => {
       created_at: d,
     });
     expect(mapped.createdAt).toBe(d);
+  });
+});
+
+describe("mapRunSummaryRow", () => {
+  it("coerces numeric strings, defaults null result/error, and maps dates", () => {
+    const mapped = mapRunSummaryRow({
+      id: "run-1",
+      public_id: "arun_abc",
+      surface: "api-chat",
+      status: "completed",
+      result: { text: "done" },
+      error: null,
+      checkpoint_seq: "4",
+      attempts: "1",
+      created_at: "2026-07-18T00:00:00.000Z",
+      started_at: "2026-07-18T00:00:01.000Z",
+      completed_at: "2026-07-18T00:00:02.000Z",
+    });
+    expect(mapped).toEqual({
+      runId: "run-1",
+      publicId: "arun_abc",
+      surface: "api-chat",
+      status: "completed",
+      result: { text: "done" },
+      error: null,
+      checkpointSeq: 4,
+      attempts: 1,
+      createdAt: new Date("2026-07-18T00:00:00.000Z"),
+      startedAt: new Date("2026-07-18T00:00:01.000Z"),
+      completedAt: new Date("2026-07-18T00:00:02.000Z"),
+    });
+  });
+
+  it("maps a pending run's null startedAt/completedAt/result", () => {
+    const mapped = mapRunSummaryRow({
+      id: "run-2",
+      public_id: "arun_def",
+      surface: "api-chat",
+      status: "pending",
+      result: null,
+      error: null,
+      checkpoint_seq: 0,
+      attempts: 0,
+      created_at: new Date("2026-07-18T00:00:00.000Z"),
+      started_at: null,
+      completed_at: null,
+    });
+    expect(mapped.status).toBe("pending");
+    expect(mapped.startedAt).toBeNull();
+    expect(mapped.completedAt).toBeNull();
+    expect(mapped.result).toBeNull();
+  });
+
+  it("passes through an error string for a failed run", () => {
+    const mapped = mapRunSummaryRow({
+      id: "run-3",
+      public_id: "arun_ghi",
+      surface: "api-chat",
+      status: "failed",
+      result: null,
+      error: "boom",
+      checkpoint_seq: 2,
+      attempts: 3,
+      created_at: new Date("2026-07-18T00:00:00.000Z"),
+      started_at: new Date("2026-07-18T00:00:01.000Z"),
+      completed_at: new Date("2026-07-18T00:00:02.000Z"),
+    });
+    expect(mapped.error).toBe("boom");
+    expect(mapped.status).toBe("failed");
   });
 });
 
@@ -296,6 +367,22 @@ describe("buildRequestCancelSql / buildIsCancelRequestedSql", () => {
     const { sql: text, params } = compile(buildIsCancelRequestedSql("run-1"));
     expect(text).toContain("SELECT cancel_requested");
     expect(params).toContain("run-1");
+  });
+});
+
+describe("buildGetRunByPublicIdSql", () => {
+  it("selects the RunSummary columns filtered by public_id (no org/workspace filter — RLS-scoped)", () => {
+    const { sql: text, params } = compile(buildGetRunByPublicIdSql("arun_abc"));
+    expect(text).toContain("SELECT id, public_id, surface, status, result");
+    expect(text).toContain("checkpoint_seq");
+    expect(text).toContain("attempts");
+    expect(text).toContain("created_at");
+    expect(text).toContain("started_at");
+    expect(text).toContain("completed_at");
+    expect(text).toContain("WHERE public_id =");
+    expect(text).not.toContain("org_id");
+    expect(text).not.toContain("workspace_id");
+    expect(params).toContain("arun_abc");
   });
 });
 
@@ -518,5 +605,49 @@ describe("createPostgresRunStore", () => {
     mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
     const store = createPostgresRunStore();
     expect(await store.isCancelRequested("missing-run")).toBe(false);
+  });
+
+  it("getRunByPublicId uses withTenantDb and maps the found row", async () => {
+    const { tx } = makeFakeTx([
+      [
+        {
+          id: "run-1",
+          public_id: "arun_abc",
+          surface: "api-chat",
+          status: "running",
+          result: null,
+          error: null,
+          checkpoint_seq: 2,
+          attempts: 1,
+          created_at: "2026-07-18T00:00:00.000Z",
+          started_at: "2026-07-18T00:00:01.000Z",
+          completed_at: null,
+        },
+      ],
+    ]);
+    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
+    const store = createPostgresRunStore();
+    const summary = await store.getRunByPublicId("arun_abc");
+    expect(summary).toEqual({
+      runId: "run-1",
+      publicId: "arun_abc",
+      surface: "api-chat",
+      status: "running",
+      result: null,
+      error: null,
+      checkpointSeq: 2,
+      attempts: 1,
+      createdAt: new Date("2026-07-18T00:00:00.000Z"),
+      startedAt: new Date("2026-07-18T00:00:01.000Z"),
+      completedAt: null,
+    });
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("getRunByPublicId returns null for an unknown or cross-tenant publicId", async () => {
+    const { tx } = makeFakeTx([[]]);
+    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(tx));
+    const store = createPostgresRunStore();
+    expect(await store.getRunByPublicId("arun_missing")).toBeNull();
   });
 });

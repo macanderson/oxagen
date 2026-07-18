@@ -1312,6 +1312,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "true" },
   },
+  OXAGEN_DURABLE_RUNS: {
+    group: "Observability",
+    description:
+      'Feature flag — set "1" or "true" to mount the durable-run API (POST /runs, ' +
+      "GET /runs/:publicId, GET /runs/:publicId/events resumable SSE, POST /runs/:publicId/cancel) " +
+      "under apps/api's /v1/:org_slug/:workspace_slug scope (agent-engine v2 Phase 2 integration, " +
+      "docs/specs/agent-engine-v2/plan.md). OFF by default: every route under /runs 404s until this " +
+      "is set. Enqueues via @oxagen/agent-runner's RunStore (agent.agent_runs / agent.agent_run_events) " +
+      "— the durable worker that actually executes a claimed run is separate, dispatch-only wiring.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "false" },
+  },
   MCP_PORT: {
     group: "Observability",
     description: "HTTP port for the xmcp server.",
