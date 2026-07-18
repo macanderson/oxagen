@@ -22,6 +22,19 @@ evaluate → enhance → route → execute → judge → revise
 | **Judge** | A **different** model grades the real `git diff` and command/test output for completeness — a model never grades its own work. | judge |
 | **Revise** | If the judge finds gaps, the worker is sent back with the findings and re-judged, up to a bounded number of rounds. | worker + judge |
 
+<Mermaid
+  chart="
+flowchart LR
+  EV[Evaluate] --> EN[Enhance]
+  EN --> R[Route]
+  R --> EX[Execute]
+  EX --> J[Judge]
+  J -->|gaps found| EX
+  J -->|complete| D[Done]"
+/>
+
+*Judge grades the real diff and test output; a bounded revise loop sends the worker back to Execute only when gaps are found — a model never grades its own work.*
+
 Each stage emits an event that drives the live TUI readout, and the whole turn is recorded so you can [`/replay`](/docs/cli/repl-commands#history) it. The pipeline **degrades gracefully**: if an evaluator or judge model fails, it falls back to a heuristic so a turn always completes.
 
 `/pipeline off` (or `--no-pipeline`) runs the **bare agent** — execute only, no evaluate/enhance/judge. Useful when you want a raw model loop with no grounding or verification overhead.
@@ -81,5 +94,5 @@ Additional judge-side skips apply to read-only turns with no diff, and to turns 
 
 - [Per-role models](/docs/cli/models#per-role-models-worker-judge-triage) — set the worker, judge, and triage models.
 - [Fleet](/docs/cli/fleet) — supervise the subagents a multi-task plan fans out.
-- [Agent memory](/docs/cli/memory) and [Knowledge graph](/docs/cli/knowledge-graph) — the two grounding sources the enhance stage injects.
+- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the two grounding sources the enhance stage injects.
 - [In-REPL slash commands](/docs/cli/repl-commands) — the turn-configuration commands above.

@@ -1,4 +1,14 @@
 {
   "title": "Stella",
-  "pages": ["index", "installation", "quickstart", "---", "commands", "models"]
+  "pages": [
+    "index",
+    "installation",
+    "quickstart",
+    "---",
+    "commands",
+    "models",
+    "---",
+    "recommended-skills",
+    "recommended-commands"
+  ]
 }

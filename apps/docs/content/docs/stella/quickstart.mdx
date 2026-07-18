@@ -1,5 +1,5 @@
 ---
-title: Quickstart
+title: Stella quickstart
 description: Set a key, run your first task, and let a judge verify your first goal — about five minutes end to end.
 ---
 
@@ -36,7 +36,7 @@ stella
 
 `stella` with no arguments opens an interactive REPL. Type a prompt and press Enter. Stella thinks (with a live spinner), calls tools as needed (reading files, running commands, searching code), shows its response, and prints a cost and token summary for the turn.
 
-Useful in-chat commands: `/files` shows the Files Touched panel (`[C|R|U|D]` per file), `/models` and `/config` show configuration, `/help` lists everything, and `Ctrl+D` exits. The full list is in [Commands](/docs/stella/commands).
+Useful in-chat commands: `/files` shows the Files Touched panel (`[C|R|U|D]` per file), `/models` and `/config` show configuration, `/help` lists everything, and `Ctrl+D` exits. The full list is in [Subcommands & flags](/docs/stella/commands).
 
 ## 3. One-shot run
 
@@ -62,6 +62,6 @@ Each round, the worker makes changes test-first, then the `verify_done` gate che
 ## 5. Where next
 
 - Pin models per task: `stella --model openai/gpt-5.5 run "…"` — see [Models and providers](/docs/stella/models).
-- Drive CI to green: `stella monitor main` — see [Commands](/docs/stella/commands).
+- Drive CI to green: `stella monitor main` — see [Subcommands & flags](/docs/stella/commands).
 - Teach it your codebase's lessons: markdown files in `.stella/memories/` load into the system prompt at session start.
 - Inspect everything it did: the full event stream and cost telemetry live in `.stella/stella.duckdb` — open it with any DuckDB client.

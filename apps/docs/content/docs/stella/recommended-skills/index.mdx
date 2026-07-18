@@ -1,0 +1,25 @@
+---
+title: Recommended skills
+description: Open-source, battle-tested Stella memory files you can copy straight into .stella/memories/ to prime a new repo with proven conventions.
+---
+
+A **Stella skill**, as used in this section, is not a separate plugin system — Stella's only extensibility point is `.stella/memories/`: markdown lesson files loaded into a byte-stable system prompt at session start ([Subcommands & flags → Workspace state](/docs/stella/commands#workspace-state)). A skill is simply a well-written memory file packaged for reuse — a self-contained convention, workflow, or piece of domain knowledge that primes Stella the moment you drop it into a repository, with no registration step and no code to run.
+
+The entries in this section are the author's own setups: published as open source, used in real repositories, and kept here because they've earned their keep across projects rather than being written for the docs. Each one documents a single skill you can copy, adapt, and drop into your own `.stella/memories/` directory.
+
+## Layout of a skill entry
+
+Every skill entry in this section follows the same structure — see [Skill entry template](/docs/stella/recommended-skills/example-skill-template) for a page you can copy wholesale:
+
+| Section | Contents |
+|---|---|
+| Name | A short, kebab-case name matching the memory filename |
+| What it does | One or two sentences on the convention or lesson it encodes |
+| When Stella loads it | Confirms it's a plain memory file — loaded at the start of the next session once it's in `.stella/memories/`, no other wiring |
+| SKILL.md content | The full memory markdown, in a fenced block, ready to copy |
+| Install / copy instructions | The exact command to drop it into a new repo |
+| Works well with | A cross-link to any other skill or command in this section it pairs with |
+
+## Adding a new skill
+
+Copy [`example-skill-template.mdx`](/docs/stella/recommended-skills/example-skill-template), fill in each section, add the new file's slug to `content/docs/stella/recommended-skills/meta.json`, and open a PR.

@@ -1,0 +1,39 @@
+---
+title: Command entry template
+description: Copy this page to document a new recommended Stella command — fill in every section before publishing.
+---
+
+<Callout type="info">
+This page is a **template**, not a real command. Copy it to a new file in this directory, fill in every section below, and register the new page in `meta.json`.
+</Callout>
+
+## Name
+
+`[command-name]` — the shell alias or function name you'll invoke, e.g. `stella-ci-fix`.
+
+## What it does
+
+One or two sentences: the task this wraps, and why it's worth a dedicated command instead of typing the prompt out each time.
+
+## The command
+
+```bash
+# ~/.zshrc or ~/.bashrc
+[command-name]() {
+  stella goal "[the well-crafted prompt, using \"\$*\" to splice in any
+  arguments the caller passes]" --budget "${STELLA_BUDGET:-5}"
+}
+```
+
+Swap `goal` for `run` if the task is a single pass rather than a judged, multi-round task — see [Subcommands & flags](/docs/stella/commands) for the difference.
+
+## Usage examples
+
+```bash
+[command-name]
+[command-name] "extra context to splice into the prompt"
+```
+
+## Works well with
+
+Pairs well with [`[a-skill-or-command]`](/docs/stella/recommended-commands/[slug]) — [one sentence on why].
