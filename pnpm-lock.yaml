@@ -665,6 +665,9 @@ importers:
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config

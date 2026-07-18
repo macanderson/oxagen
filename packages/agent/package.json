@@ -29,6 +29,7 @@
     "@oxagen/agent-engine": "workspace:*",
     "@oxagen/agent-runner": "workspace:*",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",

@@ -74,15 +74,24 @@
  *       log with events from two attempts. This is harness behavior (Phase
  *       2c, not this driver), and the window is narrow, but a log consumer
  *       should not assume a run's event log came from a single attempt.
- * - **No memory/recall provider.** `RunCodingAgentOptions.memory` is omitted.
- *   Follow-up: wire a recall provider (Engram's context compiler — the
- *   `ContextRecallPort` spec.md maps in Phase 3) once a durable-run surface
- *   needs turn memory.
- * - **No budget guard.** `RunCodingAgentOptions.budgetGuard` is omitted —
- *   unbounded turn cost. Follow-up: needs billing wiring (resolve a
- *   `TurnBudgetPolicy` via `@oxagen/billing` + `budget.policy.read`, the same
- *   shape `chat.stream.ts` already resolves) plumbed through the RunSpec or
- *   workspace governance.
+ * - **Per-turn dollar budget: workspace/org governance only.** A budget guard
+ *   IS wired (`RunCodingAgentOptions.budgetGuard`, built via
+ *   `createTurnBudgetGuard` from `@oxagen/billing` — the same module
+ *   `chat.stream.ts`/`bridge.ts` use), but only the WORKSPACE/ORG governance
+ *   half of budget resolution can apply. `get_budget_policy`
+ *   (`workspace.budget_policy.read`) keys on `ctx.workspaceId` ALONE, which
+ *   every durable run has, so an org/workspace ceiling or default DOES bind a
+ *   durable run's spend. The MEMBER's own saved budget preference
+ *   (`budget.policy.read`) is deliberately NOT resolved here — that handler
+ *   throws without an authenticated `ctx.userId`
+ *   (`packages/handlers/src/budget.policy.read.ts`), and RunSpec v1 never
+ *   captures the principal that enqueued the run (`run.orgId`/`run.workspaceId`
+ *   ride on the `ClaimedRun` row; there is no `userId`). Follow-up: RunSpec v2
+ *   must capture the enqueuing principal before a durable run can honor a
+ *   member's own per-turn budget default — until then only an org/workspace
+ *   ceiling or default governs a durable run, never a member override. The
+ *   workspace-governance read fails open (read error/no governance ⇒
+ *   unbounded) exactly like `chat.stream.ts`'s `readWorkspaceGovernance`.
  * - **No workspace/sandbox/code-mode.** `RunCodingAgentOptions.workspace` is
  *   omitted — conversational mode only (no filesystem tools, no diff, no
  *   command execution). Follow-up: a code-mode RunSpec variant needs a
@@ -105,14 +114,27 @@
 import type { ModelMessage } from "ai";
 import { z } from "zod";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen/kernel";
 import {
   executeTurn,
+  DEFAULT_AGENT_MODEL,
   DEFAULT_MAX_AGENT_STEPS,
   type PlatformSurface,
 } from "@oxagen/agent-runner";
+import {
+  createTurnBudgetGuard,
+  governedBudgetFromRead,
+  resolveEffectiveTurnBudget,
+  TURN_BUDGET_OFF,
+  type SavedWorkspaceGovernance,
+  type TurnBudgetPolicy,
+} from "@oxagen/billing";
 import type { CapabilityContext } from "../types";
 import { materializeTools } from "./materialize-tools";
-import { createPlatformAgentAi } from "../adapters";
+import {
+  createPlatformAgentAi,
+  createPlatformMemoryProvider,
+} from "../adapters";
 
 // ---------------------------------------------------------------------------
 // Structural worker-harness contract — mirrors @oxagen/agent-worker's
@@ -277,6 +299,68 @@ export function createPlatformTurnDriver(): TurnDriver {
         // are tagged "runner".
         const ai = createPlatformAgentAi(ctx, run.runId, "runner");
 
+        // Recall (Engram episodic memory), mirroring agent.repo.edit.ts's
+        // createPlatformMemoryProvider call exactly: recallQuery = the turn's
+        // instruction, telemetry keyed on this driver's own ctx/messageId
+        // shape. The adapter is already fully self-swallowing (recallContext's
+        // try/catch degrades to "" and emits its own loud
+        // agent.memory.recall_failed telemetry on ANY failure — see
+        // packages/agent/src/adapters/memory-provider.ts) — this driver adds
+        // no second catch on top of that degradable-by-design contract.
+        const memory = createPlatformMemoryProvider({
+          recallQuery: spec.instruction,
+          telemetry: {
+            orgId: run.orgId,
+            workspaceId: run.workspaceId,
+            surface: "runner",
+            messageId: run.runId,
+          },
+        });
+
+        // Per-turn dollar budget (see module doc's follow-up note for exactly
+        // what is and is not covered). Only the WORKSPACE/ORG governance half
+        // of budget resolution applies to a durable run — `get_budget_policy`
+        // keys on ctx.workspaceId alone, which every run has. The MEMBER's own
+        // saved default (budget.policy.read) is never resolved: that handler
+        // requires an authenticated ctx.userId, which this driver's ctx never
+        // has (RunSpec v1 captures no enqueuing principal). Fail OPEN on any
+        // governance-read error (no_handler, IAM deny, DB error, …) — a broken
+        // or unregistered governance capability must never block a turn — same
+        // fail-open contract as chat.stream.ts's readWorkspaceGovernance.
+        const workspaceBudgetGovernance = await invoke(
+          "get_budget_policy",
+          {},
+          ctx,
+          { surface: "agent" },
+        )
+          .then((raw) =>
+            governedBudgetFromRead(raw as SavedWorkspaceGovernance),
+          )
+          .catch((err) => {
+            console.warn(
+              "[turn-driver] workspace budget governance read failed — failing open to unbounded:",
+              String(err),
+            );
+            return null;
+          });
+        const turnBudgetPolicy: TurnBudgetPolicy = resolveEffectiveTurnBudget(
+          TURN_BUDGET_OFF, // no member policy possible — see note above
+          null, // no org-level governance read here — workspace-scoped only
+          workspaceBudgetGovernance,
+        );
+        // createTurnBudgetGuard returns undefined when the policy is off, so
+        // an ungoverned run passes no guard at all (unbounded, identical to
+        // before this feature).
+        const budgetGuard = createTurnBudgetGuard(
+          turnBudgetPolicy,
+          spec.model ?? DEFAULT_AGENT_MODEL,
+          {
+            // No interactive approver on the durable-run worker — deny (stop)
+            // rather than hang, mirroring bridge.ts's A2A guard.
+            onPause: () => false,
+          },
+        );
+
         const result = await executeTurn(run.surface as PlatformSurface, {
           ai,
           instruction: spec.instruction,
@@ -287,6 +371,8 @@ export function createPlatformTurnDriver(): TurnDriver {
           maxSteps: DEFAULT_MAX_AGENT_STEPS,
           extraTools,
           mutatingToolNames,
+          memory,
+          budgetGuard,
           // Lease loss OR a cancel request both abort this same signal — see
           // @oxagen/agent-worker's worker.ts; this driver doesn't need to
           // know which.
