@@ -64,6 +64,16 @@
  *       turns OFF via `maxRetries: 0` for its live SSE client — this driver's
  *       log-based consumers don't share that constraint, so the default is
  *       left on).
+ *     - Narrower still: the worker harness (`@oxagen/agent-worker`) only
+ *       flushes buffered events on checkpoint or turn settlement (never
+ *       inline per-event), so a crash in the window AFTER the final flush but
+ *       BEFORE the terminal store call can leave a run reclaimed and re-run
+ *       even though its whole event log already landed — the resumed
+ *       attempt's seqs then interleave with the prior attempt's under
+ *       `appendEvents`' `ON CONFLICT (run_id, seq) DO NOTHING`, producing a
+ *       log with events from two attempts. This is harness behavior (Phase
+ *       2c, not this driver), and the window is narrow, but a log consumer
+ *       should not assume a run's event log came from a single attempt.
  * - **No memory/recall provider.** `RunCodingAgentOptions.memory` is omitted.
  *   Follow-up: wire a recall provider (Engram's context compiler — the
  *   `ContextRecallPort` spec.md maps in Phase 3) once a durable-run surface
@@ -258,10 +268,14 @@ export function createPlatformTurnDriver(): TurnDriver {
         );
 
         // messageId argument = run id (this driver's execution_step_id /
-        // credit-ledger reference_id); surface defaults to "agent" (same
-        // default agent.repo.edit's sync capability uses — a backend-driven,
-        // non-interactive turn, not the app/api chat surfaces).
-        const ai = createPlatformAgentAi(ctx, run.runId);
+        // credit-ledger reference_id). surface: "runner" explicitly — the
+        // SAME tag as ctx.surface above — so LLM/token-usage telemetry
+        // (execution_logs, the credit ledger) and tool-invocation telemetry
+        // (tool_invocations, tagged from ctx.surface in materializeTools)
+        // agree about which surface drove this turn, instead of the AI
+        // port silently defaulting to "agent" while the tool calls it makes
+        // are tagged "runner".
+        const ai = createPlatformAgentAi(ctx, run.runId, "runner");
 
         const result = await executeTurn(run.surface as PlatformSurface, {
           ai,

@@ -268,6 +268,7 @@ describe("createPlatformTurnDriver — happy path", () => {
     expect(mocks.createPlatformAgentAiFn).toHaveBeenCalledWith(
       expect.objectContaining({ surface: "runner", requestId: "run_abc" }),
       "run_abc",
+      "runner",
     );
   });
 
