@@ -397,6 +397,15 @@
       "verifiedAt": null,
       "verifiedBy": "web-app-2.0-phase-2"
     },
+    "get_citation_stats": {
+      "route": "/[orgSlug]/[workspaceSlug]/knowledge/citations",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/citations/page.tsx",
+      "entry": "CitationsDashboardSection RSC invoke(get_citation_stats) → CitationsDashboard",
+      "testid": null,
+      "proof": "apps/app/e2e/knowledge-citations.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "static-trace/session_01LvTjUhzMz5nF1WWPn6K7N5"
+    },
     "ingest_graph": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app/src/components/chat/message-footer.tsx",
