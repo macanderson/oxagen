@@ -26,6 +26,8 @@ import type {
   densityEnum,
   pendingPromptBehaviorEnum,
   modelTierEnum,
+  agentRuns,
+  agentRunEvents,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -135,3 +137,19 @@ export type PendingPromptBehavior =
  * fast = lowest-latency, balanced = default, precise = best quality.
  */
 export type ModelTier = (typeof modelTierEnum.enumValues)[number];
+
+// ── Agent-engine v2 durable-run row types (Phase 2a) ─────────────────────────
+// docs/specs/agent-engine-v2/plan.md Phase 2 — the run row + append-only
+// event log that packages/agent-runner's executeTurn persists to.
+
+/** Full SELECT row from `agent.agent_runs`. */
+export type AgentRunRow = InferSelectModel<typeof agentRuns>;
+
+/** INSERT shape for `agent.agent_runs` (id/timestamps/defaults optional). */
+export type NewAgentRunRow = InferInsertModel<typeof agentRuns>;
+
+/** Full SELECT row from `agent.agent_run_events` (append-only). */
+export type AgentRunEventRow = InferSelectModel<typeof agentRunEvents>;
+
+/** INSERT shape for `agent.agent_run_events` (id/created_at optional). */
+export type NewAgentRunEventRow = InferInsertModel<typeof agentRunEvents>;
