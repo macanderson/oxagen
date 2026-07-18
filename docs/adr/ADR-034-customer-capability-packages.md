@@ -45,8 +45,9 @@ author — surfaces each installed capability on REST, MCP, agent tools, the app
 and the CLI, driven entirely by the contract and manifest. Concretely:
 
 1. **`.cap` package format.** A zip with `manifest.json` (generated, machine
-   artifact), portable JSON Schema contracts, bundled ESM handlers, optional UI
-   component bundles, per-capability docs, and an integrity block. The manifest
+   artifact), portable JSON Schema contracts, bundled ESM handlers, a reserved
+   custom-UI lane (stubbed — see spec §10.4; warn-and-ignore in v1),
+   per-capability docs, and an integrity block. The manifest
    extends the shipped `oxagenPluginManifestSchema` and follows the
    `kind`/`formatVersion` literal pattern of the portable sandbox-template
    manifest v1. Source of truth is the author's TypeScript
@@ -111,8 +112,8 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
 - Untrusted code and untrusted UI enter the platform. The blast radius is
   bounded by the sandbox policy chokepoint, the brokered host API (no ambient
   DB/storage handles, fail-closed IAM on every re-entry), manifest-declared
-  permissions, egress allow-lists, iframe-sandboxed custom UI, and package
-  checksums. These boundaries are the bulk of the spec.
+  permissions, egress allow-lists, an inert (stubbed) custom-UI lane, and
+  package checksums. These boundaries are the bulk of the spec.
 - ADR-013's manifest and entitlement gate are kept and extended; its Phase 3
   design is retired in favor of this ADR.
 

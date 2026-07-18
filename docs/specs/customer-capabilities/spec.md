@@ -41,6 +41,9 @@ without writing a route, a tool file, a React page, or a commander block.
   substrate; publishing customer packages *between* orgs is Phase 4+).
 - Non-JavaScript handler runtimes (the runner image is Node 20+; WASM and
   container-per-package runtimes are a later runner profile).
+- Custom UI components authored by publishers — stubbed in §10.4 and deferred
+  to a dedicated spec; v1 ships the auto-form runner page + curated
+  components only.
 - Replacing connectors/MCP-server plugins or skills. Those remain their own
   plugin types; a `.cap` is specifically **executable capability code**.
 - Mobile surface bindings (ADR-026 parity applies once the app binder exists).
@@ -198,9 +201,8 @@ acme-returns-1.2.0.cap
 │   └── lookup_return_status.{input,output}.json
 ├── handlers/
 │   └── bundle.mjs                    # REQUIRED — single bundled ESM module, all handlers
-├── ui/                               # OPTIONAL — custom result/form components (§10.4)
-│   ├── components.mjs                # bundled ESM, iframe-sandboxed at render time
-│   └── components.json               # componentId → export map + declared heights/props
+├── ui/                               # RESERVED — custom components are NOT processed in v1
+│   └── …                             # (validation warns and ignores; §10.4 stub)
 ├── docs/
 │   ├── process_refund.md             # REQUIRED per capability — the `docs` layer, rendered in-app
 │   └── lookup_return_status.md
@@ -256,9 +258,6 @@ sandbox-template manifest v1
       "produces": ["acme.refundId"],
       "consumes": ["acme.returnId"],
 
-      "http": { "method": "POST", "path": "returns/refund" },   // optional pretty path (§10.1)
-      "cli":  { "group": "returns", "command": "refund" },      // optional first-class command (§10.5)
-
       "permissions": {                        // §9.4 — everything else is denied
         "capabilities": ["search_graph_nodes", "send_notification"],
         "secrets": ["ACME_OMS_TOKEN"],        // vault key NAMES, never values
@@ -269,7 +268,6 @@ sandbox-template manifest v1
     }
   ],
 
-  "ui": { "components": [{ "id": "refund-summary", "entry": "ui/components.mjs#RefundSummary" }] },
   "sandbox": { "image": null }                // optional digest-pinned custom runner image (§9.2)
 }
 ```
@@ -313,7 +311,7 @@ returns/
 │   ├── process_refund.handler.ts
 │   ├── process_refund.test.ts
 │   └── process_refund.md    # doc, verbatim into the package docs/ dir
-├── ui/                      # optional custom components (React, cap-ui-sdk)
+├── ui/                      # reserved — custom components (future spec, §10.4 stub)
 ├── package.json             # devDeps: @oxagen/cap-sdk, @oxagen/cap-cli
 └── .github/workflows/cap.yml  # scaffolded CI: build → test → publish on tag
 ```
@@ -395,7 +393,7 @@ on ambient tenant scope; customer handlers get **only** the brokered host API
 | Command | What it does |
 |---|---|
 | `oxagen cap init` | Scaffold repo (above). |
-| `oxagen cap dev` | Local dev loop: runs the handler in the local runner image (docker sandbox driver), serves a local surface emulator (REST + MCP + auto-form UI) against a fake host API with recorded fixtures. |
+| `oxagen cap dev` | Local dev loop: runs the handler in the local runner image (docker sandbox driver), serves a local surface emulator (REST + MCP + auto-form UI) against a local host broker with fixture and live-proxy modes (§6.3). |
 | `oxagen cap test` | Runs the author's tests inside the runner image + the platform conformance suite: contract portability (§7), manifest validity, handler I/O round-trips against the compiled schemas, permission-violation probes (undeclared capability/secret/host must fail). |
 | `oxagen cap build` | Compile contracts (Zod → JSON Schema, §7), bundle handlers/UI (esbuild, externals forbidden), emit manifest + integrity, produce `dist/<id>-<version>.cap`. |
 | `oxagen cap publish` | Upload the `.cap` to the org's package registry (§8.1). `--workspace` also installs. CI runs this on tag push. |
@@ -406,6 +404,37 @@ on ambient tenant scope; customer handlers get **only** the brokered host API
 so every installed version is traceable to a commit. The platform never edits
 customer capability code; the DB stores install state and immutable artifacts
 only.
+
+### 6.3 Local dev, debugging, and errors
+
+The dev loop is make-or-break for adoption, so it is **beta-blocking**
+(plan Phase 2), not post-GA polish:
+
+- **`oxagen cap dev`** runs the bundle in the local runner image (docker
+  driver) behind a local surface emulator — REST on localhost, an MCP
+  endpoint any client can connect to, the auto-form page — with the host
+  broker in one of two modes:
+  - **Fixture mode** (default): `ctx.invoke` / `ctx.secrets` / `ctx.ai`
+    resolve from declarative fixtures in `fixtures/` (hand-written or
+    recorded responses keyed by capability/secret name), so the loop is
+    hermetic, fast, and CI-safe — `cap test` runs against the same fixtures.
+  - **Live mode** (`--workspace <dev-workspace>`): the broker proxies to a
+    real workspace under the author's credentials with normal IAM, billing,
+    and audit — the integration-test path before publishing.
+- **Error taxonomy** (SDK): `throw new CapUserError(message, details?)` is a
+  *caller-facing* failure — the message crosses the boundary verbatim
+  (schema-validated, size-clamped) on every surface. Any other throw is an
+  *internal* error: callers get a generic failure plus `runId`; the full
+  stack and the `ctx.log` stream appear only in the run detail view.
+  Timeouts, OOM kills, and permission denials surface as distinct typed
+  runner errors, never generic 500s — an author can tell "my bug" from "my
+  limits" from "my manifest" at a glance.
+- **Publisher observability:** every invocation is a `capability_runs` row
+  (§9.5) with retained logs; the package detail page rolls up per-version
+  error rate, p50/p95 latency, and top error classes across the org's
+  installs. Cross-org publisher telemetry is explicitly a Phase 4
+  (marketplace) question — in v1 the publisher and installer are the same
+  org and see the same runs.
 
 ---
 
@@ -668,13 +697,15 @@ parity gates stay on as regression alarms and are re-pointed at the binders
   `POST /v1/:org/:workspace/cap/:name` → resolve → `invoke(name, body, ctx,
   { surface: "api" })`. This single route serves **every** installed
   capability the moment it is enabled — no mount step, no deploy.
-- **Pretty paths:** `http.path` mounts an alias
-  (`POST /v1/:org/:workspace/returns/refund`) from the install cache; alias
-  collisions within a workspace are rejected at install. First-party
-  capabilities get their existing paths registered in a **route table**
-  (name → path/method) that replaces the 276 wrapper files and the
-  hand-listed `app.ts` imports with one loop at boot — same middleware
-  chain (`authMiddleware`/`orgMiddleware`/`workspaceMiddleware`), same
+- **One path shape, deliberately.** Installed capabilities are served only
+  at the uniform dispatch route — no per-capability "pretty path" aliases.
+  (Considered and deferred: aliases would add per-workspace collision
+  rules, install-cache invalidation, and OpenAPI complexity for cosmetic
+  value; revisit only with customer evidence.) First-party capabilities
+  keep their existing paths via a **route table** (name → path/method) that
+  replaces the 276 wrapper files and the hand-listed `app.ts` imports with
+  one loop at boot — same middleware chain
+  (`authMiddleware`/`orgMiddleware`/`workspaceMiddleware`), same
   `capabilityContext(c)`, same error middleware, byte-identical responses
   (§13 gates on this).
 - **Async envelope:** `mode: "async"` returns `202 { status: "queued", runId,
@@ -744,29 +775,31 @@ Three layers, all riding existing render plumbing:
    `file-attachment`, `capability-result`, …) via `render.componentId` —
    customers whose outputs fit standard shapes get rich rendering with zero
    UI code.
-3. **Custom components** (`ui/` bundle, Phase 3): namespaced componentIds
-   (`acme_returns/refund-summary`) rendered inside a **sandboxed iframe**
-   (`sandbox="allow-scripts"`, no same-origin, served from the package's
-   private asset path on an isolated origin, strict CSP: no external hosts) —
-   with a typed `postMessage` bridge (`@oxagen/cap-ui-sdk`: `props` in,
-   `resize`/`action` events out; actions may only invoke the declaring
-   package's capabilities, re-entering the kernel). Chat and the runner page
-   treat these exactly like registry components. The platform's SVG XSS
-   discipline (never `dangerouslySetInnerHTML`, attachment disposition on
-   stored markup — `docs/capabilities/svg.generate.md`) is the precedent:
-   customer UI is content, not code, until proven otherwise. A later
-   "verified publisher" tier may relax to module federation for reviewed
-   packages; **not v1**.
-   Discovery: installed capabilities appear in the workspace capability
-   catalog, the sidebar's Installed section, and the command menu (indexed by
-   `command.menu.search` alongside first-party rows).
+3. **Custom components — STUB; deferred to a dedicated spec.** Custom UI
+   exists for user-experience reasons only: some customer capabilities want
+   a **human in the loop**, and a schema form is the wrong instrument for
+   the moment of judgment — an airline's `assign_seat` capability wants a
+   seating-chart picker, not fourteen text inputs. That need is real, it is
+   **app-surface-only** (REST/MCP/agent/CLI parity is unaffected by its
+   absence), and it is explicitly **not v1**. What v1 fixes now so the lane
+   exists later: the `ui/` package directory and the manifest `ui` block
+   are **reserved** — validation warns and ignores them, and rendering
+   falls back to layers 1–2 (auto-form + curated components), so a package
+   shipping UI early degrades gracefully instead of breaking. The future
+   spec (`docs/specs/customer-capabilities-ui/`) owns the hard parts —
+   embedding isolation (the platform's stored-SVG XSS discipline is the
+   floor, not the ceiling), a typed props/actions bridge, publisher trust
+   tiers — and must clear a dedicated security review before any customer
+   component renders.
+
+Discovery (all layers): installed capabilities appear in the workspace
+capability catalog, the sidebar's Installed section, and the command menu
+(indexed by `command.menu.search` alongside first-party rows).
 
 ### 10.5 CLI (`apps/cli`) — and how "a CLI custom to a workspace" works
 
-The requirement: Acme's operators type something like
-`oxagen returns refund --return-id R-1042 --reason damaged` — a command that
-exists **only** in workspaces where the package is installed. Three ways to
-get there:
+The requirement: Acme's operators get a refund command that exists **only**
+in workspaces where the package is installed. Three ways to get there:
 
 | Option | How | Verdict |
 |---|---|---|
@@ -782,21 +815,23 @@ and calls REST (`apps/cli/src/lib/api.ts`); it gains:
   `.oxagen/capabilities.json` (TTL + `--refresh`; also refreshed on auth and
   workspace switch). Everything below works offline-after-sync; invocation
   requires network anyway.
-- **Universal form:** `oxagen cap run <name> [--json | flags]` — flags
-  derived from the schema (kebab-cased fields, enums validated, booleans as
-  toggles, nested via dotted flags), output pretty-printed or `--json`;
-  async mode prints the runId and polls `read_capability_run` unless
-  `--no-wait`.
-- **First-class form:** the manifest's `cli: { group, command }` mounts
-  `oxagen returns refund …` at parse time from the cache. Reserved top-level
-  groups (the built-in command tree: `auth`, `code`, `graph`, `asset`,
-  `memory`, `cap`, …) cannot be claimed; group collisions between installed
-  packages fail at install validation, mirroring HTTP alias collisions.
-- **Completions & help:** shell completions and `--help` regenerate from the
-  cache on sync, so discoverability matches hand-written commands. The REPL
-  slash catalog derives from the same commander tree, so synced commands
-  appear there too — the existing `slash-parity` tests extend to cover the
-  dynamic set.
+- **One form, deliberately:** `oxagen cap run <name> [--json | flags]` —
+  flags derived from the schema (kebab-cased fields, enums validated,
+  booleans as toggles, nested via dotted flags), output pretty-printed or
+  `--json`; async mode prints the runId and polls `read_capability_run`
+  unless `--no-wait`. Acme's command is:
+  `oxagen cap run acme_returns_process_refund --return-id R-1042 --reason damaged`.
+  Manifest-declared first-class command groups (`oxagen returns refund …`)
+  are **considered and deferred** for the same reason as HTTP pretty paths
+  (§10.1): they add reserved-name and collision machinery for ergonomics
+  that completions already deliver — and a user who wants brevity has shell
+  aliases. Revisit with customer evidence.
+- **Completions & help:** shell completions for `cap run` — capability
+  names and their flags — regenerate from the cache on sync, so
+  discoverability matches hand-written commands. The REPL slash catalog
+  derives from the same commander tree, so installed capabilities appear
+  there too — the existing `slash-parity` tests extend to cover the dynamic
+  set.
 
 This keeps **one** distributed binary (`@oxagen/cli` on npm), no per-workspace
 builds, and the workspace-specific behavior lives where the rest of this
@@ -823,8 +858,9 @@ manifest schema parse (`capabilityPackageManifestSchema`) → namespace
 ownership check → naming rules (§4) → schema portability re-verification (the
 platform re-compiles and compares digests; the client's compiler is not
 trusted) → bundle static checks (no `@oxagen/*` imports, no `node:` besides
-the allowed set, size caps) → docs presence per capability → UI bundle CSP
-lint → optional publisher policy checks (org-configurable: require review,
+the allowed set, size caps) → docs presence per capability → reserved
+`ui/` / manifest-`ui` warning (§10.4 stub — warned and ignored, never
+processed) → optional publisher policy checks (org-configurable: require review,
 forbid `network`, cap sensitivity). Result: a `capability_package_versions`
 row (`status: "validated"`) with the blob in private storage. Failures return
 a structured report (the same report `cap doctor` prints locally).
@@ -881,6 +917,32 @@ TTL, no deploy.
   `packages/config/src/registry.ts` per house rule) disables all dynamic
   resolution instantly.
 
+### 11.5 Upgrade blast radius on callers
+
+Activating a version changes the contract *for everyone already calling
+it*; the installer's diff screen (§11.4) is necessary but not sufficient:
+
+- **Agent conversations** re-materialize tools each turn, so a running
+  conversation picks up the new schema on its next step; a tool call
+  already in flight completes against the version that dispatched it.
+- **MCP clients** receive `notifications/tools/list_changed` (§10.2); a
+  client that ignores it and sends stale arguments gets a structured
+  `invalid_input` whose payload embeds the current compiled input schema —
+  self-healing for schema-reading clients, diagnosable for everything else.
+- **REST callers and automations are enumerable before the fact:**
+  ClickHouse `tool_invocations` slices by capability name, so the
+  activation screen shows a **consumer preview** — the surfaces, API keys,
+  and automation triggers that invoked this capability in the last 30
+  days — and flags contract-breaking majors against that live list. After
+  activation, the first failed run per consumer raises a notification
+  instead of failing silently inside a scheduler.
+- **Compatibility rule enforced by validation:** a minor version must be
+  accept-compatible (new optional input fields, additive output fields);
+  anything that removes, retypes, or narrows is a major and turns the
+  consumer preview into a blocking warning. Per-consumer version pinning
+  (blue/green) is deliberately out of scope — one active version per
+  workspace keeps the registry, IAM, and audit story simple.
+
 ---
 
 ## 12. Security model
@@ -906,10 +968,11 @@ fail-closed):
 4. **Contract poisoning** → schemas are data (§7); the platform re-compiles
    and digest-compares at validation; Zod materialization never evaluates
    package code.
-5. **UI XSS** → custom components are iframe-sandboxed on an isolated origin
-   with a strict CSP and a typed bridge (§10.4); curated components remain
-   the default path; stored-markup rules from the SVG pipeline apply
-   unchanged.
+5. **UI XSS** → v1 renders installed capabilities exclusively through
+   platform-registered components (auto-form + the curated set); customer
+   UI bundles are inert (§10.4 stub). The future custom-UI spec must meet
+   or exceed: sandboxed embedding, isolated origin, strict CSP, typed
+   bridge. Stored-markup rules from the SVG pipeline apply unchanged.
 6. **Supply chain** → immutable versions keyed by sha256 digests
    (`integrity.json` + `package_digest`); Git provenance recorded; runner
    images digest-pinned; Studio builds run network-restricted; revocation +
@@ -962,9 +1025,16 @@ with gates).
 
 ## 14. Open questions
 
-1. **Runner driver for v1 GA** — Modal durable sessions (shipped) vs Vercel
-   sandbox sessions: cold-start and warm-pool economics need a spike
-   (plan.md Phase 2 exit criterion).
+1. **Runner driver and pool keying for v1 GA** — Modal durable sessions
+   (shipped) vs Vercel sandbox sessions is the smaller half of the
+   question; the real fork is **pool granularity**. Per
+   (workspace × package version) pools give hard publisher isolation but
+   idle N sandboxes for N installed packages; one per-workspace session
+   hosting multiple bundles cuts the bill but puts different publishers'
+   code in one process — cross-package secret exposure within a tenant.
+   The Phase 2 spike must price both and pick a default (a plausible
+   landing: per-workspace pooling for same-publisher packages only,
+   per-package otherwise).
 2. **`require_approval` UX for external MCP callers** — an external agent
    runner hitting a pending-approval response gets the JIT access-request id
    today; is polling acceptable for v1 or do we need MCP elicitation
@@ -979,6 +1049,12 @@ with gates).
    meters land either way (§9.6).
 6. **CLI offline invocation** — is offline-after-sync enough, or do
    air-gapped fleets justify Option B (npm plugin emission) sooner?
+7. **Org-level install** — Acme's refunds package is really an org
+   capability; installing workspace-by-workspace is toil at 40 workspaces.
+   `plugin.org.install_bulk` is precedent for the mechanic; the open design
+   questions are defaulting (auto-install into newly created workspaces?)
+   and whether org-level consent can bind workspace-level grants without
+   eroding the workspace as the IAM boundary.
 
 ## 15. Out of scope (tracked elsewhere)
 

@@ -53,12 +53,14 @@ both.*
 | 2.B2 | Host broker: `POST /v1/runner/host`, scoped invocation tokens, `ctx.invoke/secrets/ai/storage/log` with permission intersection + re-entry depth cap; runner compute metering + rate-card entries | `apps/api`, `packages/oxagen`, `packages/billing` | Security tests: undeclared capability/secret/host denied at broker AND kernel; token replay/expiry/audience tests; metered rows land in ClickHouse |
 | 2.B3 | Async envelope: `cap/execute` Inngest fn, `capability_runs` lifecycle, `read_capability_run` contract on all surfaces | `packages/inngest-functions`, `packages/handlers` | Async fixture package runs queued→succeeded/failed with progress; cancellation works |
 | 2.C1 | Install lifecycle contracts (`install_capability_package`, `activate_…_version`, `set_…_enabled`, `uninstall_…`, `list/read_…`) + consent screen + IAM default-grant seeding + upgrade permission-delta re-consent + revoke/kill-switch (`CAP_PACKAGES_ENABLED` in env registry, `pnpm env:check --write`) | `packages/handlers`, `apps/app`, `packages/config` | Full lifecycle e2e: upload→validate→install→consent→enable→invoke on all five surfaces→upgrade→rollback→revoke; audit rows verified |
-| 2.C2 | Beta hardening: per-org runner concurrency, API rate limits, run history UI (runs list + detail w/ logs) | `apps/api`, `apps/app` | Load test at beta scale; runaway-package drill (revoke under load) |
+| 2.C2 | Beta hardening: per-org runner concurrency, API rate limits, run history UI (runs list + detail w/ logs), upgrade **consumer preview** (spec §11.5, from ClickHouse `tool_invocations`) | `apps/api`, `apps/app` | Load test at beta scale; runaway-package drill (revoke under load) |
+| 2.C3 | `oxagen cap dev` local loop: docker runner + surface emulator + local host broker with **fixture** and **live-proxy** modes (spec §6.3) — beta-blocking, promoted from Phase 3 | `packages/cap-cli`, `packages/cap-runner` | External-author walkthrough doc; cold-start-to-first-invoke < 5 min; fixture-mode runs are CI-hermetic |
 
-**Phase exit / beta gate:** the Acme example package (built from a real
-external repo in CI) installs into a fresh workspace and serves **REST, MCP
-(external client), agent tool, app runner page, and `oxagen cap run`** with
-IAM, billing, audit, and revocation demonstrated. Media `.cap` fixtures
+**Phase exit / beta gate:** the Acme example package (developed against
+`cap dev`, built from a real external repo in CI) installs into a fresh
+workspace and serves **REST, MCP (external client), agent tool, app runner
+page, and `oxagen cap run`** with IAM, billing, audit, and revocation
+demonstrated. Media `.cap` fixtures
 install via the `trusted` profile with zero latency regression
 (spec §13 step 2); `generate_video` migrated onto `capability_runs`.
 
@@ -66,12 +68,14 @@ install via the `trusted` profile with zero latency regression
 
 | # | Work | Exit gate |
 |---|---|---|
-| 3.1 | `cap dev` local loop (docker runner + surface emulator + recorded host fixtures) | Example-repo walkthrough doc; cold-start-to-first-invoke < 5 min |
-| 3.2 | Package Studio: Git-connected sandboxed builds (Inngest job, streamed logs, provenance) | Build from a private GitHub repo tag → validated version, no local toolchain |
-| 3.3 | CLI workspace sync: `oxagen sync`, `cap run` flag derivation, first-class `cli.group` commands, completions, REPL slash inclusion | `slash-parity` tests cover dynamic commands; Acme command demo |
-| 3.4 | Custom UI components: iframe sandbox host, isolated origin + CSP, `@oxagen/cap-ui-sdk` bridge, publish-time CSP lint | Pen-test pass on the bridge (XSS/escape attempts); fallback rendering when component fails |
-| 3.5 | Workspace OpenAPI export (`export_openapi_document`) | Generated doc validates; installed caps present |
-| 3.6 | Publisher policy controls (org-level: require review, forbid egress, sensitivity ceiling) + custom runner images (scan gate — resolve open question 3) | Policy matrix tests |
+| 3.1 | Package Studio: Git-connected sandboxed builds (Inngest job, streamed logs, provenance) | Build from a private GitHub repo tag → validated version, no local toolchain |
+| 3.2 | CLI workspace sync: `oxagen sync`, `cap run` flag derivation, completions, REPL slash inclusion (no first-class command groups — spec §10.5) | `slash-parity` tests cover dynamic entries; Acme command demo |
+| 3.3 | Workspace OpenAPI export (`export_openapi_document`) | Generated doc validates; installed caps present |
+| 3.4 | Publisher policy controls (org-level: require review, forbid egress, sensitivity ceiling) + custom runner images (scan gate — resolve open question 3) | Policy matrix tests |
+
+Custom UI components are deliberately **not scheduled** in this plan — the
+lane is stubbed in spec §10.4 (reserved `ui/` dir, warn-and-ignore) and ships
+only behind a dedicated spec + security review.
 
 ## Phase 4 — Marketplace lane (separate spec revision)
 
@@ -87,7 +91,9 @@ out of v1.
   byte-parity per batch; small reviewable batches; both parity tests stay red
   until re-pointed, never deleted first.
 - **Warm-pool economics unknown** (open question 1) — Phase 2.B1 includes a
-  cost/latency spike on Modal vs Vercel sessions before pool defaults are
+  cost/latency spike on Modal vs Vercel sessions **and must resolve the
+  pool-keying fork** (per (workspace × package version) isolation vs
+  per-workspace multi-bundle sessions, spec §14.1) before pool defaults are
   fixed; `trusted` profile keeps first-party unaffected regardless.
 - **Schema-subset gaps** discovered by real authors — the 1.2 property suite
   over all in-repo contracts front-loads this; subset extensions are additive
