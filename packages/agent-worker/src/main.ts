@@ -2,24 +2,28 @@
  * Process entrypoint for the durable-run worker (agent-engine v2 Phase 2c —
  * docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
  *
- * This file wires OS signals to `createAgentWorker(...).stop()` and reads
- * process configuration from the environment — but it does NOT wire a real
- * `RunStore` or `TurnDriver`. Those land in the integration PR that follows
- * Phase 2a (Postgres schema, `agent_runs`/`agent_events`) and Phase 2b
- * (`createPostgresRunStore`), once `executeTurn`'s engine-facing shape is
- * settled (`packages/agent-runner`). Running this file today exits
- * immediately with a clear message instead of a stack trace — the package
- * itself (`createAgentWorker`) is fully usable standalone in the meantime by
- * importing it directly with your own store + driver (e.g. from tests, or a
- * bespoke wiring script).
+ * This file wires OS signals to `createAgentWorker(...).stop()`, reads
+ * process configuration from the environment, AND — as of the integration PR
+ * that follows Phase 2a (Postgres schema)/Phase 2b (`createPostgresRunStore`)
+ * — wires the real `RunStore` (`@oxagen/agent-runner`) and `TurnDriver`
+ * (`@oxagen/agent`'s `createPlatformTurnDriver`, which reaches the engine via
+ * `executeTurn`).
+ *
+ * This is the ONLY file in this package that imports either of those two
+ * packages. `./worker.ts`, `./types.ts`, and the rest of this package's
+ * internals stay dependency-pure (structural `RunStore`/`TurnDriver` ports
+ * only) — see `./types.ts`'s module doc. Keep it that way: a future test or
+ * bespoke wiring script should still be able to import `createAgentWorker`
+ * directly with its own fakes, without pulling in Postgres or the engine.
  *
  * Env vars (registered in `packages/config/src/registry.ts` ENV_REGISTRY;
  * `.env.example` regenerated via `pnpm env:check --write`):
  *   OXAGEN_WORKER_CONCURRENCY — simultaneous runs this process drives (default 2).
  *   OXAGEN_WORKER_ID          — claim/lease owner identity (default `${hostname}:${pid}`).
  */
+import { createPostgresRunStore } from "@oxagen/agent-runner";
+import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
-import type { RunStore, TurnDriver } from "./types";
 
 function readConcurrency(): number | undefined {
   const raw = process.env.OXAGEN_WORKER_CONCURRENCY;
@@ -29,21 +33,8 @@ function readConcurrency(): number | undefined {
 }
 
 function main(): void {
-  // TODO(agent-engine-v2 integration PR): wire the real RunStore
-  // (createPostgresRunStore, Phase 2b) and TurnDriver (executeTurn) here once
-  // both land. Left undefined on purpose until then — see the module doc.
-  const store: RunStore | undefined = undefined;
-  const driveTurn: TurnDriver | undefined = undefined;
-
-  if (!store || !driveTurn) {
-    console.error(
-      "@oxagen/agent-worker: no RunStore/TurnDriver wired yet. This bin entrypoint is a " +
-        "placeholder for the agent-engine v2 Phase 2c → integration PR handoff " +
-        "(docs/specs/agent-engine-v2/plan.md). Import createAgentWorker from " +
-        "@oxagen/agent-worker directly with your own store + driver until then.",
-    );
-    process.exit(1);
-  }
+  const store = createPostgresRunStore();
+  const driveTurn = createPlatformTurnDriver();
 
   const worker = createAgentWorker({
     store,

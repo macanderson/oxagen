@@ -1,6 +1,18 @@
 export * from "./runtime/materialize-tools";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
+// The platform TurnDriver — agent-engine v2 Phase 2 integration
+// (docs/specs/agent-engine-v2/plan.md). Consumed by @oxagen/agent-worker's
+// main.ts to wire createAgentWorker; see the module doc for the RunSpec v1
+// contract and this v1 driver's explicit limitations.
+export {
+  createPlatformTurnDriver,
+  parseRunSpec,
+  type ClaimedRun,
+  type RunEventRecord,
+  type TurnDriver,
+  type RunSpecV1,
+} from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
 // Surface-bootstrap wiring for the Engram async backends (Inngest graph-sync +
 // embed client, ClickHouse compile-telemetry sink). Call once at each server
@@ -27,7 +39,10 @@ export {
   recoverSandboxSession,
   recoveryLabel,
 } from "./handlers/recover-sandbox-session";
-export type { RecoveryOutcome, RecoveryKind } from "./handlers/recover-sandbox-session";
+export type {
+  RecoveryOutcome,
+  RecoveryKind,
+} from "./handlers/recover-sandbox-session";
 export { agentSandboxStopHandler } from "./handlers/agent.sandbox.stop";
 // Typed subagent-fanout errors — surfaces (apps/api) import these to map an
 // unknown / cross-tenant fanout id to a 404 instead of a 500 via instanceof,
