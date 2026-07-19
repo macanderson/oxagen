@@ -25,7 +25,7 @@ async function CopyrightYear() {
 const NAV = [
   { label: "Docs", href: "/docs" },
   { label: "Install", href: "/install" },
-  { label: "Stella", href: "/stella" },
+  { label: "Stella", href: "https://stella.oxagen.sh" },
   { label: "CLI", href: "/docs/cli" },
   { label: "API", href: "/docs/api/overview" },
   { label: "MCP", href: "/docs/mcp/overview" },
@@ -46,7 +46,7 @@ const FOOTER = [
     heading: "Build",
     links: [
       { label: "CLI", href: "/docs/cli" },
-      { label: "Stella (open source)", href: "/stella" },
+      { label: "Stella (open source)", href: "https://stella.oxagen.sh" },
       { label: "REST API", href: "/docs/api/overview" },
       { label: "MCP server", href: "/docs/mcp/overview" },
       { label: "Connections", href: "/docs/connections/github" },
@@ -56,7 +56,10 @@ const FOOTER = [
     heading: "Trust",
     links: [
       { label: "Security", href: "/docs/security/overview" },
-      { label: "Tenant isolation", href: "/docs/security/tenant-isolation-rls" },
+      {
+        label: "Tenant isolation",
+        href: "/docs/security/tenant-isolation-rls",
+      },
       { label: "SOC 2", href: "/docs/security/soc2" },
       { label: "Enterprise", href: "/docs/enterprise/overview" },
     ],
@@ -70,7 +73,9 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-6">
           <Link href="/" aria-label="Oxagen home" className="flex items-center">
             <OxagenLockup />
-            <span className="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">Docs</span>
+            <span className="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">
+              Docs
+            </span>
           </Link>
 
           <nav className="hidden items-center gap-7 md:flex">
@@ -109,20 +114,27 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
           <div>
             <div className="flex items-center gap-2">
               <OxagenLogomark className="size-6" />
-              <span className="ox-wordmark text-lg text-foreground">oxagen</span>
+              <span className="ox-wordmark text-lg text-foreground">
+                oxagen
+              </span>
             </div>
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              Governed, auditable, tenant-isolated AI — every model call through one metered,
-              IAM-gated, audit-logged chokepoint.
+              Governed, auditable, tenant-isolated AI — every model call through
+              one metered, IAM-gated, audit-logged chokepoint.
             </p>
           </div>
           {FOOTER.map((col) => (
             <div key={col.heading}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">{col.heading}</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                {col.heading}
+              </h3>
               <ul className="mt-4 space-y-2.5">
                 {col.links.map((l) => (
                   <li key={l.href}>
-                    <Link href={l.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link
+                      href={l.href}
+                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
                       {l.label}
                     </Link>
                   </li>
@@ -133,8 +145,12 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="border-t border-border/60">
           <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-            <span>© <CopyrightYear /> Oxagen. All rights reserved.</span>
-            <span className="font-mono">app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh</span>
+            <span>
+              © <CopyrightYear /> Oxagen. All rights reserved.
+            </span>
+            <span className="font-mono">
+              app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh
+            </span>
           </div>
         </div>
       </footer>
