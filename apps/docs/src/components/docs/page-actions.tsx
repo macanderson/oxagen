@@ -5,12 +5,12 @@ import { useEffect, useRef, useState } from "react";
 interface PageActionsProps {
   /**
    * Absolute path to the page's raw-Markdown endpoint,
-   * e.g. `/llms.mdx/docs/stella/commands`.
+   * e.g. `/llms.mdx/docs/cli/installation`.
    */
   markdownUrl: string;
   /**
    * Filename stem for the downloaded `.md` file (no extension),
-   * e.g. `stella-commands`.
+   * e.g. `cli-installation`.
    */
   fileStem: string;
 }

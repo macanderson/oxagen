@@ -144,6 +144,15 @@ tools/eval-out/
 # Personal CLI settings scope (may contain MCP credentials) — never commit
 .oxagen/settings.local.json
 
+# Stella agent local state (context/memory DBs; the agent now lives in its
+# own repo — accidentally git-tracked in the past, pruned with crates/)
+.stella/
+
+# Python bytecode caches (orphaned .pyc files were git-tracked in bench/
+# after their sources were removed)
+__pycache__/
+*.pyc
+
 # stores anthropic api token safe from claude code so it doesn't burn api usage
 .anthropic-api-key
 # stores `manderson` team linked vercel api key
@@ -154,4 +163,4 @@ tools/eval-out/
 # never be committed — one leaked into #807 as page.tsx.tmp.45759.f25485f00a57.
 *.tmp.*
 *.tmp
-Icon
+Icon

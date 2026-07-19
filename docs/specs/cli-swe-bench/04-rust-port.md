@@ -1,14 +1,15 @@
 # Oxagen CLI — Rust Port Strategy
 
-> **Superseded/expanded by `docs/specs/oxagen-rust-cli/`.** That directory
-> is the full product spec + phased plan for rebuilding the CLI as a
-> **standalone, open-source, account-free, multi-provider (incl. AWS/GCP
-> Model Garden) BYOK Rust binary** — a different target than this
-> document's original framing (a platform-integrated CLI ported to Rust for
-> speed). The migration mechanics below (port-the-spec, golden-trajectory
-> conformance, strangler pattern) still apply and are referenced directly
-> from `docs/specs/oxagen-rust-cli/02-architecture.md` and `03-plan.md`.
-> Read `docs/specs/oxagen-rust-cli/00-overview.md` first for the current plan.
+> **Superseded/expanded by the `oxagen-rust-cli` spec**, which described
+> rebuilding the CLI as a standalone, open-source, account-free,
+> multi-provider BYOK Rust binary — a different target than this document's
+> original framing (a platform-integrated CLI ported to Rust for speed).
+> That effort has since been ejected from this monorepo: the agent lives in
+> its own repository, and the Open Context Protocol crates live at
+> `github.com/macanderson/opencontextprotocol` (the spec directory was
+> removed along with `crates/`; see git history for both). The migration
+> mechanics below (port-the-spec, golden-trajectory conformance, strangler
+> pattern) still apply.
 
 Goal: the most performant (highest resolve rate), most efficient (lowest token burn), and fastest (lowest wall-clock) agentic coding CLI. Rust is the vehicle for *fast* and for a single distributable binary — but the score lives in the **loop logic, prompts, and tool semantics**, which are language-independent. So: **finish and prove the design in TypeScript first, then port a frozen, well-tested spec.** Never port a moving target.
 

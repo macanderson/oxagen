@@ -1,1 +1,0 @@
-{"lesson":"Match repository work strictly to the stated user goal. For a conversational request such as “hi,” make no code changes; if unrelated edits were introduced, revert them and verify the working tree is clean before responding.","domains":[],"occurred_at":1784417106}
