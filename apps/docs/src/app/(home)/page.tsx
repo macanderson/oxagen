@@ -54,11 +54,6 @@ const SURFACES = [
     href: "/docs/cli",
   },
   {
-    title: "Stella",
-    body: "Our open-source Rust coding agent — BYOK, model-agnostic, witness-verified done. Documented on its own site.",
-    href: "https://stella.oxagen.sh",
-  },
-  {
     title: "REST API",
     body: "/v1 endpoints, API-key authentication, the capability registry, and the chat streaming transport.",
     href: "/docs/api/overview",

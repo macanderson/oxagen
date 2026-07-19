@@ -22,7 +22,6 @@
     "installable-plugins",
     "mcp-as-connected-source",
     "oxagen-cli-tui",
-    "oxagen-rust-cli",
     "oxagen-workspace-config",
     "playbook-designer",
     "posthog-product-analytics",

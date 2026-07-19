@@ -60,7 +60,7 @@ function collectPageUrls(nodes: readonly TreeNode[]): string[] {
  * GET /llms.txt — the LLM-friendly site index.
  *
  * Structure mirrors the docs sidebar: top-level pages under "Overview", then
- * one `##` section per top-level folder (CLI, Configuration, Connections, …), each
+ * one `##` section per top-level folder (CLI, Configuration, …), each
  * listing its pages with a link to the raw-Markdown endpoint.
  */
 export function GET() {

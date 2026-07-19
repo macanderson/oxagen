@@ -25,7 +25,6 @@ async function CopyrightYear() {
 const NAV = [
   { label: "Docs", href: "/docs" },
   { label: "Install", href: "/install" },
-  { label: "Stella", href: "https://stella.oxagen.sh" },
   { label: "CLI", href: "/docs/cli" },
   { label: "API", href: "/docs/api/overview" },
   { label: "MCP", href: "/docs/mcp/overview" },
@@ -46,7 +45,6 @@ const FOOTER = [
     heading: "Build",
     links: [
       { label: "CLI", href: "/docs/cli" },
-      { label: "Stella (open source)", href: "https://stella.oxagen.sh" },
       { label: "REST API", href: "/docs/api/overview" },
       { label: "MCP server", href: "/docs/mcp/overview" },
       { label: "Connections", href: "/docs/connections/github" },

@@ -235,16 +235,6 @@ export default function InstallPage(): ReactNode {
               </Link>
               .
             </p>
-            <p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">
-              Looking for our open-source coding agent instead? That&apos;s{" "}
-              <Link
-                href="https://stella.oxagen.sh"
-                className="font-medium text-[var(--_ember-flame,#F07650)] hover:underline"
-              >
-                Stella
-              </Link>{" "}
-              — BYOK, model-agnostic, written in Rust, no Oxagen account needed.
-            </p>
           </div>
         </div>
       </section>
