@@ -7,6 +7,7 @@ import {
   DocsTitle,
 } from "fumadocs-ui/page";
 import { getMDXComponents } from "@/mdx-components";
+import { PageActions } from "@/components/docs/page-actions";
 import { source } from "@/lib/source";
 
 // Page-tree node type, inferred from the loader output so it stays in sync with
@@ -33,8 +34,8 @@ function collectPageUrls(nodes: readonly TreeNode[]): string[] {
 function resolveSectionLanding(slug: string[]): string | undefined {
   if (slug.length === 0) return undefined;
   const prefix = `/docs/${slug.join("/")}`;
-  return collectPageUrls(source.pageTree.children).find(
-    (url) => url.startsWith(`${prefix}/`),
+  return collectPageUrls(source.pageTree.children).find((url) =>
+    url.startsWith(`${prefix}/`),
   );
 }
 
@@ -50,10 +51,18 @@ export default async function Page(props: {
   }
 
   const MDX = page.data.body;
+  const slug = params.slug ?? [];
+  // Raw-Markdown endpoint for this page (see src/app/llms.mdx/docs/[[...slug]]).
+  // page.url is `/docs/…`, so the raw route is that path under `/llms.mdx`.
+  const markdownUrl = `/llms.mdx${page.url}`;
+  const fileStem = slug.length > 0 ? slug.join("-") : "index";
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
-      <DocsTitle>{page.data.title}</DocsTitle>
+      <div className="flex items-start justify-between gap-4">
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <PageActions markdownUrl={markdownUrl} fileStem={fileStem} />
+      </div>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
         <MDX components={getMDXComponents()} />

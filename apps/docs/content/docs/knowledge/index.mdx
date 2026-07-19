@@ -23,6 +23,17 @@ Product-owned nodes (executions, code, memories) are flagged `is_system` so the 
 
 **Knowledge → Sources** lists the data source connections feeding the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence — webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in three modes: connection only (keep data), data only (keep config), or full.
 
+<Mermaid
+  chart="
+flowchart LR
+  S[Connected sources] --> P[(Postgres: operational record)]
+  S --> N[(Neo4j: graph index)]
+  N --> Q[Search and inference]
+  Q --> AG[Agents cite in answers]"
+/>
+
+*Sources dual-write an operational record to Postgres and a graph index to Neo4j; agents search and infer over the graph, then cite what they used.*
+
 ## Searching the graph
 
 Two complementary searches:
@@ -40,6 +51,10 @@ Oxagen can infer relationships across sources with an LLM pass — for example l
 - Edges **below** it are staged in **Knowledge → Inference** for human review, where you approve or reject each candidate with an audit trail.
 
 Inference prompts are configurable per source — see [Inference prompts](/docs/connections/inference-prompts).
+
+## Citation analytics
+
+Every grounded answer records which memories and graph nodes it cited, and how much they mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard — most-cited and least-useful memories, violated rules, top cited entities — so you can promote what works and demote what doesn't. See [Citations](/docs/knowledge/citations).
 
 ## Governing the graph's shape
 

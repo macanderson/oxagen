@@ -18,6 +18,7 @@ import { IllustrationPrivacySpot } from "@/components/illustrations/illustration
 import { IllustrationRbacSpot } from "@/components/illustrations/illustration-rbac-spot";
 import { IllustrationSecurity } from "@/components/illustrations/illustration-security";
 import { IllustrationSkillSpot } from "@/components/illustrations/illustration-skill-spot";
+import { Mermaid } from "@/components/mdx/mermaid";
 import { TuiGraphSearch } from "@/components/tui/tui-graph-search";
 import { TuiInteractiveAnswer } from "@/components/tui/tui-interactive-answer";
 import { TuiLogin } from "@/components/tui/tui-login";
@@ -45,6 +46,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     IllustrationRbacSpot,
     IllustrationSecurity,
     IllustrationSkillSpot,
+    Mermaid,
     TuiGraphSearch,
     TuiInteractiveAnswer,
     TuiLogin,

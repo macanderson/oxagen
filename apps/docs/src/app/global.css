@@ -191,3 +191,66 @@
   }
   .lp-line { opacity: 1; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Print / "Export PDF".
+ *
+ * The per-page actions menu (PageActions) exports a page by triggering
+ * `window.print()`. These rules strip everything that isn't the article — the
+ * Fumadocs sidebar (#nd-sidebar), top subnav (#nd-subnav), TOC rail (#nd-toc),
+ * the floating Install-CLI pill, and the actions menu itself — then let the
+ * article (#nd-page) fill the printable width so the prose, headings, and code
+ * blocks print cleanly.
+ * ─────────────────────────────────────────────────────────────────────────── */
+@media print {
+  #nd-sidebar,
+  #nd-subnav,
+  #nd-toc,
+  [data-docs-page-actions],
+  button[aria-label^="Install the Oxagen CLI"] {
+    display: none !important;
+  }
+
+  /* Collapse the layout grid so the article isn't offset by the (now hidden)
+   * sidebar/TOC columns. */
+  #nd-docs-layout {
+    display: block !important;
+  }
+
+  #nd-page {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Printers drop background fills, so give code blocks a visible border and
+   * force legible foreground/edges. */
+  #nd-page pre,
+  #nd-page :not(pre) > code {
+    border: 1px solid #cbd5e1 !important;
+    background: transparent !important;
+    color: #111 !important;
+  }
+
+  #nd-page pre {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  /* Avoid awkward page breaks mid-heading or inside a code block. */
+  #nd-page h1,
+  #nd-page h2,
+  #nd-page h3 {
+    break-after: avoid-page;
+  }
+  #nd-page pre,
+  #nd-page table,
+  #nd-page figure {
+    break-inside: avoid;
+  }
+}

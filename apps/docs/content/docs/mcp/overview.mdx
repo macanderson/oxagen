@@ -27,6 +27,17 @@ Authentication is API-key based. The key determines:
 
 There are no path-level org or workspace segments in the URL. Scope is carried entirely by the key.
 
+<Mermaid
+  chart="
+flowchart LR
+  C[MCP client] -->|API key| M[MCP server /mcp]
+  M --> S[Org + workspace scope]
+  S --> K[invoke kernel]
+  K --> T[Capabilities as tools]"
+/>
+
+*The API key alone carries org and workspace scope — no URL path segments — before the same `invoke()` kernel every other surface uses.*
+
 ## Audit trail
 
 Every tool call via the MCP server passes through the same `invoke()` kernel boundary as API and in-app calls. This means:

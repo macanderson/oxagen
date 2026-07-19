@@ -192,7 +192,7 @@ oxagen models use <id>         # choose the coordinator (on-device is always all
 
 ## oxagen graph — knowledge graph
 
-Query and replicate your workspace knowledge graph. See [Knowledge graph](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
+Query and replicate your workspace knowledge graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
 
 ```bash
 oxagen graph search  -q <text> [--kinds <csv>] [--labels <csv>] [--limit <n>] [--system|--no-system]
@@ -210,7 +210,7 @@ oxagen graph status  [--json]
 
 ## oxagen memory & remember — agent memory
 
-Capture and curate the workspace's [agent memory](/docs/cli/memory) — the lessons the agent recalls before acting. See that page for the full workflow.
+Capture and curate the workspace's [agent memory](/docs/cli/memory) — the lessons the agent recalls before acting. See [Memory from the CLI](/docs/cli/memory) for the full workflow.
 
 ```bash
 oxagen remember "always use withTenantDb, never raw db()" --class RULE --enforcement 90
@@ -240,7 +240,7 @@ oxagen config model anthropic/claude-sonnet-5
 
 ## oxagen settings — unified settings.json
 
-Inspect and edit the layered `settings.json` (model, env, permissions, hooks, MCP). See [Configuration](/docs/cli/configuration).
+Inspect and edit the layered `settings.json` (model, env, permissions, hooks, MCP). See [CLI configuration](/docs/cli/configuration).
 
 ```bash
 oxagen settings show                 # merged settings + which scope each came from

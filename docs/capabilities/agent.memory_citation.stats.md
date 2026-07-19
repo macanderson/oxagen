@@ -45,6 +45,52 @@ coalescing `displayName→name→publicId`) — never a bare id.
 
 - None (read-only). Returns an empty-but-valid rollup when the knowledge graph is not configured.
 
+## Reading the metrics
+
+- **Useful vs not useful:** `DECISIVE` and `CONTRIBUTING` influence means the
+  citation actually shaped the agent's output; `CONSIDERED`/`IGNORED` means it
+  was recalled but did not matter. A memory that accumulates citations without
+  ever being decisive (`leastUsefulMemories`) is a candidate to demote
+  (`demote_memory`) or dismiss from the promotion queue.
+- **Violations:** `byCompliance.VIOLATION` and `mostViolatedRules` show where
+  agents broke promoted rules — either the rule needs stronger enforcement, or
+  it is wrong and should be demoted.
+
+## Examples
+
+API — 30-day rollup, top-10 lists (defaults):
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/citations/stats" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+API — quarterly window with deeper lists:
+
+```bash
+curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/citations/stats" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"days": 90, "limit": 25}'
+```
+
+MCP — tool `get_citation_stats`:
+
+```json
+{ "days": 7, "limit": 10 }
+```
+
+CLI — compact summary in the terminal:
+
+```bash
+oxagen memory citations --days 30 --limit 10
+```
+
+App: **Knowledge → Citations** renders this capability as the dashboard (period
+switcher = `days` 7/30/90).
+
 ## SPEC references
 
 - `docs/specs/two-axis-memory/DESIGN.md` §6/§7
