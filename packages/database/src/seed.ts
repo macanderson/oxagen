@@ -12,6 +12,7 @@ import {
   workspaceUsers,
   agents,
   agentVersions,
+  principals,
 } from "./schema/index";
 
 // Seed runs idempotently. Re-running won't duplicate plans, the dev
@@ -63,7 +64,10 @@ export async function seedPlatform(): Promise<void> {
   // FORCE RLS policies would then reject every insert and break DB bootstrap.
   await withSystemDb(async (tx) => {
     for (const plan of PLAN_SEEDS) {
-      await tx.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
+      await tx
+        .insert(plans)
+        .values(plan)
+        .onConflictDoNothing({ target: plans.slug });
     }
   });
 }
@@ -92,7 +96,11 @@ export async function seedDev(): Promise<void> {
       })
       .onConflictDoNothing({ target: organizations.slug });
     const orgRow = (
-      await tx.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
+      await tx
+        .select()
+        .from(organizations)
+        .where(eq(organizations.slug, orgSlug))
+        .limit(1)
     )[0];
     if (!orgRow) throw new Error("Failed to upsert dev org");
 
@@ -121,7 +129,12 @@ export async function seedDev(): Promise<void> {
       await tx
         .select()
         .from(workspaces)
-        .where(and(eq(workspaces.orgId, orgRow.id), eq(workspaces.slug, workspaceSlug)))
+        .where(
+          and(
+            eq(workspaces.orgId, orgRow.id),
+            eq(workspaces.slug, workspaceSlug),
+          ),
+        )
         .limit(1)
     )[0];
     if (!workspaceRow) throw new Error("Failed to upsert dev workspace");
@@ -144,10 +157,34 @@ export async function seedDev(): Promise<void> {
         role: "owner",
         joinedAt: new Date(),
       })
-      .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
+      .onConflictDoNothing({
+        target: [workspaceUsers.workspaceId, workspaceUsers.userId],
+      });
 
     // Seed the built-in qa-chat agent for the dev workspace. Inline logic avoids
     // importing @oxagen/handlers (would create a database ↔ handlers dep cycle).
+    // agents.principal_id is NOT NULL (docs/specs/agent-rbac/spec.md §3.1) —
+    // provision the IAM identity in the same transaction as the agent row,
+    // never as a separate/legacy step. Both inserts are onConflictDoNothing
+    // (idempotent against agents_workspace_slug_uniq); a re-run before the
+    // agent row exists could in principle leave an extra orphaned principal
+    // row behind, but this is dev-only seed tooling, never run concurrently
+    // against production.
+    const [principal] = await tx
+      .insert(principals)
+      .values({
+        orgId: orgRow.id,
+        workspaceId: workspaceRow.id,
+        kind: "agent",
+        displayName: "QA Chat Agent",
+        status: "active",
+        parentUserId: userRow.id,
+        createdByUserId: userRow.id,
+        updatedByUserId: userRow.id,
+      })
+      .returning({ id: principals.id });
+    if (!principal) throw new Error("Failed to provision qa-chat principal");
+
     await tx
       .insert(agents)
       .values({
@@ -157,6 +194,7 @@ export async function seedDev(): Promise<void> {
         name: "QA Chat Agent",
         agentType: "interactive_chat",
         status: "active",
+        principalId: principal.id,
         createdByUserId: userRow.id,
         updatedByUserId: userRow.id,
       })
@@ -166,7 +204,12 @@ export async function seedDev(): Promise<void> {
       await tx
         .select({ id: agents.id, activeVersionId: agents.activeVersionId })
         .from(agents)
-        .where(and(eq(agents.workspaceId, workspaceRow.id), eq(agents.slug, "qa-chat")))
+        .where(
+          and(
+            eq(agents.workspaceId, workspaceRow.id),
+            eq(agents.slug, "qa-chat"),
+          ),
+        )
         .limit(1)
     )[0];
     if (!agentRow) throw new Error("Failed to upsert dev qa-chat agent");
@@ -189,10 +232,16 @@ export async function seedDev(): Promise<void> {
         await tx
           .select({ id: agentVersions.id })
           .from(agentVersions)
-          .where(and(eq(agentVersions.agentId, agentRow.id), eq(agentVersions.version, 1)))
+          .where(
+            and(
+              eq(agentVersions.agentId, agentRow.id),
+              eq(agentVersions.version, 1),
+            ),
+          )
           .limit(1)
       )[0];
-      if (!versionRow) throw new Error("Failed to upsert dev qa-chat agent version");
+      if (!versionRow)
+        throw new Error("Failed to upsert dev qa-chat agent version");
 
       await tx
         .update(agents)
@@ -221,7 +270,9 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "seed")) {
       process.exit(0);
     })
     .catch((err) => {
-      process.stderr.write(`Seed failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+      process.stderr.write(
+        `Seed failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+      );
       process.exit(1);
     });
 }

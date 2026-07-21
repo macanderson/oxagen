@@ -58,9 +58,12 @@ export const agents = agentSchema.table(
     // The agent's IAM identity (iam.principals kind='agent'), provisioned once
     // at agent.definition.create and soft-deleted together with the agent
     // (docs/specs/agent-rbac/spec.md §3.1: one principal per agent IDENTITY,
-    // not per version/run). App-enforced — no FK across the agent/iam schema
-    // boundary per CLAUDE.md storage rules.
-    principalId: uuid("principal_id"),
+    // not per version/run). NOT NULL: every agent identity is created together
+    // with its principal in the same transaction (agent.definition.create.ts)
+    // — there is no transitional/legacy agent without one (pre-launch, no
+    // backfill). App-enforced — no FK across the agent/iam schema boundary
+    // per CLAUDE.md storage rules.
+    principalId: uuid("principal_id").notNull(),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -78,8 +81,14 @@ export const agents = agentSchema.table(
       t.workspaceId,
       t.deploymentStatus,
     ),
-    // Resolve the owning agent from its principal (soft-delete-on-archive path).
-    principalIdx: index("agents_principal_idx").on(t.principalId),
+    // UNIQUE, not a plain index: exactly one agent identity per persistent
+    // IAM principal (docs/specs/agent-rbac/spec.md §3.1 — one principal per
+    // agent IDENTITY, never shared across agents). Also resolves the owning
+    // agent from its principal on the soft-delete-on-archive path. NULL-safe
+    // (multiple NULLs allowed) — a not-yet-provisioned agent row (should not
+    // occur post-launch, but the column stays nullable per the no-FK
+    // convention) never collides with another.
+    principalIdx: uniqueIndex("agents_principal_idx").on(t.principalId),
     statusCheck: check(
       "agents_status_check",
       sql`${t.status} IN ('draft', 'active', 'archived')`,

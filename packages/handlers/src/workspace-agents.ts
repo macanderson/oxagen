@@ -99,6 +99,29 @@ async function bootstrapWorkspaceAgentsWithTx(
       "workspace-agents: reconciling qa-chat with no active version",
     );
   } else {
+    // Provision the qa-chat agent's IAM identity too: agents.principal_id is
+    // NOT NULL (docs/specs/agent-rbac/spec.md §3.1) — every agent row,
+    // built-in or user-created, is created together with its principal in the
+    // same transaction, never as a separate/legacy step.
+    const [principal] = await d
+      .insert(schema.principals)
+      .values({
+        orgId,
+        workspaceId,
+        kind: "agent",
+        displayName: INTERACTIVE_AGENT_NAME,
+        status: "active",
+        parentUserId: userId,
+        createdByUserId: userId,
+        updatedByUserId: userId,
+      })
+      .returning({ id: schema.principals.id });
+    if (!principal) {
+      throw new Error(
+        `[workspace-agents] Failed to provision qa-chat principal for workspace ${workspaceId}`,
+      );
+    }
+
     const [inserted] = await d
       .insert(schema.agents)
       .values({
@@ -110,6 +133,7 @@ async function bootstrapWorkspaceAgentsWithTx(
         agentType: INTERACTIVE_AGENT_TYPE,
         status: "active",
         deploymentStatus: "active",
+        principalId: principal.id,
         createdByUserId: userId,
         updatedByUserId: userId,
       })
@@ -137,7 +161,10 @@ async function bootstrapWorkspaceAgentsWithTx(
       agentId = reselected.id;
     } else {
       agentId = inserted.id;
-      logger.info({ workspaceId, agentId }, "workspace-agents: qa-chat created");
+      logger.info(
+        { workspaceId, agentId },
+        "workspace-agents: qa-chat created",
+      );
     }
   }
 
