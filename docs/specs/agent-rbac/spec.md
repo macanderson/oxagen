@@ -1,18 +1,18 @@
 # Agent RBAC — Design Specification
 
-Status: **Proposed** · Author: platform · Date: 2026-07-07
+Status: **Proposed** - Author: platform - Date: 2026-07-07
 Related: `docs/specs/iam/plan.md`, `docs/adr/ADR-009` (unified capability/tool model), `ADR-013` (capability packs / entitlements), `ADR-014` (workspace-scoped MCP registry), `ADR-019` (unified agent engine), `ADR-022` (capability naming), `packages/oxagen/src/agent-schema.ts`.
 
 ## 0. Recommendation (TL;DR)
 
-**Make every deployed agent a first-class IAM principal and give it roles through the existing IAM spine — do not build a second permission system.** The substrate already exists end-to-end as *declaration*; what is missing is *enforcement at four seams*:
+**Make every deployed agent a first-class IAM principal and give it roles through the existing IAM spine — do not build a second permission system.** The substrate already exists end-to-end as _declaration_; what is missing is _enforcement at four seams_:
 
-| Dimension | Declared today | Enforcement seam (exists, unwired) |
-|---|---|---|
-| Capabilities / function tools | `contract.defaultRoles`, `agent.riskLevel`, `iam.role_grants` | `invoke()` kernel IAM (`packages/oxagen/src/kernel.ts`) resolving against the **agent principal**, plus the already-present-but-never-populated `allowlist: Set<string>` in `packages/agent/src/runtime/materialize-tools.ts` |
-| Graph node labels + relationship types | `graphAccess.retrieval.scopeToTypes[]`, `graphAccess.budget` (declared, **zero enforcement references**) | `scopedSession` in `packages/ontology/src/tenant.ts` — the same chokepoint that already injects `orgId`/`workspaceId` |
-| MCP servers + tools | `agentTools[{type:"mcp_server"}]`, per-tool consents (`mcp.mcp_consents`) | the existing glob allow/deny/ask engine `packages/mcp-config/src/permissions.ts` + `serverAllowlist` in `apply-agent-binding.ts` (today additive-only) |
-| Skills / subagents | `agentTools[{type:"skill"|"agent"}]` | same binding path; intersection instead of union |
+| Dimension                              | Declared today                                                                                           | Enforcement seam (exists, unwired)                                                                                                                                                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capabilities / function tools          | `contract.defaultRoles`, `agent.riskLevel`, `iam.role_grants`                                            | `invoke()` kernel IAM (`packages/oxagen/src/kernel.ts`) resolving against the **agent principal**, plus the already-present-but-never-populated `allowlist: Set<string>` in `packages/agent/src/runtime/materialize-tools.ts` |
+| Graph node labels + relationship types | `graphAccess.retrieval.scopeToTypes[]`, `graphAccess.budget` (declared, **zero enforcement references**) | `scopedSession` in `packages/ontology/src/tenant.ts` — the same chokepoint that already injects `orgId`/`workspaceId`                                                                                                         |
+| MCP servers + tools                    | `agentTools[{type:"mcp_server"}]`, per-tool consents (`mcp.mcp_consents`)                                | the existing glob allow/deny/ask engine `packages/mcp-config/src/permissions.ts` + `serverAllowlist` in `apply-agent-binding.ts` (today additive-only)                                                                        |
+| Skills / subagents                     | `agentTools[{type:"skill"\|"agent"}]`                                                                    | same binding path; intersection instead of union                                                                                                                                                                              |
 
 Concretely: an **agent role** is an `iam.roles` row (scopeKind `workspace`) whose grants carry (a) the existing capability→effect map and (b) a new typed **resource-scope condition** for graph labels, relationship types, MCP server:tool globs, and skill slugs. Agents get roles via `iam.principal_role_assignments`. At run time the agent's effective permissions are **the intersection of its own grants and the invoking human's grants** — an agent can never exceed the human it acts for (the delegation ceiling), and a subagent can only narrow, never widen, its parent's scope.
 
@@ -58,12 +58,12 @@ Rejected alternative — per-run principals: explodes the principal table, break
 
 Reuse `iam.roles` + `iam.role_grants` + `iam.principal_role_assignments` unchanged for capability grants. Add four **system default agent roles**, seeded by `seed-iam-defaults.ts`:
 
-| Role | Intent | Capability posture | Graph posture | MCP posture |
-|---|---|---|---|---|
-| `Agent Observer` | read/answer only | `category in {read, introspection, graph, memory}` allow; mutations deny | labels/rels: as-configured, `mode=read` forced | deny all |
-| `Agent Contributor` | standard worker | reads allow; `riskLevel=low\|medium` mutations allow; `high` require_approval | as-configured | allow listed servers, `ask` per tool |
-| `Agent Operator` | trusted automation | Contributor + `high` allow except `category=vcs`/billing/security | as-configured incl. `extend` | allow listed servers/tools |
-| `Agent Legacy (unrestricted)` | back-compat | mirror of today's behavior: everything the **invoking user** may do | unenforced scopes ignored → enforced as declared (§4 Phase 3 flips this) | today's additive behavior |
+| Role                          | Intent             | Capability posture                                                            | Graph posture                                                            | MCP posture                          |
+| ----------------------------- | ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------ |
+| `Agent Observer`              | read/answer only   | `category in {read, introspection, graph, memory}` allow; mutations deny      | labels/rels: as-configured, `mode=read` forced                           | deny all                             |
+| `Agent Contributor`           | standard worker    | reads allow; `riskLevel=low\|medium` mutations allow; `high` require_approval | as-configured                                                            | allow listed servers, `ask` per tool |
+| `Agent Operator`              | trusted automation | Contributor + `high` allow except `category=vcs`/billing/security             | as-configured incl. `extend`                                             | allow listed servers/tools           |
+| `Agent Legacy (unrestricted)` | back-compat        | mirror of today's behavior: everything the **invoking user** may do           | unenforced scopes ignored → enforced as declared (§4 Phase 3 flips this) | today's additive behavior            |
 
 `Agent Legacy` is auto-assigned to existing agents by backfill so shipping enforcement changes nothing until a workspace opts an agent into a real role. New agents created after Phase 1 default to `Agent Contributor`.
 
@@ -85,11 +85,11 @@ resourceScope: {
 }
 ```
 
-**Relationship between role scope and per-agent config:** the role is the *ceiling*, the agent definition (`graphAccess`, `agentTools`) is the *request*. Effective scope = intersection. This keeps `agent-schema.ts` untouched and preserves the existing builder UX — the role becomes a governance layer over it, exactly like the schema comment already promises for subagents ("inherits and may narrow, never widen").
+**Relationship between role scope and per-agent config:** the role is the _ceiling_, the agent definition (`graphAccess`, `agentTools`) is the _request_. Effective scope = intersection. This keeps `agent-schema.ts` untouched and preserves the existing builder UX — the role becomes a governance layer over it, exactly like the schema comment already promises for subagents ("inherits and may narrow, never widen").
 
 ### 3.4 Enforcement runs at every tier — this is not enterprise ACL
 
-`checkIAM` short-circuits to unconditional allow for non-enterprise orgs (`canAccessACL(tier)`). Decision: **agent-principal resolution bypasses that fast-path.** Rationale: agent RBAC is a core product safety property (an agent is an unattended automation; a human clicking a button is not), and it is the wedge's "governed" claim. Tier gating applies only to *custom* agent roles: non-enterprise orgs get the four system roles; custom role authoring stays enterprise. Implementation: `checkIAM` takes `principalKind`; the fast-path applies only when `principalKind='human'`.
+`checkIAM` short-circuits to unconditional allow for non-enterprise orgs (`canAccessACL(tier)`). Decision: **agent-principal resolution bypasses that fast-path.** Rationale: agent RBAC is a core product safety property (an agent is an unattended automation; a human clicking a button is not), and it is the wedge's "governed" claim. Tier gating applies only to _custom_ agent roles: non-enterprise orgs get the four system roles; custom role authoring stays enterprise. Implementation: `checkIAM` takes `principalKind`; the fast-path applies only when `principalKind='human'`.
 
 ### 3.5 Deny wins, and the two-layer gate stays
 
@@ -112,26 +112,31 @@ Do not invent a second matcher. `evaluatePermission(serverName, toolName, rules)
 Phases land independently, each behind its own flag, each with back-compat defaults. Order: 1 → 2 → (3 ∥ 4) → 5.
 
 ### Phase 1 — Agent principals + role spine
+
 Scope: provision principal on `agent.definition.create` (backfill script for existing agents → `Agent Legacy`); seed four system roles; `resource_scope` condition type + resolver support (resolution only, no enforcement); contracts `agent.role.assign`, `agent.role.revoke`, `agent.role.list`, `agent.role.get` (API+MCP parity, docs); audit events carry `principal_kind`.
 Acceptance: principals exist for all live agents; assigning/revoking roles round-trips; resolver unit tests cover intersection + delegation ceiling; zero runtime behavior change.
 Risks: principal backfill on shared local DB (verify with SELECT, not logs). Rollback: roles unassigned → `Agent Legacy` semantics; principal rows are inert.
 
 ### Phase 2 — Capability enforcement (tools + kernel)
+
 Scope: run context carries resolved agent grants; `materializeTools.allowlist` populated restrictively; kernel `invoke()` resolves agent principal (∩ user) when `ctx.principalKind='agent'`, bypassing the tier fast-path per §3.4; `require_approval` routes to the existing approval flow (`agent.approval.resolve`).
 Acceptance: an `Agent Observer` cannot call a mutation capability even when named directly in a poisoned prompt (kernel-level test); legacy-role agents unchanged; denial audit rows in ClickHouse.
 Risks: latency — one resolution per run, cached; fast-path change is `principalKind`-guarded so human traffic is untouched. Rollback: flag off → allowlist never populated, kernel skips agent resolution.
 
 ### Phase 3 — Graph scope enforcement
+
 Scope: `GraphScope` support in `scopedSession` + predicate/budget injection in `ontology.*` / `semantic.*` query builders; effective scope = role ceiling ∩ `graphAccess` declaration (finally enforcing `scopeToTypes` and `budget`); subagent narrowing on dispatch.
 Acceptance: integration test against live Neo4j proving out-of-scope labels/rel-types never return; budget clamps observable; `Agent Legacy` + humans unaffected.
 Risks: Cypher predicate injection must not break existing query plans — measure; label filters interact with vector-index entry points (filter post-ANN with oversampling, per the known ANN pattern). Rollback: scope param optional; flag off restores pass-through.
 
 ### Phase 4 — MCP + skills enforcement
+
 Scope: shared glob engine; role `mcp.rules` evaluated in `applyAgentBinding` (intersection) and per-call (`ask` → consent with agent principal); `skills.slugs` filter on skill index + `agent.skill.load`; `agents.refs` filter on `agent.subagent.dispatch`.
 Acceptance: e2e — agent with `deny github:*` cannot see or call those tools; consent rows record the agent principal; skill index in the system prompt excludes unauthorized slugs.
 Risks: consent UX confusion between user- and agent-scoped consents — label clearly. Rollback: flag off → today's additive union.
 
 ### Phase 5 — Surfaces: builder, review, AI-assisted setup
+
 Scope: role picker in the agent builder (create + edit) with the four system roles + custom (enterprise); the review step renders effective scope (role ∩ config) as the single accountability view; `agent.definition.suggest` proposes the narrowest adequate role (`suggestedRole` output field, additive change) and the create flow assigns it on draft save; `docs/capabilities/` + user docs.
 Acceptance: e2e with screenshots — describe → generate → review shows proposed role → save draft → agent lists with role badge; non-managers cannot assign roles above their own grants (delegation ceiling in UI and contract).
 Risks: none structural. Rollback: UI hides picker; drafts default to `Agent Contributor`.
@@ -144,9 +149,15 @@ Risks: none structural. Rollback: UI hides picker; drafts default to `Agent Cont
 
 ## 6. Open questions
 
-1. Should `Agent Legacy` be time-boxed (auto-migrate to `Agent Contributor` after N releases)? Recommend yes, with a workspace-level override.
-2. Do A2A inbound tasks (`/a2a`) map to the target agent's principal alone, or intersect with the caller's API-key scope? Recommend intersection, consistent with the delegation ceiling.
-3. Graph scope for `extend` proposals: are proposed nodes/edges validated against the label allowlist at proposal time or approval time? Recommend both (fail fast, verify on approve).
+1-Question: Should `Agent Legacy` be time-boxed (auto-migrate to `Agent Contributor` after N releases)? Recommend yes,
+  with a workspace-level override.
+1-Answer: No - we need to simply reset the entire system before going live we have no customers so we don't need
+  to do backwards compatibility work - build the feature as if it all should work and we will address any data issues between here and launch as one offs.
+2-Question: Do A2A inbound tasks (`/a2a`) map to the target agent's principal alone, or intersect with the caller's API-key scope?
+2-Answer: Intersect to be consistent with the delegation.
+3-Question: Graph scope for `extend` proposals: are proposed nodes/edges validated against the label allowlist at proposal time or approval time?
+3-Answer: fail fast, verify on approve - also make sure to verify the properties as well somehow we need to make it possible for
+          agents building inferred nodes and edges to make sure they try and populate all the properties/the complete schema.
 
 ## Changelog
 
