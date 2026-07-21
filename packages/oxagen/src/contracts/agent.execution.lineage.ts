@@ -6,12 +6,14 @@ import { knowledgeNodeRefSchema } from "./semantic.edge.list";
  * agent.execution.lineage — the file-level lineage of one agent execution.
  *
  * Returns the `:Execution` graph node for a run PLUS every `:SourceFile` it
- * touched via `(:Execution)-[:TOUCHED_FILE]->(:SourceFile)` (written by the
- * agent-engine's GraphSyncProvider — `packages/agent/src/adapters/graph-sync.ts`
- * / `packages/ontology/src/mutations/record-execution.ts`). This is the
- * auditable-graph proof: not "what files did this agent report editing" as a
- * flat list, but the real, queryable graph of what an execution actually
- * touched — the same lineage a customer can inspect and cite.
+ * touched via `(:Execution)-[:TOUCHED_FILE]->(:SourceFile)` (written by
+ * `packages/ontology/src/mutations/record-execution.ts`, invoked from the
+ * durable execution-sync path — see
+ * `packages/inngest-functions/src/functions/agent.sync-execution-to-graph.ts`).
+ * This is the auditable-graph proof: not "what files did this agent report
+ * editing" as a flat list, but the real, queryable graph of what an
+ * execution actually touched — the same lineage a customer can inspect and
+ * cite.
  *
  * Both endpoints are resolved server-side to the shared `KnowledgeNodeRef`
  * shape ({ id, label, displayName, properties }) so the UI cites them by human

@@ -10,7 +10,6 @@ import {
   createNeo4jCodeGraphProvider,
   createPlatformMemoryProvider,
   createClickHouseTraceStore,
-  createGraphSyncAdapter,
   createFileLeaseLockAdapter,
   createPlatformAgentAi,
   ModalSandboxWorkspace,
@@ -121,10 +120,6 @@ export const agentRepoEditHandler: CapabilityHandler<
       workspaceId: ctx.workspaceId,
       surface: "agent",
     }),
-    // Always-on graph sync: materialise touched files as :SourceFile nodes and
-    // record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) lineage edges in Neo4j.
-    // Both writes are async + fire-and-forget — never block or fail the turn.
-    graphSync: createGraphSyncAdapter({ owner: input.owner, repo: input.repo }),
     // Agent file locking (ADR-021 §5): this is the real fleet path —
     // agent.repo.edit is dispatched both directly and as a subagent-fanout
     // child (agent.execute-subagent invoking a capability by name), so two
