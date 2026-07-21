@@ -41,7 +41,8 @@ describe("splitStatements", () => {
   });
 
   it("three statements split correctly", () => {
-    const sql = "CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);\nCREATE TABLE c (id INT);";
+    const sql =
+      "CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);\nCREATE TABLE c (id INT);";
     const result = splitStatements(sql);
     expect(result).toHaveLength(3);
   });
@@ -111,8 +112,8 @@ describe("skill_loads migration inputs", () => {
   );
 
   function skillLoadsCreate(sql: string): string | undefined {
-    return splitStatements(sql).find(
-      (s) => /CREATE TABLE IF NOT EXISTS skill_loads\b/i.test(s),
+    return splitStatements(sql).find((s) =>
+      /CREATE TABLE IF NOT EXISTS skill_loads\b/i.test(s),
     );
   }
 
@@ -185,13 +186,15 @@ describe("usage_events migration inputs", () => {
   );
 
   function usageEventsCreate(sql: string): string | undefined {
-    return splitStatements(sql).find(
-      (s) => /CREATE TABLE IF NOT EXISTS usage_events\b/i.test(s),
+    return splitStatements(sql).find((s) =>
+      /CREATE TABLE IF NOT EXISTS usage_events\b/i.test(s),
     );
   }
 
   it("the migrations directory contains the 0019 usage_events file", () => {
-    const files = readdirSync(join(here, "migrations")).filter((f) => f.endsWith(".sql"));
+    const files = readdirSync(join(here, "migrations")).filter((f) =>
+      f.endsWith(".sql"),
+    );
     expect(files).toContain("0019_usage_events.sql");
   });
 
@@ -228,7 +231,9 @@ describe("usage_events migration inputs", () => {
     }
     // No org/workspace/user column of any kind — this table is anonymous by
     // construction, not by omission of a column that would otherwise be there.
-    expect(stmt).not.toMatch(/\borg_id\b|\bworkspace_id\b|\buser_id\b|\bemail\b/i);
+    expect(stmt).not.toMatch(
+      /\borg_id\b|\bworkspace_id\b|\buser_id\b|\bemail\b/i,
+    );
   });
 
   it("is a pure append-only MergeTree, partitioned by month with a 1-year TTL", () => {
@@ -243,5 +248,99 @@ describe("usage_events migration inputs", () => {
     const stmt = usageEventsCreate(migrationSql) ?? "";
     expect(stmt).not.toMatch(/^\s*--/m);
     expect(stmt.startsWith("CREATE TABLE")).toBe(true);
+  });
+});
+
+describe("stella_operational_events migration inputs", () => {
+  const migrationFile = "0026_stella_operational_events.sql";
+  const migrationSql = readFileSync(
+    join(here, "migrations", migrationFile),
+    "utf8",
+  );
+
+  function stellaOperationalEventsCreate(sql: string): string | undefined {
+    return splitStatements(sql).find((statement) =>
+      /CREATE TABLE IF NOT EXISTS stella_operational_events\b/i.test(statement),
+    );
+  }
+
+  it("uses the next versioned migration file", () => {
+    const files = readdirSync(join(here, "migrations")).filter((file) =>
+      file.endsWith(".sql"),
+    );
+    expect(files).toContain(migrationFile);
+  });
+
+  it("defines exactly the bounded operational columns", () => {
+    const statement = stellaOperationalEventsCreate(migrationSql) ?? "";
+    const columnBlock = statement.slice(
+      statement.indexOf("(") + 1,
+      statement.lastIndexOf(")"),
+    );
+    const columnNames = columnBlock
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^[a-z_]+\s/.test(line))
+      .map((line) => line.split(/\s+/, 1)[0]);
+
+    expect(columnNames).toEqual([
+      "org_id",
+      "workspace_id",
+      "schema",
+      "event_class",
+      "event_id",
+      "enrollment_id",
+      "provider",
+      "model",
+      "outcome",
+      "duration_ms",
+      "input_tokens",
+      "output_tokens",
+      "cost_microusd",
+      "tool_call_count",
+      "changed_file_count",
+      "produced_output",
+      "received_at",
+    ]);
+
+    for (const definition of [
+      "org_id UUID",
+      "workspace_id UUID",
+      "schema LowCardinality(String)",
+      "event_class LowCardinality(String)",
+      "event_id String",
+      "enrollment_id String",
+      "provider LowCardinality(String)",
+      "model LowCardinality(String)",
+      "outcome LowCardinality(String)",
+      "duration_ms UInt64",
+      "input_tokens UInt64",
+      "output_tokens UInt64",
+      "cost_microusd UInt64",
+      "tool_call_count UInt64",
+      "changed_file_count UInt64",
+      "produced_output Bool",
+      "received_at DateTime64(3)",
+    ]) {
+      expect(statement).toContain(definition);
+    }
+    expect(statement).not.toMatch(
+      /payload_json|prompts?|paths?|run_id|call_id|source|messages?|reasoning|stack_trace/i,
+    );
+  });
+
+  it("uses authenticated tenant plus string event_id for exact retry collapse", () => {
+    const statement = stellaOperationalEventsCreate(migrationSql) ?? "";
+    expect(statement).toMatch(/event_id\s+String/);
+    expect(statement).not.toMatch(/event_id\s+UUID/);
+    expect(statement).toMatch(/ENGINE = ReplacingMergeTree\(received_at\)/);
+    expect(statement).toMatch(/PARTITION BY toYYYYMM\(received_at\)/);
+    expect(statement).toMatch(/ORDER BY \(org_id, workspace_id, event_id\)/);
+  });
+
+  it("is parsed into one executable CREATE statement", () => {
+    const statement = stellaOperationalEventsCreate(migrationSql) ?? "";
+    expect(statement).not.toMatch(/^\s*--/m);
+    expect(statement.startsWith("CREATE TABLE")).toBe(true);
   });
 });

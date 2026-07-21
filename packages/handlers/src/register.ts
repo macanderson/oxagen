@@ -1044,6 +1044,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .auditLogQueryHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "ingest_stella_operational_telemetry",
+    async () =>
+      (await import("./telemetry.stella.ingest"))
+        .telemetryStellaIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_capability_registry",
     async () =>
       (await import("./capability.registry.list"))
