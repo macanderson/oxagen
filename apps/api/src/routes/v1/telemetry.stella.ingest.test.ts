@@ -202,15 +202,45 @@ describe("POST /v1/telemetry/stella/operational", () => {
     );
 
     for (let request = 1; request <= 30; request++) {
-      const response = await post(VALID_BATCH);
+      const response = await post(VALID_BATCH, {
+        authorization: "Bearer ox_test_key",
+        "x-forwarded-for": `198.51.100.${request}`,
+      });
       expect(response.status).toBe(200);
     }
 
     mocks.invoke.mockClear();
-    const response = await post(VALID_BATCH);
+    const response = await post(VALID_BATCH, {
+      authorization: "Bearer ox_test_key",
+      "x-forwarded-for": "198.51.100.31",
+    });
 
     expect(response.status).toBe(429);
     expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("exhausts a cheap IP limit before attempting API-key authentication", async () => {
+    const headers = {
+      authorization: "Bearer invalid_key",
+      "x-forwarded-for": "203.0.113.250",
+    };
+    mocks.resolveApiKey.mockResolvedValue({ ok: false });
+
+    for (let request = 1; request <= 300; request++) {
+      const response = await post(VALID_BATCH, headers);
+      expect(response.status).toBe(401);
+    }
+
+    expect(mocks.resolveApiKey).toHaveBeenCalledTimes(300);
+
+    mocks.resolveApiKey.mockClear();
+    const response = await post(VALID_BATCH, headers);
+
+    expect(response.status).toBe(429);
+    expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(mocks.resolveApiKey).not.toHaveBeenCalled();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 

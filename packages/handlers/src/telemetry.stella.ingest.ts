@@ -1,7 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { telemetryStellaIngest } from "@oxagen/oxagen/contracts/telemetry.stella.ingest";
-import { resolveOrgTier, isTierDenied, requireTier } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { insertStellaOperationalEvents } from "@oxagen/telemetry";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
@@ -24,16 +23,16 @@ export const telemetryStellaIngestHandler: CapabilityHandler<
   }
   const apiKeyId = ctx.apiKeyId;
 
-  const tier = await resolveOrgTier(ctx.orgId);
-  try {
-    requireTier(tier, "enterprise", "stella-operational-telemetry");
-  } catch (err) {
-    if (!isTierDenied(err)) throw err;
-    throw enrollmentDenied("Forbidden: Enterprise plan required");
-  }
-
-  const apiKey = await withTenantDb((tx) =>
-    tx.query.apiKeys.findFirst({
+  const { activeSubscription, apiKey } = await withTenantDb(async (tx) => {
+    const subscription = await tx.query.subscriptions.findFirst({
+      where: and(
+        eq(schema.subscriptions.orgId, ctx.orgId),
+        eq(schema.subscriptions.status, "active"),
+      ),
+      columns: { id: true, status: true },
+      with: { plan: { columns: { tier: true } } },
+    });
+    const key = await tx.query.apiKeys.findFirst({
       where: and(
         eq(schema.apiKeys.id, apiKeyId),
         isNull(schema.apiKeys.deletedAt),
@@ -42,9 +41,24 @@ export const telemetryStellaIngestHandler: CapabilityHandler<
           gt(schema.apiKeys.expiresAt, new Date()),
         ),
       ),
-      columns: { scope: true },
-    }),
-  );
+      columns: {
+        scope: true,
+        stellaTelemetryEnrollmentId: true,
+        stellaTelemetryEnrolledAt: true,
+      },
+    });
+    return { activeSubscription: subscription, apiKey: key };
+  });
+
+  if (
+    activeSubscription?.status !== "active" ||
+    activeSubscription.plan.tier !== "enterprise"
+  ) {
+    throw enrollmentDenied(
+      "Forbidden: active Enterprise subscription required",
+    );
+  }
+
   const protectedScope = stellaOperationalTelemetryApiKeyScopeSchema.safeParse(
     apiKey?.scope,
   );
@@ -52,8 +66,18 @@ export const telemetryStellaIngestHandler: CapabilityHandler<
     throw enrollmentDenied("Forbidden: enrolled Stella API-key scope required");
   }
   if (
+    !apiKey?.stellaTelemetryEnrolledAt ||
+    apiKey.stellaTelemetryEnrollmentId !== protectedScope.data.enrollment_id
+  ) {
+    throw enrollmentDenied(
+      "Forbidden: server-provisioned Stella enrollment required",
+    );
+  }
+  if (
     input.events.some(
-      (event) => event.enrollment_id !== protectedScope.data.enrollment_id,
+      (event) =>
+        event.enrollment_id !== apiKey.stellaTelemetryEnrollmentId ||
+        event.enrollment_id !== protectedScope.data.enrollment_id,
     )
   ) {
     throw enrollmentDenied("Forbidden: Stella enrollment mismatch");

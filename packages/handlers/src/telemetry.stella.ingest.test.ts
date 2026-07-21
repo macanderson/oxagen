@@ -4,17 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   insertStellaOperationalEvents: vi.fn(),
   loggerError: vi.fn(),
-  resolveOrgTier: vi.fn(),
+  apiKeyFindFirst: vi.fn(),
+  subscriptionFindFirst: vi.fn(),
   withTenantDb: vi.fn(),
 }));
-
-vi.mock("@oxagen/billing", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@oxagen/billing")>();
-  return {
-    ...original,
-    resolveOrgTier: mocks.resolveOrgTier,
-  };
-});
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/database")>();
@@ -57,18 +50,19 @@ const PROTECTED_SCOPE = {
   enrollment_id: ENROLLMENT_ID,
 };
 
-function scriptApiKeyScope(scope: unknown): void {
-  mocks.withTenantDb.mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        query: {
-          apiKeys: {
-            findFirst: vi
-              .fn()
-              .mockResolvedValue(scope === undefined ? undefined : { scope }),
-          },
+function scriptApiKey(
+  scope: unknown,
+  enrollmentId: string | null = ENROLLMENT_ID,
+  enrolledAt: Date | null = new Date("2026-07-21T00:00:00Z"),
+): void {
+  mocks.apiKeyFindFirst.mockResolvedValue(
+    scope === undefined
+      ? undefined
+      : {
+          scope,
+          stellaTelemetryEnrollmentId: enrollmentId,
+          stellaTelemetryEnrolledAt: enrolledAt,
         },
-      }),
   );
 }
 
@@ -100,13 +94,55 @@ const makeInput = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.insertStellaOperationalEvents.mockResolvedValue(undefined);
-  mocks.resolveOrgTier.mockResolvedValue("enterprise");
-  scriptApiKeyScope(PROTECTED_SCOPE);
+  mocks.subscriptionFindFirst.mockResolvedValue({
+    id: "sub_enterprise",
+    status: "active",
+    plan: { tier: "enterprise" },
+  });
+  mocks.withTenantDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        query: {
+          apiKeys: { findFirst: mocks.apiKeyFindFirst },
+          subscriptions: { findFirst: mocks.subscriptionFindFirst },
+        },
+      }),
+  );
+  scriptApiKey(PROTECTED_SCOPE);
 });
 
 describe("telemetryStellaIngestHandler", () => {
-  it("denies a non-Enterprise org even when the API key has the protected scope", async () => {
-    mocks.resolveOrgTier.mockResolvedValue("build");
+  it("denies an org with no active subscription despite a forged Enterprise plan slug", async () => {
+    mocks.subscriptionFindFirst.mockResolvedValue(undefined);
+
+    await expect(
+      telemetryStellaIngestHandler(makeInput(), CONTEXT),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.insertStellaOperationalEvents).not.toHaveBeenCalled();
+  });
+
+  it.each(["canceled", "past_due"])(
+    "denies an org whose Enterprise subscription is %s",
+    async (status) => {
+      mocks.subscriptionFindFirst.mockResolvedValue({
+        id: "sub_stale",
+        status,
+        plan: { tier: "enterprise" },
+      });
+
+      await expect(
+        telemetryStellaIngestHandler(makeInput(), CONTEXT),
+      ).rejects.toMatchObject({ code: "authz_denied" });
+      expect(mocks.insertStellaOperationalEvents).not.toHaveBeenCalled();
+    },
+  );
+
+  it("denies an active non-Enterprise subscription", async () => {
+    mocks.subscriptionFindFirst.mockResolvedValue({
+      id: "sub_build",
+      status: "active",
+      plan: { tier: "build" },
+    });
 
     await expect(
       telemetryStellaIngestHandler(makeInput(), CONTEXT),
@@ -126,7 +162,7 @@ describe("telemetryStellaIngestHandler", () => {
       },
     ],
   ])("denies an Enterprise org with %s API-key scope", async (_name, scope) => {
-    scriptApiKeyScope(scope);
+    scriptApiKey(scope);
 
     await expect(
       telemetryStellaIngestHandler(makeInput(), CONTEXT),
@@ -135,7 +171,25 @@ describe("telemetryStellaIngestHandler", () => {
   });
 
   it("denies when the authenticated API-key row is no longer active", async () => {
-    scriptApiKeyScope(undefined);
+    scriptApiKey(undefined);
+
+    await expect(
+      telemetryStellaIngestHandler(makeInput(), CONTEXT),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.insertStellaOperationalEvents).not.toHaveBeenCalled();
+  });
+
+  it("denies a historical marker-only key without server-owned enrollment provenance", async () => {
+    scriptApiKey(PROTECTED_SCOPE, null, null);
+
+    await expect(
+      telemetryStellaIngestHandler(makeInput(), CONTEXT),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.insertStellaOperationalEvents).not.toHaveBeenCalled();
+  });
+
+  it("denies when the server-owned enrollment binding differs from the scope marker", async () => {
+    scriptApiKey(PROTECTED_SCOPE, "different-server-enrollment");
 
     await expect(
       telemetryStellaIngestHandler(makeInput(), CONTEXT),

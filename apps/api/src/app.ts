@@ -10,6 +10,7 @@ import {
   distributedRateLimiter,
   rateLimitBudgets,
 } from "./middleware/distributed-rate-limit";
+import { rateLimiter } from "./middleware/rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
 import { inngestRoute } from "./routes/inngest";
@@ -346,6 +347,13 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // limit inside the route are the security boundary. Mounted BEFORE the
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
+
+// Cheap pre-authentication ceiling for credential stuffing on Stella intake.
+// Register it on the concrete root path before the auth-gated subrouter: Hono
+// preserves parent registration order, so exhausted IPs never reach API-key
+// resolution. This is deliberately much higher than the authenticated
+// 30/workspace budget to avoid making shared enterprise NATs the main throttle.
+app.use("/v1/telemetry/stella/*", rateLimiter({ windowMs: 60_000, max: 300 }));
 
 // Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
 // security model as /v1/telemetry: no auth (callers are website visitors),
