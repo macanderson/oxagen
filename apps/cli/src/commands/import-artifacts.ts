@@ -54,6 +54,13 @@ export async function handleImportArtifacts(
     );
     return;
   }
+  if (options.source && from.length !== 1) {
+    process.exitCode = 2;
+    writer.writeErr(
+      "ambiguous_import_source: --source requires exactly one --from platform",
+    );
+    return;
+  }
   const scope = options.scope ?? "workspace";
   if (scope !== "workspace" && scope !== "user") {
     process.exitCode = 2;

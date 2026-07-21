@@ -1,4 +1,11 @@
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -100,5 +107,36 @@ describe("foreign artifact import", () => {
       toolCatalog: new Set(["read_file", "list_dir", "glob", "grep"]),
     });
     expect(second.items).toHaveLength(0);
+  });
+
+  it("copies skill sidecars into an independent regular bundle", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "artifact-import-bundle-"));
+    const sourceDir = join(cwd, ".claude", "skills", "testing");
+    await mkdir(join(sourceDir, "references"), { recursive: true });
+    await writeFile(
+      join(sourceDir, "SKILL.md"),
+      "---\nname: testing\ndescription: Test skill\nreferences: references/guide.md\n---\n\nRun the tests.\n",
+    );
+    await writeFile(join(sourceDir, "references", "guide.md"), "Guide v1\n");
+
+    const receipt = await importArtifacts({
+      cwd,
+      scope: "workspace",
+      from: ["claude"],
+      toolCatalog: new Set(),
+    });
+
+    expect(receipt.items).toHaveLength(1);
+    const destination = join(cwd, ".oxagen", "skills", "testing");
+    expect(
+      await readFile(join(destination, "references", "guide.md"), "utf8"),
+    ).toBe("Guide v1\n");
+    expect(
+      (await lstat(join(destination, "skill.toml"))).isSymbolicLink(),
+    ).toBe(false);
+    await writeFile(join(sourceDir, "references", "guide.md"), "Guide v2\n");
+    expect(
+      await readFile(join(destination, "references", "guide.md"), "utf8"),
+    ).toBe("Guide v1\n");
   });
 });

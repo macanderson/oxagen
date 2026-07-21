@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ImportCandidate, ImportPlatform, ImportScope } from "./types";
 
@@ -191,10 +191,25 @@ export async function discoverImportCandidates(options: {
   if (options.from)
     specs = specs.filter((spec) => options.from?.includes(spec.platform));
   if (options.sourceDir) {
+    const sourceDir = options.sourceDir;
+    const sourceKind = basename(sourceDir);
     specs = specs.map((spec) => ({
       ...spec,
-      dir: options.sourceDir as string,
+      dir:
+        sourceKind === "agents" ||
+        sourceKind === "skills" ||
+        sourceKind === "commands"
+          ? sourceDir
+          : join(sourceDir, `${spec.kind}s`),
     }));
+    if (
+      sourceKind === "agents" ||
+      sourceKind === "skills" ||
+      sourceKind === "commands"
+    ) {
+      const kind = sourceKind.slice(0, -1);
+      specs = specs.filter((spec) => spec.kind === kind);
+    }
   }
 
   const candidates: ImportCandidate[] = [];
@@ -230,6 +245,9 @@ export async function discoverImportCandidates(options: {
           platform: spec.platform,
           kind: spec.kind,
           sourcePath,
+          ...(spec.kind === "skill"
+            ? { sourceBundleRoot: dirname(sourcePath) }
+            : {}),
           sourceHash,
           name,
           description,

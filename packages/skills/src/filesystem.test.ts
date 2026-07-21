@@ -1,106 +1,60 @@
-import { describe, it, expect, vi } from "vitest";
-import { writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
+import { describe, expect, it, vi } from "vitest";
 import { scanSkillsDir } from "./filesystem";
 
-const SKILL_CONTENT = (name: string) => `---
-name: ${name}
-description: A ${name} skill.
----
-
-# ${name}
-
-Body content.
-`;
+function content(name: string): string {
+  return serializeArtifactToml({
+    schema_version: 1,
+    kind: "skill",
+    name,
+    description: `A ${name} skill.`,
+    instructions: `# ${name}\n\nBody content.`,
+    references: [],
+  });
+}
 
 describe("scanSkillsDir", () => {
-  it("returns an empty array for a non-existent directory", async () => {
-    const result = await scanSkillsDir("/nonexistent/path/skills");
-    expect(result).toEqual([]);
+  it("returns empty for a missing directory", async () => {
+    expect(await scanSkillsDir("/nonexistent/path/skills")).toEqual([]);
   });
 
-  it("discovers .skill.md files in a flat directory", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "scan-test-"));
+  it("discovers nested skill.toml bundles and ignores Markdown", async () => {
+    const root = await mkdtemp(join(tmpdir(), "scan-skills-"));
     try {
-      await writeFile(join(dir, "alpha.skill.md"), SKILL_CONTENT("alpha"), "utf8");
-      await writeFile(join(dir, "beta.skill.md"), SKILL_CONTENT("beta"), "utf8");
-      await writeFile(join(dir, "ignored.md"), "not a skill", "utf8");
-
-      const skills = await scanSkillsDir(dir);
-      const slugs = skills.map((s) => s.slug).sort();
-      expect(slugs).toEqual(["alpha", "beta"]);
+      await mkdir(join(root, "alpha"));
+      await mkdir(join(root, "nested", "beta"), { recursive: true });
+      await writeFile(join(root, "alpha", "skill.toml"), content("alpha"));
+      await writeFile(
+        join(root, "nested", "beta", "skill.toml"),
+        content("beta"),
+      );
+      await writeFile(join(root, "alpha.skill.md"), "legacy");
+      expect(
+        (await scanSkillsDir(root)).map((skill) => skill.slug).sort(),
+      ).toEqual(["alpha", "beta"]);
     } finally {
-      await rm(dir, { recursive: true });
+      await rm(root, { recursive: true });
     }
   });
 
-  it("discovers .skill.md files nested in subdirectories", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "scan-test-"));
+  it("isolates a corrupt bundle", async () => {
+    const root = await mkdtemp(join(tmpdir(), "scan-skills-"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      await mkdir(join(dir, "sub"), { recursive: true });
-      await writeFile(join(dir, "top.skill.md"), SKILL_CONTENT("top"), "utf8");
-      await writeFile(join(dir, "sub", "nested.skill.md"), SKILL_CONTENT("nested"), "utf8");
-
-      const skills = await scanSkillsDir(dir);
-      const slugs = skills.map((s) => s.slug).sort();
-      expect(slugs).toEqual(["nested", "top"]);
+      await mkdir(join(root, "good"));
+      await mkdir(join(root, "bad"));
+      await writeFile(join(root, "good", "skill.toml"), content("good"));
+      await writeFile(join(root, "bad", "skill.toml"), "not toml");
+      expect((await scanSkillsDir(root)).map((skill) => skill.slug)).toEqual([
+        "good",
+      ]);
+      expect(warn).toHaveBeenCalledOnce();
     } finally {
-      await rm(dir, { recursive: true });
-    }
-  });
-
-  it("ignores non-.skill.md files", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "scan-test-"));
-    try {
-      await writeFile(join(dir, "readme.md"), "# readme", "utf8");
-      await writeFile(join(dir, "data.json"), "{}", "utf8");
-      await writeFile(join(dir, "valid.skill.md"), SKILL_CONTENT("valid"), "utf8");
-
-      const skills = await scanSkillsDir(dir);
-      expect(skills).toHaveLength(1);
-      expect(skills[0]?.slug).toBe("valid");
-    } finally {
-      await rm(dir, { recursive: true });
-    }
-  });
-
-  it("skips a corrupt .skill.md file (missing frontmatter) without aborting the scan", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "scan-test-corrupt-"));
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    try {
-      // One valid skill and one corrupt file (no YAML frontmatter → loader throws).
-      await writeFile(join(dir, "good.skill.md"), SKILL_CONTENT("good"), "utf8");
-      await writeFile(join(dir, "corrupt.skill.md"), "no frontmatter here at all", "utf8");
-
-      const skills = await scanSkillsDir(dir);
-      // The good skill still loads — a single bad file does not abort the scan.
-      expect(skills.map((s) => s.slug)).toEqual(["good"]);
-      // The corrupt file is logged with its path so the author can fix it.
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      const [msg, meta] = warnSpy.mock.calls[0] as [string, Record<string, unknown>];
-      expect(msg).toContain("failed to load skill file");
-      expect(String(meta.path)).toContain("corrupt.skill.md");
-    } finally {
-      warnSpy.mockRestore();
-      await rm(dir, { recursive: true });
-    }
-  });
-
-  it("skips a corrupt file nested in a subdirectory without aborting the scan", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "scan-test-corrupt-sub-"));
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    try {
-      await mkdir(join(dir, "sub"), { recursive: true });
-      await writeFile(join(dir, "sub", "ok.skill.md"), SKILL_CONTENT("ok"), "utf8");
-      await writeFile(join(dir, "sub", "bad.skill.md"), "garbage, no frontmatter", "utf8");
-
-      const skills = await scanSkillsDir(dir);
-      expect(skills.map((s) => s.slug)).toEqual(["ok"]);
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      warnSpy.mockRestore();
-      await rm(dir, { recursive: true });
+      warn.mockRestore();
+      await rm(root, { recursive: true });
     }
   });
 });

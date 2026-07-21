@@ -6,6 +6,16 @@ import { captureWriter } from "../lib/capture-writer";
 import { handleImportArtifacts } from "./import-artifacts";
 
 describe("import artifacts command", () => {
+  it("requires one platform for a custom source directory", async () => {
+    const captured = captureWriter();
+    await handleImportArtifacts(
+      { source: "/tmp/foreign-artifacts", from: ["claude", "cursor"] },
+      captured.writer,
+    );
+    expect(captured.output()).toContain("ambiguous_import_source");
+    process.exitCode = undefined;
+  });
+
   it("supports dry-run JSON and defaults conflicts to skip", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "import-command-"));
     await mkdir(join(cwd, ".claude", "commands"), { recursive: true });

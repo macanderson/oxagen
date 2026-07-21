@@ -40,7 +40,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "yaml": "2.9.0",
+    "@oxagen/agent-artifacts": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

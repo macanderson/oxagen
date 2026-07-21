@@ -13,6 +13,8 @@ export interface ImportCandidate {
   platform: ImportPlatform;
   kind: ArtifactKind;
   sourcePath: string;
+  /** Root copied for directory-backed skill bundles. */
+  sourceBundleRoot?: string;
   sourceHash: string;
   name: string;
   description: string;

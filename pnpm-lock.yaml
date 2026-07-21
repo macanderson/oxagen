@@ -1749,9 +1749,9 @@ importers:
 
   packages/skills:
     dependencies:
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../agent-artifacts
       zod:
         specifier: 3.25.76
         version: 3.25.76
