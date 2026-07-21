@@ -67,6 +67,28 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
     }),
 }));
 
+// The two mocks below are what the original #271 skip ("pending mock setup
+// investigation") was missing: handleSubmit's first turn awaits
+// initializeProject behind an interactive approval prompt when the cwd isn't
+// project-initialized, so without this stub the prompt parks forever and
+// runTurn is never reached — the exact waitFor timeout the suite flaked on.
+// Every other interactive.* suite that submits prompts carries the same pair.
+vi.mock("../../project/init.js", () => ({
+  isProjectInitialized: () => true,
+  initializeProject: async () => true,
+}));
+vi.mock("../../slash/expand.js", () => ({
+  loadAndExpand: () => null,
+  parseInvocation: (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed.startsWith("/")) return null;
+    const rest = trimmed.slice(1);
+    const space = rest.search(/\s/);
+    if (space === -1) return { name: rest, args: "" };
+    return { name: rest.slice(0, space), args: rest.slice(space + 1).trim() };
+  },
+}));
+
 // The REPL records each completed turn's trace; stub the durable store so the
 // test neither writes to ~/.config nor couples to the TurnTrace shape.
 vi.mock("../../agent/trace-store.js", () => ({
@@ -163,7 +185,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     runTurnSpy.mockClear();
   });
 
-  it.skip("queues prompts submitted mid-turn and runs them FIFO", async () => {
+  it("queues prompts submitted mid-turn and runs them FIFO", async () => {
     const { stdin, lastFrame } = render(
       <ReplApp options={{ session: TEST_SESSION }} />,
     );
@@ -231,7 +253,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     expect(runTurnSpy).not.toHaveBeenCalled();
   });
 
-  it.skip("runs a prompt immediately when idle (no queue wait)", async () => {
+  it("runs a prompt immediately when idle (no queue wait)", async () => {
     const { stdin } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
 
