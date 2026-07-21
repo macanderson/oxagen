@@ -11,46 +11,133 @@ const f32NumberSchema = finiteNumberSchema.refine(
   { message: "embedding value must be representable as a finite f32" },
 );
 
-const arrayPrototypeKeys = Reflect.ownKeys(Array.prototype);
-const arrayPrototypeDescriptors: PropertyDescriptor[] = [];
-arrayPrototypeDescriptors.length = arrayPrototypeKeys.length;
-for (let index = 0; index < arrayPrototypeKeys.length; index += 1) {
-  const key = arrayPrototypeKeys[index] as PropertyKey;
-  const descriptor = Object.getOwnPropertyDescriptor(
-    Array.prototype,
-    key,
-  ) as PropertyDescriptor;
-  Object.defineProperty(arrayPrototypeDescriptors, String(index), {
+interface DescriptorSnapshot {
+  configurable: boolean;
+  enumerable: boolean;
+  get: (() => unknown) | undefined;
+  isData: boolean;
+  set: ((value: unknown) => void) | undefined;
+  value: unknown;
+  writable: boolean | undefined;
+}
+
+interface PrototypeEntry {
+  descriptor: DescriptorSnapshot;
+  key: PropertyKey;
+}
+
+interface IndexedSnapshot<T> {
+  readonly [index: number]: T;
+  readonly length: number;
+}
+
+interface PrototypeSnapshot {
+  entries: IndexedSnapshot<PrototypeEntry>;
+  label: string;
+  target: object;
+}
+
+function defineReadonly(
+  target: object,
+  key: PropertyKey,
+  value: unknown,
+): void {
+  Object.defineProperty(target, key, {
     configurable: false,
     enumerable: true,
-    value: descriptor,
+    value,
     writable: false,
   });
 }
-Object.setPrototypeOf(arrayPrototypeKeys, null);
-Object.setPrototypeOf(arrayPrototypeDescriptors, null);
-Object.freeze(arrayPrototypeKeys);
-Object.freeze(arrayPrototypeDescriptors);
+
+function createIndexedSnapshot<T>(length: number): IndexedSnapshot<T> {
+  const snapshot = Object.create(null) as IndexedSnapshot<T>;
+  defineReadonly(snapshot, "length", length);
+  return snapshot;
+}
+
+function captureDescriptor(descriptor: PropertyDescriptor): DescriptorSnapshot {
+  const isData = Object.hasOwn(descriptor, "value");
+  const snapshot = Object.create(null) as DescriptorSnapshot;
+  defineReadonly(snapshot, "configurable", descriptor.configurable === true);
+  defineReadonly(snapshot, "enumerable", descriptor.enumerable === true);
+  defineReadonly(snapshot, "isData", isData);
+  defineReadonly(
+    snapshot,
+    "writable",
+    isData ? descriptor.writable === true : undefined,
+  );
+  defineReadonly(snapshot, "value", isData ? descriptor.value : undefined);
+  defineReadonly(snapshot, "get", isData ? undefined : descriptor.get);
+  defineReadonly(snapshot, "set", isData ? undefined : descriptor.set);
+  return Object.freeze(snapshot);
+}
+
+function capturePrototype(label: string, target: object): PrototypeSnapshot {
+  const keys = Reflect.ownKeys(target);
+  const entries = createIndexedSnapshot<PrototypeEntry>(keys.length);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index] as PropertyKey;
+    const descriptor = Object.getOwnPropertyDescriptor(
+      target,
+      key,
+    ) as PropertyDescriptor;
+    const entry = Object.create(null) as PrototypeEntry;
+    defineReadonly(entry, "key", key);
+    defineReadonly(entry, "descriptor", captureDescriptor(descriptor));
+    defineReadonly(entries, String(index), Object.freeze(entry));
+  }
+
+  const snapshot = Object.create(null) as PrototypeSnapshot;
+  defineReadonly(snapshot, "label", label);
+  defineReadonly(snapshot, "target", target);
+  defineReadonly(snapshot, "entries", Object.freeze(entries));
+  return Object.freeze(snapshot);
+}
+
+// Security boundary: these intrinsics are assumed pristine when this module
+// initializes. A total compromise before module initialization is out of scope.
+const protectedPrototypes = createIndexedSnapshot<PrototypeSnapshot>(4);
+defineReadonly(
+  protectedPrototypes,
+  "0",
+  capturePrototype("Array.prototype", Array.prototype),
+);
+defineReadonly(
+  protectedPrototypes,
+  "1",
+  capturePrototype("Object.prototype", Object.prototype),
+);
+defineReadonly(
+  protectedPrototypes,
+  "2",
+  capturePrototype("Set.prototype", Set.prototype),
+);
+defineReadonly(
+  protectedPrototypes,
+  "3",
+  capturePrototype("String.prototype", String.prototype),
+);
+Object.freeze(protectedPrototypes);
 
 function descriptorsMatch(
-  expected: PropertyDescriptor,
+  expected: DescriptorSnapshot,
   actual: PropertyDescriptor,
 ): boolean {
   if (
-    expected.configurable !== actual.configurable ||
-    expected.enumerable !== actual.enumerable
+    expected.configurable !== (actual.configurable === true) ||
+    expected.enumerable !== (actual.enumerable === true)
   ) {
     return false;
   }
 
-  const expectedIsData = "value" in expected;
-  const actualIsData = "value" in actual;
-  if (expectedIsData !== actualIsData) {
+  const actualIsData = Object.hasOwn(actual, "value");
+  if (expected.isData !== actualIsData) {
     return false;
   }
-  if (expectedIsData && actualIsData) {
+  if (actualIsData) {
     return (
-      expected.writable === actual.writable &&
+      expected.writable === (actual.writable === true) &&
       Object.is(expected.value, actual.value)
     );
   }
@@ -59,27 +146,37 @@ function descriptorsMatch(
   );
 }
 
-function assertArrayPrototypeIntegrity(): void {
-  const currentKeys = Reflect.ownKeys(Array.prototype);
-  if (currentKeys.length !== arrayPrototypeKeys.length) {
-    throw new TypeError("Array.prototype was modified after initialization");
-  }
-
-  for (let index = 0; index < currentKeys.length; index += 1) {
-    const currentKey = currentKeys[index] as PropertyKey;
-    const expectedKey = arrayPrototypeKeys[index] as PropertyKey;
-    const expectedDescriptor = arrayPrototypeDescriptors[
-      index
-    ] as PropertyDescriptor;
-    if (currentKey !== expectedKey) {
-      throw new TypeError("Array.prototype was modified after initialization");
+function assertIntrinsicIntegrity(): void {
+  for (
+    let prototypeIndex = 0;
+    prototypeIndex < protectedPrototypes.length;
+    prototypeIndex += 1
+  ) {
+    const snapshot = protectedPrototypes[prototypeIndex] as PrototypeSnapshot;
+    if (Reflect.ownKeys(snapshot.target).length !== snapshot.entries.length) {
+      throw new TypeError(
+        `${snapshot.label} was modified after initialization`,
+      );
     }
-    const currentDescriptor = Object.getOwnPropertyDescriptor(
-      Array.prototype,
-      currentKey,
-    ) as PropertyDescriptor;
-    if (!descriptorsMatch(expectedDescriptor, currentDescriptor)) {
-      throw new TypeError("Array.prototype was modified after initialization");
+
+    for (
+      let entryIndex = 0;
+      entryIndex < snapshot.entries.length;
+      entryIndex += 1
+    ) {
+      const entry = snapshot.entries[entryIndex] as PrototypeEntry;
+      const currentDescriptor = Object.getOwnPropertyDescriptor(
+        snapshot.target,
+        entry.key,
+      );
+      if (
+        currentDescriptor === undefined ||
+        !descriptorsMatch(entry.descriptor, currentDescriptor)
+      ) {
+        throw new TypeError(
+          `${snapshot.label} was modified after initialization`,
+        );
+      }
     }
   }
 }
@@ -164,11 +261,11 @@ export type ContextFrameV1 = z.infer<typeof contextFrameV1Schema>;
 export type ContextQueryV1 = z.infer<typeof contextQueryV1Schema>;
 
 export function normalizeContextFrameV1(input: unknown): ContextFrameV1 {
-  assertArrayPrototypeIntegrity();
+  assertIntrinsicIntegrity();
   return contextFrameV1Schema.parse(snapshotJsonWire(input));
 }
 
 export function normalizeContextQueryV1(input: unknown): ContextQueryV1 {
-  assertArrayPrototypeIntegrity();
+  assertIntrinsicIntegrity();
   return contextQueryV1Schema.parse(snapshotJsonWire(input));
 }

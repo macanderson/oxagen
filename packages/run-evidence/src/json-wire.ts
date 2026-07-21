@@ -1,5 +1,22 @@
 import { isProxy } from "node:util/types";
 
+const intrinsicSetConstructor = Set;
+const intrinsicSetAdd = Set.prototype.add;
+const intrinsicSetDelete = Set.prototype.delete;
+const intrinsicSetHas = Set.prototype.has;
+
+function setAdd<T>(target: Set<T>, value: T): void {
+  Reflect.apply(intrinsicSetAdd, target, [value]);
+}
+
+function setDelete<T>(target: Set<T>, value: T): void {
+  Reflect.apply(intrinsicSetDelete, target, [value]);
+}
+
+function setHas<T>(target: Set<T>, value: T): boolean {
+  return Reflect.apply(intrinsicSetHas, target, [value]) as boolean;
+}
+
 export type JsonWireValue =
   | null
   | boolean
@@ -37,8 +54,8 @@ function snapshotArray(
     throw new TypeError(`${path} must have an own data length property`);
   }
   const length = lengthDescriptor.value as number;
-  const allowedKeys = new Set<PropertyKey>();
-  allowedKeys.add("length");
+  const allowedKeys = new intrinsicSetConstructor<PropertyKey>();
+  setAdd(allowedKeys, "length");
   const descriptors: PropertyDescriptor[] = [];
   descriptors.length = length;
 
@@ -59,7 +76,7 @@ function snapshotArray(
       value: descriptor,
       writable: true,
     });
-    allowedKeys.add(String(index));
+    setAdd(allowedKeys, String(index));
   }
 
   const ownKeys = Reflect.ownKeys(value);
@@ -68,7 +85,7 @@ function snapshotArray(
     if (key === undefined) {
       throw new TypeError(`${path} contains an invalid array property`);
     }
-    if (!allowedKeys.has(key)) {
+    if (!setHas(allowedKeys, key)) {
       throw new TypeError(`${path} contains a non-JSON array property`);
     }
   }
@@ -150,20 +167,20 @@ function snapshotValue(
   if (isProxy(value)) {
     throw new TypeError(`${path} must not be a Proxy`);
   }
-  if (ancestors.has(value)) {
+  if (setHas(ancestors, value)) {
     throw new TypeError(`${path} contains a cycle`);
   }
 
-  ancestors.add(value);
+  setAdd(ancestors, value);
   try {
     return Array.isArray(value)
       ? snapshotArray(value, path, ancestors)
       : snapshotObject(value, path, ancestors);
   } finally {
-    ancestors.delete(value);
+    setDelete(ancestors, value);
   }
 }
 
 export function snapshotJsonWire(value: unknown): JsonWireValue {
-  return snapshotValue(value, "$", new Set());
+  return snapshotValue(value, "$", new intrinsicSetConstructor<object>());
 }

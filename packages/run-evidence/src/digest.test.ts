@@ -200,6 +200,111 @@ describe("jcsBytes", () => {
     expect(new TextDecoder().decode(result)).toBe('{"a":1,"z":2}');
   });
 
+  it("rejects extra array properties despite conditional Set.has pollution", () => {
+    const previous = Object.getOwnPropertyDescriptor(Set.prototype, "has");
+    if (previous === undefined || !("value" in previous)) {
+      throw new Error("Set.prototype.has data descriptor is unavailable");
+    }
+    const nativeHas = previous.value as Set<unknown>["has"];
+    const value = Object.defineProperty([1], "extra", {
+      enumerable: true,
+      value: true,
+    });
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(Set.prototype, "has", {
+      configurable: true,
+      value: function (this: Set<unknown>, candidate: unknown) {
+        return typeof candidate === "string"
+          ? true
+          : (Reflect.apply(nativeHas, this, [candidate]) as boolean);
+      },
+    });
+
+    try {
+      result = jcsBytes(value);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Set.prototype, "has", previous);
+    }
+
+    expect(result).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("uses captured Set.add when the public prototype method changes", () => {
+    const previous = Object.getOwnPropertyDescriptor(Set.prototype, "add");
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(Set.prototype, "add", {
+      configurable: true,
+      value: () => {
+        throw new Error("polluted Set.add was invoked");
+      },
+    });
+
+    try {
+      result = jcsBytes({ value: true });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Set.prototype, "add", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(new TextDecoder().decode(result)).toBe('{"value":true}');
+  });
+
+  it("uses captured Set.delete so shared references do not become cycles", () => {
+    const previous = Object.getOwnPropertyDescriptor(Set.prototype, "delete");
+    const shared = { value: true };
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(Set.prototype, "delete", {
+      configurable: true,
+      value: () => false,
+    });
+
+    try {
+      result = jcsBytes({ left: shared, right: shared });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Set.prototype, "delete", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(new TextDecoder().decode(result)).toBe(
+      '{"left":{"value":true},"right":{"value":true}}',
+    );
+  });
+
+  it("uses the Set constructor captured at module initialization", () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "Set");
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(globalThis, "Set", {
+      configurable: true,
+      value: class PollutedSet {
+        constructor() {
+          throw new Error("polluted global Set was constructed");
+        }
+      },
+    });
+
+    try {
+      result = jcsBytes({ value: true });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(globalThis, "Set", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(new TextDecoder().decode(result)).toBe('{"value":true}');
+  });
+
   it("canonicalizes 20,000 descending keys without quadratic amplification", () => {
     const value: Record<string, number> = {};
     for (let index = 19_999; index >= 0; index -= 1) {

@@ -457,6 +457,120 @@ describe("normalizeContextQueryV1", () => {
 });
 
 describe("JSON-wire normalization boundary", () => {
+  it("rejects Object.prototype accessors before Zod can alter required fields", () => {
+    const frame = minimalFrame();
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, "id");
+    let getterCalls = 0;
+    let setterCalls = 0;
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Object.prototype, "id", {
+      configurable: true,
+      get: () => {
+        getterCalls += 1;
+        return "polluted:id";
+      },
+      set: () => {
+        setterCalls += 1;
+      },
+    });
+
+    try {
+      normalized = normalizeContextFrameV1(frame);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Object.prototype, "id", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+    expect(getterCalls).toBe(0);
+    expect(setterCalls).toBe(0);
+  });
+
+  it("rejects String.prototype trim changes before citation validation", () => {
+    const previous = Object.getOwnPropertyDescriptor(String.prototype, "trim");
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(String.prototype, "trim", {
+      configurable: true,
+      value: () => "polluted nonblank citation",
+    });
+
+    try {
+      normalized = normalizeContextFrameV1(
+        minimalFrame({ citation_label: " \t\n" }),
+      );
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(String.prototype, "trim", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects Set.prototype membership changes before enum validation", () => {
+    const previous = Object.getOwnPropertyDescriptor(Set.prototype, "has");
+    if (previous === undefined || !("value" in previous)) {
+      throw new Error("Set.prototype.has data descriptor is unavailable");
+    }
+    const nativeHas = previous.value as Set<unknown>["has"];
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Set.prototype, "has", {
+      configurable: true,
+      value: function (this: Set<unknown>, candidate: unknown) {
+        if (this.size === 7) {
+          return true;
+        }
+        return Reflect.apply(nativeHas, this, [candidate]) as boolean;
+      },
+    });
+
+    try {
+      normalized = normalizeContextFrameV1(
+        minimalFrame({ kind: "NOT_A_KIND" }),
+      );
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Set.prototype, "has", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects removed prototype descriptors and permits exact restoration", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      String.prototype,
+      "padEnd",
+    );
+    if (previous === undefined) {
+      throw new Error("String.prototype.padEnd descriptor is unavailable");
+    }
+    let normalized: unknown;
+    let error: unknown;
+    Reflect.deleteProperty(String.prototype, "padEnd");
+
+    try {
+      normalized = normalizeContextQueryV1(minimalQuery());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(String.prototype, "padEnd", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+    expect(normalizeContextQueryV1(minimalQuery()).goal).toBe(
+      "Find relevant evidence",
+    );
+  });
+
   it("rejects an empty inherited array iterator before Zod can skip frame fields", () => {
     const previous = Object.getOwnPropertyDescriptor(
       Array.prototype,
