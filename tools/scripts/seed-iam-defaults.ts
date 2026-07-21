@@ -14,7 +14,10 @@
  *       "Agent Contributor" — standard worker
  *       "Agent Operator"    — trusted automation
  *     No unrestricted/legacy fourth role exists — pre-launch, there is no
- *     backwards-compatibility path to preserve (§6, open question 1).
+ *     backwards-compatibility path to preserve (§6, open question 1). Any
+ *     "Agent Legacy*" role found in iam.roles (from an earlier draft/manual
+ *     edit) is actively deleted, along with its role_grants, rather than
+ *     left to coexist with the three canonical roles.
  *     Grant effects are derived from each capability's `agent.category` /
  *     `agent.riskLevel` metadata (packages/oxagen/src/contracts/*.ts), and
  *     every grant row carries a `resourceScope` condition (a CEILING, not an
@@ -344,6 +347,47 @@ async function main(): Promise<void> {
       console.log(
         kleur.yellow(
           "[seed-iam] no legacy defaultRoles found — nothing to seed there",
+        ),
+      );
+    }
+
+    // ── Agent RBAC Phase 1: remove any stray "Agent Legacy" role ────────────
+    // No fourth "Agent Legacy (unrestricted)" role is ever created by this
+    // script (§6 open question 1: pre-launch, reset instead of migrate — no
+    // backwards-compatibility path). This is a defensive migration step: if
+    // an earlier draft of this script, a manual DB edit, or a hand-rolled
+    // fixture ever created one, remove it (and its role_grants) rather than
+    // silently coexisting with the three canonical roles. Matches on the
+    // workspace-scoped, system-default name the superseded spec draft used
+    // ("Agent Legacy" / "Agent Legacy (unrestricted)") — a prefix match
+    // covers both spellings without touching any *other* system role.
+    const legacyRoles = await sql<
+      { id: string; org_id: string; name: string }[]
+    >`
+      SELECT id, org_id, name
+      FROM iam.roles
+      WHERE is_system_default = 'true'
+        AND scope_kind = 'workspace'
+        AND name ILIKE 'Agent Legacy%'
+    `;
+
+    if (legacyRoles.length > 0) {
+      const legacyRoleIds = legacyRoles.map((r) => r.id);
+      const deletedGrants = await sql`
+        DELETE FROM iam.role_grants
+        WHERE role_id = ANY(${legacyRoleIds})
+        RETURNING id
+      `;
+      const deletedRoles = await sql`
+        DELETE FROM iam.roles
+        WHERE id = ANY(${legacyRoleIds})
+        RETURNING id
+      `;
+      console.log(
+        kleur.yellow(
+          `[seed-iam] removed ${deletedRoles.length} legacy "Agent Legacy*" role(s) and ` +
+            `${deletedGrants.length} associated role_grant(s) — no back-compat/unrestricted ` +
+            `agent role is supported (§6 open question 1)`,
         ),
       );
     }

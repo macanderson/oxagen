@@ -9,8 +9,19 @@ const seedSource = readFileSync(
 
 describe("Agent RBAC IAM defaults seed", () => {
   it("seeds exactly the three system workspace role ceilings from capability metadata", () => {
+    // Scope to the AGENT_ROLE_NAMES array literal — the authoritative list of
+    // role names this script actually seeds — rather than every quoted
+    // "Agent ..." string in the file (which also matches the legacy-role
+    // cleanup query/comments referencing "Agent Legacy*" as something to
+    // actively DELETE, not seed).
+    const roleNamesArrayMatch = /AGENT_ROLE_NAMES\s*=\s*\[([\s\S]*?)\]/.exec(
+      seedSource,
+    );
+    expect(roleNamesArrayMatch).not.toBeNull();
     const agentRoleNames = [
-      ...seedSource.matchAll(/["'`](Agent [^"'`]+)["'`]/g),
+      ...(roleNamesArrayMatch?.[1] ?? "").matchAll(
+        /["'`](Agent [^"'`]+)["'`]/g,
+      ),
     ].map((match) => match[1]);
 
     expect(new Set(agentRoleNames)).toEqual(
@@ -42,5 +53,17 @@ describe("Agent RBAC IAM defaults seed", () => {
         ),
       );
     }
+  });
+
+  it("actively deletes any stray 'Agent Legacy*' role and its role_grants rather than coexisting with it", () => {
+    // §6 open question 1: pre-launch, reset instead of migrate — no
+    // backwards-compatibility role is ever seeded. This asserts the seed
+    // script goes further than just "never creates one": it finds and
+    // removes any legacy role (e.g. left by an earlier draft or a manual
+    // fixture) before seeding the three canonical roles.
+    expect(seedSource).toMatch(/Agent Legacy/);
+    expect(seedSource).toMatch(/DELETE\s+FROM\s+iam\.role_grants/i);
+    expect(seedSource).toMatch(/DELETE\s+FROM\s+iam\.roles/i);
+    expect(seedSource).toMatch(/ILIKE\s*['"`]Agent Legacy/i);
   });
 });
