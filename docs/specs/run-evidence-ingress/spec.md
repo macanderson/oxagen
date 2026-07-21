@@ -1,6 +1,6 @@
 # Governed run evidence ingress — first vertical slice
 
-**Status:** Proposed
+**Status:** Approved
 
 **Decision date:** 2026-07-21
 
@@ -43,9 +43,9 @@ Importing Stella before these corrections would put a first-class engine behind 
 
 ## First success case
 
-One deployed agent principal executes `edit_repo_file` on behalf of one human principal:
+One deployed agent principal executes `edit_repo_file` on behalf of one authenticated human principal. The invocation may be the first durable run admitted from a kernel-checked deployed-agent invocation context, or a child of an existing durable run; it never requires a synthetic parent run:
 
-1. `kernel.invoke()` resolves the agent-principal ∩ human-principal delegation ceiling.
+1. `kernel.invoke()` resolves the agent-principal ∩ human-principal delegation ceiling. Trusted host code binds the active deployed-agent version and authenticated initiating human before the model can materialize `edit_repo_file`.
 2. The trusted enqueue path resolves the provider repository ID, configured default ref, immutable base commit SHA, and tree SHA. It never defaults an unresolved repository to the string `main`.
 3. Oxagen persists `RunSpecV2`, the agent version, and a digest-addressed authorization snapshot, then creates a durable run.
 4. A worker claim creates a unique attempt and an isolated sandbox checkout pinned to the resolved base commit.
@@ -55,7 +55,7 @@ One deployed agent principal executes `edit_repo_file` on behalf of one human pr
 8. Every terminal outcome, including denial, failure, cancellation, and exhausted retry, finalizes an immutable manifest. Missing evidence lowers the replay grade; it never disappears silently.
 9. A projector derives coarse `AgentVersion → Run → Attempt → ContextManifest → Artifact/Commit/PullRequest → CodeScope/Domain` lineage. GitHub reconciliation may add provider observations but never rewrites the original attempt evidence.
 
-Direct human use without a deployed agent identity, provider-API-only file editing, and standalone Stella uploads are outside this first slice. They must not be represented as if a governed agent principal produced replay-complete evidence. For launch, `edit_repo_file` is agent-only: remove its direct API and MCP exposure and invoke it only from an already-bound deployed-agent run. A future direct transport must separately specify server-resolved agent and repository-connection public IDs; it does not inherit a legacy bypass.
+Direct human use without a deployed agent identity, provider-API-only file editing, and standalone Stella uploads are outside this first slice. They must not be represented as if a governed agent principal produced replay-complete evidence. For launch, `edit_repo_file` is agent-only: remove its direct API and MCP exposure and invoke it only from a kernel-checked deployed-agent invocation context or an already-bound deployed-agent run. The root form creates `parent_run_id = null`; the child form narrows the parent's ceiling. A future direct transport must separately specify server-resolved agent and repository-connection public IDs; it does not inherit a legacy bypass.
 
 ## Ownership boundary
 
@@ -110,12 +110,14 @@ The event log is the ordered execution source. The manifest is the bounded, term
 ```text
 RunSpecV2
   version = 2
+  run_kind = "general" | "repo_edit"
   goal
   engine_policy
     requested_engine
     allowed_engine_versions[]
     model_policy_ref
     max_steps
+    max_attempts
   actor_binding
     initiating_principal_id
     agent_principal_id
@@ -130,10 +132,11 @@ RunSpecV2
     deny_generation_at_admission
     resolved_at
   repository_binding
+    repository_binding_public_id
     provider
     provider_repository_id
     connection_id
-    canonical_ref
+    configured_default_ref
     base_commit_sha
     base_tree_sha
   workspace_policy
@@ -144,6 +147,7 @@ RunSpecV2
     max_frames
     max_tokens
     retention_policy_id
+    retention_policy_digest
   tool_policy
     allowlist[]
     risk_ceiling
@@ -158,7 +162,7 @@ Internal UUIDs remain storage identifiers. Wire contracts and replay APIs use `a
 
 ### Attempt identity
 
-Every successful worker claim creates one immutable `RunAttempt` with an `arat_…` public ID before model or tool execution. A lease reclaim seals the expired attempt as `abandoned` and always creates a new attempt. In the same transaction, it fences the old lease and creates a one-shot finalization grant scoped to that attempt and its last accepted event digest. The successor may restore a checkpoint from the earlier attempt, but keeps its own attempt ID and records `resumed_from_attempt_public_id` plus an algorithm-qualified `restored_checkpoint_digest`.
+Every successful worker claim creates one immutable `RunAttempt` with an `arat_…` public ID and the resolved engine name, engine version, and build/image digest before model or tool execution. Every attempt seal atomically fences its lease and creates a one-shot finalization grant plus durable obligation scoped to that attempt, its event count, final accepted event digest when one exists, and stream digest; a truly zero-event abandoned attempt uses a nullable final-event digest plus the canonical empty stream digest and does not invent a terminal event. This closes the crash window after normal completion as well as failure/cancellation. The immutable grant public ID is also the stable `submission_id` used by every retry of that obligation. Operational finalization grants do not expire: their attempt/seal/digest binding and one successful consumption are the limiting authority, so a KMS or storage outage cannot strand an obligation. A lease reclaim seals the expired attempt as `abandoned` under the same rule. It creates a successor only while the pinned `max_attempts` permits; exhausted runs become failed after the last abandoned attempt is sealed and remain evidence-finalizable. A successor may restore a checkpoint from the earlier attempt, but keeps its own attempt ID and records `resumed_from_attempt_public_id` plus an algorithm-qualified `restored_checkpoint_digest`.
 
 Every durable event has:
 
@@ -190,7 +194,7 @@ RunEvidenceEnvelopeV1
   event_stream_digest
   event_count
   stage_coverage[]
-  checkout
+  checkout?
     provider_repository_id
     base_commit_sha
     base_tree_sha
@@ -206,7 +210,7 @@ RunEvidenceEnvelopeV1
       indexed_root_digest?
       freshness_status?
     completed_at
-  context
+  context?
     query_digest
     compiled_frame_manifest_digest
     tokenizer_ref
@@ -247,6 +251,8 @@ StageCoverageV1
 
 Empty receipt arrays never carry stage meaning. `complete` and `partial` require event bounds; `partial` requires a gap reason. `not_reached` means execution terminated before that stage, while `not_applicable` means policy or the run path did not require it. Oxagen validates coverage against the authoritative attempt event log and derives manifest completeness and replay grade server-side; producer coverage is never accepted as authority.
 
+Stage-owned summary objects follow the same rule. `checkout` and `context` are required when their stage is `complete` or `partial`, absent when it is `not_reached`, and present only when the pinned policy defines evidence for a `not_applicable` stage. An observed clean checkout still carries the canonical empty dirty-patch and untracked-manifest digests. A denied-before-checkout or zero-event abandoned attempt does not invent those observations merely to satisfy the envelope shape.
+
 ### Context frame-use receipt
 
 The array order is the order used by the compiler. One receipt records both the protocol object and what actually reached the model:
@@ -257,7 +263,8 @@ FrameUseReceiptV1
   provider_id
   frame_id
   frame_kind
-  uri?
+  uri_digest?
+  encrypted_uri_ref?
   citation_label?
   citation_conformance = "conformant" | "missing" | "empty" | "legacy_adapter"
   token_cost
@@ -275,6 +282,7 @@ FrameUseReceiptV1
 - `authorization_decision_ref` names the Oxagen decision that allowed this frame into this run. Provider claims never substitute for it.
 - `retention_mode` is exactly one of `digest_only`, `encrypted_exact`, or `external_reference`. Only `encrypted_exact` can support content-exact replay without recontacting a provider.
 - Raw embedding vectors are never projected to the manifest, ClickHouse, or Neo4j. If present in the protocol frame, they are covered by the protocol-frame digest.
+- Frame URIs may contain repository paths or external identifiers. The evidence receipt carries only `uri_digest` and, when exact retention is authorized, an encrypted URI reference; raw URI text never enters the signed manifest.
 
 `ContextFrame.id` is provider-scoped, so durable identity is always `(provider_id, frame_id)`; `provider_id` comes from the host's provider routing result, not the frame. `citation_label` preserves exactly what the provider supplied. Evidence labeled as current `context-graph-protocol` must pass conformance and rejects a missing or empty citation label. A legacy adapter may record the nonconformance explicitly; a UI may display the frame title as a fallback, but that fallback is not written back into protocol evidence. The current CGP draft requires inline `content` and has no committed reference representation; evidence retention may replace that content with a digest or encrypted blob reference, but this does not create a new CGP wire representation. `external_reference` is an Oxagen retention statement only.
 
@@ -299,7 +307,7 @@ ModelCallReceiptV1
   message_sequence_digest
   tool_schema_digest
   ordered_frame_use_digest
-  outcome = "completed" | "failed" | "cancelled"
+  outcome = "completed" | "failed" | "cancelled" | "indeterminate"
   transmitted_request_body_digest?
   response_digest?
   error_digest?
@@ -309,16 +317,14 @@ ModelCallReceiptV1
   encrypted_error_ref?
 ```
 
-`transmitted_request_body_digest` covers the exact non-secret HTTP or SDK request bytes after provider adaptation; credentials and transport headers are excluded. It is required once transmission begins. `response_digest` covers the raw returned response body and is required for a completed call. Failed calls require `error_digest`; cancelled calls record whichever request, response, usage, or error evidence existed before cancellation. `ordered_frame_use_digest` commits to the ordered frame-use receipts associated with the call. Structural replay requires the fields applicable to the outcome. Content-exact replay additionally requires the corresponding encrypted references and verifies them before display. Provider request IDs corroborate delivery but are not evidence authority.
+`transmitted_request_body_digest` covers the exact non-secret HTTP or SDK request bytes after provider adaptation; credentials and transport headers are excluded. It is required once transmission begins. `response_digest` covers the raw returned response body and is required for a completed call. Failed calls require `error_digest`; cancelled calls record whichever request, response, usage, or error evidence existed before cancellation. `indeterminate` is reserved for the narrow crash/transport case where transmission is proven but no authoritative response/error outcome can be recovered; it requires the request digest plus an error/gap digest and always lowers completeness. It is never rewritten as completed or failed without an additive provider receipt. `ordered_frame_use_digest` commits to the ordered frame-use receipts associated with the call. Structural replay requires the fields applicable to the outcome. Content-exact replay additionally requires the corresponding encrypted references and verifies them before display. Provider request IDs corroborate delivery but are not evidence authority.
 
 ### Change receipt
 
 ```text
 ChangeReceiptV1
   provider_repository_id
-  path_locator
-    kind = "tenant_hmac" | "encrypted"
-    value
+  path_locator_public_id
   change_kind = "create" | "modify" | "delete" | "rename"
   before_digest?
   after_digest?
@@ -332,7 +338,7 @@ ChangeReceiptV1
     confidence?
 ```
 
-File evidence stays in the ledger even when the workspace graph projects only `CodeScope` or `Domain`. A missing scope mapping is the explicit value `unresolved`; it never falls through to the current default-ref topology.
+`path_locator_public_id` is an opaque `rpl_…` reference to a tenant-scoped, versioned HMAC record; the HMAC and exact path are not part of the signed manifest or a public API response. Exact-authorized replay may resolve an encrypted path blob through the locator's separately audited access path. File evidence stays in the ledger even when the workspace graph projects only `CodeScope` or `Domain`. A missing scope mapping is the explicit value `unresolved`; it never falls through to the current default-ref topology.
 
 ### Tool, approval, and verification receipts
 
@@ -364,6 +370,10 @@ RunEvidenceManifestV1
   authorization_snapshot_ref
     public_id
     digest
+  retention_policy_ref
+    public_id
+    digest
+    expires_at
   evidence_authority
   replay_grade
   completeness
@@ -432,7 +442,7 @@ Artifact|Commit -[:AFFECTS {authority, manifest_id}]-> CodeScope|Domain
 Run         -[:BASED_ON]-> RepositorySnapshot
 ```
 
-It does not create permanent file nodes from `changes[]`. Noncanonical branch attempts may project run lineage and provisional domain impact, but they never mutate canonical repository topology. The configured default-ref projector advances only on provider-observed commit/tree state, normally triggered and then reconciled after a GitHub merge or push webhook.
+It does not create permanent file nodes from `changes[]`. Noncanonical branch attempts may project run lineage and provisional domain impact, but they never mutate canonical repository topology. A signed GitHub webhook is only a durable reconciliation hint. It cannot mint a provider observation. The configured default-ref projector advances only after an exact-connection GitHub read produces an immutable provider-observed commit/tree receipt and a separately retryable provider-observation delivery.
 
 ## Validation, idempotency, and failure handling
 
@@ -440,35 +450,35 @@ It does not create permanent file nodes from `changes[]`. Noncanonical branch at
 2. Resolve run, attempt, tenant, principals, agent version, and authorization snapshot from trusted state.
 3. Verify repository and base commit bindings, digest syntax, receipt references, stage coverage, and terminal state; recompute `event_stream_digest` from the authoritative log.
 4. Canonicalize the envelope and calculate `envelope_digest` server-side.
-5. Invoke `ingest_run_evidence` through the capability kernel using the durable-worker service principal or the sealed attempt's one-shot finalization grant.
+5. Invoke `ingest_run_evidence` through the capability kernel using the durable-worker service principal authenticated with the sealed attempt's matching one-shot finalization grant. Both are mandatory.
 6. Derive completeness and replay grade, stamp authority and public identities, and obtain the detached platform KMS signature.
 7. Insert the manifest exactly once, then enqueue telemetry and graph projection asynchronously.
 
 `(org_id, submission_id)` and `attempt_id` are unique finalization keys. Reusing a submission ID or attempt with the same envelope digest returns the existing receipt; reusing either with a different digest is an integrity error. Tenant mismatch, unknown attempt, mismatched principals, producer-assigned authority, forged Oxagen receipt IDs, or an unpinned repository base fail closed before the manifest is written.
 
-Projection or provider-reconciliation failure does not discard accepted evidence. Separate mutable delivery rows record `projection_pending` or `reconciliation_pending`; manifest rows remain immutable. Delivery retries with a bound and keeps the prior complete workspace projection active. A failed or interrupted attempt still finalizes from the durable events it has and carries explicit completeness gaps. The lease reclaimer seals and enqueues finalization for an abandoned attempt before creating its successor; finalization itself is driven from a durable outbox so a worker crash cannot erase the obligation.
+Projection or provider-reconciliation failure does not discard accepted evidence. Separate mutable, fenced delivery rows exist for both finalized manifests and provider observations; they record `projection_pending` or `reconciliation_pending` while immutable manifests and observations remain unchanged. Delivery retries with a bound and keeps the prior complete workspace projection active. A failed or interrupted attempt still finalizes from the durable events it has and carries explicit completeness gaps. Every seal creates its finalization obligation atomically; the lease reclaimer performs that transaction for an abandoned attempt before creating its successor. Finalization is driven from the durable outbox so a worker crash cannot erase the obligation.
 
 ## Security and retention rules
 
 - Tenant and workspace scope come from authenticated execution context, never the envelope body.
 - The first slice accepts evidence only from the internal durable-worker service principal. `ingest_run_evidence` has no user-addressable route, agent/MCP/CLI exposure, or generic graph-mutation side door.
-- `runner_observed` requires either the active fenced worker lease or the matching one-shot finalization grant minted atomically when a reclaimer seals that attempt. The grant is bound to the attempt and final event digest, can only finalize once, and cannot execute tools.
+- `runner_observed` finalization requires both the internal durable-worker service principal and the matching one-shot grant minted atomically when that attempt is sealed. The reclaimer mints it through the same seal transaction for an abandoned attempt. The grant is bound to the attempt, seal, final event and stream digests, and exact capability; it does not expire operationally, can finalize successfully only once, and cannot execute tools.
 - The pinned authorization snapshot is the run's non-expanding grant ceiling. Every tool call and context selection re-enters current kernel enforcement and checks active principal/agent status plus the org/workspace deny-generation. Later grants cannot expand an active run; any deny-generation increment invalidates cached allows so agent disablement, explicit revocation, and emergency deny policies take effect before the next operation. Each result is recorded as a new decision without rewriting prior evidence.
-- Public APIs expose public IDs, human labels, and RBAC-filtered summaries—never internal UUIDs, raw path HMACs, or blob keys.
-- Paths default to a tenant HMAC; exact paths and content require encrypted retention and an explicit replay permission.
+- Public APIs expose public IDs, human labels, and RBAC-filtered summaries—never internal UUIDs, raw path HMACs, raw frame URIs, or blob keys. The signed manifest contains only opaque `rpl_` path-locator IDs.
+- Path identity uses a tenant-scoped, versioned HMAC behind the opaque locator; exact paths and content require encrypted retention and an explicit replay permission. Key rotation preserves old locator verification without enabling cross-tenant correlation.
 - Context content, source, diffs, prompts, and tool I/O never enter ClickHouse or Neo4j.
 - Exact payloads are envelope-encrypted before reaching the storage adapter. Evidence persistence fails if the adapter reports an effective access mode outside the tenant policy; it never relies on a requested `private` flag that the provider may downgrade.
 - Platform attestation keys remain in KMS/HSM custody. Replay export includes the signature and verification metadata but never signing authority.
 - Raw model reasoning or chain-of-thought is not evidence and must not be retained. Observable model requests, responses, tool calls, verdicts, and cited evidence are sufficient.
-- Retention policy is pinned at run creation. A producer cannot upgrade itself from digest-only to exact retention.
+- Retention policy is an immutable, tenant-scoped version with a canonical digest. Both public ID and digest are pinned at run creation; a producer cannot select a mutable "current" policy or upgrade itself from digest-only to exact retention.
 - Replay access is separately authorized and audited; permission to execute an agent is not permission to inspect its retained context.
 
 ## Launch changes and deletions implied by this slice
 
-1. Make `edit_repo_file` agent-only for launch, route it through durable `RunSpecV2`, and delete its API/MCP exposure plus the legacy request-scoped execution path rather than wrapping that path in evidence finalization.
+1. Make `edit_repo_file` agent-only for launch, route it through durable `RunSpecV2`, and delete its API/MCP/app exposure plus the legacy request-scoped execution path rather than wrapping that path in evidence finalization. Remove the agent surface from low-level branch/file/PR mutation capabilities so a model cannot compose a bypass around the governed publisher.
 2. Delete the caller-controlled `baseBranch` input for this slice, resolve the governed repository connection's configured default ref, and pin its commit/tree before execution. Do not replace the old `input.baseBranch ?? "main"` behavior with another string fallback.
 3. Disable the GitHub-API-only backend for governed agent edits. If a sandbox checkout cannot be created, return a typed unavailable error rather than producing an unverified pull request.
-4. Extend the provider adapter to return immutable repository ID, configured default ref, commit/tree identities, and every branch/commit/PR result. Provider results are receipts; they must not be discarded.
+4. Extend the provider adapter to return immutable repository ID, configured default ref, commit/tree identities, and every branch/commit/PR result. Publish the complete sandbox change set as one Git tree and one commit so deletes, renames, and modes are not lost. Provider results are receipts; they must not be discarded.
 5. Delete the externally callable legacy `record_execution` contract, handler, route, tests, and capability documentation instead of repurposing it. Preserve the reused `agent_executions` storage model until its remaining internal readers and writers are separately migrated.
 6. Replace event-log mutation grants and silent conflict dropping with append-only database enforcement plus same-digest idempotency checks.
 7. Replace the once-per-run unrefreshed IAM decision cache with a pinned grant ceiling plus the live deny-generation check; do not weaken the existing agent ∩ human delegation ceiling.
