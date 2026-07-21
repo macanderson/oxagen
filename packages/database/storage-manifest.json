@@ -751,6 +751,17 @@
     },
     {
       "domain": "agent",
+      "name": "demote_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "deploy_agent",
       "reads": [],
       "surfaces": [
@@ -790,6 +801,17 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "dismiss_memory_promotion",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
         "mcp"
       ],
       "writes": []
@@ -1178,6 +1200,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "get_citation_stats",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "code",
       "name": "get_code_map",
       "reads": [],
@@ -1401,6 +1434,17 @@
     {
       "domain": "org",
       "name": "get_org_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "get_plan",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1820,6 +1864,17 @@
       "writes": []
     },
     {
+      "domain": "repo",
+      "name": "list_branches",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "capability",
       "name": "list_capability_registry",
       "reads": [],
@@ -2061,6 +2116,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_plans",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "list_plugin_registries",
       "reads": [],
@@ -2140,6 +2206,17 @@
     {
       "domain": "router",
       "name": "list_routing_stats",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "list_run_evidence",
       "reads": [],
       "surfaces": [
         "api",
@@ -2497,17 +2574,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "push_graph",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -3219,6 +3285,17 @@
       "writes": []
     },
     {
+      "domain": "run",
+      "name": "submit_run_evidence",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "suggest_agent_def",
       "reads": [],
@@ -3242,6 +3319,17 @@
     {
       "domain": "connection",
       "name": "suggest_connection_mappings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suggest_promotion_rationales",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3707,7 +3795,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2616fa86df3b983053c369d29a0fc1553c5a7c57385e57c8d9307c02c86d828b",
+  "contentHash": "f510fb51a3d26d9e52bfc52921d95d981c4beb4bb2d92f9e9cd619fdec282c99",
   "domains": [
     {
       "name": "agent",
@@ -3738,6 +3826,8 @@
         "postgres:agent.agent_execution_steps",
         "postgres:agent.agent_executions",
         "postgres:agent.agent_plans",
+        "postgres:agent.agent_run_events",
+        "postgres:agent.agent_runs",
         "postgres:agent.agent_tool_calls",
         "postgres:agent.agent_triggers",
         "postgres:agent.agent_versions",
@@ -3746,6 +3836,9 @@
         "postgres:agent.background_tasks",
         "postgres:agent.file_lock_fences",
         "postgres:agent.file_locks",
+        "postgres:agent.run_context_frames",
+        "postgres:agent.run_evidence_changes",
+        "postgres:agent.run_evidence_manifests",
         "postgres:agent.sandbox_sessions",
         "postgres:agent.skill_versions",
         "postgres:agent.skills",
@@ -3773,7 +3866,6 @@
         "neo4j:User",
         "postgres:auth.accounts",
         "postgres:auth.api_keys",
-        "postgres:auth.credentials",
         "postgres:auth.rate_limit",
         "postgres:auth.sessions",
         "postgres:auth.two_factor",
@@ -3796,9 +3888,7 @@
         "postgres:billing.credit_balances",
         "postgres:billing.credit_ledger",
         "postgres:billing.credit_lots",
-        "postgres:billing.invoice_line_items",
         "postgres:billing.invoices",
-        "postgres:billing.org_billing_profiles",
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
@@ -3810,8 +3900,7 @@
         "postgres:billing.reseller_settings",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
-        "postgres:billing.subscriptions",
-        "postgres:billing.usage_records"
+        "postgres:billing.subscriptions"
       ]
     },
     {
@@ -3890,6 +3979,7 @@
         "neo4j"
       ],
       "tables": [
+        "neo4j:Demotion",
         "neo4j:GraphNode"
       ]
     },
@@ -3920,12 +4010,17 @@
         "neo4j:SourceFile",
         "neo4j:SourceSymbol",
         "postgres:ingestion.auth_credentials",
+        "postgres:ingestion.code_repositories",
+        "postgres:ingestion.code_scopes",
         "postgres:ingestion.connector_schemas",
         "postgres:ingestion.deletion_jobs",
         "postgres:ingestion.entity_type_mappings",
         "postgres:ingestion.github_installations",
         "postgres:ingestion.oauth_accounts",
         "postgres:ingestion.oauth_tokens",
+        "postgres:ingestion.projection_generations",
+        "postgres:ingestion.repository_ref_observations",
+        "postgres:ingestion.repository_snapshots",
         "postgres:ingestion.setup_suggestions",
         "postgres:ingestion.source_connections",
         "postgres:ingestion.webhook_subscriptions"
@@ -4098,7 +4193,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 121
+      "tableCount": 127
     },
     {
       "domains": [
@@ -4125,7 +4220,7 @@
       ],
       "kind": "neo4j",
       "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 31
+      "tableCount": 32
     },
     {
       "domains": [
@@ -5378,6 +5473,12 @@
           "type": "property"
         },
         {
+          "name": "promotion_dismissed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
           "name": "publicId",
           "nullable": true,
           "primaryKey": true,
@@ -5394,7 +5495,7 @@
       "id": "neo4j:AgentMemory",
       "meta": {
         "constraints": "agent_memory_public_id",
-        "indexes": "agent_memory_class_kind,agent_memory_org,agent_memory_promotion_pressure,agent_memory_status",
+        "indexes": "agent_memory_class_kind,agent_memory_org,agent_memory_promotion_dismissed,agent_memory_promotion_pressure,agent_memory_status",
         "vectorIndexes": "memory_embedding_index"
       },
       "name": "AgentMemory",
@@ -5486,6 +5587,31 @@
       "name": "Conversation",
       "store": "neo4j",
       "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:Demotion",
+      "meta": {
+        "constraints": "demotion_id",
+        "indexes": "demotion_org"
+      },
+      "name": "Demotion",
+      "store": "neo4j",
+      "tenantScoped": true
     },
     {
       "columns": [
@@ -6285,12 +6411,6 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
-        },
-        {
-          "name": "fanout_run_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
         }
       ],
       "domain": "agent",
@@ -6598,12 +6718,6 @@
           "type": "uuid"
         },
         {
-          "name": "debug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
           "name": "state",
           "nullable": false,
           "primaryKey": false,
@@ -6725,6 +6839,200 @@
       "domain": "agent",
       "id": "postgres:agent.agent_plans",
       "name": "agent_plans",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "type",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.agent_run_events",
+      "name": "agent_run_events",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "spec",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "claimed_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "lease_expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attempts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "checkpoint",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "checkpoint_seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "result",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cancel_requested",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "started_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.agent_runs",
+      "name": "agent_runs",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -7558,6 +7866,371 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "manifest_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:agent.run_evidence_manifests",
+          "type": "uuid"
+        },
+        {
+          "name": "provider_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "frame_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "uri",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "canonical_content_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "local_graph_generation_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "authorization_decision_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "retention_mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_cost",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.run_context_frames",
+      "name": "run_context_frames",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "manifest_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:agent.run_evidence_manifests",
+          "type": "uuid"
+        },
+        {
+          "name": "repository_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "path_locator",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "change_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "before_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "after_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "code_scope_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "domain_slug",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.run_evidence_changes",
+      "name": "run_evidence_changes",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "attempt_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "initiating_principal_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_version_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "authorization_snapshot_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checkout_repository_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "base_commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_tree_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "dirty_patch_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "untracked_manifest_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "graph_generation_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "graph_schema_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "extractor_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "indexed_root_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checkout_completed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "freshness_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "evidence_authority",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "manifest_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.run_evidence_manifests",
+      "name": "run_evidence_manifests",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "updated_at",
           "nullable": false,
           "primaryKey": false,
@@ -7806,6 +8479,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "change_summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checksum",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -8683,112 +9368,6 @@
           "name": "id",
           "nullable": false,
           "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "credential_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "encrypted_payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bytea"
-        },
-        {
-          "name": "kms_key_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "last_used_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "auth",
-      "id": "postgres:auth.credentials",
-      "name": "credentials",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
           "type": "text"
         },
         {
@@ -9129,12 +9708,6 @@
           "type": "citext"
         },
         {
-          "name": "username",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
           "name": "display_name",
           "nullable": true,
           "primaryKey": false,
@@ -9157,18 +9730,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
-        },
-        {
-          "name": "email_verified_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "last_login_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
         },
         {
           "name": "two_factor_enabled",
@@ -9658,72 +10219,6 @@
           "type": "uuid"
         },
         {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "invoice_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.invoices",
-          "type": "uuid"
-        },
-        {
-          "name": "description",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "numeric(18, 4)"
-        },
-        {
-          "name": "unit_amount_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "total_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "metric",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.invoice_line_items",
-      "name": "invoice_line_items",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -9849,101 +10344,6 @@
       "domain": "billing",
       "id": "postgres:billing.invoices",
       "name": "invoices",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "billing_email",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "address_line1",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_line2",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_city",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_region",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_postal_code",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_country",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_place_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.org_billing_profiles",
-      "name": "org_billing_profiles",
       "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
@@ -11085,96 +11485,6 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "subscription_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.subscriptions",
-          "type": "uuid"
-        },
-        {
-          "name": "metric",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "numeric(20, 6)"
-        },
-        {
-          "name": "unit_cost_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "total_cost_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "period_start",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "period_end",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "source_query_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.usage_records",
-      "name": "usage_records",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
           "name": "updated_at",
           "nullable": false,
           "primaryKey": false,
@@ -11351,12 +11661,6 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "is_active_in_branch",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
         },
         {
           "name": "metadata",
@@ -11542,18 +11846,6 @@
         {
           "name": "title",
           "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "description",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "og_image_url",
-          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },
@@ -12958,12 +13250,6 @@
           "type": "jsonb"
         },
         {
-          "name": "inngest_event_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
           "name": "started_at",
           "nullable": true,
           "primaryKey": false,
@@ -13270,12 +13556,6 @@
           "type": "text"
         },
         {
-          "name": "mfa_status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
           "name": "idp_subject",
           "nullable": true,
           "primaryKey": false,
@@ -13495,6 +13775,206 @@
       "domain": "ingestion",
       "id": "postgres:ingestion.auth_credentials",
       "name": "auth_credentials",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider_repo_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "owner",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "installation_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source_connection_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "default_ref",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "observed_head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "projected_head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.code_repositories",
+      "name": "code_repositories",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.code_repositories",
+          "type": "uuid"
+        },
+        {
+          "name": "generation_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.projection_generations",
+          "type": "uuid"
+        },
+        {
+          "name": "scope_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "display_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "domain_slug",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "file_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.code_scopes",
+      "name": "code_scopes",
       "store": "postgres",
       "tenantScoped": false
     },
@@ -14026,6 +14506,313 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.code_repositories",
+          "type": "uuid"
+        },
+        {
+          "name": "snapshot_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.repository_snapshots",
+          "type": "uuid"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "files_total",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "files_processed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "files_skipped",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "truncated",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "parser_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "activated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.projection_generations",
+      "name": "projection_generations",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.code_repositories",
+          "type": "uuid"
+        },
+        {
+          "name": "ref",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "before_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "after_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "forced",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "deleted",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "delivery_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "observed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.repository_ref_observations",
+      "name": "repository_ref_observations",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:ingestion.code_repositories",
+          "type": "uuid"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tree_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "parent_shas",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "observed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "postgres:ingestion.repository_snapshots",
+      "name": "repository_snapshots",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "connection_id",
           "nullable": false,
           "primaryKey": false,
@@ -14072,18 +14859,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "resolved_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "resolved_by",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
         }
       ],
       "domain": "ingestion",
@@ -14330,6 +15105,18 @@
         {
           "name": "last_received_at",
           "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
         }
@@ -15326,12 +16113,6 @@
           "type": "text"
         },
         {
-          "name": "permissions",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
           "name": "joined_at",
           "nullable": false,
           "primaryKey": false,
@@ -15898,12 +16679,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
         }
       ],
       "domain": "schema_registry",
@@ -17594,7 +18369,7 @@
           "name": "limit_usd",
           "nullable": true,
           "primaryKey": false,
-          "type": "real"
+          "type": "numeric(12, 2)"
         },
         {
           "name": "mode",
@@ -17819,12 +18594,6 @@
           "type": "text"
         },
         {
-          "name": "permissions",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
           "name": "joined_at",
           "nullable": false,
           "primaryKey": false,
@@ -17905,6 +18674,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "description",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "prompt_config",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "settings",

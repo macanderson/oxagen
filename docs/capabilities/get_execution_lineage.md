@@ -10,9 +10,9 @@
 
 Get one agent execution's **file-level lineage** as a graph — the `:Execution`
 node plus every `:SourceFile` it touched via `(:Execution)-[:TOUCHED_FILE]->
-(:SourceFile)` edges (written by the agent-engine's GraphSyncProvider —
-`packages/agent/src/adapters/graph-sync.ts` /
-`packages/ontology/src/mutations/record-execution.ts`).
+(:SourceFile)` edges (written by
+`packages/ontology/src/mutations/record-execution.ts`, invoked from the
+durable execution-sync path).
 
 This is the auditable-graph proof, not a flat "files this agent said it
 edited" list: it is the real, queryable graph of what an execution actually

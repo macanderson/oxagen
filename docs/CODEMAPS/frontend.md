@@ -217,12 +217,10 @@ apps/cli/src/agent/
   timeouts.ts                   → per-tool timeout config
   memory.ts                     → project-scoped memory
   code-graph.ts                 → local code graph provider
-  lineage-projection.ts         → trace lineage (projectTrace)
   project-context.ts            → cwd/git context
   adapters/
     code-graph-provider.ts
     code-map-provider.ts
-    graph-sync-provider.ts
     memory-provider.ts
     platform-agent-ai.ts        → API gateway adapter
     workspace.ts                → workspace context

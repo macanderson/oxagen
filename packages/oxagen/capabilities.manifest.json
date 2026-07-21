@@ -2739,20 +2739,6 @@
       }
     },
     {
-      "name": "push_graph",
-      "file": "graph.sync.push.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
-      }
-    },
-    {
       "name": "list_iam_roles",
       "file": "iam.role.list.ts",
       "domain": "iam",
@@ -3757,6 +3743,34 @@
         "api": true,
         "mcp": true,
         "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_run_evidence",
+      "file": "run.evidence.list.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "submit_run_evidence",
+      "file": "run.evidence.submit.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },

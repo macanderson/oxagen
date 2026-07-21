@@ -1,5 +1,7 @@
 # ADR-018: CLI ↔ Workspace Graph Bidirectional Sync
 
+> **Status: Superseded** by `docs/specs/workspace-graph-boundary/spec.md` (2026-07-20). The bidirectional CLI graph sync described here has been removed.
+
 - **Status:** Accepted
 - **Date:** 2026-06-27
 - **Deciders:** Mac Anderson
