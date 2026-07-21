@@ -1,56 +1,50 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadCommands } from "../loader.js";
 
-let dir: string;
-let userDir: string;
+let root: string;
+let userDirectory: string;
 
-function writeCmd(rel: string, body: string): void {
-  const path = join(dir, rel);
-  mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, body, "utf8");
+function command(name: string, prompt: string): string {
+  return `schema_version = 1\nkind = "command"\nname = "${name}"\ndescription = "${name}"\nargument_hint = "<arg>"\nprompt = "${prompt}"\n`;
 }
 
-const load = () => loadCommands({ cwd: dir, userCommandsDir: userDir });
+function write(path: string, value: string): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, value, "utf8");
+}
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "oxagen-slash-"));
-  userDir = join(dir, "user-commands");
+  root = mkdtempSync(join(tmpdir(), "oxagen-commands-"));
+  userDirectory = join(root, "user-commands");
 });
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("loadCommands", () => {
-  it("loads a command with frontmatter and body template", () => {
-    writeCmd(".oxagen/commands/review.md", "---\ndescription: Review code\nargument-hint: <file>\nmodel: a/b\n---\nReview $ARGUMENTS.");
-    const cmd = load().get("review");
-    expect(cmd?.description).toBe("Review code");
-    expect(cmd?.argumentHint).toBe("<file>");
-    expect(cmd?.model).toBe("a/b");
-    expect(cmd?.template).toBe("Review $ARGUMENTS.");
+  it("loads TOML with workspace precedence and ignores Markdown", () => {
+    write(join(userDirectory, "review.toml"), command("review", "user"));
+    write(
+      join(root, ".oxagen", "commands", "review.toml"),
+      command("review", "workspace"),
+    );
+    write(join(root, ".claude", "commands", "foreign.md"), "foreign");
+    const loaded = loadCommands({ cwd: root, userCommandsDir: userDirectory });
+    expect([...loaded.keys()]).toEqual(["review"]);
+    expect(loaded.get("review")?.template).toBe("workspace");
+    expect(loaded.get("review")?.argumentHint).toBe("<arg>");
   });
 
-  it("defaults the name to the filename", () => {
-    writeCmd(".oxagen/commands/deploy.md", "Do the deploy: $ARGUMENTS");
-    expect(load().get("deploy")?.name).toBe("deploy");
-  });
-
-  it(".oxagen overrides .claude overrides user", () => {
-    mkdirSync(userDir, { recursive: true });
-    writeFileSync(join(userDir, "x.md"), "user body");
-    writeCmd(".claude/commands/x.md", "claude body");
-    expect(load().get("x")?.template).toBe("claude body");
-    writeCmd(".oxagen/commands/x.md", "oxagen body");
-    expect(load().get("x")?.template).toBe("oxagen body");
-  });
-
-  it("ignores files with an empty body", () => {
-    writeCmd(".oxagen/commands/empty.md", "---\ndescription: d\n---\n");
-    expect(load().has("empty")).toBe(false);
-  });
-
-  it("returns an empty registry when nothing is defined", () => {
-    expect(load().size).toBe(0);
+  it("isolates corrupt manifests", () => {
+    write(
+      join(root, ".oxagen", "commands", "good.toml"),
+      command("good", "good"),
+    );
+    write(join(root, ".oxagen", "commands", "bad.toml"), "bad toml");
+    expect([
+      ...loadCommands({ cwd: root, userCommandsDir: userDirectory }).keys(),
+    ]).toEqual(["good"]);
   });
 });

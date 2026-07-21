@@ -433,6 +433,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../../packages/agent-artifacts
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../../packages/agent-engine
@@ -472,6 +475,9 @@ importers:
       react:
         specifier: 19.2.6
         version: 19.2.6
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -662,6 +668,9 @@ importers:
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../agent-artifacts
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../agent-engine
@@ -735,6 +744,31 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/agent-artifacts:
+    dependencies:
+      canonical-json:
+        specifier: 0.4.0
+        version: 0.4.0
+      smol-toml:
+        specifier: 1.7.0
+        version: 1.7.0
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
@@ -1554,6 +1588,9 @@ importers:
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../agent-artifacts
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -6869,6 +6906,11 @@ packages:
   caniuse-lite@1.0.30001797:
     resolution: {integrity: sha512-l8xKG+gwAIExZGl9FrF7KUwuOmk6wbEPC9Xoy/RtnWv1XG0Q4LFlagaLpUv3Kiza3W/wm27zy0yWJEieYKAP6w==}
 
+  canonical-json@0.4.0:
+    resolution: {integrity: sha512-tjdV5Z1ZYX7JfotmcutLzAiwzw0XiViJB9smqVM7sIoOp+IdqRZcnqfFLzHdb9/baDzkNI0ECfLoMt+EBOYx4A==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   canonicalize@1.0.8:
     resolution: {integrity: sha512-0CNTVCLZggSh7bc5VkX5WWPWO+cyZbNd07IHIsSXLia/eAq+r836hgk+8BKoEh7949Mda87VUOitx5OddVj64A==}
 
@@ -11011,6 +11053,10 @@ packages:
   smart-buffer@4.2.0:
     resolution: {integrity: sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==}
     engines: {node: '>= 6.0.0', npm: '>= 3.0.0'}
+
+  smol-toml@1.7.0:
+    resolution: {integrity: sha512-aqVvWoyO21L23mb+drl4RmMXbf6N7FdHjAhTRA9ZBL7apWBgfWC16KjrASI+1p9GAroljyMHj6fK67i0UiTNvQ==}
+    engines: {node: '>= 18'}
 
   socks-proxy-agent@7.0.0:
     resolution: {integrity: sha512-Fgl0YPZ902wEsAyiQ+idGd1A7rSFx/ayC1CQVMw5P+EQx2V0SgpGtf6OKFhVjPflPUl9YMmEOnmfjCdMUsygww==}
@@ -17507,6 +17553,8 @@ snapshots:
 
   caniuse-lite@1.0.30001797: {}
 
+  canonical-json@0.4.0: {}
+
   canonicalize@1.0.8: {}
 
   ccount@2.0.1: {}
@@ -22666,6 +22714,8 @@ snapshots:
 
   smart-buffer@4.2.0:
     optional: true
+
+  smol-toml@1.7.0: {}
 
   socks-proxy-agent@7.0.0:
     dependencies:

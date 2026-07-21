@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
+    "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

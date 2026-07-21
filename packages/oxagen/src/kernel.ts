@@ -2,6 +2,7 @@ import type {
   CapabilityContext,
   CapabilitySurface,
   CapabilityEffect,
+  LifecycleExecutionContext,
   CheckedContext,
   ResolvedPrincipal,
 } from "./types";
@@ -263,7 +264,11 @@ export type CapabilityErrorCode =
   | "pending_approval"
   | "invalid_input"
   | "invalid_output"
-  | "capability_not_installed";
+  | "capability_not_installed"
+  | "lifecycle_not_allowed"
+  | "lifecycle_event_denied"
+  | "lifecycle_context_invalid"
+  | "lifecycle_recursion_denied";
 
 export class CapabilityError extends Error {
   constructor(
@@ -490,6 +495,8 @@ export interface InvokeOptions {
    * invoked over `mcp` is rejected before the handler runs.
    */
   surface?: CapabilitySurface;
+  /** Internal deterministic lifecycle execution; orthogonal to public surfaces. */
+  execution?: LifecycleExecutionContext;
 }
 
 /**
@@ -573,6 +580,49 @@ async function _invokeCore(
       "unknown_capability",
       `Unknown capability "${name}"`,
     );
+  }
+
+  const lifecycleExecution = opts.execution;
+  if (lifecycleExecution) {
+    if (ctx.surface !== "runner" || opts.surface !== undefined) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_context_invalid",
+        `Lifecycle capability "${name}" must originate from the runner without a public surface`,
+      );
+    }
+    if (lifecycleExecution.depth !== 0) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_recursion_denied",
+        `Lifecycle capability "${name}" cannot recursively dispatch lifecycle events`,
+      );
+    }
+    const lifecycle = cap.lifecycle;
+    if (!lifecycle) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_not_allowed",
+        `Capability "${name}" has not opted into lifecycle execution`,
+      );
+    }
+    if (!lifecycle.allowedEvents.includes(lifecycleExecution.event)) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_event_denied",
+        `Capability "${name}" does not allow lifecycle event "${lifecycleExecution.event}"`,
+      );
+    }
+    if (
+      !lifecycleExecution.idempotencyKey ||
+      !lifecycleExecution.invocationId
+    ) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_context_invalid",
+        `Lifecycle capability "${name}" requires invocation and idempotency identifiers`,
+      );
+    }
   }
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
@@ -893,6 +943,12 @@ async function _invokeCore(
       const checkedCtx: CheckedContext = {
         ...ctx,
         principal: resolvedPrincipal,
+        ...(lifecycleExecution
+          ? {
+              idempotencyKey: lifecycleExecution.idempotencyKey,
+              execution: lifecycleExecution,
+            }
+          : {}),
       };
       const attribution =
         resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)

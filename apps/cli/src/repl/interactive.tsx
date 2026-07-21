@@ -154,7 +154,10 @@ import {
   type MarketplaceClient as MarketplacePanelClient,
   type MarketplaceEntry as MarketplacePanelEntry,
 } from "./marketplace-panel.js";
-import { PromptsPanel, type SavedPrompt as PanelSavedPrompt } from "./prompts-panel.js";
+import {
+  PromptsPanel,
+  type SavedPrompt as PanelSavedPrompt,
+} from "./prompts-panel.js";
 import { CreateWizard, type CreateKind } from "./create-wizard.js";
 import { loadPrompts, scaffoldPrompt } from "../prompts/index.js";
 import { scaffoldSkill } from "../skills/index.js";
@@ -1421,7 +1424,9 @@ export function ReplApp({
             pushAssistant(
               `↻ Recovered ${n} orphaned session${n === 1 ? "" : "s"} from a dead worker — ` +
                 result.adopted
-                  .map((a) => `${a.sid.slice(0, 10)} → ${a.newSid.slice(0, 10)}`)
+                  .map(
+                    (a) => `${a.sid.slice(0, 10)} → ${a.newSid.slice(0, 10)}`,
+                  )
                   .join(", ") +
                 ". Each resumes at its last settled turn; watch with Ctrl+S or oxagen fleet ps.",
             );
@@ -2785,6 +2790,58 @@ export function ReplApp({
         }
         return;
       }
+      if (cmd === "/import") {
+        const tokens = text
+          .slice("/import".length)
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean);
+        const from: string[] = [];
+        const choice: string[] = [];
+        let scope: string | undefined;
+        let source: string | undefined;
+        let conflict: string | undefined;
+        let dryRun = false;
+        for (let index = 0; index < tokens.length; index += 1) {
+          const token = tokens[index];
+          if (token === "--dry-run") dryRun = true;
+          else if (token === "--from" && tokens[index + 1])
+            from.push(tokens[++index] as string);
+          else if (token === "--scope" && tokens[index + 1])
+            scope = tokens[++index];
+          else if (token === "--source" && tokens[index + 1])
+            source = tokens[++index];
+          else if (token === "--conflict" && tokens[index + 1])
+            conflict = tokens[++index];
+          else if (token === "--choice" && tokens[index + 1])
+            choice.push(tokens[++index] as string);
+        }
+        pushAssistant("Scanning agent artifacts…");
+        try {
+          const [{ handleImportArtifacts }, { captureWriter }] =
+            await Promise.all([
+              import("../commands/import-artifacts.js"),
+              import("../lib/capture-writer.js"),
+            ]);
+          const captured = captureWriter();
+          await handleImportArtifacts(
+            {
+              from: from.length > 0 ? from : undefined,
+              scope,
+              source,
+              conflict,
+              choice: choice.length > 0 ? choice : undefined,
+              dryRun,
+            },
+            captured.writer,
+            { cwd },
+          );
+          pushAssistant(captured.output());
+        } catch (error) {
+          pushAssistant(error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
       if (cmd === "/replay") {
         const arg = text.slice("/replay".length).trim();
         const trace = traceStoreRef.current.resolve(arg);
@@ -3094,7 +3151,7 @@ export function ReplApp({
         return;
       }
 
-      // User-defined slash commands (.oxagen/commands/*.md): a `/name args` that
+      // User-defined slash commands (.oxagen/commands/*.toml): a `/name args` that
       // isn't a built-in expands into the prompt below.
       let submission = text;
       if (text.startsWith("/")) {
@@ -4254,9 +4311,7 @@ export function ReplApp({
             lastActivityRef.current ?? "an agent turn is streaming",
           queueDepth: queueRef.current.length,
           ai: activeAiRef.current,
-          ...(triageModelRef.current
-            ? { model: triageModelRef.current }
-            : {}),
+          ...(triageModelRef.current ? { model: triageModelRef.current } : {}),
         })
           .then((decision) => {
             if (decision.route === "background") {
@@ -4271,9 +4326,7 @@ export function ReplApp({
               dispatchToBackground(text);
               pushAssistant(`⚖ triage: backgrounded — ${decision.reason}`);
             } else if (decision.route === "clarify") {
-              pushAssistant(
-                `⚖ triage: kept in the queue — ${decision.reason}`,
-              );
+              pushAssistant(`⚖ triage: kept in the queue — ${decision.reason}`);
             }
           })
           .catch(() => {

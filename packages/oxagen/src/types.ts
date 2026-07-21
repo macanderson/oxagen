@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { LifecycleEvent } from "@oxagen/agent-artifacts";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
@@ -87,6 +88,21 @@ export interface CapabilityAgentMetadata {
   category?: string;
 }
 
+export interface CapabilityLifecycleMetadata {
+  allowedEvents: readonly LifecycleEvent[];
+  effect: "read" | "mutation";
+  idempotency: "none" | "supported" | "required";
+  outputKinds: readonly ("opaque" | "prompt_patch" | "decision")[];
+}
+
+export interface LifecycleExecutionContext {
+  kind: "lifecycle";
+  event: LifecycleEvent;
+  invocationId: string;
+  depth: number;
+  idempotencyKey: string;
+}
+
 // ── Capability presentation + chaining metadata (generic capability engine) ───
 //
 // These optional, FULLY-SERIALIZABLE descriptors let the chat layer render every
@@ -153,6 +169,8 @@ export interface CapabilityDeclaration<
   surfaces?: readonly CapabilitySurface[];
   layers: readonly CapabilityLayer[];
   agent?: CapabilityAgentMetadata;
+  /** Explicit opt-in for deterministic out-of-model lifecycle execution. */
+  lifecycle?: CapabilityLifecycleMetadata;
   input: TInput;
   output: TOutput;
   /**
@@ -322,6 +340,10 @@ export interface CheckedContext extends CapabilityContext {
    * as `ctx.principal ?? null` and must treat null/absent identically.
    */
   principal?: ResolvedPrincipal | null;
+  /** Stable logical-invocation key; never injected into strict handler input. */
+  idempotencyKey?: string;
+  /** Present only when the kernel is executing a lifecycle invocation. */
+  execution?: LifecycleExecutionContext;
 }
 
 export interface CapabilityManifestEntry {
