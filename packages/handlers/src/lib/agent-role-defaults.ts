@@ -1,11 +1,26 @@
 /**
- * Pure, testable core of tools/scripts/seed-iam-defaults.ts's Agent RBAC
- * phase (docs/specs/agent-rbac/spec.md §3.2, §3.3): the category/riskLevel
- * -> effect mapping for the three system agent roles, their resourceScope
- * ceilings, and the deterministic public_id generators. The runner wires
- * this to a real Postgres connection; everything here is DB-agnostic so it
- * can be unit-tested without a live database (mirrors the split used by
- * tools/scripts/lib/backfill-mcp-server-auth-config.ts).
+ * Pure, testable core of the Agent RBAC system-role provisioning
+ * (docs/specs/agent-rbac/spec.md §3.2, §3.3): the category/riskLevel ->
+ * effect mapping for the three system agent roles, their resourceScope
+ * ceilings, and the deterministic public_id generators.
+ *
+ * Lives in @oxagen/handlers (not tools/scripts) because it has TWO
+ * consumers on opposite sides of the packages/tools boundary — packages must
+ * not import from tools/, so the shared logic has to live in a package:
+ *
+ *   - tools/scripts/seed-iam-defaults.ts — backfills these roles for
+ *     EXISTING orgs (pnpm db:seed-iam), reconciling any changed mapping via
+ *     ON CONFLICT ... DO UPDATE.
+ *   - packages/handlers/src/iam-provision.ts's bootstrapOrgIAM() —
+ *     provisions these roles for a NEW org at creation time.
+ *
+ * Both paths call the SAME computeEffect / makeAgentRolePublicId /
+ * makeRoleGrantPublicId functions here, so a role or role_grant seeded by
+ * either path resolves to the identical public_id and the two never diverge
+ * into two policies. Everything in this module is DB-agnostic (no I/O) so it
+ * can be unit-tested without a live database — mirrors the lib/+test.ts split
+ * used by tools/scripts/lib/backfill-mcp-server-auth-config.ts and this
+ * package's own src/lib/*.ts helpers (e.g. lib/api-key-authz.ts).
  */
 import { createHash } from "node:crypto";
 import type { ResourceScopeCondition } from "@oxagen/oxagen/iam";
@@ -139,8 +154,10 @@ export const AGENT_ROLE_SPECS: readonly AgentRoleSpec[] = [
 ];
 
 /** rol_<sha256(orgId:scopeKind:name)[:22]> — MUST match
- * packages/handlers/src/iam-provision.ts's makeRolePublicId so a role
- * upserted from either path resolves to the same row. */
+ * packages/handlers/src/iam-provision.ts's makeRolePublicId (same formula,
+ * kept as a private duplicate there rather than imported — see that file's
+ * "System role definitions" comment) so a role upserted from either path
+ * resolves to the same row. */
 export function makeAgentRolePublicId(
   orgId: string,
   scopeKind: "org" | "workspace",
@@ -158,8 +175,9 @@ export function makeAgentRolePublicId(
 // constraint. A previous version truncated the capability id to 14 chars,
 // which collided for capabilities sharing a prefix (e.g.
 // agent.task.background.{start,read,cancel}) and silently dropped grants.
-// Shared by the human-role phase and the Agent RBAC phase alike (and MUST
-// match packages/handlers/src/iam-provision.ts's makeRoleGrantPublicId).
+// Shared by tools/scripts/seed-iam-defaults.ts's human-role and Agent RBAC
+// phases alike (and MUST match packages/handlers/src/iam-provision.ts's
+// own makeRoleGrantPublicId, kept as a private duplicate there).
 export function makeRoleGrantPublicId(
   roleId: string,
   capabilityId: string,

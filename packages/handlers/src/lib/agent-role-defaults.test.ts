@@ -1,8 +1,8 @@
 /**
- * Unit tests for the pure Agent RBAC core of
- * tools/scripts/seed-iam-defaults.ts (docs/specs/agent-rbac/spec.md §3.2,
- * §3.3), extracted to tools/scripts/lib/seed-iam-defaults.ts so it can be
- * exercised without a live Postgres connection.
+ * Unit tests for the pure Agent RBAC role-provisioning core
+ * (docs/specs/agent-rbac/spec.md §3.2, §3.3), shared by
+ * tools/scripts/seed-iam-defaults.ts (existing orgs) and
+ * ./iam-provision.ts's bootstrapOrgIAM (new orgs).
  */
 import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
@@ -15,7 +15,7 @@ import {
   makeRoleGrantPublicId,
   selectAgentCapabilities,
   type AgentRoleSpec,
-} from "./lib/seed-iam-defaults";
+} from "./agent-role-defaults";
 
 function specFor(name: string): AgentRoleSpec {
   const spec = AGENT_ROLE_SPECS.find((s) => s.name === name);

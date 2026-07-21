@@ -39,7 +39,7 @@ import {
   type AgentRoleName,
   type CapabilityLike,
   type Effect,
-} from "./lib/seed-iam-defaults";
+} from "@oxagen/handlers/lib/agent-role-defaults";
 
 // System role names seeded in 0008_iam_seed_defaults.sql.
 const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
@@ -81,7 +81,8 @@ async function seedAgentRoles(
   }
 
   // Only capabilities that declare agent-surface metadata participate —
-  // see the "Agent RBAC system roles" comment (tools/scripts/lib/seed-iam-defaults.ts) for why.
+  // see the "Agent RBAC system roles" comment
+  // (packages/handlers/src/lib/agent-role-defaults.ts) for why.
   const agentCapabilities = selectAgentCapabilities(capabilities);
 
   console.log(
