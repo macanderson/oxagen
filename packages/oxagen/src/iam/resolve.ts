@@ -542,6 +542,27 @@ export function resolve(input: ResolveInput): ResolveResult {
       matchesCapability(rg.capabilityId),
   );
 
+  // Deny-wins: when a principal's roles carry conflicting grants for the
+  // same capability (e.g. a broad role's 'allow' alongside a narrowing
+  // custom role's 'deny'), deny must be checked BEFORE allow/require_approval
+  // — the same ordering already enforced at rule 6 (org default grant) and
+  // rules 1/3 (workspace level). A second role can only narrow, never
+  // override, an explicit deny from another role the principal also holds.
+  const roleDenyGrant = matchingRoleGrants.find((rg) => rg.effect === "deny");
+  if (roleDenyGrant) {
+    const step: TraceStep = {
+      rule: "7:role_grant",
+      description: `Role grant 'deny' via role ${roleDenyGrant.roleId}`,
+      decided: true,
+      outcome: "deny",
+    };
+    steps.push(step);
+    return {
+      outcome: "deny",
+      reason: "no_grant",
+      trace: { steps, decidedBy: step },
+    };
+  }
   const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");
   if (roleAllowGrant) {
     const step: TraceStep = {
@@ -565,21 +586,6 @@ export function resolve(input: ResolveInput): ResolveResult {
     };
     steps.push(step);
     return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
-  }
-  const roleDenyGrant = matchingRoleGrants.find((rg) => rg.effect === "deny");
-  if (roleDenyGrant) {
-    const step: TraceStep = {
-      rule: "7:role_grant",
-      description: `Role grant 'deny' via role ${roleDenyGrant.roleId}`,
-      decided: true,
-      outcome: "deny",
-    };
-    steps.push(step);
-    return {
-      outcome: "deny",
-      reason: "no_grant",
-      trace: { steps, decidedBy: step },
-    };
   }
   steps.push({
     rule: "7:role_grant",
