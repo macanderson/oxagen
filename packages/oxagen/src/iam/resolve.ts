@@ -25,6 +25,7 @@ import {
   type GraphBudget,
   type GraphMode,
   type GraphScope,
+  type McpScope,
   type McpScopeRule,
   type ResourceScope,
   type SkillsScope,
@@ -32,12 +33,15 @@ import {
 
 // Re-export the scope types for downstream consumers (kernel, packages/ontology,
 // tool materialization, MCP binding) so they can depend on the resolver module
-// alone.
+// alone. McpScope (the raw { rules: McpScopeRule[] } wrapper) is included
+// alongside McpScopeRule so a consumer constructing a raw ResourceScope.mcp
+// value doesn't need a second import from ./conditions.
 export type {
   AgentsScope,
   GraphBudget,
   GraphMode,
   GraphScope,
+  McpScope,
   McpScopeRule,
   ResourceScope,
   SkillsScope,
