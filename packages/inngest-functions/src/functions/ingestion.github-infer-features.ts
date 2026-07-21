@@ -65,13 +65,17 @@ export const [ingestionGithubInferFeatures] = createFunction(
         fileNaturalKey,
         orgId,
         totalFeatures: features.length,
-        highConfidence: features.filter((f) => f.confidence >= CONFIDENCE_THRESHOLD).length,
+        highConfidence: features.filter(
+          (f) => f.confidence >= CONFIDENCE_THRESHOLD,
+        ).length,
       },
       "ingestion-github-infer-features: inference complete",
     );
 
     // ── Step 2: Upsert Feature nodes + :IMPLEMENTS edges ──────────────────────
-    const acceptedCount = features.filter((f) => f.confidence >= CONFIDENCE_THRESHOLD).length;
+    const acceptedCount = features.filter(
+      (f) => f.confidence >= CONFIDENCE_THRESHOLD,
+    ).length;
     if (acceptedCount === 0) {
       return { fileNaturalKey, featuresCreated: 0 };
     }
@@ -82,7 +86,15 @@ export const [ingestionGithubInferFeatures] = createFunction(
         try {
           await writeAcceptedFeatures(
             session,
-            { orgId, workspaceId, connectionId, fileNaturalKey },
+            {
+              orgId,
+              workspaceId,
+              connectionId,
+              fileNaturalKey,
+              // Sync path lets @oxagen/ai pick the model, so the exact slug is
+              // not surfaced here — record the method, leave model null.
+              authority: { method: "llm-feature-inference", model: null },
+            },
             features,
           );
         } finally {

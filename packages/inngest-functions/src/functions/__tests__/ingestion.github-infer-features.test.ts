@@ -48,7 +48,12 @@ vi.mock("@oxagen/ai", () => ({
 }));
 
 vi.mock("../../logger", () => ({
-  logger: { info: mocks.loggerInfo, debug: mocks.loggerDebug, error: vi.fn(), warn: vi.fn() },
+  logger: {
+    info: mocks.loggerInfo,
+    debug: mocks.loggerDebug,
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 await import("../ingestion.github-infer-features");
@@ -70,18 +75,45 @@ const BASE_EVENT = {
 };
 
 const HIGH_CONFIDENCE_FEATURES = [
-  { name: "OAuth Login", description: "Handles user authentication", relatedSymbolNames: ["login", "verifyToken"], confidence: 0.9 },
-  { name: "Token Validation", description: "Validates JWT tokens", relatedSymbolNames: ["verifyToken"], confidence: 0.75 },
+  {
+    name: "OAuth Login",
+    description: "Handles user authentication",
+    relatedSymbolNames: ["login", "verifyToken"],
+    confidence: 0.9,
+  },
+  {
+    name: "Token Validation",
+    description: "Validates JWT tokens",
+    relatedSymbolNames: ["verifyToken"],
+    confidence: 0.75,
+  },
 ];
 
 const MIXED_CONFIDENCE_FEATURES = [
-  { name: "OAuth Login", description: "Handles user auth", relatedSymbolNames: ["login"], confidence: 0.9 },
-  { name: "Low Confidence Feature", description: "Maybe?", relatedSymbolNames: [], confidence: 0.4 },
-  { name: "Another Low", description: "Not sure", relatedSymbolNames: [], confidence: 0.55 },
+  {
+    name: "OAuth Login",
+    description: "Handles user auth",
+    relatedSymbolNames: ["login"],
+    confidence: 0.9,
+  },
+  {
+    name: "Low Confidence Feature",
+    description: "Maybe?",
+    relatedSymbolNames: [],
+    confidence: 0.4,
+  },
+  {
+    name: "Another Low",
+    description: "Not sure",
+    relatedSymbolNames: [],
+    confidence: 0.55,
+  },
 ];
 
 function setupDefaultMocks(): void {
-  mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mocks.runInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 
   mocks.scopedSession.mockReturnValue({
     run: mocks.scopedSessionRun,
@@ -110,11 +142,17 @@ describe("ingestion.github-infer-features Inngest function", () => {
 
   it("registers with correct id, retries, and concurrency", () => {
     expect(capturedCreateFunctionArgs).not.toBeNull();
-    const [opts, trigger] = capturedCreateFunctionArgs as [Record<string, unknown>, Record<string, unknown>];
+    const [opts, trigger] = capturedCreateFunctionArgs as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
     expect(opts).toMatchObject({
       id: "ingestion-github-infer-features",
       retries: 2,
-      concurrency: expect.objectContaining({ limit: 5, key: "event.data.orgId" }),
+      concurrency: expect.objectContaining({
+        limit: 5,
+        key: "event.data.orgId",
+      }),
     });
     expect(trigger).toMatchObject({ event: "ingestion/github.infer-features" });
   });
@@ -142,7 +180,9 @@ describe("ingestion.github-infer-features Inngest function", () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const [args] = mocks.generateObjectFor.mock.calls[0] as [{ prompt: string }];
+    const [args] = mocks.generateObjectFor.mock.calls[0] as [
+      { prompt: string },
+    ];
     expect(args.prompt).toContain("github:conn-gh-1:acme/api:src/auth.ts");
     expect(args.prompt).toContain("typescript");
     expect(args.prompt).toContain("login");
@@ -153,8 +193,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("MERGE (feat:Feature"),
+    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("MERGE (feat:Feature"),
     );
     // Both HIGH_CONFIDENCE_FEATURES have confidence >= 0.6.
     expect(mergeFeatureCalls.length).toBe(2);
@@ -164,8 +206,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("MERGE (feat:Feature"),
+    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("MERGE (feat:Feature"),
     );
 
     expect(mergeFeatureCalls[0]![1]).toMatchObject({
@@ -182,56 +226,76 @@ describe("ingestion.github-infer-features Inngest function", () => {
     });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     // Only "OAuth Login" (0.9) should pass — the others (0.4, 0.55) are below threshold.
     expect(result).toMatchObject({ featuresCreated: 1 });
 
-    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("MERGE (feat:Feature"),
+    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("MERGE (feat:Feature"),
     );
     expect(mergeFeatureCalls.length).toBe(1);
   });
 
-  it("MERGEs :IMPLEMENTS edges from Feature to SourceFile", async () => {
+  it("MERGEs :IMPLEMENTS edges from Feature to SourceFile carrying authority provenance", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const implementsCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" &&
-      (c[0] as string).includes("MERGE (feat)-[:IMPLEMENTS]->(f)"),
+    const implementsCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("MERGE (feat)-[impl:IMPLEMENTS]->(f)"),
     );
     // One per accepted feature (2).
     expect(implementsCalls.length).toBe(2);
+    // Every inferred edge carries { authority:'inferred', method } (spec finding 7).
+    expect(implementsCalls[0]![0] as string).toContain(
+      "impl.authority  = 'inferred'",
+    );
   });
 
-  it("MERGEs :IMPLEMENTS edges to related SourceSymbol nodes", async () => {
+  it("does NOT MERGE any Feature→SourceSymbol edge (symbols are gone from the graph)", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const symbolImplementsCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" &&
-      (c[0] as string).includes("MERGE (feat)-[:IMPLEMENTS]->(s)"),
+    const symbolImplementsCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" && (c[0] as string).includes("SourceSymbol"),
     );
-    // Feature 1: ["login", "verifyToken"] → 2 calls
-    // Feature 2: ["verifyToken"] → 1 call
-    // Total = 3.
-    expect(symbolImplementsCalls.length).toBe(3);
+    expect(symbolImplementsCalls.length).toBe(0);
   });
 
   it("returns { featuresCreated: 0 } when all features are below threshold", async () => {
     mocks.generateObjectFor.mockResolvedValueOnce({
       object: {
         features: [
-          { name: "Low", description: "no", relatedSymbolNames: [], confidence: 0.3 },
-          { name: "Also Low", description: "no", relatedSymbolNames: [], confidence: 0.5 },
+          {
+            name: "Low",
+            description: "no",
+            relatedSymbolNames: [],
+            confidence: 0.3,
+          },
+          {
+            name: "Also Low",
+            description: "no",
+            relatedSymbolNames: [],
+            confidence: 0.5,
+          },
         ],
       },
       usage: { promptTokens: 50, completionTokens: 20, totalTokens: 70 },
     });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toMatchObject({ featuresCreated: 0 });
     // No Neo4j writes should have occurred.
@@ -245,7 +309,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
     });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toMatchObject({ featuresCreated: 0 });
     expect(mocks.scopedSession).not.toHaveBeenCalled();
@@ -253,7 +320,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
 
   it("returns fileNaturalKey and featuresCreated", async () => {
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toMatchObject({
       fileNaturalKey: "github:conn-gh-1:acme/api:src/auth.ts",
@@ -275,7 +345,12 @@ describe("ingestion.github-infer-features Inngest function", () => {
     mocks.generateObjectFor.mockResolvedValueOnce({
       object: {
         features: [
-          { name: "User  Profile Management", description: "user profile", relatedSymbolNames: [], confidence: 0.8 },
+          {
+            name: "User  Profile Management",
+            description: "user profile",
+            relatedSymbolNames: [],
+            confidence: 0.8,
+          },
         ],
       },
       usage: { promptTokens: 50, completionTokens: 20, totalTokens: 70 },
@@ -284,8 +359,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("MERGE (feat:Feature"),
+    const mergeFeatureCalls = mocks.scopedSessionRun.mock.calls.filter(
+      (c: unknown[]) =>
+        typeof c[0] === "string" &&
+        (c[0] as string).includes("MERGE (feat:Feature"),
     );
 
     // "\s+" collapses multiple spaces to a single hyphen.

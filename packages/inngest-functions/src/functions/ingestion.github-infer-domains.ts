@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { toNaturalKey } from "@oxagen/ontology/natural-key";
 import { generateObjectFor } from "@oxagen/ai";
 import { inferDomains } from "@oxagen/code-graph";
 import type { DomainAI } from "@oxagen/code-graph";
@@ -17,16 +18,20 @@ import { logger } from "../logger";
  * path list, using @oxagen/ai generateObjectFor as the injected AI so the
  * call is metered, telemetry-tagged, and routed through the AI Gateway.
  *
- * Writes the inferred `domain` property to every matching :SourceFile and
- * :SourceSymbol node in Neo4j, enabling domain-sliced knowledge graph queries:
+ * Writes the inferred `domain` property (+ authority provenance) to every
+ * matching :SourceFile node in Neo4j, enabling domain-sliced knowledge graph
+ * queries:
  *   MATCH (n:SourceFile {orgId: $orgId, domain: 'payments'})
  *
  * Reconciliation with the existing :Domain / multi-label model
  * ─────────────────────────────────────────────────────────────
- * The platform graph uses TYPE labels (:SourceFile, :SourceSymbol, :Feature…)
- * as the ontological "domain" concept. This function adds an APPLICATION domain
- * as a scalar property (`n.domain`) on top of those type-labelled nodes — it
- * does NOT introduce a new :Domain label or conflict with the existing model.
+ * The platform graph uses TYPE labels (:SourceFile, :Feature…) as the
+ * ontological "domain" concept. This function adds an APPLICATION domain as a
+ * scalar property (`n.domain`) on top of those type-labelled nodes — it does
+ * NOT introduce a new :Domain label or conflict with the existing model. The
+ * classification is bounded and inferred, never authoritative RBAC truth on its
+ * own (spec finding 7), so it also stamps `domainAuthority='inferred'` +
+ * `domainMethod`.
  *
  * Concurrency: limited to 2 parallel inferences per org to cap AI spend.
  */
@@ -38,22 +43,27 @@ export const [ingestionGithubInferDomains] = createFunction(
   },
   { event: "ingestion/github.infer-domains" },
   async ({ event, step }) => {
-    const { filePaths, orgId, workspaceId, connectionId, owner, repo } =
-      event.data as {
-        filePaths: string[];
-        orgId: string;
-        workspaceId: string;
-        connectionId: string;
-        owner: string;
-        repo: string;
-      };
+    // connectionId is intentionally not destructured — the domain stamp keys on
+    // the canonical, connectionId-less identity now (spec finding 4).
+    const { filePaths, orgId, workspaceId, owner, repo } = event.data as {
+      filePaths: string[];
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+      owner: string;
+      repo: string;
+    };
 
     // ── Step 1: Infer domains via LLM ─────────────────────────────────────────
     // Inngest steps must return JSON-serialisable values (Map is not), so we
     // convert to a plain object and back.
     const domainRecord = await step.run("infer-domains", async () => {
       const ai: DomainAI = {
-        generateObject<T>(args: { schema: z.ZodType<T>; system: string; prompt: string }) {
+        generateObject<T>(args: {
+          schema: z.ZodType<T>;
+          system: string;
+          prompt: string;
+        }) {
           return generateObjectFor<T>({
             ...args,
             telemetry: {
@@ -98,27 +108,27 @@ export const [ingestionGithubInferDomains] = createFunction(
       return { orgId, filesTagged: 0 };
     }
 
-    // ── Step 2: Write domain property to SourceFile + SourceSymbol nodes ──────
-    // The naturalKey format matches ingestion.github-parse-file.ts:
-    //   `github:${connectionId}:${owner}/${repo}:${filePath}`
+    // ── Step 2: Stamp the inferred domain (+ authority) on SourceFile nodes ────
+    // The naturalKey is the canonical, connectionId-less identity parse-file
+    // projects (github:{owner}/{repo}:{path}) — a legacy connectionId-prefixed
+    // key would stamp nothing (spec finding 4). SourceSymbol nodes are gone from
+    // the workspace graph (parse-file reshape), so there is no symbol stamp.
     await step.run("write-domains", () =>
       runInTenantScope({ orgId, workspaceId }, async () => {
         const session = scopedSession();
         try {
           for (const [filePath, domain] of domainEntries) {
-            const naturalKey = `github:${connectionId}:${owner}/${repo}:${filePath}`;
+            const naturalKey = toNaturalKey(filePath, owner, repo);
 
-            // Stamp domain on the SourceFile node.
+            // Domain classification is a bounded LLM inference, never
+            // authoritative RBAC truth on its own (spec finding 7) — stamp the
+            // domain alongside its authority provenance (namespaced `domain*`
+            // so it is unambiguously about the classification, not the file).
             await session.run(
               `MATCH (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
-               SET f.domain = $domain`,
-              { naturalKey, orgId, domain },
-            );
-
-            // Stamp domain on all SourceSymbol nodes for this file.
-            await session.run(
-              `MATCH (s:SourceSymbol {fileNaturalKey: $naturalKey, orgId: $orgId})
-               SET s.domain = $domain`,
+               SET f.domain          = $domain,
+                   f.domainAuthority = 'inferred',
+                   f.domainMethod    = 'llm-domain-inference'`,
               { naturalKey, orgId, domain },
             );
           }

@@ -79,7 +79,11 @@ export const [ingestionBatchReconcile] = createFunction(
       const batchId = row.providerBatchId!;
 
       const poll = await step.run(`poll-${row.id}`, () =>
-        pollBatch({ batchId, model, telemetry: { orgId, workspaceId, surface: "ingestion" } }),
+        pollBatch({
+          batchId,
+          model,
+          telemetry: { orgId, workspaceId, surface: "ingestion" },
+        }),
       );
 
       if (!poll.ended) {
@@ -89,8 +93,13 @@ export const [ingestionBatchReconcile] = createFunction(
         if (ageHours >= DEAD_BATCH_HOURS) {
           await step.run(`fail-${row.id}`, () =>
             runInTenantScope({ orgId, workspaceId }, async () => {
-              await updateRow(batchId, { status: "failed", completedAt: new Date() });
-              await emitReconcileEvent(orgId, workspaceId, batchId, "failed", { ageHours });
+              await updateRow(batchId, {
+                status: "failed",
+                completedAt: new Date(),
+              });
+              await emitReconcileEvent(orgId, workspaceId, batchId, "failed", {
+                ageHours,
+              });
             }),
           );
           failed += 1;
@@ -118,7 +127,13 @@ export const [ingestionBatchReconcile] = createFunction(
               if (features.length === 0) continue;
               await writeAcceptedFeatures(
                 session,
-                { orgId, workspaceId, connectionId: connectionIdFromKey(r.customId), fileNaturalKey: r.customId },
+                {
+                  orgId,
+                  workspaceId,
+                  connectionId: connectionIdFromKey(r.customId),
+                  fileNaturalKey: r.customId,
+                  authority: { method: "llm-feature-inference-batch", model },
+                },
                 features,
               );
             }
@@ -126,13 +141,22 @@ export const [ingestionBatchReconcile] = createFunction(
             await session.close();
           }
 
-          await emitReconcileEvent(orgId, workspaceId, batchId, "ended", poll.counts);
+          await emitReconcileEvent(
+            orgId,
+            workspaceId,
+            batchId,
+            "ended",
+            poll.counts,
+          );
         }),
       );
       finalized += 1;
     }
 
-    logger.info({ checked: open.length, finalized, failed }, "ai-batch-reconcile: sweep complete");
+    logger.info(
+      { checked: open.length, finalized, failed },
+      "ai-batch-reconcile: sweep complete",
+    );
     return { checked: open.length, finalized, failed };
   },
 );

@@ -4,75 +4,90 @@ import { sql } from "drizzle-orm";
 import { resolveIngestionCryptoAdapterForKeyId, decrypt } from "@oxagen/crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
-import { embedText } from "@oxagen/ai";
+import {
+  toNaturalKey,
+  codeScopeNaturalKey,
+} from "@oxagen/ontology/natural-key";
 import { parseSourceFile } from "@oxagen/ingestion/parsers";
-import type { ParsedSymbol } from "@oxagen/ingestion/parsers";
-import { chunkText } from "@oxagen/ingestion/embed";
-// Canonical embed-text renderers — the ONE place file/symbol embedding text is
-// built (shared with the CLI code-graph daemon). Replaces the ad-hoc inline
-// `path language symbolNames` string this function used to construct.
-import { renderFileText, renderSymbolText } from "@oxagen/code-graph";
 import { logger } from "../logger";
 
 // ---------------------------------------------------------------------------
-// Import-path resolution helpers (no Node.js filesystem access in Inngest)
+// Transient canonical-snapshot projector (workspace-graph-boundary spec)
 // ---------------------------------------------------------------------------
+//
+// This function is NO LONGER a source-index builder. It projects one file of a
+// PINNED canonical snapshot into the governed workspace graph as commit-
+// addressed topology ONLY:
+//   (:SourceFile)-[:SOURCED_FROM]->(:SourceConnection)
+//   (:SourceFile)-[:IN_SCOPE]->(:CodeScope)
+//   (:CodeScope)-[:DEPENDS_ON {count}]->(:CodeScope)   (cross-scope imports)
+//
+// The old model — :SourceSymbol / :SourceChunk / CALLS / file-level IMPORTS /
+// plaintext chunks / source embeddings — is GONE from the workspace graph (spec
+// §"What to delete or replace", four-store law). Exact working-code detail
+// lives only in Stella's local graph. The deterministic parser is kept purely
+// as a TRANSIENT input: language detection + import extraction feed the
+// scope-level dependency aggregation, and the symbol list still rides the
+// (bounded, inferred, non-authoritative) feature-inference event.
+//
+// Every fan-out event emits EXACTLY ONE `ingestion/github.generation-file-done`
+// — success (skipped:false) or any skip path (skipped:true) — via step.sendEvent
+// (Inngest memoizes a completed step across retries, so a retried invocation
+// re-emits zero extra events). d3's atomic counter activates the generation when
+// processed + skipped reaches files_total, so a missed OR doubled emission would
+// wedge/early-activate it.
 
-/** Common TypeScript/JavaScript source extensions to try when resolving an
- *  extensionless specifier from a relative import. */
-const IMPORT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+// Skip files larger than 1000 KB — too expensive to fetch + project.
+const MAX_CONTENT_BYTES = 1000 * 1024;
 
 /**
- * Given a normalised (no `..` segments) relative path without extension,
- * return the list of candidate concrete paths to MATCH against in Neo4j.
- * We don't have fs access here, so we emit all plausible resolutions and
- * let the Cypher MATCH filter to whichever SourceFile node actually exists.
+ * Resolve a RELATIVE import specifier (starts with ".") to a normalised
+ * intra-repo path, folding out "." / ".." segments relative to the importing
+ * file's directory. Returns null when it escapes the repo root. Extension is
+ * irrelevant here — we only need the path for longest-prefix scope matching, so
+ * a trailing extension (if any) is left as-is and harmlessly ignored by the
+ * boundary-aware prefix match.
  */
-function resolveImportCandidates(rawPath: string): string[] {
-  // Normalise out ".." segments and leading slashes.
+function resolveRelativeImportPath(
+  filePath: string,
+  specifier: string,
+): string | null {
+  const dirParts = filePath.split("/").slice(0, -1);
+  const specParts = specifier.split("/");
   const parts: string[] = [];
-  for (const seg of rawPath.split("/")) {
-    if (seg === "..") { parts.pop(); }
-    else if (seg !== "." && seg !== "") { parts.push(seg); }
+  for (const seg of [...dirParts, ...specParts]) {
+    if (seg === "..") {
+      if (parts.length === 0) return null; // escaped repo root — unresolved
+      parts.pop();
+    } else if (seg !== "." && seg !== "") {
+      parts.push(seg);
+    }
   }
-  const base = parts.join("/");
-  if (!base) return [];
-
-  const hasExt = IMPORT_EXTENSIONS.some((e) => base.endsWith(e));
-  if (hasExt) return [base];
-
-  const candidates: string[] = [];
-  for (const ext of IMPORT_EXTENSIONS) candidates.push(`${base}${ext}`);
-  for (const ext of IMPORT_EXTENSIONS) candidates.push(`${base}/index${ext}`);
-  return candidates;
+  const resolved = parts.join("/");
+  return resolved || null;
 }
 
-// Skip files larger than 1000 KB — too expensive to parse + embed.
-const MAX_CONTENT_BYTES = 1000 * 1024;
-// Batch size for symbol upsert to keep Neo4j sessions bounded.
-const SYMBOL_BATCH_SIZE = 20;
-// Per-chunk upsert batch size (one embed call per chunk).
-const CHUNK_BATCH_SIZE = 10;
-
-// Shared embed telemetry. executionStepId MUST be a UUID or null — a synthesized
-// string breaks the ClickHouse UUID insert + Postgres uuid credit charge.
-const EMBED_TELEMETRY = (orgId: string, workspaceId: string) => ({
-  telemetry: {
-    orgId,
-    workspaceId,
-    surface: "ingestion" as const,
-    executionStepId: null,
-  },
-});
+/**
+ * Longest-prefix-match a repo path to a code-scope key on SEGMENT boundaries
+ * (so `packages/api` matches `packages/api/src/x` but never `packages/api-v2`).
+ * Returns the longest matching scopeKey, or null when the path is outside every
+ * known scope.
+ */
+function scopeForPath(path: string, scopeKeys: string[]): string | null {
+  let best: string | null = null;
+  for (const key of scopeKeys) {
+    if (path === key || path.startsWith(`${key}/`)) {
+      if (best === null || key.length > best.length) best = key;
+    }
+  }
+  return best;
+}
 
 /**
- * GitHub parse-file Inngest function.
+ * GitHub parse-file Inngest function — canonical-snapshot projector.
  *
- * Triggered by "ingestion/github.parse-file". Fetches the raw file blob,
- * parses it via tree-sitter, upserts SourceFile + SourceSymbol nodes in Neo4j,
- * embeds the file text, and optionally fires a feature-inference event.
- *
- * Concurrency is limited to 20 parallel parses per org (fan-out stage).
+ * Triggered by "ingestion/github.parse-file" at a pinned commit/tree SHA.
+ * Concurrency limited to 5 parallel parses per org (fan-out stage).
  */
 export const [ingestionGithubParseFile] = createFunction(
   {
@@ -82,16 +97,43 @@ export const [ingestionGithubParseFile] = createFunction(
   },
   { event: "ingestion/github.parse-file" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, owner, repo, sha, path } =
-      event.data as {
-        connectionId: string;
-        orgId: string;
-        workspaceId: string;
-        owner: string;
-        repo: string;
-        sha: string;
-        path: string;
-      };
+    const {
+      connectionId,
+      orgId,
+      workspaceId,
+      owner,
+      repo,
+      sha,
+      path,
+      generationId,
+      commitSha,
+      treeSha,
+      scopeKey,
+    } = event.data as {
+      connectionId: string;
+      orgId: string;
+      workspaceId: string;
+      owner: string;
+      repo: string;
+      sha: string;
+      path: string;
+      repositoryId: string;
+      generationId: string;
+      commitSha: string;
+      treeSha: string;
+      scopeKey: string;
+      codeScopeId: string;
+    };
+
+    // Emit the generation-completion signal exactly once. Each call is its own
+    // Inngest step (unique id per outcome) so it is durable + memoized across
+    // retries — a retried invocation replays the already-completed send without
+    // re-emitting.
+    const emitDone = (stepId: string, skipped: boolean) =>
+      step.sendEvent(stepId, {
+        name: "ingestion/github.generation-file-done" as const,
+        data: { orgId, workspaceId, generationId, skipped },
+      });
 
     // ── Step 1: Fetch access token ─────────────────────────────────────────────
     const accessToken = await step.run("fetch-token", async () => {
@@ -173,15 +215,43 @@ export const [ingestionGithubParseFile] = createFunction(
       return text;
     });
 
-    // Skip oversized or empty files.
+    // ── Skip path: oversized / empty ──────────────────────────────────────────
     if (content === null) {
+      await emitDone("done-too-large", true);
       return { skipped: true, reason: "file_too_large", path };
     }
 
-    // ── Step 3: Parse the source file ─────────────────────────────────────────
-    const parseResult = await step.run("parse-source-file", () =>
-      parseSourceFile(path, content),
-    );
+    // ── Skip path: binary ─────────────────────────────────────────────────────
+    // A NUL byte is the standard cheap binary sniff. Binary blobs are never
+    // projected as SourceFiles (they carry no scope-level import structure).
+    if (content.includes("\u0000")) {
+      logger.info(
+        { path, connectionId, orgId },
+        "ingestion-github-parse-file: binary content, skipping",
+      );
+      await emitDone("done-binary", true);
+      return { skipped: true, reason: "binary", path };
+    }
+
+    // ── Step 3: Parse (transient) — language + imports + symbols ───────────────
+    // A parser throw must NOT propagate: an uncaught throw retries forever and
+    // never emits generation-file-done, wedging the generation's activation
+    // gate. Swallow it as a skip instead.
+    // Declared without `| null` — the catch returns, so past this point
+    // parseResult is definitely assigned and non-null.
+    let parseResult: Awaited<ReturnType<typeof parseSourceFile>>;
+    try {
+      parseResult = await step.run("parse-source-file", () =>
+        parseSourceFile(path, content),
+      );
+    } catch (err) {
+      logger.warn(
+        { err, path, connectionId, orgId },
+        "ingestion-github-parse-file: parse failed, skipping",
+      );
+      await emitDone("done-parse-failed", true);
+      return { skipped: true, reason: "parse_failed", path };
+    }
 
     logger.debug(
       {
@@ -192,64 +262,88 @@ export const [ingestionGithubParseFile] = createFunction(
       "ingestion-github-parse-file: parsed",
     );
 
-    // ── Step 4: Upsert SourceFile node in Neo4j ───────────────────────────────
-    const naturalKey = `github:${connectionId}:${owner}/${repo}:${path}`;
+    // ── Step 4: MERGE the slim SourceFile + SOURCED_FROM + IN_SCOPE ────────────
+    // Commit-addressed identity (github:{owner}/{repo}:{path}) — no connectionId,
+    // unified with file-lock + run lineage (spec finding 4). No embeddings, no
+    // symbol/chunk detail. The CodeScope is MERGEd minimally here (ON CREATE
+    // only) so we never clobber the richer props projectSnapshotToGraph writes.
+    const naturalKey = toNaturalKey(path, owner, repo);
+    const scopeNaturalKey = codeScopeNaturalKey(owner, repo, scopeKey);
 
-    const fileId = await step.run("upsert-source-file", () =>
+    const fileId = await step.run("project-source-file", () =>
       runInTenantScope({ orgId, workspaceId }, async () => {
         const session = scopedSession();
         try {
           const result = await session.run(
-            // Carries the universal :GraphNode anchor + is_system + display fields
-            // (label/displayName/sourceId/properties) so the file shows up in the
-            // graph explorer and graph.search, which match the :GraphNode anchor
-            // scoped by orgId + workspaceId. The MERGE key stays on :SourceFile so
-            // the CONTAINS/SOURCED_FROM/HAS_CHUNK traversals below keep matching it.
             `MERGE (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
              ON CREATE SET
-               f.publicId    = randomUUID(),
-               f.createdAt   = datetime()
+               f.publicId  = randomUUID(),
+               f.createdAt = datetime()
              ON MATCH SET
-               f.syncedAt   = datetime()
+               f.syncedAt = datetime()
              SET
                f:GraphNode,
-               f.is_system   = true,
-               f.path        = $path,
-               f.language    = $language,
-               f.repo        = $repo,
-               f.owner       = $owner,
-               f.connectionId = $connectionId,
-               f.sourceId    = $connectionId,
-               f.workspaceId = $workspaceId,
-               f.sha         = $sha,
-               f.label       = 'SourceFile',
-               f.displayName = $path,
-               f.properties  = $properties,
-               f.updatedAt   = datetime()
+               f.is_system    = true,
+               f.path         = $path,
+               f.language     = $language,
+               f.commitSha    = $commitSha,
+               f.treeSha      = $treeSha,
+               f.generationId = $generationId,
+               f.scopeKey     = $scopeKey,
+               f.repo         = $repo,
+               f.owner        = $owner,
+               f.sourceId     = $connectionId,
+               f.workspaceId  = $workspaceId,
+               f.label        = 'SourceFile',
+               f.displayName  = $path,
+               f.properties   = $properties,
+               f.updatedAt    = datetime()
+             WITH f
+             MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})
+             MERGE (f)-[srcd:SOURCED_FROM]->(sc)
+             SET srcd.is_system = true
+             WITH f
+             MERGE (scope:CodeScope {naturalKey: $scopeNaturalKey, orgId: $orgId})
+             ON CREATE SET
+               scope.publicId    = randomUUID(),
+               scope.createdAt   = datetime(),
+               scope:GraphNode,
+               scope.is_system   = true,
+               scope.label       = 'CodeScope',
+               scope.scopeKey    = $scopeKey,
+               scope.displayName = $scopeKey,
+               scope.workspaceId = $workspaceId
+             MERGE (f)-[insc:IN_SCOPE]->(scope)
+             SET insc.is_system = true
              RETURN f.publicId AS fileId`,
             {
               naturalKey,
               orgId,
               path,
               language: parseResult.language,
+              commitSha,
+              treeSha,
+              generationId,
+              scopeKey,
               repo,
               owner,
               connectionId,
               workspaceId,
-              sha,
+              scopeNaturalKey,
               properties: JSON.stringify({
                 path,
                 language: parseResult.language,
-                repo,
-                owner,
-                sha,
+                commitSha,
+                treeSha,
+                generationId,
+                scopeKey,
               }),
             },
           );
           const record = result.records[0];
           if (!record)
             throw new Error(
-              `upsert-source-file: no record returned for ${naturalKey}`,
+              `project-source-file: no record returned for ${naturalKey}`,
             );
           return record.get("fileId") as string;
         } finally {
@@ -258,212 +352,79 @@ export const [ingestionGithubParseFile] = createFunction(
       }),
     );
 
-    // ── Step 5: Upsert SourceSymbol nodes (only if symbols found) ─────────────
-    if (parseResult.symbols.length > 0) {
-      // Process symbols in batches to keep session time bounded.
-      const symbolBatches: ParsedSymbol[][] = [];
-      for (let i = 0; i < parseResult.symbols.length; i += SYMBOL_BATCH_SIZE) {
-        symbolBatches.push(parseResult.symbols.slice(i, i + SYMBOL_BATCH_SIZE));
-      }
+    // ── Step 5: Scope-level dependency aggregation (cross-scope imports) ───────
+    // Resolve each RELATIVE import to a repo path, longest-prefix-match it to a
+    // scopeKey from the generation's code_scopes, and MERGE a CodeScope
+    // DEPENDS_ON edge for every scope other than this file's own. External
+    // (bare npm) specifiers are ignored. Target scopes are deduped per file so a
+    // file contributes at most +1 to each cross-scope edge count.
+    const relativeImports = (parseResult.imports ?? []).filter(
+      ({ specifier }) => specifier.startsWith("."),
+    );
 
-      for (let batchIdx = 0; batchIdx < symbolBatches.length; batchIdx++) {
-        const batch = symbolBatches[batchIdx]!;
-        await step.run(`upsert-symbols-batch-${batchIdx}`, async () => {
-          // Embed each symbol's rendered text (kind + name + signature + doc +
-          // code slice) BEFORE opening the Neo4j session so a natural-language
-          // query matches the symbol body — same surface + telemetry as the file
-          // and chunk embeds. A failed embed must not fail the batch: the symbol
-          // is still upserted, just without a vector this run.
-          const symbolEmbeddings = await Promise.all(
-            batch.map(async (symbol) => {
-              try {
-                return await embedText(
-                  renderSymbolText(symbol, path),
-                  EMBED_TELEMETRY(orgId, workspaceId),
-                );
-              } catch (err) {
-                logger.warn(
-                  { err, path, symbol: symbol.name },
-                  "parse-file: symbol embed failed",
-                );
-                return null;
-              }
-            }),
-          );
-          return runInTenantScope({ orgId, workspaceId }, async () => {
-            const session = scopedSession();
-            try {
-              for (let i = 0; i < batch.length; i++) {
-                const symbol = batch[i]!;
-                const symbolEmbedding = symbolEmbeddings[i] ?? null;
-                const symbolNaturalKey = `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
-                await session.run(
-                  // Same anchor pattern as SourceFile: MERGE on :SourceSymbol
-                  // (keeps the CONTAINS edge match below), then SET adds the
-                  // universal :GraphNode anchor + is_system + display fields so
-                  // symbols are visible/traversable in the graph explorer
-                  // (label = symbol kind, displayName = symbol name).
-                  `MERGE (s:SourceSymbol {naturalKey: $naturalKey, orgId: $orgId})
-                    ON CREATE SET
-                      s.publicId    = randomUUID(),
-                      s.createdAt   = datetime()
-                    ON MATCH SET
-                      s.syncedAt   = datetime()
-                    SET
-                      s:GraphNode,
-                      s.is_system   = true,
-                      s.name        = $name,
-                      s.kind        = $kind,
-                      s.label       = $kind,
-                      s.displayName = $name,
-                      s.startLine   = $startLine,
-                      s.endLine     = $endLine,
-                      s.fileNaturalKey = $fileNaturalKey,
-                      s.connectionId = $connectionId,
-                      s.sourceId    = $connectionId,
-                      s.workspaceId = $workspaceId,
-                      s.properties  = $properties,
-                      s.embedding   = coalesce($embedding, s.embedding),
-                      s.embeddingUpdatedAt = CASE WHEN $embedding IS NULL THEN s.embeddingUpdatedAt ELSE datetime() END,
-                      s.updatedAt   = datetime()
-                    WITH s
-                    MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                    MERGE (f)-[cont:CONTAINS]->(s)
-                    SET cont.is_system = true`,
-                  {
-                    naturalKey: symbolNaturalKey,
-                    orgId,
-                    name: symbol.name,
-                    kind: symbol.kind,
-                    startLine: symbol.startLine,
-                    endLine: symbol.endLine,
-                    fileNaturalKey: naturalKey,
-                    connectionId,
-                    workspaceId,
-                    embedding: symbolEmbedding,
-                    properties: JSON.stringify({
-                      kind: symbol.kind,
-                      name: symbol.name,
-                      startLine: symbol.startLine,
-                      endLine: symbol.endLine,
-                      path,
-                    }),
-                  },
-                );
-              }
-
-              // After all symbols: MERGE SourceFile → SourceConnection edge.
-              await session.run(
-                `MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                  MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})
-                  MERGE (f)-[srcd:SOURCED_FROM]->(sc)
-                  SET srcd.is_system = true`,
-                { fileNaturalKey: naturalKey, orgId, connectionId },
-              );
-            } finally {
-              await session.close();
-            }
-          });
+    if (relativeImports.length > 0) {
+      // The full scope-key set for this generation, read the same way sibling
+      // ingestion functions read Postgres (withSystemDb + explicit org filter).
+      const scopeKeys = await step.run("load-scope-keys", async () => {
+        const rows = await withSystemDb(async (tx) => {
+          const result = await tx.execute(sql`
+            SELECT scope_key
+            FROM   ingestion.code_scopes
+            WHERE  generation_id = ${generationId}::uuid
+            AND    org_id        = ${orgId}::uuid
+          `);
+          return Array.from(result) as Array<{ scope_key: string }>;
         });
-      }
-    }
+        return rows.map((r) => r.scope_key);
+      });
 
-    // ── Step 5b: Upsert CALLS edges (same-file resolution) ───────────────────
-    // For each call site in the parse result, find the enclosing symbol (caller)
-    // and the callee by name within the same file, then MERGE a :CALLS edge.
-    // Cross-file resolution is a documented follow-up; unresolvable calls are
-    // logged at info level so coverage is visible without crashing the step.
-    if (parseResult.calls && parseResult.calls.length > 0) {
-      await step.run("upsert-call-edges", () =>
-        runInTenantScope({ orgId, workspaceId }, async () => {
-          const session = scopedSession();
-          try {
-            for (const call of parseResult.calls!) {
-              if (!call.enclosingSymbol) continue; // module-level call — no caller node
-              // Match caller + optional callee by name within same file; merge CALLS edge.
-              const result = await session.run(
-                `MATCH (caller:SourceSymbol {fileNaturalKey: $fileNaturalKey, name: $callerName, orgId: $orgId})
-                 OPTIONAL MATCH (callee:SourceSymbol {fileNaturalKey: $fileNaturalKey, name: $calleeName, orgId: $orgId})
-                   WHERE callee <> caller
-                 WITH caller, callee
-                 WHERE callee IS NOT NULL
-                 MERGE (caller)-[c:CALLS]->(callee)
-                 SET c.is_system = true
-                 RETURN count(c) AS merged`,
-                {
-                  fileNaturalKey: naturalKey,
-                  callerName: call.enclosingSymbol,
-                  calleeName: call.callee,
-                  orgId,
-                },
-              );
-              const mergedRaw: unknown = result.records[0]?.get("merged");
-              const merged = typeof mergedRaw === "number" ? mergedRaw : 0;
-              if (merged === 0) {
-                logger.info(
-                  { path, callerName: call.enclosingSymbol, calleeName: call.callee, line: call.line },
-                  "ingestion-github-parse-file: unresolved call (callee not in same file — cross-file follow-up)",
-                );
-              }
-            }
-          } finally {
-            await session.close();
-          }
-        }),
-      );
-    }
-
-    // ── Step 5c: Upsert IMPORTS edges (file → file) ───────────────────────
-    // For each import in the parse result, compute the target SourceFile's
-    // naturalKey (same-repo relative specifiers only) and MERGE an IMPORTS edge.
-    // Bare specifiers (@oxagen/*, react, etc.) are logged but not yet resolved
-    // to cross-repo SourceFile nodes (documented follow-up).
-    if (parseResult.imports && parseResult.imports.length > 0) {
-      // Collect only relative imports (start with ".") for same-repo resolution.
-      const relativeImports = parseResult.imports.filter(({ specifier }) =>
-        specifier.startsWith("."),
-      );
-      const bareImports = parseResult.imports.filter(
-        ({ specifier }) => !specifier.startsWith("."),
-      );
-
-      if (bareImports.length > 0) {
-        logger.info(
-          {
-            path,
-            count: bareImports.length,
-            specifiers: bareImports.slice(0, 5).map(({ specifier }) => specifier),
-          },
-          "ingestion-github-parse-file: bare import specifiers not yet resolved (cross-package follow-up)",
-        );
+      const targetScopeKeys = new Set<string>();
+      for (const { specifier } of relativeImports) {
+        const resolved = resolveRelativeImportPath(path, specifier);
+        if (!resolved) continue;
+        const targetScope = scopeForPath(resolved, scopeKeys);
+        if (targetScope && targetScope !== scopeKey) {
+          targetScopeKeys.add(targetScope);
+        }
       }
 
-      if (relativeImports.length > 0) {
-        await step.run("upsert-import-edges", () =>
+      if (targetScopeKeys.size > 0) {
+        const targets = [...targetScopeKeys].map((key) => ({
+          naturalKey: codeScopeNaturalKey(owner, repo, key),
+          scopeKey: key,
+        }));
+        await step.run("aggregate-scope-dependencies", () =>
           runInTenantScope({ orgId, workspaceId }, async () => {
             const session = scopedSession();
             try {
-              for (const { specifier } of relativeImports) {
-                // Resolve the specifier relative to the current file's directory.
-                // We don't have filesystem access here, so we try the most common
-                // extensions and create edges that MATCH only when both nodes exist.
-                const dirParts = path.split("/").slice(0, -1);
-                const specParts = specifier.split("/");
-                // Strip leading ./ or ../
-                const rawPath = [...dirParts, ...specParts].join("/");
-                const candidates = resolveImportCandidates(rawPath);
-
-                for (const candidate of candidates) {
-                  const targetNaturalKey = `github:${connectionId}:${owner}/${repo}:${candidate}`;
-                  await session.run(
-                    `MATCH (src:SourceFile {naturalKey: $srcKey, orgId: $orgId})
-                     MATCH (tgt:SourceFile {naturalKey: $tgtKey, orgId: $orgId})
-                     MERGE (src)-[imp:IMPORTS]->(tgt)
-                     SET imp.is_system = true`,
-                    { srcKey: naturalKey, tgtKey: targetNaturalKey, orgId },
-                  );
-                }
-              }
+              // count is incremented per (source-scope, target-scope, file)
+              // observation. NOTE: it double-counts across re-projections of the
+              // same generation (scope nodes are not generation-scoped) — a known
+              // launch limitation; the authoritative dependency evidence lands
+              // as {evidence_digest} when the evidence-ledger linkage ships.
+              await session.run(
+                `MATCH (from:CodeScope {naturalKey: $fromScopeKey, orgId: $orgId})
+                 UNWIND $targets AS t
+                 MERGE (to:CodeScope {naturalKey: t.naturalKey, orgId: $orgId})
+                 ON CREATE SET
+                   to.publicId    = randomUUID(),
+                   to.createdAt   = datetime(),
+                   to:GraphNode,
+                   to.is_system   = true,
+                   to.label       = 'CodeScope',
+                   to.scopeKey    = t.scopeKey,
+                   to.displayName = t.scopeKey,
+                   to.workspaceId = $workspaceId
+                 MERGE (from)-[dep:DEPENDS_ON]->(to)
+                 ON CREATE SET
+                   dep.is_system = true,
+                   dep.count     = 1,
+                   dep.createdAt = datetime()
+                 ON MATCH SET
+                   dep.count     = coalesce(dep.count, 0) + 1,
+                   dep.updatedAt = datetime()`,
+                { fromScopeKey: scopeNaturalKey, orgId, workspaceId, targets },
+              );
             } finally {
               await session.close();
             }
@@ -472,147 +433,12 @@ export const [ingestionGithubParseFile] = createFunction(
       }
     }
 
-    // ── Step 6: Chunk the full body and upsert embedded :SourceChunk nodes ────
-    // This is what makes the ENTIRE file content searchable by similarity, not
-    // just the named symbols. Each chunk is its own :GraphNode with an embedding.
-    const { chunks, truncated: chunksTruncated } = chunkText(content);
-    if (chunksTruncated) {
-      logger.info(
-        { path, orgId, chunkCount: chunks.length },
-        "ingestion-github-parse-file: file exceeded chunk cap — tail not chunked",
-      );
-    }
-    if (chunks.length > 0) {
-      const chunkBatches: (typeof chunks)[] = [];
-      for (let i = 0; i < chunks.length; i += CHUNK_BATCH_SIZE) {
-        chunkBatches.push(chunks.slice(i, i + CHUNK_BATCH_SIZE));
-      }
-      for (let batchIdx = 0; batchIdx < chunkBatches.length; batchIdx++) {
-        const batch = chunkBatches[batchIdx]!;
-        await step.run(`upsert-chunks-batch-${batchIdx}`, async () => {
-          const embeddings = await Promise.all(
-            batch.map(async (chunk) => {
-              try {
-                return await embedText(chunk.text, EMBED_TELEMETRY(orgId, workspaceId));
-              } catch (err) {
-                logger.warn({ err, path, chunk: chunk.index }, "parse-file: chunk embed failed");
-                return null;
-              }
-            }),
-          );
-          return runInTenantScope({ orgId, workspaceId }, async () => {
-            const session = scopedSession();
-            try {
-              for (let i = 0; i < batch.length; i++) {
-                const chunk = batch[i]!;
-                const embedding = embeddings[i];
-                const chunkNaturalKey = `${naturalKey}:chunk:${chunk.index}`;
-                await session.run(
-                  `MERGE (c:SourceChunk {naturalKey: $naturalKey, orgId: $orgId})
-                   ON CREATE SET
-                     c.publicId  = randomUUID(),
-                     c.createdAt = datetime()
-                   ON MATCH SET
-                     c.syncedAt = datetime()
-                   SET
-                     c:GraphNode,
-                     c.is_system   = true,
-                     c.label       = 'SourceChunk',
-                     c.displayName = $displayName,
-                     c.chunkIndex  = $chunkIndex,
-                     c.startLine   = $startLine,
-                     c.endLine     = $endLine,
-                     c.fileNaturalKey = $fileNaturalKey,
-                     c.connectionId = $connectionId,
-                     c.sourceId    = $connectionId,
-                     c.workspaceId = $workspaceId,
-                     c.content     = $content,
-                     c.properties  = $properties,
-                     c.embedding   = coalesce($embedding, c.embedding),
-                     c.embeddingUpdatedAt = CASE WHEN $embedding IS NULL THEN c.embeddingUpdatedAt ELSE datetime() END,
-                     c.updatedAt   = datetime()
-                   WITH c
-                   MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                   MERGE (f)-[hc:HAS_CHUNK]->(c)
-                   SET hc.is_system = true`,
-                  {
-                    naturalKey: chunkNaturalKey,
-                    orgId,
-                    displayName: `${path} [${chunk.index}]`,
-                    chunkIndex: chunk.index,
-                    startLine: chunk.startLine,
-                    endLine: chunk.endLine,
-                    fileNaturalKey: naturalKey,
-                    connectionId,
-                    workspaceId,
-                    content: chunk.text,
-                    embedding: embedding ?? null,
-                    properties: JSON.stringify({
-                      path,
-                      chunkIndex: chunk.index,
-                      startLine: chunk.startLine,
-                      endLine: chunk.endLine,
-                      content: chunk.text,
-                    }),
-                  },
-                );
-              }
-            } finally {
-              await session.close();
-            }
-          });
-        });
-      }
-    }
-
-    // ── Step 7: Embed file ─────────────────────────────────────────────────────
-    // Build the embedding text via the canonical renderer (path + language +
-    // symbol names + a head slice of the real content) so file embeddings match
-    // the CLI code-graph daemon exactly and searchable content is not just the
-    // path + symbol names.
-    const embedInput = renderFileText({
-      path,
-      language: parseResult.language,
-      content,
-      symbolNames: parseResult.symbols.map((s) => s.name),
-    });
-
-    const embedding = await step.run("embed-file", () =>
-      embedText(embedInput, {
-        telemetry: {
-          orgId,
-          workspaceId,
-          surface: "ingestion",
-          // No execution step for repo-file embeds. Must be a UUID or null — a
-          // synthesized `embed-file:<naturalKey>` string broke the ClickHouse
-          // UUID insert (flooded POST /api/inngest with code-27 parse errors)
-          // and the Postgres uuid credit charge. See @oxagen/telemetry NIL_UUID.
-          executionStepId: null,
-        },
-      }),
-    );
-
-    // Store embedding on the SourceFile node.
-    await step.run("store-file-embedding", () =>
-      runInTenantScope({ orgId, workspaceId }, async () => {
-        const session = scopedSession();
-        try {
-          await session.run(
-            `MATCH (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
-              SET f.embedding = $embedding, f.embeddingUpdatedAt = datetime()`,
-            { naturalKey, orgId, embedding },
-          );
-        } finally {
-          await session.close();
-        }
-      }),
-    );
-
-    // ── Step 7: Fire feature inference event (if applicable) ──────────────────
-    // Default: one per-file event → synchronous inference. With
-    // INGESTION_FEATURE_BATCH=1, emit the batched event instead → the events are
-    // collected via Inngest batchEvents and submitted as one Anthropic Message
-    // Batch (half price). Payload is identical; only the routing differs.
+    // ── Step 6: Fire feature inference event ──────────────────────────────────
+    // (bounded, inferred, non-authoritative). Default: one per-file event →
+    // synchronous inference. With INGESTION_FEATURE_BATCH=1, emit the batched
+    // event instead (half-price Message Batch). Payload is identical; only the
+    // routing differs. The fileNaturalKey is now the canonical (connectionId-
+    // less) key.
     if (parseResult.language !== "unknown" && parseResult.symbols.length > 0) {
       const batchMode = process.env.INGESTION_FEATURE_BATCH === "1";
       await step.sendEvent("infer-features", {
@@ -636,16 +462,21 @@ export const [ingestionGithubParseFile] = createFunction(
         path,
         language: parseResult.language,
         symbolCount: parseResult.symbols.length,
+        scopeKey,
         orgId,
       },
-      "ingestion-github-parse-file: completed",
+      "ingestion-github-parse-file: projected",
     );
+
+    // ── Success: emit the completion signal exactly once ──────────────────────
+    await emitDone("done-processed", false);
 
     return {
       path,
       fileId,
       language: parseResult.language,
       symbolCount: parseResult.symbols.length,
+      skipped: false,
     };
   },
 );

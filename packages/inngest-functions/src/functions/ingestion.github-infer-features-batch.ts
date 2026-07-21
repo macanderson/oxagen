@@ -56,7 +56,9 @@ export const [ingestionGithubInferFeaturesBatch] = createFunction(
   },
   { event: "ingestion/github.infer-features-batch" },
   async ({ events, step }) => {
-    const all = (events ?? []).map((e) => e.data as unknown as FeatureEventData);
+    const all = (events ?? []).map(
+      (e) => e.data as unknown as FeatureEventData,
+    );
     if (all.length === 0) return { batches: 0, filesWritten: 0 };
 
     // batchEvents partitions by org, but not workspace — group so metering and
@@ -74,7 +76,9 @@ export const [ingestionGithubInferFeaturesBatch] = createFunction(
     for (const [groupKey, group] of byWorkspace) {
       const { orgId, workspaceId } = group[0]!;
       // fileNaturalKey → connectionId, for the graph write after the batch ends.
-      const connByFile = new Map(group.map((g) => [g.fileNaturalKey, g.connectionId]));
+      const connByFile = new Map(
+        group.map((g) => [g.fileNaturalKey, g.connectionId]),
+      );
 
       const requests = group.map((g) => ({
         customId: g.fileNaturalKey,
@@ -116,7 +120,11 @@ export const [ingestionGithubInferFeaturesBatch] = createFunction(
       let poll: Awaited<ReturnType<typeof pollBatch>> | undefined;
       for (let i = 0; i < MAX_POLLS; i++) {
         poll = await step.run(`poll-${groupKey}-${i}`, () =>
-          pollBatch({ batchId: submit.batchId, model: BATCH_MODEL, telemetry: { orgId, workspaceId, surface: "ingestion" } }),
+          pollBatch({
+            batchId: submit.batchId,
+            model: BATCH_MODEL,
+            telemetry: { orgId, workspaceId, surface: "ingestion" },
+          }),
         );
         if (poll.ended) break;
         await step.sleep(`wait-${groupKey}-${i}`, POLL_INTERVAL);
@@ -161,7 +169,16 @@ export const [ingestionGithubInferFeaturesBatch] = createFunction(
               const connectionId = connByFile.get(r.customId) ?? "";
               const created = await writeAcceptedFeatures(
                 session,
-                { orgId, workspaceId, connectionId, fileNaturalKey: r.customId },
+                {
+                  orgId,
+                  workspaceId,
+                  connectionId,
+                  fileNaturalKey: r.customId,
+                  authority: {
+                    method: "llm-feature-inference-batch",
+                    model: BATCH_MODEL,
+                  },
+                },
                 features,
               );
               if (created > 0) written += 1;
@@ -175,7 +192,13 @@ export const [ingestionGithubInferFeaturesBatch] = createFunction(
 
       totalFilesWritten += filesWritten;
       logger.info(
-        { batchId: submit.batchId, orgId, workspaceId, files: group.length, filesWritten },
+        {
+          batchId: submit.batchId,
+          orgId,
+          workspaceId,
+          files: group.length,
+          filesWritten,
+        },
         "ingestion-github-infer-features-batch: batch complete",
       );
     }
