@@ -452,4 +452,168 @@ describe("resolveAgentEffectivePermissions — delegation ceiling (resolve.ts)",
     const second = resolve.resolveAgentEffectivePermissions(input);
     expect(second).toBe(first); // same cached object, not a re-resolution
   });
+
+  it("multi-level subagent chaining: a grandchild is capped by BOTH its parent's and grandparent's ceilings end-to-end", () => {
+    // Root run: broad grant, labels {A,B,C,D}, budget maxHops=10.
+    const rootGrants = [
+      {
+        principalId: "agent1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: { labels: ["A", "B", "C", "D"], budget: { maxHops: 10 } },
+          },
+        },
+      },
+      {
+        principalId: "human1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: { labels: ["A", "B", "C", "D"], budget: { maxHops: 10 } },
+          },
+        },
+      },
+    ];
+
+    const rootResult = resolve.resolveAgentEffectivePermissions({
+      agentPrincipal,
+      humanPrincipal,
+      capability: "x",
+      scope,
+      grants: rootGrants,
+      roles: [],
+      roleGrants: [],
+      policies: [],
+      defaultEffect: "deny" as const,
+    });
+    expect(rootResult.resourceScope.graph?.labels).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+
+    // Child run (subagent dispatched by root): its OWN grants are broad too,
+    // but it must narrow via the root's effective scope passed as its parent
+    // ceiling. Child further narrows budget.maxHops to 4.
+    const childGrants = [
+      {
+        principalId: "agent1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: { labels: ["A", "B", "C", "D"], budget: { maxHops: 4 } },
+          },
+        },
+      },
+      {
+        principalId: "human1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: { labels: ["A", "B", "C", "D"], budget: { maxHops: 4 } },
+          },
+        },
+      },
+    ];
+
+    const childResult = resolve.resolveAgentEffectivePermissions({
+      agentPrincipal,
+      humanPrincipal,
+      capability: "x",
+      scope,
+      grants: childGrants,
+      roles: [],
+      roleGrants: [],
+      policies: [],
+      defaultEffect: "deny" as const,
+      parentEffectiveScope: rootResult.resourceScope,
+    });
+    expect(childResult.resourceScope.graph?.labels).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+    expect(childResult.resourceScope.graph?.budget?.maxHops).toBe(4);
+
+    // Grandchild run (subagent dispatched by child): its OWN grant is broader
+    // still (labels {A,B,C,D,E}, maxHops=8 — WIDER than the child's ceiling on
+    // both dimensions). It must inherit the CHILD's already-narrowed scope as
+    // its parent ceiling, so the effective result stays capped at the child's
+    // level — proving the narrowing survives two hops of delegation, not just
+    // one, and that a broader own-grant several levels down still cannot
+    // widen anything back out.
+    const grandchildGrants = [
+      {
+        principalId: "agent1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: {
+              labels: ["A", "B", "C", "D", "E"],
+              budget: { maxHops: 8 },
+            },
+          },
+        },
+      },
+      {
+        principalId: "human1",
+        capabilityId: "x",
+        scopeKind: "org" as const,
+        scopeId: "org1",
+        effect: "allow" as const,
+        conditionsJsonb: {
+          resourceScope: {
+            graph: {
+              labels: ["A", "B", "C", "D", "E"],
+              budget: { maxHops: 8 },
+            },
+          },
+        },
+      },
+    ];
+
+    const grandchildResult = resolve.resolveAgentEffectivePermissions({
+      agentPrincipal,
+      humanPrincipal,
+      capability: "x",
+      scope,
+      grants: grandchildGrants,
+      roles: [],
+      roleGrants: [],
+      policies: [],
+      defaultEffect: "deny" as const,
+      parentEffectiveScope: childResult.resourceScope,
+    });
+
+    expect(grandchildResult.outcome).toBe("allow");
+    // Still capped at the child's narrowed set — the grandchild's own wider
+    // {A,B,C,D,E} grant never resurrects "E".
+    expect(grandchildResult.resourceScope.graph?.labels).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+    ]);
+    // Still capped at the child's narrower maxHops=4, not the grandchild's
+    // own (wider) maxHops=8, and not the root's (widest) maxHops=10.
+    expect(grandchildResult.resourceScope.graph?.budget?.maxHops).toBe(4);
+  });
 });
