@@ -82,24 +82,43 @@ resolveAgentRunCapability; A2A skill-addressed tasks build the target agent's
 AgentRunIAMContext (∩ caller API-key gate, fail-closed when no principal).
 Tests: skill.load 15/15, skill.list 7/7, dispatch 13/13, bridge 20/20.
 
+## DONE — Phase 4a MCP (commit `16b402c7f`)
+
+Shared rule engine kept in `packages/oxagen/src/iam/resolve.ts` (NOT mcp-config —
+that module's `evaluatePermission` operates on the settings-file `Permissions`
+shape, not `McpRule[]`; glob-semantics parity is instead pinned by a 15-entry
+corpus witness in `packages/agent/src/runtime/mcp-rbac.test.ts`). Binding
+intersection in `apply-agent-binding.ts` (fully-denied servers drop); per-call
+enforcement at BOTH the listing and execution seams in `materialize-tools.ts`
+via new `packages/agent/src/runtime/mcp-rbac.ts`; `mcp.consents.subject_kind`
+discriminator (migration `20260807090000`) with the agent principal as consent
+subject; audit with `target={kind:"mcp_tool"}`. Suites green: iam 127,
+apply-agent-binding 16, materialize-tools 54, mcp-rbac 8, consent 13,
+plugin-types 43, mcp-config 17.
+
+## DONE — Phase 5a builder UI (commit `1bd884b78`)
+
+Role picker (create+edit, Contributor preselected), effective-scope review
+across all four dimensions (display-only, resolver semantics), role badge,
+ceiling-disabled options + clean `agent_role_ceiling_exceeded` surfacing,
+capability-ui-map bindings, `apps/app/e2e/agent-rbac-builder.spec.ts`.
+Tests 32/32 new + 30/30 modified.
+
+Also fixed pre-existing main drift blocking our CI typecheck: four
+`_overview`/`billing` call sites missing the required `messages` field
+(commit `c5af0bd88`).
+
 ## NOT STARTED / IN FLIGHT
 
-- **Phase 4a — MCP globs (subagent IN FLIGHT, partial on disk).** Shared `evaluatePermission` (re-export from
+- ~~Phase 4a MCP globs~~ — DONE, see above. Shared `evaluatePermission` (re-export from
   `packages/mcp-config/src/permissions.ts`); `apply-agent-binding.ts` serverAllowlist
   becomes an intersection (not union); per-call deny (hide+block) / ask (→ mcp_consents
   first-use, **agent principal as subject**, distinct from user consents, needs a
   subject-kind discriminator + migration) / allow; audit with server:tool dimension;
   tests. (A subagent had full context but wrote nothing before the limit hit.)
-- **Phase 4b — skills / subagents / A2A.** Skill index filter + `agent.skill.load`
-  gate on `skills.slugs`; `agent.subagent.dispatch` narrowing (child = child role ∩
-  parent effective scope, all dimensions — use the resolver's narrowing, don't
-  hand-roll); A2A inbound (`apps/api/src/routes/a2a`) intersects target-agent principal
-  with caller API-key scope (Q2 resolution); audit; tests. **Depends on 3b** (shares
-  the effective-scope helper).
-- **Phase 5a — builder UI (subagent IN FLIGHT).** Role picker (create+edit), effective-scope review step
-  (role ∩ config across all four dimensions), role badge in the agent list,
-  delegation-ceiling disable+tooltip; e2e with screenshots.
-- **Phase 5b — suggest + docs.** `agent.definition.suggest` gains an additive
+- ~~Phase 4b skills/subagents/A2A~~ — DONE (7d31fdc23, e7e9fca91, c1172e445).
+- ~~Phase 5a builder UI~~ — DONE (1bd884b78).
+- **Phase 5b — suggest + docs (subagent IN FLIGHT).** `agent.definition.suggest` gains an additive
   `suggestedRole` (narrowest adequate role); assign on draft save; user docs for the
   ceiling-vs-request model + delegation ceiling.
 - **verify-integration.** Acceptance sweep over the 8 spec criteria; write
