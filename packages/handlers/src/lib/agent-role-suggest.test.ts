@@ -230,7 +230,7 @@ describe("suggestNarrowestAgentRole — provenance", () => {
     }
   });
 
-  it("never suggests the backfill-only 'Agent Legacy (unrestricted)' role", () => {
+  it("never suggests the spec's back-compat 'Agent Legacy' role (never seeded, Q1)", () => {
     const everything = draft({
       agentTools: [
         ...fn(...CAPS.map((c) => c.name), "unknown_one"),

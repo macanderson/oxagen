@@ -34,7 +34,7 @@ Two capability tiers are kept strictly separate: **equip what exists** (`suggest
 | `rationale` | `string` | Why the model chose this configuration. |
 | `warnings` | `string[]` | Non-fatal repairs made during validation (dropped tool refs, substituted ontology, de-conflicted slug, clamped over-long slug, moved an already-available recommendation into `agentTools`, etc.). |
 | `recommendations` | `{ kind, ref, name, reason }[]` | Tools the agent should have but the workspace lacks — `kind: "mcp_server"` catalog servers (ref = registry name) or `kind: "skill"` disabled workspace skills (ref = slug), each with a description-anchored `reason`. Never included in `agentTools`. Defaults to `[]`. |
-| `suggestedRole` | `{ roleName, reason }?` | **Optional, additive.** The narrowest system agent role that can still run the drafted definition, plus the provenance line explaining why not something narrower. `roleName` is one of `"Agent Observer"` / `"Agent Contributor"` / `"Agent Operator"` — never a custom role, and never the backfill-only `"Agent Legacy (unrestricted)"`. Omitted callers are unaffected; a consumer that ignores the field behaves exactly as before. |
+| `suggestedRole` | `{ roleName, reason }?` | **Optional, additive.** The narrowest system agent role that can still run the drafted definition, plus the provenance line explaining why not something narrower. `roleName` is one of `"Agent Observer"` / `"Agent Contributor"` / `"Agent Operator"` — never a custom role (the spec's back-compat `Agent Legacy` role does not exist in this build; see §6 Q1). Omitted callers are unaffected; a consumer that ignores the field behaves exactly as before. |
 
 ### `suggestedRole` — how it is derived
 

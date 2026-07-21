@@ -59,7 +59,7 @@ export interface DraftAgentShape {
 
 export interface AgentRoleSuggestion {
   /** One of the three system agent roles — never a custom role, and never the
-   *  back-compat "Agent Legacy (unrestricted)" role (backfill-only). */
+   *  back-compat "Agent Legacy" role, which is never seeded (spec §6 Q1). */
   roleName: AgentRoleName;
   /**
    * Provenance: why this role and not a narrower one. Rendered next to the
