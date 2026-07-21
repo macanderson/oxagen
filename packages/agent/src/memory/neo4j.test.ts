@@ -17,7 +17,6 @@ vi.mock("@oxagen/ontology", () => ({
 
 import {
   recallMemories,
-  recallPeerResults,
   writeMemory,
   reinforceMemory,
   applyDecayToMemory,
@@ -156,60 +155,6 @@ describe("recallMemories — recallThreshold filtering", () => {
   });
 });
 
-describe("recallPeerResults", () => {
-  beforeEach(() => {
-    sessionRun.mockReset();
-    sessionClose.mockClear();
-  });
-
-  it("queries the execution vector index with tenant + summary + threshold gates", async () => {
-    sessionRun.mockResolvedValueOnce({
-      records: [
-        fakeRecord({ runId: "run-1", summary: "migrated auth", score: 0.91 }),
-        fakeRecord({ runId: "run-2", summary: "added caching", score: 0.82 }),
-      ],
-    });
-    const rows = await withTestScope(() =>
-      recallPeerResults({
-        embedding: new Array<number>(1536).fill(0.1),
-        limit: 4,
-        recallThreshold: 0.7,
-      }),
-    );
-    expect(sessionRun).toHaveBeenCalledTimes(1);
-    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain("execution_embedding_index");
-    expect(cypher).toContain("e.orgId = $orgId");
-    expect(cypher).toContain("e.workspaceId = $workspaceId");
-    expect(cypher).toContain("e.summary IS NOT NULL");
-    expect(cypher).toContain("score >= $recallThreshold");
-    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
-    // orgId/workspaceId are injected by scopedSession (real impl), not threaded.
-    expect(params.orgId).toBeUndefined();
-    expect(params.workspaceId).toBeUndefined();
-    expect(params.recallThreshold).toBe(0.7);
-    // limit is passed as BigInt (mirrors recallMemories).
-    expect(params.limit).toBe(BigInt(4));
-    expect(rows).toEqual([
-      { runId: "run-1", summary: "migrated auth", score: 0.91 },
-      { runId: "run-2", summary: "added caching", score: 0.82 },
-    ]);
-  });
-
-  it("defaults recallThreshold to 0 when not supplied", async () => {
-    sessionRun.mockResolvedValueOnce({ records: [] });
-    await withTestScope(() =>
-      recallPeerResults({
-        embedding: new Array<number>(1536).fill(0.1),
-        limit: 4,
-      }),
-    );
-    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params.recallThreshold).toBe(0);
-    expect(sessionClose).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("ANN tenant-filter over-sampling", () => {
   beforeEach(() => {
     sessionRun.mockReset();
@@ -235,24 +180,6 @@ describe("ANN tenant-filter over-sampling", () => {
     expect(params.k).toBe(BigInt(30)); // 10 x 3
     expect(params.limit).toBe(BigInt(10));
   });
-
-  it("recallPeerResults over-fetches the index by 3x but trims to the requested limit", async () => {
-    sessionRun.mockResolvedValueOnce({ records: [] });
-    await withTestScope(() =>
-      recallPeerResults({
-        embedding: new Array<number>(1536).fill(0.1),
-        limit: 4,
-      }),
-    );
-    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain(
-      "db.index.vector.queryNodes('execution_embedding_index', $k",
-    );
-    expect(cypher).toContain("LIMIT $limit");
-    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(params.k).toBe(BigInt(12)); // 4 x 3
-    expect(params.limit).toBe(BigInt(4));
-  });
 });
 
 // Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
@@ -268,7 +195,7 @@ describe("ANN tenant-filter over-sampling", () => {
 // `sessionRun` implementation below mirrors what Neo4j actually executes:
 // slice the global pool to the emitted `$k`, THEN filter to the target
 // tenant, THEN trim to `$limit` — so this test fails if `recallMemories` /
-// `recallPeerResults` ever regress to requesting `k = limit` again.
+// tenant-aware retrieval ever regresses to requesting `k = limit` again.
 describe("multi-tenant recall regression (OXA-1929)", () => {
   beforeEach(() => {
     sessionRun.mockReset();
@@ -341,52 +268,6 @@ describe("multi-tenant recall regression (OXA-1929)", () => {
 
     const rows = await withTestScope(() =>
       recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit }),
-    );
-
-    expect(rows).toHaveLength(limit);
-  });
-
-  it("recallPeerResults returns the full requested K for the target tenant even though other tenants dominate the global top-K", async () => {
-    const limit = 4;
-    // oversampledLimit(4) = 12, so 8 noise ranks + 8 target ranks (only the
-    // first 4 needed) reproduces the same crowd-out/recovery shape at a
-    // smaller K.
-    const globalPool = [
-      ...Array.from({ length: 8 }, (_, i) => ({
-        runId: `noise-${i}`,
-        summary: "noise",
-        score: 1 - i * 0.001,
-        orgId: "org-noise",
-      })),
-      ...Array.from({ length: 8 }, (_, i) => ({
-        runId: `target-${i}`,
-        summary: `peer result ${i}`,
-        score: 0.5 - i * 0.001,
-        orgId: "org-target",
-      })),
-    ];
-
-    expect(
-      globalPool.slice(0, limit).filter((r) => r.orgId === "org-target"),
-    ).toHaveLength(0);
-
-    sessionRun.mockImplementation(async (_cypher: unknown, params: unknown) => {
-      const k = Number((params as Record<string, unknown>).k as bigint);
-      const topK = globalPool.slice(0, k);
-      const tenantFiltered = topK.filter((r) => r.orgId === "org-target");
-      const trimmed = tenantFiltered.slice(0, limit);
-      return {
-        records: trimmed.map((r) =>
-          fakeRecord({ runId: r.runId, summary: r.summary, score: r.score }),
-        ),
-      };
-    });
-
-    const rows = await withTestScope(() =>
-      recallPeerResults({
-        embedding: new Array<number>(1536).fill(0.1),
-        limit,
-      }),
     );
 
     expect(rows).toHaveLength(limit);

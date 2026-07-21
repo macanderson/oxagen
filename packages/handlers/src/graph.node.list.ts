@@ -14,7 +14,9 @@ interface ListedNode {
   createdAt?: string;
 }
 
-export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = async (input, ctx) => {
+export const graphNodeListHandler: CapabilityHandler<
+  typeof graphNodeList
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   const nodes: ListedNode[] = [];
@@ -32,15 +34,6 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
       const labelFilter =
         input.labels && input.labels.length > 0 ? "AND n.label IN $labels" : "";
       const sourceFilter = input.sourceId ? "AND n.sourceId = $sourceId" : "";
-      // Ownership filter. A node written before the is_system backfill may lack the
-      // property; coalesce(false) treats unflagged nodes as customer data so they
-      // are never silently hidden from the default (unfiltered) view.
-      const systemFilter =
-        input.isSystem === undefined
-          ? ""
-          : input.isSystem
-            ? "AND coalesce(n.is_system, false) = true"
-            : "AND coalesce(n.is_system, false) = false";
       const textFilter = input.query
         ? `AND (
              toLower(n.displayName) CONTAINS toLower($query)
@@ -50,9 +43,9 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
 
       const whereClause = `WHERE n.orgId = $orgId
            AND n.workspaceId = $workspaceId
+           AND n.is_system = false
            ${labelFilter}
            ${sourceFilter}
-           ${systemFilter}
            ${textFilter}`;
 
       const params = {

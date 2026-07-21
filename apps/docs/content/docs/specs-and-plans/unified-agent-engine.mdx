@@ -9,7 +9,7 @@ description: "Archived spec & plan — status: partially shipped (audited 2026-0
 
 **Implementation evidence**
 
-- /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/ports.ts — AgentAi/MemoryProvider/TraceStore/GraphSyncProvider interfaces defined
+- /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/ports.ts — AgentAi/MemoryProvider/TraceStore/FileLockProvider interfaces defined
 - /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/engine.ts — runCodingAgent function implemented
 - /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/router/model-router.ts — model routing logic migrated
 - /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/pipeline/index.ts — full 6-stage pipeline (evaluate/enhance/route/execute/judge/revise)
@@ -17,10 +17,12 @@ description: "Archived spec & plan — status: partially shipped (audited 2026-0
 - /Users/macanderson/Workspaces/oxagen-platform/packages/agent-engine/src/fleet/index.ts — fleet scheduler
 - /Users/macanderson/Workspaces/oxagen-platform/apps/cli/src/agent/adapters/workspace.ts — CLI local workspace adapter
 - /Users/macanderson/Workspaces/oxagen-platform/apps/cli/src/agent/adapters/gateway-agent-ai.ts — CLI BYOK AI runner
-- /Users/macanderson/Workspaces/oxagen-platform/packages/agent/src/adapters/ — platform adapters (code-graph, memory-provider, trace-store, graph-sync)
+- /Users/macanderson/Workspaces/oxagen-platform/packages/agent/src/adapters/ — platform adapters (code-graph, memory-provider, trace-store, Postgres file leases)
 - /Users/macanderson/Workspaces/oxagen-platform/packages/handlers/src/agent.repo.edit.ts — handler using runTurn from agent-engine
 - /Users/macanderson/Workspaces/oxagen-platform/apps/cli/src/repl/one-shot.ts — CLI using runTurn
 - /Users/macanderson/Workspaces/oxagen-platform/docs/adr/ADR-019-unified-agent-engine.md — architecture decision recorded
+
+The former `GraphSyncProvider` and fire-and-forget platform graph-sync adapter are retired. Trace remains an engine port; any future immutable run-evidence upload is a separate, narrow ledger contract and is not part of this archived implementation plan.
 
 **Known gaps at time of archive**
 
@@ -207,4 +209,3 @@ description: "Archived spec & plan — status: partially shipped (audited 2026-0
 - **Chokepoint honored:** the engine calls only the `AgentAi` port; platform backs it with `@oxagen/ai`/`streamAgentReply` (metered), CLI with a BYOK runner (unmetered) — ADR-019.
 - **Dep boundary:** engine imports only `ai`+`zod`; all platform/local specifics live in adapters in the consumers.
 - **Type consistency:** ports defined in A2 (`AgentAi`, `MemoryProvider`, `TraceStore`, `CodeGraphProvider`, `Workspace`) are the only cross-stage contract; every migrated subsystem (A4–A7) and every adapter (B1–B2, C1) depends on exactly these.
-

@@ -1,5 +1,7 @@
 # Workflow Runs vs. Agent Executions — Clarification
 
+> **Launch update (2026-07-21):** PostgreSQL remains authoritative for execution telemetry. Automatic execution projection into Neo4j and its `synced_to_graph_at` flag have been retired; graph lineage must enter through explicit, typed evidence/citation flows.
+
 **Status:** REFERENCE GUIDE  
 **Updated:** 2026-06-07
 
@@ -135,9 +137,6 @@ type AgentExecution = {
   inputTokens?: number;
   outputTokens?: number;
   estimatedCostUsd?: Decimal; // Pulled from AI SDK response
-  
-  // Sync flag (for Neo4j mirror)
-  syncedToGraphAt?: Date;
   
   // Audit
   createdAt: Date;
@@ -349,12 +348,7 @@ HAVING SUM(ae.estimated_cost_usd) > 0.05
 ORDER BY total_cost DESC;
 ```
 
-**"What entities did task 2 touch?"** (Graph query)
-```cypher
-MATCH (exec:Execution {id: "aex-task2-001"})
-       -[:TOUCHED_ENTITY]-> (entity)
-RETURN entity;
-```
+Entity provenance is not inferred from this telemetry row. It is represented separately by explicit, typed evidence/citation records when a producer can supply trustworthy lineage.
 
 ---
 

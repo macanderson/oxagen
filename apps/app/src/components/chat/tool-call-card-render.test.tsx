@@ -45,9 +45,9 @@ describe("ToolCallCard", () => {
   });
 
   it("derives a label for uncurated capabilities", () => {
-    render(<ToolCallCard {...baseProps} capability="suggest_semantic_edges" />);
-    expect(screen.getByText("Suggest semantic edges")).toBeInTheDocument();
-    expect(screen.queryByText("suggest_semantic_edges")).not.toBeInTheDocument();
+    render(<ToolCallCard {...baseProps} capability="query_ontology" />);
+    expect(screen.getByText("Query knowledge graph")).toBeInTheDocument();
+    expect(screen.queryByText("query_ontology")).not.toBeInTheDocument();
   });
 
   it("exposes the raw capability as the header button title", () => {
@@ -58,12 +58,16 @@ describe("ToolCallCard", () => {
 
   it("shows the raw capability inside the expanded body", async () => {
     render(<ToolCallCard {...baseProps} />);
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("search_web")).toBeInTheDocument();
   });
 
   it("never renders a risk badge, even for elevated risk", () => {
-    const { rerender } = render(<ToolCallCard {...baseProps} riskLevel="low" />);
+    const { rerender } = render(
+      <ToolCallCard {...baseProps} riskLevel="low" />,
+    );
     expect(screen.queryByText(/^(low|medium|high)$/i)).not.toBeInTheDocument();
     rerender(<ToolCallCard {...baseProps} riskLevel="high" />);
     expect(screen.queryByText(/^(low|medium|high)$/i)).not.toBeInTheDocument();
@@ -85,7 +89,9 @@ describe("ToolCallCard", () => {
   });
 
   it("shows duration when not running", () => {
-    render(<ToolCallCard {...baseProps} status="completed" durationMs={2000} />);
+    render(
+      <ToolCallCard {...baseProps} status="completed" durationMs={2000} />,
+    );
     expect(screen.getByText("2.0s")).toBeInTheDocument();
   });
 
@@ -121,7 +127,13 @@ describe("ToolCallCard", () => {
   });
 
   it("shows the composing state (not raw partial JSON) while args stream in", async () => {
-    render(<ToolCallCard {...baseProps} inputPreview='{"partial":' status="pending" />);
+    render(
+      <ToolCallCard
+        {...baseProps}
+        inputPreview='{"partial":'
+        status="pending"
+      />,
+    );
     const toggle = screen.getByRole("button", { name: /tool call details/i });
     await userEvent.click(toggle);
     // The unparsed partial must NOT be rendered; a clean composing indicator is.
@@ -138,9 +150,15 @@ describe("ToolCallCard", () => {
 
   it("renders the result section as a typed tree when completed with output", async () => {
     render(
-      <ToolCallCard {...baseProps} status="completed" output={{ matchCount: 7 }} />,
+      <ToolCallCard
+        {...baseProps}
+        status="completed"
+        output={{ matchCount: 7 }}
+      />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("Result")).toBeInTheDocument(); // section label
     expect(screen.getByText("Match count")).toBeInTheDocument(); // humanized key
     expect(screen.getByText("7")).toBeInTheDocument(); // value
@@ -154,7 +172,9 @@ describe("ToolCallCard", () => {
         errorReason="Connection refused"
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("Error")).toBeInTheDocument();
     expect(screen.getByText("Connection refused")).toBeInTheDocument();
   });
@@ -163,7 +183,9 @@ describe("ToolCallCard", () => {
     render(
       <ToolCallCard {...baseProps} status="completed" stdout="Hello stdout" />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("Hello stdout")).toBeInTheDocument();
   });
 
@@ -171,7 +193,9 @@ describe("ToolCallCard", () => {
     render(
       <ToolCallCard {...baseProps} status="completed" stderr="Error output" />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("Error output")).toBeInTheDocument();
   });
 
@@ -183,23 +207,37 @@ describe("ToolCallCard", () => {
   it("toggles closed when clicking the toggle button while open", async () => {
     render(<ToolCallCard {...baseProps} defaultOpen />);
     expect(screen.getByText("Input")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.queryByText("Input")).not.toBeInTheDocument();
   });
 
   it("hideHeader renders the body directly with no toggle button, keeping the test id", () => {
     const { container } = render(<ToolCallCard {...baseProps} hideHeader />);
     // No collapsible header button.
-    expect(screen.queryByRole("button", { name: /tool call details/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /tool call details/i }),
+    ).not.toBeInTheDocument();
     // Body is shown immediately.
     expect(screen.getByText("Input")).toBeInTheDocument();
     // e2e continuity: the card keeps its test id.
-    expect(container.querySelector('[data-testid="tool-call-card-tc-1"]')).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-testid="tool-call-card-tc-1"]'),
+    ).toBeInTheDocument();
   });
 
   it("labels the input section and shows the composing indicator when pending", async () => {
-    render(<ToolCallCard {...baseProps} status="pending" inputPreview={{ key: "val" }} />);
-    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    render(
+      <ToolCallCard
+        {...baseProps}
+        status="pending"
+        inputPreview={{ key: "val" }}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /tool call details/i }),
+    );
     expect(screen.getByText("Input")).toBeInTheDocument();
     expect(screen.getByText("Composing arguments…")).toBeInTheDocument();
   });

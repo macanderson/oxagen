@@ -7,10 +7,7 @@ import type { MarketRoutingPolicy, RoutingStatRow } from "@oxagen/agent-engine";
 import { readRoutingStats, recordRouterOutcome } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
-  createNeo4jCodeGraphProvider,
-  createPlatformMemoryProvider,
   createClickHouseTraceStore,
-  createGraphSyncAdapter,
   createFileLeaseLockAdapter,
   createPlatformAgentAi,
   ModalSandboxWorkspace,
@@ -92,11 +89,11 @@ export const agentRepoEditHandler: CapabilityHandler<
   // 5. Run the full 6-stage pipeline (evaluate → enhance → route → execute →
   //    judge → revise) via runTurn from @oxagen/agent-engine.
   //    The pipeline matches the quality level of the CLI: prompt evaluation,
-  //    code-graph + memory enhancement, model routing, completeness judging,
-  //    and auto-revision.  The same AgentAi / CodeGraphProvider /
-  //    MemoryProvider / TraceStore ports are used as in the CLI — the only
-  //    difference is that the AgentAi port is backed by @oxagen/ai (metered)
-  //    instead of a BYOK gateway key.
+  //    model routing, completeness judging, and
+  //    auto-revision. The platform deliberately does not inject a centralized
+  //    code graph: checkout-specific code context stays local to the active
+  //    workspace. The AgentAi port is backed by @oxagen/ai (metered) instead of
+  //    a BYOK gateway key.
   // The kernel wraps this handler in runInTenantScope so Neo4j / embed calls
   // inside the adapters inherit the active tenant scope via AsyncLocalStorage.
   const result = await executePipelineTurn("repo-edit", {
@@ -106,43 +103,24 @@ export const agentRepoEditHandler: CapabilityHandler<
     model: input.model,
     maxSteps: input.maxSteps,
     readOnly: false,
-    codeGraph: createNeo4jCodeGraphProvider(),
-    memory: createPlatformMemoryProvider({
-      recallQuery: input.instruction,
-      telemetry: {
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        surface: "agent",
-        messageId: ctx.messageId ?? ctx.requestId,
-      },
-    }),
     trace: createClickHouseTraceStore({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       surface: "agent",
     }),
-    // Always-on graph sync: materialise touched files as :SourceFile nodes and
-    // record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) lineage edges in Neo4j.
-    // Both writes are async + fire-and-forget — never block or fail the turn.
-    graphSync: createGraphSyncAdapter({ owner: input.owner, repo: input.repo }),
     // Agent file locking (ADR-021 §5): this is the real fleet path —
     // agent.repo.edit is dispatched both directly and as a subagent-fanout
     // child (agent.execute-subagent invoking a capability by name), so two
     // agents racing to edit the same file in the same repo now genuinely
     // serialize via the transactional Postgres lease (with fencing tokens)
-    // instead of silently clobbering each other's writes. Neo4j carries only
-    // an async lineage projection of these leases now — a graph lock would be
-    // invisible to a concurrent agent during sync lag.
+    // instead of silently clobbering each other's writes.
     fileLock: createFileLeaseLockAdapter({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       owner: input.owner,
       repo: input.repo,
     }),
-    // Surface non-fatal engine failures the engine would otherwise swallow (e.g.
-    // memory-recall failure). The platform memory adapter already logs + emits a
-    // telemetry event for its own recall failures; this is the belt for any
-    // engine-level failure that reaches the injected sink.
+    // Surface non-fatal engine failures that reach the injected sink.
     onError: ({ phase, error }) =>
       logger.error(
         { err: error, phase, orgId: ctx.orgId },

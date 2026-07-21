@@ -26,16 +26,11 @@ export interface TypeFilterPanelProps {
   hiddenEdgeTypes: Set<string>;
   /** True when inferred edges are currently hidden. */
   inferredHidden: boolean;
-  /** True when agent-activity (system/lineage) nodes are currently hidden. */
-  systemHidden: boolean;
   inferredCount: number;
   confirmedCount: number;
-  /** Agent-activity nodes currently in view (0 while the toggle is off). */
-  systemCount: number;
   onToggleNodeType: (type: string) => void;
   onToggleEdgeType: (type: string) => void;
   onToggleInferred: () => void;
-  onToggleSystem: () => void;
   onShowAllNodeTypes: () => void;
   onHideAllNodeTypes: () => void;
 }
@@ -96,16 +91,6 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
           Visibility
         </h3>
         <ul className="flex flex-col gap-0.5">
-          {/* Agent runtime lineage (executions, agents, tools). Off by default:
-              explore is for the source-system ontology; toggling on reseeds
-              the graph with is_system nodes included. */}
-          <FilterRow
-            label="Agent activity"
-            count={props.systemCount}
-            color="#6b7280"
-            checked={!props.systemHidden}
-            onToggle={props.onToggleSystem}
-          />
           <FilterRow
             label="Inferred edges"
             count={props.inferredCount}

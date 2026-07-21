@@ -8,7 +8,7 @@ import { sourceConnectionRefCondition } from "./lib/connection-status";
 import { logger } from "./logger";
 
 /**
- * repo.configure — repo-specific configuration (filters, inference toggles,
+ * repo.configure — repo-specific configuration (filters,
  * sync cadence, field mappings) for a repository `source_connections` row. The
  * code-repo specialization of integration.configure; persists into the same
  * `deliveryConfig` JSONB so the ingestion pipeline and Inngest scheduler read
@@ -40,7 +40,9 @@ function asStringArray(value: unknown): string[] {
   return value.filter((v): v is string => typeof v === "string");
 }
 
-export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = async (input, ctx) => {
+export const repoConfigureHandler: CapabilityHandler<
+  typeof repoConfigure
+> = async (input, ctx) => {
   const now = new Date();
 
   const result = await withTenantDb(async (tx) => {
@@ -64,7 +66,8 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
 
     if (!existing) return null;
 
-    const prev = (existing.deliveryConfig ?? {}) as RepoDeliveryConfig & Record<string, unknown>;
+    const prev = (existing.deliveryConfig ?? {}) as RepoDeliveryConfig &
+      Record<string, unknown>;
 
     // recordTypes (allow-list). Omitted input preserves the prior value.
     const recordTypeFilters = input.recordTypes ?? prev.recordTypeFilters ?? [];
@@ -84,12 +87,10 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
       : (prev.labelFiltersInclude ?? []);
 
     const syncCadence = input.syncCadence ?? prev.syncMethod ?? "manual";
-    const inferenceEnabled = input.inferenceEnabled ?? prev.semanticInference?.enabled ?? false;
     // pollingIntervalSeconds is only meaningful for polling; preserve prior value
     // otherwise so switching cadence back and forth doesn't lose the interval.
     const syncIntervalSeconds =
       input.pollingIntervalSeconds ?? prev.syncIntervalSeconds ?? undefined;
-    const ontologyPrompt = input.ontologyPrompt ?? prev.semanticInference?.ontologyPrompt;
     const fieldMappings = input.fieldMappings ?? prev.fieldMappings;
 
     const updated: RepoDeliveryConfig & Record<string, unknown> = {
@@ -101,17 +102,16 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
       labelFiltersInclude: labelInclude,
       syncMethod: syncCadence,
       ...(syncIntervalSeconds !== undefined ? { syncIntervalSeconds } : {}),
-      semanticInference: {
-        ...prev.semanticInference,
-        enabled: inferenceEnabled,
-        ...(ontologyPrompt !== undefined ? { ontologyPrompt } : {}),
-      },
       ...(fieldMappings !== undefined ? { fieldMappings } : {}),
     };
 
     await tx
       .update(schema.sourceConnections)
-      .set({ deliveryConfig: updated, updatedByUserId: ctx.userId ?? undefined, updatedAt: now })
+      .set({
+        deliveryConfig: updated,
+        updatedByUserId: ctx.userId ?? undefined,
+        updatedAt: now,
+      })
       .where(eq(schema.sourceConnections.id, existing.id));
 
     return {
@@ -121,15 +121,19 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
       pathExclude,
       labelInclude,
       labelExclude,
-      inferenceEnabled,
       syncCadence,
       pollingIntervalSeconds: syncIntervalSeconds ?? null,
     };
   });
 
   if (!result) {
-    logger.warn({ repoId: input.repoId, orgId: ctx.orgId }, "repo.configure: not found");
-    throw new HTTPException(404, { message: "Repository connection not found" });
+    logger.warn(
+      { repoId: input.repoId, orgId: ctx.orgId },
+      "repo.configure: not found",
+    );
+    throw new HTTPException(404, {
+      message: "Repository connection not found",
+    });
   }
 
   const pathFilters =
@@ -146,7 +150,6 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
       repoId: input.repoId,
       syncCadence: result.syncCadence,
       recordTypes: result.recordTypes.length,
-      inferenceEnabled: result.inferenceEnabled,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     },
@@ -159,7 +162,6 @@ export const repoConfigureHandler: CapabilityHandler<typeof repoConfigure> = asy
     recordTypes: result.recordTypes,
     pathFilters,
     labelFilters,
-    inferenceEnabled: result.inferenceEnabled,
     syncCadence: result.syncCadence,
     pollingIntervalSeconds: result.pollingIntervalSeconds,
     updatedAt: now.toISOString(),

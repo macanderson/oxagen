@@ -9,7 +9,7 @@
  *    a fixed RunTurnResult without touching any LLM endpoint.
  *  - Partial-mock @oxagen/agent/adapters to override createPlatformAgentAi
  *    (avoids selectModel/AI Gateway env deps) while keeping the real
- *    code-graph/memory/trace/graph-sync adapters.
+ *    trace/file-lock adapters.
  *  - Mock ../lib/github-token to inject a test token.
  *  - Assert the handler orchestrates these collaborators correctly and that it
  *    invokes the full pipeline (runTurn) rather than the bare loop
@@ -337,22 +337,23 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
     );
   });
 
-  it("passes a workspace, codeGraph, memory, and trace to runTurn", async () => {
+  it("passes a workspace and trace without centralized code graph or memory", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);
 
     expect(mocks.runTurnFn).toHaveBeenCalledWith(
       expect.objectContaining({
         workspace: expect.any(Object),
-        codeGraph: expect.any(Object),
-        memory: expect.any(Object),
         trace: expect.any(Object),
       }),
     );
+    const options = mocks.runTurnFn.mock.calls[0]?.[0];
+    expect(options).not.toHaveProperty("codeGraph");
+    expect(options).not.toHaveProperty("memory");
   });
 
   // OXA-2070 (docs/specs/agent-file-locking/plan.md): agent.repo.edit is the
   // real fleet path (dispatched directly and as a subagent-fanout child), so
-  // it must inject the graph-backed FileLockProvider — the same wiring point
+  // it must inject the lease-backed FileLockProvider — the same wiring point
   // write_file/edit_file in tools.ts acquire/release through.
   it("passes a fileLock adapter (FileLockProvider) to runTurn", async () => {
     await agentRepoEditHandler(BASE_INPUT, ctx);

@@ -124,22 +124,6 @@ const connectorPluginSchemaOutput = z.object({
         .optional(),
     })
     .optional(),
-  inference: z
-    .object({
-      enabled: z.boolean(),
-      defaultEnabled: z.boolean().optional(),
-      toggleLabel: z.string().optional(),
-      perRecordType: z.record(z.boolean()).optional(),
-      confidenceThreshold: z
-        .object({
-          defaultValue: z.number().min(0).max(1),
-          min: z.number().min(0).max(1),
-          max: z.number().min(0).max(1),
-        })
-        .optional(),
-      ontologyPrompt: z.string().optional(),
-    })
-    .optional(),
   sync: z
     .object({
       delivery: z.enum(["webhook", "polling", "manual"]),

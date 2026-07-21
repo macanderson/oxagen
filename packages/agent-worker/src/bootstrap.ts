@@ -12,12 +12,10 @@ import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
-import { bootstrapEngramRuntime } from "@oxagen/agent";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
-import { createEventClient } from "@oxagen/inngest-functions/adapter";
 
 let bootPromise: Promise<void> | null = null;
 
@@ -67,11 +65,6 @@ async function runBootstrap(): Promise<void> {
   bootstrapIAMRuntime();
   bootstrapBillingRuntime();
   bootstrapEntitlementRuntime();
-
-  // Engram async backends (graph-sync/embed fan-out + compile telemetry).
-  // Best-effort — degraded Inngest/ClickHouse never breaks a run; without
-  // this the driver's memory writes would be silently dropped.
-  bootstrapEngramRuntime(createEventClient());
 
   // SOC2 audit trail: the kernel emits a security event after every
   // capability invocation, fire-and-forget. Same mapping as the API surface;

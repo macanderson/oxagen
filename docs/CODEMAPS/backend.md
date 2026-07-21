@@ -110,7 +110,6 @@ POST   /agent/memory/import/parse|commit
 GET|POST /agent/memory/policy        → read/write memory policy
 POST   /agent/approvals/resolve
 POST   /agent/execution/record       GET /agent/executions        (list, plural)
-GET    /agent/executions/lineage     → file-level lineage (TOUCHED_FILE edges → citable refs)
 GET    /agent/trace                  → get_execution_trace span tree
 GET    /agent/debug/trace            → dev-only trace introspection
 POST   /agent/file/lock/acquire|release  GET /agent/file/lock/list
@@ -158,7 +157,7 @@ POST   /graph/node/upsert|get|delete|search
 GET    /graph/nodes
 POST   /graph/edge/upsert|delete
 POST   /graph/relationship/upsert    → canonical (graph/edge/upsert stays as an alias)
-POST   /graph/search|cypher|ingest|sync/push|export
+POST   /graph/search|cypher|ingest|export
 GET    /graph/stats
 POST   /semantic-edges               → canonical semantic.edge.* routes (approve/infer/suggest/list)
 POST   /semantic-relationships       → canonical semantic.relationship.* routes
@@ -268,7 +267,7 @@ POST /a2a                            → A2A JSON-RPC transport (message/send, t
                                         stream-registry,task-store,well-known,base-url}.ts
                                       → message.metadata.skillId selects a deployed agent
                                         slug (unknown/inactive falls back to the generic agent)
-                                      → runs land in the same execution + lineage pipeline
+                                      → runs land in the same execution + trace pipeline
                                         (get_execution_trace) as subagent fan-out
 GET  /oauth/github                   → public OAuth callback (see Public / Webhook)
 ```
@@ -292,7 +291,7 @@ Route file (apps/api/src/routes/v1/*.ts)
 @oxagen/billing     (packages/billing/src/)        — Stripe, credits, usage
 @oxagen/ingestion   (packages/ingestion/src/)      — connectors, parsers
 @oxagen/plugins     (packages/plugins/src/)        — catalog, credentials, entitlements
-@oxagen/engram      (packages/engram/src/)         — memory store/retrieve/embed
+@oxagen/engram      (packages/engram/src/)         — local DuckDB memory + context compiler
 @oxagen/iam         (packages/iam/src/)            — authz, audit emit
 ```
 
@@ -303,9 +302,7 @@ agent.aggregate-fanout                → collect subagent results
 agent.background-task.execute         → long-running task runner
 agent.execute-subagent                → fan-out subagent execution
 agent.lease-sweep                     → reclaim stale agent leases
-agent.project-file-lock-to-graph      → sync file locks to Neo4j
 agent.sandbox-reaper                  → reap orphaned/expired durable sandbox sessions (new)
-agent.sync-execution-to-graph         → write lineage to Neo4j (incl. A2A runs)
 agent.video-render
 agent.workflow.supervisor             → playbook orchestration
 agent.workflow.task.execute           → individual playbook step
@@ -315,10 +312,6 @@ billing.dunning-sweep                 → failed payment retry
 billing.rollup-usage                  → usage aggregation
 chat.persist-stream                   → save streamed messages
 content.sync-generated-file-to-graph
-engram.consolidation.run              → memory dedup/distill (shared logic in
-                                          engram.consolidation.impl.ts, not its own job)
-engram.embed-memory                   → vector embedding
-engram.sync-memory-to-graph           → Neo4j memory nodes
 eval.run.execute                      → LLM-as-judge eval run
 ingestion-connection-poll             → ingestion-poll-scheduler
 ingestion-delete-connection

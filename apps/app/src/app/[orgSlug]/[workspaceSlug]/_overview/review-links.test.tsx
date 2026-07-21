@@ -24,15 +24,10 @@ import { ReviewLinks } from "./review-links";
 afterEach(cleanup);
 
 describe("ReviewLinks", () => {
-  it("renders the three review-surface links with workspace-scoped hrefs", () => {
+  it("renders the review-surface links with workspace-scoped hrefs", () => {
     render(<ReviewLinks orgSlug="acme" workspaceSlug="prod" />);
 
     expect(screen.getByTestId("overview-review-links")).toBeInTheDocument();
-
-    const inference = screen.getByRole("link", {
-      name: /review inferred edges/i,
-    });
-    expect(inference).toHaveAttribute("href", "/acme/prod/knowledge/inference");
 
     const memories = screen.getByRole("link", { name: /review memories/i });
     expect(memories).toHaveAttribute("href", "/acme/prod/knowledge/memory");

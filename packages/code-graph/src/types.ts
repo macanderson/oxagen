@@ -1,5 +1,5 @@
 /**
- * Types for the shared source code + documentation parser (@oxagen/code-graph).
+ * Types for the local source code + documentation parser (@oxagen/code-graph).
  *
  * These types represent the output of parsing a file into a structured list of
  * symbols. For code (tree-sitter) those are functions, classes, methods, etc.;
@@ -7,9 +7,8 @@
  * context (signature, docstring, and the raw source slice) to be embedded
  * individually for natural-language code/document search.
  *
- * Consumed by both @oxagen/ingestion (platform graph ingestion) and @oxagen/cli
- * (local code graph daemon) — the single source of truth for code structure
- * extraction across the platform.
+ * Consumed by the local CLI/engine graph. Parsed source, snippets, and detailed
+ * symbols do not flow into the Oxagen workspace graph.
  */
 
 export type SymbolKind =

@@ -27,7 +27,6 @@ export const MAP = {
   "agent.definition.suggest": "suggest_agent_def",
   "agent.definition.update": "update_agent_def",
   "agent.deploy": "deploy_agent",
-  "agent.execution.lineage": "get_execution_lineage",
   "agent.execution.list": "list_executions",
   "agent.execution.record": "record_execution",
   "agent.feature.verify": "verify_feature",
@@ -128,7 +127,6 @@ export const MAP = {
   // ── code ──────────────────────────────────────────────────────────────────
   "code.diff": "diff_code",
   "code.format": "format_code",
-  "code.map": "get_code_map",
   "code.patch": "patch_code",
 
   // ── command ───────────────────────────────────────────────────────────────
@@ -187,23 +185,12 @@ export const MAP = {
   "form.fill": "fill_form",
 
   // ── graph ─────────────────────────────────────────────────────────────────
-  "graph.cypher": "run_cypher",
-  "graph.edge.delete": "delete_edge",
-  "graph.edge.upsert": "upsert_edge",
-  "graph.export": "export_graph",
-  "graph.ingest": "ingest_graph",
-  "graph.node_label.add": "add_node_label",
   "graph.node_label.get": "get_node_labels",
-  "graph.node_label.remove": "remove_node_label",
-  "graph.node.delete": "delete_node",
   "graph.node.get": "get_node",
   "graph.node.list": "list_nodes",
   "graph.node.search": "search_nodes",
-  "graph.node.upsert": "upsert_node",
-  "graph.relationship.upsert": "upsert_graph_relationship",
   "graph.search": "search_graph",
   "graph.stats": "get_graph_stats",
-  "graph.sync.push": "push_graph",
 
   // ── image ─────────────────────────────────────────────────────────────────
   "image.analyze": "analyze_image",
@@ -328,10 +315,6 @@ export const MAP = {
   "secret.value.unset": "unset_secret_value",
 
   // ── semantic ──────────────────────────────────────────────────────────────
-  "semantic.edge.approve": "approve_semantic_edge",
-  "semantic.edge.infer": "infer_semantic_edges",
-  "semantic.edge.list": "list_semantic_edges",
-  "semantic.edge.suggest": "suggest_semantic_edges",
   "semantic.relationship.approve": "approve_semantic_relationship",
   "semantic.relationship.infer": "infer_semantic_relationships",
   "semantic.relationship.list": "list_semantic_relationships",
@@ -397,7 +380,8 @@ export const COMPLETED_MERGES = [
     canonical: "set_plugin_enabled",
     members: ["plugin.org.set_enabled", "plugin.workspace.set_enabled"],
     argument: 'scope: "org" | "workspace"',
-    reason: "org- vs workspace-scoped enable collapsed to set_plugin_enabled(scope); the single handler branches on scope.",
+    reason:
+      "org- vs workspace-scoped enable collapsed to set_plugin_enabled(scope); the single handler branches on scope.",
   },
 ];
 
@@ -406,14 +390,17 @@ export const COMPLETED_MERGES = [
 export const VERIFIED_DISTINCT = [
   {
     pair: ["budget.policy.read/write", "workspace.budget_policy.read/write"],
-    finding: "budget.policy.* is a per-USER personal turn budget (domain \"user\"); workspace.budget_policy.* is the org/workspace-governed budget. Distinct scopes → get_user_budget vs get_budget_policy.",
+    finding:
+      'budget.policy.* is a per-USER personal turn budget (domain "user"); workspace.budget_policy.* is the org/workspace-governed budget. Distinct scopes → get_user_budget vs get_budget_policy.',
   },
   {
     pair: ["conversation.chat", "chat.message.send"],
-    finding: "conversation.chat is a sync 'post a message'; chat.message.send is async and streams the assistant reply. Distinct behavior → post_conversation_message vs send_message.",
+    finding:
+      "conversation.chat is a sync 'post a message'; chat.message.send is async and streams the assistant reply. Distinct behavior → post_conversation_message vs send_message.",
   },
   {
     pair: ["integration.*", "plugin.org.*"],
-    finding: "Distinct nouns already (integration vs plugin-install). Kept separate; a true semantic-dedup is a product decision, not a naming merge.",
+    finding:
+      "Distinct nouns already (integration vs plugin-install). Kept separate; a true semantic-dedup is a product decision, not a naming merge.",
   },
 ];

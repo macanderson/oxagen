@@ -106,40 +106,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    opportunity: true
-    contact: true
-    account: true
-    lead: false
-    case: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer customer relationships and sales context from Salesforce CRM data.
-
-    Look for:
-    - Opportunity names that reference product features, tiers, or use cases
-    - Account industry and size signals that indicate market segment
-    - Contacts whose titles suggest engineering, product, or executive roles
-    - Cases that surface recurring product pain points or feature requests
-
-    Create edges:
-    - Account -[has_opportunity]-> Opportunity (Account is the parent of Opportunity)
-    - Contact -[associated_with]-> Account (Contact belongs to Account)
-    - Lead -[converted_to]-> Contact (when IsConverted is true)
-    - Case -[reported_by]-> Contact (when Contact is linked to Case)
-    - Opportunity -[in_stage]-> SalesStage (map StageName to a canonical pipeline stage node)
-
-    Cross-source links:
-    - If an Account name matches a GitHub organization, create an ALIAS_OF edge
-    - If a Contact email matches a known Linear or GitHub user, link to that person node
-
 sync:
   delivery: polling
   pollingSupported: true

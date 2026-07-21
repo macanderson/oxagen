@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyNeighbors } from "@oxagen/oxagen/contracts/ontology.neighbors";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/lib/relationship-type-pattern";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import {
   buildValidityFilter,
@@ -19,7 +19,6 @@ interface NeighborEntry extends EdgeValidity {
   description: string | null;
   edgeType: string;
   direction: "out" | "in";
-  isSystem: boolean;
 }
 
 /**
@@ -97,6 +96,7 @@ export const ontologyNeighborsHandler: CapabilityHandler<
       //    treated as found (tenant isolation, §0).
       const existsResult = await session.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+         WHERE n.is_system = false
          RETURN n.publicId AS nodeId`,
         { nodeId: input.nodeId, orgId, workspaceId },
       );
@@ -136,6 +136,8 @@ export const ontologyNeighborsHandler: CapabilityHandler<
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH (n)-[r]-(m:GraphNode)
          WHERE m.orgId = $orgId AND m.workspaceId = $workspaceId
+           AND n.is_system = false
+           AND m.is_system = false
            ${relTypeClause}
            ${directionClause}
            AND ${validity.clause}
@@ -146,7 +148,6 @@ export const ontologyNeighborsHandler: CapabilityHandler<
            m.description AS description,
            type(r)       AS edgeType,
            CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END AS direction,
-           coalesce(m.is_system, false) AS isSystem,
            ${edgeValidityReturn("r")}
          ORDER BY m.displayName ASC
          LIMIT $fetchLimit`,
@@ -172,9 +173,6 @@ export const ontologyNeighborsHandler: CapabilityHandler<
           description: record.get("description") as string | null,
           edgeType: record.get("edgeType") as string,
           direction: record.get("direction") as "out" | "in",
-          // `=== true` (not `as boolean`): a pre-backfill node row can surface
-          // null here and the contract output requires a real boolean.
-          isSystem: record.get("isSystem") === true,
           ...readEdgeValidity((k) => record.get(k)),
         });
       }

@@ -12,17 +12,20 @@
  */
 import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 
-const { mockGraphStats, mockExportGraph, mockAddToast } = vi.hoisted(() => ({
+const { mockGraphStats } = vi.hoisted(() => ({
   mockGraphStats: vi.fn(),
-  mockExportGraph: vi.fn(),
-  mockAddToast: vi.fn(),
 }));
 
 vi.mock("../actions", () => ({
   graphStatsAction: mockGraphStats,
-  exportGraphAction: mockExportGraph,
 }));
 
 vi.mock("@/lib/tenant/tenant-context", () => ({
@@ -36,26 +39,42 @@ vi.mock("@/lib/tenant/tenant-context", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ add: mockAddToast }),
-}));
-
 // Dumb, non-interactive Tabs mock (established pattern — see
 // workspace-context-panel.test.tsx): renders every TabsPanel unconditionally,
 // stamps the controlled `value` onto the root.
 vi.mock("@/components/ui/tabs", () => ({
-  Tabs: ({ children, value }: { children: React.ReactNode; value?: string }) => (
+  Tabs: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+  }) => (
     <div data-testid="tabs-root" data-active={value}>
       {children}
     </div>
   ),
-  TabsList: ({ children }: { children: React.ReactNode }) => <div role="tablist">{children}</div>,
-  TabsTab: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsList: ({ children }: { children: React.ReactNode }) => (
+    <div role="tablist">{children}</div>
+  ),
+  TabsTab: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <button role="tab" data-value={value} type="button">
       {children}
     </button>
   ),
-  TabsPanel: ({ children, value }: { children: React.ReactNode; value: string }) => (
+  TabsPanel: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => (
     <div role="tabpanel" data-value={value}>
       {children}
     </div>
@@ -80,8 +99,6 @@ afterEach(cleanup);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  global.URL.createObjectURL = vi.fn(() => "blob:mock");
-  global.URL.revokeObjectURL = vi.fn();
 });
 
 const READY_STATS = {
@@ -101,11 +118,19 @@ describe("GraphSidePanel", () => {
     mockGraphStats.mockResolvedValue(READY_STATS);
     render(<GraphSidePanel />);
 
-    await waitFor(() => expect(screen.getByTestId("graph-stats")).toBeInTheDocument());
-    expect(mockGraphStats).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "core", includeByType: true }),
+    await waitFor(() =>
+      expect(screen.getByTestId("graph-stats")).toBeInTheDocument(),
     );
-    expect(screen.getByTestId("browse-panel")).toHaveTextContent("labels: Feature,Issue");
+    expect(mockGraphStats).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "core",
+        includeByType: true,
+      }),
+    );
+    expect(screen.getByTestId("browse-panel")).toHaveTextContent(
+      "labels: Feature,Issue",
+    );
     expect(screen.getByTestId("search-panel")).toBeInTheDocument();
     expect(screen.getByTestId("query-console")).toBeInTheDocument();
   });
@@ -113,65 +138,35 @@ describe("GraphSidePanel", () => {
   it("shows an error state with retry when stats fail to load", async () => {
     mockGraphStats.mockResolvedValueOnce({ ok: false, error: "neo4j down" });
     render(<GraphSidePanel />);
-    await waitFor(() => expect(screen.getByText("neo4j down")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("neo4j down")).toBeInTheDocument(),
+    );
 
     mockGraphStats.mockResolvedValueOnce(READY_STATS);
     fireEvent.click(screen.getByRole("button", { name: /try again/i }));
-    await waitFor(() => expect(screen.getByTestId("graph-stats")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("graph-stats")).toBeInTheDocument(),
+    );
   });
 
   it("keeps Browse/Search/Query reachable even when nodeCount is 0 — the empty state is BrowsePanel's concern, not a workspace-wide gate", async () => {
     mockGraphStats.mockResolvedValue({
       ok: true,
-      stats: { nodeCount: 0, edgeCount: 0, inferredEdgeCount: 0, sourceCount: 0 },
+      stats: {
+        nodeCount: 0,
+        edgeCount: 0,
+        inferredEdgeCount: 0,
+        sourceCount: 0,
+      },
     });
     render(<GraphSidePanel />);
-    await waitFor(() => expect(screen.getByTestId("graph-stats")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("graph-stats")).toBeInTheDocument(),
+    );
     // All three tabs/panels still mount — Search and the Query console (Cypher
     // and ontology traversal) don't require ingested customer data to be useful.
     expect(screen.getByTestId("browse-panel")).toBeInTheDocument();
     expect(screen.getByTestId("search-panel")).toBeInTheDocument();
     expect(screen.getByTestId("query-console")).toBeInTheDocument();
-    // Export has nothing to export at nodeCount 0.
-    expect(screen.getByRole("button", { name: /export/i })).toBeDisabled();
-  });
-
-  it("Export is disabled until stats are ready, and hits export_graph with the active label scope", async () => {
-    mockGraphStats.mockResolvedValue(READY_STATS);
-    mockExportGraph.mockResolvedValue({
-      ok: true,
-      nodes: [{ id: "pub-1" }],
-      edges: [],
-      total: 1,
-    });
-    render(<GraphSidePanel />);
-
-    expect(screen.getByRole("button", { name: /export/i })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole("button", { name: /export/i })).not.toBeDisabled());
-
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
-    await waitFor(() => expect(mockExportGraph).toHaveBeenCalled());
-    expect(mockExportGraph).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "core", includeEdges: true }),
-    );
-    await waitFor(() =>
-      expect(mockAddToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Export ready", type: "success" }),
-      ),
-    );
-  });
-
-  it("shows an error toast when export fails", async () => {
-    mockGraphStats.mockResolvedValue(READY_STATS);
-    mockExportGraph.mockResolvedValue({ ok: false, error: "export failed" });
-    render(<GraphSidePanel />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /export/i })).not.toBeDisabled());
-
-    fireEvent.click(screen.getByRole("button", { name: /export/i }));
-    await waitFor(() =>
-      expect(mockAddToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Export failed", description: "export failed", type: "error" }),
-      ),
-    );
   });
 });

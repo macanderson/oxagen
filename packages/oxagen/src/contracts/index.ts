@@ -34,7 +34,6 @@ import { agentFeatureVerify } from "./agent.feature.verify";
 import { codeDiff } from "./code.diff";
 import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
-import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
@@ -56,7 +55,6 @@ import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
-import { agentExecutionLineage } from "./agent.execution.lineage";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentDebugTrace } from "./agent.debug.trace";
 import { telemetryErrorCluster } from "./telemetry.error.cluster";
@@ -227,24 +225,13 @@ import { privacyDataExport } from "./privacy.data.export";
 import { privacyDataErase } from "./privacy.data.erase";
 import { researchSwarmStart } from "./research.swarm.start";
 import { researchSwarmStatus } from "./research.swarm.status";
-import { graphNodeUpsert } from "./graph.node.upsert";
-import { graphNodeLabelAdd } from "./graph.node_label.add";
-import { graphNodeLabelRemove } from "./graph.node_label.remove";
 import { graphNodeLabelsGet } from "./graph.node_label.get";
+import { knowledgeNodeRefSchema } from "./knowledge.node-ref";
 import { graphNodeGet } from "./graph.node.get";
-import { graphNodeDelete } from "./graph.node.delete";
 import { graphNodeSearch } from "./graph.node.search";
 import { graphSearch } from "./graph.search";
-import { graphExport } from "./graph.export";
-import { graphEdgeUpsert } from "./graph.edge.upsert";
-import { graphEdgeDelete } from "./graph.edge.delete";
-import { graphCypher } from "./graph.cypher";
 import { webSearch } from "./web.search";
 import { webFetch } from "./web.fetch";
-import { semanticEdgeApprove } from "./semantic.edge.approve";
-import { semanticEdgeInfer } from "./semantic.edge.infer";
-import { semanticEdgeList } from "./semantic.edge.list";
-import { semanticEdgeSuggest } from "./semantic.edge.suggest";
 import { pluginSchemaGet } from "./plugin.schema.get";
 import { pluginSchemaValidate } from "./plugin.schema.validate";
 import { pluginVersionList } from "./plugin.version.list";
@@ -282,8 +269,6 @@ import { auditLogQuery } from "./audit.log.query";
 import { automationUpdate } from "./automation.update";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
-import { graphIngest } from "./graph.ingest";
-import { graphSyncPush } from "./graph.sync.push";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -557,7 +542,6 @@ export {
   codeDiff,
   codePatch,
   codeFormat,
-  codeMap,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -624,7 +608,6 @@ export {
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
-  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -748,24 +731,13 @@ export {
   privacyDataErase,
   researchSwarmStart,
   researchSwarmStatus,
-  graphNodeUpsert,
-  graphNodeLabelAdd,
-  graphNodeLabelRemove,
   graphNodeLabelsGet,
+  knowledgeNodeRefSchema,
   graphNodeGet,
-  graphNodeDelete,
   graphNodeSearch,
   graphSearch,
-  graphExport,
-  graphEdgeUpsert,
-  graphEdgeDelete,
-  graphCypher,
   webSearch,
   webFetch,
-  semanticEdgeApprove,
-  semanticEdgeInfer,
-  semanticEdgeList,
-  semanticEdgeSuggest,
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
@@ -803,8 +775,6 @@ export {
   automationUpdate,
   connectionPause,
   connectionUpdate,
-  graphIngest,
-  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -918,7 +888,6 @@ export const contracts = [
   codeDiff,
   codePatch,
   codeFormat,
-  codeMap,
   agentDefinitionCreate,
   agentDefinitionDelete,
   agentDefinitionSuggest,
@@ -982,7 +951,6 @@ export const contracts = [
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
-  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -1108,24 +1076,12 @@ export const contracts = [
   privacyDataErase,
   researchSwarmStart,
   researchSwarmStatus,
-  graphNodeUpsert,
-  graphNodeLabelAdd,
-  graphNodeLabelRemove,
   graphNodeLabelsGet,
   graphNodeGet,
-  graphNodeDelete,
   graphNodeSearch,
   graphSearch,
-  graphExport,
-  graphEdgeUpsert,
-  graphEdgeDelete,
-  graphCypher,
   webSearch,
   webFetch,
-  semanticEdgeApprove,
-  semanticEdgeInfer,
-  semanticEdgeList,
-  semanticEdgeSuggest,
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
@@ -1163,8 +1119,6 @@ export const contracts = [
   automationUpdate,
   connectionPause,
   connectionUpdate,
-  graphIngest,
-  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

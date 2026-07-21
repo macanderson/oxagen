@@ -72,8 +72,6 @@ API-key-only principal is rejected — the row needs an owning `userId`).
 - Postgres: none for the legacy path; one `generated_assets` insert for
   `source: "user_upload"` (the reference row per the four-store model).
 - ClickHouse: kernel security event emitted on every invocation (allow/deny).
-- Neo4j: async best-effort `:GeneratedFile` sync for user-upload rows (via the
-  shared persistence chokepoint); none for the legacy path.
 
 ## Surfaces
 

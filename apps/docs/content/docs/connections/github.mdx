@@ -1,16 +1,16 @@
 ---
 title: Connect GitHub
-description: Authorize Oxagen to read your repositories and ingest source code, pull requests, issues, and releases into your knowledge graph.
+description: Authorize Oxagen to ingest governed repository and delivery metadata without uploading your source-code graph.
 ---
 
 <IllustrationConnectionSpot />
 
 ## Overview
 
-The **GitHub connection** lets Oxagen read your repositories and ingest their contents —
-source files, pull requests, issues, commits, and releases — into your workspace knowledge
-graph. Once connected, your agents can answer questions and reason over your codebase with
-RBAC-scoped context.
+The **GitHub connection** lets Oxagen ingest stable provider metadata — repositories,
+configured refs, commits, pull requests, issues, releases, and workflow activity — into your
+workspace context graph. Agents can use that shared metadata with RBAC-scoped context while
+the exact live code graph stays local to their checkout or worktree.
 
 Oxagen connects through a **GitHub App** using read-only access. It never writes to your
 repositories, and you choose exactly which repositories it can see.
@@ -19,13 +19,14 @@ repositories, and you choose exactly which repositories it can see.
 
 | Data | GitHub permission | Access |
 | --- | --- | --- |
-| Source files (the repo tree + file contents) | Contents | Read-only |
-| Repository metadata (name, default branch, language) | Metadata | Read-only |
+| Repository, ref, commit, and changed-file metadata | Contents + Metadata | Read-only |
 | Pull requests | Pull requests | Read-only |
 | Issues and comments | Issues | Read-only |
+| Workflow and check metadata | Actions + Checks | Read-only |
 
 Oxagen requests **read-only** access only. It cannot push code, open pull requests, change
-settings, or delete anything.
+settings, or delete anything. It does not upload source text, symbols, chunks, code embeddings,
+imports, or uncommitted state into the workspace graph.
 
 ## Before you start
 
@@ -50,11 +51,11 @@ settings, or delete anything.
 
 ## What happens during the initial sync
 
-When you connect a repository, Oxagen performs a first pass over its default branch:
+When you connect a repository, Oxagen performs a first pass over provider records:
 
-- It reads the repository file tree and pulls in source files.
-- Each file and entity is added to your workspace knowledge graph with embeddings so your
-  agents can search and reason over it.
+- It resolves the repository's actual default branch and records repository, ref, commit,
+  pull-request, issue, and release metadata.
+- Provider records are projected into the workspace graph through the governed ingestion path.
 - Larger repositories are processed in batches. The sync runs in the background — you can
   leave the page and come back.
 
@@ -63,15 +64,16 @@ at any time from the source's settings.
 
 ### Staying up to date automatically
 
-After the initial sync, Oxagen keeps your knowledge graph current as your repository changes —
-new commits, pull requests, issues, comments, and releases are ingested automatically as they
-happen, with no action required. Records are added for the activity types your workspace has
-chosen to ingest; you can also trigger a manual **Re-sync** at any time.
+After the initial sync, Oxagen keeps provider metadata current as the repository changes — new
+commits, pull requests, issues, comments, releases, and workflow events are ingested as they
+happen. Records are added for the activity types your workspace has chosen to ingest; you can
+also trigger a manual **Re-sync** at any time.
 
 <Callout type="info">
-  The initial sync focuses on common source-code file types and skips generated/vendor
-  directories (for example `node_modules`, `dist`, and `.git`). If you need a different file
-  scope for your repository, contact support.
+  Canonical repository topology derived from a configured protected/default ref is a follow-up.
+  So is the typed evidence ledger that will verify execution-to-commit, artifact, test, or file
+  claims before projecting them into shared context. Provider metadata alone is not proof that
+  a particular agent changed a file.
 </Callout>
 
 ## Managing the connection

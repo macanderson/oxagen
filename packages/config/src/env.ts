@@ -335,10 +335,6 @@ export const baseEnvSchema = z.object({
   // Base64 master key for encrypting per-org reseller Stripe keys (reseller
   // revenue). Optional: reseller-secret.ts falls back to INGESTION_ENCRYPTION_KEY.
   BILLING_ENCRYPTION_KEY: z.string().min(1).optional(),
-  // "1" routes GitHub feature inference through the Anthropic Message Batches
-  // API (async, half price); unset = synchronous per-file calls.
-  INGESTION_FEATURE_BATCH: z.string().optional(),
-
   // Audit-export download-URL signing (HMAC). Optional dedicated secret; the
   // route falls back to BETTER_AUTH_SECRET. Must be >= 16 bytes when set
   // (enforced at the signing call site in the audit export route).

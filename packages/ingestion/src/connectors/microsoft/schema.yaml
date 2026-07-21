@@ -108,40 +108,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    email: true
-    teams_message: true
-    sharepoint_file: true
-    onedrive_file: true
-    calendar_event: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer project context, decisions, and relationships from Microsoft 365 content.
-
-    Look for:
-    - Email threads discussing product features, architectural decisions, or release plans
-    - Teams messages referencing GitHub PRs, Linear issues, or known feature names
-    - SharePoint/OneDrive documents (specs, designs, PRDs) linking to product areas
-    - Calendar events that tie meetings to projects or teams
-
-    Create edges:
-    - Email -[discusses]-> Feature (when subject or body references a product feature)
-    - TeamsMessage -[references]-> PullRequest (when message contains a PR URL or number)
-    - SharePointFile -[specifies]-> Feature (when filename or content references a feature)
-    - CalendarEvent -[involves]-> Person (when attendee email matches a known contributor)
-    - Person -[sent]-> Email (link sender to known users)
-
-    Cross-source links:
-    - If an email mentions a GitHub repository or PR URL, create a reference edge to that GitHub node
-    - If a Teams channel name matches a Linear project, create an ALIAS_OF edge
-
 sync:
   delivery: webhook
   pollingSupported: true

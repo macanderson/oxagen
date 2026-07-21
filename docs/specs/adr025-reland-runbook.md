@@ -3,6 +3,10 @@
 **Status: DRAFT — text only. Do NOT execute any of this against prod without the
 user's explicit, direct go. #711 stays a DRAFT until then.**
 
+> **Stale after launch pruning (2026-07-21):** do not execute this runbook until
+> its capability set and grant remap are regenerated. It still contains names for
+> retired graph mutation, code-map, graph-sync, lineage, and inference surfaces.
+
 **Why this exists.** ADR-025 renamed every capability to verb-first snake_case and
 **removed the alias shim**. IAM authorizes on an exact match of
 `iam.role_grants.capability_id` = the capability's canonical name. In prod those

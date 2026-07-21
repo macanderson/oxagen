@@ -1,9 +1,9 @@
 /**
  * @oxagen/code-graph — unified tree-sitter source code parser.
  *
- * THE single source of code-graph construction for the Oxagen platform:
- *   - packages/ingestion: platform workspace graph (SourceFile / SourceSymbol nodes)
- *   - apps/cli: local code-graph daemon (CodeNode persistence in DuckDB)
+ * The parser used by Stella/Oxagen CLI's checkout-local code graph. Parsed
+ * source, symbols, and embeddings stay in the local DuckDB replica; the shared
+ * workspace graph does not ingest this checkout-specific detail.
  *
  * The TypeScript grammar handles JS/JSX as well as TS/TSX, so JS files are
  * parsed fully without a separate grammar.
@@ -15,9 +15,23 @@
 import { extname } from "path";
 import { getParser } from "./loader";
 import { parseMarkdown } from "./markdown";
-import type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind, CallSite, ImportSite } from "./types";
+import type {
+  ParseResult,
+  ParsedSymbol,
+  ParsedLanguage,
+  SymbolKind,
+  CallSite,
+  ImportSite,
+} from "./types";
 
-export type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind, CallSite, ImportSite };
+export type {
+  ParseResult,
+  ParsedSymbol,
+  ParsedLanguage,
+  SymbolKind,
+  CallSite,
+  ImportSite,
+};
 export { getParser, _resetForTest, _injectLanguagesForTest } from "./loader";
 export { parseMarkdown } from "./markdown";
 export type { MarkdownParse } from "./markdown";
@@ -30,7 +44,11 @@ export {
   isValidCodeEmbedding,
   cosineSimilarity,
 } from "./embed";
-export { renderFileText, renderSymbolText, renderMarkdownFileText } from "./renderers";
+export {
+  renderFileText,
+  renderSymbolText,
+  renderMarkdownFileText,
+} from "./renderers";
 
 // ---------------------------------------------------------------------------
 // Language detection
@@ -39,7 +57,8 @@ export { renderFileText, renderSymbolText, renderMarkdownFileText } from "./rend
 function detectLanguage(filePath: string): ParsedLanguage {
   const ext = extname(filePath).toLowerCase();
   // The TypeScript grammar handles JS/JSX/MJS/CJS as well as TS/TSX.
-  if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) return "typescript";
+  if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext))
+    return "typescript";
   if (ext === ".py") return "python";
   if (ext === ".md" || ext === ".mdx" || ext === ".markdown") return "markdown";
   return "unknown";
@@ -369,7 +388,11 @@ function runImportQuery(
 const MAX_SYMBOL_CODE_CHARS = 4000;
 
 /** The raw source for a symbol, from its 0-indexed line range (inclusive). */
-function sliceCode(lines: string[], startLine: number, endLine: number): string {
+function sliceCode(
+  lines: string[],
+  startLine: number,
+  endLine: number,
+): string {
   const slice = lines.slice(startLine, endLine + 1).join("\n");
   return slice.length > MAX_SYMBOL_CODE_CHARS
     ? `${slice.slice(0, MAX_SYMBOL_CODE_CHARS)}\n… (truncated)`
@@ -377,7 +400,11 @@ function sliceCode(lines: string[], startLine: number, endLine: number): string 
 }
 
 /** A one-line signature: the symbol's declaration line, trimmed and capped. */
-function firstSignificantLine(lines: string[], startLine: number, endLine: number): string {
+function firstSignificantLine(
+  lines: string[],
+  startLine: number,
+  endLine: number,
+): string {
   for (let i = startLine; i <= endLine && i < lines.length; i++) {
     const t = lines[i]!.trim();
     if (t.length > 0) return t.slice(0, 300);
@@ -390,7 +417,10 @@ function firstSignificantLine(lines: string[], startLine: number, endLine: numbe
  * `/* … *​/`, `*`, or `#` comment lines directly preceding the declaration. For
  * Python def/class, also captures a triple-quoted docstring on the first body line.
  */
-function extractDocComment(lines: string[], startLine: number): string | undefined {
+function extractDocComment(
+  lines: string[],
+  startLine: number,
+): string | undefined {
   const collected: string[] = [];
   // Clamp to the last real line — a symbol's reported startLine can exceed the
   // file's line count (e.g. synthetic/parser-reported ranges), and indexing past
@@ -409,7 +439,9 @@ function extractDocComment(lines: string[], startLine: number): string | undefin
       t.endsWith("*/") ||
       t.startsWith("#")
     ) {
-      collected.unshift(t.replace(/^\/\*\*?|\*\/$|^\*\s?|^\/\/\s?|^#\s?/g, "").trim());
+      collected.unshift(
+        t.replace(/^\/\*\*?|\*\/$|^\*\s?|^\/\/\s?|^#\s?/g, "").trim(),
+      );
     } else {
       break;
     }
@@ -419,7 +451,10 @@ function extractDocComment(lines: string[], startLine: number): string | undefin
 }
 
 /** Attach code slice, signature, and leading doc comment to each parsed symbol. */
-function enrichSymbols(symbols: ParsedSymbol[], content: string): ParsedSymbol[] {
+function enrichSymbols(
+  symbols: ParsedSymbol[],
+  content: string,
+): ParsedSymbol[] {
   const lines = content.split("\n");
   return symbols.map((s) => {
     const code = sliceCode(lines, s.startLine, s.endLine);
@@ -490,9 +525,17 @@ export async function parseSourceFile(
       // Extract call sites and import specifiers using the deduped symbols so
       // enclosingSymbol resolution uses the same set that will be returned.
       const calls = runCallQuery(tree, tsLang, deduped, TS_CALL_QUERY);
-      const imports = runImportQuery(tree, tsLang, [TS_IMPORT_QUERY, TS_REEXPORT_QUERY]);
+      const imports = runImportQuery(tree, tsLang, [
+        TS_IMPORT_QUERY,
+        TS_REEXPORT_QUERY,
+      ]);
 
-      return { language, symbols: enrichSymbols(deduped, content), calls, imports };
+      return {
+        language,
+        symbols: enrichSymbols(deduped, content),
+        calls,
+        imports,
+      };
     }
 
     // Python: symbols + call and import edges.
@@ -511,7 +554,10 @@ export async function parseSourceFile(
     // Extract call sites and import specifiers against the deduped Python
     // symbols so enclosingSymbol resolution uses the returned symbol set.
     const pyCalls = runCallQuery(tree, pyLang, dedupedPy, PY_CALL_QUERY);
-    const pyImports = runImportQuery(tree, pyLang, [PY_IMPORT_QUERY, PY_IMPORT_FROM_QUERY]);
+    const pyImports = runImportQuery(tree, pyLang, [
+      PY_IMPORT_QUERY,
+      PY_IMPORT_FROM_QUERY,
+    ]);
 
     return {
       language,

@@ -1,11 +1,18 @@
 ---
 title: "Agent Execution"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
+description: "Archived spec & plan — PostgreSQL trace survives; Neo4j projection retired."
 ---
 
-> **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
+> **Status: Partially superseded (2026-07-21).** PostgreSQL execution, step,
+> tool-call, and durable trace paths remain. The automatic Neo4j execution
+> mirror, sync marker, and semantic peer-recall extension described below were
+> retired for launch. Exact lineage belongs in a future immutable typed evidence
+> ledger; this body remains only as historical implementation evidence.
 >
-> Core execution telemetry and recording infrastructure is shipped: three-table PostgreSQL schema with RLS, contracts, API/MCP routes, handlers, and Neo4j async sync with embedding. ClickHouse append-only events table and dead schema removal are incomplete. Dead schemas (workflow.playbooks, etc.) remain in the primary schema with their RLS policies updated but tables not dropped.
+> Core execution telemetry and recording infrastructure remains shipped through
+> the three-table PostgreSQL schema with RLS, contracts, API/MCP routes, handlers,
+> and durable trace reads. References below to Neo4j sync or
+> `synced_to_graph_at` are no longer current.
 
 **Implementation evidence**
 
@@ -1569,4 +1576,3 @@ They form a **parent-child relationship**, not a conflict:
 - agent_executions with origin_type='workflow_run' = the execution ledger for that container
 
 No tables are sunset. Both are kept, both are used, both serve essential roles.
-

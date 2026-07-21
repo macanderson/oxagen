@@ -10,8 +10,7 @@
  * caller is told via the returned `truncated` flag so the cap is never silent.
  *
  * Module: @oxagen/code-graph/chunk
- * Moved from packages/ingestion/src/embed/chunk.ts — canonical location is
- * now here; ingestion re-exports for backward compat.
+ * Chunk text remains checkout-local and is never a workspace-graph payload.
  */
 
 export interface TextChunk {

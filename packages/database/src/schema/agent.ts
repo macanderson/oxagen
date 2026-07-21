@@ -420,10 +420,6 @@ export const agentExecutions = agentSchema.table(
       precision: 10,
       scale: 6,
     }),
-    syncedToGraphAt: timestamp("synced_to_graph_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
     // AgentInstance shape (agent-schema.ts §4): self-reference for subagent/A2A
     // lineage (app-enforced, no FK).
     parentExecutionId: uuid("parent_execution_id"),
@@ -743,10 +739,8 @@ export const a2aTasks = agentSchema.table(
 // ── File locks — the transactional lock authority (ADR-021 §5) ──────────────
 //
 // File locks are mutual-exclusion state, so Postgres is the source of truth,
-// NOT Neo4j: the graph sync path is asynchronous (ADR-018), so a lock "written
-// to the graph" is invisible to a concurrent agent for the duration of sync
-// lag — fatal for mutual exclusion. Neo4j only carries an async LINEAGE
-// projection of these rows (packages/inngest-functions/agent.project-file-lock-to-graph).
+// NOT Neo4j: eventual graph projection cannot provide mutual exclusion. These
+// transactional rows are the sole file-lock authority.
 //
 // This extends the Inngest claim/lease mechanism (subagent_runs / execution
 // steps above) to file-path granularity rather than inventing a second lock
@@ -760,9 +754,8 @@ export const fileLocks = agentSchema.table(
     ...idMixin("flk"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    // Normalized resource identity — a repo-relative path (local CLI) or the
-    // SourceFile naturalKey toNaturalKey(path, owner, repo) produces (platform),
-    // so a locked file and its lineage projection key off the identical node.
+    // Normalized resource identity — a repo-relative path (local CLI) or a
+    // repository-scoped github:{owner}/{repo}:{path} key (platform).
     resourceKey: text("resource_key").notNull(),
     // Identity of the lock holder — an agent/session/mission/fleet-task id. Two
     // concurrent holders MUST pass different values to see each other as

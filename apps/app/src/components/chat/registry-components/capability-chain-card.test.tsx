@@ -32,7 +32,7 @@ const output = {
     },
     {
       id: "step2",
-      capability: "upsert_node",
+      capability: "query_ontology",
       rationale: "Create the vessel node",
       status: "error",
       input: { label: "Vessel" },
@@ -45,7 +45,8 @@ const output = {
       rationale: "Would buy credits",
       status: "skipped",
       input: null,
-      error: "Capability is destructive or requires approval — not auto-executed.",
+      error:
+        "Capability is destructive or requires approval — not auto-executed.",
       durationMs: 0,
     },
   ],
@@ -54,11 +55,13 @@ const output = {
 describe("CapabilityChainCard", () => {
   it("renders the summary, goal, run count, and each step", () => {
     render(<CapabilityChainCard output={output} />);
-    expect(screen.getByText("Searched the web and created 2 graph nodes.")).toBeTruthy();
+    expect(
+      screen.getByText("Searched the web and created 2 graph nodes."),
+    ).toBeTruthy();
     expect(screen.getByText(/Research USS Nautilus/)).toBeTruthy();
     expect(screen.getByText("1/3 ran")).toBeTruthy();
     expect(screen.getByText("search_web")).toBeTruthy();
-    expect(screen.getByText("upsert_node")).toBeTruthy();
+    expect(screen.getByText("query_ontology")).toBeTruthy();
     expect(screen.getByText("Find sources")).toBeTruthy();
   });
 
@@ -66,14 +69,20 @@ describe("CapabilityChainCard", () => {
     const user = userEvent.setup();
     render(<CapabilityChainCard output={output} />);
     // The web.search step button (first expandable) reveals Input/Output panes.
-    const stepButton = screen.getByText("search_web").closest("button") as HTMLButtonElement;
+    const stepButton = screen
+      .getByText("search_web")
+      .closest("button") as HTMLButtonElement;
     await user.click(stepButton);
     expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("Output")).toBeTruthy();
   });
 
   it("shows an empty state when there are no steps", () => {
-    render(<CapabilityChainCard output={{ goal: "g", summary: "", executed: false, steps: [] }} />);
+    render(
+      <CapabilityChainCard
+        output={{ goal: "g", summary: "", executed: false, steps: [] }}
+      />,
+    );
     expect(screen.getByText("No steps were planned.")).toBeTruthy();
     expect(screen.getByText("Plan only")).toBeTruthy();
   });

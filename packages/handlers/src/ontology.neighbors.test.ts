@@ -127,8 +127,6 @@ describe("ontologyNeighborsHandler", () => {
         description: "area",
         edgeType: "RELATED_TO",
         direction: "out",
-        // Ownership defaults to customer data when is_system is absent (null row).
-        isSystem: false,
         // Bi-temporal validity — all-null for an unstamped edge (mock returns null).
         validFrom: null,
         validTo: null,
@@ -138,27 +136,15 @@ describe("ontologyNeighborsHandler", () => {
     ]);
   });
 
-  it("projects is_system ownership so callers can separate lineage from knowledge", async () => {
-    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(
-      makeRows([
-        {
-          nodeId: "exec-1",
-          label: "Execution",
-          displayName: "chat execution",
-          description: null,
-          edgeType: "EXECUTED",
-          direction: "in",
-          isSystem: true,
-        },
-      ]),
-    );
-    const result = await ontologyNeighborsHandler(
+  it("requires both endpoints to be customer-context nodes", async () => {
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler(
       { nodeId: "n-1", direction: "both", limit: 100 },
       CTX,
     );
     const cypher = mocks.run.mock.calls[1]?.[0] as string;
-    expect(cypher).toContain("coalesce(m.is_system, false) AS isSystem");
-    expect(result.neighbors[0]?.isSystem).toBe(true);
+    expect(cypher).toContain("n.is_system = false");
+    expect(cypher).toContain("m.is_system = false");
   });
 
   it("applies the direction filter for 'out' and omits it for 'both'", async () => {

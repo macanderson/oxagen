@@ -131,10 +131,7 @@ import {
 } from "@oxagen/billing";
 import type { CapabilityContext } from "../types";
 import { materializeTools } from "./materialize-tools";
-import {
-  createPlatformAgentAi,
-  createPlatformMemoryProvider,
-} from "../adapters";
+import { createPlatformAgentAi } from "../adapters";
 
 // ---------------------------------------------------------------------------
 // Structural worker-harness contract — mirrors @oxagen/agent-worker's
@@ -299,24 +296,6 @@ export function createPlatformTurnDriver(): TurnDriver {
         // are tagged "runner".
         const ai = createPlatformAgentAi(ctx, run.runId, "runner");
 
-        // Recall (Engram episodic memory), mirroring agent.repo.edit.ts's
-        // createPlatformMemoryProvider call exactly: recallQuery = the turn's
-        // instruction, telemetry keyed on this driver's own ctx/messageId
-        // shape. The adapter is already fully self-swallowing (recallContext's
-        // try/catch degrades to "" and emits its own loud
-        // agent.memory.recall_failed telemetry on ANY failure — see
-        // packages/agent/src/adapters/memory-provider.ts) — this driver adds
-        // no second catch on top of that degradable-by-design contract.
-        const memory = createPlatformMemoryProvider({
-          recallQuery: spec.instruction,
-          telemetry: {
-            orgId: run.orgId,
-            workspaceId: run.workspaceId,
-            surface: "runner",
-            messageId: run.runId,
-          },
-        });
-
         // Per-turn dollar budget (see module doc's follow-up note for exactly
         // what is and is not covered). Only the WORKSPACE/ORG governance half
         // of budget resolution applies to a durable run — `get_budget_policy`
@@ -371,7 +350,6 @@ export function createPlatformTurnDriver(): TurnDriver {
           maxSteps: DEFAULT_MAX_AGENT_STEPS,
           extraTools,
           mutatingToolNames,
-          memory,
           budgetGuard,
           // Lease loss OR a cancel request both abort this same signal — see
           // @oxagen/agent-worker's worker.ts; this driver doesn't need to

@@ -19,10 +19,6 @@ export const NodeLabels = {
   PlaybookVersion: "PlaybookVersion",
   Execution: "Execution",
   Document: "Document",
-  // AI-generated files (markdown/docx/pdf/images/video/…) produced by the agent
-  // and stored in content.generated_assets. Carried as a searchable :GraphNode so
-  // "find me the files created about X" hits them via the universal vector index.
-  GeneratedFile: "GeneratedFile",
   AgentMemory: "AgentMemory",
   Conversation: "Conversation",
   Message: "Message",
@@ -70,29 +66,18 @@ export const EdgeTypes = {
   ORIGINATED_FROM: "ORIGINATED_FROM",
   CALLED_TOOL: "CALLED_TOOL",
   // Ingestion pipeline — provenance + deduplication edges.
-  ALIAS_OF: "ALIAS_OF",           // alias node → principal (dedup; carries confidence score)
-  SOURCED_FROM: "SOURCED_FROM",   // ingested EntityNode → SourceConnection
+  ALIAS_OF: "ALIAS_OF", // alias node → principal (dedup; carries confidence score)
+  SOURCED_FROM: "SOURCED_FROM", // ingested EntityNode → SourceConnection
   INFERRED_FROM: "INFERRED_FROM", // inferred edge → source entities that triggered inference
   // Agent execution provenance — event-triggered executions.
   INITIATED_FROM: "INITIATED_FROM", // Execution → triggering EntityNode
-  DOCUMENTED_BY: "DOCUMENTED_BY",   // EntityNode → Document written by the agent about it
-  CREATED_BY: "CREATED_BY",         // Document → Execution that produced it
+  DOCUMENTED_BY: "DOCUMENTED_BY", // EntityNode → Document written by the agent about it
+  CREATED_BY: "CREATED_BY", // Document → Execution that produced it
   // Semantic / structural edges written by connectors and inference workers.
-  IMPLEMENTS: "IMPLEMENTS",   // commit/PR EntityNode → feature EntityNode
-  PART_OF: "PART_OF",         // issue → epic; commit → PR
+  IMPLEMENTS: "IMPLEMENTS", // commit/PR EntityNode → feature EntityNode
+  PART_OF: "PART_OF", // issue → epic; commit → PR
   ASSIGNED_TO: "ASSIGNED_TO", // task/issue → User
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
-  // Agent coding lineage — written by the in-app coding agent on every turn.
-  TOUCHED_FILE: "TOUCHED_FILE", // Execution → SourceFile (file was read/written this turn)
-  // @deprecated Authority moved to the Postgres lease (ADR-021 §5) — a graph
-  // lock is unsound (async sync lag hides it from a concurrent agent). Retained
-  // only for the legacy Neo4j adapter; do not enforce locks on this edge.
-  HOLDS_LOCK: "HOLDS_LOCK", // Agent → SourceFile (legacy graph-backed lock)
-  // Async LINEAGE projection of Postgres file leases (ADR-021 §5). Written
-  // fire-and-forget by agent.project-file-lock-to-graph for hot-file analytics
-  // and conflict prediction — never load-bearing for mutual exclusion. Carries
-  // { holder, action, fencingToken, acquiredAt, releasedAt, executionId }.
-  LOCKED: "LOCKED", // Agent → SourceFile (projected: this agent held a lease on the file)
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

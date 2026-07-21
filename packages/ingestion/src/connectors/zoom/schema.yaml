@@ -76,38 +76,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    meeting: true
-    recording: false
-    participant: false
-    transcript: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer team collaboration patterns and project context from Zoom meeting data.
-
-    Look for:
-    - Meeting topics that reference product features, sprint names, or project codenames
-    - Recurring meeting patterns that indicate team rituals (standup, retro, planning)
-    - Participant lists that correlate to known team or squad membership
-    - Transcript content mentioning decisions, action items, or architectural discussions
-
-    Create edges:
-    - Meeting -[discusses]-> Feature (when meeting topic references a product feature by name)
-    - Meeting -[involves]-> Person (link each participant email to a known person node)
-    - Transcript -[records]-> Meeting (transcript belongs to its parent meeting)
-    - Meeting -[part_of]-> Sprint (when topic contains sprint name or cycle reference)
-
-    Cross-source links:
-    - If a participant email matches a known GitHub or Linear user, create an ALIAS_OF edge
-    - If a meeting topic mentions a Linear ticket ID (e.g. OXA-123), reference that issue node
-
 sync:
   delivery: webhook
   pollingSupported: true

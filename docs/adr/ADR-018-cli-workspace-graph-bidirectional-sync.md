@@ -1,11 +1,22 @@
 # ADR-018: CLI ↔ Workspace Graph Bidirectional Sync
 
-- **Status:** Accepted
+- **Status:** Superseded — both down-sync and up-sync revoked
 - **Date:** 2026-06-27
 - **Deciders:** Mac Anderson
-- **Related:** ADR-012 (connector dual-write), ADR-016 (CLI daemon live code graph), [[no-drift-across-surfaces]], [[connector-dual-write-pattern]]
+- **Related:** ADR-012 (connector dual-write), ADR-016 (CLI daemon live code graph), `docs/specs/workspace-graph-boundary/spec.md`, [[no-drift-across-surfaces]], [[connector-dual-write-pattern]]
 
-## Context
+> **Supersession note (2026-07-21):** No synchronization direction in this ADR
+> remains approved. `graph.export`, CLI graph pull/status, and the local
+> workspace DuckDB replica are retired with the generic CLI→cloud mutation
+> paths. A bulk graph dump cannot guarantee convergence for tombstones,
+> deletions, or authorization revocations on intermittently connected clients.
+> The exact checkout graph stays local. Shared context is read through bounded,
+> online, RBAC-scoped capabilities; canonical shared code topology comes from
+> verified provider snapshots. Exact run evidence belongs in a separate, narrow
+> evidence-ledger ingest path. The body below is retained only as rejected
+> decision history and must not be built.
+
+## Historical context (superseded)
 
 The `oxagen` CLI builds a **local code graph** — an in-memory, per-repo structural index (files → symbols → imports) used to enhance prompts (see ADR-016). It is ephemeral: rebuilt on each process/daemon start, never persisted, never synced anywhere.
 
@@ -18,7 +29,7 @@ Today these are disconnected. We want them connected, **in both directions**, wi
    - **Code structure** — the repo's files/symbols/imports as a subgraph.
    - **Agent execution** — each session/turn/tool/file/model as a **lineage** subgraph (the `TurnTrace` telemetry, in graph form).
 
-## Decision
+## Historical decision (superseded)
 
 A **single source of truth (the workspace graph) with a refreshable local read-replica, and idempotent, content-addressed up-flows.** No bespoke transport, no vendor lock.
 
@@ -59,24 +70,24 @@ All flows go through Oxagen contracts (no side-channel endpoints):
 | Capability | Dir | Purpose |
 |---|---|---|
 | `graph.export` | down | Paginated, cursor-aware read of a workspace subgraph (nodes + edges) for local projection. **(Slice 1 — this PR.)** |
-| `graph.node.upsert` / `graph.edge.upsert` (existing) | up | Idempotent node/edge writes — reused for code + lineage pushes. |
-| `graph.sync.push` | up | Batch envelope of content-addressed upserts + tombstones with a `source` (`code` \| `lineage`) and idempotency key. *(Slice 2/3.)* |
+| `graph.node.upsert` / `graph.edge.upsert` (existing) | up | **Superseded for CLI code/lineage upload.** These general graph mutations are not a code-evidence transport. |
+| `graph.sync.push` | up | **Revoked.** The generic client-authored code/lineage mutation surface is retired. |
 
 ### Local store
 
 A new **`GraphStore`** in `@oxagen/engram` (where the embedded DuckDB already lives — no new native dep, no drift) with `graph_nodes` + `graph_edges` tables and a `sync_cursor` row per `(org, workspace)`. The CLI's `queryCodeGraph` gains a workspace-projection backend so enhancement and `oxagen graph *` can read the local copy first.
 
-## Rollout (slices)
+## Historical rollout (superseded)
 
-1. **Down-sync + local store (this PR):** `graph.export` contract/handler/route/MCP + `@oxagen/engram` `GraphStore` + `oxagen graph pull` (incremental) and `oxagen graph status`. Read replica, cursor-based refresh.
-2. **Up-sync code delta:** git-native delta → `graph.sync.push` with `source: code`; repo subgraph under `is_system=true`, keyed by repo+path+hash.
-3. **Up-sync execution lineage:** project `TurnTrace` → session/turn/tool/file/model nodes + edges → `graph.sync.push` with `source: lineage`. Raw event rows continue to ClickHouse.
-4. **Enhancement integration:** prompt-enhancer reads the local projection first, falling back to the live code graph; the platform subgraph augments local context (closing the gap noted in `prompt-enhancer.ts`).
+1. **Down-sync + local store — revoked:** the export capability, pull/status commands, cursor, and workspace replica are retired.
+2. **Up-sync code delta — revoked:** the checkout graph remains local; canonical shared topology is projected from a verified provider commit.
+3. **Up-sync execution lineage — revoked:** generic graph mutation is not the run-evidence path. A future narrow evidence-ledger ingest requires its own contract and trust model.
+4. **Enhancement integration — revoked:** the agent must not read a downloaded workspace projection. Any cloud context is retrieved explicitly through the online authorization boundary.
 
-## Consequences
+## Historical consequences (superseded)
 
-**Positive:** offline-fast graph reads; the workspace graph gains code + execution lineage without GitHub coupling; idempotent/resumable sync; clean storage boundaries; everything reachable identically across API/MCP/CLI.
+**Former benefit:** offline-fast workspace-graph reads through a refreshable local replica.
 
-**Negative / risks:** the local copy can be stale (mitigated by cursor refresh + a `status` command showing drift); a large workspace graph is costly to fully mirror (mitigated by label/scope filters on `graph.export` and incremental pulls); tenant isolation on export is critical (every Cypher filters `orgId` **and** `workspaceId`, per existing graph handlers).
+**Disqualifying risks:** cursor refresh does not carry complete tombstone, deletion, or grant-revocation semantics; an offline copy can retain data after the principal is no longer authorized; and bulk export materially expands the exfiltration surface. Label filters and freshness indicators do not solve those failures.
 
-**Neutral:** local store is a *projection*, not authoritative; losing it costs only a re-pull.
+**Replacement boundary:** keep checkout-local code and memory local; query shared workspace context online under current grants; derive shared repository topology only from verified canonical provider state; ingest run evidence only through a typed, narrow, replayable contract.

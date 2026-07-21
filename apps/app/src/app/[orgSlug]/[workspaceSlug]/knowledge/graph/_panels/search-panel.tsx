@@ -17,11 +17,15 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState, ErrorState, LoadingState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { searchNodesAction, semanticSearchAction } from "../actions";
 import { fromSearchNode, fromSemanticResult } from "./node-ref-adapters";
 import { GraphResultRow } from "./graph-result-row";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 
 const DEBOUNCE_MS = 300;
 
@@ -56,25 +60,41 @@ export function SearchPanel({ orgSlug, workspaceSlug }: SearchPanelProps) {
     const timer = setTimeout(() => {
       void (async () => {
         if (semantic) {
-          const res = await semanticSearchAction({ orgSlug, workspaceSlug, query: trimmed, limit: 20 });
+          const res = await semanticSearchAction({
+            orgSlug,
+            workspaceSlug,
+            query: trimmed,
+            limit: 20,
+          });
           if (!res.ok) {
             setState({ status: "error", message: res.error });
             return;
           }
           setState({
             status: "ready",
-            results: res.results.map((r) => ({ ref: fromSemanticResult(r), score: r.score })),
+            results: res.results.map((r) => ({
+              ref: fromSemanticResult(r),
+              score: r.score,
+            })),
           });
           return;
         }
-        const res = await searchNodesAction({ orgSlug, workspaceSlug, query: trimmed, limit: 20 });
+        const res = await searchNodesAction({
+          orgSlug,
+          workspaceSlug,
+          query: trimmed,
+          limit: 20,
+        });
         if (!res.ok) {
           setState({ status: "error", message: res.error });
           return;
         }
         setState({
           status: "ready",
-          results: res.nodes.map((n) => ({ ref: fromSearchNode(n), score: n.score })),
+          results: res.nodes.map((n) => ({
+            ref: fromSearchNode(n),
+            score: n.score,
+          })),
         });
       })();
     }, DEBOUNCE_MS);
@@ -92,8 +112,15 @@ export function SearchPanel({ orgSlug, workspaceSlug }: SearchPanelProps) {
       />
 
       <div className="flex items-center gap-2">
-        <Switch id="semantic-search-toggle" checked={semantic} onCheckedChange={setSemantic} />
-        <Label htmlFor="semantic-search-toggle" className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Switch
+          id="semantic-search-toggle"
+          checked={semantic}
+          onCheckedChange={setSemantic}
+        />
+        <Label
+          htmlFor="semantic-search-toggle"
+          className="flex items-center gap-1 text-xs text-muted-foreground"
+        >
           <Sparkles className="size-3.5" aria-hidden="true" />
           Semantic search
         </Label>
@@ -101,13 +128,21 @@ export function SearchPanel({ orgSlug, workspaceSlug }: SearchPanelProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {state.status === "idle" ? (
-          <EmptyState icon={Search} title="Type to search" description="Search by name, description, or (with Semantic on) meaning." />
+          <EmptyState
+            icon={Search}
+            title="Type to search"
+            description="Search by name, description, or (with Semantic on) meaning."
+          />
         ) : state.status === "loading" ? (
           <LoadingState variant="table" />
         ) : state.status === "error" ? (
           <ErrorState title="Search failed" description={state.message} />
         ) : state.results.length === 0 ? (
-          <EmptyState icon={Search} title="No matches" description={`Nothing matched "${query.trim()}".`} />
+          <EmptyState
+            icon={Search}
+            title="No matches"
+            description={`Nothing matched "${query.trim()}".`}
+          />
         ) : (
           <div className="flex flex-col gap-1.5">
             {state.results.map((item) => (
@@ -117,7 +152,11 @@ export function SearchPanel({ orgSlug, workspaceSlug }: SearchPanelProps) {
                 orgSlug={orgSlug}
                 workspaceSlug={workspaceSlug}
                 meta={
-                  <Badge variant="muted" size="sm" className="shrink-0 tabular-nums">
+                  <Badge
+                    variant="muted"
+                    size="sm"
+                    className="shrink-0 tabular-nums"
+                  >
                     {item.score.toFixed(2)}
                   </Badge>
                 }

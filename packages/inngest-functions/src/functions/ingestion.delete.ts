@@ -1,4 +1,3 @@
- 
 import { createFunction } from "../create-function";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
@@ -32,37 +31,42 @@ import { logger } from "../logger";
  * (with completed_at + error) once retries are exhausted. Without this, jobs
  * were stuck at 'running' forever (OXA schema audit O-1).
  */
-export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = createFunction(
-  {
-    id: "ingestion-delete-connection",
-    retries: 2,
-    concurrency: { limit: 2, key: "event.data.orgId" },
-    // Terminal-failure handler: fires on `inngest/function.failed` after all
-    // retries are exhausted. Marks the deletion_jobs row 'failed' so the UI
-    // stops showing an eternally-'running' job. Mirrors privacy.erasure.execute.
-    onFailure: async ({ event, step }) => {
-      const failureData = event.data as {
-        event?: {
-          data?: { deletionJobId?: string; orgId?: string; workspaceId?: string };
+export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
+  createFunction(
+    {
+      id: "ingestion-delete-connection",
+      retries: 2,
+      concurrency: { limit: 2, key: "event.data.orgId" },
+      // Terminal-failure handler: fires on `inngest/function.failed` after all
+      // retries are exhausted. Marks the deletion_jobs row 'failed' so the UI
+      // stops showing an eternally-'running' job. Mirrors privacy.erasure.execute.
+      onFailure: async ({ event, step }) => {
+        const failureData = event.data as {
+          event?: {
+            data?: {
+              deletionJobId?: string;
+              orgId?: string;
+              workspaceId?: string;
+            };
+          };
+          error?: unknown;
         };
-        error?: unknown;
-      };
-      const deletionJobId = failureData.event?.data?.deletionJobId;
-      const orgId = failureData.event?.data?.orgId;
-      const workspaceId = failureData.event?.data?.workspaceId;
-      if (!deletionJobId || !orgId || !workspaceId) return;
+        const deletionJobId = failureData.event?.data?.deletionJobId;
+        const orgId = failureData.event?.data?.orgId;
+        const workspaceId = failureData.event?.data?.workspaceId;
+        if (!deletionJobId || !orgId || !workspaceId) return;
 
-      const errorMessage =
-        typeof failureData.error === "object" &&
-        failureData.error !== null &&
-        "message" in failureData.error
-          ? String((failureData.error as { message: unknown }).message)
-          : String(failureData.error ?? "unknown error");
+        const errorMessage =
+          typeof failureData.error === "object" &&
+          failureData.error !== null &&
+          "message" in failureData.error
+            ? String((failureData.error as { message: unknown }).message)
+            : String(failureData.error ?? "unknown error");
 
-      await step.run("mark-deletion-job-failed", () =>
-        runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb((tx) =>
-            tx.execute(sql`
+        await step.run("mark-deletion-job-failed", () =>
+          runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx.execute(sql`
               UPDATE ingestion.deletion_jobs
               SET    status       = 'failed',
                      completed_at = NOW(),
@@ -70,20 +74,27 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = c
               WHERE  id     = ${deletionJobId}::uuid
               AND    org_id = ${orgId}::uuid
             `),
+            ),
           ),
-        ),
-      );
+        );
 
-      logger.error(
-        { deletionJobId, orgId, error: errorMessage },
-        "ingestion-delete-connection: marked deletion job failed",
-      );
+        logger.error(
+          { deletionJobId, orgId, error: errorMessage },
+          "ingestion-delete-connection: marked deletion job failed",
+        );
+      },
     },
-  },
-  { event: "ingestion/connection.delete" },
-  async ({ event, step }) => {
-    const { connectionId, deletionJobId, orgId, workspaceId, mode, requestedBy, requestedAt } =
-      event.data as {
+    { event: "ingestion/connection.delete" },
+    async ({ event, step }) => {
+      const {
+        connectionId,
+        deletionJobId,
+        orgId,
+        workspaceId,
+        mode,
+        requestedBy,
+        requestedAt,
+      } = event.data as {
         connectionId: string;
         deletionJobId?: string;
         orgId: string;
@@ -93,37 +104,37 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = c
         requestedAt: string;
       };
 
-    // Rolls up graph-deletion progress for the deletion_jobs finalizer (Step 5).
-    let deletedEntities = 0;
-    let aliasPromotions = 0;
+      // Rolls up graph-deletion progress for the deletion_jobs finalizer (Step 5).
+      let deletedEntities = 0;
+      let aliasPromotions = 0;
 
-    // ── Step 1: Mark connection as 'deleting' ────────────────────────────────
-    await step.run("mark-deleting", () =>
-      runInTenantScope({ orgId, workspaceId }, () =>
-        withTenantDb((tx) =>
-          tx.execute(sql`
+      // ── Step 1: Mark connection as 'deleting' ────────────────────────────────
+      await step.run("mark-deleting", () =>
+        runInTenantScope({ orgId, workspaceId }, () =>
+          withTenantDb((tx) =>
+            tx.execute(sql`
             UPDATE ingestion.source_connections
             SET    status     = 'deleting',
                    updated_at = NOW()
             WHERE  id      = ${connectionId}::uuid
             AND    org_id  = ${orgId}::uuid
           `),
+          ),
         ),
-      ),
-    );
+      );
 
-    // ── Step 2: Delete Neo4j entity nodes (when mode includes data) ──────────
-    if (mode === "data_only" || mode === "full") {
-      const neo4jResult = (await step.run("delete-neo4j-data", () =>
-        runInTenantScope({ orgId, workspaceId }, async () => {
-          const session = scopedSession();
+      // ── Step 2: Delete Neo4j entity nodes (when mode includes data) ──────────
+      if (mode === "data_only" || mode === "full") {
+        const neo4jResult = (await step.run("delete-neo4j-data", () =>
+          runInTenantScope({ orgId, workspaceId }, async () => {
+            const session = scopedSession();
 
-          // ── Pass 1: Promote aliases ──────────────────────────────────────
-          // Find principal nodes (from this connection) that have incoming
-          // ALIAS_OF edges from OTHER connections. Promote the highest-
-          // confidence alias to become the new principal before deletion.
-          const aliasResult = await session.run(
-            `
+            // ── Pass 1: Promote aliases ──────────────────────────────────────
+            // Find principal nodes (from this connection) that have incoming
+            // ALIAS_OF edges from OTHER connections. Promote the highest-
+            // confidence alias to become the new principal before deletion.
+            const aliasResult = await session.run(
+              `
             MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)
             WHERE principal.connectionId = $connectionId
               AND principal.orgId = $orgId
@@ -150,156 +161,116 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = c
             DELETE old
             RETURN count(promoted) AS promoted
             `,
-            { connectionId, orgId },
-          );
+              { connectionId, orgId },
+            );
 
-          const promotedCount = (aliasResult.records[0]?.get("promoted") as number | undefined) ?? 0;
-          logger.info(
-            { connectionId, orgId, promotedCount },
-            "ingestion-delete: alias promotion complete",
-          );
+            const promotedCount =
+              (aliasResult.records[0]?.get("promoted") as number | undefined) ??
+              0;
+            logger.info(
+              { connectionId, orgId, promotedCount },
+              "ingestion-delete: alias promotion complete",
+            );
 
-          // ── Pass 2: Delete non-aliased entity nodes ──────────────────────
-          // Only delete nodes that have no remaining incoming ALIAS_OF edges
-          // from other connections (they were either promoted above or were
-          // never aliased).
-          const deleteResult = await session.run(
-            `
+            // ── Pass 2: Delete non-aliased entity nodes ──────────────────────
+            // Only delete nodes that have no remaining incoming ALIAS_OF edges
+            // from other connections (they were either promoted above or were
+            // never aliased).
+            const deleteResult = await session.run(
+              `
             MATCH (n:EntityNode {connectionId: $connectionId, orgId: $orgId})
             WHERE NOT ((:EntityNode)-[:ALIAS_OF]->(n))
             DETACH DELETE n
             RETURN count(n) AS deleted
             `,
-            { connectionId, orgId },
-          );
+              { connectionId, orgId },
+            );
 
-          const deletedCount = (deleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+            const deletedCount =
+              (deleteResult.records[0]?.get("deleted") as number | undefined) ??
+              0;
 
-          // ── Pass 3: Delete every other node this connection produced ─────
-          // Catch-all for all NON-EntityNode artifacts stamped with this
-          // connectionId — SourceFile, SourceSymbol, Feature, and any future
-          // connector-derived label. EntityNode is handled in Pass 2 (it carries
-          // ALIAS_OF promotion semantics); everything else is removed
-          // unconditionally. Previously only SourceFile/SourceSymbol were swept,
-          // so :Feature nodes (and others) leaked, leaving thousands of orphans
-          // after a "delete data". DETACH DELETE also drops CONTAINS / SOURCED_FROM
-          // and any other edges.
-          const sourceDeleteResult = await session.run(
-            `
+            // ── Pass 3: Delete every other node this connection produced ─────
+            // Catch-all for all NON-EntityNode artifacts stamped with this
+            // connectionId — SourceFile, SourceSymbol, Feature, and any future
+            // connector-derived label. EntityNode is handled in Pass 2 (it carries
+            // ALIAS_OF promotion semantics); everything else is removed
+            // unconditionally. Previously only SourceFile/SourceSymbol were swept,
+            // so :Feature nodes (and others) leaked, leaving thousands of orphans
+            // after a "delete data". DETACH DELETE also drops CONTAINS / SOURCED_FROM
+            // and any other edges.
+            const sourceDeleteResult = await session.run(
+              `
             MATCH (n {connectionId: $connectionId, orgId: $orgId})
             WHERE NOT n:EntityNode
             DETACH DELETE n
             RETURN count(n) AS deleted
             `,
-            { connectionId, orgId },
-          );
-          const sourceDeletedCount =
-            (sourceDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+              { connectionId, orgId },
+            );
+            const sourceDeletedCount =
+              (sourceDeleteResult.records[0]?.get("deleted") as
+                | number
+                | undefined) ?? 0;
 
-          // ── Pass 3b: Sweep inference suggestions left pointing at dead nodes ─
-          // semantic-edge inference records each candidate as an :InferredEdge
-          // node referencing its source via sourceNodeId. Those carry no usable
-          // connectionId, so once Passes 1-3 remove the source entity the edge
-          // referenced, the suggestion is a dangling "pending inference" forever.
-          // Drop any :InferredEdge whose source node no longer exists.
-          const inferredDeleteResult = await session.run(
-            `
-            MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
-            WHERE ie.sourceNodeId IS NOT NULL
-              AND NOT EXISTS {
-                MATCH (s {publicId: ie.sourceNodeId, orgId: $orgId})
-              }
-            DETACH DELETE ie
-            RETURN count(ie) AS deleted
-            `,
-            { connectionId, orgId },
-          );
-          const inferredDeletedCount =
-            (inferredDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
-
-          // ── Pass 4: Delete the SourceConnection meta-node ────────────────
-          await session.run(
-            `
+            // ── Pass 4: Delete the SourceConnection meta-node ────────────────
+            await session.run(
+              `
             MATCH (sc:SourceConnection {id: $connectionId, orgId: $orgId})
             DETACH DELETE sc
             `,
-            { connectionId, orgId },
-          );
+              { connectionId, orgId },
+            );
 
-          // ── Pass 5: Sweep concept placeholders this source's deletion orphaned
-          // Semantic-edge inference MERGEs lightweight :GraphNode concept
-          // targets (carrying type/name, NOT connectionId or naturalKey) and links
-          // source entities to them. They are intentionally connection-agnostic so
-          // a concept seen by several sources survives — so they're matched here
-          // ONLY when they have no remaining relationships after Passes 1–3, i.e.
-          // nothing else references them. naturalKey-keyed nodes (ingested entities,
-          // graph.node.upsert, web-search) are excluded so only inferred orphans go.
-          const orphanResult = await session.run(
-            `
-            MATCH (n:GraphNode {orgId: $orgId, workspaceId: $workspaceId})
-            WHERE n.connectionId IS NULL
-              AND n.naturalKey IS NULL
-              AND NOT (n)--()
-            DELETE n
-            RETURN count(n) AS deleted
-            `,
-            { connectionId, orgId },
-          );
-          const orphanDeletedCount =
-            (orphanResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+            logger.info(
+              {
+                connectionId,
+                orgId,
+                deletedCount,
+                sourceDeletedCount,
+              },
+              "ingestion-delete: neo4j nodes deleted (entities + connection-stamped + meta)",
+            );
 
-          logger.info(
-            {
-              connectionId,
-              orgId,
-              deletedCount,
-              sourceDeletedCount,
-              inferredDeletedCount,
-              orphanDeletedCount,
-            },
-            "ingestion-delete: neo4j nodes deleted (entities + connection-stamped + inference suggestions + orphaned concepts + meta)",
-          );
+            return {
+              promoted: promotedCount,
+              deleted: deletedCount + sourceDeletedCount,
+            };
+          }),
+        )) as { promoted: number; deleted: number };
 
-          return {
-            promoted: promotedCount,
-            deleted:
-              deletedCount + sourceDeletedCount + inferredDeletedCount + orphanDeletedCount,
-          };
-        }),
-      )) as { promoted: number; deleted: number };
+        aliasPromotions = neo4jResult.promoted;
+        deletedEntities = neo4jResult.deleted;
+      }
 
-      aliasPromotions = neo4jResult.promoted;
-      deletedEntities = neo4jResult.deleted;
-    }
-
-    // ── Step 3: Delete Postgres records ──────────────────────────────────────
-    if (mode === "connection_only" || mode === "full") {
-      await step.run("delete-postgres-records", () =>
-        runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb(async (tx) => {
-            // Delete child rows first (FK references source_connections.id).
-            await tx.execute(sql`
+      // ── Step 3: Delete Postgres records ──────────────────────────────────────
+      if (mode === "connection_only" || mode === "full") {
+        await step.run("delete-postgres-records", () =>
+          runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb(async (tx) => {
+              // Delete child rows first (FK references source_connections.id).
+              await tx.execute(sql`
               DELETE FROM ingestion.entity_type_mappings
               WHERE  connection_id = ${connectionId}::uuid
             `);
-            await tx.execute(sql`
+              await tx.execute(sql`
               DELETE FROM ingestion.setup_suggestions
               WHERE  connection_id = ${connectionId}::uuid
             `);
-            await tx.execute(sql`
+              await tx.execute(sql`
               DELETE FROM ingestion.webhook_subscriptions
               WHERE  connection_id = ${connectionId}::uuid
             `);
-            await tx.execute(sql`
+              await tx.execute(sql`
               DELETE FROM ingestion.auth_credentials
               WHERE  connection_id = ${connectionId}::uuid
             `);
-            // Soft-delete the connection itself so audit history is preserved.
-            // Column is deleted_by_user_id (NOT deleted_by) — the wrong name made
-            // this UPDATE throw "column deleted_by does not exist", so the job
-            // never set deleted_at and the row was stuck at status='deleting'
-            // forever in the UI (connection.list filters deleted_at IS NULL).
-            await tx.execute(sql`
+              // Soft-delete the connection itself so audit history is preserved.
+              // Column is deleted_by_user_id (NOT deleted_by) — the wrong name made
+              // this UPDATE throw "column deleted_by does not exist", so the job
+              // never set deleted_at and the row was stuck at status='deleting'
+              // forever in the UI (connection.list filters deleted_at IS NULL).
+              await tx.execute(sql`
               UPDATE ingestion.source_connections
               SET    status             = 'deleted',
                      deleted_at         = NOW(),
@@ -308,64 +279,64 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = c
               WHERE  id     = ${connectionId}::uuid
               AND    org_id = ${orgId}::uuid
             `);
-          }),
-        ),
-      );
-    }
-
-    // ── Step 4: Audit log ────────────────────────────────────────────────────
-    await step.run("audit-log", async () => {
-      // Local Pino trace — always emitted so the deletion is visible in logs.
-      logger.info(
-        { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt },
-        "ingestion-delete-connection: completed",
-      );
-
-      // Append-only runtime event to ClickHouse (four-store model: ClickHouse
-      // holds runtime events only). Emitted through @oxagen/telemetry's generic
-      // `events` table — no bespoke ingestion schema needed; source_system tags
-      // the emitter and the payload carries the deletion detail.
-      //
-      // Fire-and-forget-safe: the connection is already deleted by this point,
-      // so a ClickHouse write failure must NEVER fail (and thus retry) the
-      // deletion job. Any error is logged and swallowed, not thrown.
-      try {
-        await insertEvents([
-          {
-            event_id: globalThis.crypto.randomUUID(),
-            org_id: orgId,
-            workspace_id: workspaceId,
-            event_type: "ingestion.connection.deleted",
-            source_system: "inngest:ingestion.delete-connection",
-            stream_offset: null,
-            payload: JSON.stringify({
-              connectionId,
-              mode,
-              requestedBy,
-              requestedAt,
             }),
-            emitted_at: new Date().toISOString(),
-          },
-        ]);
-      } catch (err) {
-        logger.error(
-          { err, connectionId, orgId, workspaceId, mode, requestedBy },
-          "ingestion-delete-connection: ClickHouse audit event write failed — deletion already applied, telemetry event dropped",
+          ),
         );
       }
-    });
 
-    // ── Step 5: Finalize the deletion_jobs row ───────────────────────────────
-    // Mark the tracking row created by connection.delete as terminally
-    // 'completed' with completed_at and the observed graph-deletion progress.
-    // Without this the row sat at status='running' forever (schema audit O-1).
-    // Guarded on deletionJobId so legacy events (sent before the id was wired)
-    // still complete without throwing.
-    if (deletionJobId) {
-      await step.run("finalize-deletion-job", () =>
-        runInTenantScope({ orgId, workspaceId }, () =>
-          withTenantDb((tx) =>
-            tx.execute(sql`
+      // ── Step 4: Audit log ────────────────────────────────────────────────────
+      await step.run("audit-log", async () => {
+        // Local Pino trace — always emitted so the deletion is visible in logs.
+        logger.info(
+          { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt },
+          "ingestion-delete-connection: completed",
+        );
+
+        // Append-only runtime event to ClickHouse (four-store model: ClickHouse
+        // holds runtime events only). Emitted through @oxagen/telemetry's generic
+        // `events` table — no bespoke ingestion schema needed; source_system tags
+        // the emitter and the payload carries the deletion detail.
+        //
+        // Fire-and-forget-safe: the connection is already deleted by this point,
+        // so a ClickHouse write failure must NEVER fail (and thus retry) the
+        // deletion job. Any error is logged and swallowed, not thrown.
+        try {
+          await insertEvents([
+            {
+              event_id: globalThis.crypto.randomUUID(),
+              org_id: orgId,
+              workspace_id: workspaceId,
+              event_type: "ingestion.connection.deleted",
+              source_system: "inngest:ingestion.delete-connection",
+              stream_offset: null,
+              payload: JSON.stringify({
+                connectionId,
+                mode,
+                requestedBy,
+                requestedAt,
+              }),
+              emitted_at: new Date().toISOString(),
+            },
+          ]);
+        } catch (err) {
+          logger.error(
+            { err, connectionId, orgId, workspaceId, mode, requestedBy },
+            "ingestion-delete-connection: ClickHouse audit event write failed — deletion already applied, telemetry event dropped",
+          );
+        }
+      });
+
+      // ── Step 5: Finalize the deletion_jobs row ───────────────────────────────
+      // Mark the tracking row created by connection.delete as terminally
+      // 'completed' with completed_at and the observed graph-deletion progress.
+      // Without this the row sat at status='running' forever (schema audit O-1).
+      // Guarded on deletionJobId so legacy events (sent before the id was wired)
+      // still complete without throwing.
+      if (deletionJobId) {
+        await step.run("finalize-deletion-job", () =>
+          runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx.execute(sql`
               UPDATE ingestion.deletion_jobs
               SET    status           = 'completed',
                      completed_at     = NOW(),
@@ -374,11 +345,11 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] = c
               WHERE  id     = ${deletionJobId}::uuid
               AND    org_id = ${orgId}::uuid
             `),
+            ),
           ),
-        ),
-      );
-    }
+        );
+      }
 
-    return { connectionId, mode, deletedAt: new Date().toISOString() };
-  },
-);
+      return { connectionId, mode, deletedAt: new Date().toISOString() };
+    },
+  );

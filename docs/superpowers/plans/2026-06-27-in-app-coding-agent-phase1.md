@@ -2,6 +2,11 @@
 
 > **⚠️ SUPERSEDED (2026-06-27) by `2026-06-27-unified-agent-engine-plan.md` and `docs/adr/ADR-019-unified-agent-engine.md`.** This plan shared only the inner loop+tools, which would have shipped two diverging agents. Its Stage-C task content (sandbox workspace, coding_sessions schema, contracts/handlers/Inngest, surfaces, diff tray) is still valid and is referenced by the new plan; its narrow engine scope is replaced by the shared `@oxagen/agent-engine`. Kept for that task detail.
 
+> **Launch boundary (2026-07-21):** any central source-code graph, code embedding,
+> or automatic execution-to-file lineage described below is also superseded. Exact
+> code graphs stay local; verified shared lineage requires the future typed evidence
+> ledger.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up a server-side, sandboxed agentic coding runner that checks out a connected GitHub repo into a persistent Vercel Sandbox, makes edits with a Claude-Code-style tool loop, and returns a unified diff + summary — invokable end-to-end via a metered, tenant-scoped capability and surfaced live in chat. No GitHub writes yet (Phase 2).

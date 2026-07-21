@@ -12,14 +12,8 @@ export const schema = {
   limit: graphSearch.input.shape.limit.describe(
     "Maximum number of results to return (1–50, default 10)",
   ),
-  kinds: graphSearch.input.shape.kinds.describe(
-    "Optional filter by node kind (entity, file, symbol, chunk, memory, execution, document, message)",
-  ),
-  isSystem: graphSearch.input.shape.isSystem.describe(
-    "Filter by ownership — true for product-owned nodes, false for customer nodes",
-  ),
   labels: graphSearch.input.shape.labels.describe(
-    "Optional domain-label filter (e.g. [\"Person\", \"SourceFile\"])",
+    'Optional domain-label filter (e.g. ["Person", "Company"])',
   ),
 };
 
@@ -33,7 +27,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function graphSearchTool(args: InferSchema<typeof schema>) {
+export default async function graphSearchTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(graphSearch.name, args, ctx, { surface: "mcp" });
   return graphSearch.output.parse(output);

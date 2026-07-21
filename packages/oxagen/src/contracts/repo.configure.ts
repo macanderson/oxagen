@@ -5,7 +5,7 @@ export const repoConfigure = registerCapability({
   name: "configure_repo",
   domain: "repo",
   description:
-    "Set repo-specific configuration: filters, inference toggles, sync cadence, field mappings. Specializes connection.configure for code repository connectors.",
+    "Set repo-specific filters, sync cadence, and field mappings. Specializes connection.configure for code repository connectors.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -44,16 +44,6 @@ export const repoConfigure = registerCapability({
       })
       .optional()
       .describe("Label-based filtering for issues and PRs"),
-    inferenceEnabled: z
-      .boolean()
-      .optional()
-      .describe("Enable LLM-driven semantic inference"),
-    ontologyPrompt: z
-      .string()
-      .optional()
-      .describe(
-        "Custom prompt instructing LLM on entity extraction and relationships",
-      ),
     syncCadence: z
       .enum(["manual", "polling", "webhook"])
       .optional()
@@ -87,7 +77,6 @@ export const repoConfigure = registerCapability({
         exclude: z.array(z.string()),
       })
       .nullable(),
-    inferenceEnabled: z.boolean(),
     syncCadence: z.enum(["manual", "polling", "webhook"]),
     pollingIntervalSeconds: z.number().int().positive().nullable(),
     updatedAt: z.string(),

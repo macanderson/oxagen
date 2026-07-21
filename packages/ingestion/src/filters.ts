@@ -46,21 +46,14 @@ export interface DeliveryConfig {
   /** Polling interval in seconds (only used when syncMethod === "polling"). */
   syncIntervalSeconds?: number;
 
-  /** Semantic inference controls. */
+  /**
+   * Legacy embedding opt-out retained only to honor existing tenant config.
+   * New connector schemas do not expose this shape.
+   */
   semanticInference?: {
     enabled: boolean;
     /** Per-record-type toggle. Key = sourceRecordType; value = whether to embed. */
     perRecordType?: Record<string, boolean>;
-    /** Minimum confidence for inferred edges to be persisted. Default 0.75. */
-    confidenceThreshold?: number;
-    /** Custom prompt steering entity extraction for this source (overrides the
-     * default). Set via integration.configure; consumed by the enrichment worker
-     * fleet. */
-    ontologyPrompt?: string;
-    /** Custom prompt steering cross-source relationship inference for this source
-     * (overrides the default). Set via integration.configure; consumed by
-     * semantic.edge.infer. */
-    semanticEdgePrompt?: string;
   };
 }
 
@@ -188,14 +181,16 @@ export function applyLabelFilter(
   const raw = properties["labels"];
   if (!Array.isArray(raw) || raw.length === 0) return { filtered: false };
 
-  const labelNames: string[] = raw.map((item) => {
-    if (typeof item === "string") return item;
-    if (typeof item === "object" && item !== null && "name" in item) {
-      const name = (item as Record<string, unknown>)["name"];
-      return typeof name === "string" ? name : "";
-    }
-    return "";
-  }).filter((n) => n.length > 0);
+  const labelNames: string[] = raw
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (typeof item === "object" && item !== null && "name" in item) {
+        const name = (item as Record<string, unknown>)["name"];
+        return typeof name === "string" ? name : "";
+      }
+      return "";
+    })
+    .filter((n) => n.length > 0);
 
   for (const label of labelNames) {
     if (matchGlobPattern(label, patterns)) {
@@ -206,13 +201,13 @@ export function applyLabelFilter(
 }
 
 // ---------------------------------------------------------------------------
-// Stage 5 gate: semantic inference
+// Stage 5 gate: embeddings
 // ---------------------------------------------------------------------------
 
 /**
- * Stage 5 — embed gate: inference control.
+ * Stage 5 — embed gate: legacy opt-out compatibility.
  *
- * Returns true when embedding / inference should proceed for this record,
+ * Returns true when embedding should proceed for this record,
  * false when it should be skipped.
  *
  * Rules (applied in order):
@@ -234,14 +229,4 @@ export function shouldRunInference(
     return false;
   }
   return true;
-}
-
-/**
- * Returns the confidence threshold to apply when persisting inferred edges.
- * Defaults to 0.75 when not explicitly configured.
- */
-export function inferenceConfidenceThreshold(
-  semanticInference: DeliveryConfig["semanticInference"],
-): number {
-  return semanticInference?.confidenceThreshold ?? 0.75;
 }

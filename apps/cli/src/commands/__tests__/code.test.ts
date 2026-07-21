@@ -13,7 +13,15 @@
  * A fake CommandWriter captures write/writeErr into arrays, and node:fs is
  * mocked so the file reads/writes are controllable and observable.
  */
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({
@@ -36,14 +44,15 @@ vi.mock("node:fs", () => ({
   rmSync: vi.fn(),
 }));
 
-import {
-  handleCodeDiff,
-  handleCodeFormat,
-  handleCodePatch,
-  handleCodeMap,
-} from "../code.js";
+import { handleCodeDiff, handleCodeFormat, handleCodePatch } from "../code.js";
 import { apiPostOrThrow, ApiError } from "../../lib/api.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 
 const mockPost = apiPostOrThrow as unknown as Mock;
 const mockReadFile = readFileSync as unknown as Mock;
@@ -56,7 +65,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -70,7 +82,11 @@ const DIFF_RESULT = {
 };
 const DIFF_UNCHANGED = { diff: "", changed: false, additions: 0, deletions: 0 };
 
-const FORMAT_RESULT = { formatted: '{\n  "a": 1\n}\n', changed: true, language: "json" };
+const FORMAT_RESULT = {
+  formatted: '{\n  "a": 1\n}\n',
+  changed: true,
+  language: "json",
+};
 
 const PATCH_RESULT = {
   applied: false,
@@ -81,44 +97,6 @@ const PATCH_RESULT = {
   ],
   changedCount: 3,
 };
-
-const MAP_RESULT = {
-  files: [
-    {
-      nodeId: "n1",
-      path: "src/billing.ts",
-      language: "ts",
-      displayName: "billing",
-      domain: "billing",
-      score: 0.92,
-    },
-  ],
-  symbols: [
-    {
-      nodeId: "s1",
-      name: "charge",
-      kind: "function",
-      path: "src/billing.ts",
-      startLine: 10,
-      endLine: 40,
-      signature: "charge()",
-      docComment: "Charge a customer",
-      domain: "billing",
-      score: 0.9,
-    },
-  ],
-  calls: [{ callerNodeId: "s1", calleeNodeId: "s2", callerName: "charge", calleeName: "meter" }],
-  recentChanges: [
-    {
-      commitSha: "abcdef1234",
-      message: "fix billing\nbody",
-      authorName: "Mac",
-      committedAt: "2026-07-01T00:00:00Z",
-      modifiedFiles: ["src/billing.ts"],
-    },
-  ],
-};
-const MAP_EMPTY = { files: [], symbols: [], calls: [], recentChanges: [] };
 
 let prevExit: typeof process.exitCode;
 
@@ -143,7 +121,12 @@ describe("handleCodeDiff", () => {
   it("emits one single-line JSON value on stdout in --json mode (shape preserved)", async () => {
     mockPost.mockResolvedValueOnce(DIFF_RESULT);
     const { writer, out, err } = makeWriter();
-    await handleCodeDiff("before.ts", "after.ts", { json: true, path: "x.ts", context: "5" }, writer);
+    await handleCodeDiff(
+      "before.ts",
+      "after.ts",
+      { json: true, path: "x.ts", context: "5" },
+      writer,
+    );
     expect(mockPost).toHaveBeenCalledWith("code/diff", {
       before: "",
       after: "",
@@ -173,7 +156,9 @@ describe("handleCodeDiff", () => {
   });
 
   it("routes an API failure to a uniform stderr error (exit 1, clean stdout)", async () => {
-    mockPost.mockRejectedValueOnce(new ApiError("Error 500 from code/diff: boom", 500));
+    mockPost.mockRejectedValueOnce(
+      new ApiError("Error 500 from code/diff: boom", 500),
+    );
     const { writer, out, err } = makeWriter();
     await handleCodeDiff("before.ts", "after.ts", {}, writer);
     expect(out).toEqual([]);
@@ -208,7 +193,10 @@ describe("handleCodeFormat", () => {
     mockPost.mockResolvedValueOnce(FORMAT_RESULT);
     const { writer, out, err } = makeWriter();
     await handleCodeFormat("config.json", { write: true }, writer);
-    expect(mockWriteFile).toHaveBeenCalledWith("config.json", FORMAT_RESULT.formatted);
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      "config.json",
+      FORMAT_RESULT.formatted,
+    );
     expect(out).toEqual([]);
     expect(err[0]).toContain("✓ formatted config.json");
   });
@@ -217,7 +205,10 @@ describe("handleCodeFormat", () => {
     mockPost.mockResolvedValueOnce(FORMAT_RESULT);
     const { writer, out, err } = makeWriter();
     await handleCodeFormat("config.json", { write: true, json: true }, writer);
-    expect(mockWriteFile).toHaveBeenCalledWith("config.json", FORMAT_RESULT.formatted);
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      "config.json",
+      FORMAT_RESULT.formatted,
+    );
     expect(out).toEqual([JSON.stringify(FORMAT_RESULT)]);
     expect(err).toEqual([]);
   });
@@ -290,69 +281,6 @@ describe("handleCodePatch", () => {
     await handleCodePatch("patch.diff", {}, writer);
     expect(out).toEqual([]);
     expect(err[0]).toBe("✗ patch boom");
-    expect(process.exitCode).toBe(1);
-  });
-});
-
-// ── code map ───────────────────────────────────────────────────────────────
-
-describe("handleCodeMap", () => {
-  it("emits one single-line JSON value on stdout in --json mode (shape preserved)", async () => {
-    mockPost.mockResolvedValueOnce(MAP_RESULT);
-    const { writer, out, err } = makeWriter();
-    await handleCodeMap("billing", { json: true, limit: "20", kinds: "file,symbol", domain: "billing" }, writer);
-    expect(mockPost).toHaveBeenCalledWith("code/map", {
-      query: "billing",
-      limit: 20,
-      domain: "billing",
-      kinds: ["file", "symbol"],
-    });
-    expect(out).toEqual([JSON.stringify(MAP_RESULT)]);
-    expect(JSON.parse(out[0] as string)).toEqual(MAP_RESULT);
-    expect(err).toEqual([]);
-  });
-
-  it("renders the human code-map report on stdout in pretty mode", async () => {
-    mockPost.mockResolvedValueOnce(MAP_RESULT);
-    const { writer, out, err } = makeWriter();
-    await handleCodeMap("billing", {}, writer);
-    expect(out).toHaveLength(1);
-    const report = out[0] as string;
-    expect(report).toContain("Code map for: billing");
-    expect(report).toContain("Files (1):");
-    expect(report).toContain("src/billing.ts");
-    expect(report).toContain("Symbols (1):");
-    expect(report).toContain("charge");
-    expect(report).toContain("Call edges (1):");
-    expect(report).toContain("charge → meter");
-    expect(report).toContain("Recent changes (1):");
-    expect(report).toContain("abcdef12");
-    expect(err).toEqual([]);
-  });
-
-  it("reports 'No files matched' on stderr with a clean stdout", async () => {
-    mockPost.mockResolvedValueOnce(MAP_EMPTY);
-    const { writer, out, err } = makeWriter();
-    await handleCodeMap("nonexistent", {}, writer);
-    expect(out).toEqual([]);
-    expect(err).toEqual(['No files matched "nonexistent"']);
-  });
-
-  it("routes an API failure to a uniform stderr error (exit 1, clean stdout)", async () => {
-    mockPost.mockRejectedValueOnce(new ApiError("map boom", 500));
-    const { writer, out, err } = makeWriter();
-    await handleCodeMap("billing", {}, writer);
-    expect(out).toEqual([]);
-    expect(err[0]).toBe("✗ map boom");
-    expect(process.exitCode).toBe(1);
-  });
-
-  it("emits a json error object on stderr in --json mode", async () => {
-    mockPost.mockRejectedValueOnce(new ApiError("scoped out", 403));
-    const { writer, out, err } = makeWriter();
-    await handleCodeMap("billing", { json: true }, writer);
-    expect(out).toEqual([]);
-    expect(JSON.parse(err[0] as string)).toEqual({ type: "error", code: "api", message: "scoped out" });
     expect(process.exitCode).toBe(1);
   });
 });

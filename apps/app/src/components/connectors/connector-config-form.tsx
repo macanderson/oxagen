@@ -8,8 +8,7 @@
  *   2. Config fields
  *   3. Record type selector
  *   4. Filters panel (if enabled)
- *   5. Inference panel (if enabled)
- *   6. Sync cadence panel
+ *   5. Sync cadence panel
  *
  * Calls integration.install (new) or integration.configure (update) on submit.
  * Runs pluginSchemaValidate before submit for server-side validation.
@@ -23,7 +22,6 @@ import { AuthSchemePicker } from "./auth-scheme-picker";
 import { FieldRenderer, validateField } from "./field-renderer";
 import { RecordTypeSelector } from "./record-type-selector";
 import { FiltersPanel } from "./filters-panel";
-import { InferencePanel } from "./inference-panel";
 import { SyncCadencePanel } from "./sync-cadence-panel";
 import {
   useConnectorSchema,
@@ -284,7 +282,6 @@ export function ConnectorConfigForm({
   const hasFilters =
     schema.filters?.pathFilters?.enabled === true ||
     schema.filters?.labelFilters?.enabled === true;
-  const hasInference = schema.inference?.enabled === true;
   const hasSync = Boolean(schema.sync);
 
   return (
@@ -335,17 +332,6 @@ export function ConnectorConfigForm({
             description="Narrow which items get synced."
           />
           <FiltersPanel />
-        </section>
-      )}
-
-      {/* Inference */}
-      {hasInference && (
-        <section aria-labelledby="inference-section-heading">
-          <SectionHeader
-            title="AI inference"
-            description="Let Oxagen extract relationships and entities from synced content."
-          />
-          <InferencePanel />
         </section>
       )}
 

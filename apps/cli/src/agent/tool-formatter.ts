@@ -17,8 +17,7 @@ export const TOOL_EMOJIS: Record<string, string> = {
 
   // Knowledge & graph
   MCP: "🔗",
-  suggest_semantic_edges: "🧠",
-  approve_semantic_edge: "✅",
+  query_ontology: "🔍",
   "knowledge.query": "🔍",
 
   // LLM & inference
@@ -58,8 +57,8 @@ export function getToolAccent(toolName: string): string {
 
 /**
  * Human-facing label for a tool chip. Single-word core tools (Read, Edit, Bash)
- * read best Title-cased; capability names (`suggest_semantic_edges`, legacy
- * `semantic.edge.suggest`) are precise identifiers a developer recognizes, so
+ * read best Title-cased; capability names (`query_ontology`) are precise
+ * identifiers a developer recognizes, so
  * they're kept verbatim.
  */
 export function toolDisplayLabel(toolName: string): string {

@@ -75,7 +75,7 @@ Timeout policy (landed on this branch, keep): no wall-clock turn cap; progress-b
 
 ## 9. SWE-bench run profile (config, not fork)
 
-`--mode bypass --output-format stream-json --max-steps 200`, pinned worker model + high effort, memory OFF, graph-sync OFF, judge ON with evidence gate (or `--no-pipeline` for ablation), headless prompt profile, per-instance wall cap in the harness, `OXAGEN_ALLOW_NO_SESSION=1` + `AI_GATEWAY_API_KEY`. Ablations the harness supports: ±pipeline, ±code-graph, ±best-of-N, model matrix.
+`--mode bypass --output-format stream-json --max-steps 200`, pinned worker model + high effort, memory OFF, judge ON with evidence gate (or `--no-pipeline` for ablation), headless prompt profile, per-instance wall cap in the harness, `OXAGEN_ALLOW_NO_SESSION=1` + `AI_GATEWAY_API_KEY`. The retired client graph-upsync path is absent rather than benchmark-disabled. Ablations the harness supports: ±pipeline, ±code-graph, ±best-of-N, model matrix.
 
 ## 10. Cleanups bound to this spec
 

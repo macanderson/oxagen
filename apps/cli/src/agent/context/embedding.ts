@@ -2,27 +2,19 @@
  * Code-graph embedding client for the CLI (Group 3 context layer).
  *
  * The CLI embeds file nodes locally so `graph_query` can rank "impacted files"
- * by semantic similarity to a natural-language query — the same capability
- * `apps/app` gets from Neo4j's vector index. The GATEWAY client stays the exact
- * model, dimension, and renderer the server ingestion pipeline uses:
+ * by semantic similarity to a natural-language query. The gateway client uses
  * `text-embedding-3-small` (1536-d) via the Vercel AI Gateway, with embed text
  * built by `@oxagen/code-graph`'s shared `renderFileText`/`renderSymbolText`
- * (see {@link ../../../packages/code-graph/src/embed.ts}). A vector produced by
- * the gateway client is byte-compatible with `graph_node_embedding_index`, so
- * the CLI can also ship it on `graph push` and skip a redundant server re-embed.
+ * (see {@link ../../../packages/code-graph/src/embed.ts}).
  *
  * Two LOCAL, free, AI-SDK-free backends sit alongside the gateway so embeddings
  * work fully offline with no key: {@link OllamaEmbeddingClient}
  * (embedding-ollama.ts, an HTTP call to a local Ollama server) and the ONNX
  * client (embedding-onnx.ts, an in-process `fastembed` model). Both produce
- * vectors in a DIFFERENT vector space than the gateway's 1536-d index (a
- * 384-d or 768-d local vector would be noise there), so they are deliberately
- * NEVER shipped on `graph push` — `graph.push.ts`'s `localEmbeddingFor` only
- * attaches a vector whose `embeddingProvider` is the shared gateway model id;
- * every other provider's vectors stay purely local, and the server re-embeds
- * those files on ingest instead. That double-embed (once locally for the
- * CLI's own semantic_search, once server-side on push) is the accepted,
- * opt-in cost of running local embeddings — see `resolveEmbeddingClient`.
+ * vectors in a different vector space than the gateway's 1536-d local index (a
+ * 384-d or 768-d vector would be noise there). Every provider's vectors
+ * remain local to the checkout and are keyed by provider id so incompatible
+ * vectors are never compared.
  *
  * When NO backend is available (no local server, no local model installed, no
  * gateway key) the client is simply unavailable and the semantic layer

@@ -1,13 +1,19 @@
-# Agent File Locking — graph-backed, coordinator-free file locks for agent fleets
+# Agent File Locking — archived graph-backed plan
 
-Status: **Wired and live (OXA-2070).** The Neo4j-backed acquire/release/sweep
-mutations, the `HOLDS_LOCK` edge, and the single-wiring-point integration into
-`write_file`/`edit_file` are shipped and covered by tests (including a
-real-Neo4j integration test proving two racing agents serialize correctly).
-Capability parity (contracts/API/MCP) is done for schema/api/mcp/unit;
-`docs/capabilities/*.md` and a CLI command are deferred as fast-follows — see
-§11 below for exactly what shipped, what was adapted from this doc's original
-Cypher, and what's still open.
+Status: **Superseded.** Neo4j/`HOLDS_LOCK` and the former graph-sync adapter are
+not lock authority. Current launch enforcement uses transactional Postgres
+leases in `agent.file_locks`, monotonic fencing tokens in
+`agent.file_lock_fences`, and `createFileLeaseLockAdapter` at the shared
+`write_file`/`edit_file` enforcement point. The old `GraphSyncProvider` shape
+must not be restored or reused for coordination.
+
+Any future visibility into which run held which lock belongs in the immutable
+run-evidence ledger and may be projected into the workspace graph only from a
+narrow, authenticated server-side path. That evidence path is not implemented
+or specified by this plan. Sections 1–11 below are retained as historical design
+and rollout evidence; their Neo4j authority and graph-projection claims are no
+longer normative.
+
 Owner: platform / agent-engine
 Related: `docs/specs/graph-mediated-fanout-phase2/`, ADR-010 (subagent fan-out via Inngest)
 
@@ -105,7 +111,12 @@ RETURN CASE WHEN other IS NULL THEN true ELSE false END AS granted,
 - **Batch release**: on agent turn end, delete all `HOLDS_LOCK` edges for
   `executionId`, so a turn never leaks locks.
 
-## 6. Where it plugs into the engine
+## 6. Historical engine wiring proposal (superseded)
+
+The `graph-sync.ts`/`GraphSyncProvider` wiring described here is retired. The
+active engine port is backed by `packages/agent/src/adapters/file-lock-lease.ts`
+and Postgres lease operations; Neo4j is never consulted to decide whether a
+write may proceed.
 
 - **Coding-agent turn** (`packages/agent/src/adapters/graph-sync.ts`): today
   `recordLineage()` writes `TOUCHED_FILE` edges after a turn. Add a symmetric
@@ -157,7 +168,7 @@ heldBy?, blockedUntil? }`.
   queryable alongside `TOUCHED_FILE` lineage. This advances graph-grounding +
   metering, squarely on the wedge.
 
-## 9. Task list (wiring follow-up)
+## 9. Historical task list (superseded)
 
 1. `packages/ontology/src/types.ts` — add `HOLDS_LOCK` to `EdgeTypes` (+ test).
 2. `packages/ontology/src/mutations/` — add `acquire-file-lock.ts` /
@@ -181,7 +192,7 @@ heldBy?, blockedUntil? }`.
     concurrent acquires on one file → exactly one `granted:true`; an e2e in
     `apps/app/e2e/` if a user-facing lock view is added.
 
-## 10. Blockers / open questions
+## 10. Historical blockers / open questions
 
 - Needs a `HOLDS_LOCK` `EdgeType` and three new mutations — net-new graph surface,
   but reuses `:SourceFile` + `naturalKey` so no new node identity.
@@ -194,7 +205,12 @@ heldBy?, blockedUntil? }`.
 - Requires a running Neo4j in the agent-execution runtime (already present for
   lineage), plus `bootstrapEntitlementRuntime()` at any new worker entrypoint.
 
-## 11. OXA-2070 — what actually shipped
+## 11. OXA-2070 historical snapshot
+
+> The section below records what shipped at that time. It does not describe the
+> current launch authority: the Postgres lease and fencing-token path supersedes
+> the Neo4j lock implementation, and a future evidence ledger—not a graph sync
+> provider—is the only intended lineage bridge.
 
 **(a) Neo4j-backed acquire/release/sweep — done.**
 `packages/ontology/src/mutations/{acquire-file-lock,release-file-lock,
@@ -225,8 +241,8 @@ Also added `forceReleaseFileLock` (release by `lockId` only, no holder-identity
 check — the admin/debug path) alongside the plan's `releaseFileLock`
 (holder-checked) and `releaseFileLocksByExecution` (turn-end batch release).
 
-**(b) Wiring into the real execution path — done, at a DIFFERENT (better) point
-than §6 originally proposed.** §6 named `graph-sync.ts`'s end-of-turn
+**(b) Wiring into the then-current execution path.** §6 named the now-retired
+`graph-sync.ts` end-of-turn
 `ensureGraph`/`recordLineage` call site and `agent.execute-subagent.ts` as the
 wiring points. In practice, files are only known AFTER the model decides to
 edit them mid-turn (the fanout executor calls generic capabilities by name and

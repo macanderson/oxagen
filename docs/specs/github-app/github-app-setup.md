@@ -1,12 +1,17 @@
-# GitHub App setup — source-code ingestion connector
+# GitHub App setup — provider-metadata connector
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
 **Last verified against code:** 2026-06-28.
 
 This document is the authoritative setup reference for the GitHub App(s) that power the
-**source-code ingestion connector**. It lists every configuration value, the exact callback
+**provider-metadata connector**. It lists every configuration value, the exact callback
 and webhook endpoints the code expects, the permissions and events to subscribe to, and which
 values differ between **development** and **production**.
+
+> **Launch boundary (2026-07-21):** the connector ingests repository, ref, commit,
+> pull-request, issue, release, and workflow metadata. It does not ingest repository
+> source text, symbols, chunks, imports, or code embeddings. Exact code graphs stay
+> local. Canonical protected/default-ref topology and typed run evidence are follow-ups.
 
 For the customer-facing "how do I connect my repo" walkthrough, see
 `apps/docs/content/docs/connections/github.mdx`.
@@ -26,13 +31,13 @@ For the customer-facing "how do I connect my repo" walkthrough, see
 
 ---
 
-## How source code is ingested (the live path)
+## How GitHub metadata is ingested (the live path)
 
 The connector is defined in `packages/ingestion/src/connectors/github/index.ts`
 (`connectorId: "github"`, `deliveryMethod: "webhook"`, auth schemes
 `oauth2_authorization_code` / `api_key`). There are **two ingestion paths**: a one-time
-**pull-based initial sync** that backfills the repo's file tree (below), and **live webhooks** that
-stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's OAuth token today:
+**pull-based initial sync** that backfills repository and delivery metadata, and **live webhooks**
+that stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's OAuth token today:
 
 1. **Create connection.** The app creates a `ingestion.source_connections` row in
    `status = "pending_setup"`.
@@ -61,14 +66,11 @@ stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's OAuth 
    the `ingestion/github.initial-sync` Inngest event using `deliveryConfig.{owner, repo, defaultBranch}`.
 7. **Initial sync.** `ingestion.github-initial-sync`
    (`packages/inngest-functions/src/functions/ingestion.github-initial-sync.ts`) decrypts the user
-   token, calls `GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1`, filters to source
-   blobs (extensions `.ts/.tsx/.py`, `size > 0`, skipping `node_modules/`, `dist/`, `.git/`,
-   `__pycache__/`, capped at 500 files), upserts a `:SourceConnection` node in Neo4j, and fans out
-   `ingestion/github.parse-file` events. The shared pipeline
-   (`ingestion.pipeline.ts`, event `ingestion/entity.received`) normalizes → dedups → upserts
-   `:EntityNode`s with embeddings, following the dual-write pattern of
-   [ADR-012](../adr/ADR-012-connector-dual-write-pattern.md) (Postgres = durable cursor/health,
-   Neo4j = graph index).
+   token, resolves the repository and its actual default branch, and backfills bounded repository,
+   pull-request, issue, release, and commit metadata. It upserts the `:SourceConnection` metadata
+   node and sends provider records through `ingestion/entity.received`; the shared pipeline
+   normalizes, deduplicates, and projects those governed records into Neo4j. No repository tree or
+   source blob is parsed or embedded server-side.
 
 > **Note on `scope`.** The authorize URL passes `scope=repo,read:org`, but **GitHub Apps ignore the
 > `scope` parameter** — a user-to-server token's access is governed entirely by the App's configured
@@ -342,6 +344,6 @@ Still open — worth tracking in Linear (`oxagen-v2`, labels `connectors`, `inge
    access tokens (JWT signed with the App private key), so sync survives the authorizing user leaving.
 2. **Webhook receipt bookkeeping** — optionally stamp `last_sync_at` / a `webhook_subscriptions`
    row on delivery for observability (functional sync does not require it).
-3. **`push` → `source` file ingestion** — webhook `push` currently ingests commits; ingesting the
-   changed *files* (added/modified/removed) as `source` records on push is a follow-up. Initial
-   sync still covers the full file tree.
+3. **Canonical topology + evidence** — derive shared topology only from a configured
+   protected/default ref, and add a typed evidence ledger for verified execution-to-commit,
+   artifact, test, and changed-file claims. Do not restore source-blob ingestion to deliver this.

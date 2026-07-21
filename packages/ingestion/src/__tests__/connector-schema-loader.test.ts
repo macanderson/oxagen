@@ -66,10 +66,7 @@ sync:
 `;
 
 /** Build a minimal Response-compatible mock. */
-function makeResponse(
-  body: string,
-  status = 200,
-): Response {
+function makeResponse(body: string, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -100,6 +97,12 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     expect(schema?.metadata.schemaVersion).toBeTruthy();
     expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
     expect(schema?.config?.fields.length).toBeGreaterThan(0);
+    const recordTypes = schema?.["recordTypes"] as {
+      items: Array<{ id: string }>;
+    };
+    const filters = schema?.["filters"] as Record<string, unknown>;
+    expect(recordTypes.items.map((item) => item.id)).not.toContain("source");
+    expect(filters["pathFilters"]).toBeUndefined();
   });
 
   it("loads the slack schema", () => {
@@ -239,6 +242,7 @@ describe("loadBuiltInSchema — built-in plugins", () => {
       expect(schema?.metadata.id).toBe(id);
       expect(schema?.apiVersion).toBe("oxagen.ai/v1alpha1");
       expect(schema?.kind).toBe("ConnectorPlugin");
+      expect(schema).not.toHaveProperty("inference");
     }
   });
 
@@ -343,7 +347,9 @@ describe("loadSchema — partner URL fetch", () => {
     expect(cacheWriter).toHaveBeenCalledWith(
       "custom-partner",
       "https://cdn.example.com/schema.yaml",
-      expect.objectContaining({ metadata: expect.objectContaining({ id: "custom-partner" }) }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({ id: "custom-partner" }),
+      }),
     );
   });
 
@@ -370,7 +376,10 @@ describe("loadSchema — partner URL fetch", () => {
     );
 
     const cacheWriter = vi.fn().mockResolvedValue(undefined);
-    const opts = { schemaUrl: "https://cdn.example.com/schema.yaml", cacheWriter };
+    const opts = {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+      cacheWriter,
+    };
 
     await loadSchema("custom-partner", opts);
     await loadSchema("custom-partner", opts);
@@ -395,7 +404,9 @@ describe("loadSchema — partner URL fetch", () => {
   });
 
   it("throws immediately on 4xx (non-retryable)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse("Not Found", 404));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse("Not Found", 404),
+    );
 
     await expect(
       loadSchema("custom-partner", {
@@ -431,7 +442,9 @@ describe("loadSchema — partner URL fetch", () => {
       "oxagen.ai/v1alpha1",
       "oxagen.ai/v2",
     );
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(badSchema),
+    );
 
     await expect(
       loadSchema("custom-partner", {
@@ -445,7 +458,9 @@ describe("loadSchema — partner URL fetch", () => {
       "kind: ConnectorPlugin",
       "kind: SomethingElse",
     );
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(badSchema),
+    );
 
     await expect(
       loadSchema("custom-partner", {
@@ -468,7 +483,9 @@ metadata:
 sync:
   delivery: polling
 `;
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(makeResponse(badSchema));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      makeResponse(badSchema),
+    );
 
     await expect(
       loadSchema("custom-partner", {
@@ -491,7 +508,9 @@ describe("loadSchema — SSRF protection on partner schemaUrl", () => {
   it("rejects a non-HTTPS schemaUrl without fetching", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await expect(
-      loadSchema("custom-partner", { schemaUrl: "http://cdn.example.com/schema.yaml" }),
+      loadSchema("custom-partner", {
+        schemaUrl: "http://cdn.example.com/schema.yaml",
+      }),
     ).rejects.toThrow(/must use HTTPS/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -509,7 +528,9 @@ describe("loadSchema — SSRF protection on partner schemaUrl", () => {
   it("rejects a loopback IP literal without fetching", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await expect(
-      loadSchema("custom-partner", { schemaUrl: "https://127.0.0.1/schema.yaml" }),
+      loadSchema("custom-partner", {
+        schemaUrl: "https://127.0.0.1/schema.yaml",
+      }),
     ).rejects.toThrow(/non-public address/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -517,7 +538,9 @@ describe("loadSchema — SSRF protection on partner schemaUrl", () => {
   it("rejects an RFC1918 private IP literal without fetching", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await expect(
-      loadSchema("custom-partner", { schemaUrl: "https://10.0.0.5/schema.yaml" }),
+      loadSchema("custom-partner", {
+        schemaUrl: "https://10.0.0.5/schema.yaml",
+      }),
     ).rejects.toThrow(/non-public address/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -525,7 +548,9 @@ describe("loadSchema — SSRF protection on partner schemaUrl", () => {
   it("rejects localhost without fetching", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await expect(
-      loadSchema("custom-partner", { schemaUrl: "https://localhost/schema.yaml" }),
+      loadSchema("custom-partner", {
+        schemaUrl: "https://localhost/schema.yaml",
+      }),
     ).rejects.toThrow(/not a permitted public host/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -539,9 +564,13 @@ describe("loadSchema — after cache clear, re-fetches partner schema", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(makeResponse(PARTNER_SCHEMA_YAML));
 
-    await loadSchema("custom-partner", { schemaUrl: "https://cdn.example.com/schema.yaml" });
+    await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+    });
     _clearSchemaCacheForTest();
-    await loadSchema("custom-partner", { schemaUrl: "https://cdn.example.com/schema.yaml" });
+    await loadSchema("custom-partner", {
+      schemaUrl: "https://cdn.example.com/schema.yaml",
+    });
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
@@ -734,9 +763,7 @@ describe("validateConfigAgainstSchema — optional fields", () => {
       { organizations: ["acme"] },
       githubSchema,
     );
-    const repoErrors = errors.filter(
-      (e) => e.field === "config.repositories",
-    );
+    const repoErrors = errors.filter((e) => e.field === "config.repositories");
     expect(repoErrors).toEqual([]);
   });
 });

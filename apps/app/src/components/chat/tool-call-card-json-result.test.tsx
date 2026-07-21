@@ -35,22 +35,30 @@ function renderCard(capability: string) {
 }
 
 describe("ToolCallCard result rendering", () => {
-  it.each(["search_graph", "query_ontology", "run_cypher"])(
+  it.each(["search_graph", "query_ontology"])(
     "renders %s output as a clipped JSON snippet",
     (cap) => {
       renderCard(cap);
       const snippet = document.querySelector("[data-component='json-snippet']");
       expect(snippet).not.toBeNull();
-      expect(snippet!.querySelector("pre")?.textContent).toContain('"displayName": "Ada"');
+      expect(snippet!.querySelector("pre")?.textContent).toContain(
+        '"displayName": "Ada"',
+      );
       // Exactly one structured field remains — the (small) Input.
-      expect(document.querySelectorAll("[data-testid='structured-field']").length).toBe(1);
+      expect(
+        document.querySelectorAll("[data-testid='structured-field']").length,
+      ).toBe(1);
     },
   );
 
   it("keeps the structured Result tree for non-graph capabilities", () => {
     renderCard("send_message");
-    expect(document.querySelector("[data-component='json-snippet']")).toBeNull();
+    expect(
+      document.querySelector("[data-component='json-snippet']"),
+    ).toBeNull();
     // Input + Result both structured.
-    expect(document.querySelectorAll("[data-testid='structured-field']").length).toBe(2);
+    expect(
+      document.querySelectorAll("[data-testid='structured-field']").length,
+    ).toBe(2);
   });
 });

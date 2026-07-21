@@ -100,36 +100,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    file: true
-    folder: false
-    shared_drive: false
-  confidenceThreshold:
-    defaultValue: 0.80
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Extract specifications, design decisions, and requirements from Drive documents.
-
-    Look for:
-    - Documents mentioning feature names, service names, or architectural components
-    - Acceptance criteria, design rationale, and API contracts
-    - Author mentions or team ownership signals
-
-    Create edges:
-    - GoogleDoc -[specifies]-> Feature (when doc describes a feature by name or functionality)
-    - GoogleDoc -[references]-> PullRequest (when doc mentions a PR number or GitHub URL)
-    - GoogleDoc -[authored_by]-> GithubUser (when doc author matches a known GitHub handle)
-    - Service -[depends_on]-> ExternalAPI (when doc describes an integration or dependency)
-
-    Cross-source links:
-    - If a doc mentions a feature by name, link to the Feature node inferred from connected code sources
-    - If a doc mentions a GitHub issue number (e.g. #123), reference that Issue node
-
 sync:
   delivery: polling
   pollingSupported: true

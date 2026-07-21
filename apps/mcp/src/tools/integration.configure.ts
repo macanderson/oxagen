@@ -6,7 +6,10 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...integrationConfigure.input.shape,
-  integrationId: integrationConfigure.input.shape.integrationId.describe("Plugin instance ID"),
+  integrationId:
+    integrationConfigure.input.shape.integrationId.describe(
+      "Plugin instance ID",
+    ),
   displayName: integrationConfigure.input.shape.displayName.describe(
     "Updated display name for the integration",
   ),
@@ -15,15 +18,6 @@ export const schema = {
   ),
   syncCadence: integrationConfigure.input.shape.syncCadence.describe(
     "Update sync trigger method: manual, polling, or webhook",
-  ),
-  inferenceEnabled: integrationConfigure.input.shape.inferenceEnabled.describe(
-    "Enable or disable LLM inference for this integration",
-  ),
-  ontologyPrompt: integrationConfigure.input.shape.ontologyPrompt.describe(
-    "Custom prompt for entity extraction from this source",
-  ),
-  semanticEdgePrompt: integrationConfigure.input.shape.semanticEdgePrompt.describe(
-    "Custom prompt for cross-source relationship inference",
   ),
 };
 
@@ -37,8 +31,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function integrationConfigureTool(args: InferSchema<typeof schema>) {
+export default async function integrationConfigureTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(integrationConfigure.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(integrationConfigure.name, args, ctx, {
+    surface: "mcp",
+  });
   return integrationConfigure.output.parse(output);
 }

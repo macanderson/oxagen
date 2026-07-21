@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
  *
  * This actually shipped: the barrel drifted to 237 imports against 256 contract
  * files, so 19 capabilities (agent.memory.delete/update/remember, org.list,
- * workspace.list, code.map, graph.sync.push, agent.feature.verify, every
+ * workspace.list, code.map, agent.feature.verify, every
  * browser.* and every agent.sandbox.*) were dead at runtime. This test fails
  * loudly on that drift so it can never silently recur.
  */
@@ -68,7 +68,11 @@ describe("contracts.generated.ts barrel", () => {
   it("has no duplicate imports", () => {
     const imported = barrelImportBases();
     const seen = new Set<string>();
-    const dupes = imported.filter((b) => (seen.has(b) ? true : (seen.add(b), false)));
-    expect(dupes, "Duplicate import lines in contracts.generated.ts").toEqual([]);
+    const dupes = imported.filter((b) =>
+      seen.has(b) ? true : (seen.add(b), false),
+    );
+    expect(dupes, "Duplicate import lines in contracts.generated.ts").toEqual(
+      [],
+    );
   });
 });

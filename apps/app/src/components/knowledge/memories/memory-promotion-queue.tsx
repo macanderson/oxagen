@@ -26,7 +26,7 @@ import { ArrowUpCircle, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import {
   EmptyState,
   ErrorState,

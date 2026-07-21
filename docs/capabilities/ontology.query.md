@@ -1,6 +1,6 @@
 # ontology.query
 
-Typed multi-hop traversal over the knowledge graph. Unlike `graph.cypher`, the caller never writes Cypher: they name a start node, the relationship type(s) to follow, a direction, and a depth, and the handler walks the graph (org + workspace scoped) and returns the reachable subgraph as nodes + edges. This is the safe, agent-callable traversal primitive that powers relationship-condition triggers and graph reasoning.
+Typed multi-hop traversal over the knowledge graph. The caller names a start node, the relationship type(s) to follow, a direction, and a depth; the handler walks the tenant-scoped graph and returns the reachable subgraph as nodes and edges. This governed shape is the supported agent traversal surface; callers cannot submit raw Cypher.
 
 ## Mode
 **sync**
@@ -64,4 +64,4 @@ POST /v1/ontology/query
 ## Related
 - `ontology.neighbors` — one-hop neighborhood of a node
 - `graph.node.search` — text search over nodes
-- `graph.cypher` — raw read-only Cypher (privileged)
+- `graph.search` — semantic search over eligible shared context

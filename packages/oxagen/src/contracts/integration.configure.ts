@@ -5,7 +5,7 @@ export const integrationConfigure = registerCapability({
   name: "configure_integration",
   domain: "integration",
   description:
-    "Update plugin instance config: credentials, sync cadence, inference toggles, ontology prompts.",
+    "Update plugin instance configuration: credentials, filters, and sync cadence.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -25,24 +25,11 @@ export const integrationConfigure = registerCapability({
       .enum(["manual", "polling", "webhook"])
       .optional()
       .describe("Update sync trigger method"),
-    inferenceEnabled: z
-      .boolean()
-      .optional()
-      .describe("Enable/disable LLM inference"),
-    ontologyPrompt: z
-      .string()
-      .optional()
-      .describe("Custom prompt for entity extraction from this source"),
-    semanticEdgePrompt: z
-      .string()
-      .optional()
-      .describe("Custom prompt for cross-source relationship inference"),
   }),
   output: z.object({
     integrationId: z.string(),
     displayName: z.string(),
     syncCadence: z.enum(["manual", "polling", "webhook"]),
-    inferenceEnabled: z.boolean(),
     updatedAt: z.string(),
   }),
 });

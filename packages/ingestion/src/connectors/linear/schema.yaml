@@ -94,38 +94,6 @@ filters:
     appliesTo:
       - issue
 
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    issue: true
-    project: true
-    cycle: false
-    comment: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer product features and engineering work items from Linear entities.
-
-    Look for:
-    - Issues with "feature", "enhancement", or custom feature labels
-    - Issues grouped under projects that map to product areas or services
-    - Issue identifiers referenced in PR titles or commit messages (e.g. OXA-123)
-    - Priority and estimate signals that indicate strategic importance
-
-    Create edges:
-    - Feature -[tracked_by]-> LinearIssue (when issue describes or tracks a product feature)
-    - LinearIssue -[implemented_by]-> PullRequest (when a PR or commit references the issue identifier)
-    - LinearProject -[contains]-> Feature (when a project groups feature issues)
-    - LinearIssue -[blocked_by]-> LinearIssue (when issue description or relations indicate blocking)
-    - Service -[owns]-> LinearProject (when project name or team maps to a known service or domain)
-
-    Extract architectural domain tags from issue labels and project names:
-    api, web, mobile, infra, billing, auth, data.
-
 sync:
   delivery: webhook
   pollingSupported: true

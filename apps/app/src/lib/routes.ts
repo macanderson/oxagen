@@ -191,8 +191,8 @@ export const workspace = {
       `${wsBase(ctx)}/automations/workflows`,
   },
 
-  // Knowledge — web-app-2.0 Phase 2 IA: Sources · Graph · Inference ·
-  // Ontology · Memory. The graph explorer, node browser, and query console
+  // Knowledge — Sources · Graph · Ontology · Memory. The graph explorer,
+  // node browser, and query console
   // all live under the single /knowledge/graph surface; node detail is a
   // child of Graph.
   knowledge: {
@@ -203,8 +203,6 @@ export const workspace = {
       `${wsBase(ctx)}/knowledge/sources/connect`,
     graph: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/graph`,
-    inference: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/inference`,
     ontology: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/ontology`,
     memory: (ctx: Required<ScopeContext>): string =>

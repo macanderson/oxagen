@@ -4,7 +4,6 @@
  *   integration.configure, integration.sync, integration.metrics, integration.delete,
  *   plugin.schema.get, plugin.schema.validate, plugin.version.list,
  *   repo.configure, repo.sync, repo.pause, repo.resume, repo.metrics,
- *   semantic.edge.infer, semantic.edge.suggest, semantic.edge.approve, semantic.edge.list,
  *   web.fetch, web.search
  */
 
@@ -47,16 +46,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -71,38 +78,59 @@ beforeEach(() => {
 });
 
 async function authGet(path: string): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, { headers: { authorization: bearerHeader("oxk_key") } }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
+  );
 }
 
 async function authPost(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "POST",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "POST",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 async function authPatch(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "PATCH",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "PATCH",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 async function authDelete(path: string): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "DELETE",
-    headers: { authorization: bearerHeader("oxk_key") },
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "DELETE",
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
+  );
 }
 
 async function authPut(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "PUT",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "PUT",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 // ── integration.install ───────────────────────────────────────────────────────
@@ -111,13 +139,26 @@ describe("integration.install route", () => {
   const PATH = "/integrations";
 
   it("happy path: 202 on install", async () => {
-    mocks.invoke.mockResolvedValue({ jobId: "job-1", status: "queued", pluginId: "github", displayName: "My GitHub" });
-    const res = await authPost(PATH, { pluginId: "github", config: { org: "acme" }, displayName: "My GitHub" });
+    mocks.invoke.mockResolvedValue({
+      jobId: "job-1",
+      status: "queued",
+      pluginId: "github",
+      displayName: "My GitHub",
+    });
+    const res = await authPost(PATH, {
+      pluginId: "github",
+      config: { org: "acme" },
+      displayName: "My GitHub",
+    });
     expect(res.status).toBe(202);
   });
 
   it("calls invoke with 'install_integration' and { surface: 'api' }", async () => {
-    await authPost(PATH, { pluginId: "github", config: { org: "acme" }, displayName: "My GitHub" });
+    await authPost(PATH, {
+      pluginId: "github",
+      config: { org: "acme" },
+      displayName: "My GitHub",
+    });
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("install_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
@@ -138,10 +179,18 @@ describe("integration.list route", () => {
   const PATH = "/integrations";
 
   it("happy path: 200 with results", async () => {
-    mocks.invoke.mockResolvedValue({ integrations: [], total: 0, hasMore: false });
+    mocks.invoke.mockResolvedValue({
+      integrations: [],
+      total: 0,
+      hasMore: false,
+    });
     const res = await authGet(PATH);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ integrations: [], total: 0, hasMore: false });
+    expect(await res.json()).toEqual({
+      integrations: [],
+      total: 0,
+      hasMore: false,
+    });
   });
 
   it("calls invoke with 'list_integrations' and { surface: 'api' }", async () => {
@@ -164,7 +213,13 @@ describe("integration.list route", () => {
 
 describe("integration.get route", () => {
   it("happy path: 200 with integration details", async () => {
-    mocks.invoke.mockResolvedValue({ id: "int-1", pluginId: "github", displayName: "GH", version: "1.0", status: "active" });
+    mocks.invoke.mockResolvedValue({
+      id: "int-1",
+      pluginId: "github",
+      displayName: "GH",
+      version: "1.0",
+      status: "active",
+    });
     const res = await authGet("/integrations/int-1");
     expect(res.status).toBe(200);
   });
@@ -182,18 +237,27 @@ describe("integration.get route", () => {
 
 describe("integration.configure route", () => {
   it("happy path: 200 on configure", async () => {
-    mocks.invoke.mockResolvedValue({ integrationId: "int-1", displayName: "Updated", syncCadence: "polling", inferenceEnabled: true, updatedAt: "2026-01-01" });
-    const res = await authPatch("/integrations/int-1/configure", { displayName: "Updated" });
+    mocks.invoke.mockResolvedValue({
+      integrationId: "int-1",
+      displayName: "Updated",
+      syncCadence: "polling",
+      updatedAt: "2026-01-01",
+    });
+    const res = await authPatch("/integrations/int-1/configure", {
+      displayName: "Updated",
+    });
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'configure_integration' and merges path id", async () => {
-    await authPatch("/integrations/int-xyz/configure", { inferenceEnabled: false });
+    await authPatch("/integrations/int-xyz/configure", {
+      syncCadence: "webhook",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("configure_integration");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.integrationId).toBe("int-xyz");
-    expect(input.inferenceEnabled).toBe(false);
+    expect(input.syncCadence).toBe("webhook");
   });
 });
 
@@ -201,7 +265,12 @@ describe("integration.configure route", () => {
 
 describe("integration.sync route", () => {
   it("happy path: 202 on sync", async () => {
-    mocks.invoke.mockResolvedValue({ jobId: "job-2", status: "queued", integrationId: "int-1", mode: "incremental" });
+    mocks.invoke.mockResolvedValue({
+      jobId: "job-2",
+      status: "queued",
+      integrationId: "int-1",
+      mode: "incremental",
+    });
     const res = await authPost("/integrations/int-1/sync", {});
     expect(res.status).toBe(202);
   });
@@ -219,7 +288,18 @@ describe("integration.sync route", () => {
 
 describe("integration.metrics route", () => {
   it("happy path: 200 with metrics", async () => {
-    mocks.invoke.mockResolvedValue({ integrationId: "int-1", pluginId: "github", displayName: "GH", status: "active", entityCount: 100, entityCountByType: {}, lastSyncAt: null, lastSyncDurationMs: null, lastErrorAt: null, errorMessage: null });
+    mocks.invoke.mockResolvedValue({
+      integrationId: "int-1",
+      pluginId: "github",
+      displayName: "GH",
+      status: "active",
+      entityCount: 100,
+      entityCountByType: {},
+      lastSyncAt: null,
+      lastSyncDurationMs: null,
+      lastErrorAt: null,
+      errorMessage: null,
+    });
     const res = await authGet("/integrations/int-1/metrics");
     expect(res.status).toBe(200);
   });
@@ -237,7 +317,12 @@ describe("integration.metrics route", () => {
 
 describe("integration.delete route", () => {
   it("happy path: 202 on delete", async () => {
-    mocks.invoke.mockResolvedValue({ jobId: "job-3", status: "queued", integrationId: "int-1", purgeData: false });
+    mocks.invoke.mockResolvedValue({
+      jobId: "job-3",
+      status: "queued",
+      integrationId: "int-1",
+      purgeData: false,
+    });
     const res = await authDelete("/integrations/int-1");
     expect(res.status).toBe(202);
   });
@@ -251,10 +336,12 @@ describe("integration.delete route", () => {
   });
 
   it("passes purgeData=true from query string", async () => {
-    await app.fetch(makeRequest(`${BASE}/integrations/int-1?purgeData=true`, {
-      method: "DELETE",
-      headers: { authorization: bearerHeader("oxk_key") },
-    }));
+    await app.fetch(
+      makeRequest(`${BASE}/integrations/int-1?purgeData=true`, {
+        method: "DELETE",
+        headers: { authorization: bearerHeader("oxk_key") },
+      }),
+    );
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.purgeData).toBe(true);
   });
@@ -264,7 +351,12 @@ describe("integration.delete route", () => {
 
 describe("plugin.schema.get route", () => {
   it("happy path: 200 with schema", async () => {
-    mocks.invoke.mockResolvedValue({ pluginId: "github", title: "GitHub", authSchemes: [], configSchema: [] });
+    mocks.invoke.mockResolvedValue({
+      pluginId: "github",
+      title: "GitHub",
+      authSchemes: [],
+      configSchema: [],
+    });
     const res = await authGet("/plugin-schema/github");
     expect(res.status).toBe(200);
   });
@@ -283,14 +375,18 @@ describe("plugin.schema.get route", () => {
 describe("plugin.schema.validate route", () => {
   it("happy path: 200 with valid=true", async () => {
     mocks.invoke.mockResolvedValue({ valid: true, errors: [] });
-    const res = await authPost("/plugin-schema/github/validate", { config: { org: "acme" } });
+    const res = await authPost("/plugin-schema/github/validate", {
+      config: { org: "acme" },
+    });
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.valid).toBe(true);
   });
 
   it("calls invoke with 'validate_plugin_schema' and merges path pluginId", async () => {
-    await authPost("/plugin-schema/slack/validate", { config: { token: "xoxb-123" } });
+    await authPost("/plugin-schema/slack/validate", {
+      config: { token: "xoxb-123" },
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("validate_plugin_schema");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -309,7 +405,11 @@ describe("plugin.schema.validate route", () => {
 
 describe("plugin.version.list route", () => {
   it("happy path: 200 with versions", async () => {
-    mocks.invoke.mockResolvedValue({ pluginId: "github", currentVersion: "2.0.0", versions: [] });
+    mocks.invoke.mockResolvedValue({
+      pluginId: "github",
+      currentVersion: "2.0.0",
+      versions: [],
+    });
     const res = await authGet("/plugin-versions/github");
     expect(res.status).toBe(200);
   });
@@ -329,18 +429,28 @@ describe("plugin.version.list route", () => {
 
 describe("repo.configure route", () => {
   it("happy path: 200 on configure", async () => {
-    mocks.invoke.mockResolvedValue({ repoId: "repo-1", displayName: "My Repo", recordTypes: [], paths: { include: [], exclude: [] }, labels: { include: [], exclude: [] }, inferenceEnabled: false, syncCadence: "manual", updatedAt: "2026-01-01" });
-    const res = await authPatch("/repos/repo-1/configure", { inferenceEnabled: true });
+    mocks.invoke.mockResolvedValue({
+      repoId: "repo-1",
+      displayName: "My Repo",
+      recordTypes: [],
+      paths: { include: [], exclude: [] },
+      labels: { include: [], exclude: [] },
+      syncCadence: "manual",
+      updatedAt: "2026-01-01",
+    });
+    const res = await authPatch("/repos/repo-1/configure", {
+      syncCadence: "manual",
+    });
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'configure_repo' and repoId from path", async () => {
-    await authPatch("/repos/repo-xyz/configure", { inferenceEnabled: false });
+    await authPatch("/repos/repo-xyz/configure", { syncCadence: "webhook" });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("configure_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-xyz");
-    expect(input.inferenceEnabled).toBe(false);
+    expect(input.syncCadence).toBe("webhook");
   });
 });
 
@@ -348,7 +458,12 @@ describe("repo.configure route", () => {
 
 describe("repo.sync route", () => {
   it("happy path: 202 on sync", async () => {
-    mocks.invoke.mockResolvedValue({ jobId: "job-4", status: "queued", mode: "incremental", estimatedRecords: 0 });
+    mocks.invoke.mockResolvedValue({
+      jobId: "job-4",
+      status: "queued",
+      mode: "incremental",
+      estimatedRecords: 0,
+    });
     const res = await authPost("/repos/repo-1/sync", {});
     expect(res.status).toBe(202);
   });
@@ -366,7 +481,11 @@ describe("repo.sync route", () => {
 
 describe("repo.pause route", () => {
   it("happy path: 200 on pause", async () => {
-    mocks.invoke.mockResolvedValue({ repoId: "repo-1", status: "paused", pausedAt: "2026-01-01" });
+    mocks.invoke.mockResolvedValue({
+      repoId: "repo-1",
+      status: "paused",
+      pausedAt: "2026-01-01",
+    });
     const res = await authPost("/repos/repo-1/pause", {});
     expect(res.status).toBe(200);
   });
@@ -384,7 +503,12 @@ describe("repo.pause route", () => {
 
 describe("repo.resume route", () => {
   it("happy path: 200 on resume", async () => {
-    mocks.invoke.mockResolvedValue({ repoId: "repo-1", status: "active", resumedAt: "2026-01-01", nextSyncAt: null });
+    mocks.invoke.mockResolvedValue({
+      repoId: "repo-1",
+      status: "active",
+      resumedAt: "2026-01-01",
+      nextSyncAt: null,
+    });
     const res = await authPost("/repos/repo-1/resume", {});
     expect(res.status).toBe(200);
   });
@@ -402,7 +526,19 @@ describe("repo.resume route", () => {
 
 describe("repo.metrics route", () => {
   it("happy path: 200 with metrics", async () => {
-    mocks.invoke.mockResolvedValue({ repoId: "repo-1", displayName: "My Repo", status: "active", entityCount: 200, entityCountByType: {}, lastSyncAt: null, lastSyncDurationMs: null, lastErrorAt: null, errorMessage: null, syncIntervalSeconds: null, estimatedNextSyncAt: null });
+    mocks.invoke.mockResolvedValue({
+      repoId: "repo-1",
+      displayName: "My Repo",
+      status: "active",
+      entityCount: 200,
+      entityCountByType: {},
+      lastSyncAt: null,
+      lastSyncDurationMs: null,
+      lastErrorAt: null,
+      errorMessage: null,
+      syncIntervalSeconds: null,
+      estimatedNextSyncAt: null,
+    });
     const res = await authGet("/repos/repo-1/metrics");
     expect(res.status).toBe(200);
   });
@@ -422,17 +558,26 @@ describe("repo.create route", () => {
   const validBody = { org: "acme", name: "backend-service" };
 
   it("happy path: 201 with new repo details", async () => {
-    mocks.invoke.mockResolvedValue({ fullName: "acme/backend-service", htmlUrl: "https://github.com/acme/backend-service", defaultBranch: "main" });
+    mocks.invoke.mockResolvedValue({
+      fullName: "acme/backend-service",
+      htmlUrl: "https://github.com/acme/backend-service",
+      defaultBranch: "main",
+    });
     const res = await authPost("/repos", validBody);
     expect(res.status).toBe(201);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.fullName).toBe("acme/backend-service");
     expect(body.htmlUrl).toBe("https://github.com/acme/backend-service");
     expect(body.defaultBranch).toBe("main");
   });
 
   it("calls invoke with 'create_repo' and { surface: 'api' }", async () => {
-    await authPost("/repos", { org: "acme", name: "new-repo", private: true, autoInit: true });
+    await authPost("/repos", {
+      org: "acme",
+      name: "new-repo",
+      private: true,
+      autoInit: true,
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -444,7 +589,11 @@ describe("repo.create route", () => {
   it("omitting org → 201, creates in the connected user's personal account", async () => {
     // repo.create's `org` is optional by design (omit → personal account); a
     // missing org must NOT 400 — it succeeds and invoke is called with no org.
-    mocks.invoke.mockResolvedValue({ fullName: "octocat/no-org", htmlUrl: "https://github.com/octocat/no-org", defaultBranch: "main" });
+    mocks.invoke.mockResolvedValue({
+      fullName: "octocat/no-org",
+      htmlUrl: "https://github.com/octocat/no-org",
+      defaultBranch: "main",
+    });
     const res = await authPost("/repos", { name: "no-org" });
     expect(res.status).toBe(201);
     expect(mocks.invoke).toHaveBeenCalled();
@@ -466,15 +615,23 @@ describe("repo.fork route", () => {
   const validBody = { owner: "openai", repo: "openai-node" };
 
   it("happy path: 201 with fork details", async () => {
-    mocks.invoke.mockResolvedValue({ fullName: "acme/openai-node", htmlUrl: "https://github.com/acme/openai-node", defaultBranch: "main" });
+    mocks.invoke.mockResolvedValue({
+      fullName: "acme/openai-node",
+      htmlUrl: "https://github.com/acme/openai-node",
+      defaultBranch: "main",
+    });
     const res = await authPost("/repos/fork", validBody);
     expect(res.status).toBe(201);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.fullName).toBe("acme/openai-node");
   });
 
   it("calls invoke with 'fork_repo' and { surface: 'api' }", async () => {
-    await authPost("/repos/fork", { owner: "openai", repo: "openai-node", intoOrg: "acme" });
+    await authPost("/repos/fork", {
+      owner: "openai",
+      repo: "openai-node",
+      intoOrg: "acme",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("fork_repo");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -493,13 +650,22 @@ describe("repo.fork route", () => {
 // ── repo.file.put ─────────────────────────────────────────────────────────────
 
 describe("repo.file.put route", () => {
-  const validBody = { owner: "acme", repo: "backend-service", path: "src/hello.ts", content: "export const hello = 'world';", message: "feat: add hello" };
+  const validBody = {
+    owner: "acme",
+    repo: "backend-service",
+    path: "src/hello.ts",
+    content: "export const hello = 'world';",
+    message: "feat: add hello",
+  };
 
   it("happy path: 200 with commit details", async () => {
-    mocks.invoke.mockResolvedValue({ commitSha: "abc123", htmlUrl: "https://github.com/acme/backend-service/blob/main/src/hello.ts" });
+    mocks.invoke.mockResolvedValue({
+      commitSha: "abc123",
+      htmlUrl: "https://github.com/acme/backend-service/blob/main/src/hello.ts",
+    });
     const res = await authPut("/repos/file", validBody);
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.commitSha).toBe("abc123");
     expect(body.htmlUrl).toContain("github.com");
   });
@@ -514,7 +680,12 @@ describe("repo.file.put route", () => {
   });
 
   it("missing required content → 400, invoke not called", async () => {
-    const res = await authPut("/repos/file", { owner: "acme", repo: "backend-service", path: "src/hello.ts", message: "feat: add hello" });
+    const res = await authPut("/repos/file", {
+      owner: "acme",
+      repo: "backend-service",
+      path: "src/hello.ts",
+      message: "feat: add hello",
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -523,19 +694,31 @@ describe("repo.file.put route", () => {
 // ── repo.branch.create ────────────────────────────────────────────────────────
 
 describe("repo.branch.create route", () => {
-  const validBody = { owner: "acme", repo: "backend-service", branch: "feature/add-hello" };
+  const validBody = {
+    owner: "acme",
+    repo: "backend-service",
+    branch: "feature/add-hello",
+  };
 
   it("happy path: 201 with branch ref and sha", async () => {
-    mocks.invoke.mockResolvedValue({ ref: "refs/heads/feature/add-hello", sha: "abc123def456" });
+    mocks.invoke.mockResolvedValue({
+      ref: "refs/heads/feature/add-hello",
+      sha: "abc123def456",
+    });
     const res = await authPost("/repos/branch", validBody);
     expect(res.status).toBe(201);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.ref).toBe("refs/heads/feature/add-hello");
     expect(body.sha).toBe("abc123def456");
   });
 
   it("calls invoke with 'create_branch' and { surface: 'api' }", async () => {
-    await authPost("/repos/branch", { owner: "acme", repo: "backend-service", branch: "feature/x", fromBranch: "main" });
+    await authPost("/repos/branch", {
+      owner: "acme",
+      repo: "backend-service",
+      branch: "feature/x",
+      fromBranch: "main",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_branch");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -544,7 +727,10 @@ describe("repo.branch.create route", () => {
   });
 
   it("missing required branch → 400, invoke not called", async () => {
-    const res = await authPost("/repos/branch", { owner: "acme", repo: "backend-service" });
+    const res = await authPost("/repos/branch", {
+      owner: "acme",
+      repo: "backend-service",
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -553,19 +739,32 @@ describe("repo.branch.create route", () => {
 // ── repo.pr.open ──────────────────────────────────────────────────────────────
 
 describe("repo.pr.open route", () => {
-  const validBody = { owner: "acme", repo: "backend-service", title: "feat: add hello", head: "feature/add-hello", base: "main" };
+  const validBody = {
+    owner: "acme",
+    repo: "backend-service",
+    title: "feat: add hello",
+    head: "feature/add-hello",
+    base: "main",
+  };
 
   it("happy path: 201 with PR number and URL", async () => {
-    mocks.invoke.mockResolvedValue({ number: 42, htmlUrl: "https://github.com/acme/backend-service/pull/42" });
+    mocks.invoke.mockResolvedValue({
+      number: 42,
+      htmlUrl: "https://github.com/acme/backend-service/pull/42",
+    });
     const res = await authPost("/repos/pulls", validBody);
     expect(res.status).toBe(201);
-    const body = await res.json() as Record<string, unknown>;
+    const body = (await res.json()) as Record<string, unknown>;
     expect(body.number).toBe(42);
     expect(body.htmlUrl).toContain("/pull/42");
   });
 
   it("calls invoke with 'open_pr' and { surface: 'api' }", async () => {
-    await authPost("/repos/pulls", { ...validBody, body: "PR description", draft: true });
+    await authPost("/repos/pulls", {
+      ...validBody,
+      body: "PR description",
+      draft: true,
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("open_pr");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -575,100 +774,14 @@ describe("repo.pr.open route", () => {
   });
 
   it("missing required title → 400, invoke not called", async () => {
-    const res = await authPost("/repos/pulls", { owner: "acme", repo: "backend-service", head: "feature/add-hello", base: "main" });
+    const res = await authPost("/repos/pulls", {
+      owner: "acme",
+      repo: "backend-service",
+      head: "feature/add-hello",
+      base: "main",
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── semantic.edge.infer ───────────────────────────────────────────────────────
-
-describe("semantic.edge.infer route", () => {
-  const PATH = "/semantic-edges/infer";
-  const validBody = { semanticEdgePrompt: "Find relationships between customer entities" };
-
-  it("happy path: 202 on infer", async () => {
-    mocks.invoke.mockResolvedValue({ jobId: "job-5", status: "queued", estimatedNodes: 50, dryRun: false });
-    const res = await authPost(PATH, validBody);
-    expect(res.status).toBe(202);
-  });
-
-  it("calls invoke with 'infer_semantic_edges' and { surface: 'api' }", async () => {
-    await authPost(PATH, validBody);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("infer_semantic_edges");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(input.semanticEdgePrompt).toBe("Find relationships between customer entities");
-  });
-
-  it("missing semanticEdgePrompt → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { dryRun: true });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── semantic.edge.suggest ─────────────────────────────────────────────────────
-
-describe("semantic.edge.suggest route", () => {
-  it("happy path: 200 with suggestions", async () => {
-    mocks.invoke.mockResolvedValue({ suggestions: [], total: 0, limit: 50 });
-    const res = await authGet("/semantic-edges/suggest");
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'suggest_semantic_edges' and { surface: 'api' }", async () => {
-    await authGet("/semantic-edges/suggest?confidenceMin=0.7&limit=20");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("suggest_semantic_edges");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(input.confidenceMin).toBe(0.7);
-    expect(input.limit).toBe(20);
-  });
-});
-
-// ── semantic.edge.approve (decide) ────────────────────────────────────────────
-
-describe("semantic.edge.approve route", () => {
-  it("happy path: 200 on approve", async () => {
-    mocks.invoke.mockResolvedValue({ edgeId: "edge-1", decision: "approve" });
-    const res = await authPost("/semantic-edges/edge-1/decide", { decision: "approve" });
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'approve_semantic_edge' and edgeId from path", async () => {
-    await authPost("/semantic-edges/edge-xyz/decide", { decision: "reject" });
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("approve_semantic_edge");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(input.edgeId).toBe("edge-xyz");
-    expect(input.decision).toBe("reject");
-  });
-
-  it("invalid decision value → 400, invoke not called", async () => {
-    const res = await authPost("/semantic-edges/edge-1/decide", { decision: "maybe" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── semantic.edge.list ────────────────────────────────────────────────────────
-
-describe("semantic.edge.list route", () => {
-  it("happy path: 200 with edges", async () => {
-    mocks.invoke.mockResolvedValue({ edges: [], total: 0, limit: 50 });
-    const res = await authGet("/semantic-edges");
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'list_semantic_edges' and { surface: 'api' }", async () => {
-    await authGet("/semantic-edges?type=customer&sourceId=src-1&limit=25&offset=0");
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_semantic_edges");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(input.type).toBe("customer");
-    expect(input.sourceId).toBe("src-1");
-    expect(input.limit).toBe(25);
   });
 });
 
@@ -679,13 +792,24 @@ describe("web.fetch route", () => {
   const validBody = { url: "https://example.com" };
 
   it("happy path: 200 with page content", async () => {
-    mocks.invoke.mockResolvedValue({ url: "https://example.com", title: "Example", content: "Hello", wordCount: 1, fetchedAt: "2026-01-01", statusCode: 200 });
+    mocks.invoke.mockResolvedValue({
+      url: "https://example.com",
+      title: "Example",
+      content: "Hello",
+      wordCount: 1,
+      fetchedAt: "2026-01-01",
+      statusCode: 200,
+    });
     const res = await authPost(PATH, validBody);
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'fetch_web_page' and { surface: 'api' }", async () => {
-    await authPost(PATH, { url: "https://example.com", extractMarkdown: true, timeout: 5000 });
+    await authPost(PATH, {
+      url: "https://example.com",
+      extractMarkdown: true,
+      timeout: 5000,
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("fetch_web_page");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -714,13 +838,21 @@ describe("web.search route", () => {
   const validBody = { query: "openai api pricing" };
 
   it("happy path: 200 with results", async () => {
-    mocks.invoke.mockResolvedValue({ results: [], totalResults: 0, searchId: "srch-1" });
+    mocks.invoke.mockResolvedValue({
+      results: [],
+      totalResults: 0,
+      searchId: "srch-1",
+    });
     const res = await authPost(PATH, validBody);
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'search_web' and { surface: 'api' }", async () => {
-    await authPost(PATH, { query: "best practices for typescript", maxResults: 3, searchDepth: "advanced" });
+    await authPost(PATH, {
+      query: "best practices for typescript",
+      maxResults: 3,
+      searchDepth: "advanced",
+    });
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("search_web");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;

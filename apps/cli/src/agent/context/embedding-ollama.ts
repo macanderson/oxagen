@@ -10,11 +10,9 @@
  *
  * Its vectors live in a different vector space than the platform gateway's
  * 1536-d `text-embedding-3-small` index (dimension varies by model — 768 for
- * the default `nomic-embed-text`). `graph.push.ts`'s `localEmbeddingFor` only
- * ever attaches a vector whose provider is the shared gateway model, so an
- * Ollama-produced vector is used for the CLI's own local `semantic_search`
- * and never shipped to the server — the server re-embeds instead, which is
- * the accepted, opt-in cost of running local embeddings (see embedding.ts).
+ * the default `nomic-embed-text`). They remain in the checkout-local graph,
+ * where the provider id prevents incompatible vector spaces from being
+ * compared (see embedding.ts).
  */
 import type { EmbeddingClient } from "./embedding-types.js";
 

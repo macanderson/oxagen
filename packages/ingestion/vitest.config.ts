@@ -6,15 +6,6 @@ export default defineConfig({
     environment: "node",
     globals: false,
     include: ["src/**/*.test.ts"],
-    // Inline @oxagen/code-graph so vi.mock("web-tree-sitter") and vi.mock("fs")
-    // applied in parser tests are propagated into the code-graph's loader module
-    // (pnpm symlinks otherwise give web-tree-sitter a different resolved path
-    // that bypasses the mock registry in this package's vitest process).
-    server: {
-      deps: {
-        inline: ["@oxagen/code-graph"],
-      },
-    },
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

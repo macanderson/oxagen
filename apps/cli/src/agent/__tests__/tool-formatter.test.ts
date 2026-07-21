@@ -16,22 +16,32 @@ import {
 
 describe("formatToolArgs", () => {
   it("shows the file path for file operations (not the whole object)", () => {
-    expect(formatToolArgs("Edit", { file_path: "src/a.ts", old_string: "x", new_string: "y" })).toBe(
-      "src/a.ts",
-    );
+    expect(
+      formatToolArgs("Edit", {
+        file_path: "src/a.ts",
+        old_string: "x",
+        new_string: "y",
+      }),
+    ).toBe("src/a.ts");
     expect(formatToolArgs("Read", { path: "README.md" })).toBe("README.md");
-    expect(formatToolArgs("Write", { file: "out.txt", content: "…" })).toBe("out.txt");
+    expect(formatToolArgs("Write", { file: "out.txt", content: "…" })).toBe(
+      "out.txt",
+    );
   });
 
   it("shows the command for shell execution", () => {
-    expect(formatToolArgs("Bash", { command: "git push origin main" })).toBe("git push origin main");
+    expect(formatToolArgs("Bash", { command: "git push origin main" })).toBe(
+      "git push origin main",
+    );
   });
 
   it("shows the query/pattern for search tools", () => {
-    expect(formatToolArgs("Grep", { pattern: "TODO", path: "src" })).toBe("TODO");
-    expect(formatToolArgs("knowledge.query", { query: "who owns billing" })).toBe(
-      "who owns billing",
+    expect(formatToolArgs("Grep", { pattern: "TODO", path: "src" })).toBe(
+      "TODO",
     );
+    expect(
+      formatToolArgs("knowledge.query", { query: "who owns billing" }),
+    ).toBe("who owns billing");
   });
 
   it("never emits a raw JSON object — falls back to key=value or key names", () => {
@@ -68,8 +78,8 @@ describe("formatToolCall", () => {
   });
 
   it("renders snake capability names verbatim and no raw JSON", () => {
-    const line = formatToolCall("suggest_semantic_edges", { nodeId: "n1", limit: 3 });
-    expect(line).toContain("suggest_semantic_edges(");
+    const line = formatToolCall("query_ontology", { nodeId: "n1", limit: 3 });
+    expect(line).toContain("query_ontology(");
     expect(line).not.toContain("{");
   });
 
@@ -81,7 +91,12 @@ describe("formatToolCall", () => {
   });
 
   it("never emits the removed bolt/wrench glyphs for any tool", () => {
-    for (const tool of ["agent.code.execute", "Read", "Bash", "totally.unknown"]) {
+    for (const tool of [
+      "agent.code.execute",
+      "Read",
+      "Bash",
+      "totally.unknown",
+    ]) {
       const line = formatToolCall(tool, { query: "q" });
       expect(line).not.toContain("⚡");
       expect(line).not.toContain("🔧");
@@ -109,7 +124,7 @@ describe("toolDisplayLabel", () => {
   });
 
   it("keeps dotted capability names verbatim (precise identifiers)", () => {
-    expect(toolDisplayLabel("suggest_semantic_edges")).toBe("suggest_semantic_edges");
+    expect(toolDisplayLabel("query_ontology")).toBe("query_ontology");
     expect(toolDisplayLabel("knowledge.query")).toBe("knowledge.query");
   });
 });
@@ -146,10 +161,15 @@ describe("isSubagentDispatch / subagentInfo", () => {
 
   it("formats a dispatch call as `slug → task`", () => {
     expect(
-      formatToolArgs("dispatch_subagent", { agent: "show-agent", task: "wire the indicator" }),
+      formatToolArgs("dispatch_subagent", {
+        agent: "show-agent",
+        task: "wire the indicator",
+      }),
     ).toBe("show-agent → wire the indicator");
     // Slug-only and task-only inputs still degrade gracefully.
     expect(formatToolArgs("dispatch_subagent", { agent: "solo" })).toBe("solo");
-    expect(formatToolArgs("dispatch_subagent", { task: "just do it" })).toBe("just do it");
+    expect(formatToolArgs("dispatch_subagent", { task: "just do it" })).toBe(
+      "just do it",
+    );
   });
 });

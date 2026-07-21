@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (75, count drifts)
+## Agent (74, count drifts)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -83,7 +83,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
-- [get_execution_lineage](get_execution_lineage.md) — Get one agent execution's file-level lineage as a graph: the execution node plus every source file it touched via TOUCHED_FILE edges, resolved to citable KnowledgeNodeRefs
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
@@ -178,11 +177,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
 - [chat.message.send](chat.message.send.md) — Append a user message to a conversation and stream the assistant's response
 
-## Code (4)
+## Code (3)
 
 - [code.diff](code.diff.md) — Produce a unified diff between two file blobs with added/removed line counts (computed in-process)
 - [code.format](code.format.md) — Run a language-aware formatter (json, python) on source inside the sandbox and return the formatted text
-- [code.map](code.map.md) — Return a structured code-map bundle for a natural-language concept query: semantically matched files, symbols, call edges, and recent commits
 - [code.patch](code.patch.md) — Apply a unified diff to a path-confined workspace and return only the changed files
 
 ## Command (2)
@@ -253,26 +251,16 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (16)
+## Graph (8)
 
 | Capability                  | Notes                                                                                                                                                     |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                                                     |
-| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                                              |
 | `graph.node.get`            | Retrieve a graph node by externalId.                                                                                                                      |
-| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                                                |
 | `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                                               |
-| `graph.node.label.add`      | Add one or more labels to a node (multi-label, idempotent, never removes existing labels).                                                                |
-| `graph.node.label.remove`   | Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).                                                              |
-| `graph.node.labels.get`     | Read a node's full label set (read-only companion to the label add/remove primitives).                                                                    |
-| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
-| `graph.edge.upsert`         | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, Cypher-safe via the RELATIONSHIP_TYPE_PATTERN guard).      |
-| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                                                         |
-| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                                                |
-| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
+| `graph.node.labels.get`     | Read a node's customer-context label set.                                                                                                                  |
+| `graph.search`              | Unified semantic search across customer-context nodes visible to the workspace.                                                                            |
 | `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
-| `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
-| `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
 | `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
 | `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
@@ -285,7 +273,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Integration (7)
 
-- [integration.configure](integration.configure.md) — Update plugin instance config, cadence, and inference settings
+- [integration.configure](integration.configure.md) — Update plugin instance configuration, filters, and sync cadence
 - [integration.delete](integration.delete.md) — Remove a plugin instance and optionally purge graph data (async)
 - [integration.get](integration.get.md) — Get full details of a single plugin instance including schema
 - [integration.install](integration.install.md) — Install a plugin instance from catalog or custom URL (async)
@@ -433,13 +421,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [secret.import_env](secret.import_env.md) — Parse pasted .env text and preview/commit key upserts + value sets for the defaults or a chosen environment
 - [secret.reveal](secret.reveal.md) — Reveal a single secret's plaintext value for an environment; Owner/Admin only, every reveal is audited (api, mcp)
 - [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
-
-## Semantic (4)
-
-- [semantic.edge.approve](semantic.edge.approve.md) — Approve or reject an inferred semantic edge candidate; approved edges become permanent Neo4j relationships
-- [semantic.edge.infer](semantic.edge.infer.md) — Run LLM inference to discover cross-source semantic edges (async)
-- [semantic.edge.list](semantic.edge.list.md) — Paginated browse of inferred semantic edges with filtering
-- [semantic.edge.suggest](semantic.edge.suggest.md) — Return unapproved semantic edge candidates for human review
 
 ## Skill (14)
 

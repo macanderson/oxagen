@@ -13,7 +13,13 @@
  */
 import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 
 const { mockSearchNodes, mockSemanticSearch } = vi.hoisted(() => ({
   mockSearchNodes: vi.fn(),
@@ -32,7 +38,14 @@ vi.mock("@/components/knowledge/graph/node-ref", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => (
     <a href={String(href)} {...rest}>
       {children}
     </a>
@@ -93,11 +106,19 @@ describe("SearchPanel", () => {
     mockSearchNodes.mockResolvedValue({
       ok: true,
       nodes: [
-        { nodeId: "pub-1", label: "Feature", displayName: "Billing", description: null, score: 1 },
+        {
+          nodeId: "pub-1",
+          label: "Feature",
+          displayName: "Billing",
+          description: null,
+          score: 1,
+        },
       ],
     });
     render(<SearchPanel orgSlug="acme" workspaceSlug="core" />);
-    fireEvent.change(screen.getByLabelText("Search graph nodes"), { target: { value: "bill" } });
+    fireEvent.change(screen.getByLabelText("Search graph nodes"), {
+      target: { value: "bill" },
+    });
 
     // Not called until the debounce elapses.
     expect(mockSearchNodes).not.toHaveBeenCalled();
@@ -105,7 +126,12 @@ describe("SearchPanel", () => {
 
     expect(screen.getByText("Billing")).toBeInTheDocument();
     expect(mockSearchNodes).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "core", query: "bill", limit: 20 }),
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "core",
+        query: "bill",
+        limit: 20,
+      }),
     );
     expect(mockSemanticSearch).not.toHaveBeenCalled();
   });
@@ -118,16 +144,17 @@ describe("SearchPanel", () => {
           nodeId: "pub-2",
           label: "SourceFile",
           displayName: "billing.ts",
-          kind: "file",
+          kind: "entity",
           snippet: "charge()",
           score: 0.9,
-          isSystem: true,
         },
       ],
     });
     render(<SearchPanel orgSlug="acme" workspaceSlug="core" />);
     fireEvent.click(screen.getByRole("switch"));
-    fireEvent.change(screen.getByLabelText("Search graph nodes"), { target: { value: "charging logic" } });
+    fireEvent.change(screen.getByLabelText("Search graph nodes"), {
+      target: { value: "charging logic" },
+    });
     await flushDebounce();
 
     expect(screen.getByText("billing.ts")).toBeInTheDocument();
@@ -140,15 +167,22 @@ describe("SearchPanel", () => {
   it("shows a no-match empty state for zero results", async () => {
     mockSearchNodes.mockResolvedValue({ ok: true, nodes: [] });
     render(<SearchPanel orgSlug="acme" workspaceSlug="core" />);
-    fireEvent.change(screen.getByLabelText("Search graph nodes"), { target: { value: "nope" } });
+    fireEvent.change(screen.getByLabelText("Search graph nodes"), {
+      target: { value: "nope" },
+    });
     await flushDebounce();
     expect(screen.getByText("No matches")).toBeInTheDocument();
   });
 
   it("shows an error state when the action fails", async () => {
-    mockSearchNodes.mockResolvedValue({ ok: false, error: "index unavailable" });
+    mockSearchNodes.mockResolvedValue({
+      ok: false,
+      error: "index unavailable",
+    });
     render(<SearchPanel orgSlug="acme" workspaceSlug="core" />);
-    fireEvent.change(screen.getByLabelText("Search graph nodes"), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText("Search graph nodes"), {
+      target: { value: "x" },
+    });
     await flushDebounce();
     expect(screen.getByText("index unavailable")).toBeInTheDocument();
   });
@@ -156,7 +190,15 @@ describe("SearchPanel", () => {
   it("clearing the query returns to idle", async () => {
     mockSearchNodes.mockResolvedValue({
       ok: true,
-      nodes: [{ nodeId: "pub-1", label: "Feature", displayName: "Billing", description: null, score: 1 }],
+      nodes: [
+        {
+          nodeId: "pub-1",
+          label: "Feature",
+          displayName: "Billing",
+          description: null,
+          score: 1,
+        },
+      ],
     });
     render(<SearchPanel orgSlug="acme" workspaceSlug="core" />);
     const input = screen.getByLabelText("Search graph nodes");

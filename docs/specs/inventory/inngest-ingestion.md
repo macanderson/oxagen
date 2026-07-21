@@ -1,5 +1,11 @@
 # Spec: inngest-ingestion
 
+> **Historical inventory — superseded in part (2026-07-21).** This file was mined
+> from a 2026-06-20 implementation snapshot. Central source-file/symbol parsing,
+> code embeddings, feature inference, and semantic auto-accept sections describe
+> retired launch behavior. Exact code graphs stay local, and semantic candidates
+> require explicit governed approval.
+
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
 > Source: ingestion.pipeline.ts, ingestion.sync-requested.ts, ingestion.delete.ts, ingestion.github-initial-sync.ts, ingestion.github-parse-file.ts, ingestion.github-infer-features.ts, ingestion.oauth-refresh.ts, ingestion.semantic-edge-infer.ts, plugin.oauth-refresh-watcher.ts, mcp.tool-snapshot-retention.ts
 > Last verified: 2026-06-20 (commit 2f628504)

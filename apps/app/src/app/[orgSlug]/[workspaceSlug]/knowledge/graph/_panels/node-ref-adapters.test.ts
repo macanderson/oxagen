@@ -5,7 +5,6 @@ import {
   fromSemanticResult,
   fromNeighbor,
   fromTraversedNode,
-  tryNodeRefFromCell,
 } from "./node-ref-adapters";
 
 describe("fromListNode", () => {
@@ -77,25 +76,23 @@ describe("fromSearchNode", () => {
 });
 
 describe("fromSemanticResult", () => {
-  it("maps nodeId → id and carries kind/snippet/relevance/isSystem", () => {
+  it("maps nodeId to id and carries entity kind, snippet, and relevance", () => {
     const ref = fromSemanticResult({
       nodeId: "pub-5",
       label: "SourceFile",
       displayName: "billing.ts",
-      kind: "file",
+      kind: "entity",
       snippet: "export function charge()",
       score: 0.87,
-      isSystem: true,
     });
     expect(ref).toEqual({
       id: "pub-5",
       label: "SourceFile",
       displayName: "billing.ts",
       properties: {
-        kind: "file",
+        kind: "entity",
         snippet: "export function charge()",
         relevance: 0.87,
-        isSystem: true,
       },
     });
   });
@@ -110,7 +107,6 @@ describe("fromNeighbor", () => {
       description: null,
       edgeType: "OWNS",
       direction: "out",
-      isSystem: false,
       validFrom: null,
       validTo: null,
       recordedAt: null,
@@ -136,64 +132,5 @@ describe("fromTraversedNode", () => {
       displayName: "Billing",
       properties: { description: "Billing domain", depth: 2 },
     });
-  });
-});
-
-describe("tryNodeRefFromCell", () => {
-  it("detects a raw Neo4j-driver-shaped node (labels + properties)", () => {
-    const ref = tryNodeRefFromCell({
-      identity: { low: 1, high: 0 },
-      labels: ["Feature"],
-      properties: { publicId: "pub-8", displayName: "Streaming", owner: "platform" },
-    });
-    expect(ref).toEqual({
-      id: "pub-8",
-      label: "Feature",
-      displayName: "Streaming",
-      properties: { publicId: "pub-8", displayName: "Streaming", owner: "platform" },
-    });
-  });
-
-  it("falls back through name/publicId when displayName is missing on a raw node", () => {
-    const ref = tryNodeRefFromCell({
-      labels: ["Feature"],
-      properties: { name: "Fallback name" },
-    });
-    expect(ref?.displayName).toBe("Fallback name");
-  });
-
-  it("detects a contract-shaped node ref (id + displayName)", () => {
-    const ref = tryNodeRefFromCell({
-      id: "pub-9",
-      label: "Repository",
-      displayName: "oxagen-platform",
-      properties: { stars: 12 },
-    });
-    expect(ref).toEqual({
-      id: "pub-9",
-      label: "Repository",
-      displayName: "oxagen-platform",
-      properties: { stars: 12 },
-    });
-  });
-
-  it("accepts a null id for an unmaterialised candidate", () => {
-    const ref = tryNodeRefFromCell({ id: null, displayName: "Pending target" });
-    expect(ref).toEqual({ id: null, label: "Node", displayName: "Pending target", properties: {} });
-  });
-
-  it("returns null for a plain scalar", () => {
-    expect(tryNodeRefFromCell("just a string")).toBeNull();
-    expect(tryNodeRefFromCell(42)).toBeNull();
-    expect(tryNodeRefFromCell(null)).toBeNull();
-    expect(tryNodeRefFromCell(undefined)).toBeNull();
-  });
-
-  it("returns null for an array", () => {
-    expect(tryNodeRefFromCell([1, 2, 3])).toBeNull();
-  });
-
-  it("returns null for a plain object without a displayName", () => {
-    expect(tryNodeRefFromCell({ count: 5 })).toBeNull();
   });
 });

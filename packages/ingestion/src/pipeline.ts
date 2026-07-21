@@ -9,12 +9,9 @@
  *              → label filter: skip if record.properties.labels matches deliveryConfig.labelFilters
  *   3. Map        ctx.getMapping() → EntityTypeMapping | null (skip if null)
  *   4. Dedup      resolveEntity() → DeduplicationResult
- *   5. Embed      embedEntity() → vector stored on :EntityNode
- *              → inference gate: skip embed+infer if deliveryConfig.semanticInference disables it
- *   6. Infer      ctx.scheduleInference() fires async Inngest event
- *
- * Stages 2–5 run inline in one Inngest step. Stage 6 fires asynchronously
- * so LLM inference doesn't hold concurrency slots.
+ *   5. Embed      embedEntity() → vector stored on :EntityNode. A legacy
+ *                 semanticInference opt-out is still honored as an embedding
+ *                 opt-out, but no relationship-inference job is scheduled.
  *
  * Filtered records (record-type / path / label) return null with a reason
  * attached so callers can emit the `pipeline:record:filtered` telemetry event.
@@ -31,7 +28,12 @@ import {
   type DeliveryConfig,
 } from "./filters";
 import type { PinnedSchema } from "./validate/schema";
-import type { RawIngestEvent, EntityMutation, PipelineResult, SourceRef } from "./types";
+import type {
+  RawIngestEvent,
+  EntityMutation,
+  PipelineResult,
+  SourceRef,
+} from "./types";
 
 export interface EntityTypeMapping {
   // Customer-configured workspace-scoped entity type string.
@@ -44,8 +46,10 @@ export interface PipelineContext {
   orgId: string;
   // Returns null when no mapping is configured for this (connectionId, sourceRecordType).
   // A null result means the record type is intentionally ignored — return null from runPipeline.
-  getMapping(connectionId: string, sourceRecordType: string): Promise<EntityTypeMapping | null>;
-  scheduleInference(nodeId: string, entityType: string, snapshot: Record<string, unknown>): Promise<void>;
+  getMapping(
+    connectionId: string,
+    sourceRecordType: string,
+  ): Promise<EntityTypeMapping | null>;
   /** Optional: connector delivery config to enforce filters. */
   getDeliveryConfig?(connectionId: string): Promise<DeliveryConfig | null>;
   /**
@@ -54,11 +58,14 @@ export interface PipelineContext {
    * returning the enabled schemas' labels/relationship types/properties; it is
    * null when no version is pinned (registry inert → today's behavior).
    *
-   * `runPipeline` loads this once and threads it to the grounding (infer) and
-   * validation (upsert) stages. Optional so callers that predate the registry
+   * `runPipeline` loads this once and threads it to the validation (upsert)
+   * stage. Optional so callers that predate the registry
    * (and tests) keep working without it.
    */
-  getPinnedSchema?(orgId: string, workspaceId: string): Promise<PinnedSchema | null>;
+  getPinnedSchema?(
+    orgId: string,
+    workspaceId: string,
+  ): Promise<PinnedSchema | null>;
 }
 
 export interface FilteredResult {
@@ -74,13 +81,20 @@ export async function runPipeline(
 ): Promise<PipelineResult | FilteredResult | null> {
   // Parallelize independent I/O operations: delivery config and pinned schema
   const [deliveryConfig, pinnedSchema] = await Promise.all([
-    ctx.getDeliveryConfig ? ctx.getDeliveryConfig(event.connectionId) : Promise.resolve(null),
-    ctx.getPinnedSchema ? ctx.getPinnedSchema(event.orgId, event.workspaceId) : Promise.resolve(null),
+    ctx.getDeliveryConfig
+      ? ctx.getDeliveryConfig(event.connectionId)
+      : Promise.resolve(null),
+    ctx.getPinnedSchema
+      ? ctx.getPinnedSchema(event.orgId, event.workspaceId)
+      : Promise.resolve(null),
   ]);
 
   // ── Stage 1: Record type filter ───────────────────────────────────────────
   const recordTypeFilters = deliveryConfig?.recordTypeFilters ?? [];
-  const typeFilter = applyRecordTypeFilter(event.sourceRecordType, recordTypeFilters);
+  const typeFilter = applyRecordTypeFilter(
+    event.sourceRecordType,
+    recordTypeFilters,
+  );
   if (typeFilter.filtered) {
     return {
       filtered: true,
@@ -92,7 +106,10 @@ export async function runPipeline(
 
   // Stage 2: Normalize raw payload → flat NormalizedRecord
   const connector = getConnector(event.connectorType);
-  const normalized = connector.normalizeRecord(event.sourceRecordType, event.payload);
+  const normalized = connector.normalizeRecord(
+    event.sourceRecordType,
+    event.payload,
+  );
 
   // ── Stage 2: Path filter ──────────────────────────────────────────────────
   const pathPatterns = deliveryConfig?.pathFilters ?? [];
@@ -119,12 +136,19 @@ export async function runPipeline(
   }
 
   // Stage 3: Look up customer's entity type mapping for this sourceRecordType
-  const mapping = await ctx.getMapping(event.connectionId, event.sourceRecordType);
+  const mapping = await ctx.getMapping(
+    event.connectionId,
+    event.sourceRecordType,
+  );
   if (mapping === null) return null;
 
   // Apply property mappings: rename source field paths to canonical property names
-  const mappedProperties: Record<string, unknown> = { ...normalized.properties };
-  for (const [sourceField, canonicalName] of Object.entries(mapping.propertyMappings)) {
+  const mappedProperties: Record<string, unknown> = {
+    ...normalized.properties,
+  };
+  for (const [sourceField, canonicalName] of Object.entries(
+    mapping.propertyMappings,
+  )) {
     if (sourceField in mappedProperties) {
       mappedProperties[canonicalName] = mappedProperties[sourceField];
       if (canonicalName !== sourceField) delete mappedProperties[sourceField];
@@ -160,7 +184,7 @@ export async function runPipeline(
   });
 
   // strict-mode rejection (§8): the node was NOT written — surface a filtered
-  // result so the caller emits `pipeline:record:filtered` and does not embed/infer.
+  // result so the caller emits `pipeline:record:filtered` and does not embed.
   if (dedup.rejected || dedup.principalNodeId == null) {
     return {
       filtered: true,
@@ -173,17 +197,19 @@ export async function runPipeline(
   // The guard above guarantees a written node — capture the non-null id.
   const principalNodeId = dedup.principalNodeId;
 
-  // ── Stage 5: Embed + Inference gate ──────────────────────────────────────
-  const inferenceEnabled = shouldRunInference(
+  // ── Stage 5: Embed (honor the legacy persisted opt-out) ──────────────────
+  const embeddingEnabled = shouldRunInference(
     event.sourceRecordType,
     deliveryConfig?.semanticInference,
   );
 
   let embedded = false;
-  let inferenceQueued = false;
-
-  if (inferenceEnabled) {
-    const text = renderEntityText(mutation.entityType, mutation.displayName, mutation.properties);
+  if (embeddingEnabled) {
+    const text = renderEntityText(
+      mutation.entityType,
+      mutation.displayName,
+      mutation.properties,
+    );
     await embedEntity({
       nodeId: principalNodeId,
       entityType: mutation.entityType,
@@ -193,10 +219,6 @@ export async function runPipeline(
       connectionId: mutation.connectionId,
     });
     embedded = true;
-
-    // Stage 6: Fire async inference (does not block return)
-    await ctx.scheduleInference(principalNodeId, mutation.entityType, mutation.properties);
-    inferenceQueued = true;
   }
 
   return {
@@ -204,7 +226,6 @@ export async function runPipeline(
     operation: mutation.operation,
     dedup,
     embedded,
-    inferenceQueued,
     conformanceScore: dedup.conformanceScore,
   };
 }
