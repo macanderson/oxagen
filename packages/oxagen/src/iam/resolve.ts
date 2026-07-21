@@ -77,6 +77,13 @@ export interface RoleGrant {
   roleId: string;
   capabilityId: string;
   effect: CapabilityEffect;
+  /**
+   * Optional conditionsJsonb carried by the role-grant row itself (mirrors
+   * Grant.conditionsJsonb). Used by the Agent RBAC resolver to collect
+   * resourceScope ceilings inherited THROUGH a role, not just from direct
+   * principal grants.
+   */
+  conditionsJsonb?: unknown;
 }
 
 export interface Role {
@@ -1014,8 +1021,29 @@ function principalScopeCeiling(
   scope: ResolveScope,
   grants: readonly Grant[],
   evalCtx: ConditionEvalContext,
+  roles: readonly Role[] = [],
+  roleGrants: readonly RoleGrant[] = [],
 ): EffectiveScope | undefined {
   let ceiling: EffectiveScope | undefined;
+
+  const applyConditionsJsonb = (conditionsJsonb: unknown): void => {
+    if (!evaluateConditions(conditionsJsonb, evalCtx)) return;
+    const raw =
+      typeof conditionsJsonb === "object" &&
+      conditionsJsonb !== null &&
+      !Array.isArray(conditionsJsonb)
+        ? (conditionsJsonb as Record<string, unknown>)["resourceScope"]
+        : undefined;
+    if (raw === undefined) return;
+    const parsed = parseResourceScope(raw);
+    if (parsed === null) return; // malformed — already fail-closed by evaluateConditions
+    ceiling =
+      ceiling === undefined
+        ? intersectEffectiveScope(parsed, {})
+        : intersectEffectiveScope(ceiling, parsed);
+  };
+
+  // Direct grants.
   for (const g of grants) {
     if (g.principalId !== principalId) continue;
     if (g.capabilityId !== capability) continue;
@@ -1026,21 +1054,24 @@ function principalScopeCeiling(
       (g.scopeKind === "org" && g.scopeId === scope.orgId);
     if (!inScope) continue;
     if (g.expiresAt && g.expiresAt < evalCtx.now) continue;
-    if (!evaluateConditions(g.conditionsJsonb, evalCtx)) continue;
-    const raw =
-      typeof g.conditionsJsonb === "object" &&
-      g.conditionsJsonb !== null &&
-      !Array.isArray(g.conditionsJsonb)
-        ? (g.conditionsJsonb as Record<string, unknown>)["resourceScope"]
-        : undefined;
-    if (raw === undefined) continue;
-    const parsed = parseResourceScope(raw);
-    if (parsed === null) continue; // malformed — already fail-closed by evaluateConditions
-    ceiling =
-      ceiling === undefined
-        ? intersectEffectiveScope(parsed, {})
-        : intersectEffectiveScope(ceiling, parsed);
+    applyConditionsJsonb(g.conditionsJsonb);
   }
+
+  // Role-inherited grants: a resourceScope ceiling attached to a role_grant
+  // row is inherited by every principal who is a member of that role, the
+  // same way the role's allow/deny/require_approval effect is inherited
+  // (Rule 7 above). Without this, a role that grants both a capability AND a
+  // ceiling on it would silently drop the ceiling for principals who hold
+  // the capability only through the role (no direct grant row).
+  const principalRoleIds = roles
+    .filter((r) => r.principalIds.includes(principalId))
+    .map((r) => r.id);
+  for (const rg of roleGrants) {
+    if (!principalRoleIds.includes(rg.roleId)) continue;
+    if (rg.capabilityId !== capability) continue;
+    applyConditionsJsonb(rg.conditionsJsonb);
+  }
+
   return ceiling;
 }
 
@@ -1129,6 +1160,8 @@ export function resolveAgentEffectivePermissions(
     input.scope,
     input.grants,
     evalCtx,
+    input.roles,
+    input.roleGrants,
   );
   const humanScope = principalScopeCeiling(
     input.humanPrincipal.id,
@@ -1136,6 +1169,8 @@ export function resolveAgentEffectivePermissions(
     input.scope,
     input.grants,
     evalCtx,
+    input.roles,
+    input.roleGrants,
   );
 
   let resourceScope: EffectiveScope = {};
