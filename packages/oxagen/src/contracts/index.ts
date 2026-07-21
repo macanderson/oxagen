@@ -58,6 +58,7 @@ import { agentExecutionRecord } from "./agent.execution.record";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentDebugTrace } from "./agent.debug.trace";
 import { telemetryErrorCluster } from "./telemetry.error.cluster";
+import { telemetryStellaIngest } from "./telemetry.stella.ingest";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./document.generate";
 import { documentsPdfCreate } from "./document.pdf.create";
@@ -608,6 +609,7 @@ export {
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
+  telemetryStellaIngest,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -951,6 +953,7 @@ export const contracts = [
   agentTraceGet,
   agentDebugTrace,
   telemetryErrorCluster,
+  telemetryStellaIngest,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
