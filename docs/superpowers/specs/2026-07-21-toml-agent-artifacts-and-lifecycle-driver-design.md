@@ -62,11 +62,16 @@ intelligence receives the prompt, and emits receipts proving what ran.
 
 ## Design principles
 
-### One canonical representation
+### Canonical ownership by storage plane
 
-The TOML source document is canonical for portable artifacts. In-memory types,
-database fields, generated indexes, and rendered prompts are projections of the
-canonical document, not competing sources of truth.
+For filesystem artifacts, the TOML document is canonical. For workspace-managed
+artifacts, an immutable version row stores the canonical TOML source while
+indexed relational columns are projections updated transactionally with that
+version. UI edits create a new canonical version and its projections in one
+transaction; they never update a projection without regenerating the TOML.
+
+In-memory types, generated indexes, and rendered prompts are projections. A
+foreign source is import input, not a continuing source of truth after import.
 
 ### Model choice and runtime guarantees are different contracts
 
@@ -100,9 +105,11 @@ A shared, dependency-light module will own:
 - Artifact validation and normalized error formatting.
 - Safe relative-path resolution for sidecar files and JSON schemas.
 - Lifecycle invocation and prompt-patch schemas.
+- Lifecycle eligibility metadata used by capability contracts.
 - Runtime-ready versus needs-review classification.
 - Import candidate and receipt types shared by CLI adapters and tests.
 - The foreign-tool mapping registry format and target validation.
+- Canonical hashing helpers for TOML documents and structured receipt values.
 
 Every CLI, server, handler, code generator, and seeder consumes these shared
 types. Oxagen must not retain separate parsers with subtly different behavior.
@@ -167,7 +174,7 @@ on_error = "block"
 
 [[driver.invocations]]
 id = "record-lineage"
-event = "after_turn"
+event = "before_finalize"
 when = "always"
 capability = "record_support_lineage"
 required = true
@@ -285,7 +292,69 @@ must resolve through the capability registry and always execute through
 The design does not create another permanent naming layer. Provider-facing
 names are adapter inputs; canonical Oxagen identifiers are stored in TOML.
 
+Foreign permissions are not assumed to be one-to-one with tools. A source
+permission class may map to an explicit ordered set of Oxagen identifiers when
+that set preserves the source semantics. For example, a broad foreign read
+permission may intentionally cover `read_file`, `list_dir`, `glob`, and `grep`.
+The mapping registry stores the complete set and its rationale; runtime access
+is still the intersection of that set, the agent allowlist, installed tools,
+entitlements, and IAM grants.
+
+## Lifecycle capability eligibility
+
+Naming a registered capability in agent TOML is not sufficient to make it a
+lifecycle capability. Capability contracts opt in with metadata equivalent to:
+
+```ts
+interface CapabilityLifecycleMetadata {
+  allowedEvents: LifecycleEvent[];
+  effect: "read" | "mutation";
+  idempotency: "none" | "supported" | "required";
+  outputKinds: Array<"opaque" | "prompt_patch" | "decision">;
+}
+```
+
+Agent activation compiles every invocation against the live registry and fails
+closed when:
+
+- The capability has no lifecycle metadata.
+- The event is not allowed.
+- `apply_as` is incompatible with the declared output kind.
+- Retry is configured for a mutating capability without idempotency support.
+- A deployment output schema is missing, unsafe, or cannot be compiled. The
+  kernel contract always validates first, so the additional schema can reject
+  more values but can never widen what the capability returns.
+
+Lifecycle execution remains inside `invoke()`, but the kernel receives an
+internal execution kind and lifecycle event instead of pretending the runner is
+an external `agent` surface. The kernel checks lifecycle metadata independently
+from API/MCP/agent/CLI exposure and records `ctx.surface = "runner"` in audit and
+metering data.
+
 ## Deterministic lifecycle driver
+
+### RunSpec V2 principal requirement
+
+The lifecycle driver cannot ship on the current principal-less durable run
+shape. RunSpec V2 records the originating principal reference and delegation
+context needed to re-resolve authorization at execution time:
+
+```ts
+interface RunPrincipalRefV1 {
+  kind: "user" | "api_key" | "service" | "agent";
+  id: string;
+  userId?: string;
+  apiKeyId?: string;
+  delegatedByPrincipalId?: string;
+  delegationGrantId?: string;
+}
+```
+
+The run stores identity references, not a copied grant snapshot. At claim time,
+the driver re-resolves the principal and current grants, then applies the same
+human/agent/service and delegation intersections as synchronous execution. A
+deleted, disabled, expired, or unresolvable principal fails closed before any
+lifecycle capability or model call.
 
 ### Event model
 
@@ -301,7 +370,8 @@ mechanism; an invocation is an execution contract.
 | `before_tool_call` | Before each model-selected tool executes |
 | `after_tool_call` | After each model-selected tool succeeds or fails |
 | `after_intelligence` | Once after candidate final output and before final output validation |
-| `after_turn` | Once when the turn reaches a terminal outcome |
+| `before_finalize` | Once while the turn is in `finalizing`, before terminal commit and output release |
+| `after_turn` | Durable observer scheduled atomically with terminal commit; cannot change the committed outcome |
 
 Invocations execute sequentially in TOML declaration order in version 1. This
 makes ordering visible and replayable. Parallel lifecycle execution is outside
@@ -331,7 +401,10 @@ interface LifecycleEventEnvelope {
   principal: {
     orgId: string;
     workspaceId: string;
-    principalId: string | null;
+    kind: "user" | "api_key" | "service" | "agent";
+    principalId: string;
+    delegatedByPrincipalId?: string;
+    delegationGrantId?: string;
   };
   prompt?: {
     effectiveHash: string;
@@ -406,17 +479,23 @@ registered output contract.
 - `continue`: record the failure and continue; valid only for
   `required = false`.
 
-Retries use one stable idempotency key for the logical invocation. Mutating
-capabilities must honor it to make retries safe. Oxagen guarantees ordered
-attempt and result handling; it cannot guarantee that an unavailable external
-MCP server succeeds.
+Retries use one stable idempotency key for the logical invocation. The kernel
+adds it to `CheckedContext`; it is not injected into raw capability input where
+strict schemas could reject it. Contract lifecycle metadata declares whether a
+handler supports or requires idempotency, and activation rejects unsafe retry
+configurations. Oxagen guarantees ordered attempt and result handling; it cannot
+guarantee that an unavailable external MCP server succeeds.
 
-`when` accepts `success`, `failure`, or `always` on terminal events. An
-`after_turn` invocation with `when = "always"` runs for success, rejection,
-failure, and cancellation.
+`when` accepts `success`, `failure`, or `always` on finalization and terminal
+events. A `before_finalize` invocation can block terminal commit and buffered
+output. An `after_turn` invocation runs from the durable outbox after terminal
+commit; it is retried and dead-lettered according to policy but cannot rewrite
+the committed turn outcome.
 
 Timeouts compose with the turn abort signal. A timeout never leaves the driver
-waiting indefinitely. Required failures prevent buffered output release.
+waiting indefinitely. Required failures before terminal commit prevent buffered
+output release. Customers that require an external side effect to succeed before
+delivery configure it at `before_finalize`, not `after_turn`.
 
 ### Prompt patches
 
@@ -450,7 +529,7 @@ and telemetry, but no candidate output is released to the caller until:
 
 1. `after_intelligence` invocations succeed.
 2. The final output passes the agent output schema.
-3. Required pre-release terminal work succeeds.
+3. Required `before_finalize` work succeeds.
 
 Chunk-level output policy and irreversible provisional streaming are outside
 version 1 because they weaken the stated contract.
@@ -477,6 +556,33 @@ registry and contract
 Direct handler calls and raw MCP calls are forbidden in lifecycle execution. An
 MCP-backed lifecycle operation is exposed through a canonical Oxagen capability
 whose handler delegates to the entitled server.
+
+Lifecycle invocations never recursively emit model tool lifecycle events.
+`before_tool_call` and `after_tool_call` apply only to tool calls selected by
+intelligence. Kernel calls made by lifecycle handlers, and nested capability
+calls made by ordinary handlers, retain trace lineage but do not re-enter the
+lifecycle event dispatcher. The driver carries an execution-origin/depth marker
+and fails closed on an attempted lifecycle cycle.
+
+### Finalization state machine
+
+The turn state machine is:
+
+```text
+running
+  -> finalizing
+  -> succeeded | rejected | failed | cancelled
+```
+
+The driver enters `finalizing` after candidate-output processing. It executes
+matching `before_finalize` invocations, validates the final output, and commits
+the terminal state plus all `after_turn` outbox obligations atomically. Buffered
+output is released only after that commit. Outbox workers execute `after_turn`
+obligations at least once with stable idempotency keys and durable receipts.
+
+This separates a blocking pre-commit guarantee from a durable post-commit
+observer and prevents an `after_turn` failure from leaving a logically terminal
+turn stuck indefinitely.
 
 ## Lifecycle receipts
 
@@ -506,6 +612,11 @@ interface LifecycleInvocationReceipt {
 
 Receipts join the existing append-only run event and lineage model. They contain
 hashes and safe metadata by default, not raw sensitive inputs or prompts.
+
+Artifact hashes use SHA-256 over UTF-8 deterministic TOML with LF line endings.
+Structured input, output, patch, and receipt hashes use RFC 8785 JSON
+Canonicalization Scheme bytes before SHA-256. Values that cannot be represented
+under the canonical JSON rules are rejected before hashing rather than coerced.
 
 ## Import and conversion engine
 
@@ -563,7 +674,8 @@ Mappings are versioned and source-specific. A mapping records:
 
 - Source platform.
 - Exact foreign identifier.
-- Canonical Oxagen target identifier.
+- One or more canonical Oxagen target identifiers, preserving the foreign
+  permission's actual breadth without widening it.
 - Mapping-registry version.
 - Optional source-version constraints.
 - Rationale and tests.
@@ -663,10 +775,11 @@ The same release converts and updates:
 - Agent-builder generation prompts and artifact downloads.
 - Documentation, examples, and focused inventory specifications.
 
-Database text columns may continue storing the canonical source document. Their
-content becomes TOML. Format-specific API fields become `content` or
-`skillToml`; parsed metadata becomes a canonical parsed artifact projection
-rather than `frontmatter`.
+An immutable managed-artifact version stores the canonical TOML source.
+Relational columns used for lookup, filtering, and joins are projections and are
+written in the same transaction as the version. Format-specific API fields
+become `content` or `skillToml`; parsed metadata becomes a canonical parsed
+artifact projection rather than `frontmatter`.
 
 The importer remains able to read legacy Oxagen Markdown as a source dialect so
 customers can convert after upgrading. That parser is not reachable from normal
@@ -684,10 +797,14 @@ The shared module and driver expose stable codes:
 - `unknown_capability`
 - `conflict`
 - `unsafe_symlink`
+- `principal_unresolved`
+- `lifecycle_ineligible`
 - `lifecycle_invalid_input`
 - `lifecycle_timeout`
 - `lifecycle_invalid_output`
 - `lifecycle_blocked`
+- `lifecycle_cycle`
+- `finalization_failed`
 - `prompt_patch_rejected`
 
 Errors flow through Oxagen's typed error conventions. Required runtime failures
@@ -703,7 +820,11 @@ foreign artifact does not hide other valid candidates.
 - Import scanning uses explicit roots and bounded traversal.
 - Symlinks are resolved and containment-checked before reads or copies.
 - Tool mapping cannot broaden permissions through fuzzy matching.
+- Durable runs re-resolve the stored principal and current grant intersections
+  before model or lifecycle execution.
 - Lifecycle invocations cannot bypass the kernel.
+- Capability lifecycle eligibility is checked at agent activation and again at
+  invocation.
 - Prompt patches cannot add tools, identities, permissions, or lifecycle work.
 - Receipts redact raw sensitive values by default.
 - Required invocation output is validated before it can affect the turn.
@@ -714,6 +835,7 @@ foreign artifact does not hide other valid candidates.
 
 - Parse and serialize round trips for agents, skills, and commands.
 - Deterministic serialization and artifact hashes.
+- RFC 8785 structured hashing and rejection of non-canonical values.
 - Required fields, unknown fields, kind mismatches, and schema-version behavior.
 - JSON Schema reference containment and validation.
 - Skill reference containment, missing assets, and unsafe symlinks.
@@ -726,6 +848,8 @@ foreign artifact does not hide other valid candidates.
 - Representative Cursor agent, skill, and command fixtures.
 - Shared-path deduplication.
 - Known exact tool mappings.
+- Exact one-to-many permission mappings preserve, but never widen, source
+  semantics.
 - Unknown and ambiguous mappings remain unresolved.
 - Exact MCP server/tool resolution.
 - Interactive conflict decisions and non-interactive skip defaults.
@@ -748,6 +872,10 @@ foreign artifact does not hide other valid candidates.
 ### Lifecycle driver
 
 - Input is validated before `before_turn`.
+- RunSpec V2 principal references are re-resolved and missing/expired principals
+  fail closed.
+- Agent activation rejects capabilities or events without compatible lifecycle
+  metadata.
 - Events fire at their declared cadence.
 - Invocations run in declaration order.
 - Input mappings resolve JSON Pointers and literals correctly.
@@ -756,8 +884,14 @@ foreign artifact does not hide other valid candidates.
 - Required failure blocks advancement and buffered delivery.
 - Optional continue records the failure and advances.
 - Retry count, stable idempotency key, timeout, and abort behavior.
-- `after_turn` with `when = "always"` runs on success, rejection, failure, and
-  cancellation.
+- Retry on a mutating non-idempotent capability is rejected at activation.
+- `before_finalize` blocks terminal commit and delivery when required work
+  fails.
+- Terminal state and `after_turn` outbox obligations commit atomically.
+- `after_turn` with `when = "always"` is delivered at least once for success,
+  rejection, failure, and cancellation without rewriting terminal outcome.
+- Lifecycle and nested kernel calls do not recursively emit model-tool events;
+  cycles fail closed.
 - Capability output and optional deployment schema both validate.
 - Prompt patches validate, apply in order, and cannot broaden authority.
 - Prompt before/patch/after hashes appear in receipts.
@@ -830,9 +964,12 @@ The feature is complete when:
 - Contracted agent inputs and outputs validate against customer JSON Schemas.
 - Required lifecycle capabilities execute outside the model loop at every
   configured event and through the capability kernel.
+- Durable runs execute lifecycle work under a re-resolved originating principal
+  and current grant intersection.
 - Structured prompt patches can mutate bounded prompt/input slots before
   intelligence receives them, with hashes and provenance.
-- Required failures block output release according to declared policy.
+- Required pre-finalization failures block output release according to declared
+  policy, while post-turn observers use durable outbox delivery.
 - Receipts prove execution order, attempts, outcomes, and prompt mutations.
 - Focused tests cover conversion, safety, ordering, retries, contracts, and
   cutover behavior.
