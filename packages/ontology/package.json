@@ -13,7 +13,8 @@
     "./labels": "./src/labels.ts",
     "./tenant": "./src/tenant.ts",
     "./temporal": "./src/temporal.ts",
-    "./ann": "./src/ann.ts"
+    "./ann": "./src/ann.ts",
+    "./natural-key": "./src/natural-key.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

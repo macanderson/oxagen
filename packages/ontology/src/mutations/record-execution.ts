@@ -26,13 +26,18 @@ export interface RecordExecutionInput {
    *  explorer as the node's primary identifier instead of a raw UUID. */
   displayName?: string | null;
   /**
-   * File paths (or naturalKeys) touched during this execution. Each entry is
-   * MERGEd as a `:SourceFile` node and linked via a `[:TOUCHED_FILE]` edge so
-   * callers can query "which files did execution X touch?" in Neo4j.
+   * SourceFile naturalKeys touched during this execution. Each entry MUST be
+   * `toNaturalKey(path, owner, repo)` output — the canonical
+   * `github:{owner}/{repo}:{path}` identity (packages/ontology/src/natural-key.ts).
+   * A bare path will NOT match the node GitHub ingestion writes, so these
+   * lineage edges would land on an orphan; pass the built key, not a raw path
+   * (docs/specs/workspace-graph-boundary/spec.md finding 4 — unified identity).
    *
-   * The MERGE uses `naturalKey` as the primary key so it is idempotent — a
-   * repeat call for the same file sets properties on the existing node
-   * without ever overwriting the lineage edge.
+   * Each entry is MERGEd as a `:SourceFile` node and linked via a
+   * `[:TOUCHED_FILE]` edge so callers can query "which files did execution X
+   * touch?" in Neo4j. The MERGE uses `naturalKey` as the primary key so it is
+   * idempotent — a repeat call for the same file sets properties on the
+   * existing node without ever overwriting the lineage edge.
    */
   touchedFilePaths?: string[] | null;
   /**
@@ -195,9 +200,12 @@ export async function recordExecutionInGraph(
     }
 
     // Record file-level lineage: MERGE a minimal :SourceFile for each path and
-    // link it from the Execution with a [:TOUCHED_FILE] edge. Uses naturalKey
-    // as the primary key so the MERGE is idempotent across repeat calls —
-    // it will never clobber the edge. Single round-trip via UNWIND.
+    // link it from the Execution with a [:TOUCHED_FILE] edge. Each naturalKey is
+    // the canonical toNaturalKey(path, owner, repo) form, so this MERGE lands on
+    // the SAME node GitHub ingestion projects (github:{owner}/{repo}:{path}) —
+    // the touched-file edge and the ingested file share one identity. Uses
+    // naturalKey as the primary key so the MERGE is idempotent across repeat
+    // calls — it will never clobber the edge. Single round-trip via UNWIND.
     if (touchedFilePaths?.length) {
       await neo4j.run(
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})

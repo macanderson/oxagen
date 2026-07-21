@@ -12,8 +12,14 @@ export { recordExecutionInGraph } from "./mutations/record-execution";
 export type { RecordExecutionInput } from "./mutations/record-execution";
 export { recordGeneratedFileInGraph } from "./mutations/record-generated-file";
 export type { RecordGeneratedFileInput } from "./mutations/record-generated-file";
-export { acquireFileLock, DEFAULT_FILE_LOCK_TTL_MS } from "./mutations/acquire-file-lock";
-export type { AcquireFileLockInput, AcquireFileLockResult } from "./mutations/acquire-file-lock";
+export {
+  acquireFileLock,
+  DEFAULT_FILE_LOCK_TTL_MS,
+} from "./mutations/acquire-file-lock";
+export type {
+  AcquireFileLockInput,
+  AcquireFileLockResult,
+} from "./mutations/acquire-file-lock";
 export {
   releaseFileLock,
   releaseFileLocksByExecution,
@@ -30,6 +36,33 @@ export type {
 export { sweepExpiredFileLocks } from "./mutations/sweep-file-locks";
 export type { SweepFileLocksResult } from "./mutations/sweep-file-locks";
 export { listFileLocks } from "./mutations/list-file-locks";
-export type { FileLockRecord, ListFileLocksInput, ListFileLocksResult } from "./mutations/list-file-locks";
+export type {
+  FileLockRecord,
+  ListFileLocksInput,
+  ListFileLocksResult,
+} from "./mutations/list-file-locks";
 export { projectFileLockToGraph } from "./mutations/project-file-lock";
-export type { ProjectFileLockInput, ProjectFileLockResult } from "./mutations/project-file-lock";
+export type {
+  ProjectFileLockInput,
+  ProjectFileLockResult,
+} from "./mutations/project-file-lock";
+export {
+  projectSnapshotToGraph,
+  removeCanonicalFiles,
+  pruneLegacySourceDetail,
+} from "./mutations/project-snapshot";
+export type {
+  ProjectSnapshotInput,
+  ProjectSnapshotScope,
+  RemoveCanonicalFilesInput,
+  PruneLegacySourceDetailInput,
+} from "./mutations/project-snapshot";
+// Canonical natural-key builders. Also available via the lightweight
+// `@oxagen/ontology/natural-key` subpath (no neo4j-driver graph) for hot-path
+// consumers like the file-lock lease.
+export {
+  toNaturalKey,
+  codeScopeNaturalKey,
+  repositoryNaturalKey,
+  repositorySnapshotNaturalKey,
+} from "./natural-key";
