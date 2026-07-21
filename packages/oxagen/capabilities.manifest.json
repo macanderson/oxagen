@@ -1463,7 +1463,7 @@
       "file": "billing.budget.get.ts",
       "domain": "billing",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "layers": {
         "schema": true,
         "api": true,
@@ -1478,7 +1478,7 @@
       "file": "billing.budget.set.ts",
       "domain": "billing",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": ["api", "mcp", "agent", "cli"],
       "layers": {
         "schema": true,
         "api": true,
@@ -4266,7 +4266,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -4480,6 +4480,19 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "ingest_stella_operational_telemetry",
+      "file": "telemetry.stella.ingest.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "unit": true,
+        "docs": false
       }
     },
     {

@@ -637,6 +637,53 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
+  // ── budget: hard spend ceilings (get_spend_budget / set_spend_budget) ───────
+
+  const budgetCmd = program
+    .command("budget")
+    .description(
+      "Hard period-to-date spend ceilings that gate agent runs — org + workspace",
+    );
+  budgetCmd
+    .command("show")
+    .description("Show configured spend ceilings with their live burn")
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { budgetShow } = await import("./commands/budget.js");
+      await budgetShow(opts);
+    });
+  budgetCmd
+    .command("set")
+    .description(
+      "Set (create or replace) a spend ceiling — Owner/Admin/Billing only",
+    )
+    .requiredOption("--scope <scope>", "org | workspace")
+    .requiredOption("--period <period>", "monthly | rolling")
+    .requiredOption("--limit <usd>", "Hard USD ceiling (> 0)")
+    .option(
+      "--window-days <n>",
+      "Trailing window in days — required for --period rolling, omit for monthly",
+    )
+    .option(
+      "--enabled <bool>",
+      "Whether the ceiling is enforced (true/false)",
+      "true",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        scope?: string;
+        period?: string;
+        limit?: string;
+        windowDays?: string;
+        enabled?: string;
+        json?: boolean;
+      }) => {
+        const { budgetSet } = await import("./commands/budget.js");
+        await budgetSet(opts);
+      },
+    );
+
   program
     .command("trace")
     .argument("<executionId>", "Public ID (aex_…) or UUID of the execution")

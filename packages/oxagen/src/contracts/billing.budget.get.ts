@@ -51,7 +51,7 @@ export const billingBudgetGet = registerCapability({
   description:
     "Read the hard period-to-date spend ceilings governing the active scope — the org-level ceiling (covers every workspace) and this workspace's own ceiling, if configured — each with its live burn: period-to-date spend, projection to the period end, the percent-of-ceiling reached, and whether the gate is currently denying. Powers the Billing → Budgets panel. Reading your own budget is never blocked by being over it.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // Reading your own spend/budget must never be denied by the budget gate.

@@ -67,7 +67,7 @@ export const billingBudgetSet = registerCapability({
   description:
     "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the USD limit, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // Writing your own budget must never be blocked by being over it.
