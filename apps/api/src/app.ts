@@ -291,6 +291,7 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
 import { a2aWellKnownRoute } from "./routes/a2a/well-known";
 import { a2aRpcRoute } from "./routes/a2a/rpc";
@@ -372,6 +373,14 @@ userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
+
+// Enrolled Stella operational telemetry is machine-to-machine only. The
+// workspace API key carries its immutable org+workspace scope, so this static
+// path sits outside the human-readable /:org_slug/:workspace_slug group.
+const stellaTelemetryScoped = new Hono<AppEnv>();
+stellaTelemetryScoped.use("*", authMiddleware);
+stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
+app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
 // Distributed, workspace-keyed rate limiters for the expensive surfaces. Budgets
 // are env-tunable (requests/minute) with conservative defaults; the store is
