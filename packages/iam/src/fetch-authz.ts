@@ -218,10 +218,14 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       .where(
         and(
           eq(schema.principals.orgId, orgId),
-          // Match by the effective user's ID stored in parent_user_id. The
-          // partial unique index principals_org_parent_user_uniq makes this at
-          // most one row, so LIMIT 1 is deterministic.
+          // Match by the effective user's ID stored in parent_user_id. Scoped
+          // to kind='human' — agent principals ALSO carry parentUserId=creator
+          // (docs/specs/agent-rbac/spec.md §3.1), so without this filter a
+          // user who has created agents would match multiple rows here. The
+          // partial unique index principals_org_parent_user_human_uniq makes
+          // this at most one row for a human, so LIMIT 1 is deterministic.
           eq(schema.principals.parentUserId, effectiveUserId as string),
+          eq(schema.principals.kind, "human"),
         ),
       )
       .limit(1);

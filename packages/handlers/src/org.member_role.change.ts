@@ -43,6 +43,7 @@ async function resolveActorPrincipalAndRole(
       and(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.kind, "human"),
         eq(schema.principals.status, "active"),
       ),
     )
@@ -53,7 +54,10 @@ async function resolveActorPrincipalAndRole(
   const [praRow] = await tx
     .select({ roleName: schema.roles.name })
     .from(schema.principalRoleAssignments)
-    .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+    .innerJoin(
+      schema.roles,
+      eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+    )
     .where(
       and(
         eq(schema.principalRoleAssignments.principalId, principalRow.id),
@@ -68,13 +72,15 @@ async function resolveActorPrincipalAndRole(
   return { principalId: principalRow.id, roleName: praRow?.roleName ?? null };
 }
 
-export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleChange> = async (
-  input,
-  ctx,
-) => {
+export const orgMemberRoleChangeHandler: CapabilityHandler<
+  typeof orgMemberRoleChange
+> = async (input, ctx) => {
   // ── Auth + scope guard ───────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "org.member.role.change: rejected — no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "org.member.role.change: rejected — no authenticated principal",
+    );
     throw new Error("Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
@@ -95,13 +101,19 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
   // Returns the target's previous role for the audit event below.
   const previousRole = await withTenantDb(async (tx) => {
     // ── Actor role gate (IAM, not legacy role string) ──────────────────────────
-    const { roleName: actorRole } = await resolveActorPrincipalAndRole(tx, ctx.orgId, actorId);
+    const { roleName: actorRole } = await resolveActorPrincipalAndRole(
+      tx,
+      ctx.orgId,
+      actorId,
+    );
     if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
       logger.warn(
         { orgId: ctx.orgId, actorId, actorRole },
         "org.member.role.change: rejected — insufficient org role",
       );
-      throw new Error("Forbidden: only org Owners and Admins can change member roles");
+      throw new Error(
+        "Forbidden: only org Owners and Admins can change member roles",
+      );
     }
 
     // ── Resolve target membership (IDOR guard) ──────────────────────────────────
@@ -171,6 +183,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
             and(
               eq(schema.principals.orgId, ctx.orgId),
               eq(schema.principals.parentUserId, input.targetUserId),
+              eq(schema.principals.kind, "human"),
             ),
           )
           .limit(1);
@@ -182,7 +195,10 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
             .from(schema.principalRoleAssignments)
             .where(
               and(
-                eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
+                eq(
+                  schema.principalRoleAssignments.principalId,
+                  targetPrincipalRow.id,
+                ),
                 eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
                 isNull(schema.principalRoleAssignments.workspaceId),
                 isNull(schema.principalRoleAssignments.deletedAt),
@@ -206,7 +222,11 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
 
             if (allOwnerPras.length <= 1) {
               logger.warn(
-                { orgId: ctx.orgId, targetUserId: input.targetUserId, newRole: input.newRole },
+                {
+                  orgId: ctx.orgId,
+                  targetUserId: input.targetUserId,
+                  newRole: input.newRole,
+                },
                 "org.member.role.change: blocked — would demote last org owner",
               );
               throw new Error(
@@ -227,6 +247,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<typeof orgMemberRoleC
         and(
           eq(schema.principals.orgId, ctx.orgId),
           eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.principals.kind, "human"),
         ),
       )
       .limit(1);
