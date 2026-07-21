@@ -1,0 +1,16 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+CLAUDE_CODE_USE_WORKTREES = "1"
+CLAUDE_CODE_MAX_WORKTREES = "6"
+CLAUDE_CODE_MAX_PARALLEL_AGENTS = "6"
+CLAUDE_CODE_WORKTREE_BASE_DIR = "${CLAUDE_PROJECT_DIR}/.worktrees"
+CLAUDE_CODE_AGENT_TEAM_SIZE = "6"
+CLAUDE_CODE_BACKGROUND_AGENTS = "1"
+CLAUDE_TELEMETRY_LOGGER = "${CLAUDE_PROJECT_DIR}/tools/scripts/claude-telemetry-logger.ts"
+POSTHOG_LLMA_CC_ENABLED = "true"
+POSTHOG_API_KEY = "phc_mnBFDvrZmhrSGwU4MbPddzjj7fL8tCNfEfe4iNJXz4wo"
+POSTHOG_HOST = "https://us.i.posthog.com"
+POSTHOG_LLMA_CUSTOM_PROPERTIES = '{"ai_product": "oxagen", "repo": "monorepo"}'
