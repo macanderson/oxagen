@@ -749,6 +749,95 @@ export function evaluateEffectiveMcpScope(
   return result;
 }
 
+/**
+ * Build the canonical "server:tool" key every MCP rule evaluation uses
+ * (Phase 4a, spec §3.7). The server segment is lowercased so rule authors
+ * address servers by their lowercase name (the seeded system-role convention,
+ * e.g. "github:*") regardless of the display-cased server row name
+ * ("GitHub"). Tool names pass through verbatim — MCP tools are snake_case by
+ * convention and matched case-sensitively.
+ */
+export function mcpServerToolKey(serverName: string, toolName: string): string {
+  return `${serverName.toLowerCase()}:${toolName}`;
+}
+
+/**
+ * Does this rule pattern decide EVERY tool of `serverName`? Exact, not
+ * conservative: a glob pattern P matches "s:t" for ALL tool strings t iff P
+ * ends in "*" (so the tail wildcard can absorb any tool name) and P matches
+ * the bare "s:" prefix (take t = "" for one direction; the trailing ".*" in
+ * the compiled regex absorbs any longer t for the other).
+ */
+function mcpRuleDecidesAllTools(pattern: string, serverName: string): boolean {
+  return pattern.endsWith("*") && matchGlobPattern(pattern, serverName + ":");
+}
+
+/**
+ * Could this rule pattern match SOME tool of `serverName`? Deliberately
+ * conservative in the "yes" direction: over-reporting keeps a server in the
+ * binding, where the per-tool-call gate (the authoritative enforcement)
+ * still evaluates every invocation — it can never widen access.
+ */
+function mcpRuleCouldMatchServer(pattern: string, serverName: string): boolean {
+  if (mcpRuleDecidesAllTools(pattern, serverName)) return true;
+  const idx = pattern.indexOf(":");
+  if (idx >= 0) {
+    // "server-glob:tool-glob" — the rule addresses this server iff the
+    // server segment matches. (A '*' inside the server segment could in
+    // principle also absorb the ':' — matchGlobPattern on the segment is the
+    // conservative approximation.)
+    return matchGlobPattern(pattern.slice(0, idx), serverName);
+  }
+  // No ':' in the pattern: it can only match a "server:tool" key when a '*'
+  // absorbs the ':' — patterns ending in '*' were handled above, so only
+  // internal-star shapes remain. Treat any remaining starred pattern as
+  // could-match (conservative); a literal pattern without ':' can never
+  // match a key that always contains ':'.
+  return pattern.includes("*");
+}
+
+/**
+ * True when ONE rule set (first-match-wins) provably denies EVERY tool of
+ * `serverName`: walking the rules in order, a deny rule that decides all
+ * tools is reached before any non-deny rule that could match some tool of
+ * this server. The default effect for unmatched tools is "allow", so a rule
+ * set without a covering deny never fully denies a server.
+ */
+export function mcpRuleSetFullyDeniesServer(
+  rules: readonly McpRule[],
+  serverName: string,
+): boolean {
+  const server = serverName.toLowerCase();
+  for (const rule of rules) {
+    if (rule.effect !== "deny") {
+      if (mcpRuleCouldMatchServer(rule.pattern, server)) return false;
+      continue;
+    }
+    if (mcpRuleDecidesAllTools(rule.pattern, server)) return true;
+    // A partial deny (e.g. "github:delete_*") leaves other tools undecided —
+    // keep walking.
+  }
+  return false;
+}
+
+/**
+ * True when the effective (intersected) MCP scope denies EVERY tool of
+ * `serverName` — i.e. ANY contributing ceiling's rule set fully denies it
+ * (the cross-set combination is most-restrictive-wins, so one fully-denying
+ * ceiling denies every tool regardless of the other sets). Used by the agent
+ * binding (apply-agent-binding.ts) to drop fully-denied servers from the
+ * per-turn MCP server allowlist entirely; `undefined` scope = unrestricted.
+ */
+export function mcpServerFullyDenied(
+  scope: EffectiveMcpScope | undefined,
+  serverName: string,
+): boolean {
+  if (!scope) return false;
+  return scope.ruleSets.some((rules) =>
+    mcpRuleSetFullyDeniesServer(rules, serverName),
+  );
+}
+
 // ── Effective scope types (exported for downstream consumers: kernel,
 //    packages/ontology, tool materialization, MCP binding) ─────────────────────
 

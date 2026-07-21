@@ -289,6 +289,17 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   };
 });
 
+// Agent RBAC Phase 4a: mcp-rbac.ts emits IAM audit rows (ClickHouse) for MCP
+// rule denials/ask-escalations — spy the emitter so tests can assert the
+// agent-principal rows without a ClickHouse client. (mcp-rbac.ts is the only
+// module in this file's import graph that touches @oxagen/iam.)
+const iamMocks = vi.hoisted(() => ({
+  emitAudit: vi.fn(async () => undefined),
+}));
+vi.mock("@oxagen/iam", () => ({
+  emitAudit: iamMocks.emitAudit,
+}));
+
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import {
@@ -1419,5 +1430,369 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     const { tools } = await materializeTools(CTX);
     expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
     expect(vi.mocked(resolveAgentRunCapability)).not.toHaveBeenCalled();
+  });
+});
+
+// ── Agent RBAC Phase 4a: MCP rule enforcement (spec §3.7) ────────────────────
+// The run's effective resourceScope.mcp rules ({pattern: "server:tool" glob,
+// effect: allow|deny|ask}, first-match-wins) govern external MCP tools at TWO
+// seams: listing (deny → never registered, the model cannot SEE it) and
+// execution (deny → blocked + audited even if the tool somehow reached the
+// model; ask → the existing mcp_consents flow with the AGENT PRINCIPAL as the
+// consent subject). No agentRun → both seams inert (the OXA-816 user-consent
+// tests above prove the unchanged paths).
+describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () => {
+  const AGENT_PRN = "prn_agent_1";
+  const HUMAN_PRN = "prn_human_1";
+  const MCP_SERVER = {
+    id: "srv_abc",
+    name: "GitHub", // display-cased — rules address the lowercase name
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+    endpointUrl: "https://github.mcp.example.com",
+    authStrategy: "bearer",
+    authConfig: { token: "tok_test" },
+    healthStatus: "healthy",
+    authKind: "secret",
+  };
+  const ALIAS = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+  const SYNTHETIC = `mcp.${MCP_SERVER.id}.list_pull_requests`;
+  const fakeExecute = vi.fn(async () => ({ content: { data: "result" } }));
+
+  const roles = [
+    {
+      id: "role_agent",
+      name: "Agent Role Under Test",
+      scopeKind: "workspace" as const,
+      orgId: "ten_1",
+      principalIds: [AGENT_PRN],
+      isSystemDefault: true,
+    },
+    {
+      id: "role_human",
+      name: "Member",
+      scopeKind: "workspace" as const,
+      orgId: "ten_1",
+      principalIds: [HUMAN_PRN],
+      isSystemDefault: true,
+    },
+  ];
+
+  /** Snapshot whose agent role carries the given resourceScope.mcp rules. */
+  function mcpRulesSnapshot(
+    rules: Array<{ pattern: string; effect: "allow" | "deny" | "ask" }>,
+  ): AgentAuthzSnapshot {
+    return {
+      grants: [],
+      policies: [],
+      roles,
+      roleGrants: [
+        {
+          roleId: "role_agent",
+          capabilityId: "capA",
+          effect: "allow",
+          conditionsJsonb: { resourceScope: { mcp: { rules } } },
+        },
+        { roleId: "role_human", capabilityId: "capA", effect: "allow" },
+      ],
+    };
+  }
+
+  function makeMcpAgentRun(
+    rules: Array<{ pattern: string; effect: "allow" | "deny" | "ask" }>,
+  ): AgentRunIAMContext {
+    const runCtx: AgentRunIAMContext = {
+      principalKind: "agent",
+      agentPrincipal: {
+        id: AGENT_PRN,
+        kind: "agent",
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+      },
+      humanPrincipal: {
+        id: HUMAN_PRN,
+        kind: "human",
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+      },
+      agentId: "agt_test",
+      runId: "run_test_1",
+      parentRunId: null,
+    };
+    runCtx.resolution = createAgentRunResolution(mcpRulesSnapshot(rules));
+    return runCtx;
+  }
+
+  beforeEach(() => {
+    vi.mocked(authorizeExternalCapability).mockClear();
+    vi.mocked(authorizeExternalCapability).mockResolvedValue({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+    });
+    fakeExecute.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    mocks.insertToolInvocation.mockResolvedValue(undefined);
+    mocks.createApprovalRequest.mockClear();
+    mocks.createApprovalRequest.mockResolvedValue({ approvalId: "appr_ask" });
+    mocks.waitForApproval.mockClear();
+    mocks.waitForApproval.mockResolvedValue({
+      approvalId: "appr_ask",
+      resolution: "approved",
+      note: null,
+    });
+    consentMocks.checkConsent.mockClear();
+    consentMocks.checkConsent.mockResolvedValue(null);
+    consentMocks.recordConsent.mockClear();
+    consentMocks.recordConsent.mockResolvedValue({ consentId: "mcons_x" });
+    iamMocks.emitAudit.mockClear();
+    iamMocks.emitAudit.mockResolvedValue(undefined);
+
+    dbMocks.rowsByTable.clear();
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
+    vi.mocked(connectMcp).mockResolvedValue({
+      callTool: fakeExecute,
+    } as unknown as Awaited<ReturnType<typeof connectMcp>>);
+    vi.mocked(listMcpToolDescriptors).mockResolvedValue([
+      {
+        name: "list_pull_requests",
+        description: "List PRs",
+        inputSchema: { type: "object" },
+      },
+    ]);
+  });
+
+  it("listing: an agent whose rules deny github:* cannot SEE github tools (unbound turn still can)", async () => {
+    // Baseline: the unbound turn lists the tool.
+    const unbound = await materializeTools(CTX);
+    expect(unbound.tools[ALIAS]).toBeDefined();
+
+    // Same workspace, agent run with a blanket github deny → tool never
+    // registered. Rule addresses the lowercase server name; the row is
+    // display-cased "GitHub" — case-insensitivity is enforced end-to-end.
+    const bound = await materializeTools({
+      ...CTX,
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "deny" }]),
+    });
+    expect(bound.tools[ALIAS]).toBeUndefined();
+  });
+
+  it("listing: first-match-wins — an earlier specific allow survives a later blanket deny", async () => {
+    const { tools } = await materializeTools({
+      ...CTX,
+      agentRun: makeMcpAgentRun([
+        { pattern: "github:list_*", effect: "allow" },
+        { pattern: "github:*", effect: "deny" },
+      ]),
+    });
+    expect(tools[ALIAS]).toBeDefined();
+    // Flip the order and the blanket deny decides first — the tool vanishes.
+    const flipped = await materializeTools({
+      ...CTX,
+      agentRun: makeMcpAgentRun([
+        { pattern: "github:*", effect: "deny" },
+        { pattern: "github:list_*", effect: "allow" },
+      ]),
+    });
+    expect(flipped.tools[ALIAS]).toBeUndefined();
+  });
+
+  it("listing: ask-ruled tools STAY visible (consent governs at call time), and fail-closed hides everything", async () => {
+    const asked = await materializeTools({
+      ...CTX,
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    });
+    expect(asked.tools[ALIAS]).toBeDefined();
+
+    // agentRun WITHOUT a resolution → fail closed for MCP tools too.
+    const bare: AgentRunIAMContext = {
+      principalKind: "agent",
+      agentPrincipal: {
+        id: AGENT_PRN,
+        kind: "agent",
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+      },
+      humanPrincipal: null,
+      agentId: "agt_test",
+      runId: "run_test_2",
+    };
+    const closed = await materializeTools({ ...CTX, agentRun: bare });
+    expect(closed.tools[ALIAS]).toBeUndefined();
+  });
+
+  it("execution: deny blocks the CALL even when the tool was materialized before the rules bound — audited with the agent principal and server:tool dimension", async () => {
+    // Materialize UNBOUND (tool visible), then attach the agent run to the
+    // same ctx object — the real ordering hazard: resolution slots are
+    // written by the run's first IAM check, which may postdate tool
+    // materialization. The execute closure reads ctx.agentRun at CALL time.
+    const ctx: typeof CTX & { agentRun?: AgentRunIAMContext } = { ...CTX };
+    const { tools } = await materializeTools(ctx);
+    expect(tools[ALIAS]).toBeDefined();
+
+    ctx.agentRun = makeMcpAgentRun([{ pattern: "github:*", effect: "deny" }]);
+    const result = await (
+      tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
+
+    // Transport never ran; the model got a readable block string.
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(result as string).toMatch(/agent role policy/i);
+    expect(result as string).toContain("github:list_pull_requests");
+
+    // Audit: existing IAM event, agent principal (→ principal_kind='agent'),
+    // server:tool as the target dimension, run lineage attached.
+    expect(iamMocks.emitAudit).toHaveBeenCalledTimes(1);
+    const audit = (
+      iamMocks.emitAudit.mock.calls[0] as unknown as [Record<string, unknown>]
+    )[0];
+    expect(audit.capability).toBe(SYNTHETIC);
+    expect(audit.principal).toMatchObject({ id: AGENT_PRN, kind: "agent" });
+    expect(audit.target).toEqual({
+      kind: "mcp_tool",
+      id: "github:list_pull_requests",
+    });
+    expect((audit.result as { outcome: string }).outcome).toBe("deny");
+    expect(audit.runLineage).toMatchObject({
+      agentId: "agt_test",
+      runId: "run_test_1",
+    });
+
+    // Metered as a failed invocation with the rule-denial error class.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const meter = (
+      mocks.insertToolInvocation.mock.calls[0] as unknown as [
+        Record<string, unknown>,
+      ]
+    )[0];
+    expect(meter.status).toBe("failed");
+    expect(meter.error_class).toBe("McpRuleDenied");
+  });
+
+  it("execution: a call under agentRun WITHOUT a resolution fails closed", async () => {
+    const ctx: typeof CTX & { agentRun?: AgentRunIAMContext } = { ...CTX };
+    const { tools } = await materializeTools(ctx);
+    ctx.agentRun = {
+      principalKind: "agent",
+      agentPrincipal: {
+        id: AGENT_PRN,
+        kind: "agent",
+        orgId: "ten_1",
+        workspaceId: "ws_1",
+      },
+      humanPrincipal: null,
+      agentId: "agt_test",
+      runId: "run_test_3",
+    };
+    const result = await (
+      tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(result as string).toMatch(/no IAM resolution/i);
+  });
+
+  it("ask: routes through the EXISTING consent flow with the AGENT PRINCIPAL as subject (subject_kind='agent'), skipping the user-scoped gate", async () => {
+    const events: Array<{ approvalId: string }> = [];
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask", // interactive surface — the card can render
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools } = await materializeTools(ctx, {
+      onConsentRequired: (e) => events.push({ approvalId: e.approvalId }),
+    });
+    const result = await (
+      tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
+
+    // Consent lookup used the AGENT subject: principal id + "agent" kind —
+    // and it is the ONLY consent lookup (the user-scoped gate was skipped).
+    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(1);
+    expect(consentMocks.checkConsent).toHaveBeenCalledWith(
+      ctx,
+      AGENT_PRN,
+      MCP_SERVER.id,
+      "list_pull_requests",
+      "agent",
+    );
+    // The HITL card machinery ran and the durable grant recorded the agent
+    // principal as the subject with the distinct label.
+    expect(events).toEqual([{ approvalId: "appr_ask" }]);
+    expect(consentMocks.recordConsent).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        consentMocks.recordConsent.mock.calls[0] as unknown as [
+          Record<string, unknown>,
+        ]
+      )[0],
+    ).toMatchObject({
+      userId: AGENT_PRN,
+      subjectKind: "agent",
+      serverId: MCP_SERVER.id,
+      toolName: "list_pull_requests",
+      status: "granted",
+    });
+    // Ask-escalation audited as pending_approval.
+    expect(iamMocks.emitAudit).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        iamMocks.emitAudit.mock.calls[0] as unknown as [
+          { result: { outcome: string } },
+        ]
+      )[0].result.outcome,
+    ).toBe("pending_approval");
+    // Approved → the transport ran.
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ data: "result" });
+  });
+
+  it("ask: an active agent-subject grant runs inline — no card, no audit, no user gate", async () => {
+    consentMocks.checkConsent.mockResolvedValueOnce({
+      status: "granted",
+      active: true,
+    });
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask2",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools } = await materializeTools(ctx);
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(iamMocks.emitAudit).not.toHaveBeenCalled();
+    expect(consentMocks.checkConsent).toHaveBeenCalledTimes(1);
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("ask: unattended surface (no messageId) fails closed without writing a consent row", async () => {
+    const ctx = {
+      ...CTX, // messageId: null — durable runner turn
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools } = await materializeTools(ctx);
+    const result = await (
+      tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
+    expect(fakeExecute).not.toHaveBeenCalled();
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(consentMocks.recordConsent).not.toHaveBeenCalled();
+    expect(result as string).toMatch(/consent required/i);
+    // The escalation is still audited.
+    expect(iamMocks.emitAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it("allow-ruled and unruled agent runs execute unchanged (rules only bind where written)", async () => {
+    const ctx = {
+      ...CTX,
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "allow" }]),
+    };
+    const { tools } = await materializeTools(ctx);
+    const result = await (
+      tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> }
+    ).execute!({});
+    expect(fakeExecute).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ data: "result" });
+    expect(iamMocks.emitAudit).not.toHaveBeenCalled();
   });
 });

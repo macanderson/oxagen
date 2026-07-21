@@ -139,9 +139,15 @@ function collectAllowedTools(
       // AI SDK v7 allows function-valued tool descriptions (resolved with
       // call options we don't have here) — only static strings carry over.
       description:
-        typeof rawTool.description === "string" ? rawTool.description : undefined,
+        typeof rawTool.description === "string"
+          ? rawTool.description
+          : undefined,
       execute: execute as ContributedRawTool["execute"],
       externalServerId: `file:${serverName}`,
+      // Agent-RBAC rule identity (spec §3.7): the settings server key is the
+      // name "server:tool" rule patterns address.
+      externalServerName: serverName,
+      externalToolName: toolName,
     });
   }
   return out;
