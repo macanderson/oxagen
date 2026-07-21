@@ -46,6 +46,19 @@ interface RunSpecV1 {
     allowlist?: string[];
     riskCeiling?: "low" | "medium" | "high";
   };
+  /**
+   * Agent RBAC delegation (spec §3.4/§3.5, Phase 2b). The run record carries
+   * no principal columns, so the enqueuing identity rides on the spec:
+   * `userId` is stamped server-side from the authenticated session (never
+   * client-supplied; absent for API-key auth, which carries no user), and
+   * `agentId` names the deployed agent the run acts as. When `agentId` is
+   * present, the worker's turn driver resolves the two-principal delegation
+   * ceiling and enforces agent RBAC on every capability the run invokes.
+   */
+  delegation?: {
+    agentId?: string;
+    userId?: string;
+  };
 }
 
 const ToolPolicySchema = z
@@ -62,6 +75,12 @@ const CreateRunBodySchema = z
     instruction: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
     model: z.string().min(1).optional(),
     toolPolicy: ToolPolicySchema.optional(),
+    // Deployed agent identity (agt_… public id or UUID) this run acts as.
+    // Optional + additive. Existence/liveness is validated by the worker's
+    // turn driver at claim time (the authoritative moment — an agent deleted
+    // between enqueue and claim must fail the run there anyway); a bad id
+    // fails the run with a clear error rather than 400ing here.
+    agentId: z.string().min(1).max(255).optional(),
   })
   .strict();
 
@@ -149,11 +168,26 @@ agentRunRoute.post("/", async (c) => {
   const body = CreateRunBodySchema.parse(await c.req.json());
   const ctx = capabilityContext(c);
 
+  // Agent RBAC delegation threading (Phase 2b): the run record has no
+  // principal columns, so the enqueuing human (ctx.userId — the authenticated
+  // session; null under API-key auth) and the requested agent identity ride
+  // on the spec for the worker's turn driver to resolve. Omitted entirely
+  // when neither is known so a plain enqueue produces the exact pre-Phase-2b
+  // spec shape.
+  const delegation: RunSpecV1["delegation"] =
+    body.agentId !== undefined || ctx.userId !== null
+      ? {
+          ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+          ...(ctx.userId !== null ? { userId: ctx.userId } : {}),
+        }
+      : undefined;
+
   const spec: RunSpecV1 = {
     version: 1,
     instruction: body.instruction,
     ...(body.model !== undefined ? { model: body.model } : {}),
     ...(body.toolPolicy !== undefined ? { toolPolicy: body.toolPolicy } : {}),
+    ...(delegation !== undefined ? { delegation } : {}),
   };
 
   const { publicId } = await runInTenantScope(
@@ -258,6 +292,13 @@ agentRunRoute.get("/:publicId/events", async (c) => {
             emitEvent(evt);
             seq = evt.seq;
           }
+          // Guard: the cursor must strictly advance each batch. The real
+          // store guarantees `seq > afterSeq` in SQL, but a misbehaving
+          // store/mock returning non-advancing rows would otherwise spin
+          // this loop forever, emitting an unbounded SSE buffer (memory
+          // exhaustion). Stop rather than re-read the same rows.
+          if (seq <= fromSeq) break;
+          fromSeq = seq;
         }
         return seq;
       }

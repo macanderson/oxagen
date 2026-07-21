@@ -21,9 +21,26 @@
  *   "instruction": "<string>",
  *   "model": "<optional string>",
  *   "history": ["...optional ModelMessage[]..."],
- *   "toolPolicy": { "allowlist": ["cap", ...], "riskCeiling": "low|medium|high" }
+ *   "toolPolicy": { "allowlist": ["cap", ...], "riskCeiling": "low|medium|high" },
+ *   "delegation": { "agentId": "agt_… | uuid", "userId": "<enqueuing user id>" }
  * }
  * ```
+ *
+ * `delegation` (Agent RBAC Phase 2b, docs/specs/agent-rbac/spec.md §3.4/§3.5)
+ * is optional and additive: `userId` is the human who enqueued the run
+ * (stamped by the enqueue route from its authenticated ctx — the run record
+ * itself carries no principal columns, so the spec is where it rides), and
+ * `agentId` names the deployed agent identity the run acts as. When
+ * `delegation.agentId` is present this driver resolves the two-principal
+ * AgentRunIAMContext (agent principal + invoking human), prefetches the
+ * once-per-run authz snapshot, and attaches it as `ctx.agentRun` — activating
+ * kernel IAM enforcement for every capability the turn invokes AND the
+ * materializeTools model-facing tool filter, both reading the ONE cached
+ * resolution (§3.5). A delegated run whose agent identity cannot be resolved
+ * to a live agent principal FAILS (thrown → failRun) rather than running
+ * ungoverned. A spec with no `delegation.agentId` behaves exactly as before
+ * this field existed (no agentRun on the context; kernel treats the turn as
+ * the pre-agent-RBAC runner surface).
  *
  * `history` messages are validated only for a recognizable `role` — `content`
  * is treated as opaque. The `ai` SDK's `ModelMessage.content` is itself a
@@ -84,14 +101,16 @@
  *   durable run's spend. The MEMBER's own saved budget preference
  *   (`budget.policy.read`) is deliberately NOT resolved here — that handler
  *   throws without an authenticated `ctx.userId`
- *   (`packages/handlers/src/budget.policy.read.ts`), and RunSpec v1 never
- *   captures the principal that enqueued the run (`run.orgId`/`run.workspaceId`
- *   ride on the `ClaimedRun` row; there is no `userId`). Follow-up: RunSpec v2
- *   must capture the enqueuing principal before a durable run can honor a
- *   member's own per-turn budget default — until then only an org/workspace
- *   ceiling or default governs a durable run, never a member override. The
- *   workspace-governance read fails open (read error/no governance ⇒
- *   unbounded) exactly like `chat.stream.ts`'s `readWorkspaceGovernance`.
+ *   (`packages/handlers/src/budget.policy.read.ts`). The enqueuing principal
+ *   IS now captured when the enqueue surface knows it (`delegation.userId`,
+ *   Agent RBAC Phase 2b) and rides on `ctx.userId`, but resolving the
+ *   member's own per-turn budget default from it remains a follow-up — until
+ *   then only an org/workspace ceiling or default governs a durable run,
+ *   never a member override. The workspace-governance read fails open (read
+ *   error/no governance ⇒ unbounded) exactly like `chat.stream.ts`'s
+ *   `readWorkspaceGovernance`, and is made with the driver's OWN context
+ *   (no `agentRun`) so an agent role can never unbind workspace budget
+ *   governance by denying the read.
  * - **No workspace/sandbox/code-mode.** `RunCodingAgentOptions.workspace` is
  *   omitted — conversational mode only (no filesystem tools, no diff, no
  *   command execution). Follow-up: a code-mode RunSpec variant needs a
@@ -115,6 +134,11 @@ import type { ModelMessage } from "ai";
 import { z } from "zod";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
+import {
+  createAgentRunResolution,
+  type AgentRunIAMContext,
+} from "@oxagen/oxagen/iam";
+import { resolveAgentRunAuthzContext, fetchAgentRunAuthz } from "@oxagen/iam";
 import {
   executeTurn,
   DEFAULT_AGENT_MODEL,
@@ -201,6 +225,15 @@ const toolPolicySchema = z.object({
   riskCeiling: z.enum(["low", "medium", "high"]).optional(),
 });
 
+// Agent RBAC delegation block (spec §3.4/§3.5) — see the module doc's RunSpec
+// section. Optional + additive: pre-delegation v1 specs parse unchanged.
+const delegationSchema = z.object({
+  /** Deployed agent identity (agt_… public id or UUID) this run acts as. */
+  agentId: z.string().min(1).optional(),
+  /** The human user who enqueued/invoked this run (delegation ceiling). */
+  userId: z.string().min(1).optional(),
+});
+
 // `content` is opaque on purpose — see the module doc's tool-name-translation
 // note and the RunSpec v1 section above. `.passthrough()` keeps whatever
 // shape the `ai` SDK's ModelMessage variant actually has instead of
@@ -218,6 +251,7 @@ const runSpecV1Schema = z.object({
   model: z.string().min(1).optional(),
   history: z.array(historyMessageSchema).optional(),
   toolPolicy: toolPolicySchema.optional(),
+  delegation: delegationSchema.optional(),
 });
 
 export type RunSpecV1 = z.infer<typeof runSpecV1Schema>;
@@ -269,15 +303,77 @@ export function createPlatformTurnDriver(): TurnDriver {
     return runInTenantScope(
       { orgId: run.orgId, workspaceId: run.workspaceId },
       async () => {
-        const ctx: CapabilityContext = {
+        // ── Agent RBAC (Phase 2b, spec §3.4/§3.5) ──────────────────────────
+        // A delegated run (spec.delegation.agentId) resolves its two-principal
+        // IAM context — the agent's own delegated principal + the invoking
+        // human (delegation.userId when the enqueue route captured one,
+        // otherwise the creator recorded at provisioning) — and prefetches
+        // the ONE per-run authz snapshot onto `agentRun.resolution`. Both IAM
+        // seams read this same object: materializeTools' model-facing tool
+        // filter (below) and the kernel's checkIAM (which reuses a
+        // pre-populated `resolution` instead of fetching its own —
+        // packages/iam/src/check-iam.ts resolutionForAgentRun). Runs inside
+        // the tenant scope opened above (both resolvers use withTenantDb).
+        const delegation = spec.delegation;
+        let agentRun: AgentRunIAMContext | undefined;
+        if (delegation?.agentId !== undefined) {
+          const authzCtx = await resolveAgentRunAuthzContext({
+            orgId: run.orgId,
+            workspaceId: run.workspaceId,
+            agentId: delegation.agentId,
+            invokingUserId: delegation.userId ?? null,
+          });
+          if (authzCtx === null) {
+            // Fail closed, loudly: a run that DECLARED an agent identity but
+            // cannot anchor it to a live agent principal must never execute
+            // ungoverned. The thrown message becomes failRun's error.
+            throw new Error(
+              `Agent run delegation failed: agent "${delegation.agentId}" ` +
+                `could not be resolved to a live agent principal — failing ` +
+                `closed (the run will not execute without its delegation ceiling)`,
+            );
+          }
+          agentRun = {
+            principalKind: "agent",
+            agentPrincipal: authzCtx.agentPrincipal,
+            humanPrincipal: authzCtx.humanPrincipal,
+            agentId: delegation.agentId,
+            runId: run.runId,
+            parentRunId: null,
+          };
+          // Prefetch the once-per-run snapshot so tool materialization can
+          // filter from it BEFORE the first kernel check of the run. A fetch
+          // failure here throws → failRun (same fail-closed posture as
+          // fetch-agent-authz's missing-migration contract).
+          agentRun.resolution = createAgentRunResolution(
+            await fetchAgentRunAuthz({
+              orgId: run.orgId,
+              workspaceId: run.workspaceId,
+              agentPrincipalId: authzCtx.agentPrincipal.id,
+              humanPrincipalId: authzCtx.humanPrincipal?.id ?? null,
+            }),
+          );
+        }
+
+        // `baseCtx` is the driver's OWN identity for housekeeping reads (no
+        // agentRun); `ctx` — handed to tool materialization and every model
+        // tool call — carries `agentRun` for delegated runs so kernel IAM
+        // enforcement activates. A non-delegated spec builds the exact
+        // pre-agent-RBAC context (no extra keys, ctx === baseCtx).
+        const baseCtx: CapabilityContext = {
           orgId: run.orgId,
           workspaceId: run.workspaceId,
-          userId: null,
+          // The enqueuing human, when the enqueue surface captured one
+          // (delegation.userId) — honest attribution; null preserves the
+          // pre-delegation shape byte-for-byte.
+          userId: delegation?.userId ?? null,
           apiKeyId: null,
           requestId: run.runId,
           surface: "runner",
           messageId: null,
         };
+        const ctx: CapabilityContext =
+          agentRun !== undefined ? { ...baseCtx, agentRun } : baseCtx;
 
         const { tools: extraTools, mutatingToolNames } = await materializeTools(
           ctx,
@@ -322,15 +418,23 @@ export function createPlatformTurnDriver(): TurnDriver {
         // of budget resolution applies to a durable run — `get_budget_policy`
         // keys on ctx.workspaceId alone, which every run has. The MEMBER's own
         // saved default (budget.policy.read) is never resolved: that handler
-        // requires an authenticated ctx.userId, which this driver's ctx never
-        // has (RunSpec v1 captures no enqueuing principal). Fail OPEN on any
-        // governance-read error (no_handler, IAM deny, DB error, …) — a broken
-        // or unregistered governance capability must never block a turn — same
-        // fail-open contract as chat.stream.ts's readWorkspaceGovernance.
+        // requires an authenticated ctx.userId, which pre-delegation runs
+        // never carry (delegated runs now do — resolving the member default
+        // remains a follow-up). Fail OPEN on any governance-read error
+        // (no_handler, IAM deny, DB error, …) — a broken or unregistered
+        // governance capability must never block a turn — same fail-open
+        // contract as chat.stream.ts's readWorkspaceGovernance.
+        //
+        // DELIBERATELY invoked with `baseCtx` (no `agentRun`): this read is
+        // the DRIVER's own governance housekeeping, not a model/agent action.
+        // Routing it through agent-run IAM would mean an agent role that
+        // doesn't grant the governance read silently UNBINDS the workspace
+        // budget (deny → catch → fail-open → unbounded spend) — the opposite
+        // of what RBAC-restricting an agent should do.
         const workspaceBudgetGovernance = await invoke(
           "get_budget_policy",
           {},
-          ctx,
+          baseCtx,
           { surface: "agent" },
         )
           .then((raw) =>

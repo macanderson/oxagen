@@ -8,6 +8,10 @@ import {
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import {
+  resolveAgentRunCapability,
+  type AgentRunIAMResolution,
+} from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
@@ -364,12 +368,75 @@ export async function materializeTools(
   let entitledPluginIds: Set<string> | null = null;
   let entitlementFetchFailed = false;
 
+  // ── Agent RBAC tool filter (spec §3.5 — the second seam) ────────────────────
+  // When this turn carries an agent-run IAM context, capabilities whose
+  // delegation-ceiling resolution (agent ∩ invoking human, deny-wins) is DENY
+  // are never materialized — the model never sees them. `pending_approval`
+  // (require_approval) tools STAY visible: they route to the approval flow at
+  // invoke time. This layer is UX only; the kernel invoke() gate is the real
+  // enforcement (defense against prompt-injected direct capability names).
+  //
+  // CRITICAL — one resolution per run: this reads ctx.agentRun.resolution, the
+  // SAME cached object the kernel's checkIAM reads/writes
+  // (packages/iam/src/check-iam.ts resolutionForAgentRun), via the SAME pure
+  // per-capability resolver (resolveAgentRunCapability, memoized on
+  // resolution.byCapability). No second fetch, no second policy — whoever
+  // attaches ctx.agentRun (the turn driver) populates `resolution` first.
+  // If an agentRun context arrives WITHOUT its resolution, fail closed for
+  // capability tools: an unattended automation must never see tools its
+  // ceiling was never computed for. Scope: capability/function tools only —
+  // MCP tools, skills, and subagent refs are governed at their own seams
+  // (spec Phase 4), not here.
+  const agentRun = ctx.agentRun;
+  const agentRunResolution: AgentRunIAMResolution | null =
+    agentRun?.principalKind === "agent" ? (agentRun.resolution ?? null) : null;
+  const agentRunFailClosed =
+    agentRun?.principalKind === "agent" && agentRunResolution === null;
+  if (agentRunFailClosed) {
+    logger.error(
+      {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        runId: agentRun?.runId,
+      },
+      "[agent-rbac] ctx.agentRun present without a populated resolution — " +
+        "failing closed: no capability tools will be materialized for this " +
+        "turn. The attacher must populate agentRun.resolution before " +
+        "materializeTools (see turn-driver.ts).",
+    );
+  }
+  // Run-constant resolver inputs (a run is pinned to one org+workspace; one
+  // `now` per materialization mirrors checkIAM's one `now` per check).
+  const agentRunScope = {
+    kind: (ctx.workspaceId ? "workspace" : "org") as "org" | "workspace",
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
+  const agentRunNow = new Date();
+
   for (const cap of all) {
     if (!getSurfaces(cap).includes("agent")) continue;
     if (WORKBENCH_ONLY_SANDBOX_CAPS.has(cap.name)) continue;
     if (opts.excludeCapabilities?.has(cap.name)) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
+    // Agent RBAC (spec §3.5): resolve this capability against the run's cached
+    // resolution and drop it on DENY. The memo written here
+    // (resolution.byCapability) is the memo the kernel hits at invoke time —
+    // the two layers provably share one decision per capability per run.
+    if (agentRunFailClosed) continue;
+    if (agentRunResolution !== null) {
+      const perms = resolveAgentRunCapability(agentRun!, agentRunResolution, {
+        capability: cap.name,
+        scope: agentRunScope,
+        // Same fallback as the kernel's IAM seam (kernel.ts): a capability
+        // without an explicit defaultEffect defaults to "deny".
+        defaultEffect: cap.defaultEffect ?? "deny",
+        now: agentRunNow,
+        clientIp: ctx.clientIp ?? null,
+      });
+      if (perms.outcome === "deny") continue;
+    }
     // Gate the entire sandbox-execution family on a configured driver: both the
     // one-shot execute_code and the durable sandbox session tools require
     // SANDBOX_ENABLED + a driver. Advertising a tool the model cannot actually

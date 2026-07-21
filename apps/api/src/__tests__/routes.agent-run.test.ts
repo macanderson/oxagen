@@ -60,9 +60,18 @@ vi.mock("../middleware/logger", () => ({
 
 import { app } from "../app";
 import {
+  resolveSession,
+  parseSessionCookie,
+  resolveOrgScope,
+  resolveWorkspaceScope,
+} from "@oxagen/auth";
+import {
   makeRequest,
   bearerHeader,
   makeApiKeyOk,
+  makeSessionValid,
+  makeOrgScopeOk,
+  makeWorkspaceScopeOk,
   TEST_ORG_ID,
   TEST_WORKSPACE_ID,
 } from "./_helpers";
@@ -245,6 +254,63 @@ describe("durable-run API: POST /runs", () => {
     expect(spec.version).toBe(1);
   });
 
+  // ── Agent RBAC delegation threading (Phase 2b) ─────────────────────────────
+
+  it("threads body.agentId into spec.delegation (API-key auth carries no userId, so delegation holds agentId alone)", async () => {
+    await app.fetch(post("/runs", { instruction: "hi", agentId: "agt_1" }));
+    const spec = mocks.enqueueRun.mock.calls[0]![0].spec;
+    expect(Object.keys(spec).sort()).toEqual([
+      "delegation",
+      "instruction",
+      "version",
+    ]);
+    expect(spec.delegation).toEqual({ agentId: "agt_1" });
+  });
+
+  it("400s when the client tries to inject a `delegation` block directly (userId is server-stamped, never client-supplied)", async () => {
+    const res = await app.fetch(
+      post("/runs", {
+        instruction: "hi",
+        delegation: { agentId: "agt_1", userId: "usr_forged" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.enqueueRun).not.toHaveBeenCalled();
+  });
+
+  it("400s on an empty agentId", async () => {
+    const res = await app.fetch(
+      post("/runs", { instruction: "hi", agentId: "" }),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.enqueueRun).not.toHaveBeenCalled();
+  });
+
+  it("stamps the authenticated session's userId into spec.delegation (session auth)", async () => {
+    vi.mocked(parseSessionCookie).mockReturnValue("tok");
+    vi.mocked(resolveSession).mockResolvedValue(
+      makeSessionValid("user-inv-1") as Awaited<
+        ReturnType<typeof resolveSession>
+      >,
+    );
+    vi.mocked(resolveOrgScope).mockResolvedValue(makeOrgScopeOk());
+    vi.mocked(resolveWorkspaceScope).mockResolvedValue(makeWorkspaceScopeOk());
+
+    const res = await app.fetch(
+      makeRequest(`${BASE}/runs`, {
+        method: "POST",
+        headers: {
+          cookie: "oxagen.session_token=tok.sig",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ instruction: "hi", agentId: "agt_1" }),
+      }),
+    );
+    expect(res.status).toBe(202);
+    const spec = mocks.enqueueRun.mock.calls[0]![0].spec;
+    expect(spec.delegation).toEqual({ agentId: "agt_1", userId: "user-inv-1" });
+  });
+
   it("400s when instruction is missing", async () => {
     const res = await app.fetch(post("/runs", {}));
     expect(res.status).toBe(400);
@@ -417,19 +483,25 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
     // Call 1 = initial replay, call 2 = the loop iteration's own read (both
     // still empty — the commit hasn't landed yet); call 3+ = the drain read
     // that runs after the terminal status observation (commit now visible).
+    // The visible event MUST still honor afterSeq: drainSince loops until a
+    // read comes back empty, so a mock that keeps returning seq 1 regardless
+    // of the advanced cursor spins that loop forever (unbounded SSE buffer →
+    // worker OOM — this exact bug hung the suite).
     let readCall = 0;
-    mocks.readEventsSince.mockImplementation(async () => {
-      readCall += 1;
-      if (readCall < 3) return [];
-      return [
-        {
-          seq: 1,
-          type: "final-diff",
-          payload: { diff: "final" },
-          createdAt: new Date(),
-        },
-      ];
-    });
+    mocks.readEventsSince.mockImplementation(
+      async (_runId: string, afterSeq: number) => {
+        readCall += 1;
+        if (readCall < 3) return [];
+        return [
+          {
+            seq: 1,
+            type: "final-diff",
+            payload: { diff: "final" },
+            createdAt: new Date(),
+          },
+        ].filter((e) => e.seq > afterSeq);
+      },
+    );
 
     const res = await app.fetch(get("/runs/arun_abc123/events"));
     const text = await res.text();

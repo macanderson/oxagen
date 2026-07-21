@@ -152,6 +152,19 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   })),
 }));
 
+// Agent RBAC (spec §3.5): keep the pure resolver REAL (the filter's behavior
+// is exercised end-to-end against actual role-grant resolution), but wrap
+// resolveAgentRunCapability in a spy so the tests can prove the filter reads
+// the EXACT cached resolution object (reference equality on the second
+// argument) — the "one resolution, two readers" invariant.
+vi.mock("@oxagen/oxagen/iam", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen/iam")>();
+  return {
+    ...real,
+    resolveAgentRunCapability: vi.fn(real.resolveAgentRunCapability),
+  };
+});
+
 // Lightweight @oxagen/tenancy shim. The real runInTenantScope asserts UUIDs and
 // uses a module-singleton AsyncLocalStorage; both fight this file (fake ids like
 // "ten_1", plus vi.resetModules() re-imports that would fork the ALS). The shim
@@ -278,6 +291,13 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 
 import { materializeTools } from "./materialize-tools";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import {
+  createAgentRunResolution,
+  resolveAgentRunCapability,
+  type AgentAuthzSnapshot,
+  type AgentRunIAMContext,
+  type AgentRunIAMResolution,
+} from "@oxagen/oxagen/iam";
 import { isSandboxAvailable } from "@oxagen/sandbox";
 import { connectMcp, listMcpToolDescriptors } from "../dispatch/mcp-client";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
@@ -1205,5 +1225,199 @@ describe("materializeTools — sandbox tool exposure policy", () => {
     expect(tools["execute_code"]).toBeUndefined();
     // Unrelated capabilities are untouched by the exclusion.
     expect(tools["capA"]).toBeDefined();
+  });
+});
+
+// ── Agent RBAC model-facing tool filter (spec §3.5, Phase 2b) ───────────────
+//
+// When the context carries an agent-run IAM context with its once-per-run
+// cached resolution, capability tools whose delegation-ceiling outcome is
+// DENY are never materialized; require_approval (pending_approval) tools stay
+// visible and route to the approval flow at invoke time. The filter must read
+// THE cached resolution object — never fetch or fork a second policy — and a
+// context without agentRun behaves byte-identically to today.
+describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
+  const AGENT_PRN = "prn_agent_1";
+  const HUMAN_PRN = "prn_human_1";
+
+  const agentPrincipal = {
+    id: AGENT_PRN,
+    kind: "agent" as const,
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+  };
+  const humanPrincipal = {
+    id: HUMAN_PRN,
+    kind: "human" as const,
+    orgId: "ten_1",
+    workspaceId: "ws_1",
+  };
+
+  // Human role: allows every fixture capability (the ceiling under test is
+  // the AGENT side; the human side must not be the thing denying).
+  const humanRoleGrants = [
+    { roleId: "role_human", capabilityId: "capA", effect: "allow" as const },
+    { roleId: "role_human", capabilityId: "capB", effect: "allow" as const },
+    {
+      roleId: "role_human",
+      capabilityId: "fill_form",
+      effect: "allow" as const,
+    },
+  ];
+
+  const roles = [
+    {
+      id: "role_agent",
+      name: "Agent Role Under Test",
+      scopeKind: "workspace" as const,
+      orgId: "ten_1",
+      principalIds: [AGENT_PRN],
+      isSystemDefault: true,
+    },
+    {
+      id: "role_human",
+      name: "Member",
+      scopeKind: "workspace" as const,
+      orgId: "ten_1",
+      principalIds: [HUMAN_PRN],
+      isSystemDefault: true,
+    },
+  ];
+
+  /**
+   * Agent-Observer-shaped snapshot: the agent role allows ONLY the read
+   * (capA); fill_form carries an explicit deny; capB has no agent grant at
+   * all, so it falls to the contract defaultEffect — absent on the fixture,
+   * hence the kernel-mirroring "deny" fallback.
+   */
+  function observerSnapshot(): AgentAuthzSnapshot {
+    return {
+      grants: [],
+      policies: [],
+      roles,
+      roleGrants: [
+        { roleId: "role_agent", capabilityId: "capA", effect: "allow" },
+        { roleId: "role_agent", capabilityId: "fill_form", effect: "deny" },
+        ...humanRoleGrants,
+      ],
+    };
+  }
+
+  /**
+   * Agent-Contributor-shaped snapshot: low/medium mutations allowed
+   * (fill_form), reads allowed (capA), and the high-risk capB gated behind
+   * require_approval — which must stay VISIBLE.
+   */
+  function contributorSnapshot(): AgentAuthzSnapshot {
+    return {
+      grants: [],
+      policies: [],
+      roles,
+      roleGrants: [
+        { roleId: "role_agent", capabilityId: "capA", effect: "allow" },
+        { roleId: "role_agent", capabilityId: "fill_form", effect: "allow" },
+        {
+          roleId: "role_agent",
+          capabilityId: "capB",
+          effect: "require_approval",
+        },
+        ...humanRoleGrants,
+      ],
+    };
+  }
+
+  function makeAgentRun(
+    resolution?: AgentRunIAMResolution,
+  ): AgentRunIAMContext {
+    const runCtx: AgentRunIAMContext = {
+      principalKind: "agent",
+      agentPrincipal,
+      humanPrincipal,
+      agentId: "agt_test",
+      runId: "run_test_1",
+      parentRunId: null,
+    };
+    if (resolution !== undefined) runCtx.resolution = resolution;
+    return runCtx;
+  }
+
+  function ctxWith(agentRun: AgentRunIAMContext): typeof CTX & {
+    agentRun: AgentRunIAMContext;
+  } {
+    return { ...CTX, agentRun };
+  }
+
+  beforeEach(() => {
+    dbMocks.rowsByTable.clear();
+    vi.mocked(resolveAgentRunCapability).mockClear();
+  });
+
+  it("Agent Observer: deny-resolved capabilities are never materialized — the model sees no mutation tools", async () => {
+    const resolution = createAgentRunResolution(observerSnapshot());
+    const { tools } = await materializeTools(ctxWith(makeAgentRun(resolution)));
+
+    expect(Object.keys(tools).sort()).toEqual(["capA"]);
+    // Explicit agent-role deny (fill_form) and default-deny fallback (capB —
+    // no grant, no contract defaultEffect) are both excluded.
+    expect(tools["fill_form"]).toBeUndefined();
+    expect(tools["capB"]).toBeUndefined();
+  });
+
+  it("Agent Contributor: keeps low/medium mutations AND keeps require_approval tools visible (they route to the approval flow at invoke time)", async () => {
+    const resolution = createAgentRunResolution(contributorSnapshot());
+    const { tools } = await materializeTools(ctxWith(makeAgentRun(resolution)));
+
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+    // capB stayed visible precisely because its outcome is pending_approval,
+    // not allow — provable from the shared per-capability memo.
+    expect(resolution.byCapability.get("capB")?.outcome).toBe(
+      "pending_approval",
+    );
+    expect(resolution.byCapability.get("fill_form")?.outcome).toBe("allow");
+  });
+
+  it("provably derives from the cached resolution: same object by reference, kernel-shared memo, no second fetch or fork", async () => {
+    const resolution = createAgentRunResolution(observerSnapshot());
+    const agentRun = makeAgentRun(resolution);
+
+    await materializeTools(ctxWith(agentRun));
+
+    // Every per-capability decision was computed against the EXACT resolution
+    // object cached on the run context — reference equality, not a copy, not
+    // a re-fetch (materialize-tools has no snapshot fetcher to call).
+    const calls = vi.mocked(resolveAgentRunCapability).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call[0]).toBe(agentRun);
+      expect(call[1]).toBe(resolution);
+      // The kernel's defaultEffect fallback is mirrored exactly: fixture
+      // capabilities declare no defaultEffect, so the filter resolves "deny".
+      expect(call[2]).toMatchObject({ defaultEffect: "deny" });
+    }
+    // The cache slot was never replaced or forked…
+    expect(agentRun.resolution).toBe(resolution);
+    // …and the memo the kernel reads at invoke time now holds these exact
+    // decisions: a later resolution of the same capability is a Map lookup
+    // returning the same object.
+    const memoized = resolution.byCapability.get("capA");
+    expect(memoized).toBeDefined();
+    await materializeTools(ctxWith(agentRun));
+    expect(resolution.byCapability.get("capA")).toBe(memoized);
+  });
+
+  it("fails closed when agentRun is present WITHOUT a populated resolution: no capability tools at all", async () => {
+    const { tools, mutatingToolNames } = await materializeTools(
+      ctxWith(makeAgentRun(undefined)),
+    );
+    expect(Object.keys(tools)).toEqual([]);
+    expect(mutatingToolNames).toEqual([]);
+    // Fail-closed means NOT resolving — there is no resolution to read.
+    expect(vi.mocked(resolveAgentRunCapability)).not.toHaveBeenCalled();
+  });
+
+  it("no agentRun on the context → byte-identical to today: full tool set, resolver never consulted", async () => {
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+    expect(vi.mocked(resolveAgentRunCapability)).not.toHaveBeenCalled();
   });
 });

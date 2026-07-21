@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => {
   );
   const invokeFn = vi.fn();
   const createTurnBudgetGuardFn = vi.fn();
+  const resolveAgentRunAuthzContextFn = vi.fn();
+  const fetchAgentRunAuthzFn = vi.fn();
   return {
     materializeToolsFn,
     createPlatformAgentAiFn,
@@ -38,6 +40,8 @@ const mocks = vi.hoisted(() => {
     runInTenantScopeFn,
     invokeFn,
     createTurnBudgetGuardFn,
+    resolveAgentRunAuthzContextFn,
+    fetchAgentRunAuthzFn,
     // Real value is 256 (packages/agent-engine/src/engine.ts) — mocked here
     // as its own named constant so the "maxSteps" assertion below and the
     // mock's exported value can never drift from each other independently of
@@ -68,6 +72,15 @@ vi.mock("@oxagen/tenancy", () => ({
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: mocks.invokeFn,
+}));
+
+// The impure IAM resolvers (@oxagen/iam — DB-backed) are spies; the PURE
+// helper the driver uses from @oxagen/oxagen/iam (createAgentRunResolution)
+// stays real, so the resolution object attached to ctx.agentRun is the
+// genuine {snapshot, byCapability, resolvedAt} shape downstream readers see.
+vi.mock("@oxagen/iam", () => ({
+  resolveAgentRunAuthzContext: mocks.resolveAgentRunAuthzContextFn,
+  fetchAgentRunAuthz: mocks.fetchAgentRunAuthzFn,
 }));
 
 // Real implementations of the PURE helpers (governedBudgetFromRead,
@@ -229,6 +242,22 @@ describe("parseRunSpec", () => {
       somethingFutureAddsLater: true,
     });
     expect(parsed).not.toHaveProperty("somethingFutureAddsLater");
+  });
+
+  it("accepts an optional delegation block (agentId/userId, each independently optional)", () => {
+    const parsed = parseRunSpec({
+      version: 1,
+      instruction: "hi",
+      delegation: { agentId: "agt_1", userId: "usr_1" },
+    });
+    expect(parsed.delegation).toEqual({ agentId: "agt_1", userId: "usr_1" });
+
+    const userOnly = parseRunSpec({
+      version: 1,
+      instruction: "hi",
+      delegation: { userId: "usr_1" },
+    });
+    expect(userOnly.delegation).toEqual({ userId: "usr_1" });
   });
 });
 
@@ -651,5 +680,188 @@ describe("createPlatformTurnDriver — budget guard", () => {
     expect(outcome).toEqual({
       result: expect.objectContaining({ stopReason: "budget" }),
     });
+  });
+});
+
+// ── createPlatformTurnDriver — agent RBAC delegation (spec §3.4/§3.5) ───────
+//
+// A delegated run (spec.delegation.agentId) resolves the two-principal
+// delegation ceiling, prefetches the once-per-run authz snapshot, and hands
+// materializeTools a CapabilityContext carrying `agentRun` — activating both
+// the kernel IAM gate and the model-facing tool filter from ONE resolution.
+
+// Minimal shape this suite reads off materializeTools' first argument.
+interface CtxWithAgentRun {
+  userId: string | null;
+  agentRun?: {
+    principalKind: string;
+    agentPrincipal: unknown;
+    humanPrincipal: unknown;
+    agentId: string;
+    runId: string;
+    parentRunId: string | null;
+    resolution?: { snapshot: unknown; byCapability: Map<string, unknown> };
+  };
+}
+
+describe("createPlatformTurnDriver — agent RBAC delegation (spec §3.4/§3.5)", () => {
+  const AGENT_PRINCIPAL = {
+    id: "prn-agent-1",
+    kind: "agent" as const,
+    orgId: "org-1",
+    workspaceId: "ws-1",
+  };
+  const HUMAN_PRINCIPAL = {
+    id: "prn-human-1",
+    kind: "human" as const,
+    orgId: "org-1",
+    workspaceId: null,
+  };
+  const SNAPSHOT = { grants: [], roles: [], roleGrants: [], policies: [] };
+
+  function delegatedRun(overrides: Partial<ClaimedRun> = {}): ClaimedRun {
+    return makeRun({
+      runId: "run_del1",
+      spec: {
+        version: 1,
+        instruction: "act as the agent",
+        delegation: { agentId: "agt_1", userId: "usr_inv" },
+      },
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    mocks.resolveAgentRunAuthzContextFn.mockResolvedValue({
+      principalKind: "agent",
+      agentPrincipal: AGENT_PRINCIPAL,
+      humanPrincipal: HUMAN_PRINCIPAL,
+    });
+    mocks.fetchAgentRunAuthzFn.mockResolvedValue(SNAPSHOT);
+  });
+
+  it("attaches ctx.agentRun with BOTH principals, run lineage, and a prefetched resolution built from the fetched snapshot", async () => {
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await driver(delegatedRun(), io);
+
+    // The ceiling is resolved for the run's org/workspace, the named agent,
+    // and the INVOKING user threaded from the enqueue path.
+    expect(mocks.resolveAgentRunAuthzContextFn).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      agentId: "agt_1",
+      invokingUserId: "usr_inv",
+    });
+    // The once-per-run snapshot covers BOTH principals of the ceiling.
+    expect(mocks.fetchAgentRunAuthzFn).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      agentPrincipalId: "prn-agent-1",
+      humanPrincipalId: "prn-human-1",
+    });
+
+    const ctx = mocks.materializeToolsFn.mock.calls[0]?.[0] as CtxWithAgentRun;
+    expect(ctx.agentRun).toBeDefined();
+    expect(ctx.agentRun).toMatchObject({
+      principalKind: "agent",
+      agentId: "agt_1",
+      runId: "run_del1",
+      parentRunId: null,
+    });
+    // Both principals ride on the context — by reference, no copies.
+    expect(ctx.agentRun?.agentPrincipal).toBe(AGENT_PRINCIPAL);
+    expect(ctx.agentRun?.humanPrincipal).toBe(HUMAN_PRINCIPAL);
+    // The resolution cache is PRE-populated (materializeTools filters from it
+    // before the first kernel check) and wraps the exact fetched snapshot.
+    expect(ctx.agentRun?.resolution?.snapshot).toBe(SNAPSHOT);
+    expect(ctx.agentRun?.resolution?.byCapability).toBeInstanceOf(Map);
+    expect(ctx.agentRun?.resolution?.byCapability.size).toBe(0);
+    // The enqueuing human also rides on ctx.userId (honest attribution).
+    expect(ctx.userId).toBe("usr_inv");
+  });
+
+  it("fails the run (throws → failRun) when the agent identity cannot be resolved — never executes ungoverned", async () => {
+    mocks.resolveAgentRunAuthzContextFn.mockResolvedValue(null);
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await expect(driver(delegatedRun(), io)).rejects.toThrow(
+      /agent "agt_1" could not be resolved to a live agent principal/,
+    );
+    expect(mocks.materializeToolsFn).not.toHaveBeenCalled();
+    expect(mocks.executeTurnFn).not.toHaveBeenCalled();
+  });
+
+  it("passes a null humanPrincipal through to the snapshot fetch and the run context (sentinel ceiling downstream)", async () => {
+    mocks.resolveAgentRunAuthzContextFn.mockResolvedValue({
+      principalKind: "agent",
+      agentPrincipal: AGENT_PRINCIPAL,
+      humanPrincipal: null,
+    });
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await driver(delegatedRun(), io);
+
+    expect(mocks.fetchAgentRunAuthzFn).toHaveBeenCalledWith(
+      expect.objectContaining({ humanPrincipalId: null }),
+    );
+    const ctx = mocks.materializeToolsFn.mock.calls[0]?.[0] as CtxWithAgentRun;
+    expect(ctx.agentRun?.humanPrincipal).toBeNull();
+  });
+
+  it("the driver's own budget-governance read carries NO agentRun — an agent role can never unbind workspace budget", async () => {
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await driver(delegatedRun(), io);
+
+    expect(mocks.invokeFn).toHaveBeenCalledWith(
+      "get_budget_policy",
+      {},
+      expect.anything(),
+      { surface: "agent" },
+    );
+    const budgetCtx = mocks.invokeFn.mock.calls[0]?.[2] as CtxWithAgentRun;
+    expect("agentRun" in budgetCtx).toBe(false);
+    // …but the model-facing context DOES carry it.
+    const toolCtx = mocks.materializeToolsFn.mock
+      .calls[0]?.[0] as CtxWithAgentRun;
+    expect(toolCtx.agentRun).toBeDefined();
+  });
+
+  it("delegation with userId but NO agentId: userId rides on ctx, no agentRun, IAM resolvers untouched", async () => {
+    const driver = createPlatformTurnDriver();
+    const run = makeRun({
+      spec: {
+        version: 1,
+        instruction: "hi",
+        delegation: { userId: "usr_only" },
+      },
+    });
+    const { io } = makeIo();
+
+    await driver(run, io);
+
+    expect(mocks.resolveAgentRunAuthzContextFn).not.toHaveBeenCalled();
+    expect(mocks.fetchAgentRunAuthzFn).not.toHaveBeenCalled();
+    const ctx = mocks.materializeToolsFn.mock.calls[0]?.[0] as CtxWithAgentRun;
+    expect(ctx.userId).toBe("usr_only");
+    expect("agentRun" in ctx).toBe(false);
+  });
+
+  it("non-delegated specs never touch the IAM resolvers and build the exact pre-RBAC context (no agentRun key)", async () => {
+    const driver = createPlatformTurnDriver();
+    const { io } = makeIo();
+
+    await driver(makeRun(), io);
+
+    expect(mocks.resolveAgentRunAuthzContextFn).not.toHaveBeenCalled();
+    expect(mocks.fetchAgentRunAuthzFn).not.toHaveBeenCalled();
+    const ctx = mocks.materializeToolsFn.mock.calls[0]?.[0] as CtxWithAgentRun;
+    expect("agentRun" in ctx).toBe(false);
+    expect(ctx.userId).toBeNull();
   });
 });
