@@ -17,8 +17,6 @@ import type {
  *   recalled context.
  * - `memory-remember` — persisting the turn's episodic memory failed.
  * - `trace-record` — writing the turn trace failed.
- * - `graph-sync` — a fire-and-forget knowledge-graph sync (file upsert / lineage
- *   edge) failed (pipeline finalization).
  * - `file-lock-release` — the turn-end batch lock release failed (the lock TTL is
  *   the ultimate backstop).
  * - `budget-wait-slow` — NOT an error but an observability breadcrumb: an
@@ -29,7 +27,6 @@ export type EngineNonFatalPhase =
   | "memory-recall"
   | "memory-remember"
   | "trace-record"
-  | "graph-sync"
   | "file-lock-release"
   | "budget-wait-slow";
 

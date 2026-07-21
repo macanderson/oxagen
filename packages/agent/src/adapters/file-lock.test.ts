@@ -27,15 +27,31 @@ describe("createFileLockAdapter", () => {
   beforeEach(() => {
     onto.acquireFileLock.mockReset();
     onto.releaseFileLock.mockReset().mockResolvedValue({ released: true });
-    onto.releaseFileLocksByExecution.mockReset().mockResolvedValue({ releasedCount: 0 });
+    onto.releaseFileLocksByExecution
+      .mockReset()
+      .mockResolvedValue({ releasedCount: 0 });
     loggerMock.warn.mockClear();
   });
 
-  it("acquire() derives the SAME naturalKey format createGraphSyncAdapter uses (github:{owner}/{repo}:{path})", async () => {
-    onto.acquireFileLock.mockResolvedValue({ granted: true, lockId: "lock-1", heldBy: null, blockedUntil: null });
-    const adapter = createFileLockAdapter({ owner: "oxageninc", repo: "oxagen-platform", workspaceId: "ws-1" });
+  it("acquire() derives the shared naturalKey format (github:{owner}/{repo}:{path})", async () => {
+    onto.acquireFileLock.mockResolvedValue({
+      granted: true,
+      lockId: "lock-1",
+      heldBy: null,
+      blockedUntil: null,
+    });
+    const adapter = createFileLockAdapter({
+      owner: "oxageninc",
+      repo: "oxagen-platform",
+      workspaceId: "ws-1",
+    });
 
-    await adapter.acquire({ path: "src/a.ts", agentId: "agent-a", executionId: "turn-1", action: "write" });
+    await adapter.acquire({
+      path: "src/a.ts",
+      agentId: "agent-a",
+      executionId: "turn-1",
+      action: "write",
+    });
 
     expect(onto.acquireFileLock).toHaveBeenCalledWith({
       naturalKey: "github:oxageninc/oxagen-platform:src/a.ts",
@@ -47,10 +63,19 @@ describe("createFileLockAdapter", () => {
   });
 
   it("acquire() falls back to the raw path as naturalKey when owner/repo are omitted", async () => {
-    onto.acquireFileLock.mockResolvedValue({ granted: true, lockId: "lock-1", heldBy: null, blockedUntil: null });
+    onto.acquireFileLock.mockResolvedValue({
+      granted: true,
+      lockId: "lock-1",
+      heldBy: null,
+      blockedUntil: null,
+    });
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
 
-    await adapter.acquire({ path: "src/a.ts", agentId: "agent-a", executionId: "turn-1" });
+    await adapter.acquire({
+      path: "src/a.ts",
+      agentId: "agent-a",
+      executionId: "turn-1",
+    });
 
     expect(onto.acquireFileLock).toHaveBeenCalledWith(
       expect.objectContaining({ naturalKey: "src/a.ts" }),
@@ -58,11 +83,20 @@ describe("createFileLockAdapter", () => {
   });
 
   it("acquire() returns the grant as-is on success", async () => {
-    const grant = { granted: false, lockId: "", heldBy: "agent-b", blockedUntil: 123 };
+    const grant = {
+      granted: false,
+      lockId: "",
+      heldBy: "agent-b",
+      blockedUntil: 123,
+    };
     onto.acquireFileLock.mockResolvedValue(grant);
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
 
-    const result = await adapter.acquire({ path: "a.ts", agentId: "agent-a", executionId: "turn-1" });
+    const result = await adapter.acquire({
+      path: "a.ts",
+      agentId: "agent-a",
+      executionId: "turn-1",
+    });
     expect(result).toEqual(grant);
   });
 
@@ -70,7 +104,11 @@ describe("createFileLockAdapter", () => {
     onto.acquireFileLock.mockRejectedValue(new Error("neo4j unreachable"));
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
 
-    const result = await adapter.acquire({ path: "a.ts", agentId: "agent-a", executionId: "turn-1" });
+    const result = await adapter.acquire({
+      path: "a.ts",
+      agentId: "agent-a",
+      executionId: "turn-1",
+    });
 
     expect(result.granted).toBe(false);
     expect(loggerMock.warn).toHaveBeenCalledWith(
@@ -82,7 +120,10 @@ describe("createFileLockAdapter", () => {
   it("release() delegates to releaseFileLock with lockId + agentId", async () => {
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
     await adapter.release({ lockId: "lock-1", agentId: "agent-a" });
-    expect(onto.releaseFileLock).toHaveBeenCalledWith({ lockId: "lock-1", agentId: "agent-a" });
+    expect(onto.releaseFileLock).toHaveBeenCalledWith({
+      lockId: "lock-1",
+      agentId: "agent-a",
+    });
   });
 
   it("release() is a no-op when lockId is empty (a denied/degraded grant was never held)", async () => {
@@ -94,18 +135,24 @@ describe("createFileLockAdapter", () => {
   it("release() never throws when the Neo4j mutation rejects — best-effort, TTL is the backstop", async () => {
     onto.releaseFileLock.mockRejectedValue(new Error("neo4j unreachable"));
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
-    await expect(adapter.release({ lockId: "lock-1", agentId: "agent-a" })).resolves.toBeUndefined();
+    await expect(
+      adapter.release({ lockId: "lock-1", agentId: "agent-a" }),
+    ).resolves.toBeUndefined();
     expect(loggerMock.warn).toHaveBeenCalled();
   });
 
   it("releaseAll() delegates to releaseFileLocksByExecution", async () => {
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
     await adapter.releaseAll("turn-1");
-    expect(onto.releaseFileLocksByExecution).toHaveBeenCalledWith({ executionId: "turn-1" });
+    expect(onto.releaseFileLocksByExecution).toHaveBeenCalledWith({
+      executionId: "turn-1",
+    });
   });
 
   it("releaseAll() never throws when the Neo4j mutation rejects", async () => {
-    onto.releaseFileLocksByExecution.mockRejectedValue(new Error("neo4j unreachable"));
+    onto.releaseFileLocksByExecution.mockRejectedValue(
+      new Error("neo4j unreachable"),
+    );
     const adapter = createFileLockAdapter({ workspaceId: "ws-1" });
     await expect(adapter.releaseAll("turn-1")).resolves.toBeUndefined();
     expect(loggerMock.warn).toHaveBeenCalled();

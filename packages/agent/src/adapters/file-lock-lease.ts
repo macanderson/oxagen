@@ -25,9 +25,12 @@ import {
   releaseFileLease,
   releaseFileLeasesByExecution,
 } from "../file-lock/lease";
-import { toNaturalKey } from "./graph-sync";
+import { toNaturalKey } from "./natural-key";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.file-lock-lease" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.file-lock-lease" },
+});
 
 const DENIED_ON_ERROR: FileLockGrant = {
   granted: false,
@@ -40,17 +43,24 @@ const DENIED_ON_ERROR: FileLockGrant = {
 export interface FileLeaseLockAdapterArgs {
   orgId: string;
   workspaceId: string;
-  /** GitHub owner (org or user) — same coordinates `createGraphSyncAdapter` takes, so the lock and the lineage projection key off the identical naturalKey. */
+  /** GitHub owner (org or user) — feeds `toNaturalKey` so the lock and the lineage projection key off the identical naturalKey. */
   owner?: string;
   /** GitHub repo name. */
   repo?: string;
 }
 
-export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): FileLockProvider {
+export function createFileLeaseLockAdapter(
+  args: FileLeaseLockAdapterArgs,
+): FileLockProvider {
   const { orgId, workspaceId, owner, repo } = args;
 
   return {
-    async acquire({ path, agentId, executionId, action }): Promise<FileLockGrant> {
+    async acquire({
+      path,
+      agentId,
+      executionId,
+      action,
+    }): Promise<FileLockGrant> {
       const resourceKey = toNaturalKey(path, owner, repo);
       try {
         const result = await acquireFileLease({
@@ -64,7 +74,13 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         });
         const lease = result.acquired[0];
         if (lease) {
-          return { granted: true, lockId: lease.lockId, heldBy: null, blockedUntil: null, fencingToken: lease.fencingToken };
+          return {
+            granted: true,
+            lockId: lease.lockId,
+            heldBy: null,
+            blockedUntil: null,
+            fencingToken: lease.fencingToken,
+          };
         }
         const conflict = result.conflicts[0];
         return {
@@ -78,7 +94,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         // Fail SOFT toward denial — a DB outage must never let a write proceed
         // unguarded. tools.ts retries a denial a bounded number of times, then
         // surfaces a clear "Blocked" tool result rather than crashing the turn.
-        logger.warn({ err, resourceKey, agentId, executionId }, "file-lock lease: acquire failed — denying (fail-soft)");
+        logger.warn(
+          { err, resourceKey, agentId, executionId },
+          "file-lock lease: acquire failed — denying (fail-soft)",
+        );
         return DENIED_ON_ERROR;
       }
     },
@@ -89,7 +108,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         await releaseFileLease({ orgId, workspaceId, lockId, holder: agentId });
       } catch (err) {
         // Best-effort — the lease TTL and the turn-end releaseAll both still apply.
-        logger.warn({ err, lockId, agentId }, "file-lock lease: release failed — relying on TTL/backstop");
+        logger.warn(
+          { err, lockId, agentId },
+          "file-lock lease: release failed — relying on TTL/backstop",
+        );
       }
     },
 
@@ -97,7 +119,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
       try {
         await releaseFileLeasesByExecution({ orgId, workspaceId, executionId });
       } catch (err) {
-        logger.warn({ err, executionId }, "file-lock lease: releaseAll failed — relying on TTL sweep");
+        logger.warn(
+          { err, executionId },
+          "file-lock lease: releaseAll failed — relying on TTL sweep",
+        );
       }
     },
   };

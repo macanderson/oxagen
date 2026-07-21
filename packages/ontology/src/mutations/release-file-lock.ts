@@ -18,7 +18,9 @@ export interface ReleaseFileLockResult {
  * Idempotent: releasing an already-released/expired/nonexistent lock is a
  * no-op that returns `released: false`, never an error.
  */
-export async function releaseFileLock(input: ReleaseFileLockInput): Promise<ReleaseFileLockResult> {
+export async function releaseFileLock(
+  input: ReleaseFileLockInput,
+): Promise<ReleaseFileLockResult> {
   const neo4j = scopedSession();
   try {
     const result = await neo4j.run(
@@ -85,8 +87,7 @@ export interface ReleaseFileLocksByExecutionResult {
  * Batch release on agent-turn-end (docs/specs/agent-file-locking/plan.md
  * §5): delete every `HOLDS_LOCK` edge stamped with `executionId`, so a turn
  * never leaks locks past its own lifetime regardless of how many files it
- * touched. Called from the turn's `finally`, alongside the existing
- * `graphSync.recordLineage` fire-and-forget write.
+ * touched. Called from the turn's `finally`, fire-and-forget.
  */
 export async function releaseFileLocksByExecution(
   input: ReleaseFileLocksByExecutionInput,

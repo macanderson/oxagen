@@ -19,12 +19,12 @@
  * capability, or a direct CLI-less platform invocation) without duplicated
  * per-caller locking code.
  *
- * All three methods degrade to fail-soft/deny rather than throwing, mirroring
- * `graph-sync.ts`'s "MUST NOT throw" contract — a Neo4j outage must never
- * crash a tool call. `acquire()` degrading to `granted: false` is the SAFE
- * direction (denies a write rather than risking an unguarded one); `release`/
- * `releaseAll` degrading to a no-op relies on the lock's own TTL sweep as the
- * backstop, exactly as documented on the `FileLockProvider` port.
+ * All three methods degrade to fail-soft/deny rather than throwing — a Neo4j
+ * outage must never crash a tool call. `acquire()` degrading to
+ * `granted: false` is the SAFE direction (denies a write rather than risking
+ * an unguarded one); `release`/`releaseAll` degrading to a no-op relies on
+ * the lock's own TTL sweep as the backstop, exactly as documented on the
+ * `FileLockProvider` port.
  */
 import pino from "pino";
 import {
@@ -33,9 +33,12 @@ import {
   releaseFileLocksByExecution,
 } from "@oxagen/ontology";
 import type { FileLockProvider, FileLockGrant } from "@oxagen/agent-engine";
-import { toNaturalKey } from "./graph-sync";
+import { toNaturalKey } from "./natural-key";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.file-lock" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.file-lock" },
+});
 
 const DENIED_ON_ERROR: FileLockGrant = {
   granted: false,
@@ -45,7 +48,7 @@ const DENIED_ON_ERROR: FileLockGrant = {
 };
 
 export interface FileLockAdapterArgs {
-  /** GitHub owner (org or user) — same coordinates `createGraphSyncAdapter` takes, so the lock and the lineage edge key off the identical naturalKey. */
+  /** GitHub owner (org or user) — feeds `toNaturalKey` so the lock and the lineage edge key off the identical naturalKey. */
   owner?: string;
   /** GitHub repo name. */
   repo?: string;
@@ -53,20 +56,36 @@ export interface FileLockAdapterArgs {
   workspaceId: string;
 }
 
-export function createFileLockAdapter(args: FileLockAdapterArgs): FileLockProvider {
+export function createFileLockAdapter(
+  args: FileLockAdapterArgs,
+): FileLockProvider {
   const { owner, repo, workspaceId } = args;
 
   return {
-    async acquire({ path, agentId, executionId, action }): Promise<FileLockGrant> {
+    async acquire({
+      path,
+      agentId,
+      executionId,
+      action,
+    }): Promise<FileLockGrant> {
       const naturalKey = toNaturalKey(path, owner, repo);
       try {
-        return await acquireFileLock({ naturalKey, agentId, executionId, workspaceId, action });
+        return await acquireFileLock({
+          naturalKey,
+          agentId,
+          executionId,
+          workspaceId,
+          action,
+        });
       } catch (err) {
         // Fail SOFT toward denial — a graph outage must never let a write
         // proceed unguarded. tools.ts's withFileLock retries a denial a
         // bounded number of times, then surfaces a clear "Blocked" tool
         // result rather than crashing the turn.
-        logger.warn({ err, path, agentId, executionId }, "file-lock: acquire failed — denying (fail-soft)");
+        logger.warn(
+          { err, path, agentId, executionId },
+          "file-lock: acquire failed — denying (fail-soft)",
+        );
         return DENIED_ON_ERROR;
       }
     },
@@ -78,7 +97,10 @@ export function createFileLockAdapter(args: FileLockAdapterArgs): FileLockProvid
       } catch (err) {
         // Best-effort — the lock's own TTL (default 300s) and the turn-end
         // releaseAll backstop both still apply.
-        logger.warn({ err, lockId, agentId }, "file-lock: release failed — relying on TTL/backstop");
+        logger.warn(
+          { err, lockId, agentId },
+          "file-lock: release failed — relying on TTL/backstop",
+        );
       }
     },
 
@@ -86,7 +108,10 @@ export function createFileLockAdapter(args: FileLockAdapterArgs): FileLockProvid
       try {
         await releaseFileLocksByExecution({ executionId });
       } catch (err) {
-        logger.warn({ err, executionId }, "file-lock: releaseAll failed — relying on TTL sweep");
+        logger.warn(
+          { err, executionId },
+          "file-lock: releaseAll failed — relying on TTL sweep",
+        );
       }
     },
   };

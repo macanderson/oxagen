@@ -9,7 +9,7 @@
  *  2. runTurn batch-releases (`releaseAll`) everything the turn's executionId
  *     holds when the turn ends.
  *  3. A throwing `releaseAll` does NOT propagate — the turn still succeeds
- *     (same fail-soft contract as GraphSyncProvider).
+ *     (the same fail-soft contract as every other best-effort engine hook).
  *  4. Two INDEPENDENT `runTurn` calls — standing in for the chat surface and
  *     a fleet subagent child, both of which funnel through this same shared
  *     engine (docs/adr/ADR-017-unified-agent-engine.md) — get DIFFERENT lock
@@ -20,7 +20,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
-import type { AgentAi, FileLockProvider, FileLockGrant, ModelRunArgs } from "../ports";
+import type {
+  AgentAi,
+  FileLockProvider,
+  FileLockGrant,
+  ModelRunArgs,
+} from "../ports";
 
 function makeAi(editFile?: string): AgentAi {
   return {
@@ -39,11 +44,18 @@ function makeAi(editFile?: string): AgentAi {
           yield { type: "text-delta", text: "done" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+        usage: Promise.resolve({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        }),
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
-    generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    generateObject: async () => ({
+      object: {} as never,
+      usage: { totalTokens: 0 },
+    }),
   };
 }
 
@@ -80,7 +92,10 @@ describe("runTurn — FileLockProvider", () => {
     expect(acquireArgs.path).toBe("src/a.ts");
     expect(acquireArgs.agentId).toMatch(/^turn_/);
 
-    expect(release).toHaveBeenCalledWith({ lockId: "lock-1", agentId: acquireArgs.agentId });
+    expect(release).toHaveBeenCalledWith({
+      lockId: "lock-1",
+      agentId: acquireArgs.agentId,
+    });
 
     expect(releaseAll).toHaveBeenCalledOnce();
     // The SAME id is used for both agentId (renew identity) and executionId
@@ -92,7 +107,11 @@ describe("runTurn — FileLockProvider", () => {
     const ws = new MemoryWorkspace({ "src/d.ts": "untouched" });
     const acquire = vi.fn();
     const releaseAll = vi.fn().mockResolvedValue(undefined);
-    const fileLock: FileLockProvider = { acquire, release: vi.fn(), releaseAll };
+    const fileLock: FileLockProvider = {
+      acquire,
+      release: vi.fn(),
+      releaseAll,
+    };
 
     await runTurn({
       prompt: "describe the file",
@@ -110,15 +129,17 @@ describe("runTurn — FileLockProvider", () => {
     expect(releaseAll).toHaveBeenCalledOnce();
   });
 
-  it("does NOT propagate a throwing releaseAll — the turn still succeeds (fail-soft, same as GraphSyncProvider)", async () => {
+  it("does NOT propagate a throwing releaseAll — the turn still succeeds (fail-soft)", async () => {
     const ws = new MemoryWorkspace({ "src/b.ts": "before" });
     const fileLock: FileLockProvider = {
-      acquire: vi.fn(async (): Promise<FileLockGrant> => ({
-        granted: true,
-        lockId: "lock-1",
-        heldBy: null,
-        blockedUntil: null,
-      })),
+      acquire: vi.fn(
+        async (): Promise<FileLockGrant> => ({
+          granted: true,
+          lockId: "lock-1",
+          heldBy: null,
+          blockedUntil: null,
+        }),
+      ),
       release: vi.fn().mockResolvedValue(undefined),
       releaseAll: vi.fn().mockRejectedValue(new Error("Neo4j down")),
     };
@@ -160,10 +181,20 @@ describe("runTurn — FileLockProvider protects independent callers (chat vs. fl
       acquire: async ({ path, agentId }) => {
         const holder = holders.get(path);
         if (holder && holder !== agentId) {
-          return { granted: false, lockId: "", heldBy: holder, blockedUntil: Date.now() + 60_000 };
+          return {
+            granted: false,
+            lockId: "",
+            heldBy: holder,
+            blockedUntil: Date.now() + 60_000,
+          };
         }
         holders.set(path, agentId);
-        return { granted: true, lockId: `lock-${agentId}`, heldBy: null, blockedUntil: null };
+        return {
+          granted: true,
+          lockId: `lock-${agentId}`,
+          heldBy: null,
+          blockedUntil: null,
+        };
       },
       release: async ({ agentId }) => {
         for (const [path, holder] of holders) {

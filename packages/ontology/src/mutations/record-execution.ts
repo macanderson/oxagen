@@ -30,9 +30,9 @@ export interface RecordExecutionInput {
    * MERGEd as a `:SourceFile` node and linked via a `[:TOUCHED_FILE]` edge so
    * callers can query "which files did execution X touch?" in Neo4j.
    *
-   * The MERGE uses `naturalKey` as the primary key so it is safe to call before
-   * `graph.sync.push` has enriched the node — subsequent syncs SET additional
-   * properties without overwriting the lineage edge.
+   * The MERGE uses `naturalKey` as the primary key so it is idempotent — a
+   * repeat call for the same file sets properties on the existing node
+   * without ever overwriting the lineage edge.
    */
   touchedFilePaths?: string[] | null;
   /**
@@ -52,7 +52,9 @@ export interface RecordExecutionInput {
  * The node now carries the universal `:GraphNode` anchor label so it appears in
  * the graph explorer and is hit by the `graph_node_embedding_index` vector search.
  */
-export async function recordExecutionInGraph(input: RecordExecutionInput): Promise<void> {
+export async function recordExecutionInGraph(
+  input: RecordExecutionInput,
+): Promise<void> {
   const {
     executionId,
     status,
@@ -77,7 +79,9 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
   // omitted so the bag stays lean.
   const toolNames = toolCalls?.map((tc) => tc.toolName) ?? [];
   const extraProperties = Object.fromEntries(
-    Object.entries(input.properties ?? {}).filter(([, v]) => v !== null && v !== undefined),
+    Object.entries(input.properties ?? {}).filter(
+      ([, v]) => v !== null && v !== undefined,
+    ),
   );
   const propertiesBag: Record<string, unknown> = {
     status,
@@ -192,8 +196,8 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
 
     // Record file-level lineage: MERGE a minimal :SourceFile for each path and
     // link it from the Execution with a [:TOUCHED_FILE] edge. Uses naturalKey
-    // as the primary key so subsequent graph.sync.push enrichment only adds
-    // properties — it will never clobber the edge. Single round-trip via UNWIND.
+    // as the primary key so the MERGE is idempotent across repeat calls —
+    // it will never clobber the edge. Single round-trip via UNWIND.
     if (touchedFilePaths?.length) {
       await neo4j.run(
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})

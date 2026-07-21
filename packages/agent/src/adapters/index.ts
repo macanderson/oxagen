@@ -1,10 +1,12 @@
 export { createNeo4jCodeGraphProvider } from "./code-graph";
 export { createPlatformMemoryProvider } from "./memory-provider";
-export type { MemoryAdapterArgs, MemoryAdapterTelemetry } from "./memory-provider";
+export type {
+  MemoryAdapterArgs,
+  MemoryAdapterTelemetry,
+} from "./memory-provider";
 export { createClickHouseTraceStore } from "./trace-store";
 export type { TraceStoreArgs } from "./trace-store";
-export { createGraphSyncAdapter, toNaturalKey } from "./graph-sync";
-export type { GraphSyncAdapterArgs } from "./graph-sync";
+export { toNaturalKey } from "./natural-key";
 // Postgres lease-backed file lock (ADR-021 §5) — the current provider.
 export { createFileLeaseLockAdapter } from "./file-lock-lease";
 export type { FileLeaseLockAdapterArgs } from "./file-lock-lease";

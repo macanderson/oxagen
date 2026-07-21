@@ -24,7 +24,10 @@ export interface ModelRunArgs {
   abortSignal?: AbortSignal;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
   onError?: (e: { error: unknown }) => void;
-  onStepFinish?: (s: { toolCalls?: unknown[]; toolResults?: unknown[] }) => void;
+  onStepFinish?: (s: {
+    toolCalls?: unknown[];
+    toolResults?: unknown[];
+  }) => void;
 }
 
 /**
@@ -32,7 +35,11 @@ export interface ModelRunArgs {
  * `response`). Both a `streamText` wrapper (CLI/BYOK) and a `streamAgentReply`
  * wrapper (platform) satisfy this exactly — both return `StreamTextResult`.
  */
-export type StreamRunResult = StreamTextResult<ToolSet, Record<string, unknown>, never>;
+export type StreamRunResult = StreamTextResult<
+  ToolSet,
+  Record<string, unknown>,
+  never
+>;
 
 /** Arguments for one structured-output generation (mirrors `generateObject`). */
 export interface ObjectRunArgs<T> {
@@ -76,7 +83,11 @@ export interface AgentAi {
 /** Episodic/recalled memory. CLI: local DuckDB/engram. Platform: `agent.memory.*`. */
 export interface MemoryProvider {
   recallContext(): Promise<string>;
-  remember(kind: string, content: unknown, status?: string): void | Promise<void>;
+  remember(
+    kind: string,
+    content: unknown,
+    status?: string,
+  ): void | Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -85,32 +96,6 @@ export interface TraceStore {
   // TurnTrace is defined in src/trace/types.ts; using `unknown` here keeps
   // this file dep-light and avoids a circular import through the ports layer.
   record(trace: unknown): void | Promise<void>;
-}
-
-/**
- * Graph-sync port: materialises touched files into the knowledge graph and
- * records execution-lineage edges from the turn's execution node to each file.
- *
- * Both methods are fire-and-forget — callers MUST wrap them in
- * `void Promise.resolve(...).catch(() => {})` so a failure never blocks or
- * fails the agent turn.
- *
- * CLI: a no-op stub (the CLI has no platform Neo4j session).
- * Platform: injects the in-app adapter from `@oxagen/agent/adapters`.
- */
-export interface GraphSyncProvider {
-  /**
-   * Upsert minimal `:SourceFile` nodes for every path in `touchedFiles`.
-   * Called near the start of turn finalization so the nodes exist before
-   * `recordLineage` attempts to create TOUCHED_FILE edges.
-   */
-  ensureGraph(touchedFiles: string[]): void | Promise<void>;
-
-  /**
-   * Create `(:Execution)-[:TOUCHED_FILE]->(:SourceFile)` edges in Neo4j for
-   * every path in `touchedFiles`. Uses the turn's trace id as the executionId.
-   */
-  recordLineage(args: { executionId: string; touchedFiles: string[] }): void | Promise<void>;
 }
 
 /**
@@ -184,9 +169,8 @@ export interface FileLockProvider {
   release(args: { lockId: string; agentId: string }): void | Promise<void>;
   /**
    * Batch-release every lock this execution/turn holds — the turn-end
-   * backstop (alongside `graphSync.recordLineage`) so a crashed/aborted turn
-   * never leaks a lock past its own lifetime even if a per-call release was
-   * skipped.
+   * backstop so a crashed/aborted turn never leaks a lock past its own
+   * lifetime even if a per-call release was skipped.
    */
   releaseAll(executionId: string): void | Promise<void>;
 }
