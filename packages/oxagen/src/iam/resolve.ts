@@ -778,8 +778,10 @@ function intersectStringSets(
   aEmptyIsUnrestricted = false,
   bEmptyIsUnrestricted = false,
 ): string[] | undefined {
-  const unrestrictedA = a === undefined || (aEmptyIsUnrestricted && a.length === 0);
-  const unrestrictedB = b === undefined || (bEmptyIsUnrestricted && b.length === 0);
+  const unrestrictedA =
+    a === undefined || (aEmptyIsUnrestricted && a.length === 0);
+  const unrestrictedB =
+    b === undefined || (bEmptyIsUnrestricted && b.length === 0);
   if (unrestrictedA && unrestrictedB) return undefined;
   if (unrestrictedA) return Array.from(new Set(b as readonly string[]));
   if (unrestrictedB) return Array.from(new Set(a as readonly string[]));
@@ -1081,6 +1083,14 @@ export function resolveAgentEffectivePermissions(
           input.scope.kind,
           input.scope.orgId,
           input.scope.workspaceId ?? "",
+          // Include whether the parent scope is an already-computed
+          // EffectiveScope (marked) vs. a raw, admin-authored ResourceScope
+          // literal — JSON.stringify alone cannot see the non-enumerable
+          // marker, so e.g. a raw `{ graph: { labels: [] } }` ("unrestricted")
+          // and an effective `labels: []` from a disjoint intersection
+          // ("nothing survives") would otherwise collide on the same key
+          // despite meaning opposite things.
+          isEffectiveScope(input.parentEffectiveScope) ? "eff" : "raw",
           JSON.stringify(input.parentEffectiveScope ?? null),
         ].join("\u0000")
       : null;
