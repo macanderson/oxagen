@@ -1,0 +1,26 @@
+{
+  "name": "@oxagen/agent-artifacts",
+  "version": "2.1.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "canonical-json": "0.4.0",
+    "smol-toml": "1.7.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@vitest/coverage-v8": "2.1.9",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
+  }
+}

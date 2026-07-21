@@ -1844,6 +1844,49 @@ export function buildProgram(): Command {
       settingsInit(opts.scope);
     });
 
+  // ── import artifacts: foreign platform conversion ──────────────────────────
+
+  const importCommand = program
+    .command("import")
+    .description("Import configuration from other agent platforms");
+  importCommand
+    .command("artifacts")
+    .description(
+      "Convert Claude Code, Codex, Cursor, or legacy Oxagen artifacts to TOML",
+    )
+    .option("--from <platform>", "Source platform (repeatable)", collect, [])
+    .option("--scope <scope>", "workspace | user", "workspace")
+    .option("--source <dir>", "Override source directory")
+    .option("--dry-run", "Scan and convert without activating files", false)
+    .option("--json", "Emit the import receipt as JSON", false)
+    .option(
+      "--conflict <decision>",
+      "skip | replace | rename (default: skip)",
+      "skip",
+    )
+    .option(
+      "--choice <name=decision>",
+      "Per-item conflict choice (repeatable)",
+      collect,
+      [],
+    )
+    .action(
+      async (opts: {
+        from?: string[];
+        scope?: string;
+        source?: string;
+        dryRun?: boolean;
+        json?: boolean;
+        conflict?: string;
+        choice?: string[];
+      }) => {
+        const { handleImportArtifacts } = await import(
+          "./commands/import-artifacts.js"
+        );
+        await handleImportArtifacts(opts);
+      },
+    );
+
   // ── agent: named agent definitions ──────────────────────────────────────────
 
   const agent = program
@@ -1868,7 +1911,7 @@ export function buildProgram(): Command {
     });
   agent
     .command("new")
-    .description("Scaffold a new agent at .oxagen/agents/<name>.md")
+    .description("Scaffold a new agent at .oxagen/agents/<name>.toml")
     .argument("<name>", "Agent name")
     .action(async (name: string) => {
       const { agentNew } = await import("./commands/agent.js");
@@ -1966,7 +2009,7 @@ export function buildProgram(): Command {
     });
   command
     .command("new")
-    .description("Scaffold a new slash command at .oxagen/commands/<name>.md")
+    .description("Scaffold a new slash command at .oxagen/commands/<name>.toml")
     .argument("<name>", "Command name")
     .action(async (name: string) => {
       const { commandNew } = await import("./commands/command.js");
@@ -2015,12 +2058,12 @@ export function buildProgram(): Command {
       promptNew(name);
     });
 
-  // ── skill: loadable skills (SKILL.md reference material) ─────────────────────
+  // ── skill: loadable TOML skill bundles ──────────────────────────────────────
 
   const skill = program
     .command("skill")
     .description(
-      "Manage loadable skills — SKILL.md reference material injected into the agent's system prompt",
+      "Manage loadable TOML skill bundles injected into the agent's system prompt",
     );
   skill
     .command("list")
@@ -2039,7 +2082,7 @@ export function buildProgram(): Command {
     });
   skill
     .command("new")
-    .description("Scaffold a new skill at .oxagen/skills/<name>/SKILL.md")
+    .description("Scaffold a new skill at .oxagen/skills/<name>/skill.toml")
     .argument("<name>", "Skill name")
     .action(async (name: string) => {
       const { skillNew } = await import("./commands/skill.js");

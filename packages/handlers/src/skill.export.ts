@@ -3,27 +3,7 @@ import { skillExport } from "@oxagen/oxagen/contracts/skill.export";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
-
-/**
- * Serialises a skill version back to `.skill.md` format.
- *
- * Only `name` and `description` are required frontmatter fields per
- * packages/skills/src/types.ts (skillFrontmatterSchema). We emit them in
- * a minimal but valid YAML block so the content round-trips through parseSkill.
- * Values are single-quoted to handle special characters without a yaml dep.
- */
-function buildSkillMd(opts: {
-  slug: string;
-  description: string;
-  body: string;
-}): string {
-  // Single-quote escaping: replace ' with '' (YAML single-quoted scalar rule).
-  const yamlEscape = (s: string) => s.replace(/'/g, "''");
-  const yamlBlock =
-    `name: '${yamlEscape(opts.slug)}'\n` +
-    `description: '${yamlEscape(opts.description)}'`;
-  return `---\n${yamlBlock}\n---\n\n${opts.body.trimEnd()}\n`;
-}
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 
 export const skillExportHandler: CapabilityHandler<typeof skillExport> = async (
   input,
@@ -121,13 +101,8 @@ export const skillExportHandler: CapabilityHandler<typeof skillExport> = async (
     );
   }
 
-  const content = buildSkillMd({
-    slug: skill.slug,
-    description: skill.description ?? "",
-    body: versionRow.body,
-  });
-
-  const filename = `${skill.slug}.skill.md`;
+  const { content } = canonicalizeSkillArtifact(versionRow.body);
+  const filename = `${skill.slug}.toml`;
 
   logger.info(
     {

@@ -46,6 +46,19 @@ function capabilitySignature(cap: CapabilityDeclaration): string {
 }
 
 export function registerCapability<C extends CapabilityDeclaration>(cap: C): C {
+  if (cap.lifecycle) {
+    const { allowedEvents, outputKinds } = cap.lifecycle;
+    if (
+      allowedEvents.length === 0 ||
+      new Set(allowedEvents).size !== allowedEvents.length ||
+      outputKinds.length === 0 ||
+      new Set(outputKinds).size !== outputKinds.length
+    ) {
+      throw new Error(
+        `invalid_lifecycle_metadata: capability "${cap.name}" must declare unique allowedEvents and outputKinds`,
+      );
+    }
+  }
   const existing = registry.get(cap.name);
   if (existing) {
     // Same name, same shape → the bundler evaluated this contract module twice.

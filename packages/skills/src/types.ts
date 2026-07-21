@@ -1,10 +1,9 @@
 import { z } from "zod";
 
-// SkillFrontmatter mirrors the YAML block at the top of a `.skill.md` file.
-// The shape is intentionally lenient: only `name` and `description` are
-// required, and `metadata` is an open bag the loader passes through so
+// SkillMetadata is the validated metadata projection from canonical TOML. It
+// remains an open bag so
 // callers can read arbitrary keys without changing the parser contract.
-export const skillFrontmatterSchema = z.object({
+export const skillMetadataProjectionSchema = z.object({
   name: z
     .string()
     .min(1)
@@ -19,7 +18,9 @@ export const skillFrontmatterSchema = z.object({
     .optional(),
 });
 
-export type SkillFrontmatter = z.infer<typeof skillFrontmatterSchema>;
+export type SkillMetadataProjection = z.infer<
+  typeof skillMetadataProjectionSchema
+>;
 
 export interface SkillReference {
   path: string;
@@ -31,9 +32,9 @@ export interface Skill {
   slug: string;
   name: string;
   description: string;
-  metadata: SkillFrontmatter["metadata"];
+  metadata: SkillMetadataProjection["metadata"];
   body: string;
-  // Reference paths discovered in the body; bodies populate on demand.
+  // Explicit manifest references; bodies populate on demand.
   references: SkillReference[];
   source: "builtin" | "tenant";
   version: string;

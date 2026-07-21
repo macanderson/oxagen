@@ -18,16 +18,16 @@
  * - All writes are inside a single withTenantDb transaction.
  */
 import { schema, withTenantDb } from "@oxagen/database";
-import { parseSkill } from "@oxagen/skills";
 import { and, eq, isNull, max, or } from "drizzle-orm";
 import { skillBodyChecksum } from "./skill-checksum";
 import { logger } from "./logger";
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 
 export interface CreateSkillVersionOptions {
   /** Public ID of the skill (skl_…) or its workspace-unique slug */
   skillPublicId: string;
-  /** Raw .skill.md body (must include YAML frontmatter) */
-  body: string;
+  /** Untrusted skill TOML, normalized before persistence. */
+  content: string;
   /** Author-supplied summary of what changed (commit message) */
   changeSummary?: string;
   /** Whether to set this version as the skill's active_version_id. Default: true */
@@ -49,7 +49,7 @@ export async function createNewSkillVersion(
 ): Promise<CreatedSkillVersion> {
   const {
     skillPublicId,
-    body,
+    content: untrustedContent,
     changeSummary,
     activate,
     orgId,
@@ -57,8 +57,9 @@ export async function createNewSkillVersion(
     userId,
   } = opts;
 
-  // Validate the body is parseable before touching the DB.
-  parseSkill(body, { source: "tenant" });
+  // Validate and normalize before touching the DB.
+  const { content, referencesPayload } =
+    canonicalizeSkillArtifact(untrustedContent);
 
   return withTenantDb(async (tx) => {
     // 1. Resolve skill internal UUID from publicId or slug within this tenant
@@ -124,14 +125,14 @@ export async function createNewSkillVersion(
         orgId,
         workspaceId,
         skillId: skillRow.id,
-        body,
+        body: content,
         versionNumber: nextVersion,
         isLatest: true,
         parentVersionId: priorLatest?.id ?? null,
         publishedAt: new Date(),
-        referencesPayload: priorLatest?.referencesPayload ?? [],
+        referencesPayload,
         changeSummary: changeSummary ?? null,
-        checksum: skillBodyChecksum(body),
+        checksum: skillBodyChecksum(content),
         createdByUserId: userId ?? undefined,
         updatedByUserId: userId ?? undefined,
       })

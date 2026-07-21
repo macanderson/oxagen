@@ -36,6 +36,14 @@ const BUILTIN_SKILL = {
   version: "1.0.0",
 };
 
+const CUSTOM_CONTENT = `schema_version = 1
+kind = "skill"
+name = "my-skill"
+description = "A custom skill"
+instructions = "Custom instructions"
+references = []
+`;
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
 
@@ -78,8 +86,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
   return {
     ...real,
-    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
-      fn(makeTx()),
+    withTenantDb: async (
+      fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>,
+    ) => fn(makeTx()),
   };
 });
 
@@ -122,7 +131,9 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
     mocks.skillInsertReturning.mockResolvedValue([
       { id: "uuid-skill-1", publicId: "skl_TEST01", slug: "summarization" },
     ]);
-    mocks.versionInsertReturning.mockResolvedValue([{ id: "uuid-ver-1", versionNumber: 1 }]);
+    mocks.versionInsertReturning.mockResolvedValue([
+      { id: "uuid-ver-1", versionNumber: 1 },
+    ]);
     mocks.skillUpdateWhere.mockResolvedValue([]);
     mocks.registryGet.mockResolvedValue(BUILTIN_SKILL);
   });
@@ -136,7 +147,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
   });
 
   it("throws when workspaceId is missing from context", async () => {
-    const noWsCtx = { ...CTX, workspaceId: undefined } as unknown as CapabilityContext;
+    const noWsCtx = {
+      ...CTX,
+      workspaceId: undefined,
+    } as unknown as CapabilityContext;
     await expect(
       skillWorkspaceInstallHandler({ slug: "summarization" }, noWsCtx),
     ).rejects.toThrow("workspaceId is required");
@@ -152,7 +166,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
   // ── fresh install: builtin template ──────────────────────────────────────
 
   it("installs a builtin template and returns installed=true", async () => {
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result.installed).toBe(true);
     expect(result.slug).toBe("summarization");
     expect(result.publicId).toBe("skl_TEST01");
@@ -161,14 +178,21 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
 
   it("passes installedFromSlug when installing a builtin template", async () => {
     // Verify the insert was called (skill insert mock invoked)
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result.installed).toBe(true);
     // The handler must have called registryGet with the template slug
     expect(mocks.registryGet).toHaveBeenCalledWith("summarization");
     // The skill insert must carry installedFromSlug = the template slug.
-    const skillInsert = mocks.insertedValues.find((v) => "installedFromSlug" in v);
+    const skillInsert = mocks.insertedValues.find(
+      (v) => "installedFromSlug" in v,
+    );
     expect(skillInsert).toBeDefined();
-    expect((skillInsert as { installedFromSlug: string }).installedFromSlug).toBe("summarization");
+    expect(
+      (skillInsert as { installedFromSlug: string }).installedFromSlug,
+    ).toBe("summarization");
     // active_version_id back-fill update must have run.
     expect(mocks.skillUpdateWhere).toHaveBeenCalledTimes(1);
   });
@@ -180,7 +204,7 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
       { id: "uuid-skill-2", publicId: "skl_CUSTOM", slug: "my-skill" },
     ]);
     const result = await skillWorkspaceInstallHandler(
-      { custom: { name: "my-skill", body: "## Custom body" } },
+      { custom: { content: CUSTOM_CONTENT } },
       CTX,
     );
     expect(result.installed).toBe(true);
@@ -191,15 +215,39 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
     expect(mocks.registryGet).not.toHaveBeenCalled();
   });
 
-  it("slugifies the custom skill name from whitespace-separated words", async () => {
+  it("uses the canonical manifest name as the custom slug", async () => {
     mocks.skillInsertReturning.mockResolvedValueOnce([
       { id: "uuid-skill-3", publicId: "skl_WS", slug: "my-new-skill" },
     ]);
     const result = await skillWorkspaceInstallHandler(
-      { custom: { name: "my new skill", body: "## Body" } },
+      {
+        custom: {
+          content: CUSTOM_CONTENT.replace(
+            'name = "my-skill"',
+            'name = "my-new-skill"',
+          ),
+        },
+      },
       CTX,
     );
     expect(result.slug).toBe("my-new-skill");
+  });
+
+  it("preserves an explicit display_name without changing the canonical slug", async () => {
+    mocks.skillInsertReturning.mockResolvedValueOnce([
+      { id: "uuid-skill-4", publicId: "skl_DISPLAY", slug: "my-skill" },
+    ]);
+    await skillWorkspaceInstallHandler(
+      {
+        custom: {
+          content: `${CUSTOM_CONTENT}\n[metadata]\ndisplay_name = "My Skill"\n`,
+        },
+      },
+      CTX,
+    );
+
+    const skillInsert = mocks.insertedValues.find((value) => "source" in value);
+    expect(skillInsert).toMatchObject({ name: "My Skill", slug: "my-skill" });
   });
 
   // ── idempotency: skill already exists ────────────────────────────────────
@@ -218,7 +266,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
       [{ versionNumber: 2 }],
     );
 
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result.installed).toBe(false);
     expect(result.publicId).toBe("skl_EXISTING");
     expect(result.activeVersion).toBe(2);
@@ -237,7 +288,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
       },
     ]);
 
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result.installed).toBe(false);
     expect(result.activeVersion).toBe(1);
   });
@@ -262,7 +316,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
     );
     mocks.skillInsertReturning.mockRejectedValueOnce({ code: "23505" });
 
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result.installed).toBe(false);
     expect(result.publicId).toBe("skl_RACE");
     expect(result.slug).toBe("summarization");
@@ -270,7 +327,9 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
   });
 
   it("rethrows non-unique-violation insert errors", async () => {
-    mocks.skillInsertReturning.mockRejectedValueOnce(new Error("connection reset"));
+    mocks.skillInsertReturning.mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
     await expect(
       skillWorkspaceInstallHandler({ slug: "summarization" }, CTX),
     ).rejects.toThrow("connection reset");
@@ -279,7 +338,10 @@ describe("skillWorkspaceInstallHandler (@oxagen/handlers)", () => {
   // ── output shape compliance ────────────────────────────────────────────────
 
   it("output always includes publicId, slug, activeVersion, installed", async () => {
-    const result = await skillWorkspaceInstallHandler({ slug: "summarization" }, CTX);
+    const result = await skillWorkspaceInstallHandler(
+      { slug: "summarization" },
+      CTX,
+    );
     expect(result).toHaveProperty("publicId");
     expect(result).toHaveProperty("slug");
     expect(result).toHaveProperty("activeVersion");

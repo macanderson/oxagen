@@ -77,10 +77,14 @@ describe("buildSlashCatalog", () => {
     });
   }
 
+  function customCommand(name: string, description: string): string {
+    return `schema_version = 1\nkind = "command"\nname = "${name}"\ndescription = "${description}"\nprompt = "body"\n`;
+  }
+
   it("marks built-in and CLI commands productized, custom commands not", () => {
     writeFileSync(
-      join(userDir, "shipit.md"),
-      "---\ndescription: Ship the branch\n---\nOpen a PR for $ARGUMENTS\n",
+      join(userDir, "shipit.toml"),
+      customCommand("shipit", "Ship the branch"),
       "utf8",
     );
     const catalog = build();
@@ -108,8 +112,8 @@ describe("buildSlashCatalog", () => {
   it("dedupes on name with precedence builtin > cli > custom", () => {
     // A custom command that shadows a built-in name must not displace the built-in.
     writeFileSync(
-      join(userDir, "mode.md"),
-      "---\ndescription: custom mode\n---\nbody\n",
+      join(userDir, "mode.toml"),
+      customCommand("mode", "custom mode"),
       "utf8",
     );
     const catalog = build();
@@ -127,11 +131,7 @@ describe("buildSlashCatalog", () => {
   });
 
   it("orders builtin entries before cli before custom", () => {
-    writeFileSync(
-      join(userDir, "zzz.md"),
-      "---\ndescription: z\n---\nbody\n",
-      "utf8",
-    );
+    writeFileSync(join(userDir, "zzz.toml"), customCommand("zzz", "z"), "utf8");
     const catalog = build();
     const sources = catalog.map((c) => c.source);
     const firstCli = sources.indexOf("cli");

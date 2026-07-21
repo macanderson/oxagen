@@ -9,7 +9,7 @@
  * ontology, de-conflicts a colliding slug) before returning it for review.
  *
  * The HOW of turning a description into a valid config lives in the
- * `create-agent` builtin skill (packages/skills/skills/create-agent.skill.md),
+ * `create-agent` builtin skill (packages/skills/skills/create-agent/skill.toml),
  * loaded as the system prompt, and the candidate assembly + synthesis schema +
  * deterministic repair are shared with `agent.definition.revise` in
  * ./agent-suggest-core.ts — this handler owns only the description prompt and
@@ -94,7 +94,8 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   // Slug: honour the caller's nameHint, else the model's slug, else the name.
   // Clamp to the 18-char budget BEFORE de-conflict — the model (or a long
   // nameHint) can exceed it, and the contract would otherwise reject the output.
-  const slugBase = toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
+  const slugBase =
+    toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
   let slug = clampSlug(slugBase);
   if (slug !== slugBase) {
     warnings.push(
@@ -109,7 +110,11 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     slug = deconflicted;
   }
 
-  const { config, agentType, recommendations } = repairSynthesis(object, candidates, warnings);
+  const { config, agentType, recommendations } = repairSynthesis(
+    object,
+    candidates,
+    warnings,
+  );
 
   logger.info(
     {

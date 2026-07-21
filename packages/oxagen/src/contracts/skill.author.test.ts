@@ -6,7 +6,9 @@ describe("skill.author capability", () => {
   // ── input: valid paths ────────────────────────────────────────────────────
 
   it("accepts a minimal valid prompt", () => {
-    const parsed = skillAuthor.input.parse({ prompt: "Teach the agent how to review PRs" });
+    const parsed = skillAuthor.input.parse({
+      prompt: "Teach the agent how to review PRs",
+    });
     expect(parsed.prompt).toBe("Teach the agent how to review PRs");
     expect(parsed.activate).toBe(true); // default
     expect(parsed.nameHint).toBeUndefined();
@@ -95,7 +97,7 @@ describe("skill.author capability", () => {
     const parsed = skillAuthor.output.parse({
       publicId: "skl_ABC123",
       slug: "pr-review",
-      body: "---\nname: pr-review\ndescription: How to review PRs\n---\n\n# PR Review\n\nReview carefully.",
+      content: 'schema_version = 1\nkind = "skill"\nname = "pr-review"\n',
       activeVersion: 1,
       installed: true,
     });
@@ -109,7 +111,7 @@ describe("skill.author capability", () => {
     const parsed = skillAuthor.output.parse({
       publicId: "skl_XYZ",
       slug: "pr-review",
-      body: "---\nname: pr-review\ndescription: Existing skill body\n---\n\n# Title",
+      content: 'schema_version = 1\nkind = "skill"\nname = "pr-review"\n',
       activeVersion: 2,
       installed: false,
     });
@@ -122,7 +124,7 @@ describe("skill.author capability", () => {
       skillAuthor.output.parse({
         publicId: "skl_ABC",
         slug: "pr-review",
-        body: "---\nname: pr-review\ndescription: desc\n---\n\n# body",
+        content: 'schema_version = 1\nkind = "skill"\n',
         activeVersion: 0,
         installed: true,
       }),
@@ -133,7 +135,7 @@ describe("skill.author capability", () => {
     expect(() =>
       skillAuthor.output.parse({
         slug: "pr-review",
-        body: "---\nname: pr-review\ndescription: desc\n---\n\n# body",
+        content: 'schema_version = 1\nkind = "skill"\n',
         activeVersion: 1,
         installed: true,
       }),
@@ -145,7 +147,7 @@ describe("skill.author capability", () => {
       skillAuthor.output.parse({
         publicId: "skl_ABC",
         slug: "pr-review",
-        body: "---\nname: pr-review\ndescription: desc\n---\n\n# body",
+        content: 'schema_version = 1\nkind = "skill"\n',
         activeVersion: 1,
         installed: "yes",
       }),

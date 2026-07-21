@@ -2,17 +2,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillVersionGet } from "@oxagen/oxagen/contracts/skill.version.get";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { parse as parseYaml } from "yaml";
 import { logger } from "./logger";
-
-// Frontmatter delimiter — matches the FRONTMATTER_RE in packages/skills/src/loader.ts.
-const FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---\s*\n/;
-
-function extractFrontmatter(body: string): Record<string, unknown> {
-  const match = FRONTMATTER_RE.exec(body);
-  if (!match) return {};
-  return (parseYaml(match[1] ?? "") as Record<string, unknown>) ?? {};
-}
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 
 export const skillVersionGetHandler: CapabilityHandler<
   typeof skillVersionGet
@@ -109,7 +100,7 @@ export const skillVersionGetHandler: CapabilityHandler<
     );
   }
 
-  const frontmatter = extractFrontmatter(versionRow.body);
+  const { artifact, content } = canonicalizeSkillArtifact(versionRow.body);
   const isActive =
     skillRow.activeVersionId != null &&
     versionRow.id === skillRow.activeVersionId;
@@ -136,8 +127,8 @@ export const skillVersionGetHandler: CapabilityHandler<
     versionNumber: versionRow.versionNumber,
     isLatest: versionRow.isLatest,
     isActive,
-    body: versionRow.body,
-    frontmatter,
+    content,
+    artifact,
     referencesPayload: Array.isArray(versionRow.referencesPayload)
       ? versionRow.referencesPayload
       : [],

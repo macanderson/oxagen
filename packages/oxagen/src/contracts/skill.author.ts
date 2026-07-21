@@ -5,7 +5,7 @@ export const skillAuthor = registerCapability({
   name: "author_skill",
   domain: "skill",
   description:
-    "Author a new skill from a natural-language prompt. The model synthesises a complete .skill.md document (YAML frontmatter + body), validates it, then installs it into the workspace via skill.workspace.install. Returns the installed skill's publicId, slug, active version number, the generated body, and whether this was a new install.",
+    "Author a new skill from a natural-language prompt, serialize canonical TOML, validate it, and install it into the workspace",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -35,7 +35,9 @@ export const skillAuthor = registerCapability({
     category: z
       .string()
       .optional()
-      .describe("Optional category label (e.g. 'engineering', 'writing', 'meta')."),
+      .describe(
+        "Optional category label (e.g. 'engineering', 'writing', 'meta').",
+      ),
     activate: z
       .boolean()
       .optional()
@@ -44,12 +46,14 @@ export const skillAuthor = registerCapability({
     workspace_id: z
       .string()
       .optional()
-      .describe("Workspace ID to install the skill into (defaults to the current workspace)."),
+      .describe(
+        "Workspace ID to install the skill into (defaults to the current workspace).",
+      ),
   }),
   output: z.object({
     publicId: z.string().describe("Public ID of the installed skill (skl_…)"),
     slug: z.string().describe("Kebab-case slug of the installed skill"),
-    body: z.string().describe("The generated .skill.md content (YAML frontmatter + body)"),
+    content: z.string().describe("The generated canonical skill.toml content"),
     activeVersion: z
       .number()
       .int()

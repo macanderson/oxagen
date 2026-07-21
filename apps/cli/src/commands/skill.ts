@@ -2,8 +2,8 @@
  * skill command — manage loadable skills.
  *
  *   oxagen skill list            List available skills (name, description, source)
- *   oxagen skill show <name>     Show a skill's full SKILL.md instructions
- *   oxagen skill new <name>      Scaffold .oxagen/skills/<name>/SKILL.md
+ *   oxagen skill show <name>     Show a skill's full instructions
+ *   oxagen skill new <name>      Scaffold .oxagen/skills/<name>/skill.toml
  *
  * Skills are reference material injected into the agent's system prompt (see
  * skills/loader.ts skillsPromptBlock); this command manages the local ones.
@@ -65,7 +65,10 @@ export function skillShow(
   const out = createOutput({ json: ctx.json }, writer);
   const skill = loadSkills(ctx).get(name);
   if (!skill) {
-    out.error(`Unknown skill "${name}". Run \`oxagen skill list\`.`, "not_found");
+    out.error(
+      `Unknown skill "${name}". Run \`oxagen skill list\`.`,
+      "not_found",
+    );
     return;
   }
   out.data(skill, () => prettySkill(skill));
@@ -80,7 +83,10 @@ export function skillNew(
   if (!/^[A-Za-z0-9][\w-]*$/.test(name)) {
     // Malformed input → usage error (exit 2). Set before out.error so it wins.
     process.exitCode = 2;
-    out.error(`Invalid skill name "${name}". Use letters, digits, dashes, underscores.`, "usage");
+    out.error(
+      `Invalid skill name "${name}". Use letters, digits, dashes, underscores.`,
+      "usage",
+    );
     return;
   }
   const { path, created } = scaffoldSkill({ name, cwd: ctx.cwd });

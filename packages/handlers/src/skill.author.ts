@@ -2,23 +2,28 @@ import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { skillAuthor } from "@oxagen/oxagen/contracts/skill.author";
-import { parseSkill } from "@oxagen/skills";
 import { logger } from "./logger";
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 import {
-  assembleSkillMd,
+  assembleSkillToml,
   buildSystemPrompt,
   synthesisSchema,
   type SkillSynthesis,
 } from "./skill-synthesis";
 
-// The synthesis shape, system prompt, and .skill.md assembler are shared with
+// The synthesis shape, system prompt, and TOML assembler are shared with
 // skill.draft (the review-before-save variant) — see ./skill-synthesis.ts.
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const skillAuthorHandler: CapabilityHandler<typeof skillAuthor> = async (input, ctx) => {
+export const skillAuthorHandler: CapabilityHandler<typeof skillAuthor> = async (
+  input,
+  ctx,
+) => {
   if (!ctx.workspaceId) {
-    throw new Error("[skill.author] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[skill.author] workspaceId is required (scoped capability)",
+    );
   }
 
   const messageId = ctx.messageId ?? ctx.requestId;
@@ -45,28 +50,30 @@ export const skillAuthorHandler: CapabilityHandler<typeof skillAuthor> = async (
       { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       "skill.author: generateObjectFor failed",
     );
-    throw new Error(`[skill.author] Model synthesis failed: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `[skill.author] Model synthesis failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
-  // ── Step 2: assemble and validate the .skill.md string ───────────────────
-  const body = assembleSkillMd(synthesis);
-
-  // parseSkill throws if frontmatter is missing or malformed — this guards
-  // against a model returning a slug that violates the kebab-case schema.
-  parseSkill(body, { source: "tenant" });
+  // ── Step 2: assemble and validate canonical TOML ─────────────────────────
+  const { content } = canonicalizeSkillArtifact(assembleSkillToml(synthesis));
 
   // ── Step 3: persist via the existing transactional installer ─────────────
   const installResult = (await invoke(
     "install_skill",
     {
       custom: {
-        name: synthesis.name,
-        body,
+        content,
       },
       workspace_id: input.workspace_id,
     },
     ctx,
-  )) as { publicId: string; slug: string; activeVersion: number; installed: boolean };
+  )) as {
+    publicId: string;
+    slug: string;
+    activeVersion: number;
+    installed: boolean;
+  };
 
   logger.info(
     {
@@ -83,7 +90,7 @@ export const skillAuthorHandler: CapabilityHandler<typeof skillAuthor> = async (
   return {
     publicId: installResult.publicId,
     slug: installResult.slug,
-    body,
+    content,
     activeVersion: installResult.activeVersion,
     installed: installResult.installed,
   };

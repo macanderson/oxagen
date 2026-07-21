@@ -21,10 +21,10 @@ export const skillEdit = registerCapability({
     skill_id: z
       .string()
       .describe("Public ID of the skill to edit (skl_…) or its slug"),
-    body: z
+    content: z
       .string()
       .min(1)
-      .describe("Full updated .skill.md content including YAML frontmatter"),
+      .describe("Full updated canonical skill.toml content"),
     change_summary: z
       .string()
       .max(500)

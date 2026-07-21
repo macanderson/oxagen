@@ -5,7 +5,7 @@ export const skillVersionUpload = registerCapability({
   name: "upload_skill_version",
   domain: "skill",
   description:
-    "Upload a new immutable skill version from raw .skill.md content. Creates a new version row, marks it as latest, and sets it as the skill's active version (unless activate=false).",
+    "Upload canonical TOML as a new immutable skill version, mark it latest, and optionally activate it",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp", "app"],
@@ -23,10 +23,7 @@ export const skillVersionUpload = registerCapability({
       .describe(
         "Public ID of the skill to add a version to (skl_…) or its slug",
       ),
-    body: z
-      .string()
-      .min(1)
-      .describe("Raw .skill.md content including YAML frontmatter"),
+    content: z.string().min(1).describe("Canonical skill.toml content"),
     change_summary: z
       .string()
       .max(500)

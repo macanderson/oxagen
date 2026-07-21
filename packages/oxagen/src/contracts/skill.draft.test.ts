@@ -11,14 +11,25 @@ const VALID_DRAFT = {
   body: "# PR Review\n\nLoad when reviewing a pull request.",
 };
 
-const VALID_SKILL_MD =
-  "---\nname: pr-review\ndescription: How to review PRs\nmetadata:\n  weight: high\n---\n\n# PR Review\n";
+const VALID_ARTIFACT = {
+  schema_version: 1 as const,
+  kind: "skill" as const,
+  name: "pr-review",
+  description: "How to review PRs",
+  instructions: "# PR Review",
+  references: [],
+  metadata: { weight: "high" },
+};
+const VALID_CONTENT =
+  'schema_version = 1\nkind = "skill"\nname = "pr-review"\n';
 
 describe("skill.draft capability", () => {
   // ── input: valid paths ────────────────────────────────────────────────────
 
   it("accepts a minimal valid prompt", () => {
-    const parsed = skillDraft.input.parse({ prompt: "Teach the agent how to review PRs" });
+    const parsed = skillDraft.input.parse({
+      prompt: "Teach the agent how to review PRs",
+    });
     expect(parsed.prompt).toBe("Teach the agent how to review PRs");
     expect(parsed.nameHint).toBeUndefined();
     expect(parsed.category).toBeUndefined();
@@ -41,7 +52,9 @@ describe("skill.draft capability", () => {
   });
 
   it("rejects a prompt longer than 4000 characters", () => {
-    expect(() => skillDraft.input.parse({ prompt: "a".repeat(4001) })).toThrow();
+    expect(() =>
+      skillDraft.input.parse({ prompt: "a".repeat(4001) }),
+    ).toThrow();
   });
 
   it("rejects a nameHint with uppercase letters", () => {
@@ -79,16 +92,25 @@ describe("skill.draft capability", () => {
   // ── output: valid shapes ──────────────────────────────────────────────────
 
   it("parses a valid draft output", () => {
-    const parsed = skillDraft.output.parse({ draft: VALID_DRAFT, skillMd: VALID_SKILL_MD });
+    const parsed = skillDraft.output.parse({
+      draft: VALID_DRAFT,
+      content: VALID_CONTENT,
+      artifact: VALID_ARTIFACT,
+    });
     expect(parsed.draft.displayName).toBe("PR Review");
     expect(parsed.draft.slug).toBe("pr-review");
     expect(parsed.draft.weight).toBe("high");
-    expect(parsed.skillMd).toContain("---");
+    expect(parsed.content).toContain("schema_version");
+    expect(parsed.artifact.name).toBe("pr-review");
   });
 
   it("parses a draft without a category", () => {
     const { category: _omitted, ...noCategory } = VALID_DRAFT;
-    const parsed = skillDraft.output.parse({ draft: noCategory, skillMd: VALID_SKILL_MD });
+    const parsed = skillDraft.output.parse({
+      draft: noCategory,
+      content: VALID_CONTENT,
+      artifact: VALID_ARTIFACT,
+    });
     expect(parsed.draft.category).toBeUndefined();
   });
 
@@ -96,18 +118,25 @@ describe("skill.draft capability", () => {
     expect(() =>
       skillDraft.output.parse({
         draft: { ...VALID_DRAFT, weight: "medium" },
-        skillMd: VALID_SKILL_MD,
+        content: VALID_CONTENT,
+        artifact: VALID_ARTIFACT,
       }),
     ).toThrow();
   });
 
-  it("rejects output missing skillMd", () => {
+  it("rejects output missing content", () => {
     expect(() => skillDraft.output.parse({ draft: VALID_DRAFT })).toThrow();
   });
 
   it("rejects output missing draft fields", () => {
     const { body: _omitted, ...noBody } = VALID_DRAFT;
-    expect(() => skillDraft.output.parse({ draft: noBody, skillMd: VALID_SKILL_MD })).toThrow();
+    expect(() =>
+      skillDraft.output.parse({
+        draft: noBody,
+        content: VALID_CONTENT,
+        artifact: VALID_ARTIFACT,
+      }),
+    ).toThrow();
   });
 
   // ── capability registry ───────────────────────────────────────────────────
