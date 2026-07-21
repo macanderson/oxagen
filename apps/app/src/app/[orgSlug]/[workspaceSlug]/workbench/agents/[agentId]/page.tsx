@@ -5,6 +5,13 @@ import { workspace } from "@/lib/routes";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { getAgent } from "@/lib/workbench/agents";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
+import {
+  listAgentRoleOptions,
+  fallbackSystemRoleOptions,
+  getAssignedAgentRole,
+  getAgentRolePreview,
+  type AgentRoleOption,
+} from "@/lib/workbench/agent-roles";
 import { AgentBuilder } from "../agent-builder";
 import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
 import { AgentEnvironmentsCard } from "./agent-environments-card";
@@ -52,6 +59,47 @@ export default async function EditAgentPage({ params }: PageProps) {
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   const readOnly = agent.managed || !canManage;
+
+  // Role picker data (Agent RBAC Phase 5a). Fail-soft, same posture as the
+  // create page: system-role fallback + honest error when the load fails.
+  let roleOptions: AgentRoleOption[];
+  let customRolesAvailable = false;
+  let rolesError: string | null = null;
+  let initialRoleName: string | null = null;
+  try {
+    const roleData = await listAgentRoleOptions(ctx);
+    roleOptions = roleData.options;
+    customRolesAvailable = roleData.customRolesAvailable;
+  } catch (err) {
+    roleOptions = fallbackSystemRoleOptions();
+    rolesError = err instanceof Error ? err.message : "Unknown error";
+  }
+  try {
+    initialRoleName = await getAssignedAgentRole(ctx, agent.publicId);
+  } catch {
+    // A pre-RBAC agent (no principal) or a transient failure: no badge — the
+    // picker still defaults to "Agent Contributor" for the next save.
+    initialRoleName = null;
+  }
+  // Reviewer preview: get_agent_role returns the assigned role's grant list
+  // authoritatively (even when unassigned) — use it to refresh that option's
+  // grants so the review step reflects the live role, fail-soft.
+  if (initialRoleName !== null) {
+    try {
+      const preview = await getAgentRolePreview(
+        ctx,
+        agent.publicId,
+        initialRoleName,
+      );
+      roleOptions = roleOptions.map((option) =>
+        option.roleName === preview.roleName
+          ? { ...option, grants: preview.grants, grantsKnown: true }
+          : option,
+      );
+    } catch {
+      // keep the list_iam_roles grants already on the option.
+    }
+  }
 
   // Environment bindings + the options that populate the bind form. Each read
   // degrades to empty so a failure never blocks the builder from rendering.
@@ -116,6 +164,10 @@ export default async function EditAgentPage({ params }: PageProps) {
       }}
       installAction={installPlugin}
       installBulkAction={installBulkPlugin}
+      roleOptions={roleOptions}
+      customRolesAvailable={customRolesAvailable}
+      rolesError={rolesError}
+      initialRoleName={initialRoleName}
       />
       <AgentEnvironmentsCard
         scope={scope}

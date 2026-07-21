@@ -27,7 +27,7 @@ export const agentRoleAssign = registerCapability({
     "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "high",

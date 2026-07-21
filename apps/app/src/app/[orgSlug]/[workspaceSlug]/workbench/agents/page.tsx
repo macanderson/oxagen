@@ -8,6 +8,7 @@ import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { ensureAgentSummaries, listAgents } from "@/lib/workbench/agents";
+import { getAssignedAgentRoles } from "@/lib/workbench/agent-roles";
 import { AgentsGrid, type AgentGridRow } from "./agents-grid";
 
 export const metadata: Metadata = {
@@ -36,10 +37,18 @@ export default async function WorkbenchAgentsPage({ params }: PageProps) {
   );
   const agents = await ensureAgentSummaries(ctx, await listAgents(ctx));
 
+  // Role badge per agent (Agent RBAC Phase 5a): parallel list_agent_roles
+  // lookups, fail-open — a failed lookup means no badge, never a failed list.
+  const rolesByAgent = await getAssignedAgentRoles(
+    ctx,
+    agents.map((agent) => agent.publicId),
+  );
+
   // Route targets are resolved server-side so the client grid stays a pure
   // presenter with no dependency on the scope context.
   const rows: AgentGridRow[] = agents.map((agent) => ({
     ...agent,
+    roleName: rolesByAgent.get(agent.publicId) ?? null,
     detailHref: workspace.workbench.agent(routeCtx, agent.publicId),
     launchHref:
       agent.deploymentStatus === "active"

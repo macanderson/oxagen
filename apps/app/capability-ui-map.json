@@ -10,6 +10,42 @@
     "verifiedBy": "session id / agent that captured the proof"
   },
   "bindings": {
+    "assign_agent_role": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
+      "entry": "Agent Builder → Access step role picker; selection persists on Save draft/Publish (assignAgentRoleAction → assign_agent_role)",
+      "testid": "agent-role-picker",
+      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session-77f78a54-agent-rbac"
+    },
+    "revoke_agent_role": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
+      "entry": "Agent Builder → Access step: changing the role revokes the previously-held role after the new assign lands (assignAgentRoleAction → revoke_agent_role)",
+      "testid": "agent-role-picker",
+      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session-77f78a54-agent-rbac"
+    },
+    "list_agent_roles": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/page.tsx",
+      "entry": "Agents list role badge per card (getAssignedAgentRoles → list_agent_roles); also seeds the builder's Access step current-role state",
+      "testid": "agent-role-*",
+      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session-77f78a54-agent-rbac"
+    },
+    "get_agent_role": {
+      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
+      "entry": "Agent Builder edit-mode load refreshes the assigned role's grant preview for the Review step's effective-scope panel (getAgentRolePreview → get_agent_role)",
+      "testid": "effective-scope-panel",
+      "proof": "apps/app/e2e/agent-rbac-builder.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session-77f78a54-agent-rbac"
+    },
     "get_plugin_schema": {
       "route": "/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/marketplace/integrations/[connectorId]/page.tsx",

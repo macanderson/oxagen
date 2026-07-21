@@ -12,6 +12,8 @@ const {
   publishAgent,
   deployAgent,
   suggestAgentDefinition,
+  assignAgentRole,
+  revokeAgentRole,
 } = vi.hoisted(() => ({
   resolveWorkbenchScope: vi.fn(),
   createAgent: vi.fn(),
@@ -19,6 +21,8 @@ const {
   publishAgent: vi.fn(),
   deployAgent: vi.fn(),
   suggestAgentDefinition: vi.fn(),
+  assignAgentRole: vi.fn(),
+  revokeAgentRole: vi.fn(),
 }));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
@@ -31,12 +35,24 @@ vi.mock("@/lib/workbench/agents", () => ({
   deployAgent,
   suggestAgentDefinition,
 }));
+vi.mock("@/lib/workbench/agent-roles", () => ({
+  assignAgentRole,
+  revokeAgentRole,
+  // Same narrowing the real module ships (kept trivial so the action's
+  // error-code passthrough is exercised for real).
+  isCeilingError: (err: unknown) =>
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "agent_role_ceiling_exceeded" &&
+    Array.isArray((err as { capabilities?: unknown }).capabilities),
+}));
 
 import {
   createAgentAction,
   updateAgentAction,
   deployAgentAction,
   suggestAgentAction,
+  assignAgentRoleAction,
 } from "./actions";
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "eng" };
@@ -298,5 +314,111 @@ describe("deployAgentAction", () => {
     });
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.deploymentStatus).toBe("active");
+  });
+});
+
+describe("assignAgentRoleAction", () => {
+  it("denies a non-manager without touching the contracts", async () => {
+    resolveWorkbenchScope.mockResolvedValue({ ctx: CTX, canManage: false });
+    const res = await assignAgentRoleAction({
+      ...SCOPE,
+      agentId: "agt_1",
+      roleName: "Agent Operator",
+    });
+    expect(res.ok).toBe(false);
+    expect(assignAgentRole).not.toHaveBeenCalled();
+    expect(revokeAgentRole).not.toHaveBeenCalled();
+  });
+
+  it("assigns, then revokes the previous role only after the assign landed", async () => {
+    assignAgentRole.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: false,
+      agentId: "agt_1",
+      roleId: "rol_1",
+      roleName: "Agent Operator",
+    });
+    revokeAgentRole.mockResolvedValue({
+      revoked: true,
+      agentId: "agt_1",
+      roleName: "Agent Contributor",
+    });
+
+    const res = await assignAgentRoleAction({
+      ...SCOPE,
+      agentId: "agt_1",
+      roleName: "Agent Operator",
+      previousRoleName: "Agent Contributor",
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.roleName).toBe("Agent Operator");
+    expect(assignAgentRole).toHaveBeenCalledWith(CTX, "agt_1", "Agent Operator");
+    expect(revokeAgentRole).toHaveBeenCalledWith(
+      CTX,
+      "agt_1",
+      "Agent Contributor",
+    );
+    // Ordering: a rejected assign must leave the old role intact.
+    expect(assignAgentRole.mock.invocationCallOrder[0]!).toBeLessThan(
+      revokeAgentRole.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("skips the revoke when the selection matches the previous role", async () => {
+    assignAgentRole.mockResolvedValue({
+      assigned: true,
+      alreadyAssigned: true,
+      agentId: "agt_1",
+      roleId: "rol_1",
+      roleName: "Agent Contributor",
+    });
+    const res = await assignAgentRoleAction({
+      ...SCOPE,
+      agentId: "agt_1",
+      roleName: "Agent Contributor",
+      previousRoleName: "Agent Contributor",
+    });
+    expect(res.ok).toBe(true);
+    expect(revokeAgentRole).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the delegation-ceiling rejection with its stable code and capabilities, without revoking", async () => {
+    assignAgentRole.mockRejectedValue(
+      Object.assign(new Error("Role 'Agent Operator' grants capabilities beyond your own effective access"), {
+        code: "agent_role_ceiling_exceeded",
+        capabilities: ["secret.reveal", "repo.pr.open"],
+      }),
+    );
+
+    const res = await assignAgentRoleAction({
+      ...SCOPE,
+      agentId: "agt_1",
+      roleName: "Agent Operator",
+      previousRoleName: "Agent Contributor",
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("agent_role_ceiling_exceeded");
+      expect(res.capabilities).toEqual(["secret.reveal", "repo.pr.open"]);
+      expect(res.error).toMatch(/beyond your own effective access/);
+    }
+    expect(revokeAgentRole).not.toHaveBeenCalled();
+  });
+
+  it("passes through other typed error codes (e.g. tier gate) verbatim", async () => {
+    assignAgentRole.mockRejectedValue(
+      Object.assign(new Error("custom agent roles require enterprise"), {
+        code: "tier_denied",
+      }),
+    );
+    const res = await assignAgentRoleAction({
+      ...SCOPE,
+      agentId: "agt_1",
+      roleName: "Release Ops",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("tier_denied");
   });
 });
