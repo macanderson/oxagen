@@ -1,6 +1,6 @@
 ---
 title: skill.author
-description: Author a new skill from a natural-language prompt — model-synthesised .skill.md, validated, installed.
+description: Author a new skill from a natural-language prompt — model-synthesised skill.toml, validated, installed.
 ---
 
 <IllustrationSkillSpot />
@@ -12,9 +12,10 @@ plain-English description. The handler:
 
 1. Passes the prompt to the model (via `@oxagen/ai` `generateObjectFor`) to synthesise a structured
    skill definition — name, description, weight, category, and body.
-2. Assembles the `.skill.md` string (YAML frontmatter + markdown body).
-3. Validates the assembled document with `parseSkill` from `@oxagen/skills` — an invalid slug or
-   missing frontmatter throws before anything is written.
+2. Assembles a canonical `skill.toml` document with the shared serializer from
+   `@oxagen/agent-artifacts`.
+3. Validates the assembled document with `canonicalizeSkillArtifact` — an invalid slug, a wrong
+   `kind`, or any unknown field throws before anything is written.
 4. Calls `skill.workspace.install` (custom path) to persist the skill transactionally.
 
 The operation is idempotent on slug: if a skill with the generated name already exists, the
@@ -44,7 +45,7 @@ installer returns `installed: false` and no duplicate is created.
 |---|---|---|
 | `publicId` | `string` | Public ID of the installed skill (`skl_…`) |
 | `slug` | `string` | Kebab-case slug |
-| `body` | `string` | The full generated `.skill.md` content (YAML frontmatter + body) |
+| `content` | `string` | The full generated canonical `skill.toml` content |
 | `activeVersion` | `number` | Active version number |
 | `installed` | `boolean` | `true` for a new install; `false` when the slug already existed |
 
@@ -82,7 +83,7 @@ POST /v1/acme/default/skill/author
 
 - `skill.author` is a **builtin agent capability** — it does not appear in the plugin marketplace.
   It is always available to agents on workspaces where the caller has the appropriate role.
-- The generated skill body follows the canonical `.skill.md` anatomy described in the
+- The generated skill follows the canonical `skill.toml` anatomy described in the
   `skill-builder` builtin skill.
 - Skill generation goes through `@oxagen/ai` `generateObjectFor`, so it is metered, surface-tagged,
   and included in token usage telemetry like any other LLM call in the platform.

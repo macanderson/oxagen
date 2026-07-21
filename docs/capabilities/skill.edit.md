@@ -15,7 +15,7 @@ Save an edited skill body as a new immutable version. Thin wrapper over the same
 | Field | Type | Notes |
 | --- | --- | --- |
 | skill_id | string | Public ID of the skill to edit (`skl_…`) |
-| body | string (min 1) | Full updated `.skill.md` content including YAML frontmatter |
+| content | string (min 1) | Full updated canonical `skill.toml` content |
 | activate | boolean (default: true) | Set the new version as active immediately |
 | workspace_id | string (optional) | Workspace ID (defaults to current workspace) |
 
@@ -41,6 +41,6 @@ Uses the same `createNewSkillVersion` helper as `skill.version.upload`. Both are
 ## Errors
 
 - `skill.edit requires an authenticated user` — no authenticated user in context.
-- `missing YAML frontmatter` — `body` does not include valid YAML frontmatter block.
+- `invalid_skill_artifact` — `content` is not valid TOML, is not `kind = "skill"`, or fails schema validation.
 - `skill not found: skl_…` — the given `skill_id` does not exist within the caller's workspace, has been soft-deleted, or belongs to another org/workspace (tenant isolation enforced).
 - DB errors propagated as-is.

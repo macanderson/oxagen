@@ -17,7 +17,7 @@ Create a new tenant-authored skill in the workspace. Inserts a `skills` row with
 | `name` | `string` (1–100) | Human-readable name for the skill. |
 | `slug` | `string` (1–64, kebab-case) | Unique kebab-case identifier for the skill within this workspace. |
 | `description?` | `string` (≤500) | Short description of what the skill teaches the agent. |
-| `body` | `string` (1–32000) | Full `.skill.md` content (YAML frontmatter + markdown body). |
+| `content` | `string` (1–32000) | Full canonical `skill.toml` content. |
 | `activate?` | `boolean` | Set the initial version as active immediately (default `true`). |
 | `workspace_id?` | `string` | Workspace ID (defaults to current workspace). |
 
