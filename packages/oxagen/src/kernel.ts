@@ -759,8 +759,17 @@ async function _invokeCore(
 
         resolvedPrincipal = iamResult?.principal ?? null;
 
+        // Agent-run invocations are ALWAYS enforced, independent of the
+        // IAM_ENFORCEMENT_ENABLED rollout flag (Agent RBAC Phase 2, spec
+        // §3.4/§3.5): an agent is an unattended automation, and the kernel
+        // gate is the defense against prompt-injected direct capability
+        // names — a would-deny that proceeds is exactly the poisoned-prompt
+        // hole the spec closes. Human/API-key traffic (no ctx.agentRun)
+        // keeps the existing flag semantics untouched.
+        const isAgentRunInvocation = ctx.agentRun?.principalKind === "agent";
+
         if (iamResult !== null && iamResult.outcome !== "allow") {
-          if (_iamEnforced) {
+          if (_iamEnforced || isAgentRunInvocation) {
             // Enforcement on: block the call. A "pending_approval" resolution is
             // a soft-deny — the action is DENIED right now, but we mint a JIT
             // access request so an approver can grant it and the caller can poll
@@ -1129,7 +1138,11 @@ export async function authorizeExternalCapability(
   });
 
   if (isDenied) {
-    if (_iamEnforced) {
+    // Agent-run checks are always enforced, independent of the rollout flag —
+    // same rationale as the matching branch in _invokeCore (Agent RBAC Phase
+    // 2, spec §3.4/§3.5): an unattended automation must never proceed on a
+    // would-deny.
+    if (_iamEnforced || ctx.agentRun?.principalKind === "agent") {
       return { allowed: false, outcome, reason: reason ?? outcome };
     }
     // Enforcement off — log would-deny and allow.

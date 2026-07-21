@@ -10,6 +10,9 @@ export type { DenialResponse } from "./denial";
 export { fetchAuthz } from "./fetch-authz";
 export type { AuthzData, FetchAuthzArgs } from "./fetch-authz";
 
+export { fetchAgentRunAuthz } from "./fetch-agent-authz";
+export type { FetchAgentRunAuthzArgs } from "./fetch-agent-authz";
+
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";
 
