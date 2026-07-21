@@ -325,7 +325,30 @@ export function resolve(input: ResolveInput): ResolveResult {
   });
 
   // ── Rule 3: Workspace explicit allow ───────────────────────────────────────
+  // Approval-wins-over-allow at the same tier: when a principal holds BOTH an
+  // allow grant and a require_approval grant at workspace scope, the more
+  // restrictive require_approval must decide — a principal cannot escape an
+  // approval gate they also hold merely because they hold an allow grant too.
+  // (Mirrors the deny-before-allow ordering already enforced at rules 1/3,
+  // 6, and 7 — this closes the analogous gap for approval vs. allow.)
   if (scope.kind === "workspace") {
+    const wsApprovalGrantEarly = workspaceGrants.find(
+      (g) =>
+        g.effect === "require_approval" &&
+        !isExpired(g) &&
+        conditionsMet(g.conditionsJsonb, evalCtx),
+    );
+    if (wsApprovalGrantEarly) {
+      const step: TraceStep = {
+        rule: "5:workspace_require_approval",
+        description:
+          "Workspace require_approval grant found (takes precedence over an allow grant at the same tier)",
+        decided: true,
+        outcome: "pending_approval",
+      };
+      steps.push(step);
+      return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
+    }
     const wsAllowGrant = workspaceGrants.find(
       (g) =>
         g.effect === "allow" &&
@@ -406,24 +429,10 @@ export function resolve(input: ResolveInput): ResolveResult {
   });
 
   // ── Rule 5: Workspace require_approval ─────────────────────────────────────
-  if (scope.kind === "workspace") {
-    const wsApprovalGrant = workspaceGrants.find(
-      (g) =>
-        g.effect === "require_approval" &&
-        !isExpired(g) &&
-        conditionsMet(g.conditionsJsonb, evalCtx),
-    );
-    if (wsApprovalGrant) {
-      const step: TraceStep = {
-        rule: "5:workspace_require_approval",
-        description: "Workspace require_approval grant found",
-        decided: true,
-        outcome: "pending_approval",
-      };
-      steps.push(step);
-      return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
-    }
-  }
+  // NOTE: when scope.kind === "workspace", any require_approval grant was
+  // already found and returned above (rule 3's approval-wins-over-allow
+  // check) — this block is reached only when there was none, so it never
+  // fires for the workspace case. Kept for trace-step continuity.
   steps.push({
     rule: "5:workspace_require_approval",
     description: "No workspace require_approval grant",
@@ -456,6 +465,23 @@ export function resolve(input: ResolveInput): ResolveResult {
       trace: { steps, decidedBy: step },
     };
   }
+  const orgApprovalGrant = orgGrants.find(
+    (g) =>
+      g.effect === "require_approval" &&
+      !isExpired(g) &&
+      conditionsMet(g.conditionsJsonb, evalCtx),
+  );
+  if (orgApprovalGrant) {
+    const step: TraceStep = {
+      rule: "6:org_grant",
+      description:
+        "Org require_approval grant inherited (takes precedence over an allow grant at the same tier)",
+      decided: true,
+      outcome: "pending_approval",
+    };
+    steps.push(step);
+    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
+  }
   const orgAllowGrant = orgGrants.find(
     (g) =>
       g.effect === "allow" &&
@@ -471,22 +497,6 @@ export function resolve(input: ResolveInput): ResolveResult {
     };
     steps.push(step);
     return { outcome: "allow", trace: { steps, decidedBy: step } };
-  }
-  const orgApprovalGrant = orgGrants.find(
-    (g) =>
-      g.effect === "require_approval" &&
-      !isExpired(g) &&
-      conditionsMet(g.conditionsJsonb, evalCtx),
-  );
-  if (orgApprovalGrant) {
-    const step: TraceStep = {
-      rule: "6:org_grant",
-      description: "Org require_approval grant inherited",
-      decided: true,
-      outcome: "pending_approval",
-    };
-    steps.push(step);
-    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
   }
   // Check expired org grants.
   const orgExpiredGrant = orgGrants.find((g) => isExpired(g));
@@ -563,6 +573,22 @@ export function resolve(input: ResolveInput): ResolveResult {
       trace: { steps, decidedBy: step },
     };
   }
+  // Approval-wins-over-allow: mirrors the workspace/org tier fix above — a
+  // principal whose roles carry BOTH an allow and a require_approval grant
+  // for this capability must be gated by the approval, not silently allowed.
+  const roleApprovalGrant = matchingRoleGrants.find(
+    (rg) => rg.effect === "require_approval",
+  );
+  if (roleApprovalGrant) {
+    const step: TraceStep = {
+      rule: "7:role_grant",
+      description: `Role grant 'require_approval' via role ${roleApprovalGrant.roleId} (takes precedence over an allow grant at the same tier)`,
+      decided: true,
+      outcome: "pending_approval",
+    };
+    steps.push(step);
+    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
+  }
   const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");
   if (roleAllowGrant) {
     const step: TraceStep = {
@@ -573,19 +599,6 @@ export function resolve(input: ResolveInput): ResolveResult {
     };
     steps.push(step);
     return { outcome: "allow", trace: { steps, decidedBy: step } };
-  }
-  const roleApprovalGrant = matchingRoleGrants.find(
-    (rg) => rg.effect === "require_approval",
-  );
-  if (roleApprovalGrant) {
-    const step: TraceStep = {
-      rule: "7:role_grant",
-      description: `Role grant 'require_approval' via role ${roleApprovalGrant.roleId}`,
-      decided: true,
-      outcome: "pending_approval",
-    };
-    steps.push(step);
-    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
   }
   steps.push({
     rule: "7:role_grant",
