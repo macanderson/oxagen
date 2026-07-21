@@ -786,43 +786,64 @@ export function buildProgram(): Command {
       await handleGraphStatus(opts);
     });
 
-  graph
-    .command("push")
+  // ── run: governed agent-run evidence ledger (RunEvidenceManifestV1) ──────────
+  const run = program
+    .command("run")
+    .description("Governed agent-run evidence");
+  const runEvidence = run
+    .command("evidence")
+    .description("The run-evidence ledger (RunEvidenceManifestV1)");
+  runEvidence
+    .command("submit")
     .description(
-      "Compute a git code delta and push it to the workspace knowledge graph (ADR-018 up-sync)",
+      "Submit a RunEvidenceManifestV1 JSON file for one governed agent attempt",
     )
+    .requiredOption("-f, --file <path>", "Path to the manifest JSON file")
     .option(
-      "--full",
-      "Ignore the saved cursor and push all tracked source files",
+      "--json",
+      "One machine JSON line (also the default when stdout is piped)",
       false,
     )
-    .option("--repo <id>", "Override the repo identifier")
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { full?: boolean; repo?: string; json?: boolean }) => {
-      const { handleGraphPush } = await import("./commands/graph.push.js");
-      await handleGraphPush({
-        full: opts.full,
-        repo: opts.repo,
-        json: opts.json,
-      });
-    });
-
-  graph
-    .command("lineage")
-    .description(
-      "Push CLI session execution lineage into the workspace knowledge graph (ADR-018 slice 3)",
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(
+      async (opts: { file: string; json?: boolean; quiet?: boolean }) => {
+        const { handleRunEvidenceSubmit } = await import(
+          "./commands/run.evidence.js"
+        );
+        await handleRunEvidenceSubmit(opts);
+      },
+    );
+  runEvidence
+    .command("list")
+    .description("List RunEvidenceManifestV1 summaries for the workspace, newest first")
+    .option("--run-id <id>", "Filter to one run's manifests")
+    .option("--repository-id <uuid>", "Filter to one repository's manifests")
+    .option("-n, --limit <n>", "Maximum manifests to return (1–100)", "25")
+    .option(
+      "--cursor <iso>",
+      "Keyset cursor: manifests created strictly before this ISO timestamp",
     )
     .option(
-      "--repo <id>",
-      "Override the repo identifier used to link touched files to the code subgraph",
+      "--json",
+      "One machine JSON line (also the default when stdout is piped)",
+      false,
     )
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { repo?: string; json?: boolean }) => {
-      const { handleGraphLineage } = await import(
-        "./commands/graph.lineage.js"
-      );
-      await handleGraphLineage({ repo: opts.repo, json: opts.json });
-    });
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(
+      async (opts: {
+        runId?: string;
+        repositoryId?: string;
+        limit?: string;
+        cursor?: string;
+        json?: boolean;
+        quiet?: boolean;
+      }) => {
+        const { handleRunEvidenceList } = await import(
+          "./commands/run.evidence.js"
+        );
+        await handleRunEvidenceList(opts);
+      },
+    );
 
   // ── a2a: Agent2Agent protocol surface ───────────────────────────────────────
   const a2a = program
@@ -1831,14 +1852,13 @@ export function buildProgram(): Command {
     .command("logs")
     .description(
       "See and debug the CLI's log (~/.oxagen/logs/cli.output). Captures invocations, " +
-        "LLM telemetry, and the lineage + code-graph data synced to the workspace graph " +
-        "when OXAGEN_CLI_DEBUG=1.",
+        "LLM telemetry, and local code-graph queries when OXAGEN_CLI_DEBUG=1.",
     )
     .option("--path", "Print the log file path and exit", false)
     .option("-n, --lines <n>", "Number of recent entries to show (default 50)")
     .option(
       "--category <category>",
-      "Filter by category: invoke | turn | api | code-graph | graph-sync | llm | error",
+      "Filter by category: invoke | turn | api | code-graph | llm | error",
     )
     .option("-f, --follow", "Follow the log live (like tail -f)", false)
     .option("--clear", "Truncate the log to empty and exit", false)

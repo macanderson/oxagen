@@ -98,6 +98,7 @@ import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
+import { runEvidenceRoute } from "./routes/v1/run-evidence";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
@@ -289,7 +290,6 @@ import {
 } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphExportRoute } from "./routes/v1/graph.export";
-import { graphSyncPushRoute } from "./routes/v1/graph.sync.push";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
@@ -557,6 +557,10 @@ orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
 // :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
 // KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
 orgScoped.route("/agent/executions/lineage", agentExecutionLineageRoute);
+// Run-evidence ledger — POST submits a RunEvidenceManifestV1, GET lists
+// summaries. The narrow, governed Stella ingestion path (workspace-graph
+// boundary spec), distinct from the removed generic graph push.
+orgScoped.route("/run/evidence", runEvidenceRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
@@ -752,7 +756,6 @@ orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
 orgScoped.route("/graph/export", graphExportRoute);
-orgScoped.route("/graph/sync/push", graphSyncPushRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);

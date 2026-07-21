@@ -1099,12 +1099,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphExportHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "push_graph",
-    async () =>
-      (await import("./graph.sync.push"))
-        .graphSyncPushHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_graph_stats",
     async () =>
       (await import("./graph.stats")).graphStatsHandler as CapabilityHandlerFn,
@@ -1552,5 +1546,17 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./router.decision.preview"))
         .routerDecisionPreviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "submit_run_evidence",
+    async () =>
+      (await import("./run.evidence.submit"))
+        .runEvidenceSubmitHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_run_evidence",
+    async () =>
+      (await import("./run.evidence.list"))
+        .runEvidenceListHandler as CapabilityHandlerFn,
   );
 });

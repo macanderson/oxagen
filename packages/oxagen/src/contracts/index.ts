@@ -278,7 +278,6 @@ import { automationUpdate } from "./automation.update";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { graphIngest } from "./graph.ingest";
-import { graphSyncPush } from "./graph.sync.push";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -357,6 +356,8 @@ import { routerPolicyGet } from "./router.policy.get";
 import { routerPolicySet } from "./router.policy.set";
 import { routerStatsList } from "./router.stats.list";
 import { routerDecisionPreview } from "./router.decision.preview";
+import { runEvidenceSubmit } from "./run.evidence.submit";
+import { runEvidenceList } from "./run.evidence.list";
 
 // Shared router.* schemas (not capabilities themselves) — re-exported so the
 // contracts array guard sees router-schema.ts referenced, mirroring eval-schema.
@@ -794,7 +795,6 @@ export {
   connectionPause,
   connectionUpdate,
   graphIngest,
-  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -871,6 +871,8 @@ export {
   routerPolicySet,
   routerStatsList,
   routerDecisionPreview,
+  runEvidenceSubmit,
+  runEvidenceList,
 };
 
 /**
@@ -1149,7 +1151,6 @@ export const contracts = [
   connectionPause,
   connectionUpdate,
   graphIngest,
-  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -1227,4 +1228,6 @@ export const contracts = [
   routerPolicySet,
   routerStatsList,
   routerDecisionPreview,
+  runEvidenceSubmit,
+  runEvidenceList,
 ] as const;
