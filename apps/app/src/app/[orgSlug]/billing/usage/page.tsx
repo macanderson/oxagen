@@ -43,6 +43,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
     cachedTokens: 0,
     costMicros: 0,
     executions: 0,
+    messages: 0,
   },
   series: [],
   byModel: [],
