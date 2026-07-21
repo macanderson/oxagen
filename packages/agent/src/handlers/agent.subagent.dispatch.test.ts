@@ -1,6 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { getTableName } from "drizzle-orm";
 
+// Agent RBAC: the scope-denial audit path pulls emitAudit via _effective-scope;
+// mock @oxagen/iam so no real DB/telemetry deps load.
+const emitAuditSpy = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@oxagen/iam", () => ({
+  emitAudit: emitAuditSpy,
+}));
+
 // Track DB insert calls and Inngest send calls. The fan-out insert returns BOTH
 // the internal uuid (`id`) and the external `publicId`; the handler stores `id`
 // as subagent_runs.fanout_id and returns `publicId` as the dispatchId.
@@ -291,5 +298,104 @@ describe("agent.subagent.dispatch handler", () => {
 
     expect(result.status).toBe("pending");
     expect(inngestSendSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Agent RBAC dispatch narrowing (spec §2.7, Phase 4b) ────────────────────────
+
+describe("agent.subagent.dispatch — role scope narrowing", () => {
+  beforeEach(() => {
+    insertFanoutSpy.mockClear();
+    inngestSendSpy.mockClear();
+    emitAuditSpy.mockClear();
+    insertedRuns = [];
+    fanoutUpdates = [];
+    runUpdates = [];
+    descendantCountResult = 0;
+  });
+
+  /**
+   * CTX carrying an agentRun. Each entry of `caps` seeds the cached resolution
+   * for that capability with the given outcome; `refs` sets the effective
+   * agents.refs allow-list (undefined = no extra ceiling).
+   */
+  function agentCtx(
+    caps: Record<string, "allow" | "deny">,
+    refs?: string[],
+  ) {
+    const byCapability = new Map<string, unknown>();
+    for (const [name, outcome] of Object.entries(caps)) {
+      byCapability.set(name, {
+        outcome,
+        agentResolution: {},
+        humanResolution: {},
+        resourceScope: refs === undefined ? {} : { agents: { refs } },
+      });
+    }
+    return {
+      ...CTX,
+      agentRun: {
+        agentPrincipal: {
+          id: "prn_agent",
+          kind: "agent",
+          orgId: CTX.orgId,
+          workspaceId: CTX.workspaceId,
+        },
+        humanPrincipal: null,
+        agentId: "agt_1",
+        runId: "run_1",
+        resolution: {
+          byCapability,
+          snapshot: { grants: [], roles: [], roleGrants: [], policies: [] },
+        },
+      },
+    } as typeof CTX;
+  }
+
+  it("rejects a task outside the agents.refs allow-list before creating any rows", async () => {
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_1",
+          tasks: [
+            { capabilityName: "list_agent_tools", input: {} },
+            { capabilityName: "recall_memory", input: {} },
+          ],
+        },
+        agentCtx(
+          { list_agent_tools: "allow", recall_memory: "allow" },
+          ["list_agent_tools"], // recall_memory not dispatchable
+        ),
+      ),
+    ).rejects.toThrow(/role scope does not permit.*recall_memory/);
+    expect(insertFanoutSpy).not.toHaveBeenCalled();
+    expect(inngestSendSpy).not.toHaveBeenCalled();
+    expect(emitAuditSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a task whose effective capability outcome is deny (no laundering)", async () => {
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_1",
+          tasks: [{ capabilityName: "execute_code", input: {} }],
+        },
+        agentCtx({ execute_code: "deny" }),
+      ),
+    ).rejects.toThrow(/role scope does not permit.*execute_code/);
+    expect(insertFanoutSpy).not.toHaveBeenCalled();
+  });
+
+  it("dispatches normally when every task is in refs and resolves allow", async () => {
+    const result = await agentSubagentDispatchHandler(
+      {
+        parentMessageId: "msg_1",
+        tasks: [{ capabilityName: "list_agent_tools", input: {} }],
+      },
+      agentCtx({ list_agent_tools: "allow" }, ["list_agent_tools"]),
+    );
+    expect(result.status).toBe("pending");
+    expect(insertFanoutSpy).toHaveBeenCalledTimes(1);
+    expect(emitAuditSpy).not.toHaveBeenCalled();
   });
 });

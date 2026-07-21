@@ -25,6 +25,7 @@ import type { GraphAccess } from "../agent-schema";
 import {
   resolveAgentEffectivePermissions,
   type EffectivePermissions,
+  type EffectiveResourceScope,
   type Grant,
   type Policy,
   type ResolveScope,
@@ -90,6 +91,15 @@ export interface AgentRunIAMContext {
   readonly runId: string;
   /** Parent run for subagent dispatches; null/absent for top-level runs. */
   readonly parentRunId?: string | null;
+  /**
+   * The parent run's already-resolved effective resourceScope, set by the
+   * dispatch/bridge path that created this child context (subagent executor,
+   * A2A inbound). When present it is an ADDITIONAL ceiling on every
+   * resolution — the resolver intersects it dimension-wise, so a child can
+   * only narrow, never widen, its parent's scope (spec §0/§3.3). Absent for
+   * top-level runs.
+   */
+  readonly parentEffectiveScope?: EffectiveResourceScope;
   /**
    * The agent DEFINITION's `graphAccess` declaration (agent-schema.ts),
    * populated by the run driver from the deployed definition version when the
@@ -178,6 +188,10 @@ export function resolveAgentRunCapability(
     defaultEffect: args.defaultEffect,
     now: args.now,
     clientIp: args.clientIp,
+    // Subagent/A2A narrowing (spec §2.7): the parent run's effective scope is
+    // an additional ceiling — intersected dimension-wise by the resolver, so
+    // this child resolution can only narrow, never widen, the parent's scope.
+    parentEffectiveScope: runCtx.parentEffectiveScope,
   });
 
   resolution.byCapability.set(args.capability, permissions);

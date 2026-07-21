@@ -3,6 +3,7 @@ import { and, eq, isNull, desc, sql } from "drizzle-orm";
 import { recordSkillLoad } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import type { AgentSkillLoadInput, AgentSkillLoadOutput } from "@oxagen/oxagen/contracts/agent.skill.load";
+import { effectiveResourceScope, auditScopeDenial } from "./_effective-scope";
 
 export type { AgentSkillLoadInput, AgentSkillLoadOutput };
 
@@ -128,8 +129,47 @@ export async function agentSkillLoadHandler(
   const startedAt = Date.now();
   const dependencyErrors: AgentSkillLoadOutput["dependencyErrors"] = [];
 
-  // Validate declared extra dependencies first (non-blocking; collect errors)
-  const extra = input.dependencies ?? [];
+  // Agent RBAC Phase 4 (spec §3.3): the run's effective skills.slugs allow-list
+  // is the LOAD-TIME gate (the skill index shown to the model is the UX layer;
+  // this check is what a prompt-injected direct load hits). undefined = all
+  // enabled workspace skills; humans/API-key callers carry no scope → no-op.
+  // Denial follows this handler's soft-failure convention (loaded:false + a
+  // reason the model can act on) and emits a meterable IAM audit row.
+  const allowedSlugs = effectiveResourceScope(ctx)?.skills?.slugs;
+  if (allowedSlugs !== undefined && !allowedSlugs.includes(input.skillSlug)) {
+    auditScopeDenial({
+      ctx,
+      capability: "load_agent_skill",
+      rule: "agent_skill_scope",
+      description: `Skill '${input.skillSlug}' is outside the agent's skills.slugs allow-list`,
+      rawInputJson: JSON.stringify(input),
+      target: { kind: "skill", id: input.skillSlug },
+    });
+    return {
+      skillSlug: input.skillSlug,
+      loaded: false,
+      versionLoaded: 0,
+      body: "",
+      capabilities: [],
+      dependencyErrors: [
+        {
+          slug: input.skillSlug,
+          reason: `Skill '${input.skillSlug}' is not permitted by this agent's role scope`,
+        },
+      ],
+    };
+  }
+
+  // Validate declared extra dependencies first (non-blocking; collect errors).
+  // The same scope allow-list applies to each declared dependency.
+  const extra = (input.dependencies ?? []).filter((depSlug) => {
+    if (allowedSlugs === undefined || allowedSlugs.includes(depSlug)) return true;
+    dependencyErrors.push({
+      slug: depSlug,
+      reason: `Skill '${depSlug}' is not permitted by this agent's role scope`,
+    });
+    return false;
+  });
   for (const depSlug of extra) {
     const resolved = await resolveSkillVersion(depSlug, undefined, ctx.orgId, ctx.workspaceId);
     if (!resolved) {
