@@ -6,6 +6,22 @@ export type Sha256Digest = `sha256:${string}`;
 
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const intrinsicArraySort = Array.prototype.sort;
+const intrinsicArrayIsArray = Array.isArray;
+const intrinsicRegExpTest = RegExp.prototype.test;
+const intrinsicTextEncoderConstructor = TextEncoder;
+const intrinsicTextEncoderEncode = TextEncoder.prototype.encode;
+const intrinsicUint8ArrayConstructor = Uint8Array;
+const intrinsicHashPrototype = Object.getPrototypeOf(
+  createHash("sha256"),
+) as object;
+const intrinsicHashUpdate = Object.getOwnPropertyDescriptor(
+  intrinsicHashPrototype,
+  "update",
+)?.value as (...arguments_: unknown[]) => unknown;
+const intrinsicHashDigest = Object.getOwnPropertyDescriptor(
+  intrinsicHashPrototype,
+  "digest",
+)?.value as (...arguments_: unknown[]) => unknown;
 
 function canonicalizePrimitive(
   value: null | boolean | number | string,
@@ -38,7 +54,7 @@ function serializeSnapshot(value: JsonWireValue): string {
     return canonicalizePrimitive(value);
   }
 
-  if (Array.isArray(value)) {
+  if (intrinsicArrayIsArray(value)) {
     let result = "[";
     for (let index = 0; index < value.length; index += 1) {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
@@ -93,18 +109,29 @@ function serializeSnapshot(value: JsonWireValue): string {
 export function jcsBytes(value: unknown): Uint8Array {
   // This generic primitive intentionally has no envelope policy. Task 2B owns
   // the 1 MiB envelope guard; O(k log k) ordering prevents key-sort amplification.
-  return new TextEncoder().encode(serializeSnapshot(snapshotJsonWire(value)));
+  const encoder = new intrinsicTextEncoderConstructor();
+  return Reflect.apply(intrinsicTextEncoderEncode, encoder, [
+    serializeSnapshot(snapshotJsonWire(value)),
+  ]) as Uint8Array;
 }
 
 export function sha256Digest(bytes: Uint8Array): Sha256Digest {
-  if (!(bytes instanceof Uint8Array)) {
+  if (!(bytes instanceof intrinsicUint8ArrayConstructor)) {
     throw new TypeError("sha256Digest requires exact bytes");
   }
-  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  const hash = createHash("sha256");
+  Reflect.apply(intrinsicHashUpdate, hash, [bytes]);
+  const hex = Reflect.apply(intrinsicHashDigest, hash, ["hex"]) as string;
+  return `sha256:${hex}`;
 }
 
 export function assertDigest(value: unknown): Sha256Digest {
-  if (typeof value !== "string" || !SHA256_DIGEST_PATTERN.test(value)) {
+  if (
+    typeof value !== "string" ||
+    !(Reflect.apply(intrinsicRegExpTest, SHA256_DIGEST_PATTERN, [
+      value,
+    ]) as boolean)
+  ) {
     throw new TypeError(
       "digest must be sha256: followed by 64 lowercase hex digits",
     );

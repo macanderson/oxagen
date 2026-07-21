@@ -4,6 +4,11 @@ const intrinsicSetConstructor = Set;
 const intrinsicSetAdd = Set.prototype.add;
 const intrinsicSetDelete = Set.prototype.delete;
 const intrinsicSetHas = Set.prototype.has;
+const intrinsicArrayIsArray = Array.isArray;
+const intrinsicArrayPrototype = Array.prototype;
+const intrinsicNumberIsFinite = Number.isFinite;
+const intrinsicObjectPrototype = Object.prototype;
+const intrinsicStringCharCodeAt = String.prototype.charCodeAt;
 
 function setAdd<T>(target: Set<T>, value: T): void {
   Reflect.apply(intrinsicSetAdd, target, [value]);
@@ -27,9 +32,13 @@ export type JsonWireValue =
 
 function assertUnicodeScalarString(value: string, path: string): void {
   for (let index = 0; index < value.length; index += 1) {
-    const codeUnit = value.charCodeAt(index);
+    const codeUnit = Reflect.apply(intrinsicStringCharCodeAt, value, [
+      index,
+    ]) as number;
     if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
+      const next = Reflect.apply(intrinsicStringCharCodeAt, value, [
+        index + 1,
+      ]) as number;
       if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) {
         throw new TypeError(`${path} contains an unpaired high surrogate`);
       }
@@ -45,7 +54,7 @@ function snapshotArray(
   path: string,
   ancestors: Set<object>,
 ): JsonWireValue[] {
-  if (Object.getPrototypeOf(value) !== Array.prototype) {
+  if (Object.getPrototypeOf(value) !== intrinsicArrayPrototype) {
     throw new TypeError(`${path} must have the ordinary array prototype`);
   }
 
@@ -112,7 +121,7 @@ function snapshotObject(
   path: string,
   ancestors: Set<object>,
 ): { [key: string]: JsonWireValue } {
-  if (Object.getPrototypeOf(value) !== Object.prototype) {
+  if (Object.getPrototypeOf(value) !== intrinsicObjectPrototype) {
     throw new TypeError(`${path} must be a plain object`);
   }
 
@@ -156,7 +165,7 @@ function snapshotValue(
     return value;
   }
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
+    if (!intrinsicNumberIsFinite(value)) {
       throw new TypeError(`${path} must be a finite binary64 number`);
     }
     return value;
@@ -173,7 +182,7 @@ function snapshotValue(
 
   setAdd(ancestors, value);
   try {
-    return Array.isArray(value)
+    return intrinsicArrayIsArray(value)
       ? snapshotArray(value, path, ancestors)
       : snapshotObject(value, path, ancestors);
   } finally {

@@ -4,10 +4,20 @@ import { snapshotJsonWire } from "./json-wire.js";
 export const CONTEXTGRAPH_PROTOCOL_VERSION = "contextgraph/1.0-draft" as const;
 export const CONTEXTGRAPH_FIXTURE_PROFILE_VERSION = "1.1.0" as const;
 
-const u32Schema = z.number().int().min(0).max(0xffff_ffff);
+const intrinsicMathFround = Math.fround;
+const intrinsicNumberIsFinite = Number.isFinite;
+const intrinsicObjectIs = Object.is;
+const u32Schema = z
+  .number()
+  .int()
+  .min(0)
+  .max(0xffff_ffff)
+  .refine((value) => !intrinsicObjectIs(value, -0), {
+    message: "u32 value must not be negative zero",
+  });
 const finiteNumberSchema = z.number().finite();
 const f32NumberSchema = finiteNumberSchema.refine(
-  (value) => Number.isFinite(Math.fround(value)),
+  (value) => intrinsicNumberIsFinite(intrinsicMathFround(value)),
   { message: "embedding value must be representable as a finite f32" },
 );
 
@@ -138,11 +148,12 @@ function descriptorsMatch(
   if (actualIsData) {
     return (
       expected.writable === (actual.writable === true) &&
-      Object.is(expected.value, actual.value)
+      intrinsicObjectIs(expected.value, actual.value)
     );
   }
   return (
-    Object.is(expected.get, actual.get) && Object.is(expected.set, actual.set)
+    intrinsicObjectIs(expected.get, actual.get) &&
+    intrinsicObjectIs(expected.set, actual.set)
   );
 }
 

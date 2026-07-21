@@ -224,6 +224,21 @@ describe("normalizeContextFrameV1", () => {
     },
   );
 
+  it("rejects negative-zero token cost while accepting both u32 bounds", () => {
+    expect(Object.is(-0, 0)).toBe(false);
+    expect(() =>
+      normalizeContextFrameV1(minimalFrame({ token_cost: -0 })),
+    ).toThrow(ZodError);
+
+    for (const tokenCost of [0, 4_294_967_295]) {
+      const normalized = normalizeContextFrameV1(
+        minimalFrame({ token_cost: tokenCost }),
+      );
+      expect(normalized.token_cost).toBe(tokenCost);
+      expect(Object.is(normalized.token_cost, -0)).toBe(false);
+    }
+  });
+
   it.each([undefined, "", " \t\n"])(
     "rejects missing or blank citation label %j",
     (citationLabel) => {
@@ -403,6 +418,20 @@ describe("normalizeContextQueryV1", () => {
           field as "max_frames" | "max_tokens"
         ],
       ).toBe(4_294_967_295);
+    },
+  );
+
+  it.each(["max_frames", "max_tokens"] as const)(
+    "rejects negative zero for query %s while accepting positive zero",
+    (field) => {
+      expect(Object.is(-0, 0)).toBe(false);
+      expect(() =>
+        normalizeContextQueryV1(minimalQuery({ [field]: -0 })),
+      ).toThrow(ZodError);
+
+      const normalized = normalizeContextQueryV1(minimalQuery({ [field]: 0 }));
+      expect(normalized[field]).toBe(0);
+      expect(Object.is(normalized[field], -0)).toBe(false);
     },
   );
 

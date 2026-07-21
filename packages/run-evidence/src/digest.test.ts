@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
@@ -102,6 +103,79 @@ describe("jcsBytes", () => {
     expect(new TextDecoder().decode(jcsBytes(value))).toBe(
       '{"a":1,"toJSON":"data","z":3}',
     );
+  });
+
+  it("rejects lone surrogates after public charCodeAt mutation", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      String.prototype,
+      "charCodeAt",
+    );
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(String.prototype, "charCodeAt", {
+      configurable: true,
+      value: () => 0,
+    });
+
+    try {
+      result = jcsBytes("\ud800");
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(String.prototype, "charCodeAt", previous);
+    }
+
+    expect(result).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("uses captured TextEncoder.encode for canonical bytes", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      TextEncoder.prototype,
+      "encode",
+    );
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(TextEncoder.prototype, "encode", {
+      configurable: true,
+      value: () => Uint8Array.of(0),
+    });
+
+    try {
+      result = jcsBytes({ a: 1 });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(TextEncoder.prototype, "encode", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(result).toEqual(new Uint8Array([123, 34, 97, 34, 58, 49, 125]));
+  });
+
+  it("uses the TextEncoder constructor captured at module initialization", () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "TextEncoder");
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(globalThis, "TextEncoder", {
+      configurable: true,
+      value: class PollutedTextEncoder {
+        constructor() {
+          throw new Error("polluted TextEncoder was constructed");
+        }
+      },
+    });
+
+    try {
+      result = jcsBytes({ a: 1 });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(globalThis, "TextEncoder", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(result).toEqual(new Uint8Array([123, 34, 97, 34, 58, 49, 125]));
   });
 
   it("ignores ambient Object.prototype pollution", () => {
@@ -421,6 +495,65 @@ describe("SHA-256 digest validation", () => {
     expect(sha256Digest(new TextEncoder().encode("abc"))).toBe(
       "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
+  });
+
+  it("uses captured Hash update and digest operations", () => {
+    const hashPrototype = Object.getPrototypeOf(createHash("sha256")) as object;
+    const previousUpdate = Object.getOwnPropertyDescriptor(
+      hashPrototype,
+      "update",
+    );
+    const previousDigest = Object.getOwnPropertyDescriptor(
+      hashPrototype,
+      "digest",
+    );
+    let result: string | undefined;
+    let error: unknown;
+    Object.defineProperty(hashPrototype, "update", {
+      configurable: true,
+      value: function (this: unknown) {
+        return this;
+      },
+    });
+    Object.defineProperty(hashPrototype, "digest", {
+      configurable: true,
+      value: () => "0".repeat(64),
+    });
+
+    try {
+      result = sha256Digest(new TextEncoder().encode("abc"));
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(hashPrototype, "update", previousUpdate);
+      restoreOwnProperty(hashPrototype, "digest", previousDigest);
+    }
+
+    expect(error).toBeUndefined();
+    expect(result).toBe(
+      "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
+  });
+
+  it("rejects malformed digests after public RegExp.test mutation", () => {
+    const previous = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
+    let result: string | undefined;
+    let error: unknown;
+    Object.defineProperty(RegExp.prototype, "test", {
+      configurable: true,
+      value: () => true,
+    });
+
+    try {
+      result = assertDigest("not-a-digest");
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(RegExp.prototype, "test", previous);
+    }
+
+    expect(result).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
   });
 
   it.each([
