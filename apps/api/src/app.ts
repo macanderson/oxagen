@@ -379,6 +379,13 @@ app.route("/v1", userScoped);
 // path sits outside the human-readable /:org_slug/:workspace_slug group.
 const stellaTelemetryScoped = new Hono<AppEnv>();
 stellaTelemetryScoped.use("*", authMiddleware);
+stellaTelemetryScoped.use(
+  "*",
+  distributedRateLimiter({
+    keyPrefix: "stella-telemetry",
+    max: () => rateLimitBudgets().agentExec,
+  }),
+);
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
 app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 

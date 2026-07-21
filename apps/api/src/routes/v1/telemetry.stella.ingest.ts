@@ -28,6 +28,17 @@ telemetryStellaIngestRoute.use(
 );
 
 telemetryStellaIngestRoute.post("/operational", async (c) => {
+  const mediaType = c.req
+    .header("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (mediaType !== "application/json") {
+    throw new HTTPException(415, {
+      message: "Content-Type must be application/json",
+    });
+  }
+
   let rawInput: unknown;
   try {
     rawInput = await c.req.json();

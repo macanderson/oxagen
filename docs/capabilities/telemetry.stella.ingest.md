@@ -9,15 +9,29 @@ Accept content-free Stella execution rollups for an explicitly enrolled Oxagen E
 ## Surface
 
 - API only: `POST /v1/telemetry/stella/operational`
-- Authentication: workspace API key only; browser/session credentials are rejected
+- Authentication: operator-provisioned Stella enrollment API key only; browser/session credentials and ordinary workspace API keys are rejected
 - Content type: `application/json`
 - Maximum request body: 256 KiB
+- Distributed limit: the workspace shares the configured agent-execution requests-per-minute budget, under an independent `stella-telemetry` counter bucket
 
-The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and are not used by Oxagen to derive or partition the deduplication key. Oxagen uses the submitted `event_id` as the tenant-scoped deduplication key and cannot verify the client's hash preimage.
+The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. Before any ClickHouse append, Oxagen reloads the active, non-deleted, non-expired API-key row inside tenant scope and requires its server-owned `auth.api_keys.scope` value to be exactly:
+
+```json
+{
+  "purpose": "stella_operational_telemetry_v1",
+  "enrollment_id": "<1-128 character bounded enrollment id>"
+}
+```
+
+The object is strict: missing, additional, or malformed fields are denied. Every event in the batch must carry the same `enrollment_id` as the protected key binding. The generic `create_api_key` capability rejects this reserved `purpose`; it cannot be used to self-enroll a client. A separate enrollment tool or operator provisioning process must write the marker. This intake endpoint only verifies an existing enrollment and never creates or updates one.
+
+The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and are not used by Oxagen to derive or partition the deduplication key. Oxagen uses the submitted `event_id` as the tenant-scoped deduplication key and cannot verify the client's hash preimage.
 
 ## Access and governance
 
-This is a scoped, high-sensitivity management action. IAM is default-deny; the default organization grants allow only `Owner` and `Admin`, with no default workspace-role grants. It does not consume AI credits (`noBillingGate: true`).
+This is a scoped, high-sensitivity management action. IAM is default-deny; the default organization grants allow only `Owner` and `Admin`, with no default workspace-role grants. It does not consume AI credits (`noBillingGate: true`). Oxagen resolves the organization's current plan tier on every accepted attempt and requires `enterprise`. Downgrading the organization immediately denies intake, even while a previously provisioned API key and its protected marker still exist; no event is appended.
+
+The Postgres-backed limiter is keyed by the authenticated workspace and uses `RATE_LIMIT_AGENT_EXEC_PER_MIN`, but its `stella-telemetry` prefix prevents telemetry traffic from consuming the interactive agent bucket. Requests beyond the boundary return `429` with `Retry-After` before capability dispatch. In accordance with the shared distributed-limiter policy, a counter-store failure is logged and fails open; API-key enrollment, tier, IAM, strict schema, and tenant-stamped append checks remain fail-closed.
 
 The resulting records are operational telemetry, not compliance or audit evidence. Do not use this capability as a substitute for Oxagen security events, audit logs, execution lineage, or billing usage records.
 

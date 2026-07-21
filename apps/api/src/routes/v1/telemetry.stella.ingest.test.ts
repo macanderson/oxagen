@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -7,6 +7,24 @@ const mocks = vi.hoisted(() => ({
   resolveOrgScope: vi.fn(),
   resolveSession: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
+  requireEnv: vi.fn(),
+  withSystemDb: vi.fn(),
+}));
+
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@oxagen/config/env")>();
+  return {
+    ...original,
+    requireEnv: (keys: readonly string[]) =>
+      keys.includes("RATE_LIMIT_AGENT_EXEC_PER_MIN")
+        ? mocks.requireEnv(keys)
+        : original.requireEnv(keys as never),
+  };
+});
+
+vi.mock("@oxagen/database", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/database")>()),
+  withSystemDb: mocks.withSystemDb,
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -102,6 +120,7 @@ async function post(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
   mocks.parseSessionCookie.mockReturnValue(null);
   mocks.resolveApiKey.mockResolvedValue({
     ok: true,
@@ -109,10 +128,92 @@ beforeEach(() => {
     orgId: KEY_ORG_ID,
     workspaceId: KEY_WORKSPACE_ID,
   });
+  mocks.requireEnv.mockReturnValue({
+    RATE_LIMIT_CHAT_PER_MIN: 60,
+    RATE_LIMIT_AGENT_EXEC_PER_MIN: 30,
+  });
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ execute: vi.fn().mockResolvedValue([{ count: 1 }]) }),
+  );
   mocks.invoke.mockResolvedValue(OUTPUT);
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("POST /v1/telemetry/stella/operational", () => {
+  it("accepts a case-insensitive application/json media type with charset", async () => {
+    const response = await post(VALID_BATCH, {
+      authorization: "Bearer ox_test_key",
+      "content-type": "Application/JSON; Charset=UTF-8",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["wrong", "text/plain"],
+  ])(
+    "rejects %s Content-Type with 415 before parsing or invoking",
+    async (_name, contentType) => {
+      const headers: Record<string, string> = {
+        authorization: "Bearer ox_test_key",
+      };
+      if (contentType) headers["content-type"] = contentType;
+      const body = contentType
+        ? "{not-json"
+        : new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("{not-json"));
+              controller.close();
+            },
+          });
+
+      const request = new Request(`http://localhost${PATH}`, {
+        method: "POST",
+        headers,
+        body,
+        ...(contentType ? {} : { duplex: "half" }),
+      } as RequestInit & { duplex?: "half" });
+      expect(request.headers.get("content-type")).toBe(contentType ?? null);
+
+      const response = await app.fetch(request);
+
+      expect(response.status).toBe(415);
+      expect(await response.json()).toMatchObject({
+        error: { code: "bad_request" },
+        requestId: REQUEST_ID,
+      });
+      expect(mocks.invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rate-limits globally by the authenticated workspace before invoke", async () => {
+    let count = 0;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async () => [{ count: ++count }]),
+        }),
+    );
+
+    for (let request = 1; request <= 30; request++) {
+      const response = await post(VALID_BATCH);
+      expect(response.status).toBe(200);
+    }
+
+    mocks.invoke.mockClear();
+    const response = await post(VALID_BATCH);
+
+    expect(response.status).toBe(429);
+    expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   it("mounts the exact POST route and rejects other methods", async () => {
     const postResponse = await post(VALID_BATCH);
     expect(postResponse.status).toBe(200);
