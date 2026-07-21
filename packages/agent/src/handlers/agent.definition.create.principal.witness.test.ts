@@ -74,5 +74,14 @@ describe("agent principal provisioning", () => {
       orgId: TEST_CTX.orgId,
       workspaceId: TEST_CTX.workspaceId,
     });
+
+    // The principal id returned by that insert must be persisted onto the
+    // agent row in the SAME transaction — the two are created together and
+    // must never drift (docs/specs/agent-rbac/spec.md §3.1).
+    const agentInserts = inserts.filter(({ table }) => table === schema.agents);
+    expect(agentInserts).toHaveLength(1);
+    expect(agentInserts[0]?.values).toMatchObject({
+      principalId: "principal-1",
+    });
   });
 });
