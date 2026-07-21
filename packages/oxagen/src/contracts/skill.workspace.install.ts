@@ -24,9 +24,7 @@ export const skillWorkspaceInstall = registerCapability({
     // Install a custom (uploaded) skill definition. Mutually exclusive with `slug`.
     custom: z
       .object({
-        name: z.string().min(1),
-        body: z.string().min(1),
-        references: z.array(z.string()).optional(),
+        content: z.string().min(1).describe("Canonical skill.toml content"),
       })
       .optional(),
     workspace_id: z.string().optional(),
@@ -35,9 +33,15 @@ export const skillWorkspaceInstall = registerCapability({
     publicId: z.string(),
     slug: z.string(),
     activeVersion: z.number().int().positive(),
-    installed: z.boolean().describe("false when the skill already existed (idempotent)"),
+    installed: z
+      .boolean()
+      .describe("false when the skill already existed (idempotent)"),
   }),
 });
 
-export type SkillWorkspaceInstallInput = z.output<typeof skillWorkspaceInstall.input>;
-export type SkillWorkspaceInstallOutput = z.output<typeof skillWorkspaceInstall.output>;
+export type SkillWorkspaceInstallInput = z.output<
+  typeof skillWorkspaceInstall.input
+>;
+export type SkillWorkspaceInstallOutput = z.output<
+  typeof skillWorkspaceInstall.output
+>;

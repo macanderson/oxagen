@@ -12,7 +12,10 @@ describe("skill.export capability", () => {
   });
 
   it("accepts a skillId with versionNumber", () => {
-    const parsed = skillExport.input.parse({ skillId: "skl_abc123", versionNumber: 3 });
+    const parsed = skillExport.input.parse({
+      skillId: "skl_abc123",
+      versionNumber: 3,
+    });
     expect(parsed.skillId).toBe("skl_abc123");
     expect(parsed.versionNumber).toBe(3);
   });
@@ -47,19 +50,19 @@ describe("skill.export capability", () => {
 
   it("parses a valid output", () => {
     const parsed = skillExport.output.parse({
-      filename: "my-skill.skill.md",
-      content: "---\nname: my-skill\ndescription: A skill\n---\n\nBody here.",
+      filename: "my-skill.toml",
+      content: 'schema_version = 1\nkind = "skill"\nname = "my-skill"\n',
       versionNumber: 2,
     });
-    expect(parsed.filename).toBe("my-skill.skill.md");
-    expect(parsed.content).toContain("---");
+    expect(parsed.filename).toBe("my-skill.toml");
+    expect(parsed.content).toContain("schema_version");
     expect(parsed.versionNumber).toBe(2);
   });
 
   it("rejects output missing filename", () => {
     expect(() =>
       skillExport.output.parse({
-        content: "---\nname: x\ndescription: y\n---\n\nBody.",
+        content: 'schema_version = 1\nkind = "skill"\n',
         versionNumber: 1,
       }),
     ).toThrow();
@@ -67,15 +70,15 @@ describe("skill.export capability", () => {
 
   it("rejects output missing content", () => {
     expect(() =>
-      skillExport.output.parse({ filename: "x.skill.md", versionNumber: 1 }),
+      skillExport.output.parse({ filename: "x.toml", versionNumber: 1 }),
     ).toThrow();
   });
 
   it("rejects output missing versionNumber", () => {
     expect(() =>
       skillExport.output.parse({
-        filename: "x.skill.md",
-        content: "---\nname: x\ndescription: y\n---\n\nBody.",
+        filename: "x.toml",
+        content: 'schema_version = 1\nkind = "skill"\n',
       }),
     ).toThrow();
   });
@@ -83,8 +86,8 @@ describe("skill.export capability", () => {
   it("rejects non-positive versionNumber in output", () => {
     expect(() =>
       skillExport.output.parse({
-        filename: "x.skill.md",
-        content: "---\nname: x\ndescription: y\n---\n\nBody.",
+        filename: "x.toml",
+        content: 'schema_version = 1\nkind = "skill"\n',
         versionNumber: 0,
       }),
     ).toThrow();

@@ -5,7 +5,7 @@ import {
   resolveContainedPath,
 } from "@oxagen/agent-artifacts";
 import {
-  skillFrontmatterSchema,
+  skillMetadataProjectionSchema,
   type Skill,
   type SkillReference,
 } from "./types";
@@ -25,7 +25,7 @@ export function parseSkill(
       `invalid_skill_artifact: expected skill, received ${artifact.kind}`,
     );
   }
-  const frontmatter = skillFrontmatterSchema.parse({
+  const projection = skillMetadataProjectionSchema.parse({
     name: artifact.name,
     description: artifact.description,
     metadata: artifact.metadata,
@@ -34,7 +34,7 @@ export function parseSkill(
     slug: artifact.name,
     name: artifact.name,
     description: artifact.description,
-    metadata: frontmatter.metadata,
+    metadata: projection.metadata,
     body: artifact.instructions.trim(),
     references: artifact.references.map((path) => ({ path, body: "" })),
     source: options.source ?? "builtin",

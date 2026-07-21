@@ -301,7 +301,7 @@ export function SkillDetailPanel({
             className="font-mono text-sm resize-y"
             aria-label="Skill content"
             data-testid="skill-content-textarea"
-            placeholder="# Skill content (Markdown / MDX)..."
+            placeholder="Canonical skill.toml content..."
           />
           <div className="flex items-center gap-3">
             <input

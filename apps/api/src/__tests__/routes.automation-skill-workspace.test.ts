@@ -70,9 +70,10 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
-
 
 import { app } from "../app";
 import { makeRequest, bearerHeader, makeApiKeyOk } from "./_helpers";
@@ -151,7 +152,12 @@ describe("automation.create route", () => {
   };
 
   it("happy path POST: returns 200", async () => {
-    const invokeResult = { id: "plt-1", name: "Daily Report", status: "active", enabled: true };
+    const invokeResult = {
+      id: "plt-1",
+      name: "Daily Report",
+      status: "active",
+      enabled: true,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -186,7 +192,11 @@ describe("automation.enable route", () => {
   const PATH = "/automation/enable";
 
   it("happy path POST: returns 200", async () => {
-    mocks.invoke.mockResolvedValue({ automation_id: "plt-1", enabled: true, status: "active" });
+    mocks.invoke.mockResolvedValue({
+      automation_id: "plt-1",
+      enabled: true,
+      status: "active",
+    });
 
     const res = await app.fetch(post(PATH, { automation_id: "plt-1" }));
     expect(res.status).toBe(200);
@@ -212,7 +222,11 @@ describe("automation.disable route", () => {
   const PATH = "/automation/disable";
 
   it("happy path POST: returns 200", async () => {
-    mocks.invoke.mockResolvedValue({ automation_id: "plt-1", enabled: false, status: "paused" });
+    mocks.invoke.mockResolvedValue({
+      automation_id: "plt-1",
+      enabled: false,
+      status: "paused",
+    });
 
     const res = await app.fetch(post(PATH, { automation_id: "plt-1" }));
     expect(res.status).toBe(200);
@@ -238,21 +252,28 @@ describe("automation.trigger route", () => {
   const PATH = "/automation/trigger";
 
   it("happy path POST: returns 200 with execution info", async () => {
-    mocks.invoke.mockResolvedValue({ execution_id: "exec-1", status: "running" });
+    mocks.invoke.mockResolvedValue({
+      execution_id: "exec-1",
+      status: "running",
+    });
 
     const res = await app.fetch(post(PATH, { automation_id: "plt-1" }));
     expect(res.status).toBe(200);
   });
 
   it("calls invoke with 'trigger_automation' and surface 'api'", async () => {
-    await app.fetch(post(PATH, { automation_id: "plt-1", payload: { key: "value" } }));
+    await app.fetch(
+      post(PATH, { automation_id: "plt-1", payload: { key: "value" } }),
+    );
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("trigger_automation");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
   it("passes automation_id and optional payload to invoke", async () => {
-    await app.fetch(post(PATH, { automation_id: "plt-1", payload: { topic: "sales" } }));
+    await app.fetch(
+      post(PATH, { automation_id: "plt-1", payload: { topic: "sales" } }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.automation_id).toBe("plt-1");
     expect(body.payload).toEqual({ topic: "sales" });
@@ -274,7 +295,9 @@ describe("automation.update route", () => {
       enabled: true,
     });
 
-    const res = await app.fetch(patch(PATH, { automation_id: "plt-1", name: "Updated Report" }));
+    const res = await app.fetch(
+      patch(PATH, { automation_id: "plt-1", name: "Updated Report" }),
+    );
     expect(res.status).toBe(200);
   });
 
@@ -296,10 +319,15 @@ describe("automation.update route", () => {
 
 describe("skill.author route", () => {
   const PATH = "/skill/author";
-  const VALID_BODY = { prompt: "Create a skill for reviewing code quality and security" };
+  const VALID_BODY = {
+    prompt: "Create a skill for reviewing code quality and security",
+  };
 
   it("happy path POST: returns 200 with authored skill", async () => {
-    const invokeResult = { slug: "code-quality-review", name: "Code Quality Review", body: "# Code Quality Review..." };
+    const invokeResult = {
+      slug: "code-quality-review",
+      content: 'schema_version = 1\nkind = "skill"\n',
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -315,7 +343,12 @@ describe("skill.author route", () => {
   });
 
   it("passes prompt and optional nameHint to invoke", async () => {
-    await app.fetch(post(PATH, { prompt: "A skill for data analysis workflows", nameHint: "data-analysis" }));
+    await app.fetch(
+      post(PATH, {
+        prompt: "A skill for data analysis workflows",
+        nameHint: "data-analysis",
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.prompt).toBe("A skill for data analysis workflows");
     expect(body.nameHint).toBe("data-analysis");
@@ -333,13 +366,16 @@ describe("skill.author route", () => {
 describe("skill.create route", () => {
   const PATH = "/skill/create";
   const VALID_BODY = {
-    name: "Code Review",
-    slug: "code-review",
-    body: "---\nname: Code Review\n---\n# Code Review Skill\n\nThis skill reviews code.",
+    content:
+      'schema_version = 1\nkind = "skill"\nname = "code-review"\ndescription = "Reviews code"\ninstructions = "Review code"\nreferences = []\n',
   };
 
   it("happy path POST: returns 200 with skill id", async () => {
-    const invokeResult = { id: "skl-1", name: "Code Review", slug: "code-review" };
+    const invokeResult = {
+      id: "skl-1",
+      name: "Code Review",
+      slug: "code-review",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -354,15 +390,14 @@ describe("skill.create route", () => {
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("passes name, slug, body to invoke", async () => {
+  it("passes canonical content to invoke", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.name).toBe("Code Review");
-    expect(body.slug).toBe("code-review");
+    expect(body.content).toContain('name = "code-review"');
   });
 
-  it("invalid slug (spaces) → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { ...VALID_BODY, slug: "invalid slug" }));
+  it("missing content → 400, invoke not called", async () => {
+    const res = await app.fetch(post(PATH, {}));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -374,9 +409,15 @@ describe("skill.enable route", () => {
   const PATH = "/skill/enable";
 
   it("happy path POST: returns 200", async () => {
-    mocks.invoke.mockResolvedValue({ skill_id: "skl-1", slug: "code-review", enabled: true });
+    mocks.invoke.mockResolvedValue({
+      skill_id: "skl-1",
+      slug: "code-review",
+      enabled: true,
+    });
 
-    const res = await app.fetch(post(PATH, { skill_id: "skl-1", enabled: true }));
+    const res = await app.fetch(
+      post(PATH, { skill_id: "skl-1", enabled: true }),
+    );
     expect(res.status).toBe(200);
   });
 
@@ -439,9 +480,15 @@ describe("skill.version.activate route", () => {
   const PATH = "/skill/version/activate";
 
   it("happy path POST: returns 200", async () => {
-    mocks.invoke.mockResolvedValue({ skillId: "skl-1", activeVersionNumber: 3, activatedAt: "2026-06-28T00:00:00.000Z" });
+    mocks.invoke.mockResolvedValue({
+      skillId: "skl-1",
+      activeVersionNumber: 3,
+      activatedAt: "2026-06-28T00:00:00.000Z",
+    });
 
-    const res = await app.fetch(post(PATH, { skillId: "skl-1", versionNumber: 3 }));
+    const res = await app.fetch(
+      post(PATH, { skillId: "skl-1", versionNumber: 3 }),
+    );
     expect(res.status).toBe(200);
   });
 
@@ -453,7 +500,9 @@ describe("skill.version.activate route", () => {
   });
 
   it("versionNumber < 1 → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { skillId: "skl-1", versionNumber: 0 }));
+    const res = await app.fetch(
+      post(PATH, { skillId: "skl-1", versionNumber: 0 }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -465,7 +514,13 @@ describe("skill.version.get route", () => {
   const PATH = "/skill/version/get";
 
   it("happy path GET: returns 200 with version", async () => {
-    mocks.invoke.mockResolvedValue({ id: "slv-1", skill_id: "skl-1", versionNumber: 2, isLatest: true, isActive: true });
+    mocks.invoke.mockResolvedValue({
+      id: "slv-1",
+      skill_id: "skl-1",
+      versionNumber: 2,
+      isLatest: true,
+      isActive: true,
+    });
 
     const res = await app.fetch(get(`${PATH}?skill_id=skl-1&version_id=slv-1`));
     expect(res.status).toBe(200);
@@ -520,11 +575,15 @@ describe("skill.version.upload route", () => {
   const PATH = "/skill/version/upload";
   const VALID_BODY = {
     skill_id: "skl-1",
-    body: "---\nname: Code Review\n---\n# Code Review\n\nImproved version.",
+    content: 'schema_version = 1\nkind = "skill"\nname = "code-review"\n',
   };
 
   it("happy path POST: returns 200", async () => {
-    mocks.invoke.mockResolvedValue({ versionNumber: 3, skillId: "skl-1", isActive: true });
+    mocks.invoke.mockResolvedValue({
+      versionNumber: 3,
+      skillId: "skl-1",
+      isActive: true,
+    });
 
     const res = await app.fetch(post(PATH, VALID_BODY));
     expect(res.status).toBe(200);
@@ -537,15 +596,16 @@ describe("skill.version.upload route", () => {
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("passes skill_id and body to invoke", async () => {
+  it("passes skill_id and content to invoke", async () => {
     await app.fetch(post(PATH, { ...VALID_BODY, activate: false }));
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.skill_id).toBe("skl-1");
+    expect(body.content).toContain("schema_version");
     expect(body.activate).toBe(false);
   });
 
-  it("missing body (empty string) → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { skill_id: "skl-1", body: "" }));
+  it("missing content (empty string) → 400, invoke not called", async () => {
+    const res = await app.fetch(post(PATH, { skill_id: "skl-1", content: "" }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -557,7 +617,14 @@ describe("workspace.member.list route", () => {
   const PATH = "/workspace/member/list";
 
   it("happy path GET: returns 200 with members", async () => {
-    mocks.invoke.mockResolvedValue([{ id: "usr-1", email: "alice@test.com", role: "admin", joined_at: "2026-01-01T00:00:00.000Z" }]);
+    mocks.invoke.mockResolvedValue([
+      {
+        id: "usr-1",
+        email: "alice@test.com",
+        role: "admin",
+        joined_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
 
     const res = await app.fetch(get(PATH));
     expect(res.status).toBe(200);
@@ -589,7 +656,11 @@ describe("workspace.invite.send route", () => {
   const PATH = "/workspace/invite/send";
 
   it("happy path POST: returns 200 with invite", async () => {
-    mocks.invoke.mockResolvedValue({ id: "inv-1", status: "pending", expires_at: "2026-07-28T00:00:00.000Z" });
+    mocks.invoke.mockResolvedValue({
+      id: "inv-1",
+      status: "pending",
+      expires_at: "2026-07-28T00:00:00.000Z",
+    });
 
     const res = await app.fetch(post(PATH, { email: "bob@test.com" }));
     expect(res.status).toBe(200);
@@ -603,7 +674,13 @@ describe("workspace.invite.send route", () => {
   });
 
   it("passes email and optional role/message to invoke", async () => {
-    await app.fetch(post(PATH, { email: "dan@test.com", role: "member", message: "Join us!" }));
+    await app.fetch(
+      post(PATH, {
+        email: "dan@test.com",
+        role: "member",
+        message: "Join us!",
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.email).toBe("dan@test.com");
     expect(body.role).toBe("member");
@@ -623,7 +700,12 @@ describe("workspace.model.settings.read route", () => {
   const PATH = "/workspace/model-settings";
 
   it("happy path GET: returns 200 with settings", async () => {
-    mocks.invoke.mockResolvedValue({ defaultTextTier: "balanced", defaultTextModel: null, defaultImageModel: null, defaultVideoModel: null });
+    mocks.invoke.mockResolvedValue({
+      defaultTextTier: "balanced",
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    });
 
     const res = await app.fetch(get(PATH));
     expect(res.status).toBe(200);
@@ -648,7 +730,12 @@ describe("workspace.model.settings.write route", () => {
   const PATH = "/workspace/model-settings";
 
   it("happy path PATCH: returns 200 with updated settings", async () => {
-    mocks.invoke.mockResolvedValue({ defaultTextTier: "fast", defaultTextModel: null, defaultImageModel: null, defaultVideoModel: null });
+    mocks.invoke.mockResolvedValue({
+      defaultTextTier: "fast",
+      defaultTextModel: null,
+      defaultImageModel: null,
+      defaultVideoModel: null,
+    });
 
     const res = await app.fetch(patch(PATH, { defaultTextTier: "fast" }));
     expect(res.status).toBe(200);
@@ -662,7 +749,9 @@ describe("workspace.model.settings.write route", () => {
   });
 
   it("passes optional model fields to invoke", async () => {
-    await app.fetch(patch(PATH, { defaultTextTier: "precise", defaultImageModel: null }));
+    await app.fetch(
+      patch(PATH, { defaultTextTier: "precise", defaultImageModel: null }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.defaultTextTier).toBe("precise");
     expect(body.defaultImageModel).toBeNull();
@@ -709,7 +798,9 @@ describe("privacy.data.erase route", () => {
   });
 
   it("invalid scope → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { scope: "workspace", confirm: true }));
+    const res = await app.fetch(
+      post(PATH, { scope: "workspace", confirm: true }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -758,10 +849,16 @@ describe("privacy.data.export route", () => {
 
 describe("code.diff route", () => {
   const PATH = "/code/diff";
-  const VALID_BODY = { before: "const x = 1;\n", after: "const x = 2;\n", path: "src/foo.ts" };
+  const VALID_BODY = {
+    before: "const x = 1;\n",
+    after: "const x = 2;\n",
+    path: "src/foo.ts",
+  };
 
   it("happy path POST: returns 200 with diff", async () => {
-    const invokeResult = { diff: "--- src/foo.ts\n+++ src/foo.ts\n@@ -1 +1 @@\n-const x = 1;\n+const x = 2;" };
+    const invokeResult = {
+      diff: "--- src/foo.ts\n+++ src/foo.ts\n@@ -1 +1 @@\n-const x = 1;\n+const x = 2;",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, VALID_BODY));
@@ -819,7 +916,9 @@ describe("code.format route", () => {
   });
 
   it("invalid language → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { language: "typescript", source: "const x=1;" }));
+    const res = await app.fetch(
+      post(PATH, { language: "typescript", source: "const x=1;" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -841,7 +940,11 @@ describe("code.patch route", () => {
   };
 
   it("happy path POST: returns 200 with patched files", async () => {
-    mocks.invoke.mockResolvedValue({ files: { "src/foo.ts": "const x = 2;\n" }, applied: 1, failed: 0 });
+    mocks.invoke.mockResolvedValue({
+      files: { "src/foo.ts": "const x = 2;\n" },
+      applied: 1,
+      failed: 0,
+    });
 
     const res = await app.fetch(post(PATH, VALID_BODY));
     expect(res.status).toBe(200);
@@ -862,7 +965,9 @@ describe("code.patch route", () => {
   });
 
   it("empty diff → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { files: { "src/foo.ts": "const x = 1;" }, diff: "" }));
+    const res = await app.fetch(
+      post(PATH, { files: { "src/foo.ts": "const x = 1;" }, diff: "" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -874,7 +979,11 @@ describe("api.key.rotate route", () => {
   const PATH = "/api-keys/rotate";
 
   it("happy path POST: returns 201 with new key", async () => {
-    const invokeResult = { publicId: "aky-new", keyHint: "oxk_...", revokedAt: "2026-06-28T00:00:00.000Z" };
+    const invokeResult = {
+      publicId: "aky-new",
+      keyHint: "oxk_...",
+      revokedAt: "2026-06-28T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, { keyPublicId: "aky-old" }));
@@ -890,7 +999,9 @@ describe("api.key.rotate route", () => {
   });
 
   it("passes keyPublicId and optional name to invoke", async () => {
-    await app.fetch(post(PATH, { keyPublicId: "aky-123", name: "New Key Name" }));
+    await app.fetch(
+      post(PATH, { keyPublicId: "aky-123", name: "New Key Name" }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.keyPublicId).toBe("aky-123");
     expect(body.name).toBe("New Key Name");
@@ -930,7 +1041,9 @@ describe("research.swarm.start route", () => {
   });
 
   it("passes topic and optional depth/maxParallel to invoke", async () => {
-    await app.fetch(post(PATH, { topic: "Vector databases", depth: "deep", maxParallel: 10 }));
+    await app.fetch(
+      post(PATH, { topic: "Vector databases", depth: "deep", maxParallel: 10 }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.topic).toBe("Vector databases");
     expect(body.depth).toBe("deep");

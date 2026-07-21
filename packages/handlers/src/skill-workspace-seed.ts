@@ -16,6 +16,8 @@
  */
 
 import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
+import { canonicalSkillMetadata } from "./skill-artifact";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createBuiltinSkillRegistry } from "@oxagen/skills";
@@ -24,7 +26,7 @@ import { skillBodyChecksum } from "./skill-checksum";
 
 // Builtin skills are resolved from EMBEDDED module data (createBuiltinSkillRegistry),
 // never a runtime filesystem read. Serverless bundlers drop the sibling
-// packages/skills/skills/*.md, so a `readdir` there returns ENOENT in prod and
+// packages/skills/skills data, so a `readdir` there returns ENOENT in prod and
 // silently seeded ZERO skills — the root cause of the "no builtin on disk" error.
 
 interface SeedArgs {
@@ -52,6 +54,17 @@ async function runSeed(
   let inserted = 0;
 
   for (const template of templates) {
+    const content = serializeArtifactToml({
+      schema_version: 1,
+      kind: "skill",
+      name: template.slug,
+      description: template.description,
+      instructions: template.body,
+      references: template.references.map((reference) => reference.path),
+      ...(canonicalSkillMetadata(template.metadata)
+        ? { metadata: canonicalSkillMetadata(template.metadata) }
+        : {}),
+    });
     // ── Idempotency check ─────────────────────────────────────────────────
     // Skip if a skill with this slug already exists (not soft-deleted) for
     // the workspace.  ON CONFLICT DO NOTHING on the insert also guards this
@@ -116,8 +129,8 @@ async function runSeed(
         skillId: skillRow.id,
         versionNumber: 1,
         isLatest: true,
-        body: template.body,
-        checksum: skillBodyChecksum(template.body),
+        body: content,
+        checksum: skillBodyChecksum(content),
         referencesPayload: template.references.map((r) => ({
           path: r.path,
           body: r.body,
@@ -168,7 +181,7 @@ async function runSeed(
 /**
  * Idempotently seeds workspace-owned copies of all builtin skill templates.
  *
- * - Loads every *.skill.md from the shared skills directory.
+ * - Loads every canonical skill.toml bundle from embedded module data.
  * - Skips slugs that already exist for the workspace (idempotent).
  * - Inserts a skills row (source='tenant', installed_from_slug=<template slug>)
  *   and a skill_versions v1 row, then back-fills active_version_id.

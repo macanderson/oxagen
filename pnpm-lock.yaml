@@ -192,6 +192,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../../packages/agent-artifacts
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../../packages/agent-engine
@@ -1245,6 +1248,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
+      '@oxagen/agent-artifacts':
+        specifier: workspace:*
+        version: link:../agent-artifacts
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../agent-engine
@@ -1338,9 +1344,6 @@ importers:
       pptxgenjs:
         specifier: 4.0.1
         version: 4.0.1
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
       zod:
         specifier: 3.25.76
         version: 3.25.76

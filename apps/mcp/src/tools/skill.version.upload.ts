@@ -8,8 +8,8 @@ export const schema = {
   skill_id: skillVersionUpload.input.shape.skill_id.describe(
     "Public ID of the skill to add a version to (e.g. 'skl_...')",
   ),
-  body: skillVersionUpload.input.shape.body.describe(
-    "Raw .skill.md content including YAML frontmatter",
+  content: skillVersionUpload.input.shape.content.describe(
+    "Canonical skill.toml content",
   ),
   activate: skillVersionUpload.input.shape.activate.describe(
     "Set this version as active immediately (default: true)",
@@ -29,8 +29,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillVersionUploadTool(args: InferSchema<typeof schema>) {
+export default async function skillVersionUploadTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(skillVersionUpload.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(skillVersionUpload.name, args, ctx, {
+    surface: "mcp",
+  });
   return skillVersionUpload.output.parse(output);
 }
