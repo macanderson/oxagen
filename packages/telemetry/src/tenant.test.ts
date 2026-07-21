@@ -40,6 +40,24 @@ describe("clickhouse tenant seam", () => {
     });
   });
 
+  it("overwrites hostile caller-supplied tenant columns", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      chInsert("events", [
+        {
+          event_type: "x",
+          org_id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          workspace_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        },
+      ]),
+    );
+
+    expect(insert).toHaveBeenCalledWith({
+      table: "events",
+      values: [{ event_type: "x", org_id: ORG, workspace_id: WS }],
+      format: "JSONEachRow",
+    });
+  });
+
   it("binds orgId/workspaceId as query params on read", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
       chSelect({ query: "SELECT 1 WHERE org_id = {orgId:UUID}" }),
@@ -47,7 +65,9 @@ describe("clickhouse tenant seam", () => {
     expect(query).toHaveBeenCalledOnce();
     // Extract the first argument of the first call. Cast through unknown since
     // vi.fn() infers void params; the shape is validated by the assertions below.
-    const callArg = (query.mock.calls[0] as unknown as [{ query: string; query_params: Record<string, string>; format: string }]);
+    const callArg = query.mock.calls[0] as unknown as [
+      { query: string; query_params: Record<string, string>; format: string },
+    ];
     expect(callArg[0]?.query_params.orgId).toBe(ORG);
     expect(callArg[0]?.query_params.workspaceId).toBe(WS);
   });
