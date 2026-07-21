@@ -12,6 +12,8 @@ import {
 } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
+import { assertProposalWithinScope } from "./lib/extend-proposal";
 
 // graph.edge.upsert is the one-release DEPRECATION ALIAS of graph.relationship.upsert
 // (Workspace Schema Registry §1.2). The fixed GRAPH_EDGE_TYPES enum is GONE (§3.2):
@@ -65,6 +67,19 @@ export const graphEdgeUpsertHandler: CapabilityHandler<
   typeof graphEdgeUpsert
 > = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
+
+  // Agent RBAC Phase 3 (spec §3.6 + §6 Q3): an extend-mode agent writing a
+  // relationship directly is a PROPOSAL — fail fast before the write. Both
+  // endpoints are pre-existing nodes, so only the relationship-type dimension
+  // (and read-mode) of the agent's effective GraphScope is enforced here; the
+  // label allow-list does not apply (no node is proposed). Non-agent writes
+  // carry no scope → no-op, byte-identical to before.
+  const scope = effectiveGraphScope(ctx, graphEdgeUpsert.name);
+  assertProposalWithinScope(
+    { relationshipType: input.relationshipType },
+    scope,
+  );
+
   const query = buildUpsertQuery(input.relationshipType);
 
   const propertiesJson = input.properties

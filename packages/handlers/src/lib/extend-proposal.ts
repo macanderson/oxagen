@@ -92,8 +92,13 @@ export class PropertyCompletenessError extends HTTPException {
 }
 
 export interface ProposalTarget {
-  /** Proposed node label (the target label of an inferred node/edge). */
-  label: string;
+  /**
+   * Proposed node label (the target label of an inferred node/edge). Omit for a
+   * relationship-only proposal (e.g. `graph.edge.upsert`, whose endpoints are
+   * pre-existing nodes) — the label allow-list check is then skipped and only
+   * the relationship-type dimension (and mode) is enforced.
+   */
+  label?: string;
   /** Proposed relationship type; omit/null for a bare node proposal. */
   relationshipType?: string | null;
 }
@@ -119,7 +124,11 @@ export function assertProposalWithinScope(
     );
   }
 
-  if (scope.labels !== undefined && !scope.labels.includes(target.label)) {
+  if (
+    target.label !== undefined &&
+    scope.labels !== undefined &&
+    !scope.labels.includes(target.label)
+  ) {
     throw new ExtendProposalScopeError(
       "label",
       target.label,
@@ -158,7 +167,11 @@ export function assertProposalInVocabulary(
   if (!pinnedSchema || pinnedSchema.enforcementMode !== "strict") return;
 
   const labelNames = pinnedSchema.labels.map((l) => l.name);
-  if (labelNames.length > 0 && !labelNames.includes(target.label)) {
+  if (
+    target.label !== undefined &&
+    labelNames.length > 0 &&
+    !labelNames.includes(target.label)
+  ) {
     throw new ExtendProposalScopeError(
       "label",
       target.label,

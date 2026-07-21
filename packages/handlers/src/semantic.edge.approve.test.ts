@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   closeFn: vi.fn().mockResolvedValue(undefined),
   scopedSession: vi.fn(),
   runInTenantScope: vi.fn(),
+  getPinnedSchema: vi.fn(),
 }));
 
 const sessionObj = { run: mocks.runFn, close: mocks.closeFn };
@@ -36,6 +37,12 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
+}));
+
+// Pinned-schema lookup hits Postgres via withTenantDb — mock it like
+// graph.ingest.test.ts does. Default null = no pinned vocabulary (gates inert).
+vi.mock("./schema.pinned", () => ({
+  getPinnedSchema: (...a: unknown[]) => mocks.getPinnedSchema(...a),
 }));
 
 import { semanticEdgeApproveHandler } from "./semantic.edge.approve";
@@ -68,7 +75,10 @@ const APPROVED_EDGE_ROW = makeRecord({
   approvalStatus: "approved",
 });
 
-function setupNeo4j(edgeRow: ReturnType<typeof makeRecord> | null, relId = "rel-id-1") {
+function setupNeo4j(
+  edgeRow: ReturnType<typeof makeRecord> | null,
+  relId = "rel-id-1",
+) {
   let callCount = 0;
   mocks.runFn.mockImplementation(async () => {
     callCount++;
@@ -83,7 +93,9 @@ function setupNeo4j(edgeRow: ReturnType<typeof makeRecord> | null, relId = "rel-
     // Third call: approve path only — materialise the descriptive relationship
     return { records: [makeRecord({ relId })] };
   });
-  return { getCypher: (idx: number) => (mocks.runFn.mock.calls[idx] as [string])[0] };
+  return {
+    getCypher: (idx: number) => (mocks.runFn.mock.calls[idx] as [string])[0],
+  };
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -96,13 +108,17 @@ describe("semanticEdgeApproveHandler", () => {
       (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
     );
     mocks.closeFn.mockResolvedValue(undefined);
+    mocks.getPinnedSchema.mockResolvedValue(null);
   });
 
   it("throws 404 when InferredEdge is not found", async () => {
     setupNeo4j(null);
 
     await expect(
-      semanticEdgeApproveHandler({ edgeId: "edge-missing", decision: "approve" }, CTX),
+      semanticEdgeApproveHandler(
+        { edgeId: "edge-missing", decision: "approve" },
+        CTX,
+      ),
     ).rejects.toMatchObject({ status: 404 });
 
     expect(mocks.closeFn).toHaveBeenCalledOnce();
@@ -113,7 +129,10 @@ describe("semanticEdgeApproveHandler", () => {
     mocks.runFn.mockResolvedValueOnce({ records: [APPROVED_EDGE_ROW] });
 
     await expect(
-      semanticEdgeApproveHandler({ edgeId: "edge-uuid-1", decision: "approve" }, CTX),
+      semanticEdgeApproveHandler(
+        { edgeId: "edge-uuid-1", decision: "approve" },
+        CTX,
+      ),
     ).rejects.toMatchObject({ status: 409 });
 
     expect(mocks.closeFn).toHaveBeenCalledOnce();
@@ -145,7 +164,10 @@ describe("semanticEdgeApproveHandler", () => {
       CTX,
     );
 
-    const [, params] = mocks.runFn.mock.calls[1] as [string, Record<string, unknown>];
+    const [, params] = mocks.runFn.mock.calls[1] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params.comment).toBe("low quality");
   });
 
@@ -189,7 +211,10 @@ describe("semanticEdgeApproveHandler", () => {
     });
     const { getCypher } = setupNeo4j(messyRow, "rel-2");
 
-    await semanticEdgeApproveHandler({ edgeId: "edge-uuid-2", decision: "approve" }, CTX);
+    await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-2", decision: "approve" },
+      CTX,
+    );
 
     const relCypher = getCypher(2);
     expect(relCypher).toContain("[r:DEPENDS_ON_HEAVILY");
@@ -204,7 +229,10 @@ describe("semanticEdgeApproveHandler", () => {
       CTX,
     );
 
-    const [, params] = mocks.runFn.mock.calls[1] as [string, Record<string, unknown>];
+    const [, params] = mocks.runFn.mock.calls[1] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(params.approvedBy).toBe("user-1");
   });
 
@@ -217,13 +245,22 @@ describe("semanticEdgeApproveHandler", () => {
   it("binds orgId/workspaceId explicitly on the find query and orgId on the update query (regression: previously relied solely on scopedSession auto-injection)", async () => {
     setupNeo4j(PENDING_EDGE_ROW);
 
-    await semanticEdgeApproveHandler({ edgeId: "edge-uuid-1", decision: "reject" }, CTX);
+    await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "reject" },
+      CTX,
+    );
 
-    const findParams = mocks.runFn.mock.calls[0]?.[1] as Record<string, unknown>;
+    const findParams = mocks.runFn.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(findParams.orgId).toBe(CTX.orgId);
     expect(findParams.workspaceId).toBe(CTX.workspaceId);
 
-    const updateParams = mocks.runFn.mock.calls[1]?.[1] as Record<string, unknown>;
+    const updateParams = mocks.runFn.mock.calls[1]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(updateParams.orgId).toBe(CTX.orgId);
   });
 
@@ -234,7 +271,10 @@ describe("semanticEdgeApproveHandler", () => {
       .mockRejectedValueOnce(new Error("write failed"));
 
     await expect(
-      semanticEdgeApproveHandler({ edgeId: "edge-uuid-1", decision: "reject" }, CTX),
+      semanticEdgeApproveHandler(
+        { edgeId: "edge-uuid-1", decision: "reject" },
+        CTX,
+      ),
     ).rejects.toThrow("write failed");
 
     expect(mocks.closeFn).toHaveBeenCalledOnce();
@@ -251,6 +291,7 @@ describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
       (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
     );
     mocks.closeFn.mockResolvedValue(undefined);
+    mocks.getPinnedSchema.mockResolvedValue(null);
   });
 
   function setupApprove(tgtId = "tgt-1", closed = 0) {
@@ -259,7 +300,8 @@ describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
       call++;
       if (call === 1) return { records: [PENDING_EDGE_ROW] };
       if (call === 2) return { records: [] };
-      if (call === 3) return { records: [makeRecord({ relId: "rel-1", tgtId })] };
+      if (call === 3)
+        return { records: [makeRecord({ relId: "rel-1", tgtId })] };
       return { records: [makeRecord({ closed })] }; // supersede close
     });
   }
@@ -267,13 +309,21 @@ describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
   it("stamps validity on the materialised edge and threads observedAt", async () => {
     setupApprove();
     await semanticEdgeApproveHandler(
-      { edgeId: "edge-uuid-1", decision: "approve", observedAt: "2019-03-03T00:00:00.000Z" },
+      {
+        edgeId: "edge-uuid-1",
+        decision: "approve",
+        observedAt: "2019-03-03T00:00:00.000Z",
+      },
       CTX,
     );
     const materializeCypher = (mocks.runFn.mock.calls[2] as [string])[0];
-    expect(materializeCypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(materializeCypher).toContain(
+      "r.validFrom = coalesce(datetime($validFrom), datetime())",
+    );
     expect(materializeCypher).toContain("r.recordedAt = datetime()");
-    const materializeParams = (mocks.runFn.mock.calls[2] as [string, Record<string, unknown>])[1];
+    const materializeParams = (
+      mocks.runFn.mock.calls[2] as [string, Record<string, unknown>]
+    )[1];
     expect(materializeParams.validFrom).toBe("2019-03-03T00:00:00.000Z");
   });
 
@@ -297,7 +347,9 @@ describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
     expect(mocks.runFn).toHaveBeenCalledTimes(4);
     const closeCypher = (mocks.runFn.mock.calls[3] as [string])[0];
     expect(closeCypher).toContain("other.publicId <> $materializedTargetId");
-    expect(closeCypher).toContain("old.validTo IS NULL AND old.invalidatedAt IS NULL");
+    expect(closeCypher).toContain(
+      "old.validTo IS NULL AND old.invalidatedAt IS NULL",
+    );
     expect(closeCypher).not.toMatch(/DELETE/i);
     expect(result.superseded).toBe(3);
   });
@@ -316,5 +368,138 @@ describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
     expect(result.decision).toBe("reject");
     expect(result.superseded).toBe(0);
     expect(result.permanentEdgeId).toBeUndefined();
+  });
+});
+
+// ── Agent RBAC Q3 gates (verify on approve) ───────────────────────────────────
+
+describe("semantic.edge.approve — Q3 approval gates", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue(sessionObj);
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
+    );
+    mocks.closeFn.mockResolvedValue(undefined);
+    mocks.getPinnedSchema.mockResolvedValue(null);
+  });
+
+  /** CTX carrying an agentRun whose graph ceiling excludes the edge's target. */
+  function agentCtx(labels: string[] | undefined) {
+    const byCapability = new Map<string, unknown>();
+    byCapability.set("semantic.edge.approve", {
+      outcome: "allow",
+      agentResolution: {},
+      humanResolution: {},
+      resourceScope: {
+        graph: { mode: "extend", labels },
+      },
+    });
+    return {
+      ...CTX,
+      agentRun: { resolution: { byCapability } },
+    } as typeof CTX;
+  }
+
+  it("agent approve of an out-of-scope target label throws 422 BEFORE any write", async () => {
+    mocks.runFn.mockResolvedValue({ records: [PENDING_EDGE_ROW] });
+
+    await expect(
+      semanticEdgeApproveHandler(
+        { edgeId: "edge-uuid-1", decision: "approve" },
+        agentCtx(["Service"]), // PENDING_EDGE_ROW.targetType is "Feature"
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      dimension: "label",
+      value: "Feature",
+    });
+
+    // Only the find query ran — the edge is still pending (retryable), never
+    // stamped approved-but-unmaterialised.
+    expect(mocks.runFn).toHaveBeenCalledTimes(1);
+    expect(mocks.runFn.mock.calls[0]?.[0]).toMatch(/MATCH \(ie:InferredEdge/);
+  });
+
+  it("agent approve of an in-scope target proceeds to materialise", async () => {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      if (call === 3)
+        return { records: [makeRecord({ relId: "rel-1", tgtId: "tgt-1" })] };
+      return { records: [] };
+    });
+
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve" },
+      agentCtx(["Feature"]),
+    );
+    expect(result.decision).toBe("approve");
+    expect(result.permanentEdgeId).toBe("rel-1");
+  });
+
+  it("agent REJECT of an out-of-scope proposal is permitted (narrowing)", async () => {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      return { records: [] };
+    });
+
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "reject" },
+      agentCtx(["Service"]),
+    );
+    expect(result.decision).toBe("reject");
+  });
+
+  it("strict workspace vocabulary blocks approval of an out-of-vocabulary type for ANY approver", async () => {
+    mocks.runFn.mockResolvedValue({ records: [PENDING_EDGE_ROW] });
+    mocks.getPinnedSchema.mockResolvedValue({
+      registryId: "reg",
+      versionId: "ver",
+      versionNumber: 1,
+      enforcementMode: "strict",
+      conformanceFloor: 0,
+      labels: [
+        {
+          schemaName: "s",
+          name: "Service",
+          displayName: "Service",
+          description: null,
+          naturalKeyProps: [],
+          properties: [],
+        },
+      ],
+      relationshipTypes: [],
+    });
+
+    // Plain human CTX — no agentRun; the vocabulary gate binds regardless.
+    await expect(
+      semanticEdgeApproveHandler(
+        { edgeId: "edge-uuid-1", decision: "approve" },
+        CTX,
+      ),
+    ).rejects.toMatchObject({ status: 422, dimension: "label" });
+    expect(mocks.runFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("non-strict workspace + human approver: gates are inert (unchanged behavior)", async () => {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      if (call === 3)
+        return { records: [makeRecord({ relId: "rel-1", tgtId: "tgt-1" })] };
+      return { records: [] };
+    });
+
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve" },
+      CTX,
+    );
+    expect(result.decision).toBe("approve");
+    expect(result.permanentEdgeId).toBe("rel-1");
   });
 });

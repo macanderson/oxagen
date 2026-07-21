@@ -5,12 +5,36 @@ import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { embedText } from "@oxagen/ai";
 import { logger } from "./logger";
+import { getPinnedSchema } from "./schema.pinned";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
+import {
+  assertProposalWithinScope,
+  assertProposalInVocabulary,
+  assertProposalComplete,
+} from "./lib/extend-proposal";
 
-export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> = async (
-  input,
-  ctx,
-) => {
+export const graphNodeUpsertHandler: CapabilityHandler<
+  typeof graphNodeUpsert
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
+
+  // Agent RBAC Phase 3 (spec §3.6 + §6 Q3): an extend-mode agent writing a node
+  // directly is a PROPOSAL — fail fast BEFORE the write. (a) the target label
+  // must be inside the agent's effective GraphScope allow-list and the scope
+  // must not be read-only; (b) under strict schema enforcement the label must be
+  // in the workspace's active vocabulary; (c) the node must populate every
+  // required property its label declares. Non-agent (human/API-key) writes carry
+  // no scope and unpinned/lenient workspaces no-op — byte-identical to before.
+  const scope = effectiveGraphScope(ctx, graphNodeUpsert.name);
+  assertProposalWithinScope({ label: input.label }, scope);
+  if (scope !== undefined) {
+    const pinned = await getPinnedSchema(orgId, workspaceId);
+    assertProposalInVocabulary({ label: input.label }, pinned);
+    assertProposalComplete(
+      { label: input.label, properties: input.properties ?? {} },
+      pinned,
+    );
+  }
 
   // Natural key is always workspace-scoped: externalId when provided
   // (prefixed with workspaceId so the same external id in two workspaces of the
@@ -19,7 +43,9 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
     ? `ext:${workspaceId}:${input.externalId}`
     : `${input.label}:${input.displayName}:${workspaceId}`;
 
-  const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
+  const propertiesJson = input.properties
+    ? JSON.stringify(input.properties)
+    : null;
 
   // Promote the customer's type to a REAL Neo4j label (in addition to the
   // :GraphNode anchor) so it is queryable/traversable as `(:Submarine)`. Labels
@@ -28,7 +54,9 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
   // (e.g. "!!!") falls back to the anchor-only node with the type preserved in
   // the `label` property. See packages/ontology/src/labels.ts.
   const domainLabel = sanitizeLabel(input.label);
-  const domainLabelClause = domainLabel ? `\n           SET n:${domainLabel}` : "";
+  const domainLabelClause = domainLabel
+    ? `\n           SET n:${domainLabel}`
+    : "";
   // The `label` display property mirrors the structural domain label so the
   // explorer chip reads PascalCase too (PullRequest, not pull_request). When the
   // type is unusable as a label, keep the caller's raw string so the node never
@@ -105,7 +133,12 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
     if (input.description) textParts.push(input.description);
     if (input.properties) {
       for (const v of Object.values(input.properties)) {
-        if (v != null && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
+        if (
+          v != null &&
+          (typeof v === "string" ||
+            typeof v === "number" ||
+            typeof v === "boolean")
+        ) {
           textParts.push(String(v));
         }
       }
@@ -133,7 +166,10 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
       }
     });
   } catch (err) {
-    logger.warn({ err, nodeId }, "graph.node.upsert: embedding failed (non-fatal)");
+    logger.warn(
+      { err, nodeId },
+      "graph.node.upsert: embedding failed (non-fatal)",
+    );
   }
 
   return { nodeId, created };
