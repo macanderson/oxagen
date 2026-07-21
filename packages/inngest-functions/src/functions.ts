@@ -37,6 +37,9 @@ import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
 import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
 import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
+import { ingestionRepositoryRefUpdated } from "./functions/ingestion.repository-ref-updated";
+import { ingestionGenerationFileDone } from "./functions/ingestion.generation-file-done";
+import { ingestionRepositoryReconcile } from "./functions/ingestion.repository-reconcile";
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
 import { ingestionGithubInferFeaturesBatch } from "./functions/ingestion.github-infer-features-batch";
 import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-domains";
@@ -99,6 +102,9 @@ export const functions: any[] = [
   ingestionGithubInitialSync,
   ingestionGithubCommitFiles,
   ingestionGithubParseFile,
+  ingestionRepositoryRefUpdated,
+  ingestionGenerationFileDone,
+  ingestionRepositoryReconcile,
   ingestionGithubInferFeatures,
   ingestionGithubInferFeaturesBatch,
   ingestionGithubInferDomains,
