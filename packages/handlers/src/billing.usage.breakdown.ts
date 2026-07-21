@@ -17,8 +17,32 @@
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingUsageBreakdown } from "@oxagen/oxagen/contracts/billing.usage.breakdown";
-import { readUsageBreakdown } from "@oxagen/telemetry";
+import { readUsageBreakdown, type UsageBreakdownRow } from "@oxagen/telemetry";
+import { resolveRate } from "@oxagen/billing";
 import { logger } from "./logger";
+
+/**
+ * Estimate cache savings (micro-USD) NET of the write premium, using the
+ * per-model provider rate card. For each model row:
+ *   reads saved  = cachedTokens × (inputPer1M − cachedInputPer1M)
+ *   writes cost  = cacheWriteTokens × (cacheWritePer1M − inputPer1M)
+ * savings = Σ (reads saved − writes cost). Rate keys are per 1M tokens, so
+ * divide by 1M and scale to micro-USD (×1M) — the two cancel, leaving the rate
+ * delta × token count as micro-USD directly. Reads dominate for cache-friendly
+ * workloads; the figure can go slightly negative when writes outweigh reads.
+ */
+function estimateCacheSavingsMicros(byModel: UsageBreakdownRow[]): number {
+  let micros = 0;
+  for (const row of byModel) {
+    const rate = resolveRate(row.key);
+    const readsSaved =
+      row.cachedTokens * (rate.inputPer1M - rate.cachedInputPer1M);
+    const writesCost =
+      row.cacheWriteTokens * (rate.cacheWritePer1M - rate.inputPer1M);
+    micros += readsSaved - writesCost;
+  }
+  return Math.round(micros);
+}
 
 export const billingUsageBreakdownHandler: CapabilityHandler<
   typeof billingUsageBreakdown
@@ -55,6 +79,7 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
   return {
     range: { start: input.start, end: input.end },
     totals: breakdown.totals,
+    cacheSavingsMicros: estimateCacheSavingsMicros(breakdown.byModel),
     series: breakdown.series,
     byModel: breakdown.byModel,
     bySurface: breakdown.bySurface,
