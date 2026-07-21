@@ -1,7 +1,8 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, inArray } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import type { AgentSkillListInput, AgentSkillListOutput } from "@oxagen/oxagen/contracts/agent.skill.list";
+import { effectiveResourceScope } from "./_effective-scope";
 
 export type { AgentSkillListInput, AgentSkillListOutput };
 
@@ -17,6 +18,17 @@ export async function agentSkillListHandler(
     eq(schema.skills.workspaceId, ctx.workspaceId),
   ];
   if (input.filter) conditions.push(ilike(schema.skills.name, `%${input.filter}%`));
+
+  // Agent RBAC Phase 4 (spec §3.3): the skill INDEX an agent run sees is
+  // filtered to its effective skills.slugs allow-list — an unauthorized skill
+  // is never even surfaced (the load-time gate in agent.skill.load is the
+  // enforcement backstop; this is the UX layer of the same one resolution).
+  // undefined = all enabled workspace skills; humans see everything.
+  const allowedSlugs = effectiveResourceScope(ctx)?.skills?.slugs;
+  if (allowedSlugs !== undefined) {
+    if (allowedSlugs.length === 0) return { skills: [] };
+    conditions.push(inArray(schema.skills.slug, [...allowedSlugs]));
+  }
 
   const rows = await withTenantDb((tx) =>
     tx
