@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { LifecycleEvent } from "@oxagen/agent-artifacts";
+import type { AgentRunIAMContext } from "./iam/agent-run";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
