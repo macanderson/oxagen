@@ -1,9 +1,16 @@
-# RBAC Permissions Plane — a unified resource-grant model across skills, capabilities, MCP, and plugins
+# RBAC Permissions Plane — historical proposal
 
-- **Status:** Proposed
+- **Status:** Superseded — do not implement
 - **Date:** 2026-07-07
 - **Author:** platform
 - **Related:** [ADR-009](../adr/ADR-009-unified-capability-tool-model.md) (unified capability/tool model), [ADR-013](../adr/ADR-013-oxagen-plugins-capability-packs.md) (capability packs), [ADR-014](../adr/ADR-014-workspace-scoped-mcp-registry-single-default.md) (workspace-scoped MCP registries), [docs/VISION.md](../VISION.md) (governance wedge)
+
+> The approved canonical design is
+> [`docs/specs/agent-rbac/spec.md`](agent-rbac/spec.md). It resolves principal
+> identity, deny precedence, delegation, graph label/relationship scope, tool
+> enforcement, the Permissions UI, and the pre-launch reset posture. This file
+> is retained only as historical analysis. Plugin-specific authorization not
+> covered by the canonical design requires a separate approved specification.
 
 ---
 
