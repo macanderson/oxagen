@@ -118,7 +118,12 @@ Also fixed pre-existing main drift blocking our CI typecheck: four
   tests. (A subagent had full context but wrote nothing before the limit hit.)
 - ~~Phase 4b skills/subagents/A2A~~ — DONE (7d31fdc23, e7e9fca91, c1172e445).
 - ~~Phase 5a builder UI~~ — DONE (1bd884b78).
-- **Phase 5b — suggest + docs (subagent IN FLIGHT).** `agent.definition.suggest` gains an additive
+- ~~Phase 5b suggest + docs~~ — DONE (`485f64ce2`).
+- ~~verify-integration~~ — DONE: `docs/specs/agent-rbac/agent-rbac-verification.md` (`8ddbcae8b` + this commit). Found and fixed a Q1 defect: `Agent Legacy` was still in the tier-exemption allow-list.
+
+**ALL PHASES COMPLETE.** Before merge: re-run `pnpm gate` and confirm CI green — GitHub Actions was in a repo-wide outage during the build (see the verification report's gap #1).
+
+SUPERSEDED note — `agent.definition.suggest` gains an additive
   `suggestedRole` (narrowest adequate role); assign on draft save; user docs for the
   ceiling-vs-request model + delegation ceiling.
 - **verify-integration.** Acceptance sweep over the 8 spec criteria; write
