@@ -4,6 +4,12 @@
 **Branch:** `feat/agentic-coding-runner`
 **Status:** Approved design — implementation plan to follow.
 
+> **Superseded for launch (2026-07-21).** This design is retained as historical
+> context. Its central `SourceFile`/`SourceSymbol` and code-embedding assumptions
+> are retired: exact code graphs stay local, while Oxagen retains provider metadata
+> and durable run traces. Canonical protected/default-ref topology and typed run
+> evidence are separate follow-ups.
+
 ## Goal
 
 Let the in-app agent modify code in GitHub repos that are connected as knowledge

@@ -334,8 +334,8 @@ Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Audit
 │  │ ⚑ HIGH   repo.pr.open on acme/site          Auditor · 2m   [✓][✕][…]    │ │
 │  │   Preview: open PR "fix 12 broken links"    «inputPreview, riskLevel»   │ │
 │  │ ⚑ MED    browser.screenshot /admin          Auditor · 5m   [✓][✕]       │ │
-│  │ ◈ EDGE   approve inferred: Page —LINKS_TO→   semantic  · 1h [✓][✕]      │ │
-│  │          Pricing   «semantic.edge.approve, cited endpoints by label»    │ │
+│  │ ⚙ TOOL   production deploy request             Auditor · 1h [✓][✕]      │ │
+│  │          acme/site · release workflow          «agent approval request» │ │
 │  │ ⌘ PLAN   Auditor plan: 3 steps              /audit    · 1h  [ Review ]  │ │
 │  │ 🔌 CONSENT Ahrefs MCP first use: rank.get    Auditor · 1h   [✓][✕]      │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
@@ -385,9 +385,9 @@ Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Audit
 │  Dual-write shown: Postgres (cursor, health) + Neo4j (entities, edges).      │
 ├── Graph (explore) ──────────────────────────────────────────────────────────┤
 │  «graph.search / ontology.neighbors»    query ____                           │
-│    ◈ Pricing Page ──LINKS_TO──▸ ◈ Signup   ◈ SEO Policy ┄suggested┄▸ ◈ Home  │
+│    ◈ Pricing Page ──LINKS_TO──▸ ◈ Signup   ◈ SEO Policy ──APPLIES_TO──▸ ◈ Home│
 │  Node click → property popover, copyable id (only place raw id appears).      │
-│  Suggested (dashed) edges → resolve in Approvals.  «semantic.edge.suggest»    │
+│  Only materialized, authorized relationships are displayed.                  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 

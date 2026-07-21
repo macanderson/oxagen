@@ -1829,9 +1829,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "local Ollama server if reachable, else an in-process ONNX model if installed, else the " +
       "platform gateway if a key is configured, else no vector ranking), 'ollama', 'onnx' " +
       "('local' also accepted), 'gateway', or 'off'. Local providers are free, offline, and use " +
-      "no AI SDK, but their vectors are a different, smaller vector space than the platform's " +
-      "1536-d index, so `graph push` never ships them — the server re-embeds those files " +
-      "instead. Overrides the `graph.embedProvider` value in ~/.config/oxagen/config.json; " +
+      "no AI SDK, and their vectors stay local to the checkout. Overrides the " +
+      "`graph.embedProvider` value in ~/.config/oxagen/config.json; " +
       "invalid values fall back to 'auto'.",
     secret: false,
     clientExposed: false,
@@ -2345,17 +2344,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
-  },
-  INGESTION_FEATURE_BATCH: {
-    group: "Ingestion",
-    description:
-      "When '1', route GitHub feature inference through the Anthropic Message Batches API (async, half price) instead of per-file synchronous calls. Unset/absent = synchronous per-file (default).",
-    secret: false,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { development: "", preview: "", production: "" },
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",

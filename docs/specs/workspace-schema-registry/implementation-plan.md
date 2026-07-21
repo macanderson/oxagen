@@ -1,5 +1,10 @@
 # Workspace Schema Registry — Implementation Plan (parallel-optimized)
 
+> **Launch-boundary addendum (2026-07-21):** this executed plan predates removal
+> of generic graph mutation and inference-trigger capabilities. Its registry and
+> validation work remains useful; mutation/alias tasks below are historical and
+> must not be re-landed.
+
 Companion to `spec.md`. Optimized for **wall-clock speed via maximum safe
 parallelism**: agents work concurrently on **disjoint file sets** so they never
 collide, all on one branch in one worktree. Scope here is **v1** (define /

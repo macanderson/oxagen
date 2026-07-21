@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 export const graphNodeGet = registerCapability({
   name: "get_node",
   domain: "graph",
-  description: "Retrieve a KnowledgeNode by its publicId.",
+  description: "Retrieve a customer-context graph node by its publicId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

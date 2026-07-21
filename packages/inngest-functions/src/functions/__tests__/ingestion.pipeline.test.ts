@@ -221,7 +221,7 @@ describe("ingestion.pipeline Inngest function", () => {
       );
       expect(stepRun).toHaveBeenNthCalledWith(5, "embed", expect.any(Function));
       expect(sendEvent).toHaveBeenCalledWith(
-        "schedule-inference",
+        "schedule-change-event",
         expect.any(Object),
       );
     });
@@ -254,32 +254,22 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(renderCall[2]).not.toHaveProperty("title");
     });
 
-    it("fires ingestion/entity.created and ingestion/entity.infer in a single step.sendEvent call", async () => {
+    it("fires ingestion/entity.created after the node write", async () => {
       const sendEvent = vi.fn().mockResolvedValue(undefined);
       const step = makeStep({ sendEvent });
       await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
       expect(sendEvent).toHaveBeenCalledWith(
-        "schedule-inference",
-        expect.arrayContaining([
-          expect.objectContaining({
-            name: "ingestion/entity.created",
-            data: expect.objectContaining({
-              entityType: "task",
-              orgId: "org-123",
-              workspaceId: "ws-xyz",
-              naturalKey: "github:conn-abc:42",
-            }),
+        "schedule-change-event",
+        expect.objectContaining({
+          name: "ingestion/entity.created",
+          data: expect.objectContaining({
+            entityType: "task",
+            orgId: "org-123",
+            workspaceId: "ws-xyz",
+            naturalKey: "github:conn-abc:42",
           }),
-          expect.objectContaining({
-            name: "ingestion/entity.infer",
-            data: expect.objectContaining({
-              entityType: "task",
-              orgId: "org-123",
-              workspaceId: "ws-xyz",
-            }),
-          }),
-        ]),
+        }),
       );
     });
 
@@ -288,7 +278,7 @@ describe("ingestion.pipeline Inngest function", () => {
       const step = makeStep({ sendEvent });
       await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-      const events = sendEvent.mock.calls[0]![1] as Array<{
+      const events = [sendEvent.mock.calls[0]![1]] as Array<{
         name: string;
         data: Record<string, unknown>;
       }>;
@@ -483,21 +473,17 @@ describe("ingestion.pipeline Inngest function", () => {
       const step = makeStep({ run: stepRun, sendEvent });
       await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-      const events = sendEvent.mock.calls[0]![1] as Array<{
+      const emitted = sendEvent.mock.calls[0]![1] as {
         name: string;
         data: Record<string, unknown>;
-      }>;
-      const updated = events.find((e) => e.name === "ingestion/entity.updated");
-      expect(updated).toBeDefined();
-      expect(updated?.data["isNew"]).toBe(false);
-      expect(updated?.data["previousProperties"]).toEqual({ state: "open" });
-      expect(
-        events.find((e) => e.name === "ingestion/entity.created"),
-      ).toBeUndefined();
+      };
+      expect(emitted.name).toBe("ingestion/entity.updated");
+      expect(emitted.data["isNew"]).toBe(false);
+      expect(emitted.data["previousProperties"]).toEqual({ state: "open" });
     });
   });
 
-  // ── DeliveryConfig enforcement (record-type / path / label filters + inference gate) ──
+  // ── DeliveryConfig enforcement (filters + legacy embedding opt-out) ──
   describe("DeliveryConfig enforcement", () => {
     // Mocks the step-1 JOIN read (entity_type_mappings ⨝ source_connections):
     // returns one mapping row with the connection's delivery_config attached.
@@ -525,10 +511,11 @@ describe("ingestion.pipeline Inngest function", () => {
     function eventsFrom(
       sendEvent: ReturnType<typeof vi.fn>,
     ): Array<{ name: string; data: Record<string, unknown> }> {
-      return sendEvent.mock.calls[0]![1] as Array<{
+      const payload = sendEvent.mock.calls[0]![1] as {
         name: string;
         data: Record<string, unknown>;
-      }>;
+      };
+      return [payload];
     }
 
     // ── Stage 1: record-type filter ─────────────────────────────────────────
@@ -652,8 +639,8 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(mocks.upsertEntityNode).toHaveBeenCalled();
     });
 
-    // ── Stage 5/6: semantic-inference gate ──────────────────────────────────
-    it("skips embed and the entity.infer event when semanticInference.enabled is false", async () => {
+    // ── Stage 5: legacy embedding opt-out ──────────────────────────────────
+    it("skips embed when semanticInference.enabled is false", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mockRowWithConfig({ semanticInference: { enabled: false } });
 
@@ -664,7 +651,7 @@ describe("ingestion.pipeline Inngest function", () => {
         step,
       });
 
-      // Node is still written; only embedding + semantic inference are skipped.
+      // Node is still written; only embedding is skipped.
       expect(result).toEqual({
         naturalKey: "github:conn-abc:42",
         action: "created_principal",
@@ -677,7 +664,7 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(events[0]!.name).toBe("ingestion/entity.created");
     });
 
-    it("skips inference when perRecordType disables this record type", async () => {
+    it("skips embedding when perRecordType disables this record type", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mockRowWithConfig({
         semanticInference: {
@@ -696,7 +683,7 @@ describe("ingestion.pipeline Inngest function", () => {
       expect(events[0]!.name).toBe("ingestion/entity.created");
     });
 
-    it("runs embed and fires entity.infer when semanticInference.enabled is true", async () => {
+    it("runs embed without scheduling relationship inference when the legacy flag is true", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mockRowWithConfig({ semanticInference: { enabled: true } });
 
@@ -706,15 +693,12 @@ describe("ingestion.pipeline Inngest function", () => {
 
       expect(mocks.embedEntity).toHaveBeenCalled();
       const events = eventsFrom(sendEvent);
-      expect(events).toHaveLength(2);
-      expect(events.map((e) => e.name)).toEqual([
-        "ingestion/entity.created",
-        "ingestion/entity.infer",
-      ]);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.name).toBe("ingestion/entity.created");
     });
 
     // ── Backward compatibility: unset / empty DeliveryConfig ────────────────
-    it("applies no filtering and runs inference when delivery_config is null (backward compatible)", async () => {
+    it("applies no filtering and embeds when delivery_config is null", async () => {
       mocks.getConnector.mockReturnValue({ normalizeRecord: () => NORMALIZED });
       mockRowWithConfig(null);
 
@@ -730,7 +714,7 @@ describe("ingestion.pipeline Inngest function", () => {
         action: "created_principal",
       });
       expect(mocks.embedEntity).toHaveBeenCalled();
-      expect(eventsFrom(sendEvent)).toHaveLength(2);
+      expect(eventsFrom(sendEvent)).toHaveLength(1);
     });
 
     it("applies no filtering when every filter array is empty", async () => {

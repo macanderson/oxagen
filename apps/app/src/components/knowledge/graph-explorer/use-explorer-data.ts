@@ -40,20 +40,7 @@ export interface ExplorerGraphState {
 
 const EMPTY_GRAPH: Graph = { nodes: [], edges: [] };
 
-export interface UseExplorerDataOptions {
-  /**
-   * Opt runtime lineage (executions, agents, tools) into the seed. Off by
-   * default — the explorer's purpose is the source-system ontology, and the
-   * lineage nodes are refetched only when the visibility toggle asks for them.
-   */
-  includeSystem?: boolean;
-}
-
-export function useExplorerData(
-  tenant: TenantSlugs,
-  options: UseExplorerDataOptions = {},
-): ExplorerGraphState {
-  const includeSystem = options.includeSystem === true;
+export function useExplorerData(tenant: TenantSlugs): ExplorerGraphState {
   const [graph, setGraph] = React.useState<Graph>(EMPTY_GRAPH);
   const [stats, setStats] = React.useState<ExplorerStats | null>(null);
   const [status, setStatus] = React.useState<LoadStatus>("loading");
@@ -69,11 +56,7 @@ export function useExplorerData(
     let active = true;
     setStatus("loading");
     setError(null);
-    fetchGraph(
-      tenant,
-      includeSystem ? { includeSystem: true } : {},
-      controller.signal,
-    )
+    fetchGraph(tenant, {}, controller.signal)
       .then((payload) => {
         if (!active) return;
         setGraph({ nodes: payload.nodes, edges: payload.edges });
@@ -91,8 +74,8 @@ export function useExplorerData(
       controller.abort();
     };
     // tenant slugs are stable for the page lifetime; reloadKey forces a
-    // refetch, and flipping the system-node opt-in reseeds the whole view.
-  }, [tenant, reloadKey, includeSystem]);
+    // refetch.
+  }, [tenant, reloadKey]);
 
   const addSubgraph = React.useCallback(
     (incomingNodes: ExplorerNode[], incomingEdges: ExplorerEdge[]) => {

@@ -14,11 +14,6 @@ export {
   type RunSpecV1,
 } from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
-// Surface-bootstrap wiring for the Engram async backends (Inngest graph-sync +
-// embed client, ClickHouse compile-telemetry sink). Call once at each server
-// surface's boot so emitGraphSync/emitEmbedEvent/emitCompileTelemetry stop
-// silently no-oping.
-export { bootstrapEngramRuntime } from "./runtime/engram-bootstrap";
 export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
 export * from "./memory/neo4j";

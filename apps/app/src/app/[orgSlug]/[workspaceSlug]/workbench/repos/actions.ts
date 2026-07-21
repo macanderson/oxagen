@@ -271,8 +271,6 @@ const configureSchema = z.object({
       exclude: z.array(z.string()).optional(),
     })
     .optional(),
-  inferenceEnabled: z.boolean().optional(),
-  ontologyPrompt: z.string().optional(),
   syncCadence: z.enum(["manual", "polling", "webhook"]).optional(),
   pollingIntervalSeconds: z.number().int().positive().optional(),
   fieldMappings: z.record(z.string()).optional(),

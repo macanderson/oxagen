@@ -12,8 +12,6 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
-import { emitGeneratedFileSyncEvent } from "./generated-asset.sync-event";
-import { logger } from "./logger";
 
 export type AssetKind =
   | "image"
@@ -116,35 +114,6 @@ const EXT_BY_MIME: Record<string, string> = {
 function extFor(mimeType: string): string {
   const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
   return EXT_BY_MIME[type] ?? "bin";
-}
-
-/** A clean display name for the graph node: explicit name, else first line of
- *  the prompt (instruction prefix stripped, ≤80 chars), else "<kind> file". */
-function deriveDisplayName(
-  displayName: string | null | undefined,
-  prompt: string,
-  kind: string,
-): string {
-  const explicit = (displayName ?? "").trim();
-  if (explicit.length > 0) return explicit.slice(0, 120);
-  const firstLine = (prompt.split(/[\n.!?]/)[0] ?? prompt)
-    .replace(
-      /^\s*(?:generate|create|make|write|build|render|draw|produce|compose)\b[^:\n-]*[:-]\s*/i,
-      "",
-    )
-    .trim();
-  return firstLine.length > 0 ? firstLine.slice(0, 80) : `${kind} file`;
-}
-
-/** Decoded text for text/* assets (the strongest embedding source); else null. */
-function decodeTextContent(bytes: Uint8Array, mimeType: string): string | null {
-  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-  if (!type.startsWith("text/")) return null;
-  try {
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -280,33 +249,6 @@ export async function persistGeneratedAsset(
   });
 
   if (!row) throw new Error("generated_assets insert failed");
-
-  // Mirror the file into the knowledge graph as a searchable :GeneratedFile node
-  // (embedding + lineage to the producing execution). Best-effort and awaited so
-  // the work completes within the request lifecycle (serverless-safe); a failure
-  // never breaks asset creation — the Postgres row is the source of truth, and
-  // synced_to_graph_at stays NULL for a sweep to retry.
-  try {
-    await emitGeneratedFileSyncEvent({
-      assetId: row.id,
-      publicId: row.publicId,
-      orgId: args.orgId,
-      workspaceId: args.workspaceId,
-      kind: args.kind,
-      mimeType: args.mimeType,
-      model: args.model,
-      displayName: deriveDisplayName(args.displayName, args.prompt, args.kind),
-      prompt: args.prompt,
-      conversationId: args.conversationId ?? null,
-      messageId: args.messageId ?? null,
-      contentText: decodeTextContent(args.bytes, args.mimeType),
-    });
-  } catch (err) {
-    logger.warn(
-      { err, publicId: row.publicId, orgId: args.orgId },
-      "persistGeneratedAsset: knowledge-graph sync emit failed (non-fatal)",
-    );
-  }
 
   return {
     id: row.id,

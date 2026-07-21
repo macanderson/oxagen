@@ -363,8 +363,8 @@ function withBackstop(
 }
 
 // ── Agent file locking (docs/specs/agent-file-locking/plan.md) ─────────────
-// The SINGLE wiring point: write_file/edit_file acquire the graph-backed
-// HOLDS_LOCK edge immediately before the real filesystem write and release it
+// The SINGLE wiring point: write_file/edit_file acquire the transactional
+// Postgres lease immediately before the real filesystem write and release it
 // immediately after, for EVERY caller of runCodingAgent (chat, CLI,
 // agent.repo.edit fleet dispatch) — there is exactly one enforcement point.
 
@@ -378,7 +378,7 @@ const FILE_LOCK_RETRY_DELAY_MS = 200;
 /**
  * Acquire `path` (with a short bounded retry), run `execute`, and release the
  * lock afterward — success or failure. When `fileLock`/`lockContext` are not
- * supplied (the CLI's default: single-process, no shared Neo4j) this is a
+ * supplied (the CLI's default: single-process) this is a
  * transparent passthrough to `execute()`. On a denied acquire, returns a
  * clear denial string instead of performing the write — the calling agent
  * (chat or fleet) sees it as a tool result and can react (try another file,
@@ -556,7 +556,11 @@ export function buildWorkspaceTools(
   }
 
   /** The corrective note appended to a syntax-gate rejection. */
-  const editRejection = (count: number, shown: string, errors: string[]): string =>
+  const editRejection = (
+    count: number,
+    shown: string,
+    errors: string[],
+  ): string =>
     `Edit rejected (would introduce ${count} new syntax error${count === 1 ? "" : "s"} in ${shown}):\n` +
     `${errors.join("\n")}\n` +
     `Fix the edit, or pass expect_errors:true only if this is an intentional mid-refactor breakage.`;

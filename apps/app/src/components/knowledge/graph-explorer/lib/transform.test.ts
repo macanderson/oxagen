@@ -5,7 +5,6 @@ import {
   nodeFromNeighbor,
   edgeId,
   edgesFromNeighbors,
-  edgeFromSemantic,
   mergeNodes,
   mergeEdges,
   reconcile,
@@ -73,21 +72,6 @@ describe("nodeFromNeighbor", () => {
       displayName: "AI",
       hydrated: false,
     });
-    // No flag on the wire → leave it undefined so the client can distinguish
-    // "unknown" from an explicit customer-data false.
-    expect(node.isSystem).toBeUndefined();
-  });
-
-  it("carries the isSystem lineage flag when present", () => {
-    const node = nodeFromNeighbor({
-      nodeId: "exec",
-      label: "Execution",
-      displayName: "run",
-      edgeType: "EXECUTED",
-      direction: "in",
-      isSystem: true,
-    });
-    expect(node.isSystem).toBe(true);
   });
 });
 
@@ -121,25 +105,6 @@ describe("edgeId / edgesFromNeighbors", () => {
       source: "c",
       target: "anchor",
       inferred: false,
-    });
-  });
-});
-
-describe("edgeFromSemantic", () => {
-  it("maps to an inferred edge with confidence", () => {
-    const e = edgeFromSemantic({
-      id: "s1",
-      sourceNodeId: "a",
-      targetNodeId: "b",
-      type: "CAUSES",
-      confidence: 0.9,
-    });
-    expect(e).toMatchObject({
-      source: "a",
-      target: "b",
-      type: "CAUSES",
-      inferred: true,
-      confidence: 0.9,
     });
   });
 });

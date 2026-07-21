@@ -1,20 +1,14 @@
 /**
- * Shared code-graph embedding contract — the ONE place the code-graph vector
- * model, dimension, and similarity math are defined.
+ * Local code-graph embedding contract — the one place the checkout graph's
+ * vector model, dimension, and similarity math are defined.
  *
- * Every vector index in the platform is 1536-d `text-embedding-3-small` / cosine
- * (see `packages/ontology/src/schema.cypher`; the universal index is
- * `graph_node_embedding_index`). Both consumers of the code graph — the server
- * ingestion pipeline (`@oxagen/ingestion`) and the local CLI daemon
- * (`apps/cli`) — MUST embed with this exact model and dimension so a graph
- * synced from the CLI stays searchable in `apps/app`, and so "semantic search"
- * behaves identically across surfaces. Import these constants instead of
- * re-pinning the literals.
+ * The exact code graph stays beside the checkout/worktree and is never synced
+ * into the Oxagen workspace graph. Local consumers import these constants
+ * instead of re-pinning model literals so a single graph generation remains
+ * internally consistent.
  *
- * The embed *call* itself is surface-specific and stays in the consumer:
- *   - server: `@oxagen/ai`'s `embedText` (metered + billed through the gateway),
- *   - CLI: a thin gateway client keyed by `AI_GATEWAY_API_KEY`.
- * Only the model contract and the pure similarity math live here.
+ * The embed call stays in the local client; only the model contract and pure
+ * similarity math live here.
  *
  * Module: @oxagen/code-graph/embed
  */
@@ -30,9 +24,8 @@ export const CODE_EMBED_GATEWAY_MODEL = "openai/text-embedding-3-small";
 export const CODE_EMBED_MODEL = "text-embedding-3-small";
 
 /**
- * Vector dimension of {@link CODE_EMBED_MODEL}. Every Neo4j vector index is
- * declared with this dimension; an embedding of any other length is rejected at
- * the sync boundary rather than corrupting the index.
+ * Vector dimension of {@link CODE_EMBED_MODEL}. A local index rejects any other
+ * length rather than mixing incompatible graph generations.
  */
 export const CODE_EMBED_DIM = 1536;
 
@@ -50,7 +43,10 @@ export function isValidCodeEmbedding(vector: unknown): vector is number[] {
  * length mismatch or a zero-magnitude vector rather than throwing or emitting
  * NaN, so a ranking loop never has to special-case degenerate inputs.
  */
-export function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
+export function cosineSimilarity(
+  a: readonly number[],
+  b: readonly number[],
+): number {
   if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
   let normA = 0;

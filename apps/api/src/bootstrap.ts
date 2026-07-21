@@ -9,14 +9,12 @@ import { loadEnv } from "@oxagen/config/env";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
-import { bootstrapEngramRuntime } from "@oxagen/agent";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
 import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { isEmailVerificationRequired } from "@oxagen/auth";
 import { isEmailTransportConfigured } from "@oxagen/notifications";
-import { eventClient } from "./event-client";
 import { logger } from "./middleware/logger";
 
 let bootPromise: Promise<void> | null = null;
@@ -95,13 +93,6 @@ async function runBootstrap(): Promise<void> {
   // Wire the capability entitlement gate — blocks invocations of plugin-owned
   // capabilities when the plugin is not installed+enabled for the org.
   bootstrapEntitlementRuntime();
-
-  // Wire the Engram async backends: the Inngest-backed graph-sync/embed client
-  // (so agent memory writes fan out :REMEMBERS/:ABOUT Neo4j edges + embeddings)
-  // and the ClickHouse compile-telemetry sink. Without this the emit-sync client
-  // and telemetry sink stay null and silently drop every event. Best-effort — a
-  // degraded Inngest/ClickHouse never breaks a request (the emitters swallow).
-  bootstrapEngramRuntime(eventClient);
 
   // makeSecurityEventInserter() now uses withSystemDb internally — no db() arg.
   const securityInsert = makeSecurityEventInserter();

@@ -60,10 +60,10 @@ Content-Type: application/json
 ## Notes
 - **Access:** Org: Owner/Admin; Workspace: Owner/Member/Viewer (read-only).
 - Sensitivity: low — pure validation, no mutations.
-- `outcome` reflects what would happen if this node were submitted to `graph.node.upsert` given the current enforcement mode: `accepted` = passes, `rejected` = blocked by strict enforcement, `written_below_floor` = written but flagged.
+- `outcome` reflects what governed ingestion would do under the current enforcement mode: `accepted` = passes, `rejected` = blocked by strict enforcement, `written_below_floor` = admitted but flagged.
 - Useful as a pre-flight check before bulk ingestion.
 
 ## Related
 - `schema.validate.relationship` — validate a relationship's type and properties
 - `schema.registry.get` — inspect the active schema definition
-- `graph.node.upsert` — the write path that this validates against
+- Connector ingestion is the governed graph write path. Semantic candidate approval is not a launch capability.

@@ -2,24 +2,15 @@
  * LLM-inferred domain tagging for code-graph nodes.
  *
  * This module is intentionally dependency-light (zod only, no platform AI
- * imports) so @oxagen/code-graph can be consumed by both the platform ingestion
- * pipeline and the CLI without pulling in metering, ClickHouse, or tenancy
- * infrastructure.
+ * imports) so the local CLI can classify a checkout without pulling in
+ * platform metering, ClickHouse, or tenancy infrastructure.
  *
- * The AI call is INJECTED by the caller:
- *   - Platform ingestion: wraps @oxagen/ai generateObjectFor (metered, telemetry-tagged)
- *   - CLI graph push:     wraps ai.generateObject (AI Gateway, BYOK)
+ * The AI call is injected by the local CLI caller.
  *
- * Reconciliation with the existing :Domain / multi-label model
- * ─────────────────────────────────────────────────────────────
- * The platform's graph node anchor model uses TYPE labels (:SourceFile,
- * :SourceSymbol, :Feature, :EntityNode …) as the "domain" in the ontological
- * sense. This module adds a separate, LLM-inferred APPLICATION domain (e.g.
- * "payments", "auth") as a scalar PROPERTY (`n.domain`) on those type-labelled
- * nodes — it does NOT introduce a new :Domain label or compete with the
- * label-based model. The `domain` property enables querys like:
- *   MATCH (n:SourceFile {orgId: $orgId, domain: 'payments'})
- * and will be stored in DuckDB for offline CLI queries too.
+ * The resulting application-domain slug (for example `payments` or `auth`) is
+ * stored only on local DuckDB code nodes. A future shared canonical-ref
+ * projector may consume a separately verified coarse projection; this module
+ * does not publish one.
  */
 import { z } from "zod";
 
@@ -88,7 +79,9 @@ const domainInferenceSchema = z.object({
           ),
         description: z
           .string()
-          .describe("One sentence describing what functionality this domain covers."),
+          .describe(
+            "One sentence describing what functionality this domain covers.",
+          ),
         filePaths: z
           .array(z.string())
           .describe(
@@ -147,22 +140,23 @@ const MAX_SYMBOLS_IN_PROMPT = 150;
  * });
  * ```
  */
-export async function inferDomains(input: DomainInferInput, ai: DomainAI): Promise<DomainMap> {
+export async function inferDomains(
+  input: DomainInferInput,
+  ai: DomainAI,
+): Promise<DomainMap> {
   if (input.files.length === 0) return new Map();
 
   // Fast-lookup set so path validation is O(1) per file.
   const fileSet = new Set(input.files);
 
   // Derive top-level dirs from file paths when not supplied.
-  const dirs =
-    input.dirs ??
-    [
-      ...new Set(
-        input.files
-          .map((f) => f.split("/")[0])
-          .filter((d): d is string => Boolean(d)),
-      ),
-    ];
+  const dirs = input.dirs ?? [
+    ...new Set(
+      input.files
+        .map((f) => f.split("/")[0])
+        .filter((d): d is string => Boolean(d)),
+    ),
+  ];
 
   const fileSample = input.files.slice(0, MAX_FILES_IN_PROMPT);
   const symbolSample = (input.symbols ?? []).slice(0, MAX_SYMBOLS_IN_PROMPT);

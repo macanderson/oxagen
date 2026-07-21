@@ -12,6 +12,7 @@
     "./types": "./src/types.ts",
     "./labels": "./src/labels.ts",
     "./tenant": "./src/tenant.ts",
+    "./graph-scope": "./src/graph-scope.ts",
     "./temporal": "./src/temporal.ts",
     "./ann": "./src/ann.ts"
   },

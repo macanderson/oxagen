@@ -2,14 +2,13 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /**
- * Read the full label set of a node. Read-only companion to
- * graph.node.label.add / .remove — useful for verifying multi-label state and
- * for a curator agent to inspect which domains a node belongs to.
+ * Read the full label set of a customer-context node. Product-owned runtime
+ * nodes are intentionally available only through their typed domain APIs.
  */
 export const graphNodeLabelsGet = registerCapability({
   name: "get_node_labels",
   domain: "graph",
-  description: "Read a node's full label set.",
+  description: "Read a customer-context node's full label set.",
   mode: "sync",
   surfaces: ["agent"] as const,
   layers: ["schema", "unit", "docs"],
@@ -31,4 +30,6 @@ export const graphNodeLabelsGet = registerCapability({
 });
 
 export type GraphNodeLabelsGetInput = z.output<typeof graphNodeLabelsGet.input>;
-export type GraphNodeLabelsGetOutput = z.output<typeof graphNodeLabelsGet.output>;
+export type GraphNodeLabelsGetOutput = z.output<
+  typeof graphNodeLabelsGet.output
+>;

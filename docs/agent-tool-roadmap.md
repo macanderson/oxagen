@@ -1,5 +1,13 @@
 # Agent Tool Roadmap
 
+> **Superseded for launch (2026-07-21).** This is a historical 2026-07-11
+> inventory, so its counts, tool surfaces, and recommendations predate the launch
+> pruning. Do not use it to reintroduce generic graph mutation/sync, a central
+> source-symbol graph, or automatic execution-to-file lineage. The exact code graph
+> stays local; Oxagen retains governed provider metadata and durable run traces.
+> Canonical protected/default-ref topology and a typed evidence ledger are follow-ups.
+> The audit body is preserved below as historical evidence.
+
 _Last audited: 2026-07-11, via direct source inspection (packages/agent-engine, packages/agent, apps/app, apps/api, apps/mcp, apps/cli, crates/) — not from docs alone. Counts drift as capabilities ship; re-verify before quoting numbers in a Linear ticket or external doc._
 
 ## TL;DR — three separate tool-delivery mechanisms, not one
@@ -42,6 +50,10 @@ It's tempting to think of "the agent's tools" as a single list. In this codebase
 | `code_graph` | symbol/import/dependents/semantic search | ✅ conditional, Neo4j-backed | ✅ conditional, Neo4j-backed | — (`get_code_map` is a related but distinct capability tool) | ✅ always, local DuckDB-backed | ❌ planned Phase 3 (`oxagen-graph` crate exists, uncommitted, not wired) |
 | `ask_user` | sync human clarification, 2–5 options | ❌ never wired (no `askUser` callback passed) | ❌ never wired | — | ✅ interactive REPL only, never headless/one-shot | ❌ not yet |
 | `test_unit_run`, `test_trace_run`, `build_package_run`, `git_diff_summarize`, `workspace_health_check` | deterministic structured diagnostics (ADR-021 §3) — never mutate, always advertised even read-only | ✅ code-mode | ✅ code-mode | — | ✅ | ❌ not yet (natural Phase 2 territory) |
+
+> **Launch correction to the historical table:** the central Neo4j-backed code-graph
+> and `get_code_map` paths represented above are retired. The supported exact code
+> graph is local to the checkout/worktree.
 
 **Naming note:** these tool names deliberately break the `domain_subject_action` convention (ADR-025) — they're grandfathered "training-prior protected" names (agent models already know what `read_file`/`bash` mean), and were never renamed under the ADR-025 sweep.
 

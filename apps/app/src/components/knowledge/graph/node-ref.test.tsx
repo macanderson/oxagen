@@ -27,11 +27,13 @@ vi.mock("@/components/ui/popover", () => ({
       {children}
     </button>
   ),
-  PopoverPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
-import { NodeRef, sourceNodeRef, targetNodeRef } from "./node-ref";
-import type { KnowledgeNodeRef, SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import { NodeRef } from "./node-ref";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 
 afterEach(cleanup);
 
@@ -47,24 +49,13 @@ function makeNode(overrides: Partial<KnowledgeNodeRef> = {}): KnowledgeNodeRef {
   };
 }
 
-function makeEdge(overrides: Partial<SemanticEdge> = {}): SemanticEdge {
-  return {
-    id: "edge-1",
-    sourceNodeId: SOURCE_UUID,
-    targetNodeId: "OAuth Login",
-    type: "MODIFIES",
-    confidence: 0.83,
-    source: { connectorId: "github", sourceId: "github" },
-    inferredAt: "2026-01-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
 describe("NodeRef", () => {
   it("cites the node by its displayName, not its UUID", () => {
     render(<NodeRef node={makeNode()} />);
     // Friendly label is shown (trigger chip + popup header → at least one).
-    expect(screen.getAllByText("Billing Subscription Streaming").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Billing Subscription Streaming").length,
+    ).toBeGreaterThan(0);
     // The raw UUID is never the primary on-screen identifier.
     expect(screen.queryByText(SOURCE_UUID)).toBeNull();
   });
@@ -87,7 +78,9 @@ describe("NodeRef", () => {
   });
 
   it("marks a not-yet-materialised node (null id) as a candidate", () => {
-    render(<NodeRef node={makeNode({ id: null, displayName: "OAuth Login" })} />);
+    render(
+      <NodeRef node={makeNode({ id: null, displayName: "OAuth Login" })} />,
+    );
     expect(screen.getByText(/not yet materialised/i)).toBeInTheDocument();
   });
 
@@ -101,7 +94,9 @@ describe("NodeRef", () => {
     // The graph.node.list handler coalesces displayName → name → publicId, so an
     // unnamed node arrives with displayName === its own UUID. That is not a human
     // label — the chip must cite by the domain label, never the UUID.
-    render(<NodeRef node={makeNode({ displayName: SOURCE_UUID, properties: {} })} />);
+    render(
+      <NodeRef node={makeNode({ displayName: SOURCE_UUID, properties: {} })} />,
+    );
     expect(screen.getAllByText("Feature").length).toBeGreaterThan(0);
     expect(screen.queryByText(SOURCE_UUID)).toBeNull();
   });
@@ -111,43 +106,14 @@ describe("NodeRef", () => {
     // The generic base label is still preferred over the raw id.
     render(
       <NodeRef
-        node={makeNode({ label: "Node", displayName: SOURCE_UUID, properties: {} })}
+        node={makeNode({
+          label: "Node",
+          displayName: SOURCE_UUID,
+          properties: {},
+        })}
       />,
     );
     expect(screen.queryByText(SOURCE_UUID)).toBeNull();
     expect(screen.getAllByText("Node").length).toBeGreaterThan(0);
-  });
-});
-
-describe("sourceNodeRef / targetNodeRef", () => {
-  it("prefers the resolved sourceNode/targetNode from the edge", () => {
-    const edge = makeEdge({
-      sourceNode: { id: SOURCE_UUID, label: "Feature", displayName: "Billing", properties: { a: 1 } },
-      targetNode: { id: null, label: "Concept", displayName: "OAuth Login", properties: {} },
-    });
-    expect(sourceNodeRef(edge)).toEqual({
-      id: SOURCE_UUID,
-      label: "Feature",
-      displayName: "Billing",
-      properties: { a: 1 },
-    });
-    expect(targetNodeRef(edge).displayName).toBe("OAuth Login");
-    expect(targetNodeRef(edge).id).toBeNull();
-  });
-
-  it("falls back to the edge ids when no resolved node is present", () => {
-    const edge = makeEdge();
-    expect(sourceNodeRef(edge)).toEqual({
-      id: SOURCE_UUID,
-      label: "Node",
-      displayName: SOURCE_UUID,
-      properties: {},
-    });
-    expect(targetNodeRef(edge)).toEqual({
-      id: null,
-      label: "Node",
-      displayName: "OAuth Login",
-      properties: {},
-    });
   });
 });

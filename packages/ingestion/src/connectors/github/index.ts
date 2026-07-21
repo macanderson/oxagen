@@ -33,7 +33,8 @@ function githubToken(auth: AuthCredential): string | null {
 
 /** Derive the { owner, repo } targets to poll from the stored config. */
 function pollTargets(config: Config): Array<{ owner: string; repo: string }> {
-  if (config.owner && config.repo) return [{ owner: config.owner, repo: config.repo }];
+  if (config.owner && config.repo)
+    return [{ owner: config.owner, repo: config.repo }];
   const out: Array<{ owner: string; repo: string }> = [];
   for (const full of config.repositories ?? []) {
     const [owner, repo] = full.split("/");
@@ -82,7 +83,8 @@ function asArray(v: unknown): unknown[] {
 const github: ConnectorDefinition<typeof connectionConfigSchema> = {
   connectorId: "github",
   displayName: "GitHub",
-  description: "Sync pull requests, issues, commits, releases, and sources from GitHub repositories.",
+  description:
+    "Sync repository, pull request, issue, commit, and release metadata from GitHub.",
   icon: "github",
   supportedAuthSchemes: ["oauth2_authorization_code", "api_key"],
   deliveryMethod: "webhook",
@@ -189,19 +191,6 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           createdAt: "string",
         },
       },
-      {
-        sourceRecordType: "source",
-        displayName: "Source Files",
-        sampleRecords: [],
-        fieldSchema: {
-          path: "string",
-          type: "string",
-          size: "number",
-          mode: "string",
-          sha: "string",
-          url: "string",
-        },
-      },
     ];
   },
 
@@ -216,7 +205,12 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           .map((l) => asString(asRecord(l)["name"]))
           .filter((n): n is string => !!n);
         return {
-          externalId: r["number"] !== undefined ? String(r["number"]) : r["id"] !== undefined ? String(r["id"]) : "",
+          externalId:
+            r["number"] !== undefined
+              ? String(r["number"])
+              : r["id"] !== undefined
+                ? String(r["id"])
+                : "",
           externalUrl: asString(r["html_url"]) ?? undefined,
           displayName: asString(r["title"]) ?? undefined,
           properties: {
@@ -240,7 +234,12 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           .map((l) => asString(asRecord(l)["name"]))
           .filter((n): n is string => !!n);
         return {
-          externalId: r["number"] !== undefined ? String(r["number"]) : r["id"] !== undefined ? String(r["id"]) : "",
+          externalId:
+            r["number"] !== undefined
+              ? String(r["number"])
+              : r["id"] !== undefined
+                ? String(r["id"])
+                : "",
           externalUrl: asString(r["html_url"]) ?? undefined,
           displayName: asString(r["title"]) ?? undefined,
           properties: {
@@ -267,9 +266,13 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         // trigger conditions can match on `git_branch = 'main'`.
         const gitBranch = asString(r["git_branch"]);
         return {
-          externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
+          externalId:
+            asString(r["sha"]) ??
+            (r["id"] !== undefined ? String(r["id"]) : ""),
           externalUrl: asString(r["html_url"]) ?? undefined,
-          displayName: asString(commitObj["message"]) ? asString(commitObj["message"])!.split("\n")[0] : undefined,
+          displayName: asString(commitObj["message"])
+            ? asString(commitObj["message"])!.split("\n")[0]
+            : undefined,
           properties: {
             sha: asString(r["sha"]),
             message: asString(commitObj["message"]),
@@ -288,13 +291,15 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         return {
           externalId: r["id"] !== undefined ? String(r["id"]) : "",
           externalUrl: asString(r["html_url"]) ?? undefined,
-          displayName: asString(r["full_name"]) ?? asString(r["name"]) ?? undefined,
+          displayName:
+            asString(r["full_name"]) ?? asString(r["name"]) ?? undefined,
           properties: {
             name: asString(r["name"]),
             fullName: asString(r["full_name"]),
             description: asString(r["description"]),
             owner: asString(owner["login"]),
-            private: typeof r["private"] === "boolean" ? r["private"] : undefined,
+            private:
+              typeof r["private"] === "boolean" ? r["private"] : undefined,
             language: asString(r["language"]),
             stargazersCount: asNumber(r["stargazers_count"]),
             url: asString(r["html_url"]),
@@ -310,14 +315,18 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         return {
           externalId: r["id"] !== undefined ? String(r["id"]) : "",
           externalUrl: asString(r["html_url"]) ?? undefined,
-          displayName: asString(r["name"]) ?? asString(r["tag_name"]) ?? undefined,
+          displayName:
+            asString(r["name"]) ?? asString(r["tag_name"]) ?? undefined,
           properties: {
             name: asString(r["name"]),
             tagName: asString(r["tag_name"]),
             body: asString(r["body"]),
             author: asString(author["login"]),
             draft: typeof r["draft"] === "boolean" ? r["draft"] : undefined,
-            prerelease: typeof r["prerelease"] === "boolean" ? r["prerelease"] : undefined,
+            prerelease:
+              typeof r["prerelease"] === "boolean"
+                ? r["prerelease"]
+                : undefined,
             publishedAt: asString(r["published_at"]),
             url: asString(r["html_url"]),
           },
@@ -330,7 +339,9 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         return {
           externalId: r["id"] !== undefined ? String(r["id"]) : "",
           externalUrl: asString(r["html_url"]) ?? undefined,
-          displayName: asString(r["body"]) ? asString(r["body"])!.slice(0, 100) : undefined,
+          displayName: asString(r["body"])
+            ? asString(r["body"])!.slice(0, 100)
+            : undefined,
           properties: {
             body: asString(r["body"]),
             url: asString(r["html_url"]),
@@ -338,59 +349,10 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           },
         };
 
-      // Sources (with more robust field checks)
-      case "source": {
-        // For demonstration, support both file and directory
-        // Accepts GitHub API tree/blob responses, or webhook payloads for files
-
-        // Try github REST output for a tree entry
-        if (
-          typeof r["type"] === "string" &&
-          (r["type"] === "blob" || r["type"] === "tree")
-        ) {
-          return {
-            externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
-            externalUrl: asString(r["url"]) ?? asString(r["html_url"]) ?? undefined,
-            displayName: asString(r["path"]) ?? undefined,
-            properties: {
-              path: asString(r["path"]),
-              type: asString(r["type"]), // 'tree' (directory), 'blob' (file)
-              size: asNumber(r["size"]),
-              mode: asString(r["mode"]),
-              sha: asString(r["sha"]),
-              url: asString(r["url"]),
-            },
-          };
-        }
-        // Try a file object from webhook (push event)
-        if (typeof r["filename"] === "string") {
-          return {
-            externalId: asString(r["sha"]) ?? (r["id"] !== undefined ? String(r["id"]) : ""),
-            externalUrl: asString(r["url"]) ?? asString(r["blob_url"]) ?? asString(r["raw_url"]) ?? undefined,
-            displayName: asString(r["filename"]),
-            properties: {
-              path: asString(r["filename"]),
-              status: asString(r["status"]),
-              additions: asNumber(r["additions"]),
-              deletions: asNumber(r["deletions"]),
-              changes: asNumber(r["changes"]),
-              sha: asString(r["sha"]),
-              blobUrl: asString(r["blob_url"]),
-              rawUrl: asString(r["raw_url"]),
-            },
-          };
-        }
-        // Could not determine source type
-        return {
-          externalId: asString(r["sha"]) ?? (asString(r["id"]) ?? ""),
-          externalUrl: asString(r["url"]) ?? undefined,
-          displayName: asString(r["path"]) ?? asString(r["filename"]) ?? "Unknown",
-          properties: r,
-        };
-      }
-
       default:
-        throw new Error(`github.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `github.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
@@ -404,9 +366,14 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
   parseWebhookEvent(eventName: string, raw: unknown): WebhookExtraction[] {
     const p = asRecord(raw);
 
-    const one = (sourceRecordType: string, key: string): WebhookExtraction[] => {
+    const one = (
+      sourceRecordType: string,
+      key: string,
+    ): WebhookExtraction[] => {
       const record = asRecord(p[key]);
-      return Object.keys(record).length > 0 ? [{ sourceRecordType, record }] : [];
+      return Object.keys(record).length > 0
+        ? [{ sourceRecordType, record }]
+        : [];
     };
 
     switch (eventName) {
@@ -431,7 +398,9 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
       case "push": {
         const ref = asString(p["ref"]);
         const branch =
-          ref && ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : ref;
+          ref && ref.startsWith("refs/heads/")
+            ? ref.slice("refs/heads/".length)
+            : ref;
         return asArray(p["commits"]).flatMap((c): WebhookExtraction[] => {
           const commit = asRecord(c);
           const author = asRecord(commit["author"]);
@@ -469,7 +438,8 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
     if (!secret) return false;
     const sig = headers["x-hub-signature-256"];
     if (!sig || typeof sig !== "string") return false;
-    const expected = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    const expected =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
     try {
       // Normalize lengths before timingSafeEqual to prevent crash
       const sigBuf = Buffer.from(sig, "utf8");
@@ -498,11 +468,19 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
 
       if (recordType === "commit") {
         const sinceQuery = cursor ? `&since=${encodeURIComponent(cursor)}` : "";
-        const rows = await ghListPage(`${base}/commits?per_page=100${sinceQuery}`, token);
+        const rows = await ghListPage(
+          `${base}/commits?per_page=100${sinceQuery}`,
+          token,
+        );
         for (const raw of rows) {
           const id = (raw as { sha?: string }).sha ?? "";
           if (!id) continue;
-          yield { sourceRecordType: "commit", externalId: id, raw, receivedAt: now };
+          yield {
+            sourceRecordType: "commit",
+            externalId: id,
+            raw,
+            receivedAt: now,
+          };
         }
         continue;
       }
@@ -514,7 +492,11 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
           token,
         );
         for (const raw of rows) {
-          const r = raw as { updated_at?: string; pull_request?: unknown; number?: number };
+          const r = raw as {
+            updated_at?: string;
+            pull_request?: unknown;
+            number?: number;
+          };
           // The issues endpoint also returns PRs — drop them here.
           if (recordType === "issue" && r.pull_request !== undefined) continue;
           if (cursor && r.updated_at && r.updated_at <= cursor) break; // sorted desc
@@ -531,7 +513,11 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
       if (recordType === "release") {
         const rows = await ghListPage(`${base}/releases?per_page=100`, token);
         for (const raw of rows) {
-          const r = raw as { id?: number; published_at?: string; created_at?: string };
+          const r = raw as {
+            id?: number;
+            published_at?: string;
+            created_at?: string;
+          };
           const stamp = r.published_at ?? r.created_at;
           if (cursor && stamp && stamp <= cursor) continue;
           yield {
@@ -557,7 +543,7 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
         };
         continue;
       }
-      // code_review / comment / source are webhook/initial-sync only — no poll.
+      // code_review / comment are webhook-only — no poll.
     }
   },
 

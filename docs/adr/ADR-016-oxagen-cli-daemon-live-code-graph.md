@@ -4,6 +4,12 @@
 **Status:** Proposed
 **Epic:** CLI & Local Agent Runtime
 
+> **Superseded for launch (2026-07-21).** The live local code-graph goal survives,
+> but its cloud-sync, server-side exact-code-graph, and generic inference paths do
+> not. The exact graph stays local to each checkout/worktree. Oxagen retains stable
+> provider metadata and durable traces; canonical protected/default-ref topology
+> and typed run evidence are separate follow-ups.
+
 ## Context
 
 Oxagen's value is a knowledge graph that is never out of date. Today that graph is fed

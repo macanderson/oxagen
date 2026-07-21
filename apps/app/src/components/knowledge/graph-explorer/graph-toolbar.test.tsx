@@ -103,8 +103,6 @@ function makeProps(
     onZoomOut: vi.fn(),
     onScreenshot: vi.fn(),
     onReload: vi.fn(),
-    onCreateNode: vi.fn(),
-    onCreateEdge: vi.fn(),
     ...overrides,
   };
 }
@@ -312,7 +310,7 @@ describe("GraphToolbar — compact mode (<md)", () => {
     ).toBeInTheDocument();
   });
 
-  it("moves zoom, drag, screenshot, create, and reload actions into the menu", () => {
+  it("moves zoom, drag, screenshot, and reload actions into the menu", () => {
     render(<GraphToolbar {...makeProps({ view: "2d", canvasReady: true })} />);
     const popup = within(screen.getByTestId("menu-popup"));
     expect(
@@ -328,12 +326,6 @@ describe("GraphToolbar — compact mode (<md)", () => {
       popup.getByRole("menuitem", { name: /download screenshot/i }),
     ).toBeInTheDocument();
     expect(
-      popup.getByRole("menuitem", { name: /add node/i }),
-    ).toBeInTheDocument();
-    expect(
-      popup.getByRole("menuitem", { name: /add edge/i }),
-    ).toBeInTheDocument();
-    expect(
       popup.getByRole("menuitem", { name: /reload graph/i }),
     ).toBeInTheDocument();
     // No standalone inline zoom button remains outside the menu.
@@ -344,13 +336,11 @@ describe("GraphToolbar — compact mode (<md)", () => {
 
   it("menu actions invoke their callbacks", () => {
     const onZoomIn = vi.fn();
-    const onCreateNode = vi.fn();
     const onReload = vi.fn();
     render(
       <GraphToolbar
         {...makeProps({
           onZoomIn,
-          onCreateNode,
           onReload,
           view: "2d",
           canvasReady: true,
@@ -359,14 +349,12 @@ describe("GraphToolbar — compact mode (<md)", () => {
     );
     const popup = within(screen.getByTestId("menu-popup"));
     fireEvent.click(popup.getByRole("menuitem", { name: /zoom in/i }));
-    fireEvent.click(popup.getByRole("menuitem", { name: /add node/i }));
     fireEvent.click(popup.getByRole("menuitem", { name: /reload graph/i }));
     expect(onZoomIn).toHaveBeenCalledOnce();
-    expect(onCreateNode).toHaveBeenCalledOnce();
     expect(onReload).toHaveBeenCalledOnce();
   });
 
-  it("omits canvas-only menu items in table view but keeps create/reload", () => {
+  it("omits canvas-only menu items in table view but keeps reload", () => {
     render(<GraphToolbar {...makeProps({ view: "table" })} />);
     const popup = within(screen.getByTestId("menu-popup"));
     expect(
@@ -375,9 +363,6 @@ describe("GraphToolbar — compact mode (<md)", () => {
     expect(
       popup.queryByRole("menuitem", { name: /download screenshot/i }),
     ).not.toBeInTheDocument();
-    expect(
-      popup.getByRole("menuitem", { name: /add node/i }),
-    ).toBeInTheDocument();
     expect(
       popup.getByRole("menuitem", { name: /reload graph/i }),
     ).toBeInTheDocument();

@@ -23,7 +23,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => {
   const materializeToolsFn = vi.fn();
   const createPlatformAgentAiFn = vi.fn();
-  const createPlatformMemoryProviderFn = vi.fn();
   const executeTurnFn = vi.fn();
   const runInTenantScopeFn = vi.fn((_scope: unknown, fn: () => unknown) =>
     fn(),
@@ -33,7 +32,6 @@ const mocks = vi.hoisted(() => {
   return {
     materializeToolsFn,
     createPlatformAgentAiFn,
-    createPlatformMemoryProviderFn,
     executeTurnFn,
     runInTenantScopeFn,
     invokeFn,
@@ -53,7 +51,6 @@ vi.mock("./materialize-tools", () => ({
 
 vi.mock("../adapters", () => ({
   createPlatformAgentAi: mocks.createPlatformAgentAiFn,
-  createPlatformMemoryProvider: mocks.createPlatformMemoryProviderFn,
 }));
 
 vi.mock("@oxagen/agent-runner", () => ({
@@ -132,12 +129,6 @@ function makeIo(signal: AbortSignal = new AbortController().signal): {
 
 const fakeAi = { stream: vi.fn(), generateObject: vi.fn() };
 const fakeTools = { toolA: {} };
-const fakeMemory = {
-  recallContext: vi.fn(),
-  remember: vi.fn(),
-  close: vi.fn(),
-};
-
 /** `get_budget_policy`'s own "no governance configured" shape (mirrors
  * packages/handlers/src/workspace.budget_policy.read.ts's no-row default). */
 const NO_WORKSPACE_GOVERNANCE = {
@@ -165,7 +156,6 @@ beforeEach(() => {
     mutatingToolNames: ["toolA"],
   });
   mocks.createPlatformAgentAiFn.mockReturnValue(fakeAi);
-  mocks.createPlatformMemoryProviderFn.mockReturnValue(fakeMemory);
   // Default: no workspace/org budget governance configured — resolves to the
   // off policy, so createTurnBudgetGuard (mirroring its real off-policy
   // behavior) returns undefined and executeTurn runs unbudgeted, exactly like
@@ -424,72 +414,6 @@ describe("createPlatformTurnDriver — happy path", () => {
     // just that a scope was requested.
     expect(mocks.materializeToolsFn).toHaveBeenCalledTimes(1);
     expect(mocks.executeTurnFn).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── createPlatformTurnDriver — memory recall ────────────────────────────────
-
-describe("createPlatformTurnDriver — memory recall", () => {
-  it("builds createPlatformMemoryProvider with recallQuery = the spec's instruction and the agent.repo.edit telemetry shape, and passes it to executeTurn as `memory`", async () => {
-    const driver = createPlatformTurnDriver();
-    const run = makeRun({
-      runId: "run_mem1",
-      orgId: "org-mem",
-      workspaceId: "ws-mem",
-      spec: { version: 1, instruction: "summarize the thread" },
-    });
-    const { io } = makeIo();
-
-    await driver(run, io);
-
-    expect(mocks.createPlatformMemoryProviderFn).toHaveBeenCalledWith({
-      recallQuery: "summarize the thread",
-      telemetry: {
-        orgId: "org-mem",
-        workspaceId: "ws-mem",
-        surface: "runner",
-        messageId: "run_mem1",
-      },
-    });
-    expect(mocks.executeTurnFn).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ memory: fakeMemory }),
-    );
-  });
-
-  it("does not disturb the happy-path event order/outcome when memory is wired in (recall itself degrades inside the adapter, never here)", async () => {
-    mocks.executeTurnFn.mockImplementation(
-      async (_surface: string, opts: ExecuteTurnCallArgs) => {
-        opts.onStreamPart?.({ type: "text-delta", text: "hi" });
-        opts.onEvent?.({ type: "text", delta: "hi" });
-        return {
-          text: "final answer",
-          steps: 1,
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-          stopReason: undefined,
-        };
-      },
-    );
-
-    const driver = createPlatformTurnDriver();
-    const run = makeRun();
-    const { io, events } = makeIo();
-
-    const outcome = await driver(run, io);
-
-    expect(events.map((e) => e.type)).toEqual([
-      "stream-part",
-      "coding-event",
-      "run-result",
-    ]);
-    expect(outcome).toEqual({
-      result: {
-        text: "final answer",
-        steps: 1,
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        stopReason: undefined,
-      },
-    });
   });
 });
 

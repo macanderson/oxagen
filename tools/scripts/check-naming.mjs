@@ -122,6 +122,8 @@ const ACTIONS = new Set([
   "reauth",
   "rotate",
   "revoke",
+  "assign", // pairs with "revoke" for role assignment; matches iam.principal_role_assignments
+
   "reveal",
   "pin",
   "purchase",

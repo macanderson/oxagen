@@ -118,7 +118,7 @@ Hierarchy: **Organization → Workspace → User**
 | `@oxagen/oxagen` | Contracts (Zod; 344 non-test contract files, 311 registered capabilities), CapabilityContext type, capability kernel |
 | `@oxagen/handlers` | Shared business logic handlers (270 non-test files) |
 | `@oxagen/database` | Drizzle schema + client (23 schema files, 55 migrations) |
-| `@oxagen/engram` | Memory system: embed/store/retrieve/sync (63 files) |
+| `@oxagen/engram` | Local DuckDB memory, context compilation, replay |
 | `@oxagen/agent` | Agent runtime, dispatch, memory adapters (120 files) |
 | `@oxagen/agent-engine` | Pipeline, planner, fork, oracle, evaluator, fleet (43 files) |
 | `@oxagen/iam` | AuthZ, audit, access requests |

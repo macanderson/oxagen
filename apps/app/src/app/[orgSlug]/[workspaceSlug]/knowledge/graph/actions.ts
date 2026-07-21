@@ -14,11 +14,7 @@
  *   6. return an `{ ok: true, ... } | { ok: false, error }` result — no thrown
  *      errors cross the server-action boundary
  *
- * Surface note: every capability here is invoked with `{ surface: "agent" }`
- * EXCEPT `export_graph`, whose contract (graph.export.ts) declares
- * `surfaces: ["api", "mcp"]` — no "agent" entry — so `{ surface: "agent" }`
- * would throw `surface_denied`. `exportGraphAction` uses `{ surface: "api" }`
- * instead (same pattern as reconcile-actions.ts / privacy-actions.ts).
+ * Every retained capability here is invoked with `{ surface: "agent" }`.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -31,13 +27,15 @@ import type { GraphNodeListOutput } from "@oxagen/oxagen/contracts/graph.node.li
 import type { GraphNodeSearchOutput } from "@oxagen/oxagen/contracts/graph.node.search";
 import type { GraphSearchOutput } from "@oxagen/oxagen/contracts/graph.search";
 import type { GraphStatsOutput } from "@oxagen/oxagen/contracts/graph.stats";
-import type { GraphCypherOutput } from "@oxagen/oxagen/contracts/graph.cypher";
-import type { GraphExportOutput } from "@oxagen/oxagen/contracts/graph.export";
 import type { OntologyNeighborsOutput } from "@oxagen/oxagen/contracts/ontology.neighbors";
 import type { OntologyQueryOutput } from "@oxagen/oxagen/contracts/ontology.query";
 import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Result types (exported for client prop typing)
@@ -68,14 +66,6 @@ export type GraphStatsResult =
   | { ok: true; stats: GraphStatsSummary }
   | { ok: false; error: string };
 
-export type RunCypherResult =
-  | { ok: true; rows: GraphCypherOutput["rows"]; columns: string[]; rowCount: number }
-  | { ok: false; error: string };
-
-export type ExportGraphResult =
-  | { ok: true; nodes: GraphExportOutput["nodes"]; edges: GraphExportOutput["edges"]; total: number }
-  | { ok: false; error: string };
-
 export type OntologyNeighborsResult =
   | {
       ok: true;
@@ -99,10 +89,7 @@ export type OntologyQueryResult =
 // ---------------------------------------------------------------------------
 // Shared IAM helper — apps/app never bootstraps IAM, so re-read the caller's
 // workspace role from Postgres before every read/write. Owner + Member are
-// treated as full access to the graph surface (Browse/Search/Query/Export);
-// there is no "Viewer" carve-out here since run_cypher and export_graph are
-// member-level-or-above per the task spec regardless of the individual
-// contract's own defaultRoles.
+// treated as full access to the graph read surface (Browse/Search/Query).
 // ---------------------------------------------------------------------------
 
 async function assertWorkspaceMember(
@@ -144,7 +131,10 @@ interface Gated {
 }
 
 /** Session + org resolution + org-membership IDOR guard (steps 1–3). */
-async function resolveAndGate(orgSlug: string, workspaceSlug: string): Promise<Gated> {
+async function resolveAndGate(
+  orgSlug: string,
+  workspaceSlug: string,
+): Promise<Gated> {
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
@@ -160,7 +150,6 @@ export async function listNodesAction(input: {
   orgSlug: string;
   workspaceSlug: string;
   labels?: string[];
-  isSystem?: boolean;
   limit?: number;
   offset?: number;
   query?: string;
@@ -171,13 +160,18 @@ export async function listNodesAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to browse the graph." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to browse the graph.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
 
     try {
-      const out = (await invoke("list_nodes", params, ctx, { surface: "agent" })) as GraphNodeListOutput;
+      const out = (await invoke("list_nodes", params, ctx, {
+        surface: "agent",
+      })) as GraphNodeListOutput;
       return {
         ok: true,
         nodes: out.nodes,
@@ -187,7 +181,10 @@ export async function listNodesAction(input: {
         offset: out.offset,
       };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: listNodesAction failed");
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.graph: listNodesAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to list nodes." };
     }
@@ -211,16 +208,24 @@ export async function searchNodesAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to search the graph." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to search the graph.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
 
     try {
-      const out = (await invoke("search_nodes", params, ctx, { surface: "agent" })) as GraphNodeSearchOutput;
+      const out = (await invoke("search_nodes", params, ctx, {
+        surface: "agent",
+      })) as GraphNodeSearchOutput;
       return { ok: true, nodes: out.nodes };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: searchNodesAction failed");
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.graph: searchNodesAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to search nodes." };
     }
@@ -236,19 +241,7 @@ export async function semanticSearchAction(input: {
   workspaceSlug: string;
   query: string;
   limit?: number;
-  kinds?: Array<
-    | "entity"
-    | "file"
-    | "symbol"
-    | "chunk"
-    | "memory"
-    | "execution"
-    | "document"
-    | "message"
-    | "asset"
-  >;
   labels?: string[];
-  isSystem?: boolean;
 }): Promise<SemanticSearchResult> {
   const { orgSlug, workspaceSlug, ...params } = input;
   const { session, org, ws } = await resolveAndGate(orgSlug, workspaceSlug);
@@ -256,16 +249,24 @@ export async function semanticSearchAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to search the graph." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to search the graph.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
 
     try {
-      const out = (await invoke("search_graph", params, ctx, { surface: "agent" })) as GraphSearchOutput;
+      const out = (await invoke("search_graph", params, ctx, {
+        surface: "agent",
+      })) as GraphSearchOutput;
       return { ok: true, results: out.results };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: semanticSearchAction failed");
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.graph: semanticSearchAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to run semantic search." };
     }
@@ -290,7 +291,10 @@ export async function graphStatsAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to view graph stats." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to view graph stats.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
@@ -305,85 +309,12 @@ export async function graphStatsAction(input: {
       const { render: _render, ...stats } = out;
       return { ok: true, stats };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: graphStatsAction failed");
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id },
+        "knowledge.graph: graphStatsAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to load graph stats." };
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// runCypherAction — graph.cypher ("run_cypher"). Query console — raw Cypher
-// or nlQuery=true natural-language translation. High-risk capability (the
-// contract marks it agent.riskLevel "high" and defaultRoles workspace Owner
-// only); per the task spec, treat as member-level here since apps/app is the
-// sole IAM enforcement point.
-// ---------------------------------------------------------------------------
-
-export async function runCypherAction(input: {
-  orgSlug: string;
-  workspaceSlug: string;
-  query: string;
-  nlQuery?: boolean;
-  params?: Record<string, string | number | boolean>;
-}): Promise<RunCypherResult> {
-  const { orgSlug, workspaceSlug, ...params } = input;
-  const { session, org, ws } = await resolveAndGate(orgSlug, workspaceSlug);
-
-  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertWorkspaceMember(ws.id, session.user.id);
-    if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to run graph queries." };
-    }
-
-    const ctx = makeCtx(org.id, ws.id, session.user.id);
-
-    try {
-      const out = (await invoke("run_cypher", params, ctx, { surface: "agent" })) as GraphCypherOutput;
-      return { ok: true, rows: out.rows, columns: out.columns, rowCount: out.rowCount };
-    } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: runCypherAction failed");
-      const message = err instanceof Error ? err.message : "";
-      return { ok: false, error: message || "Query failed." };
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// exportGraphAction — graph.export ("export_graph"). Subgraph export to file
-// (client turns the returned nodes/edges into a downloaded JSON blob).
-// NOTE surfaces: ["api","mcp"] only — invoke with { surface: "api" }, NOT
-// "agent" (that would throw surface_denied).
-// ---------------------------------------------------------------------------
-
-export async function exportGraphAction(input: {
-  orgSlug: string;
-  workspaceSlug: string;
-  labels?: string[];
-  isSystem?: boolean;
-  updatedAfter?: string;
-  includeEdges?: boolean;
-  limit?: number;
-  offset?: number;
-}): Promise<ExportGraphResult> {
-  const { orgSlug, workspaceSlug, ...params } = input;
-  const { session, org, ws } = await resolveAndGate(orgSlug, workspaceSlug);
-
-  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertWorkspaceMember(ws.id, session.user.id);
-    if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to export the graph." };
-    }
-
-    const ctx = makeCtx(org.id, ws.id, session.user.id);
-
-    try {
-      const out = (await invoke("export_graph", params, ctx, { surface: "api" })) as GraphExportOutput;
-      return { ok: true, nodes: out.nodes, edges: out.edges, total: out.total };
-    } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id }, "knowledge.graph: exportGraphAction failed");
-      const message = err instanceof Error ? err.message : "";
-      return { ok: false, error: message || "Failed to export the graph." };
     }
   });
 }
@@ -407,19 +338,25 @@ export async function ontologyNeighborsAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to expand graph neighbors." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to expand graph neighbors.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
 
     try {
-      const out = (await invoke(
-        "get_ontology_neighbors",
-        params,
-        ctx,
-        { surface: "agent" },
-      )) as OntologyNeighborsOutput;
-      return { ok: true, nodeId: out.nodeId, found: out.found, neighbors: out.neighbors, truncated: out.truncated };
+      const out = (await invoke("get_ontology_neighbors", params, ctx, {
+        surface: "agent",
+      })) as OntologyNeighborsOutput;
+      return {
+        ok: true,
+        nodeId: out.nodeId,
+        found: out.found,
+        neighbors: out.neighbors,
+        truncated: out.truncated,
+      };
     } catch (err) {
       logger.error(
         { err, orgId: org.id, workspaceId: ws.id, nodeId: input.nodeId },
@@ -451,17 +388,33 @@ export async function ontologyQueryAction(input: {
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const gate = await assertWorkspaceMember(ws.id, session.user.id);
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace member to traverse the graph." };
+      return {
+        ok: false,
+        error: "You must be a workspace member to traverse the graph.",
+      };
     }
 
     const ctx = makeCtx(org.id, ws.id, session.user.id);
 
     try {
-      const out = (await invoke("query_ontology", params, ctx, { surface: "agent" })) as OntologyQueryOutput;
-      return { ok: true, startNode: out.startNode, nodes: out.nodes, edges: out.edges, truncated: out.truncated };
+      const out = (await invoke("query_ontology", params, ctx, {
+        surface: "agent",
+      })) as OntologyQueryOutput;
+      return {
+        ok: true,
+        startNode: out.startNode,
+        nodes: out.nodes,
+        edges: out.edges,
+        truncated: out.truncated,
+      };
     } catch (err) {
       logger.error(
-        { err, orgId: org.id, workspaceId: ws.id, startNodeId: input.startNodeId },
+        {
+          err,
+          orgId: org.id,
+          workspaceId: ws.id,
+          startNodeId: input.startNodeId,
+        },
         "knowledge.graph: ontologyQueryAction failed",
       );
       const message = err instanceof Error ? err.message : "";

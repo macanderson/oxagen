@@ -16,7 +16,11 @@ const KIND_COLOR: Record<string, string> = {
 /** Matches `oxagen graph search -q "…" -k file,symbol,entity` in the
  *  Knowledge graph doc page's example. */
 const RESULTS: readonly ResultRow[] = [
-  { kind: "file", label: "apps/api/src/middleware/tenant-scope.ts", score: "0.91" },
+  {
+    kind: "file",
+    label: "apps/api/src/middleware/tenant-scope.ts",
+    score: "0.91",
+  },
   { kind: "symbol", label: "withTenantDb", score: "0.88" },
   { kind: "entity", label: "Tenant Isolation Policy", score: "0.79" },
 ];
@@ -30,13 +34,20 @@ const RESULTS: readonly ResultRow[] = [
  */
 export function TuiGraphSearch({ className }: { className?: string }) {
   return (
-    <TuiFrame id="tui-graph-search" title="~/acme-web — oxagen" width={560} height={222} className={className}>
+    <TuiFrame
+      id="tui-graph-search"
+      title="~/acme-web — oxagen"
+      width={560}
+      height={222}
+      className={className}
+    >
       <text x={20} y={48} fontSize={12.5}>
         <tspan fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.pointer}{" "}
         </tspan>
         <tspan fill="#f5f5f5">
-          oxagen graph search -q &quot;where do we enforce tenant isolation?&quot;
+          oxagen graph search -q &quot;where do we enforce tenant
+          isolation?&quot;
         </tspan>
       </text>
 
@@ -44,13 +55,25 @@ export function TuiGraphSearch({ className }: { className?: string }) {
         const y = 78 + i * 24;
         return (
           <g key={r.label}>
-            <text x={20} y={y} fontSize={11.5} fill={KIND_COLOR[r.kind]} fontWeight={700}>
+            <text
+              x={20}
+              y={y}
+              fontSize={11.5}
+              fill={KIND_COLOR[r.kind]}
+              fontWeight={700}
+            >
               [{r.kind}]
             </text>
             <text x={92} y={y} fontSize={12} fill="#e6e6e6">
               {r.label}
             </text>
-            <text x={490} y={y} fontSize={11.5} fill={tuiColors.amber} textAnchor="end">
+            <text
+              x={490}
+              y={y}
+              fontSize={11.5}
+              fill={tuiColors.amber}
+              textAnchor="end"
+            >
               {r.score}
             </text>
           </g>
@@ -58,7 +81,7 @@ export function TuiGraphSearch({ className }: { className?: string }) {
       })}
 
       <text x={20} y={164} fontSize={11} fill={tuiColors.dim}>
-        3 results · 84ms · local replica (oxagen graph pull)
+        3 results · 84ms · online · workspace scoped
       </text>
 
       <text x={20} y={196} fontSize={13}>
@@ -66,7 +89,15 @@ export function TuiGraphSearch({ className }: { className?: string }) {
           {tuiGlyphs.pointer}{" "}
         </tspan>
       </text>
-      <rect className="tui-caret" x={34} y={184} width={7} height={15} fill={tuiColors.cyan} opacity={0.85} />
+      <rect
+        className="tui-caret"
+        x={34}
+        y={184}
+        width={7}
+        height={15}
+        fill={tuiColors.cyan}
+        opacity={0.85}
+      />
     </TuiFrame>
   );
 }

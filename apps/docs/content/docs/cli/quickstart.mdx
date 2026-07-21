@@ -99,21 +99,15 @@ oxagen agents --concurrency 6 "migrate components off the deprecated Button API"
 
 For detached, long-lived sessions you can supervise from any terminal, see [Fleet](/docs/cli/fleet). Run [`oxagen view`](/docs/cli/commands#oxagen-view-audit-agent-work) to audit what agents have done here — recent runs with their model, duration, and real cost, plus code-graph stats and daemon/auth health.
 
-## Ground the agent in your knowledge graph
+## Query shared workspace context
 
-This is what sets `oxagen` apart from a generic coding agent. If you've [authenticated against the platform](/docs/cli/account-setup#4-authenticate-the-cli), pull your workspace knowledge graph into a fast local replica:
-
-```bash
-oxagen graph pull
-```
-
-The agent now reasons with your graph — entities, relationships, prior decisions — alongside the files in your repo. Query the graph directly any time:
+If you've [authenticated against the platform](/docs/cli/account-setup#4-authenticate-the-cli), query the governed workspace graph directly:
 
 ```bash
 oxagen graph search -q "where do we enforce tenant isolation?" -n 5
 ```
 
-See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full workflow.
+The query runs online and returns only the bounded results your current workspace grants allow. It does not download a local workspace replica or automatically inject the result into a later agent turn. The exact checkout code graph remains local. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full boundary.
 
 ## Speed up repeated runs
 
@@ -147,4 +141,4 @@ oxagen cost --session
 - [The agent engine](/docs/cli/agent-engine) — how a turn is planned, executed, and verified.
 - [Command reference](/docs/cli/commands) — every command and flag.
 - [Custom commands, agents & rules](/docs/cli/custom-commands) — extend the CLI with your own.
-- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — the two things the agent grounds on.
+- [Memory from the CLI](/docs/cli/memory) and [Knowledge graph from the CLI](/docs/cli/knowledge-graph) — local experiential context and explicit shared-context queries.

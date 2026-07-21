@@ -2,7 +2,6 @@ import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { insertEvents, type EventRow } from "@oxagen/telemetry";
-import { sweepExpiredFileLocks } from "@oxagen/ontology";
 import { MAX_ATTEMPTS, decideSweepAction } from "../lease";
 import { deriveFanoutStatus } from "./agent.execute-subagent";
 import { logger } from "../logger";
@@ -31,13 +30,6 @@ import { logger } from "../logger";
  *      child finished still terminates.
  *   3. Emits agent.lease.expired / agent.task.reclaimed telemetry rows; the
  *      self-healing MTTR metric reads straight off these.
- *   4. Sweeps expired agent file locks (docs/specs/agent-file-locking/plan.md
- *      §6) — reaps HOLDS_LOCK Neo4j edges left behind by a crashed/aborted
- *      turn. This is a reclaim-only backstop: `acquireFileLock`'s lazy-expiry
- *      predicate already makes an expired lock invisible to new acquires
- *      without this sweep running, so a Neo4j outage here degrades to "stale
- *      rows accumulate until the next successful sweep", never a correctness
- *      issue for lock acquisition itself.
  *
  * System-wide sweep (withSystemDb, memory.decay-pass precedent) — a cron has
  * no tenant. Concurrency 1: two overlapping sweeps would double-emit
@@ -533,26 +525,6 @@ export const [agentLeaseSweep] = createFunction(
       }
     });
 
-    // ── 5. Sweep expired agent file locks (docs/specs/agent-file-locking/plan.md
-    //      §6) — reaps orphaned HOLDS_LOCK Neo4j edges left by a crashed/aborted
-    //      turn. Lazy expiry (acquireFileLock's `l.expiresAt > $now` predicate)
-    //      already makes an expired lock invisible to new acquires; this sweep
-    //      only reclaims the graph rows so they don't accumulate forever. A
-    //      Neo4j outage here must never fail the rest of this Postgres-backed
-    //      sweep — best-effort, same fail-soft contract as the telemetry step.
-    const fileLocksSwept = await step.run("sweep-file-locks", async () => {
-      try {
-        const { sweptCount } = await sweepExpiredFileLocks();
-        return sweptCount;
-      } catch (err) {
-        logger.warn(
-          { err },
-          "sweepExpiredFileLocks failed — expired HOLDS_LOCK edges left for next sweep",
-        );
-        return 0;
-      }
-    });
-
     const summary = {
       runsRequeued: runSweep.requeued.length,
       runsFailedAtCap: runSweep.failed.length,
@@ -563,7 +535,6 @@ export const [agentLeaseSweep] = createFunction(
       agentRunsCancelled: agentRunSweep.cancelled.length,
       fanoutsFinalized: finalizedFanouts.length,
       executionsFinalized: finalizedExecutions.length,
-      fileLocksSwept,
       maxAttempts: MAX_ATTEMPTS,
       maxAgentRunAttempts: MAX_AGENT_RUN_ATTEMPTS,
     };

@@ -15,16 +15,6 @@ import { getApiUrl, getToken, getOrgId, getWorkspaceId } from "./config.js";
 import { debugLog, type DebugCategory } from "./debug-log.js";
 import { stdoutWriter, type CommandWriter } from "./capture-writer.js";
 
-/**
- * Route a request to its debug-log category so a `graph push` (the code-graph
- * envelope synced to the workspace graph) is logged distinctly from ordinary
- * command traffic. Lineage sync bypasses this client (raw fetch in
- * graph-sync-provider.ts) and is logged there.
- */
-function debugCategoryForPath(path: string): DebugCategory {
-  return path.includes("graph/sync/push") ? "code-graph" : "api";
-}
-
 interface ApiContext {
   apiUrl: string;
   token: string;
@@ -138,7 +128,11 @@ async function buildHttpError(
     ...(hint ? { hint } : {}),
   });
   const suffix = traceId ? ` (trace ${traceId})` : "";
-  return new ApiError(`Error ${res.status} from ${path}: ${body}${suffix}`, res.status, traceId);
+  return new ApiError(
+    `Error ${res.status} from ${path}: ${body}${suffix}`,
+    res.status,
+    traceId,
+  );
 }
 
 /**
@@ -219,7 +213,12 @@ export async function apiGetOrThrow<T>(
       }
     }
   }
-  void debugLog("api", "api.get.request", { method: "GET", url: url.toString(), path, query });
+  void debugLog("api", "api.get.request", {
+    method: "GET",
+    url: url.toString(),
+    path,
+    query,
+  });
   const startedAt = Date.now();
   let res: Response;
   try {
@@ -230,10 +229,24 @@ export async function apiGetOrThrow<T>(
       },
     });
   } catch (err) {
-    throw await buildNetworkError("api.get.network", "GET", url.toString(), path, err, startedAt);
+    throw await buildNetworkError(
+      "api.get.network",
+      "GET",
+      url.toString(),
+      path,
+      err,
+      startedAt,
+    );
   }
   if (!res.ok) {
-    throw await buildHttpError("api.get.response", "GET", url.toString(), path, res, startedAt);
+    throw await buildHttpError(
+      "api.get.response",
+      "GET",
+      url.toString(),
+      path,
+      res,
+      startedAt,
+    );
   }
   const json = (await res.json()) as T;
   void debugLog("api", "api.get.response", {
@@ -258,7 +271,12 @@ export async function userApiPostOrThrow<T>(
   if (!token) throw new ApiError(NOT_LOGGED_IN);
   const apiUrl = getApiUrl();
   const url = `${apiUrl}/v1/user/${path}`;
-  void debugLog("api", "api.user-post.request", { method: "POST", url, path, body });
+  void debugLog("api", "api.user-post.request", {
+    method: "POST",
+    url,
+    path,
+    body,
+  });
   const startedAt = Date.now();
   let res: Response;
   try {
@@ -271,10 +289,24 @@ export async function userApiPostOrThrow<T>(
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
-    throw await buildNetworkError("api.user-post.network", "POST", url, path, err, startedAt);
+    throw await buildNetworkError(
+      "api.user-post.network",
+      "POST",
+      url,
+      path,
+      err,
+      startedAt,
+    );
   }
   if (!res.ok) {
-    throw await buildHttpError("api.user-post.response", "POST", url, path, res, startedAt);
+    throw await buildHttpError(
+      "api.user-post.response",
+      "POST",
+      url,
+      path,
+      res,
+      startedAt,
+    );
   }
   const json = (await res.json()) as T;
   void debugLog("api", "api.user-post.response", {
@@ -290,14 +322,20 @@ export async function userApiPostOrThrow<T>(
  * POST an org-scoped capability and return the parsed JSON. Throws `ApiError`
  * on missing scope, network failure, or a non-2xx response — never exits.
  */
-export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T> {
+export async function apiPostOrThrow<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
   const ctx = resolveApiContext();
   if (!ctx) throw new ApiError(NOT_LOGGED_IN);
-  // Log the full request body — for `graph push` this is the code-graph
-  // envelope (nodes/edges/tombstones) synced back to the workspace graph.
-  const category = debugCategoryForPath(path);
+  const category: DebugCategory = "api";
   const url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
-  void debugLog(category, "api.post.request", { method: "POST", url, path, body });
+  void debugLog(category, "api.post.request", {
+    method: "POST",
+    url,
+    path,
+    body,
+  });
   const startedAt = Date.now();
   let res: Response;
   try {
@@ -310,10 +348,24 @@ export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T>
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
-    throw await buildNetworkError("api.post.network", "POST", url, path, err, startedAt);
+    throw await buildNetworkError(
+      "api.post.network",
+      "POST",
+      url,
+      path,
+      err,
+      startedAt,
+    );
   }
   if (!res.ok) {
-    throw await buildHttpError("api.post.response", "POST", url, path, res, startedAt);
+    throw await buildHttpError(
+      "api.post.response",
+      "POST",
+      url,
+      path,
+      res,
+      startedAt,
+    );
   }
   const json = (await res.json()) as T;
   void debugLog(category, "api.post.response", {

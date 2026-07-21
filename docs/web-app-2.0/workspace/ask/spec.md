@@ -35,11 +35,10 @@ The canonical conversation surface where a user talks to an agent — asks a que
 - `agent.definition.get` (`get_agent_def`) — resolve `?agent=` binding.
 - `conversation.list` / `.rename` / `.archive` / `.delete` / `.purge` — conversation lifecycle.
 - `agent.memory.write` (`write_memory`) — persist durable memory from the turn.
-- `graph.ingest` (`ingest_graph`) — ingest new facts surfaced mid-conversation.
 - `video.generate` (`generate_video`) — generative-UI video output when requested.
 
 ## Data sources
-Postgres (conversations, budget policy, agent definitions); ClickHouse (turn/tool metering emitted through `invoke()`); Neo4j (memory writes, graph ingest, cited node/edge lookups); SSE stream from `POST /api/v1/chat/stream` consumed by `use-tool-stream.ts`.
+Postgres (conversations, budget policy, agent definitions); ClickHouse (turn/tool metering emitted through `invoke()`); Neo4j (memory writes and governed cited node/edge lookups); SSE stream from `POST /api/v1/chat/stream` consumed by `use-tool-stream.ts`. Facts surfaced in conversation do not mutate the shared graph through a generic tool; they enter through governed connector ingestion or a reviewed candidate flow.
 
 ## States
 - **Empty:** no conversations yet — compose bar front and center with a blank-canvas prompt.

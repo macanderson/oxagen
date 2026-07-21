@@ -3,7 +3,7 @@ import type {
   AgentFileLockAcquireInput,
   AgentFileLockAcquireOutput,
 } from "@oxagen/oxagen/contracts/agent.file_lock.acquire";
-import { toNaturalKey } from "../adapters/graph-sync";
+import { toFileResourceKey } from "../file-lock/resource-key";
 import { acquireFileLease } from "../file-lock/lease";
 
 export type { AgentFileLockAcquireInput, AgentFileLockAcquireOutput };
@@ -19,8 +19,9 @@ export async function agentFileLockAcquireHandler(
   input: AgentFileLockAcquireInput,
   ctx: CapabilityContext,
 ): Promise<AgentFileLockAcquireOutput> {
-  const resourceKey = toNaturalKey(input.path, input.owner, input.repo);
-  const holder = input.agentId ?? ctx.userId ?? ctx.apiKeyId ?? `manual:${ctx.requestId}`;
+  const resourceKey = toFileResourceKey(input.path, input.owner, input.repo);
+  const holder =
+    input.agentId ?? ctx.userId ?? ctx.apiKeyId ?? `manual:${ctx.requestId}`;
   const executionId = input.executionId ?? crypto.randomUUID();
 
   const result = await acquireFileLease({
@@ -35,7 +36,13 @@ export async function agentFileLockAcquireHandler(
 
   const lease = result.acquired[0];
   if (lease) {
-    return { granted: true, lockId: lease.lockId, heldBy: null, blockedUntil: null, fencingToken: lease.fencingToken };
+    return {
+      granted: true,
+      lockId: lease.lockId,
+      heldBy: null,
+      blockedUntil: null,
+      fencingToken: lease.fencingToken,
+    };
   }
   const conflict = result.conflicts[0];
   return {

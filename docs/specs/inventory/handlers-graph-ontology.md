@@ -1,5 +1,11 @@
 # Spec: handlers-graph-ontology
 
+> **Historical inventory — superseded in part (2026-07-21).** This file was mined
+> from a 2026-06-20 implementation snapshot. Sections for generic graph mutation,
+> raw Cypher, `get_code_map`, and the full legacy semantic-edge family describe
+> retired code and are not current capabilities. Surviving read-only graph and typed ontology paths
+> must be verified against source before use.
+
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
 > Source: packages/handlers/src/graph.*.ts, ontology.*.ts, semantic.edge.*.ts (14 files)
 > Last verified: 2026-06-20 (commit 2f628504)
@@ -604,4 +610,3 @@ Confidence scores are constrained to [0, 1] at the extraction schema level (via 
 
 <!-- uncertainty: graph.ingest entity upsert failure handling is silent (logged warning, processing continues) — no explicit contract guarantees partial-failure behavior to the caller. Test coverage exists but behavior under concurrent failures not fully specified. -->
 <!-- uncertainty: semantic.edge.infer is fully async (Inngest-dispatched); this spec captures the synchronous boundary (the handler) only. The actual LLM inference and Neo4j writes happen in a worker process whose behavior is not visible in these source files. -->
-

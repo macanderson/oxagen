@@ -188,26 +188,18 @@ const REGISTRY: Record<string, CliAdapter> = {
     const query = opts["query"] as string | undefined;
     if (!query) {
       throw new UsageError(
-        "Missing -q/--query. Usage: /graph:search -q <text> [-k kinds] [-l labels] [-n limit] [--system|--no-system]",
+        "Missing -q/--query. Usage: /graph:search -q <text> [-l labels] [-n limit]",
       );
     }
     await handleGraphSearch(
       {
         query,
-        kinds: opts["kinds"] as string | undefined,
         labels: opts["labels"] as string | undefined,
         limit: opts["limit"] as string | undefined,
-        system: opts["system"] as boolean | undefined,
       },
       writer,
     );
   },
-  "graph:status": async (rawArgs, node, writer) => {
-    const { handleGraphStatus } = await import("../commands/graph.status.js");
-    const { opts } = parseArgs(node, rawArgs);
-    await handleGraphStatus(opts as { json?: boolean }, writer);
-  },
-
   "memory:list": async (rawArgs, node, writer) => {
     const { handleMemoryList } = await import("../commands/memory.js");
     const { opts } = parseArgs(node, rawArgs);

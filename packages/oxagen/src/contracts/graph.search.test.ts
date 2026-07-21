@@ -20,7 +20,9 @@ describe("graph.search capability", () => {
   });
 
   it("rejects a query exceeding 1000 characters (max)", () => {
-    expect(() => graphSearch.input.parse({ query: "a".repeat(1001) })).toThrow();
+    expect(() =>
+      graphSearch.input.parse({ query: "a".repeat(1001) }),
+    ).toThrow();
   });
 
   it("rejects a missing query field", () => {
@@ -45,67 +47,21 @@ describe("graph.search capability", () => {
   });
 
   it("rejects limit=0 (below min)", () => {
-    expect(() => graphSearch.input.parse({ query: "test", limit: 0 })).toThrow();
-  });
-
-  it("rejects limit=51 (above max)", () => {
-    expect(() => graphSearch.input.parse({ query: "test", limit: 51 })).toThrow();
-  });
-
-  it("rejects a non-integer limit", () => {
-    expect(() => graphSearch.input.parse({ query: "test", limit: 2.5 })).toThrow();
-  });
-
-  // ── input: kinds (optional) ───────────────────────────────────────────────
-
-  it("defaults kinds to undefined", () => {
-    const parsed = graphSearch.input.parse({ query: "test" });
-    expect(parsed.kinds).toBeUndefined();
-  });
-
-  it("accepts a valid kinds array", () => {
-    const parsed = graphSearch.input.parse({
-      query: "test",
-      kinds: ["entity", "file", "symbol", "chunk", "memory", "execution", "document", "message"],
-    });
-    expect(parsed.kinds).toEqual([
-      "entity",
-      "file",
-      "symbol",
-      "chunk",
-      "memory",
-      "execution",
-      "document",
-      "message",
-    ]);
-  });
-
-  it("accepts an empty kinds array", () => {
-    const parsed = graphSearch.input.parse({ query: "test", kinds: [] });
-    expect(parsed.kinds).toEqual([]);
-  });
-
-  it("rejects an invalid kind value", () => {
     expect(() =>
-      graphSearch.input.parse({ query: "test", kinds: ["invalid_kind"] }),
+      graphSearch.input.parse({ query: "test", limit: 0 }),
     ).toThrow();
   });
 
-  // ── input: isSystem (optional) ────────────────────────────────────────────
-
-  it("defaults isSystem to undefined", () => {
-    const parsed = graphSearch.input.parse({ query: "test" });
-    expect(parsed.isSystem).toBeUndefined();
+  it("rejects limit=51 (above max)", () => {
+    expect(() =>
+      graphSearch.input.parse({ query: "test", limit: 51 }),
+    ).toThrow();
   });
 
-  it("accepts isSystem=true", () => {
-    const parsed = graphSearch.input.parse({ query: "test", isSystem: true });
-    expect(parsed.isSystem).toBe(true);
-  });
-
-  it("accepts isSystem=false", () => {
-    const parsed = graphSearch.input.parse({ query: "test", isSystem: false });
-    expect(parsed.isSystem).toBe(false);
+  it("rejects a non-integer limit", () => {
+    expect(() =>
+      graphSearch.input.parse({ query: "test", limit: 2.5 }),
+    ).toThrow();
   });
 
   // ── input: labels (optional) ──────────────────────────────────────────────
@@ -118,9 +74,9 @@ describe("graph.search capability", () => {
   it("accepts a labels array", () => {
     const parsed = graphSearch.input.parse({
       query: "test",
-      labels: ["Person", "SourceFile"],
+      labels: ["Person", "Company"],
     });
-    expect(parsed.labels).toEqual(["Person", "SourceFile"]);
+    expect(parsed.labels).toEqual(["Person", "Company"]);
   });
 
   // ── output shape ──────────────────────────────────────────────────────────
@@ -130,20 +86,18 @@ describe("graph.search capability", () => {
       results: [
         {
           nodeId: "node_abc",
-          label: "SourceFile",
-          displayName: "auth/token.ts",
-          kind: "file",
-          snippet: "function refreshToken()",
+          label: "Document",
+          displayName: "Authentication policy",
+          kind: "entity",
+          snippet: "Refresh tokens expire after 30 days.",
           score: 0.94,
-          isSystem: true,
         },
       ],
     });
     expect(parsed.results).toHaveLength(1);
     expect(parsed.results[0]?.nodeId).toBe("node_abc");
-    expect(parsed.results[0]?.kind).toBe("file");
+    expect(parsed.results[0]?.kind).toBe("entity");
     expect(parsed.results[0]?.score).toBe(0.94);
-    expect(parsed.results[0]?.isSystem).toBe(true);
   });
 
   it("parses an empty results array", () => {
@@ -161,11 +115,10 @@ describe("graph.search capability", () => {
         results: [
           {
             nodeId: "node_abc",
-            label: "SourceFile",
-            displayName: "auth.ts",
-            kind: "file",
-            snippet: "code",
-            isSystem: true,
+            label: "Document",
+            displayName: "Authentication policy",
+            kind: "entity",
+            snippet: "policy",
             // score missing
           },
         ],

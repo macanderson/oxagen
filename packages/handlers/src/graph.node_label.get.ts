@@ -5,10 +5,9 @@ import { runInTenantScope } from "@oxagen/tenancy";
 
 const BASE_LABEL = "GraphNode";
 
-export const graphNodeLabelsGetHandler: CapabilityHandler<typeof graphNodeLabelsGet> = async (
-  input,
-  ctx,
-) => {
+export const graphNodeLabelsGetHandler: CapabilityHandler<
+  typeof graphNodeLabelsGet
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
   let labels: string[] = [];
 
@@ -17,12 +16,18 @@ export const graphNodeLabelsGetHandler: CapabilityHandler<typeof graphNodeLabels
     try {
       const result = await session.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+         WHERE n.is_system = false
          RETURN labels(n) AS labels`,
         { nodeId: input.nodeId, orgId, workspaceId },
       );
       const record = result.records[0];
-      if (!record) throw new Error(`graph.node.labels.get: node "${input.nodeId}" not found`);
-      labels = (record.get("labels") as string[]).filter((l) => l !== BASE_LABEL);
+      if (!record)
+        throw new Error(
+          `graph.node.labels.get: node "${input.nodeId}" not found`,
+        );
+      labels = (record.get("labels") as string[]).filter(
+        (l) => l !== BASE_LABEL,
+      );
     } finally {
       await session.close();
     }

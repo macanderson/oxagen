@@ -3,6 +3,13 @@ title: "GitHub App Setup"
 description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
 ---
 
+> **Superseded for launch (2026-07-21).** This archived document preserves the
+> pre-pruning implementation record. GitHub now contributes governed provider metadata;
+> the exact code graph stays local, and source text, symbols, chunks, imports, and code
+> embeddings are not ingested centrally. Canonical protected/default-ref topology and a
+> typed evidence ledger are follow-ups. The historical body below is not a current
+> implementation contract.
+
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
 > The GitHub App Setup feature is fully shipped and operational. All core deliverables are implemented: OAuth authentication flow (auth-url and callback routes), webhook receiver for live sync, Inngest-based initial file sync, database schema for storing connections and OAuth accounts, environment variable configuration, and customer-facing setup UI. The implementation spans API routes, database migrations, Inngest functions, app landing pages, and comprehensive documentation.
@@ -374,4 +381,3 @@ Still open — worth tracking in Linear (`oxagen-v2`, labels `connectors`, `inge
 3. **`push` → `source` file ingestion** — webhook `push` currently ingests commits; ingesting the
    changed *files* (added/modified/removed) as `source` records on push is a follow-up. Initial
    sync still covers the full file tree.
-

@@ -52,7 +52,6 @@ describe("isInlineDispatchableCliCommand", () => {
       "models:status",
       "models:use",
       "graph:search",
-      "graph:status",
       "memory:list",
       "memory:show",
       "memory:edit",

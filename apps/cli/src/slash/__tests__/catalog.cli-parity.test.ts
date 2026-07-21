@@ -38,7 +38,6 @@ describe("describeCliCommands — recursive subcommand discovery", () => {
   it("includes colon-joined subcommand paths — graph:search and mcp:add", () => {
     const names = describeCliCommands(buildProgram()).map((c) => c.name);
     expect(names).toContain("graph:search");
-    expect(names).toContain("graph:status");
     expect(names).toContain("mcp:add");
     expect(names).toContain("mcp:list");
     expect(names).toContain("memory:list");

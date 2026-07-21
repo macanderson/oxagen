@@ -76,11 +76,11 @@ export async function register(): Promise<void> {
     const { bootstrapIAMRuntime } = await import("@oxagen/iam");
     const { bootstrapBillingRuntime } = await import("@oxagen/billing");
     const { bootstrapEntitlementRuntime } = await import("@oxagen/plugins");
-    const { bootstrapEngramRuntime } = await import("@oxagen/agent");
-    const { eventClient } = await import("@/event-client");
     const { setSecurityEventEmitter } = await import("@oxagen/oxagen/kernel");
     const { recordSecurityEvent } = await import("@oxagen/telemetry");
-    const { makeSecurityEventInserter } = await import("@oxagen/database/security");
+    const { makeSecurityEventInserter } = await import(
+      "@oxagen/database/security"
+    );
     const { assertRlsConnectionSafe } = await import("@oxagen/database");
 
     // Refuse to boot if a production runtime disabled RLS enforcement, or if
@@ -96,13 +96,6 @@ export async function register(): Promise<void> {
     // Wire the capability entitlement gate — blocks invocations of plugin-owned
     // capabilities when the plugin is not installed+enabled for the org.
     bootstrapEntitlementRuntime();
-
-    // Wire the Engram async backends: the Inngest-backed graph-sync/embed client
-    // (so agent memory writes fan out :REMEMBERS/:ABOUT Neo4j edges + embeddings)
-    // and the ClickHouse compile-telemetry sink. Without this the emit-sync client
-    // and telemetry sink stay null and silently drop every event. Best-effort — a
-    // degraded Inngest/ClickHouse never breaks a request (the emitters swallow).
-    bootstrapEngramRuntime(eventClient);
 
     // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
     // Registered once per server process, immediately after bootstrapIAMRuntime()

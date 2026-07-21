@@ -31,6 +31,7 @@ export const graphNodeGetHandler: CapabilityHandler<
       // matched in the node pattern so the index can prune up front.
       const result = await session.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+         WHERE n.is_system = false
          RETURN
            n.publicId    AS nodeId,
            n.label       AS label,

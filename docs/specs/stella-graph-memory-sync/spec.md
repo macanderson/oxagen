@@ -1,15 +1,26 @@
 # Stella ⇄ Oxagen Graph — Memory, Execution Lineage & Business-Process Binding
 
-**Status:** Draft · **Owner:** Mac Anderson · **Surface:** `apps/cli` (Stella) + `packages/engram` + `packages/oxagen` contracts + Neo4j ontology
-**Related:** ADR-018 (CLI ↔ workspace graph bidirectional sync — down-sync shipped, up-sync in flight on `feat/graph-sync-bidirectional`), [[connector-dual-write-pattern]], [[graph-node-anchor-and-is-system-model]], [[cli-claude-code-parity-stack]]
+**Status:** Superseded — all workspace-graph synchronization directions are obsolete · **Owner:** Mac Anderson · **Surface:** `apps/cli` (Stella) + `packages/engram` + `packages/oxagen` contracts + Neo4j ontology
+**Related:** ADR-018 (superseded), `docs/specs/workspace-graph-boundary/spec.md`, [[connector-dual-write-pattern]], [[graph-node-anchor-and-is-system-model]], [[cli-claude-code-parity-stack]]
 
-> **Coordinate before building.** A parallel session owns `feat/graph-sync-bidirectional` (ADR-018 up-sync). This spec is the *design layer above the transport* — it says **what** Stella records and **how** it obeys, and reuses ADR-018's sync plumbing. Land the transport first; this rides on it.
+> **Do not build the up-sync plan in this document.** The workspace-graph
+> boundary supersedes every proposal here that uploads Stella's checkout graph,
+> writes exact file/symbol lineage into the workspace graph, or rides
+> `graph.sync.push`. The former cloud→CLI path is also retired: graph export,
+> CLI pull/status, and the local workspace DuckDB projection cannot guarantee
+> tombstone, deletion, or authorization-revocation convergence. Stella owns its
+> exact local graph and memory; shared Oxagen context is retrieved online through
+> the current authorization boundary. Oxagen's workspace graph may accept
+> verified canonical domain/code-scope projections. A future
+> `RunEvidenceManifestV1` path may carry governed run evidence, but no such
+> ingest implementation is defined here. Memory lifecycle and rule-adherence
+> ideas may be reconsidered separately.
 
 ---
 
 ## 0. One-paragraph thesis
 
-Every other coding agent (Cursor, Copilot, Claude Code, Windsurf, Cody) keeps memory as flat, per-repo, per-user text that never learns across sessions, never crosses repos, and has **no idea what the code is *for*.** Oxagen already stores, per workspace, (a) a **business ontology** (Customer, Invoice, Order, `:Feature`, processes) ingested from the company's real systems, (b) the **code graph** (`:SourceFile`/`:SourceSymbol`) linked to those features via `IMPLEMENTS`, and (c) a **portable, confidence-decayed memory substrate** (`@oxagen/engram`) with a built-in CRDT sync protocol. Stella is the only coding agent that can stand on all three. The win is a flywheel: Stella **writes code → records what it did as graph lineage bound to the business process it served → distills reusable facts and rules → obeys those rules on the next run, everywhere, for every agent and human.** This document specifies that flywheel.
+Stella's exact code graph and Oxagen's governed workspace context are complementary, not one graph to synchronize. Stella follows the bytes in the active checkout; Oxagen retains the business ontology, stable canonical domain/code-scope topology, governed context, and enterprise policy. The intended bridge is immutable, attributable run evidence that can support coarse business impact without centrally copying branch-local files and symbols. This document's memory and rule-adherence ideas remain useful product intent, but its generic graph-up-sync mechanism and exact file-lineage projection are superseded.
 
 ---
 
@@ -25,7 +36,7 @@ Every other coding agent (Cursor, Copilot, Claude Code, Windsurf, Cody) keeps me
 | Write API | `engram/src/api/*` + `createEngram(store)` | `remember(episodic)`, `assert(fact, confidence)`, `pin(rule)` / `unpin`, `relate(src,edge,tgt)`. |
 | Consolidation | `engram/src/consolidation/*` | `distill()` clusters episodics → semantic facts; `detectPatterns()`+`promotePatterns()` turn repeated successful tool sequences → procedural rules; `deduplicateSemanticRecords()`. |
 | Sync (offline-first) | `engram/src/sync/*` | **Full CRDT sync**: `VectorClock`, `ORSet`, `PNCounter`, Merkle-tree diff, `prioritizeForSync`, `batchByPriority`, `syncWithPeer(SyncRequest→SyncResponse)`. |
-| Graph projection | `engram/src/graph/emit-sync.ts` | `emitGraphSync` / `emitEmbedEvent` project records into Neo4j as nodes/edges + enqueue embeddings. |
+| Cloud projection | Retired | Engram remains local. Shared memory must be promoted through an explicit, typed, IAM-governed path rather than hidden graph-sync/embed fan-out. |
 | Legacy migration | `engram/src/migration/neo4j-to-engram.ts` | Gen-1 `:AgentMemory` → Gen-2 engram records (`WEIGHT_TO_SALIENCE`). |
 | Decay / reinforcement | `engram/src/{decay,reinforcement,salience}.ts` | Half-life salience decay, reinforcement on re-use. |
 
@@ -36,19 +47,23 @@ Every other coding agent (Cursor, Copilot, Claude Code, Windsurf, Cody) keeps me
 | Fleet lessons (weighted JSONL) | `apps/cli/src/agent/fleet/memory.ts` | `~/.config/oxagen/memories/<proj>.jsonl` | ❌ (planned to promote to `agent.memory.write`) |
 | Episodic session memory | `apps/cli/src/agent/memory.ts` → engram | `~/.config/oxagen/context.duckdb` | ❌ |
 | Turn traces (eval/enhance/route/execute/judge, tokens, cost, tool events) | `apps/cli/src/agent/trace*.ts` | `~/.config/oxagen/traces/<proj>.json` | ❌ |
-| Local code graph | `apps/cli/src/agent/code-graph.ts` | in-memory | ❌ (ephemeral) |
-| **Workspace graph projection** | `apps/cli/src/commands/graph.pull.ts` | `~/.config/oxagen/graph/<ws>.duckdb` | ⬇️ **down-sync SHIPPED** (`graph.export`); ⬆️ up-sync in flight |
+| Local code graph | `apps/cli/src/daemon/code-graph/store.ts` | checkout-local DuckDB | ❌ (stays local) |
+| **Workspace graph projection** | historical `apps/cli/src/commands/graph.pull.ts` | historical `~/.config/oxagen/graph/<ws>.duckdb` | **Retired:** no export, pull/status, cursor, or workspace replica |
 
-**Takeaway:** Stella already *reads* the workspace graph locally and already uses engram's episodic store. It does **not** yet (a) use engram's `assert`/`pin`/consolidation, (b) up-sync any memory or execution, or (c) connect what it did to the business graph. That is the work.
+**Takeaway:** Stella uses local code and memory stores. It does not keep a workspace-graph replica. Shared context is read through scoped online capabilities, while memory federation, execution evidence, and code/process bindings each require a separately governed design consistent with the workspace-graph boundary.
 
-### 1.3 The platform graph model (what we write *into*)
+### 1.3 Historical platform graph model (superseded for code/run evidence)
+
+The inventory below describes the pre-boundary model. Its `SourceFile`,
+`SourceSymbol`, and execution-edge shapes are not approved as the launch upload
+target for Stella checkout detail.
 
 - Universal anchor `(:GraphNode:<Label>)` with `publicId`, `displayName`, `properties`, `is_system`, optional `embedding float[1536]`; `graph_node_embedding_index` powers NL search via `graph.search` (kinds: `entity·file·symbol·chunk·memory·execution·document·message·asset`). Cite nodes by `knowledgeNodeRef{id,label,displayName,properties}`, **never raw UUID** ([[ui-node-edge-citation-rule]]).
 - Memory (Gen-1): `agent.memory.write/recall/policy.*` → `(:AgentMemory)` with `REMEMBERS`/`ABOUT` edges, vector recall, half-life decay.
 - Executions: Postgres `agent_executions` (status, tokens, cost, `parent_execution_id`, `synced_to_graph_at`) projected to `(:Execution)` with `INVOKED`/`ORIGINATED_FROM`/`CALLED_TOOL` edges (`packages/ontology/src/mutations/record-execution.ts`).
 - Business ontology: customer entities are `(:<Type>:EntityNode)` keyed by `naturalKey="{connector}:{conn}:{externalId}"`, `entityType` property, multi-label via `graph.node.label.add/remove`. Code is `(:SourceFile)/(:SourceSymbol)/(:SourceChunk)`; `(:Feature)-[:IMPLEMENTS]->(:SourceFile|:SourceSymbol)` is inferred today.
 
-### 1.4 The three greenfield gaps this spec fills
+### 1.4 Original greenfield gaps (historical)
 
 1. **Memory up-sync** — Stella's engram records (episodic/semantic/procedural) never reach the cloud graph. *(Build on ADR-018 + engram `sync/`.)*
 2. **Execution-as-lineage with code + process binding** — no `(:Execution)-[:MODIFIED]->(:SourceFile|:Feature)` and no `(:Execution)-[:SERVED]->(business process/entity)`. The agent runs but the graph never learns *what code it changed* or *what the business it served*.
@@ -60,7 +75,7 @@ Every other coding agent (Cursor, Copilot, Claude Code, Windsurf, Cody) keeps me
 
 Two streams: **executions** (what happened) and **memories** (what we learned). Record by value, not by volume — every record costs sync bandwidth, graph size, and recall noise.
 
-### 2.1 Executions → graph (the audit + lineage stream)
+### 2.1 Executions → graph (historical proposal; superseded)
 
 One `(:Execution)` per Stella turn/fleet-task, written **after** the turn (we know the outcome). Priority = highest first.
 
@@ -149,7 +164,7 @@ Before a turn, retrieve the **active rule set** for this context and inject it i
 - High-confidence semantic facts relevant to the touched files (vector recall via `agent.memory.recall` / `graph.search kinds=[memory]`, scoped to the files' `:Feature`/domain).
 - Workspace policies (`agent.memory.policy.read`).
 
-Retrieval is **graph-local first** (the down-synced DuckDB projection — zero latency, offline-capable) with a cloud `agent.memory.recall` fallback. This is the same `recallContext()` seam already in `runAgent`; we upgrade it from "recent episodics" to "applicable rules + facts."
+Retrieval starts from Stella-local memory and the checkout-local code graph. Shared cloud context, when explicitly authorized for the turn, is fetched through a bounded online capability; there is no bulk workspace replica or offline cloud-context fallback. The `recallContext()` seam can still evolve from "recent episodics" to applicable local rules and facts.
 
 ### 4.2 Tier 2 — Gate (hard, per tool call)
 
@@ -176,30 +191,30 @@ Tier-2 blocks and Tier-3 catches both feed `successCount`/`failureCount` back in
 
 ## 5. Sync architecture (CLI ⇄ cloud)
 
-### 5.1 Reuse, don't rebuild
+### 5.1 Both synchronization directions are retired
 
-- **Down (cloud→CLI):** shipped — `graph.export` → local DuckDB projection (`graph.pull.ts`). Gives Tier-1 retrieval offline.
-- **Up (CLI→cloud):** ride ADR-018's `graph.sync.push` for the **execution + code-lineage** delta, and engram's **CRDT `syncWithPeer`** for the **memory** delta. Both are content-addressed and idempotent, so retries and concurrent agents are safe.
+- **Down (cloud→CLI): retired.** No graph export, pull/status command, cursor, or local workspace projection. Bulk dumps cannot converge safely for tombstones, deletion, and grant revocation.
+- **Up (CLI→cloud): retired.** Do not use generic graph mutation for execution, code lineage, or memory. Any future memory federation or `RunEvidenceManifestV1` ingest needs a narrow authenticated contract, explicit authority, retention, and verification semantics outside this obsolete transport plan.
 
 ### 5.2 What syncs where
 
 | Stream | Local write | Up-sync transport | Cloud landing |
 |---|---|---|---|
-| Memories (episodic/semantic/procedural) | engram store (DuckDB) | engram `sync/` CRDT (`SyncRequest`/Merkle diff) → new `agent.memory.sync` contract (the "peer" endpoint) | `(:AgentMemory)`/engram nodes via `emitGraphSync`; embeddings enqueued |
-| Executions + code lineage | trace store + a new local "pending executions" queue | ADR-018 `graph.sync.push` (git-native delta: repo+path+contentHash) | `(:Execution)` + `MODIFIED`/`SERVED`/`DERIVED_FROM` edges |
+| Memories (episodic/semantic/procedural) | engram store (DuckDB) | **Not specified here.** The former CRDT peer/up-sync proposal requires a new governed design. | No new landing is approved by this spec. |
+| Executions + code lineage | local trace/evidence sources | **Retired:** no `graph.sync.push`. A future narrow evidence-manifest ingest is a separate design. | Evidence ledger first; any coarse workspace projection must be derived and verified. |
 | Raw telemetry | (already) | existing telemetry ingestion | ClickHouse |
 
-### 5.3 Offline-first + prioritized
+### 5.3 Historical offline-first proposal (superseded)
 
-The CLI must work on a plane. All writes go to the local store immediately; sync is a background, resumable reconcile. `prioritizeForSync` + `batchByPriority` (already in engram) push **high-salience, human-originated, rule-affecting** records first; low-salience episodics may never sync (they decay locally). Merkle-tree diff (`diffMerkleTrees`) means a reconnect transfers only the delta, not the whole store. Vector clocks + OR-sets resolve concurrent writes from multiple agents/machines without a coordinator — critical because [[concurrent-main-commits]] shows many sessions run at once.
+The CLI must still work offline for checkout-local code and Stella-local memory. This document does not authorize a background workspace-graph reconcile. The former prioritized CRDT proposal is retained as research for a future memory-federation spec, not as a graph-sync launch path.
 
 ### 5.4 Tenancy + privacy
 
-Namespaces (`{org,workspace,session,agent}`) scope every record; sync is org+workspace-scoped through the API key, enforced server-side like every contract. Memories are customer-owned and portable (Neo4j = the customer's carry-away graph, per the four-store law) — secrets/credentials are **never** stored as memory content (the noise filter + a redaction pass on episodic payloads).
+Namespaces (`{org,workspace,session,agent}`) scope local records. Any future federation contract must enforce organization/workspace scope server-side and define deletion, revocation, retention, and redaction semantics. Secrets and credentials are **never** stored as memory content.
 
 ---
 
-## 6. The moat: binding code-agent executions to business processes
+## 6. Historical graph-binding proposal (superseded)
 
 This is the section competitors structurally cannot copy, because they have no business ontology.
 
@@ -239,6 +254,10 @@ This is the section competitors structurally cannot copy, because they have no b
 
 ## 7. Contracts & surfaces (capability-parity: contract → API → MCP → CLI)
 
+> **Historical, non-normative inventory.** The proposed execution/link/lineage
+> capabilities below are not approved launch surfaces. They must be redesigned
+> around the workspace-graph and evidence-ledger boundary before implementation.
+
 New/changed capabilities (each gets a contract in `packages/oxagen/src/contracts/`, an API route, an MCP tool, and CLI wiring — [[no-drift-across-surfaces]]):
 
 | Capability | Purpose | Notes |
@@ -257,23 +276,23 @@ CLI: extend `runAgent`/the pipeline to write engram records + queue an execution
 
 ## 8. Phased delivery (coordinate with ADR-018)
 
-- **Phase 0 — Land the transport.** Merge ADR-018 up-sync (`graph.sync.push`) and confirm down-sync. *(Other session; this spec waits on it.)*
+- **Phase 0 — Superseded.** Retire both ADR-018 directions: no graph export, pull/status, workspace replica, or generic graph mutation transport.
 - **Phase 1 — Memory write + sync.** Wire the CLI agent loop to engram `remember/assert/pin` with the §3.1 noise filter; stand up `agent.memory.sync` (engram CRDT peer) and up-sync memories. *Verification:* write a fact in the CLI, see it in `graph.search kinds=[memory]` in the web app.
 - **Phase 2 — Execution lineage.** `execution.record` + `MODIFIED` edges from the turn's `filesTouched`. *Verification:* run Stella on a file, query `execution.lineage.get`, see the `:Execution`→`:SourceFile` edge.
 - **Phase 3 — Business binding.** `SERVED` inference (join `MODIFIED` × `IMPLEMENTS`), `process.executions.list`, impact-analysis surface. *Verification:* edit billing code → "served the Billing process" in the PR/UI.
 - **Phase 4 — Adherence loop.** Tier-1 rule retrieval into the prompt, Tier-2 machine-guard gate (reuse permission gate), Tier-3 compliance judge + violation episodics + decay. *Verification:* pin a "no edits to applied migrations" rule, watch the gate block a violating edit and the judge attest compliance.
 - **Phase 5 — Consolidation & ROI.** Scheduled `distill`/`promotePatterns` (Inngest), rule demotion/decay, per-process ROI reporting.
 
-Each phase is independently shippable and additive; Phases 1–2 don't need 3–5 to deliver value.
+Phases 1–5 are retained as historical product intent, not an executable plan. They require a replacement spec that preserves Stella-local code detail, a canonical-ref-only workspace projection, and a separately authorized evidence ledger.
 
 ---
 
 ## 9. Risks & open decisions
 
 - **Recall noise is the existential risk.** If memory recall returns junk, the agent learns to ignore it and the whole flywheel dies. Mitigation: aggressive §3.1 filter, confidence/salience thresholds on recall, decay, dedupe. Treat recall precision as the headline metric.
-- **`SERVED` confidence.** Inferred process binding will be imperfect. Ship it as a *suggested* edge (low `confidence`, `inferred:true`) routed through the existing `semantic.edge.suggest` approval flow before it's load-bearing for audit.
+- **`SERVED` confidence.** Inferred process binding will be imperfect. Do not ship it through the retired semantic-edge family. A replacement candidate model must preserve evidence and provenance, require explicit authorized approval, and support invalidation before any binding becomes load-bearing for audit.
 - **Privacy of code as memory.** Never sync secret-bearing payloads; redact episodic payloads; memories are customer-owned and deletable (GDPR erase path already exists).
-- **Open:** (a) machine-guard rule DSL — start with the permission-rule syntax already shipped (`Tool(glob)`), extend only as needed. (b) Decay constants for procedural rules (separate from the memory half-life policy). (c) Whether `:Execution` lineage lives only in Neo4j or also mirrors a Postgres edge table for transactional joins. (d) Coordinate the `agent.memory.sync` peer contract with the ADR-018 author so memory + code-lineage share one push session.
+- **Open:** (a) machine-guard rule DSL — start with the permission-rule syntax already shipped (`Tool(glob)`), extend only as needed. (b) Decay constants for procedural rules (separate from the memory half-life policy). (c) The authoritative typed evidence-ledger store and projection model. (d) A separate memory-federation contract with explicit lifecycle, authority, and erasure semantics.
 
 ---
 

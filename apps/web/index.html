@@ -625,7 +625,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       <span class="tick-item">
         <span><b>oxagen</b> solve</span><span class="sep">·</span>
         <span><b>oxagen</b> agents</span><span class="sep">·</span>
-        <span><b>oxagen</b> graph pull</span><span class="sep">·</span>
+        <span><b>oxagen</b> view</span><span class="sep">·</span>
         <span><b>oxagen</b> graph search</span><span class="sep">·</span>
         <span><b>oxagen</b> pr</span><span class="sep">·</span>
         <span><b>oxagen</b> sandbox</span><span class="sep">·</span>
@@ -707,12 +707,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
             <svg viewBox="0 0 24 24"><path d="M12 3l4 2.3v4.6L12 12.2 8 9.9V5.3L12 3z"/><path d="M17.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/><path d="M6.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/></svg>
           </div>
           <h3>Grounded in your map</h3>
-          <p>Pull your workspace's connected map down locally. The agent reasons with your
-          architecture and past decisions — with citations, not guesses.</p>
+          <p>Query your workspace's governed context through its live authorization boundary.
+          Exact checkout detail stays local; shared answers remain scoped and citable.</p>
           <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen graph pull</span></div>
-            <div><span class="i">◆</span> snapshot synced · incremental · local replica</div>
-            <div><span class="g">✔</span> context ready — answers cite their sources</div>
+            <div><span class="p">$</span> <span class="c">oxagen graph search -q "billing policy"</span></div>
+            <div><span class="i">◆</span> live query · workspace scoped · RBAC enforced</div>
+            <div><span class="g">✔</span> bounded results cite their sources</div>
           </div>
         </article>
       </div>
@@ -1117,12 +1117,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       { cls: "t-ok", text: "✔ 2 pull requests open · 2 on the way" }
     ],
     [
-      { cls: "cmd", text: 'oxagen graph search "who calls refundInvoice"' },
-      { cls: "t-dim", text: "◆ searching your map · local replica · nothing leaves the machine" },
-      { cls: "t-diff", text: "1. billing/worker.ts:118        retry path, nightly job" },
-      { cls: "t-diff", text: "2. api/routes/refunds.ts:41     customer-initiated" },
-      { cls: "t-diff", text: "3. support/tools/goodwill.ts:9  support console" },
-      { cls: "t-ok", text: "✔ 3 call sites · each answer cites its source" }
+      { cls: "cmd", text: 'oxagen graph search -q "who owns the billing policy?"' },
+      { cls: "t-dim", text: "◆ live workspace query · RBAC scoped · bounded results" },
+      { cls: "t-diff", text: "1. Billing Platform team        owner · directory source" },
+      { cls: "t-diff", text: "2. Subscription Policy          document · Drive source" },
+      { cls: "t-diff", text: "3. PR #842                      provider metadata · GitHub" },
+      { cls: "t-ok", text: "✔ 3 results · each answer cites its source" }
     ]
   ];
 

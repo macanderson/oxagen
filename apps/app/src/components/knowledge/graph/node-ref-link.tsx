@@ -22,7 +22,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { NodeRef, nodeCitationLabel } from "./node-ref";
@@ -43,7 +43,9 @@ export function NodeRefLink({ node, href, className }: NodeRefLinkProps) {
   const label = nodeCitationLabel(node);
 
   return (
-    <span className={cn("inline-flex max-w-full items-center gap-0.5", className)}>
+    <span
+      className={cn("inline-flex max-w-full items-center gap-0.5", className)}
+    >
       <NodeRef node={node} />
       {href ? (
         <Button

@@ -31,7 +31,7 @@ import { parse as parseYaml } from "yaml";
  * `fileURLToPath(import.meta.url)` throws ERR_INVALID_ARG_TYPE on every cold
  * start and takes the whole API function down (this is what broke the connector
  * "Configure" flow in prod). Same failure class fixed for the tree-sitter wasm
- * loader in parsers/loader.ts (P0 2026-06-12).
+ * loader in @oxagen/code-graph (P0 2026-06-12).
  */
 function moduleDir(): string {
   try {
@@ -213,7 +213,9 @@ function resolveBuiltInSchemaPath(pluginId: string): string {
  * Throws when the YAML file exists but fails to parse or produces an
  * unexpected shape — this is a deployment error and should surface loudly.
  */
-export function loadBuiltInSchema(pluginId: string): LoadedConnectorSchema | null {
+export function loadBuiltInSchema(
+  pluginId: string,
+): LoadedConnectorSchema | null {
   if (!BUILT_IN_PLUGIN_IDS.has(pluginId)) {
     return null;
   }
@@ -227,7 +229,9 @@ export function loadBuiltInSchema(pluginId: string): LoadedConnectorSchema | nul
   const parsed = parseYaml(content) as unknown;
 
   if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`connector-schema-loader: YAML for "${pluginId}" did not parse to an object`);
+    throw new Error(
+      `connector-schema-loader: YAML for "${pluginId}" did not parse to an object`,
+    );
   }
 
   const loaded = parsed as LoadedConnectorSchema;
@@ -265,14 +269,22 @@ export async function loadSchema(
   }
 
   // Partner URL fetch.
-  const { schemaUrl, cacheWriter, fetchTimeoutMs = 10_000, maxRetries = 2 } =
-    options ?? {};
+  const {
+    schemaUrl,
+    cacheWriter,
+    fetchTimeoutMs = 10_000,
+    maxRetries = 2,
+  } = options ?? {};
 
   if (!schemaUrl) {
     return null;
   }
 
-  const schema = await fetchPartnerSchema(schemaUrl, fetchTimeoutMs, maxRetries);
+  const schema = await fetchPartnerSchema(
+    schemaUrl,
+    fetchTimeoutMs,
+    maxRetries,
+  );
 
   // Warm in-process cache.
   schemaCache.set(pluginId, schema);
@@ -370,7 +382,10 @@ function isBlockedAddress(ip: string): boolean {
 
 function isBlockedIPv4(ip: string): boolean {
   const parts = ip.split(".").map((p) => Number(p));
-  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)
+  ) {
     return true;
   }
   const [a, b] = parts as [number, number, number, number];
@@ -624,15 +639,27 @@ export function validateConfigAgainstSchema(
   // Validate top-level config fields.
   const configFields = pluginSchema.config?.fields ?? [];
   for (const field of configFields) {
-    validateField(`config.${field.key}`, config[field.key], field.validation, errors);
+    validateField(
+      `config.${field.key}`,
+      config[field.key],
+      field.validation,
+      errors,
+    );
   }
 
   // Validate auth scheme fields when authSchemeId is provided.
   if (authSchemeId) {
-    const scheme = pluginSchema.auth?.schemes.find((s) => s.id === authSchemeId);
+    const scheme = pluginSchema.auth?.schemes.find(
+      (s) => s.id === authSchemeId,
+    );
     if (scheme?.fields) {
       for (const field of scheme.fields) {
-        validateField(`auth.${field.key}`, config[field.key], field.validation, errors);
+        validateField(
+          `auth.${field.key}`,
+          config[field.key],
+          field.validation,
+          errors,
+        );
       }
     }
   }
@@ -653,7 +680,11 @@ function validateField(
   const absent = value === undefined || value === null || value === "";
 
   if (validation.required === true && absent) {
-    errors.push({ field: path, message: `${path} is required`, code: "required" });
+    errors.push({
+      field: path,
+      message: `${path} is required`,
+      code: "required",
+    });
     // No further checks if the value is absent.
     return;
   }
@@ -706,14 +737,20 @@ function validateField(
 
   // Array checks.
   if (Array.isArray(value)) {
-    if (validation.minItems !== undefined && value.length < validation.minItems) {
+    if (
+      validation.minItems !== undefined &&
+      value.length < validation.minItems
+    ) {
       errors.push({
         field: path,
         message: `${path} must have at least ${validation.minItems} item(s)`,
         code: "minItems",
       });
     }
-    if (validation.maxItems !== undefined && value.length > validation.maxItems) {
+    if (
+      validation.maxItems !== undefined &&
+      value.length > validation.maxItems
+    ) {
       errors.push({
         field: path,
         message: `${path} must have at most ${validation.maxItems} item(s)`,

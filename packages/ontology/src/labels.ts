@@ -13,7 +13,7 @@
  *    node; it backs the publicId/scope/vector indexes and is never dynamic.
  *  - The domain label (:Submarine, :Execution, …) is the node's real type. Customer
  *    types are validated here; the Schema Registry is the upstream allow-list that
- *    decides WHICH types may exist (see graph.ingest-vocabulary), while this module
+ *    decides WHICH types may exist, while this module
  *    guarantees whatever string reaches a query is structurally safe.
  */
 
@@ -81,7 +81,9 @@ export function sanitizeLabel(raw: string): string | null {
     .split(/[^A-Za-z0-9]+/)
     .filter((w) => w.length > 0);
   if (words.length === 0) return null;
-  let pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
+  let pascal = words
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join("");
   // A Neo4j label must start with a letter; prefix `N` for digit-leading results.
   if (!/^[A-Za-z]/.test(pascal)) pascal = `N${pascal}`;
   const capped = pascal.slice(0, 99);

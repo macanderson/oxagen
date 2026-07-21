@@ -210,34 +210,25 @@ URI:      NEO4J_URI (env)
 Database: NEO4J_DATABASE
 Usage:
   - Knowledge graph nodes + relationships
-  - Agent execution lineage (subagent fan-out AND A2A-originated runs —
-    both show up via get_execution_trace / `oxagen trace` the same way;
-    contract/route file stem is still agent.trace.get.ts post-ADR-025)
-  - Memory nodes (synced from Engram)
+  - IAM-governed AgentMemory nodes
   - Semantic edges / ontology
-  - Code graph (packages/code-graph/)
-Packages: packages/engram/src/store/graph-store.ts
-          packages/agent/src/memory/neo4j.ts
-          packages/agent/src/adapters/graph-sync.ts
+  - Governed canonical repository domain/code-scope projection
+  - NOT the exact checkout graph or the authoritative run-evidence ledger
+Packages: packages/agent/src/memory/neo4j.ts
 ```
 
-## Memory Store — Engram (packages/engram/, 63 files)
+## Local Memory Store — Engram (packages/engram/)
 ```
 Backends:
   - DuckDB (local episodic store)         engram/src/store/duckdb-adapter.ts
-  - ClickHouse (analytics/telemetry)      engram/src/store/clickhouse-adapter.ts
-  - Neo4j (graph sync)                    engram/src/store/graph-store.ts
-  - PostgreSQL (via @oxagen/database)
 
 Subsystems:
-  embed/        → vector embedding pipeline + quantization
-  retrieval/    → fusion (vector+lexical+graph+temporal)
-  blackboard/   → multi-agent shared working memory
-  consolidation → dedup, distill, promote
+  retrieval/    → lexical + temporal retrieval and fusion
+  consolidation → local dedup, distill, promote primitives
   compiler/     → context window packing
   session/      → session event log, fork, replay (analyzeReplay)
   sync/         → CRDT merge, Merkle sync, protocol
-  api/          → remember, recall, pin, relate, assert
+  api/          → remember, pin, relate, assert
 ```
 
 ## Telemetry Store — ClickHouse

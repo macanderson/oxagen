@@ -3,9 +3,13 @@ title: "Graph-Mediated Fan-out (Phases 1 & 2)"
 description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
 ---
 
-> **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
+> **Status: Partially superseded** — compact Postgres summaries, claims, leases,
+> sibling reads, and scaling remain. The automatic Neo4j execution projection
+> and cross-fanout semantic peer recall were retired for launch.
 >
-> Graph-mediated fan-out shipped in two phases (PR #527 Phase 1, PR #551 Phase 2). Phase 1 replaced full-payload relay with compact summaries + on-demand fetches, cutting coordinator tokens by ~85%. Phase 2 added durable claim/lease self-healing, graph projection of child results, peer-aware coordination via siblings capability and memory recall, and dynamic scaling policy enforcement. All contracts, handlers, MCP tools, API routes, migrations, and capability docs are in main.
+> Phase 1 replaced full-payload relay with compact summaries and on-demand
+> fetches. Phase 2's durable claim/lease self-healing, sibling capability, and
+> scaling policy remain; its hidden graph projection/recall extension does not.
 
 **Implementation evidence**
 
@@ -15,14 +19,10 @@ description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
 - packages/agent/src/handlers/agent.subagent.aggregate.ts — compact logic with pending short-circuit returning only counts + recheckAfterMs
 - packages/agent/src/handlers/agent.subagent.result.get.ts — Phase 1 new handler with tenant scoping (PR #527)
 - packages/agent/src/handlers/agent.subagent.siblings.ts — Phase 2 new handler with sibling query
-- packages/inngest-functions/src/functions/agent.execute-subagent.ts — claim-loop pattern (Phase 2 2a) + structural summary writes (Phase 1) + originType fanout projection (Phase 2 2b)
+- packages/inngest-functions/src/functions/agent.execute-subagent.ts — claim-loop pattern (Phase 2 2a) + structural summary writes (Phase 1)
 - packages/inngest-functions/src/functions/agent.lease-sweep.ts — Phase 2 new cron for expired-lease reclaim and backstop finalization
 - packages/database/atlas/migrations/20260703120000_subagent_runs_summary.sql — Phase 1 migration adds summary column
 - packages/database/atlas/migrations/20260703150000_phase2_claim_lease.sql — Phase 2 migration adds claimed_by/lease_expires_at/attempts + claim indexes + originType fanout
-- packages/ontology/src/types.ts — NodeLabels.Fanout added for graph projection (Phase 2 2b)
-- packages/oxagen/src/contracts/agent.execution.record.ts — originType fanout in AGENT_EXECUTION_ORIGIN_TYPES (Phase 2 2b)
-- packages/agent/src/adapters/memory-provider.ts — recallPeerResults() call for semantic peer recall (Phase 2 2b Tier B)
-- packages/agent/src/memory/neo4j.ts — recallPeerResults() implementation with vector search over :Execution summaries
 - packages/agent/src/handlers/agent.subagent.dispatch.ts — descendant cap enforcement at 250 tasks (Phase 2 2c)
 - apps/mcp/src/tools/agent.subagent.result.get.ts — Phase 1 MCP tool (PR #527)
 - apps/mcp/src/tools/agent.subagent.siblings.ts — Phase 2 MCP tool
@@ -214,7 +214,7 @@ aggregate tool while the fanout is still running:
 | Handler | `packages/agent/src/handlers/agent.subagent.aggregate.ts` | compact mapping, caps, pending short-circuit |
 | Handler | `packages/agent/src/handlers/agent.subagent.result.get.ts` | new, `withTenantDb` |
 | Runtime dispatcher | `packages/agent/src/dispatch/subagent.ts` | unchanged — `readFanout()` has no production consumers (tests only); reshaping it is churn without benefit |
-| Executor | `packages/inngest-functions/src/functions/agent.execute-subagent.ts` | write `summary` on completion; enrich graph-sync properties |
+| Executor | `packages/inngest-functions/src/functions/agent.execute-subagent.ts` | write `summary` on completion; enrich the durable execution record |
 | Migration | `packages/database/migrations/NNNN_subagent_runs_summary.sql` | add `summary text` |
 | MCP | `apps/mcp/src/tools/agent.subagent.aggregate.ts` | schema + description update |
 | MCP | `apps/mcp/src/tools/agent.subagent.result.get.ts` | new |
@@ -258,10 +258,9 @@ Baseline for one week before rollout, compare one week after:
   surface and any workflow supervisor usage.
 - **Summaries too lossy for merge-style tasks** (e.g. research swarm synthesis).
   Those callers set `includeMerged: true` or fetch the specific children they
-  synthesize from. Note the research swarm already lands full content in the
-  graph via `web/search.completed → graph.ingest`
-  (`research.swarm.start.ts:9-15`) — synthesis should read the graph, not the
-  relay, which is exactly the Phase 2 direction.
+  synthesize from. Full child content belongs in durable result storage and is
+  retrieved by explicit scoped references; generic graph ingestion is not a
+  fanout-result transport.
 - **`aggregatedData` cap breaks a caller that depended on huge merges.** The cap
   surfaces as `aggregatedDataTruncated: true`, not silent data loss; such callers
   migrate to result.get.
@@ -660,4 +659,3 @@ anywhere in the loop.
   `originLabelFor` unit case.
 - Peer recall: memory-provider test asserting `[peer-result]` lines appear and
   the recall string stays ≤ the existing budget.
-

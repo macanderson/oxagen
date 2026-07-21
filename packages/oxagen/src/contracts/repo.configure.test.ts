@@ -25,11 +25,6 @@ describe("repo.configure capability", () => {
     expect(parsed.recordTypes).toBeUndefined();
   });
 
-  it("inferenceEnabled is undefined when omitted", () => {
-    const parsed = repoConfigure.input.parse({ repoId: "r1" });
-    expect(parsed.inferenceEnabled).toBeUndefined();
-  });
-
   // ── input: recordTypes ────────────────────────────────────────────────────
 
   it("accepts a non-empty recordTypes array", () => {
@@ -49,17 +44,26 @@ describe("repo.configure capability", () => {
   // ── input: syncCadence enum ───────────────────────────────────────────────
 
   it("accepts syncCadence='manual'", () => {
-    const parsed = repoConfigure.input.parse({ repoId: "r1", syncCadence: "manual" });
+    const parsed = repoConfigure.input.parse({
+      repoId: "r1",
+      syncCadence: "manual",
+    });
     expect(parsed.syncCadence).toBe("manual");
   });
 
   it("accepts syncCadence='polling'", () => {
-    const parsed = repoConfigure.input.parse({ repoId: "r1", syncCadence: "polling" });
+    const parsed = repoConfigure.input.parse({
+      repoId: "r1",
+      syncCadence: "polling",
+    });
     expect(parsed.syncCadence).toBe("polling");
   });
 
   it("accepts syncCadence='webhook'", () => {
-    const parsed = repoConfigure.input.parse({ repoId: "r1", syncCadence: "webhook" });
+    const parsed = repoConfigure.input.parse({
+      repoId: "r1",
+      syncCadence: "webhook",
+    });
     expect(parsed.syncCadence).toBe("webhook");
   });
 
@@ -144,14 +148,12 @@ describe("repo.configure capability", () => {
       recordTypes: ["pull_request", "issue"],
       pathFilters: { include: ["src/**"], exclude: ["dist/**"] },
       labelFilters: { include: ["bug"], exclude: [] },
-      inferenceEnabled: true,
       syncCadence: "webhook",
       pollingIntervalSeconds: null,
       updatedAt: "2024-01-01T00:00:00.000Z",
     });
     expect(parsed.repoId).toBe("conn_abc123");
     expect(parsed.displayName).toBe("my-org/my-repo");
-    expect(parsed.inferenceEnabled).toBe(true);
     expect(parsed.syncCadence).toBe("webhook");
     expect(parsed.pollingIntervalSeconds).toBeNull();
   });
@@ -163,7 +165,6 @@ describe("repo.configure capability", () => {
       recordTypes: [],
       pathFilters: null,
       labelFilters: null,
-      inferenceEnabled: false,
       syncCadence: "manual",
       pollingIntervalSeconds: null,
       updatedAt: "2024-06-01T12:00:00.000Z",
@@ -179,7 +180,6 @@ describe("repo.configure capability", () => {
       recordTypes: ["commit"],
       pathFilters: null,
       labelFilters: null,
-      inferenceEnabled: false,
       syncCadence: "polling",
       pollingIntervalSeconds: 3600,
       updatedAt: "2024-06-01T12:00:00.000Z",
@@ -194,7 +194,6 @@ describe("repo.configure capability", () => {
         recordTypes: [],
         pathFilters: null,
         labelFilters: null,
-        inferenceEnabled: false,
         syncCadence: "manual",
         pollingIntervalSeconds: null,
         updatedAt: "2024-06-01T12:00:00.000Z",
@@ -210,7 +209,6 @@ describe("repo.configure capability", () => {
         recordTypes: [],
         pathFilters: null,
         labelFilters: null,
-        inferenceEnabled: false,
         syncCadence: "cron",
         pollingIntervalSeconds: null,
         updatedAt: "2024-06-01T12:00:00.000Z",

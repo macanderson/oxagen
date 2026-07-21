@@ -89,30 +89,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    bigquery_row: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer business entities and relationships from BigQuery query results.
-
-    Look for:
-    - Columns with name/title values mapping to known product features or customers
-    - Foreign key columns (user_id, account_id, product_id) implying relationships
-    - Status or lifecycle columns (active, churned, converted)
-    - Timestamp columns establishing temporal ordering
-
-    Create edges:
-    - Entity -[related_to]-> Entity (when a foreign-key column references another entity by ID)
-    - Entity -[owned_by]-> Account (when an account_id or org_id column is present)
-    - Entity -[has_status]-> LifecycleState (when a status column maps to a known state)
-
 sync:
   delivery: polling
   pollingSupported: true

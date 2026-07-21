@@ -11,7 +11,6 @@
  *   4. Dedup       naturalKey lookup → match existing node OR create principal
  *                  embedding similarity → ALIAS_OF edge with confidence score
  *   5. Embed       embedText() → store vector on Neo4j node
- *   6. Infer       async LLM worker → infer semantic edges
  *
  * Stages fire each other via Inngest. Each stage is independently retryable.
  *
@@ -116,15 +115,17 @@ export const DeduplicationActionSchema = z.enum([
 export type DeduplicationAction = z.infer<typeof DeduplicationActionSchema>;
 
 export type AliasMatchReason =
-  | "natural_key_exact"    // same externalId from same connector type
-  | "email_match"          // identical email property
-  | "url_match"            // identical canonical URL
-  | "name_embedding"       // high-cosine-similarity on display name
-  | "property_embedding"   // high-cosine-similarity on full property vector
-  | "cross_source_id"      // explicit cross-system ID hint (e.g. GitHub login in Linear profile)
-  | "human_confirmed";     // a workspace user approved the alias
+  | "natural_key_exact" // same externalId from same connector type
+  | "email_match" // identical email property
+  | "url_match" // identical canonical URL
+  | "name_embedding" // high-cosine-similarity on display name
+  | "property_embedding" // high-cosine-similarity on full property vector
+  | "cross_source_id" // explicit cross-system ID hint (e.g. GitHub login in Linear profile)
+  | "human_confirmed"; // a workspace user approved the alias
 
-export const DeduplicationActionRejectedSchema = z.literal("rejected_nonconformant");
+export const DeduplicationActionRejectedSchema = z.literal(
+  "rejected_nonconformant",
+);
 
 export interface DeduplicationResult {
   /** Neo4j publicId of the canonical (principal) node. Null on a strict reject. */
@@ -149,7 +150,7 @@ export interface DeduplicationResult {
   matchReason?: AliasMatchReason;
 }
 
-export const ALIAS_THRESHOLD = 0.70;
+export const ALIAS_THRESHOLD = 0.7;
 export const CONFIRM_THRESHOLD = 0.92;
 
 // ---------------------------------------------------------------------------
@@ -170,57 +171,6 @@ export interface EmbedRequest {
   workspaceId: string;
   orgId: string;
   connectionId: string;
-}
-
-// ---------------------------------------------------------------------------
-// Stage 5 — Semantic inference
-// ---------------------------------------------------------------------------
-
-export interface SemanticInferenceJob {
-  /** Neo4j publicId of the node that triggered inference. */
-  nodeId: string;
-  entityType: string;
-  /** Snapshot of key properties — prevents a second Neo4j read in the worker. */
-  propertiesSnapshot: Record<string, unknown>;
-  workspaceId: string;
-  orgId: string;
-  /**
-   * Number of graph hops to include as context for the inference LLM call.
-   * Default: 1. Increase for entities with sparse direct properties (e.g. a
-   * commit with only a SHA — hop to the PR and feature for context).
-   */
-  contextHops?: number;
-  /**
-   * The pinned active vocabulary (§4.8/§8), resolved by the handler/Inngest
-   * worker via `getPinnedSchema`. When present and the entity's label is in it,
-   * the inference prompt is grounded with the label/property descriptions and
-   * the allowed relationship types (with start/end constraints), and inferred
-   * relationship types are constrained to that vocabulary. Null/absent → today's
-   * unconstrained inference (registry inert).
-   */
-  pinnedSchema?: import("./validate/schema").PinnedSchema | null;
-}
-
-/**
- * Output of a single semantic inference pass.
- * The worker may infer N edges and/or N new nodes (e.g. inferring that a
- * commit "implements" a Feature, or that two Issues describe the same bug).
- */
-export interface InferenceOutput {
-  nodeId: string;
-  inferredEdges: Array<{
-    targetNodeId: string;
-    edgeType: string;        // must be in EdgeTypes registry
-    confidence: number;
-    properties?: Record<string, unknown>;
-  }>;
-  inferredNodes: Array<{
-    entityType: string;
-    naturalKey: string;
-    displayName: string;
-    properties: Record<string, unknown>;
-    confidence: number;
-  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +204,6 @@ export interface PipelineResult {
   operation: EntityOperation;
   dedup: DeduplicationResult;
   embedded: boolean;
-  inferenceQueued: boolean;
   /** Conformance score (0.0–1.0) of the written node, when a schema was pinned (§8). */
   conformanceScore?: number;
 }

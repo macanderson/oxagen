@@ -2,9 +2,8 @@
  * Code graph builder — constructs the initial code graph from a workspace
  * by walking files and extracting symbols via @oxagen/code-graph (tree-sitter).
  *
- * Previously used a simplified regex-based extraction. Now unified with the
- * platform ingestion path: both consumers use parseSourceFile() from
- * @oxagen/code-graph, backed by the same tree-sitter WASM grammars.
+ * Uses parseSourceFile() from @oxagen/code-graph, backed by tree-sitter WASM.
+ * The resulting graph remains checkout-local in DuckDB.
  *
  * Language coverage: TypeScript, JavaScript, JSX/TSX, Python.
  * Go/Rust/Java: file nodes are created but symbols are skipped (parseSourceFile
@@ -15,7 +14,12 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { parseSourceFile, type SymbolKind, type CallSite, type ImportSite } from "@oxagen/code-graph";
+import {
+  parseSourceFile,
+  type SymbolKind,
+  type CallSite,
+  type ImportSite,
+} from "@oxagen/code-graph";
 import type { CodeGraph, CodeNode, CodeEdge, CodeNodeKind } from "./types";
 import { hashContent } from "./store";
 import type { FileGraph, CodeGraphStore } from "./store";
@@ -34,17 +38,33 @@ function codeGraphDebugEnabled(): boolean {
 }
 
 const SUPPORTED_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".py", ".go", ".rs", ".java", ".kt",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+  ".kt",
   // Docs: parsed by @oxagen/code-graph into heading sections (skipped as
   // symbols — see symbolKindToNodeKind) but the file itself becomes a node
   // so it can carry a content embedding + domain like any other file.
-  ".md", ".mdx",
+  ".md",
+  ".mdx",
 ]);
 
 const IGNORE_DIRS = new Set([
-  "node_modules", ".git", ".next", "dist", "coverage",
-  ".turbo", ".vercel", "__pycache__",
+  "node_modules",
+  ".git",
+  ".next",
+  "dist",
+  "coverage",
+  ".turbo",
+  ".vercel",
+  "__pycache__",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -54,14 +74,22 @@ const IGNORE_DIRS = new Set([
 /** Map a tree-sitter SymbolKind to the CLI's CodeNodeKind. */
 function symbolKindToNodeKind(kind: SymbolKind): CodeNodeKind | null {
   switch (kind) {
-    case "function":      return "function";
-    case "class":         return "class";
-    case "method":        return "method";
-    case "interface":     return "interface";
-    case "type":          return "type";
-    case "arrow_function": return "arrow_function";
-    case "heading":       return null; // markdown headings: skip in code graph
-    default:              return null;
+    case "function":
+      return "function";
+    case "class":
+      return "class";
+    case "method":
+      return "method";
+    case "interface":
+      return "interface";
+    case "type":
+      return "type";
+    case "arrow_function":
+      return "arrow_function";
+    case "heading":
+      return null; // markdown headings: skip in code graph
+    default:
+      return null;
   }
 }
 
@@ -85,7 +113,10 @@ export async function buildCodeGraph(
   const files = await listSourceFiles(workspaceRoot);
   let done = 0;
   for (const rel of files) {
-    const fg = await extractFileGraph(path.join(workspaceRoot, rel), workspaceRoot);
+    const fg = await extractFileGraph(
+      path.join(workspaceRoot, rel),
+      workspaceRoot,
+    );
     if (fg) {
       for (const node of fg.nodes) graph.nodes.set(node.id, node);
       graph.edges.push(...fg.edges);
@@ -109,10 +140,14 @@ export async function buildCodeGraph(
  * `init`. Outside a git repo we fall back to a manual directory walk that still
  * skips the well-known build/output directories.
  */
-export async function listSourceFiles(workspaceRoot: string): Promise<string[]> {
+export async function listSourceFiles(
+  workspaceRoot: string,
+): Promise<string[]> {
   const gitFiles = await listGitFiles(workspaceRoot);
   if (gitFiles) {
-    return gitFiles.filter((rel) => SUPPORTED_EXTENSIONS.has(path.extname(rel)));
+    return gitFiles.filter((rel) =>
+      SUPPORTED_EXTENSIONS.has(path.extname(rel)),
+    );
   }
   const out: string[] = [];
   await walkDirectory(workspaceRoot, workspaceRoot, out);
@@ -142,7 +177,11 @@ async function listGitFiles(workspaceRoot: string): Promise<string[] | null> {
   }
 }
 
-async function walkDirectory(dir: string, root: string, out: string[]): Promise<void> {
+async function walkDirectory(
+  dir: string,
+  root: string,
+  out: string[],
+): Promise<void> {
   let entries: fs.Dirent[];
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
@@ -156,7 +195,10 @@ async function walkDirectory(dir: string, root: string, out: string[]): Promise<
 
     if (entry.isDirectory()) {
       await walkDirectory(fullPath, root, out);
-    } else if (entry.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name))) {
+    } else if (
+      entry.isFile() &&
+      SUPPORTED_EXTENSIONS.has(path.extname(entry.name))
+    ) {
       out.push(path.relative(root, fullPath));
     }
   }
@@ -187,7 +229,7 @@ export async function fileGraphFromContent(
   };
   nodes.push(fileNode);
 
-  // Use the tree-sitter parser from @oxagen/code-graph (same as platform ingestion).
+  // Use the tree-sitter parser from @oxagen/code-graph in this local checkout.
   const parseResult = await parseSourceFile(relativePath, content);
   for (const sym of parseResult.symbols) {
     const nodeKind = symbolKindToNodeKind(sym.kind);
@@ -204,7 +246,11 @@ export async function fileGraphFromContent(
       ...(sym.docComment ? { docstring: sym.docComment } : {}),
     };
     nodes.push(symbolNode);
-    edges.push({ source: fileNode.id, target: symbolNode.id, type: "contains" });
+    edges.push({
+      source: fileNode.id,
+      target: symbolNode.id,
+      type: "contains",
+    });
   }
 
   edges.push(...extractImports(content, relativePath, root));
@@ -230,7 +276,10 @@ export async function fileGraphFromContent(
 }
 
 /** Read + extract one file's subgraph. Returns null if the file can't be read. */
-export async function extractFileGraph(filePath: string, root: string): Promise<FileGraph | null> {
+export async function extractFileGraph(
+  filePath: string,
+  root: string,
+): Promise<FileGraph | null> {
   let content: string;
   try {
     content = await fs.promises.readFile(filePath, "utf-8");
@@ -274,7 +323,11 @@ export async function buildAndPersistCodeGraph(
       skipped++;
       continue;
     }
-    await store.replaceFile(root, rel, await fileGraphFromContent(rel, content, root));
+    await store.replaceFile(
+      root,
+      rel,
+      await fileGraphFromContent(rel, content, root),
+    );
     indexed++;
   }
 
@@ -314,11 +367,13 @@ function resolveRelativeImport(
   const candidates: string[] = [];
   if (ext && SUPPORTED_EXTENSIONS.has(ext)) candidates.push(baseAbs);
   for (const e of RESOLVE_EXTENSIONS) candidates.push(stem + e);
-  for (const e of RESOLVE_EXTENSIONS) candidates.push(path.join(baseAbs, "index" + e));
+  for (const e of RESOLVE_EXTENSIONS)
+    candidates.push(path.join(baseAbs, "index" + e));
 
   for (const candidate of candidates) {
     try {
-      if (fs.statSync(candidate).isFile()) return path.relative(root, candidate);
+      if (fs.statSync(candidate).isFile())
+        return path.relative(root, candidate);
     } catch {
       // not this candidate
     }
@@ -330,7 +385,11 @@ function resolveRelativeImport(
  * Extract import edges from file content, resolving each relative specifier to
  * the real target file node so the dependency graph is queryable.
  */
-function extractImports(content: string, filePath: string, root: string): CodeEdge[] {
+function extractImports(
+  content: string,
+  filePath: string,
+  root: string,
+): CodeEdge[] {
   const edges: CodeEdge[] = [];
   const fileId = computeNodeId(filePath, path.basename(filePath), "file");
   const seen = new Set<string>();
@@ -470,7 +529,11 @@ function extractWorkspaceAliasImports(
       continue;
     }
 
-    const targetId = computeNodeId(resolvedRel, path.basename(resolvedRel), "file");
+    const targetId = computeNodeId(
+      resolvedRel,
+      path.basename(resolvedRel),
+      "file",
+    );
     if (targetId === fileNodeId || seenTargets.has(targetId)) continue;
     seenTargets.add(targetId);
 
@@ -484,17 +547,32 @@ function extractWorkspaceAliasImports(
 // Shared utilities
 // ---------------------------------------------------------------------------
 
-function computeNodeId(nodePath: string, name: string, kind: CodeNodeKind): string {
-  return createHash("sha256").update(`${nodePath}:${name}:${kind}`).digest("hex").slice(0, 32);
+function computeNodeId(
+  nodePath: string,
+  name: string,
+  kind: CodeNodeKind,
+): string {
+  return createHash("sha256")
+    .update(`${nodePath}:${name}:${kind}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 function extensionToLanguage(ext: string): string {
   const map: Record<string, string> = {
-    ".ts": "typescript", ".tsx": "typescript", ".js": "javascript",
-    ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
-    ".py": "python", ".go": "go", ".rs": "rust",
-    ".java": "java", ".kt": "kotlin",
-    ".md": "markdown", ".mdx": "markdown",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".py": "python",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".md": "markdown",
+    ".mdx": "markdown",
   };
   return map[ext] ?? "unknown";
 }

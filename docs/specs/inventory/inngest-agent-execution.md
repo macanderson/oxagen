@@ -1,7 +1,7 @@
 # Spec: inngest-agent-execution
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Source: adapter.ts, inngest.ts, create-function.ts, functions.ts, index.ts, agent.aggregate-fanout.ts, agent.execute-subagent.ts, agent.background-task.execute.ts, agent.sync-execution-to-graph.ts, agent.video-render.ts, agent.workflow.supervisor.ts, agent.workflow.task.execute.ts
+> Source: adapter.ts, inngest.ts, create-function.ts, functions.ts, index.ts, agent.aggregate-fanout.ts, agent.execute-subagent.ts, agent.background-task.execute.ts, agent.video-render.ts, agent.workflow.supervisor.ts, agent.workflow.task.execute.ts
 > Last verified: 2026-06-20 (commit 2f628504)
 
 ---
@@ -193,31 +193,6 @@ When `agent/workflow.task.execute` event is received, the system SHALL mark the 
 
 ---
 
-### Requirement: Execution graph synchronization to Neo4j
-<!-- id: agentSyncExecutionToGraph.agentSyncExecutionToGraph -->
-<!-- entities: agentExecutions, Neo4j execution node -->
-<!-- enforced: agent.sync-execution-to-graph.ts:agentSyncExecutionToGraph -->
-
-When `agent/execution.sync` event is received, the system SHALL call recordExecutionInGraph() to write/upsert the execution node into Neo4j (using MERGE semantics for idempotency), then stamp the Postgres row's synced_to_graph_at column. Retry strategy: up to 17 retries over ~24 hours; on exhaustion the function fails permanently and synced_to_graph_at remains NULL.
-
-#### Scenario: execution syncs to graph successfully
-- **WHEN** recordExecutionInGraph() completes without error
-- **THEN** agentExecutions.synced_to_graph_at is updated to NOW(); execution node exists in Neo4j with matching executionId, status, latencyMs, tokens
-
-#### Scenario: idempotent re-sync
-- **WHEN** the same execution.sync event is processed twice
-- **THEN** recordExecutionInGraph() MERGE upserts the node (no duplicate); synced_to_graph_at is stamped both times
-
-#### Scenario: graph write fails, retry succeeds
-- **WHEN** first retry attempt fails, second succeeds
-- **THEN** Inngest retries automatically; on success, synced_to_graph_at is stamped
-
-#### Scenario: all retries exhausted
-- **WHEN** recordExecutionInGraph() fails in all 17 retry attempts
-- **THEN** function fails permanently; synced_to_graph_at remains NULL; nightly sweep can find these rows
-
----
-
 ### Requirement: Video generation and asset upload pipeline
 <!-- id: agentVideoRender.agentVideoRender -->
 <!-- entities: generatedAssets -->
@@ -325,7 +300,7 @@ Every invocation of a capability (subagent child, background task, workflow step
 
 ### Invariant: Database transactions are scoped tightly
 <!-- entities: schema, withTenantDb, withSystemDb -->
-<!-- enforced: agent.execute-subagent.ts, agent.background-task.execute.ts, agent.workflow.supervisor.ts, agent.workflow.task.execute.ts, agent.sync-execution-to-graph.ts, agent.video-render.ts -->
+<!-- enforced: agent.execute-subagent.ts, agent.background-task.execute.ts, agent.workflow.supervisor.ts, agent.workflow.task.execute.ts, agent.video-render.ts -->
 
 Transactions (withTenantDb, withSystemDb blocks) MUST wrap only DB-level operations. Long-running I/O (LLM calls, video generation, file uploads) MUST occur outside the transaction to avoid holding locks. If a capability returns a large result, the persist step runs after invoke() completes, not wrapping it.
 
