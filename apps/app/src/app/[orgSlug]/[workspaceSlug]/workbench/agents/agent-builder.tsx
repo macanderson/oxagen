@@ -84,6 +84,9 @@ import { RolePicker } from "./role-picker";
 import { EffectiveScopePanel } from "./effective-scope-panel";
 import {
   mapSuggestionToPrefill,
+  planRoleAssignment,
+  resolveSuggestedRole,
+  DEFAULT_AGENT_ROLE_NAME,
   type BuilderPrefill,
   type AgentRecommendation,
 } from "./suggestion-mapping";
@@ -98,12 +101,11 @@ import { RecommendedConnections } from "./recommended-connections";
 const CODING_AGENT_TYPE = "code";
 const DEFAULT_AGENT_TYPE = "custom";
 
-/**
- * Client-safe mirror of DEFAULT_AGENT_ROLE_NAME from
- * packages/agent/src/handlers/_agent-role.ts (server-only): the role the
- * backend auto-assigns to every newly created agent. Keep in sync.
- */
-const DEFAULT_AGENT_ROLE_NAME = "Agent Contributor";
+// DEFAULT_AGENT_ROLE_NAME ("Agent Contributor" — the role the backend
+// auto-assigns to every newly created agent, and the fallback when a
+// suggestion carries no suggestedRole) is imported from ./suggestion-mapping
+// so the client-safe mirror of packages/agent/src/handlers/_agent-role.ts
+// exists in exactly one place.
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -297,6 +299,13 @@ export function AgentBuilder({
   const [roleActionError, setRoleActionError] = React.useState<string | null>(
     null,
   );
+  // Provenance for an AI-pre-selected role (Agent RBAC Phase 5b): why the
+  // suggestion landed on this ceiling and not a narrower one. Cleared the
+  // moment the user picks a different role — the line would no longer describe
+  // the selection. Null whenever the role was not AI-set.
+  const [roleSuggestionReason, setRoleSuggestionReason] = React.useState<
+    string | null
+  >(null);
 
   // Triggers
   const [manualEnabled, setManualEnabled] = React.useState(
@@ -381,7 +390,7 @@ export function AgentBuilder({
    * user-edited so the AI-chosen slug survives later name edits, and leaves
    * every field fully editable in the normal steps.
    */
-  function applyPrefill(p: BuilderPrefill) {
+  function applyPrefill(p: BuilderPrefill, roleReason?: string) {
     setName(p.name);
     setSlug(p.slug);
     setSlugEdited(true);
@@ -399,6 +408,17 @@ export function AgentBuilder({
     setEventSource(p.eventSource);
     setEventType(p.eventType);
     setEventConnection(p.eventConnection);
+    // Access step: the role is a prefill field like any other — pre-selected,
+    // then reviewed on the Access step and re-checked on the Review step's
+    // effective-scope panel (role ceiling ∩ this config) before anything saves.
+    // resolveSuggestedRole refuses a role the picker does not actually offer,
+    // so the AI can never select past the viewer's own delegation ceiling.
+    const resolved = resolveSuggestedRole(p.roleName, roleOptions);
+    setSelectedRoleName(resolved.roleName);
+    setRoleSuggestionReason(
+      resolved.aiSelected && roleReason?.trim() ? roleReason : null,
+    );
+    setRoleActionError(null);
   }
 
   async function onGenerate() {
@@ -419,7 +439,10 @@ export function AgentBuilder({
         setSuggestError(res.error);
         return;
       }
-      applyPrefill(mapSuggestionToPrefill(res.suggestion));
+      applyPrefill(
+        mapSuggestionToPrefill(res.suggestion, res.suggestedRole),
+        res.suggestedRole?.reason,
+      );
       setPrefillMeta({ rationale: res.rationale, warnings: res.warnings });
       setRecommendations(res.recommendations);
       setBannerDismissed(false);
@@ -508,7 +531,15 @@ export function AgentBuilder({
       ? DEFAULT_AGENT_ROLE_NAME
       : assignedRoleName;
     if (wasCreated) setAssignedRoleName(DEFAULT_AGENT_ROLE_NAME);
-    if (selectedRoleName === persistedRole) {
+    // Pure decision (unit-tested in suggestion-mapping.test.ts): assign only
+    // when the selection diverges from what is persisted, revoking the role it
+    // replaces. An AI-suggested role reaches assign_agent_role through exactly
+    // this path — there is no separate mechanism for AI-drafted agents.
+    const plan = planRoleAssignment({
+      selectedRoleName,
+      persistedRoleName: persistedRole,
+    });
+    if (plan.assign === null) {
       setRoleActionError(null);
       return;
     }
@@ -516,8 +547,8 @@ export function AgentBuilder({
       orgSlug,
       workspaceSlug,
       agentId: agentPublicId,
-      roleName: selectedRoleName,
-      previousRoleName: persistedRole ?? undefined,
+      roleName: plan.assign,
+      ...(plan.revoke !== undefined ? { previousRoleName: plan.revoke } : {}),
     });
     if (res.ok) {
       setAssignedRoleName(res.roleName);
@@ -683,7 +714,9 @@ export function AgentBuilder({
       case "access":
         // A role is always selected (default "Agent Contributor"); the chip
         // fills once the selection is persisted on the agent.
-        return assignedRoleName !== null && assignedRoleName === selectedRoleName;
+        return (
+          assignedRoleName !== null && assignedRoleName === selectedRoleName
+        );
       case "triggers":
         return (
           manualEnabled ||
@@ -1210,12 +1243,35 @@ export function AgentBuilder({
                   {roleActionError}
                 </div>
               ) : null}
+              {roleSuggestionReason ? (
+                <div
+                  className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+                  role="status"
+                  data-testid="agent-role-suggestion-reason"
+                >
+                  <Sparkles
+                    className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {selectedRoleName}
+                    </span>{" "}
+                    was pre-selected from your description — the narrowest role
+                    that can still do the job. {roleSuggestionReason} Pick a
+                    different one if that is not the ceiling you want.
+                  </p>
+                </div>
+              ) : null}
               <RolePicker
                 options={roleOptions}
                 value={selectedRoleName}
                 onChange={(roleName) => {
                   setSelectedRoleName(roleName);
                   setRoleActionError(null);
+                  // The AI provenance described the previous selection — a
+                  // manual pick is the user's own, so stop attributing it.
+                  setRoleSuggestionReason(null);
                 }}
                 disabled={disabled}
                 customRolesAvailable={customRolesAvailable}

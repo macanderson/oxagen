@@ -78,6 +78,8 @@ Every agent configuration is also a principal with its own grant matrix. When an
 
 When a human is actively in chat, the agent runs in delegated context: it borrows the human's effective grants for the session. Both the human and agent principals are recorded in the audit event.
 
+Agents get their own roles, separate from the human ones above — three built-in postures, intersected with the agent's own configuration, and bounded by a delegation ceiling so an agent can never outgrow the person it acts for. See [Agent roles](/docs/governance/agent-roles).
+
 This is what makes AI automation auditable: every action is attributable to either a human chain of custody or a configured service identity.
 
 ## Configuring grants

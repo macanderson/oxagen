@@ -150,7 +150,11 @@ describe("createAgentAction", () => {
 
 describe("updateAgentAction", () => {
   it("passes an agentType change through to updateAgent", async () => {
-    updateAgent.mockResolvedValue({ agentId: "agt_1", version: 2, isPublished: false });
+    updateAgent.mockResolvedValue({
+      agentId: "agt_1",
+      version: 2,
+      isPublished: false,
+    });
     const res = await updateAgentAction({
       ...SCOPE,
       agentId: "agt_1",
@@ -246,7 +250,8 @@ describe("suggestAgentAction", () => {
     });
     const res = await suggestAgentAction({
       ...SCOPE,
-      description: "A release-notes writer grounded in the engineering ontology.",
+      description:
+        "A release-notes writer grounded in the engineering ontology.",
     });
     expect(res.ok).toBe(true);
     if (res.ok) {
@@ -262,7 +267,8 @@ describe("suggestAgentAction", () => {
     expect(suggestAgentDefinition).toHaveBeenCalledWith(
       CTX,
       expect.objectContaining({
-        description: "A release-notes writer grounded in the engineering ontology.",
+        description:
+          "A release-notes writer grounded in the engineering ontology.",
       }),
     );
   });
@@ -291,6 +297,47 @@ describe("suggestAgentAction", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/model unavailable/);
   });
+
+  // ── suggestedRole passthrough (Agent RBAC Phase 5b) ───────────────────────
+
+  it("passes the suggested role and its provenance straight through", async () => {
+    suggestAgentDefinition.mockResolvedValue({
+      suggestion: SUGGESTION,
+      rationale: "r",
+      warnings: [],
+      recommendations: [],
+      suggestedRole: {
+        roleName: "Agent Observer",
+        reason: "Reads and answers only — no mutating capability equipped.",
+      },
+    });
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.suggestedRole?.roleName).toBe("Agent Observer");
+      expect(res.suggestedRole?.reason).toMatch(/reads and answers/i);
+    }
+  });
+
+  it("omits suggestedRole entirely when the contract returned none", async () => {
+    suggestAgentDefinition.mockResolvedValue({
+      suggestion: SUGGESTION,
+      rationale: "r",
+      warnings: [],
+      recommendations: [],
+    });
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+    });
+    expect(res.ok).toBe(true);
+    // Absent rather than an explicit undefined key — the builder's `??`
+    // fallback to "Agent Contributor" is what fills the gap.
+    if (res.ok) expect("suggestedRole" in res).toBe(false);
+  });
 });
 
 describe("deployAgentAction", () => {
@@ -306,7 +353,10 @@ describe("deployAgentAction", () => {
   });
 
   it("deploys active for a manager", async () => {
-    deployAgent.mockResolvedValue({ agentId: "agt_1", deploymentStatus: "active" });
+    deployAgent.mockResolvedValue({
+      agentId: "agt_1",
+      deploymentStatus: "active",
+    });
     const res = await deployAgentAction({
       ...SCOPE,
       agentId: "agt_1",
@@ -353,7 +403,11 @@ describe("assignAgentRoleAction", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.roleName).toBe("Agent Operator");
-    expect(assignAgentRole).toHaveBeenCalledWith(CTX, "agt_1", "Agent Operator");
+    expect(assignAgentRole).toHaveBeenCalledWith(
+      CTX,
+      "agt_1",
+      "Agent Operator",
+    );
     expect(revokeAgentRole).toHaveBeenCalledWith(
       CTX,
       "agt_1",
@@ -385,10 +439,15 @@ describe("assignAgentRoleAction", () => {
 
   it("surfaces the delegation-ceiling rejection with its stable code and capabilities, without revoking", async () => {
     assignAgentRole.mockRejectedValue(
-      Object.assign(new Error("Role 'Agent Operator' grants capabilities beyond your own effective access"), {
-        code: "agent_role_ceiling_exceeded",
-        capabilities: ["secret.reveal", "repo.pr.open"],
-      }),
+      Object.assign(
+        new Error(
+          "Role 'Agent Operator' grants capabilities beyond your own effective access",
+        ),
+        {
+          code: "agent_role_ceiling_exceeded",
+          capabilities: ["secret.reveal", "repo.pr.open"],
+        },
+      ),
     );
 
     const res = await assignAgentRoleAction({

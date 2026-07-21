@@ -12,7 +12,8 @@ Attach an IAM role to an agent's delegated principal (Agent RBAC, `docs/specs/ag
 
 Governance rules:
 
-- Among system roles, only the agent system roles (`Agent Observer`, `Agent Contributor`, `Agent Operator`, `Agent Legacy (unrestricted)`) are agent-assignable — human org roles (Owner, Admin, …) never are.
+- Among system roles, only the agent system roles (`Agent Observer`, `Agent Contributor`, `Agent Operator`, `Agent Legacy (unrestricted)`) are agent-assignable — human org roles (Owner, Admin, …) never are. `Agent Legacy (unrestricted)` is the back-compat role the pre-RBAC backfill attaches; it is accepted here only so re-attaching it through the contract stays possible, and it is never seeded for a new org, offered in the builder's picker, or proposed by `agent.definition.suggest`'s `suggestedRole`.
+- New agents are auto-assigned `Agent Contributor` on `agent.definition.create`; the builder (and any AI-assisted setup flow) narrows or widens from there through this capability. See the user-facing [Agent roles](../../apps/docs/content/docs/governance/agent-roles.mdx) page for what each role means.
 - **Tier gate (§3.4):** system agent roles are assignable at every org tier; custom roles remain enterprise-only (same `canAccessACL` check as custom IAM ACL).
 - **Delegation ceiling:** the assigning user cannot attach a role whose grants exceed their own effective grants — each capability the role confers is resolved for the assigner through the pure IAM resolver; a role conferring a less restrictive outcome than the assigner's own is rejected.
 

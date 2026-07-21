@@ -17,6 +17,20 @@ const suggestedConfigSchema = z.object({
   instructions: z.string().min(1),
 });
 
+// The three system agent roles (Agent RBAC, docs/specs/agent-rbac/spec.md
+// §3.2). Restated as literals rather than imported from
+// @oxagen/handlers/lib/agent-role-defaults because the contract layer must not
+// depend on the handler layer — the dependency runs handlers → contracts. The
+// SUGGESTION LOGIC still lives handler-side and is derived from
+// AGENT_ROLE_SPECS; this enum only constrains the wire shape. Deliberately
+// excludes "Agent Legacy (unrestricted)", which is backfill-only and must
+// never be proposed for a new agent.
+const suggestedRoleNameSchema = z.enum([
+  "Agent Observer",
+  "Agent Contributor",
+  "Agent Operator",
+]);
+
 export const agentDefinitionSuggest = registerCapability({
   name: "suggest_agent_def",
   domain: "agent",
@@ -110,7 +124,27 @@ export const agentDefinitionSuggest = registerCapability({
       )
       .default([])
       .describe(
-        "Tools the agent SHOULD have that are not yet available in the workspace — MCP servers from the catalog that are not registered, or disabled skills. Never included in suggestion.config.agentTools (which only carries refs that exist right now); the caller connects/enables these first, then equips them. A seam for suggested IAM roles will join this once agent RBAC ships (docs/specs/agent-rbac).",
+        "Tools the agent SHOULD have that are not yet available in the workspace — MCP servers from the catalog that are not registered, or disabled skills. Never included in suggestion.config.agentTools (which only carries refs that exist right now); the caller connects/enables these first, then equips them. The suggested IAM role for the same draft is returned separately as `suggestedRole` (docs/specs/agent-rbac).",
+      ),
+    // ADDITIVE (Agent RBAC Phase 5b). Optional so every existing consumer of
+    // this contract is unaffected: a caller that ignores the field behaves
+    // exactly as before, and a handler build that does not emit it still
+    // passes the kernel's output validation.
+    suggestedRole: z
+      .object({
+        roleName: suggestedRoleNameSchema.describe(
+          "The narrowest system agent role that can still run this draft.",
+        ),
+        reason: z
+          .string()
+          .min(1)
+          .describe(
+            "Why this role and not a narrower one — cites the equipped capabilities, MCP servers, or graph-write request that a smaller ceiling would block.",
+          ),
+      })
+      .optional()
+      .describe(
+        "Suggested ROLE (the ceiling) for the drafted definition (the request); effective scope is the intersection of the two. Derived deterministically in code from the drafted config's capability category/riskLevel metadata and the system roles' own grant mapping — NOT model output. Advisory only: a pre-selection for a human-reviewable picker. assign_agent_role remains the sole authority (delegation ceiling, tier gate, assignability), and a caller that omits this field falls back to 'Agent Contributor'.",
       ),
   }),
 });

@@ -11,9 +11,7 @@
  */
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen";
-import type {
-  AgentDefinitionConfig,
-} from "@oxagen/oxagen/agent-schema";
+import type { AgentDefinitionConfig } from "@oxagen/oxagen/agent-schema";
 import type { AgentDefinitionSuggestOutput } from "@oxagen/oxagen/contracts/agent.definition.suggest";
 import type { AgentDefinitionSummarizeOutput } from "@oxagen/oxagen/contracts/agent.definition.summarize";
 import type { WorkbenchCtx } from "./scope";
@@ -33,11 +31,24 @@ export type AgentSuggestion = AgentDefinitionSuggestOutput["suggestion"];
 export type AgentRecommendation =
   AgentDefinitionSuggestOutput["recommendations"][number];
 
+/**
+ * The suggested ROLE (ceiling) for an AI-drafted definition (Agent RBAC
+ * Phase 5b): the narrowest system agent role that can still run what was
+ * drafted, plus the provenance line explaining why not something narrower.
+ * Optional on the contract — a suggestion produced before this field existed,
+ * or by a build that does not emit it, simply omits it and the builder falls
+ * back to "Agent Contributor".
+ */
+export type AgentSuggestedRole = NonNullable<
+  AgentDefinitionSuggestOutput["suggestedRole"]
+>;
+
 export type SuggestAgentResult = {
   suggestion: AgentSuggestion;
   rationale: string;
   warnings: string[];
   recommendations: AgentRecommendation[];
+  suggestedRole?: AgentSuggestedRole;
 };
 
 // ── Types mirrored from the agent.definition.* contract outputs ───────────────
@@ -110,12 +121,9 @@ export async function listAgents(
   ctx: WorkbenchCtx,
   status?: "draft" | "active" | "archived",
 ): Promise<AgentListRow[]> {
-  const out = (await invoke(
-    "list_agent_defs",
-    { status },
-    ctx,
-    { surface: "agent" },
-  )) as { agents: AgentListRow[] };
+  const out = (await invoke("list_agent_defs", { status }, ctx, {
+    surface: "agent",
+  })) as { agents: AgentListRow[] };
   return out.agents;
 }
 
@@ -123,12 +131,9 @@ export async function getAgent(
   ctx: WorkbenchCtx,
   agentId: string,
 ): Promise<AgentDetail> {
-  return (await invoke(
-    "get_agent_def",
-    { agentId },
-    ctx,
-    { surface: "agent" },
-  )) as AgentDetail;
+  return (await invoke("get_agent_def", { agentId }, ctx, {
+    surface: "agent",
+  })) as AgentDetail;
 }
 
 /**
@@ -141,12 +146,9 @@ export async function suggestAgentDefinition(
   ctx: WorkbenchCtx,
   input: { description: string; nameHint?: string; agentTypeHint?: string },
 ): Promise<SuggestAgentResult> {
-  return (await invoke(
-    "suggest_agent_def",
-    input,
-    ctx,
-    { surface: "agent" },
-  )) as SuggestAgentResult;
+  return (await invoke("suggest_agent_def", input, ctx, {
+    surface: "agent",
+  })) as SuggestAgentResult;
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -164,7 +166,12 @@ export type CreateAgentInput = {
 export async function createAgent(
   ctx: WorkbenchCtx,
   input: CreateAgentInput,
-): Promise<{ agentId: string; publicId: string; slug: string; version: number }> {
+): Promise<{
+  agentId: string;
+  publicId: string;
+  slug: string;
+  version: number;
+}> {
   return (await invoke(
     "create_agent_def",
     {
@@ -202,12 +209,9 @@ export async function updateAgent(
   ctx: WorkbenchCtx,
   input: UpdateAgentInput,
 ): Promise<{ agentId: string; version: number; isPublished: boolean }> {
-  return (await invoke(
-    "update_agent_def",
-    input,
-    ctx,
-    { surface: "agent" },
-  )) as { agentId: string; version: number; isPublished: boolean };
+  return (await invoke("update_agent_def", input, ctx, {
+    surface: "agent",
+  })) as { agentId: string; version: number; isPublished: boolean };
 }
 
 /**
@@ -221,12 +225,9 @@ export async function summarizeAgent(
   agentId: string,
   force?: boolean,
 ): Promise<AgentDefinitionSummarizeOutput> {
-  return (await invoke(
-    "summarize_agent_def",
-    { agentId, force },
-    ctx,
-    { surface: "agent" },
-  )) as AgentDefinitionSummarizeOutput;
+  return (await invoke("summarize_agent_def", { agentId, force }, ctx, {
+    surface: "agent",
+  })) as AgentDefinitionSummarizeOutput;
 }
 
 /**
@@ -270,12 +271,9 @@ export async function publishAgent(
   agentId: string,
   version?: number,
 ): Promise<{ agentId: string; version: number; checksum: string }> {
-  return (await invoke(
-    "publish_agent_def",
-    { agentId, version },
-    ctx,
-    { surface: "agent" },
-  )) as { agentId: string; version: number; checksum: string };
+  return (await invoke("publish_agent_def", { agentId, version }, ctx, {
+    surface: "agent",
+  })) as { agentId: string; version: number; checksum: string };
 }
 
 export async function deployAgent(
@@ -283,10 +281,7 @@ export async function deployAgent(
   agentId: string,
   deploymentStatus: "inactive" | "active",
 ): Promise<{ agentId: string; deploymentStatus: "inactive" | "active" }> {
-  return (await invoke(
-    "deploy_agent",
-    { agentId, deploymentStatus },
-    ctx,
-    { surface: "agent" },
-  )) as { agentId: string; deploymentStatus: "inactive" | "active" };
+  return (await invoke("deploy_agent", { agentId, deploymentStatus }, ctx, {
+    surface: "agent",
+  })) as { agentId: string; deploymentStatus: "inactive" | "active" };
 }

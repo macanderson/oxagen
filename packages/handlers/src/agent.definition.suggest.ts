@@ -17,8 +17,11 @@
  */
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { listCapabilities } from "@oxagen/oxagen";
 import { agentDefinitionSuggest } from "@oxagen/oxagen/contracts/agent.definition.suggest";
 import { logger } from "./logger";
+import { selectAgentCapabilities } from "./lib/agent-role-defaults";
+import { suggestNarrowestAgentRole } from "./lib/agent-role-suggest";
 import {
   AgentSuggestError,
   assembleCandidates,
@@ -94,7 +97,8 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   // Slug: honour the caller's nameHint, else the model's slug, else the name.
   // Clamp to the 18-char budget BEFORE de-conflict — the model (or a long
   // nameHint) can exceed it, and the contract would otherwise reject the output.
-  const slugBase = toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
+  const slugBase =
+    toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
   let slug = clampSlug(slugBase);
   if (slug !== slugBase) {
     warnings.push(
@@ -109,7 +113,31 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     slug = deconflicted;
   }
 
-  const { config, agentType, recommendations } = repairSynthesis(object, candidates, warnings);
+  const { config, agentType, recommendations } = repairSynthesis(
+    object,
+    candidates,
+    warnings,
+  );
+
+  // ── Suggested role (Agent RBAC Phase 5b) ────────────────────────────────────
+  //
+  // The narrowest system role that can still run what was just drafted. Derived
+  // from the REPAIRED config (hallucinated tool refs are already gone, so the
+  // suggestion reflects what the agent will actually be equipped with) and from
+  // the live capability registry's agent metadata — the same category/riskLevel
+  // pairs AGENT_ROLE_SPECS computes its grants from. Purely deterministic: no
+  // model output feeds this decision.
+  const suggestedRole = suggestNarrowestAgentRole(
+    {
+      agentTools: config.agentTools,
+      graphMode: config.graph.mode,
+      // Trigger TYPES, not their enabled flag — repairSynthesis forces every
+      // suggested trigger disabled, so the declared type is the only signal of
+      // whether a human is meant to be present when the agent runs.
+      triggerTypes: config.triggers.map((t) => t.type),
+    },
+    selectAgentCapabilities(listCapabilities()),
+  );
 
   logger.info(
     {
@@ -121,6 +149,7 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       triggers: config.triggers.length,
       recommendations: recommendations.length,
       warnings: warnings.length,
+      suggestedRole: suggestedRole.roleName,
     },
     "agent.definition.suggest: suggestion produced",
   );
@@ -144,5 +173,6 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     rationale: object.rationale,
     warnings,
     recommendations,
+    suggestedRole,
   };
 };
