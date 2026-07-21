@@ -110,6 +110,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   get_execution_lineage: () => import("./agent.execution.lineage"),
   render_agent_ui: () => import("./agent.ui.render"),
   create_agent_def: () => import("./agent.definition.create"),
+  delete_agent_def: () => import("./agent.definition.delete"),
   update_agent_def: () => import("./agent.definition.update"),
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),

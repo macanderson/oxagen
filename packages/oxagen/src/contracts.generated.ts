@@ -12,6 +12,7 @@ import "./contracts/agent.code.execute";
 import "./contracts/agent.compose";
 import "./contracts/agent.debug.trace";
 import "./contracts/agent.definition.create";
+import "./contracts/agent.definition.delete";
 import "./contracts/agent.definition.get";
 import "./contracts/agent.definition.list";
 import "./contracts/agent.definition.publish";

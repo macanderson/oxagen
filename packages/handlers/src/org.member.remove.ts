@@ -40,6 +40,7 @@ async function resolveActorPrincipalAndRole(
         and(
           eq(schema.principals.orgId, orgId),
           eq(schema.principals.parentUserId, userId),
+          eq(schema.principals.kind, "human"),
           eq(schema.principals.status, "active"),
         ),
       )
@@ -52,7 +53,10 @@ async function resolveActorPrincipalAndRole(
     const [praRow] = await tx
       .select({ roleName: schema.roles.name })
       .from(schema.principalRoleAssignments)
-      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+      .innerJoin(
+        schema.roles,
+        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+      )
       .where(
         and(
           eq(schema.principalRoleAssignments.principalId, principalRow.id),
@@ -70,13 +74,15 @@ async function resolveActorPrincipalAndRole(
 
 const AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
 
-export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> = async (
-  input,
-  ctx,
-) => {
+export const orgMemberRemoveHandler: CapabilityHandler<
+  typeof orgMemberRemove
+> = async (input, ctx) => {
   // ── Auth + scope guard ───────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "org.member.remove: rejected — no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "org.member.remove: rejected — no authenticated principal",
+    );
     throw new Error("Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
@@ -90,7 +96,10 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
   // Resolves via principal_role_assignments → roles, mirroring the billing
   // authz gate (billing-authz-role-gate memory). A bare membership is NOT
   // sufficient — the actor must hold Owner or Admin.
-  const { roleName: actorRole } = await resolveActorPrincipalAndRole(ctx.orgId, actorId);
+  const { roleName: actorRole } = await resolveActorPrincipalAndRole(
+    ctx.orgId,
+    actorId,
+  );
   if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
     logger.warn(
       { orgId: ctx.orgId, actorId, actorRole },
@@ -166,6 +175,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
           and(
             eq(schema.principals.orgId, ctx.orgId),
             eq(schema.principals.parentUserId, input.targetUserId),
+            eq(schema.principals.kind, "human"),
           ),
         )
         .limit(1);
@@ -176,7 +186,10 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
           .from(schema.principalRoleAssignments)
           .where(
             and(
-              eq(schema.principalRoleAssignments.principalId, targetPrincipalRow.id),
+              eq(
+                schema.principalRoleAssignments.principalId,
+                targetPrincipalRow.id,
+              ),
               eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
               isNull(schema.principalRoleAssignments.workspaceId),
               isNull(schema.principalRoleAssignments.deletedAt),
@@ -205,6 +218,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<typeof orgMemberRemove> =
         and(
           eq(schema.principals.orgId, ctx.orgId),
           eq(schema.principals.parentUserId, input.targetUserId),
+          eq(schema.principals.kind, "human"),
         ),
       )
       .limit(1);

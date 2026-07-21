@@ -20,3 +20,9 @@ export { createAccessRequest } from "./access-request";
 export type { CreateAccessRequestArgs } from "./access-request";
 
 export { bootstrapIAMRuntime } from "./bootstrap";
+
+export { resolveAgentRunAuthzContext } from "./agent-run-context";
+export type {
+  AgentRunAuthzContext,
+  ResolveAgentRunAuthzContextArgs,
+} from "./agent-run-context";

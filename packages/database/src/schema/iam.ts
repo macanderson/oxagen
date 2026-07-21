@@ -69,9 +69,13 @@ export const principals = iamSchema.table(
     // and the LIMIT 1 would pick one non-deterministically (an owner could
     // resolve to a role-less principal and be spuriously denied). Partial so
     // org-level service principals (parent_user_id NULL) are unconstrained.
+    // Narrowed to kind='human' (Agent RBAC Phase 1, migration
+    // 20260805120000): a delegated agent principal legitimately shares the
+    // same (org_id, parent_user_id) pair as its creator's human principal —
+    // one human may create many agents, each with its own principal row.
     orgParentUserUniq: uniqueIndex("principals_org_parent_user_uniq")
       .on(t.orgId, t.parentUserId)
-      .where(sql`${t.parentUserId} IS NOT NULL`),
+      .where(sql`${t.parentUserId} IS NOT NULL AND ${t.kind} = 'human'`),
     kindCheck: check(
       "principals_kind_check",
       sql`${t.kind} IN ('human', 'agent', 'service')`,

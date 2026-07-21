@@ -14,7 +14,10 @@ export const API_KEY_AUTHORIZED_ROLES = new Set(["Owner", "Admin"]);
  * Resolve the acting user's org-scoped role name, or null when they have no
  * active principal / org-role assignment in this org.
  */
-export async function resolveActorOrgRole(orgId: string, userId: string): Promise<string | null> {
+export async function resolveActorOrgRole(
+  orgId: string,
+  userId: string,
+): Promise<string | null> {
   return withTenantDb(async (tx) => {
     const [principalRow] = await tx
       .select({ id: schema.principals.id })
@@ -23,6 +26,7 @@ export async function resolveActorOrgRole(orgId: string, userId: string): Promis
         and(
           eq(schema.principals.orgId, orgId),
           eq(schema.principals.parentUserId, userId),
+          eq(schema.principals.kind, "human"),
           eq(schema.principals.status, "active"),
         ),
       )
@@ -33,7 +37,10 @@ export async function resolveActorOrgRole(orgId: string, userId: string): Promis
     const [praRow] = await tx
       .select({ roleName: schema.roles.name })
       .from(schema.principalRoleAssignments)
-      .innerJoin(schema.roles, eq(schema.roles.id, schema.principalRoleAssignments.roleId))
+      .innerJoin(
+        schema.roles,
+        eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+      )
       .where(
         and(
           eq(schema.principalRoleAssignments.principalId, principalRow.id),
@@ -50,7 +57,10 @@ export async function resolveActorOrgRole(orgId: string, userId: string): Promis
 }
 
 /** True when the user holds an org role permitted to manage API keys. */
-export async function actorCanManageApiKeys(orgId: string, userId: string): Promise<boolean> {
+export async function actorCanManageApiKeys(
+  orgId: string,
+  userId: string,
+): Promise<boolean> {
   const role = await resolveActorOrgRole(orgId, userId);
   return role !== null && API_KEY_AUTHORIZED_ROLES.has(role);
 }
@@ -64,7 +74,11 @@ export async function actorCanManageApiKeys(orgId: string, userId: string): Prom
  * the two live in separate packages. Keep the window identical or no key will
  * resolve. Pinned by the generateApiKey prefix-contract test.
  */
-export function generateApiKey(): { rawKey: string; keyPrefix: string; keyHash: string } {
+export function generateApiKey(): {
+  rawKey: string;
+  keyPrefix: string;
+  keyHash: string;
+} {
   const rawKey = "ox_" + randomBytes(32).toString("base64url");
   const keyPrefix = rawKey.slice(0, 12); // == @oxagen/auth API_KEY_PREFIX_LENGTH
   const keyHash = createHash("sha256").update(rawKey).digest("hex");

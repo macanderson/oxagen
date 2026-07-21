@@ -39,7 +39,12 @@ export type { Tx as DbOrTx };
 // System role definitions. Mirrored from seed-iam-defaults.ts. The Owner name is
 // sourced from the resolver's ORG_OWNER_ROLE_NAME so the seeded role name can
 // never drift from the super-user check in resolve.ts (rule 7.5).
-const ORG_ROLES = [ORG_OWNER_ROLE_NAME, "Admin", "Compliance", "Billing"] as const;
+const ORG_ROLES = [
+  ORG_OWNER_ROLE_NAME,
+  "Admin",
+  "Compliance",
+  "Billing",
+] as const;
 const WORKSPACE_ROLES = ["Owner", "Member", "Viewer"] as const;
 
 type OrgRoleName = (typeof ORG_ROLES)[number];
@@ -49,7 +54,11 @@ type Effect = "allow" | "deny" | "require_approval";
 // ── Deterministic ID helpers ──────────────────────────────────────────────────
 
 /** rol_<sha256(orgId:scopeKind:name)[:22]> */
-function makeRolePublicId(orgId: string, scopeKind: "org" | "workspace", name: string): string {
+function makeRolePublicId(
+  orgId: string,
+  scopeKind: "org" | "workspace",
+  name: string,
+): string {
   const digest = createHash("sha256")
     .update(`${orgId}:${scopeKind}:${name}`)
     .digest("hex")
@@ -87,7 +96,9 @@ export interface BootstrapOrgIAMArgs {
  * Idempotent: safe to call multiple times; all operations use conflict-free
  * or select-then-insert patterns.
  */
-export async function bootstrapOrgIAM(args: BootstrapOrgIAMArgs): Promise<void> {
+export async function bootstrapOrgIAM(
+  args: BootstrapOrgIAMArgs,
+): Promise<void> {
   const { orgId, ownerUserId, actorUserId, tx } = args;
   // tenancy: system bypass via withSystemDb (bootstrap — always called with an
   // explicit tx from the org/workspace creation transaction in normal kernel
@@ -96,7 +107,9 @@ export async function bootstrapOrgIAM(args: BootstrapOrgIAMArgs): Promise<void> 
   if (tx) {
     return bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, tx);
   }
-  return withSystemDb((sysTx) => bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, sysTx));
+  return withSystemDb((sysTx) =>
+    bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, sysTx),
+  );
 }
 
 async function bootstrapOrgIAMWithTx(
@@ -105,13 +118,15 @@ async function bootstrapOrgIAMWithTx(
   actorUserId: string,
   d: Tx,
 ): Promise<void> {
-
   // ── (a) Upsert 7 system roles ─────────────────────────────────────────────
   // Build the full set: 4 org-level + 3 workspace-level.
   type RoleSpec = { scopeKind: "org" | "workspace"; name: string };
   const roleSpecs: RoleSpec[] = [
     ...ORG_ROLES.map((name) => ({ scopeKind: "org" as const, name })),
-    ...WORKSPACE_ROLES.map((name) => ({ scopeKind: "workspace" as const, name })),
+    ...WORKSPACE_ROLES.map((name) => ({
+      scopeKind: "workspace" as const,
+      name,
+    })),
   ];
 
   // Map: "<scopeKind>:<name>" → internal UUID (populated after upserts).
@@ -178,19 +193,25 @@ async function bootstrapOrgIAMWithTx(
     roleIdMap.set(`${spec.scopeKind}:${spec.name}`, roleId);
   }
 
-  logger.info({ orgId, roleCount: roleIdMap.size }, "iam-provision: system roles upserted");
+  logger.info(
+    { orgId, roleCount: roleIdMap.size },
+    "iam-provision: system roles upserted",
+  );
 
   // ── (b) Upsert owner principal ────────────────────────────────────────────
   // Fetch the user's display name from auth.users.
   const [userRow] = await d
-    .select({ displayName: schema.users.displayName, email: schema.users.email })
+    .select({
+      displayName: schema.users.displayName,
+      email: schema.users.email,
+    })
     .from(schema.users)
     .where(eq(schema.users.id, ownerUserId))
     .limit(1);
 
   const displayName = userRow?.displayName ?? userRow?.email ?? ownerUserId;
 
-  // Idempotent: select-then-insert on (orgId, parentUserId).
+  // Idempotent: select-then-insert on (orgId, parentUserId, kind='human').
   const existingPrincipal = await d
     .select({ id: schema.principals.id })
     .from(schema.principals)
@@ -198,6 +219,7 @@ async function bootstrapOrgIAMWithTx(
       and(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, ownerUserId),
+        eq(schema.principals.kind, "human"),
       ),
     )
     .limit(1);
@@ -206,7 +228,10 @@ async function bootstrapOrgIAMWithTx(
 
   if (existingPrincipal[0]) {
     principalId = existingPrincipal[0].id;
-    logger.debug({ orgId, principalId }, "iam-provision: owner principal already exists");
+    logger.debug(
+      { orgId, principalId },
+      "iam-provision: owner principal already exists",
+    );
   } else {
     const [newPrincipal] = await d
       .insert(schema.principals)
@@ -233,21 +258,29 @@ async function bootstrapOrgIAMWithTx(
           and(
             eq(schema.principals.orgId, orgId),
             eq(schema.principals.parentUserId, ownerUserId),
+            eq(schema.principals.kind, "human"),
           ),
         )
         .limit(1);
       if (!reselected) {
-        throw new Error(`[iam-provision] Failed to upsert owner principal for org ${orgId}`);
+        throw new Error(
+          `[iam-provision] Failed to upsert owner principal for org ${orgId}`,
+        );
       }
       principalId = reselected.id;
     }
-    logger.info({ orgId, principalId }, "iam-provision: owner principal created");
+    logger.info(
+      { orgId, principalId },
+      "iam-provision: owner principal created",
+    );
   }
 
   // ── (c) Assign owner the org "Owner" role ─────────────────────────────────
   const ownerRoleId = roleIdMap.get(`org:${ORG_OWNER_ROLE_NAME}`);
   if (!ownerRoleId) {
-    throw new Error(`[iam-provision] org:Owner role not found in roleIdMap for org ${orgId}`);
+    throw new Error(
+      `[iam-provision] org:Owner role not found in roleIdMap for org ${orgId}`,
+    );
   }
 
   // The partial unique index covers (principalId, roleId, orgId) WHERE workspaceId IS NULL.
@@ -278,7 +311,10 @@ async function bootstrapOrgIAMWithTx(
         updatedByUserId: actorUserId,
       })
       .onConflictDoNothing();
-    logger.info({ orgId, principalId, ownerRoleId }, "iam-provision: owner role assignment created");
+    logger.info(
+      { orgId, principalId, ownerRoleId },
+      "iam-provision: owner role assignment created",
+    );
   }
 
   // ── (d) Seed role_grants from capability defaultRoles ────────────────────
@@ -312,7 +348,9 @@ async function bootstrapOrgIAMWithTx(
 
     if (workspace) {
       for (const roleName of WORKSPACE_ROLES) {
-        const effect = workspace[roleName as WorkspaceRoleName] as Effect | undefined;
+        const effect = workspace[roleName as WorkspaceRoleName] as
+          | Effect
+          | undefined;
         if (!effect) continue;
         const roleId = roleIdMap.get(`workspace:${roleName}`);
         if (!roleId) continue;
@@ -366,7 +404,9 @@ export async function provisionMemberPrincipal(
   if (tx) {
     return provisionMemberPrincipalWithTx(orgId, userId, actorUserId, tx);
   }
-  return withSystemDb((sysTx) => provisionMemberPrincipalWithTx(orgId, userId, actorUserId, sysTx));
+  return withSystemDb((sysTx) =>
+    provisionMemberPrincipalWithTx(orgId, userId, actorUserId, sysTx),
+  );
 }
 
 async function provisionMemberPrincipalWithTx(
@@ -383,18 +423,25 @@ async function provisionMemberPrincipalWithTx(
       and(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.kind, "human"),
       ),
     )
     .limit(1);
 
   if (existing[0]) {
-    logger.debug({ orgId, userId }, "iam-provision: member principal already exists");
+    logger.debug(
+      { orgId, userId },
+      "iam-provision: member principal already exists",
+    );
     return existing[0].id;
   }
 
   // Fetch user display name.
   const [userRow] = await d
-    .select({ displayName: schema.users.displayName, email: schema.users.email })
+    .select({
+      displayName: schema.users.displayName,
+      email: schema.users.email,
+    })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
     .limit(1);
@@ -416,7 +463,10 @@ async function provisionMemberPrincipalWithTx(
     .returning({ id: schema.principals.id });
 
   if (inserted) {
-    logger.info({ orgId, userId, principalId: inserted.id }, "iam-provision: member principal created");
+    logger.info(
+      { orgId, userId, principalId: inserted.id },
+      "iam-provision: member principal created",
+    );
     return inserted.id;
   }
 
@@ -428,12 +478,15 @@ async function provisionMemberPrincipalWithTx(
       and(
         eq(schema.principals.orgId, orgId),
         eq(schema.principals.parentUserId, userId),
+        eq(schema.principals.kind, "human"),
       ),
     )
     .limit(1);
 
   if (!reselected) {
-    throw new Error(`[iam-provision] Failed to upsert member principal for org ${orgId}, user ${userId}`);
+    throw new Error(
+      `[iam-provision] Failed to upsert member principal for org ${orgId}, user ${userId}`,
+    );
   }
 
   return reselected.id;

@@ -132,6 +132,22 @@
       }
     },
     {
+      "name": "delete_agent_def",
+      "file": "agent.definition.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_agent_def",
       "file": "agent.definition.get.ts",
       "domain": "agent",
