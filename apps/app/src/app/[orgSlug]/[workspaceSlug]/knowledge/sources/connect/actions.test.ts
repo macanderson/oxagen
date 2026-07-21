@@ -53,7 +53,11 @@ vi.mock("@oxagen/database", () => ({
       }),
     }),
   schema: {
-    workspaceUsers: { workspaceId: "workspaceId", userId: "userId", role: "role" },
+    workspaceUsers: {
+      workspaceId: "workspaceId",
+      userId: "userId",
+      role: "role",
+    },
   },
 }));
 vi.mock("@oxagen/handlers/logger", () => ({
@@ -93,13 +97,23 @@ describe("getConnectSourceSchemaAction", () => {
     workspaceRoleRows.rows = [{ role: "member" }];
     mockInvoke.mockResolvedValue({ metadata: { id: "custom-sql" } });
 
-    const result = await getConnectSourceSchemaAction({ ...SLUGS, connectorId: "custom-sql" });
+    const result = await getConnectSourceSchemaAction({
+      ...SLUGS,
+      connectorId: "custom-sql",
+    });
 
-    expect(result).toEqual({ ok: true, value: { metadata: { id: "custom-sql" } } });
+    expect(result).toEqual({
+      ok: true,
+      value: { metadata: { id: "custom-sql" } },
+    });
     expect(mockInvoke).toHaveBeenCalledWith(
       "get_plugin_schema",
       { pluginId: "custom-sql" },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
   });
@@ -109,7 +123,10 @@ describe("getConnectSourceSchemaAction", () => {
     workspaceRoleRows.rows = [];
     mockInvoke.mockResolvedValue({ metadata: { id: "custom-sql" } });
 
-    const result = await getConnectSourceSchemaAction({ ...SLUGS, connectorId: "custom-sql" });
+    const result = await getConnectSourceSchemaAction({
+      ...SLUGS,
+      connectorId: "custom-sql",
+    });
 
     expect(result.ok).toBe(true);
   });
@@ -117,11 +134,15 @@ describe("getConnectSourceSchemaAction", () => {
   it("denies when caller has neither an allowed org nor workspace role", async () => {
     workspaceRoleRows.rows = [];
 
-    const result = await getConnectSourceSchemaAction({ ...SLUGS, connectorId: "custom-sql" });
+    const result = await getConnectSourceSchemaAction({
+      ...SLUGS,
+      connectorId: "custom-sql",
+    });
 
     expect(result).toEqual({
       ok: false,
-      error: "You do not have permission to connect a source in this workspace.",
+      error:
+        "You do not have permission to connect a source in this workspace.",
     });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -130,7 +151,10 @@ describe("getConnectSourceSchemaAction", () => {
     workspaceRoleRows.rows = [{ role: "member" }];
     mockInvoke.mockRejectedValue(new Error("Unknown plugin: bogus"));
 
-    const result = await getConnectSourceSchemaAction({ ...SLUGS, connectorId: "bogus" });
+    const result = await getConnectSourceSchemaAction({
+      ...SLUGS,
+      connectorId: "bogus",
+    });
 
     expect(result).toEqual({ ok: false, error: "Unknown plugin: bogus" });
     expect(mockLoggerError).toHaveBeenCalled();
@@ -149,7 +173,10 @@ describe("getConnectSourceSchemaAction", () => {
 describe("validateConnectSourceConfigAction", () => {
   it("returns validation errors from invoke()", async () => {
     workspaceRoleRows.rows = [{ role: "member" }];
-    mockInvoke.mockResolvedValue({ valid: false, errors: [{ field: "apiKey", message: "Required", code: "required" }] });
+    mockInvoke.mockResolvedValue({
+      valid: false,
+      errors: [{ field: "apiKey", message: "Required", code: "required" }],
+    });
 
     const result = await validateConnectSourceConfigAction({
       ...SLUGS,
@@ -218,7 +245,8 @@ describe("createSourceConnectionAction", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "You must be a workspace owner (or org owner/admin) to connect a source.",
+      error:
+        "You must be a workspace owner (or org owner/admin) to connect a source.",
     });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
@@ -226,9 +254,22 @@ describe("createSourceConnectionAction", () => {
 
 describe("previewSourceConnectionAction", () => {
   it("returns preview record types on success", async () => {
-    mockInvoke.mockResolvedValue({ recordTypes: [{ sourceRecordType: "custom", displayName: "Custom", sampleCount: 2, sampleFields: ["id"], sampleRecords: [] }] });
+    mockInvoke.mockResolvedValue({
+      recordTypes: [
+        {
+          sourceRecordType: "custom",
+          displayName: "Custom",
+          sampleCount: 2,
+          sampleFields: ["id"],
+          sampleRecords: [],
+        },
+      ],
+    });
 
-    const result = await previewSourceConnectionAction({ ...SLUGS, connectionId: "con_123" });
+    const result = await previewSourceConnectionAction({
+      ...SLUGS,
+      connectionId: "con_123",
+    });
 
     expect(result.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
@@ -240,11 +281,19 @@ describe("previewSourceConnectionAction", () => {
   });
 
   it("surfaces the raw connector error message on failure", async () => {
-    mockInvoke.mockRejectedValue(new Error("Connection refused: bad credentials"));
+    mockInvoke.mockRejectedValue(
+      new Error("Connection refused: bad credentials"),
+    );
 
-    const result = await previewSourceConnectionAction({ ...SLUGS, connectionId: "con_123" });
+    const result = await previewSourceConnectionAction({
+      ...SLUGS,
+      connectionId: "con_123",
+    });
 
-    expect(result).toEqual({ ok: false, error: "Connection refused: bad credentials" });
+    expect(result).toEqual({
+      ok: false,
+      error: "Connection refused: bad credentials",
+    });
   });
 });
 
@@ -266,7 +315,13 @@ describe("suggestSourceMappingsAction", () => {
     const result = await suggestSourceMappingsAction({
       ...SLUGS,
       connectionId: "con_123",
-      recordTypes: [{ sourceRecordType: "custom", displayName: "Custom", sampleFields: ["id"] }],
+      recordTypes: [
+        {
+          sourceRecordType: "custom",
+          displayName: "Custom",
+          sampleFields: ["id"],
+        },
+      ],
     });
 
     expect(result.ok).toBe(true);
@@ -284,7 +339,10 @@ describe("getSourceMappingsAction", () => {
     workspaceRoleRows.rows = [{ role: "member" }];
     mockInvoke.mockResolvedValue({ mappings: [] });
 
-    const result = await getSourceMappingsAction({ ...SLUGS, connectionId: "con_123" });
+    const result = await getSourceMappingsAction({
+      ...SLUGS,
+      connectionId: "con_123",
+    });
 
     expect(result).toEqual({ ok: true, value: { mappings: [] } });
   });
@@ -292,18 +350,38 @@ describe("getSourceMappingsAction", () => {
 
 describe("confirmSourceMappingsAction", () => {
   it("persists and activates on success", async () => {
-    mockInvoke.mockResolvedValue({ mappingsCreated: 1, mappingsUpdated: 0, connectionStatus: "active" });
+    mockInvoke.mockResolvedValue({
+      mappingsCreated: 1,
+      mappingsUpdated: 0,
+      connectionStatus: "active",
+    });
 
     const result = await confirmSourceMappingsAction({
       ...SLUGS,
       connectionId: "con_123",
-      mappings: [{ sourceRecordType: "custom", oxagenEntityType: "task", propertyMappings: {} }],
+      mappings: [
+        {
+          sourceRecordType: "custom",
+          oxagenEntityType: "task",
+          propertyMappings: {},
+        },
+      ],
     });
 
-    expect(result).toEqual({ ok: true, value: { mappingsCreated: 1, mappingsUpdated: 0, connectionStatus: "active" } });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        mappingsCreated: 1,
+        mappingsUpdated: 0,
+        connectionStatus: "active",
+      },
+    });
     expect(mockInvoke).toHaveBeenCalledWith(
       "set_connection_mappings",
-      expect.objectContaining({ connectionId: "con_123", activateConnection: true }),
+      expect.objectContaining({
+        connectionId: "con_123",
+        activateConnection: true,
+      }),
       expect.anything(),
       { surface: "agent" },
     );
@@ -315,7 +393,13 @@ describe("confirmSourceMappingsAction", () => {
     const result = await confirmSourceMappingsAction({
       ...SLUGS,
       connectionId: "con_123",
-      mappings: [{ sourceRecordType: "custom", oxagenEntityType: "task", propertyMappings: {} }],
+      mappings: [
+        {
+          sourceRecordType: "custom",
+          oxagenEntityType: "task",
+          propertyMappings: {},
+        },
+      ],
     });
 
     expect(result.ok).toBe(false);
@@ -330,7 +414,6 @@ describe("configureSourceIntegrationAction", () => {
       integrationId: "con_123",
       displayName: "My DB",
       syncCadence: "polling",
-      inferenceEnabled: true,
       updatedAt: "2026-07-12T00:00:00.000Z",
     });
 
@@ -338,13 +421,12 @@ describe("configureSourceIntegrationAction", () => {
       ...SLUGS,
       integrationId: "con_123",
       syncCadence: "polling",
-      inferenceEnabled: true,
     });
 
     expect(result.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "configure_integration",
-      { integrationId: "con_123", syncCadence: "polling", inferenceEnabled: true, ontologyPrompt: undefined },
+      { integrationId: "con_123", syncCadence: "polling" },
       expect.anything(),
       { surface: "agent" },
     );

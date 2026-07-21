@@ -4,10 +4,9 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
-export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> = async (
-  input,
-  ctx,
-) => {
+export const graphNodeSearchHandler: CapabilityHandler<
+  typeof graphNodeSearch
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   type SearchRow = {
@@ -27,9 +26,7 @@ export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> =
       // types here, but label filtering on a node property is safe and avoids
       // APOC or dynamic Cypher injection.
       const labelFilter =
-        input.labels && input.labels.length > 0
-          ? "AND n.label IN $labels"
-          : "";
+        input.labels && input.labels.length > 0 ? "AND n.label IN $labels" : "";
 
       // Score: 1.0 if displayName matches, 0.5 if only description matches,
       // 0.75 if both match. This keeps ranking deterministic without full-text indexing.
@@ -37,6 +34,7 @@ export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> =
         `MATCH (n:GraphNode)
          WHERE n.orgId = $orgId
            AND n.workspaceId = $workspaceId
+           AND n.is_system = false
            AND (
                  toLower(n.displayName) CONTAINS toLower($query)
               OR toLower(coalesce(n.description, '')) CONTAINS toLower($query)

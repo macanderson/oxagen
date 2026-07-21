@@ -15,7 +15,7 @@ The inspectable ground-truth view of a single graph node — its full property b
   - Confirm a chat citation's underlying node data, not just its label
   - See a node's neighbors to understand its place in the graph
   - Copy the raw id when it's genuinely needed (support, debugging)
-  - (Admin) correct or remove a node/label/relationship found to be wrong
+  - Route a correction back through the governed source that produced the record
 
 ## Functionality
 - Header: human `displayName` + domain `label` badge (never the UUID as primary identifier); description if present.
@@ -23,16 +23,12 @@ The inspectable ground-truth view of a single graph node — its full property b
 - Metadata/provenance section: created/updated timestamps, source connection if known, copyable raw id (`CopyableId`) — the only place the UUID appears.
 - Neighbors section (new): adjacent nodes rendered as `NodeRef` chips grouped by relationship type, each opening its own node detail on click.
 - Not-found state: friendly message with a back link, distinguishing "doesn't exist" from "no access."
-- (Admin-gated) actions: delete node, add/remove label, upsert/delete an outgoing relationship.
+- Provenance actions link to the owning source; the detail page does not expose generic graph mutation.
 
 ## Capabilities invoked
 - `graph.node.get` (`get_node`) — primary fetch.
 - `graph.node_label.get` (`get_node_labels`) — label badges.
 - `ontology.neighbors` (`get_ontology_neighbors`) — neighbors section.
-- `graph.node.delete` (`delete_node`) — admin delete.
-- `graph.node_label.add` / `graph.node_label.remove` (`add_node_label` / `remove_node_label`) — admin label edit.
-- `graph.edge.upsert` (`upsert_edge`) — admin add/edit relationship.
-- `graph.edge.delete` (`delete_edge`) — admin remove relationship.
 
 ## Data sources
 Neo4j exclusively — node, labels, properties, relationships.
@@ -43,7 +39,7 @@ Neo4j exclusively — node, labels, properties, relationships.
 - **Error:** node fetch failure or missing node renders the existing friendly not-found card, never a raw 500.
 
 ## Existing implementation
-- **Today:** `apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]/page.tsx` is COMPLETE for properties/provenance/metadata and the not-found state. Move the route under `knowledge/graph/[nodeId]`; add the neighbors section and admin actions; make `NodeRef` chips app-wide link here instead of only opening the hover popover, so this page becomes reachable by click, not just Cmd+K.
+- **Today:** `apps/app/src/app/[orgSlug]/[workspaceSlug]/knowledge/nodes/[nodeId]/page.tsx` is COMPLETE for properties/provenance/metadata and the not-found state. Move the route under `knowledge/graph/[nodeId]`; add the neighbors section and provenance links; make `NodeRef` chips app-wide link here instead of only opening the hover popover, so this page becomes reachable by click, not just Cmd+K.
 
 ## Vision alignment
 This is the citation rule made real: a node is never just an id, it's an inspectable, labeled, sourced record — P2 because the data is already correct today, the gap is discoverability, not correctness.

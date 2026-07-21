@@ -48,11 +48,11 @@ Fleet fan-out uses **zero dispatcher-model calls**. Work partitioning is determi
 - return **structured facts** (schema-validated), never transcripts;
 - acquire file locks before mutating (see §5).
 
-### 5. Lock authority in Postgres; graph carries only a projection
+### 5. Lock authority and file-level state stay in Postgres
 
 **File locks and work leases are transactional mutual-exclusion state, so they live in Postgres** — lease rows with atomic acquire (`INSERT … ON CONFLICT` / `SELECT … FOR UPDATE SKIP LOCKED`), TTL expiry, and **fencing tokens** (monotonic per-resource counters checked at write time so a stale lease-holder's late write is rejected). This extends the existing Inngest claim/lease mechanism (`packages/inngest-functions`, Fanout Phase 2) to file-path granularity rather than inventing a second lock system.
 
-**Neo4j never enforces a lock.** The graph sync path is asynchronous (ADR-018 local-replica ⇄ workspace graph), so a lock "written to the graph" is invisible to a concurrent agent for the duration of sync lag — fatal for mutual exclusion. Instead, lease events are **projected** onto the graph asynchronously (`LOCKED/TOUCHED` edges between agents, missions, and file nodes) purely for lineage, hot-file analytics, and conflict *prediction* (the planner reads the projection to shard work so locks are rarely contended). This mirrors the connector dual-write pattern (ADR-012): Postgres = operational record and source of truth, Neo4j = derived graph index.
+**Neo4j never enforces or mirrors a lock for launch.** A graph projection is eventually consistent and would leak branch/worktree-specific file paths into shared state without providing replay-grade evidence. File locks remain queryable in Postgres; exact file lineage belongs in the future immutable run-evidence ledger, and any coarse workspace projection must be derived from verified evidence.
 
 Local-only CLI fleets (no platform round-trip on the critical path) back the same `LockProvider` port with a local implementation (single-process mutex + lock file); the port contract, fencing semantics, and lease TTLs are identical.
 

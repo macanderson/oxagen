@@ -1,5 +1,10 @@
 # ADR-025 naming mapping — final resolved (EXECUTED)
 
+> **Historical name ledger (2026-07-21 note):** rows for retired graph mutation,
+> raw Cypher, code-map, graph-sync, execution-lineage, and legacy semantic-edge
+> capabilities are preserved only to explain the completed rename. They are not
+> current product surfaces and must not be re-registered from this table.
+
 **Status:** Executed on branch `feat/adr024-naming-standard`. All contract `name` fields have been rewritten to verb-first snake_case. The ADR-022 alias mechanism has been **removed** — there is one canonical name per capability, no shim. See `docs/adr/ADR-025-verb-first-snake-naming.md` for the standard.
 
 **Totals:** 293 capabilities (294 renamed, then the scope-collapse merge removed one) · 293 globally-unique names · 0 true-duplicate merges (all flagged pairs verified DISTINCT) · 1 executed scope-collapse merge (2 members → 1) · 0 four-word names.

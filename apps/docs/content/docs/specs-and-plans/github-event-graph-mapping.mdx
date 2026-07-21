@@ -3,6 +3,15 @@ title: "GitHub Event → Graph Mapping"
 description: "Archived spec & plan — status: not started (audited 2026-07-03)."
 ---
 
+> **Superseded for launch (2026-07-21).** This archived document is retained as
+> historical design context, not as an implementation plan. The exact live code
+> graph stays local; Oxagen keeps GitHub provider, repository, ref, commit,
+> pull-request, workflow-run, and changed-file metadata. References below to central
+> `SourceFile`/`SourceSymbol` indexing, source embeddings, automatic intent-to-code
+> edges, or confidence-based materialization are historical. Canonical topology from
+> configured protected/default refs and a typed evidence ledger are explicit
+> follow-ups, and every semantic candidate requires governed approval.
+
 > **Status: Not started** — verified against the codebase on 2026-07-03 by an automated audit.
 >
 > The spec is a comprehensive design document (Status: Design / requirements) specifying how GitHub webhook events should map to knowledge-graph nodes and edges across 50+ event types. All 6 implementation checklist items remain unchecked. The GitHub connector's parseWebhookEvent currently handles only 8 events and explicitly excludes all Tier 2-3 events. No new node labels, relationship types, inferred-edge jobs, or capability documentation have been implemented.
@@ -259,4 +268,3 @@ These are computed in the ingestion functions, not pushed by GitHub — but ever
 - [ ] Add the inferred-edge jobs (ownership, intent→code, deploy provenance) as post-ingestion Inngest steps.
 - [ ] Verify no secret material (secret-scanning values, deploy keys, PAT contents) is ever persisted to Postgres or Neo4j.
 - [ ] Add the GitHub event coverage to `docs/capabilities/` and confirm UI cites every node via `NodeRef` (`displayName` + `label`, never the UUID).
-

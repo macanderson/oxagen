@@ -5,6 +5,10 @@
 **Related:** ADR-010 (subagent fanout via Inngest), ADR-019 (unified agent engine)
 **Supersedes on acceptance:** parts of ADR-010's aggregate model → file as ADR-021
 
+> **2026-07 launch update:** Phase 1's compact Postgres summary model remains.
+> The later automatic Neo4j execution projection and semantic peer-recall
+> extension were retired; durable run evidence is the future projection source.
+
 ## Problem — one seam burns most of the fleet's tokens and wall-clock
 
 The platform fanout path relays **every child's full input and output back into the
@@ -172,7 +176,7 @@ aggregate tool while the fanout is still running:
 | Handler | `packages/agent/src/handlers/agent.subagent.aggregate.ts` | compact mapping, caps, pending short-circuit |
 | Handler | `packages/agent/src/handlers/agent.subagent.result.get.ts` | new, `withTenantDb` |
 | Runtime dispatcher | `packages/agent/src/dispatch/subagent.ts` | unchanged — `readFanout()` has no production consumers (tests only); reshaping it is churn without benefit |
-| Executor | `packages/inngest-functions/src/functions/agent.execute-subagent.ts` | write `summary` on completion; enrich graph-sync properties |
+| Executor | `packages/inngest-functions/src/functions/agent.execute-subagent.ts` | write `summary` on completion; enrich the durable execution record |
 | Migration | `packages/database/migrations/NNNN_subagent_runs_summary.sql` | add `summary text` |
 | MCP | `apps/mcp/src/tools/agent.subagent.aggregate.ts` | schema + description update |
 | MCP | `apps/mcp/src/tools/agent.subagent.result.get.ts` | new |
@@ -216,10 +220,9 @@ Baseline for one week before rollout, compare one week after:
   surface and any workflow supervisor usage.
 - **Summaries too lossy for merge-style tasks** (e.g. research swarm synthesis).
   Those callers set `includeMerged: true` or fetch the specific children they
-  synthesize from. Note the research swarm already lands full content in the
-  graph via `web/search.completed → graph.ingest`
-  (`research.swarm.start.ts:9-15`) — synthesis should read the graph, not the
-  relay, which is exactly the Phase 2 direction.
+  synthesize from. Full child content belongs in durable result storage and is
+  retrieved by explicit scoped references; generic graph ingestion is not a
+  fanout-result transport.
 - **`aggregatedData` cap breaks a caller that depended on huge merges.** The cap
   surfaces as `aggregatedDataTruncated: true`, not silent data loss; such callers
   migrate to result.get.

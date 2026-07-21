@@ -1,0 +1,320 @@
+# Fleet plan: RBAC Permissions Plane rollout
+# Source spec: docs/specs/rbac-permissions-plane.md (Phases 0-5 of §4, one task per phase,
+# Phase 0 split into its two independent items, plus a final docs/parity pass).
+#
+# How to run:
+#   git switch -c feat/rbac-permissions-plane origin/main   # shared_tree workers commit to the CURRENT branch
+#   stella fleet --plan docs/specs/rbac-permissions-plane.fleet.toml --max-concurrency 4 --budget <N>
+#
+# Operational notes:
+# - The fleet has NO resume: re-running re-dispatches every task. Prompts tell workers to
+#   reconcile with already-landed work instead of duplicating it.
+# - Per-child budget = --budget / --max-concurrency (default concurrency 4).
+# - Enable worker shell access if your build supports it: the schema task wants
+#   `atlas migrate hash`, and workers are told to run narrow (single-file / single-package)
+#   tests when they can. Without shell they still write tests, just don't execute them.
+# - Claims are exact-string file locks. The claims shared between tasks below
+#   (fetch-authz.ts, schema/iam.ts) are dependency-ordered on purpose; do not add a task
+#   that shares a claim without also dependency-ordering it.
+
+[[tasks]]
+id = "p0-tier-bypass"
+title = "Phase 0a — remove the non-enterprise IAM tier bypass"
+claims = ["packages/iam/src/check-iam.ts"]
+prompt = '''
+Implement Phase 0 (tier-bypass item) of docs/specs/rbac-permissions-plane.md.
+
+The P0 defect (spec §2.2): checkIAM in packages/iam/src/check-iam.ts (~line 74) reads the
+org plan tier and returns an unconditional allow for any non-enterprise org BEFORE the
+8-rule resolver runs — canAccessACL(tier) is `tier === "enterprise"`. For non-enterprise
+orgs the entire grant matrix, explicit denies, require_approval, and conditions are inert.
+
+Do:
+1. Make the resolver (packages/oxagen/src/iam/resolve.ts — do not modify it) run for ALL
+   tiers, per the spec's recommended policy: governance is universal, tier gating belongs
+   on matrix-AUTHORING surfaces only. Keep canAccessACL exported for those surfaces if
+   referenced, but it must no longer short-circuit enforcement.
+2. Preserve current behavior for orgs with no grant rows: resolution must reduce to
+   role-inherited grants + contract defaultEffect — which is what non-enterprise orgs
+   effectively get today. Add unit tests asserting a non-enterprise org with default
+   seeds resolves identically before/after this change, and that an explicit deny row
+   now actually denies for a non-enterprise org.
+3. Do NOT modify packages/iam/src/fetch-authz.ts — a separate task owns that file.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit (e.g.
+`pnpm --filter @oxagen/iam test:unit -- check-iam.test.ts`); NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p0-resource-grants"
+title = "Phase 0b — reland grant storage as iam.resource_grants"
+claims = ["packages/database/src/schema/iam.ts", "packages/database/atlas/migrations"]
+prompt = '''
+Implement Phase 0 (grant-storage item) of docs/specs/rbac-permissions-plane.md — the
+iam.resource_grants table from spec §3.3, reviving the direct-grant storage dropped in
+migration 0027.
+
+Do:
+1. Drizzle schema in packages/database/src/schema/iam.ts, following the conventions of
+   the sibling tables in that file exactly (UUID id + public id with `rsg_` prefix,
+   auditMixin + softDeleteMixin). Columns per §3.3:
+   org_id (not null), principal_type ('user'|'api_key'|'agent'|'role'),
+   principal_id (uuid — principal id, OR role id when principal_type='role'),
+   resource_type ('capability'|'skill'|'mcp_tool'|'plugin'), resource_id (text),
+   action (text — 'invoke'|'load'|'edit'|'activate'|'call'|'use'|'*'),
+   scope_kind ('org'|'workspace'), scope_id (uuid),
+   effect ('allow'|'deny'|'require_approval' — the existing GrantEffect vocabulary),
+   conditions (jsonb, nullable), expires_at (timestamptz, nullable).
+   Add indexes for the hot lookups: (org_id, principal_type, principal_id) and
+   (org_id, resource_type, resource_id).
+2. SQL migration in packages/database/atlas/migrations/ — NEVER in apps/. The timestamp
+   prefix must sort LATER than every existing migration file.
+3. If you have shell access: from packages/database run
+   `atlas migrate hash --dir "file://atlas/migrations"` (never hand-edit atlas.sum),
+   apply locally (`unset DATABASE_URL` first so .env.local targeting wins; local DB is
+   localhost:5433) and verify with a post-migrate SELECT. If you have no shell access,
+   state clearly in your commit message that atlas.sum regeneration is outstanding.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p1-resource-fetch"
+title = "Phase 1 — widen fetchAuthz to feed resource grants into the resolver"
+depends_on = ["p0-tier-bypass", "p0-resource-grants"]
+claims = ["packages/iam/src/fetch-authz.ts", "packages/oxagen/src/iam/resolve.ts"]
+prompt = '''
+Implement Phase 1 of docs/specs/rbac-permissions-plane.md (§3.4): generalize the fetch,
+not the resolver.
+
+Context: fetchAuthz (packages/iam/src/fetch-authz.ts) returns empty grants/policies
+arrays since migration 0027 dropped their tables, so only rules 7/7.5/8 can fire. An
+earlier task on this branch relanded storage as iam.resource_grants
+(packages/database/src/schema/iam.ts — read it for the exact shape).
+
+Do:
+1. Widen fetchAuthz to load matching iam.resource_grants rows for the principal (and
+   their roles) and map them into the resolver's EXISTING Grant[] shape, generalizing
+   the capability key to resourceKey = `${resource_type}:${resource_id}:${action}`.
+   Back-compat: a capability grant is resource_type='capability',
+   resource_id=<contract name>, action='invoke'. Support action='*' matching any action.
+2. Fold role_grants into the same stream as principal_type='role' rows at the FETCH
+   layer (leave the role_grants table and the seed/provision path untouched).
+3. Widen types in packages/oxagen/src/iam/resolve.ts ONLY as needed for the key
+   generalization — NO new decision rules; the rule 1-8 precedence is exactly the
+   composition the spec wants (deny > require_approval > allow at equal specificity;
+   resource-specific beats capability-default; principal-specific beats role-inherited
+   beats defaultEffect; workspace allow beats org; org-enforced deny beats everything).
+4. Honor `conditions` jsonb via the existing evaluator (packages/oxagen/src/iam/
+   conditions.ts — fail-closed) and `expires_at` (expired rows must never match).
+5. Perf (spec §5): batch the new query in parallel with the existing fetches and add a
+   short-TTL cache keyed by (principal, workspace), mirroring the entitlement service's
+   30s cache pattern.
+6. Unit tests covering the full §3.4 composition matrix, including the tier-universal
+   enforcement landed by the Phase 0 task.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p2-app-parity"
+title = "Phase 2 — apps/app IAM parity via assertCapability"
+depends_on = ["p1-resource-fetch"]
+claims = ["apps/app/src/lib/workbench/scope.ts", "apps/app/src/lib/automations/scope.ts", "apps/app/src/lib/agent-tools/authz.ts"]
+prompt = '''
+Implement Phase 2 of docs/specs/rbac-permissions-plane.md (§2.5): apps/app does not
+bootstrap the IAM kernel runtime, so invoke() from server actions skips the resolver and
+app surfaces hand-roll a coarse canManage boolean. NOTE the spec predates a refactor:
+resolveStudioScope / apps/app/src/lib/studio/scope.ts no longer exist. The pattern now
+lives in resolveWorkbenchScope (apps/app/src/lib/workbench/scope.ts) and
+resolveAutomationsScope (apps/app/src/lib/automations/scope.ts) — both compute
+canManage = ["owner","admin"].includes(role) — plus consumers such as
+apps/app/src/lib/agent-tools/authz.ts. Search the app for every canManage site.
+
+Do:
+1. Bootstrap the IAM runtime in apps/app server startup (bootstrapIAMRuntime from
+   packages/iam/src/bootstrap.ts) so invoke() from server actions is gated identically
+   to API/MCP. Also ensure bootstrapEntitlementRuntime() from @oxagen/plugins is called,
+   and remember invoke() needs `import "@oxagen/handlers/register"`.
+2. Add a shared assertCapability(ctx, name, action) helper backed by the resolver, so
+   the check is audited and resolver-consistent instead of hand-rolled.
+3. Migrate every canManage call site (workbench, automations, agent-tools authz, and
+   any other surface rg finds) onto assertCapability. canManage may remain as a thin
+   resolver-backed wrapper to limit churn.
+4. Behavior must be preserved by default grants: workspace owner/admin manage, others
+   read-only — assert exactly this in unit tests so rollout is a no-op until an admin
+   authors a narrowing grant.
+5. Server Components only where appropriate — never call a "use client" function from a
+   Server Component.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p3-skill-grants"
+title = "Phase 3 — skills as grantable resources"
+depends_on = ["p1-resource-fetch"]
+prompt = '''
+Implement Phase 3 of docs/specs/rbac-permissions-plane.md (§3.2, §3.5): per-skill access
+grants — the net-new enforcement surface. Today "who may load a skill" is a property of
+the VERB (the shared skill.* / agent.skill.load contracts), not the SKILL.
+
+Do:
+1. Enforce per-skill access in the agent.skill.load, skill edit/update, and skill
+   version-activate handlers: before acting, resolve (resource_type='skill',
+   resource_id=<skl_ public id>, action ∈ load|edit|activate) through the resolver.
+   When NO skill-specific grant rows exist, fall through to the capability contract's
+   existing defaultRoles — today's behavior (Owner/Admin/Member load) must be exactly
+   preserved so rollout is a no-op. Skill enable/disable stays a workspace toggle.
+2. Add grant-management capability contract(s) in packages/oxagen/src/contracts/
+   (e.g. set/list/delete of skill grants — follow ADR-025 naming conventions used by
+   neighboring contracts) that read/write iam.resource_grants rows with
+   resource_type='skill'. Capability parity is law: contract → API route
+   (apps/api/src/routes/v1/) → MCP tool (apps/mcp/src/tools/) → CLI command
+   (apps/cli/src/commands/). Write the per-capability doc file(s) under
+   docs/capabilities/ but do NOT edit docs/capabilities/_index.md — a later task owns
+   that file.
+3. Unit tests: enforcement fires on a deny row targeting a specific skill (including for
+   an agent principal), falls through cleanly with no rows, and the grant CRUD
+   capabilities are tenant-scoped.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p4-mcp-authz"
+title = "Phase 4 — MCP per-key tool authz and tools/list filtering"
+depends_on = ["p1-resource-fetch"]
+claims = ["apps/mcp/src/context.ts", "packages/iam/src/fetch-authz.ts", "packages/database/src/schema/iam.ts"]
+prompt = '''
+Implement Phase 4 of docs/specs/rbac-permissions-plane.md (§2.3, §3.5): MCP tool-level
+authorization. Today an API key carries org+workspace scope but no tool allowlist, and
+unauthorized tools are fully LISTED by tools/list and only fail on call.
+
+Do:
+1. In buildContext (apps/mcp/src/context.ts), attach the resolved grant set for the
+   key's principal to the request context (derive everything from the validated
+   credential, never client headers; keep the fail-closed posture).
+2. Filter the xmcp tools/list surface so tools the principal is not authorized to call
+   are ABSENT from discovery, not merely erroring on invocation — this is the headline
+   least-privilege win of the whole spec.
+3. Per-key tool allowlists are iam.resource_grants rows (resource_type='mcp_tool',
+   action='call') against the key's principal. Keys currently resolve to their
+   creator's principal in packages/iam/src/fetch-authz.ts (spec open question 2): if a
+   dedicated service-principal-per-key is needed to make per-key grants meaningful,
+   implement the minimal version; if that balloons, ship allowlists keyed to the
+   existing principal resolution and document the follow-up in code comments and your
+   commit message.
+4. Flag-gate everything: a key with NO mcp_tool grant rows defaults to "all enabled
+   tools" so every existing key keeps working until an allowlist is authored.
+5. Do NOT modify packages/oxagen/src/kernel.ts — another task owns it. External
+   (mcp.<server>.<tool>) dispatch already flows through authorizeExternalCapability.
+6. Unit tests: list-filtering hides unauthorized tools, default-open path with no rows,
+   deny row blocks both list and call.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p5-plugin-grants"
+title = "Phase 5 — plugin per-principal grants in the entitlement gate"
+depends_on = ["p1-resource-fetch"]
+claims = ["packages/oxagen/src/kernel.ts", "packages/plugins/src/entitlements/entitlement-service.ts"]
+prompt = '''
+Implement Phase 5 of docs/specs/rbac-permissions-plane.md (§2.4, §3.5): give the plugin
+entitlement plane a principal dimension. Today the kernel's capability entitlement gate
+(packages/oxagen/src/kernel.ts + packages/plugins/src/entitlements/
+entitlement-service.ts) is a binary workspace install/enable check — once a pack is
+installed, every principal who passes the capability IAM check may use it.
+
+Do:
+1. Keep the existing install/enable check (workspace-scoped per ADR-013/014, 30s cache)
+   exactly as is, then ADD a resource-grant check: resolve (resource_type='plugin',
+   resource_id=<plugin id, e.g. oxagen/media-svg>, action='use') for the invoking
+   principal through the resolver.
+2. Absent any plugin grant rows, behavior is unchanged (installed ⇒ allowed) — assert
+   this no-op default in tests.
+3. Make installed-but-not-granted a DISTINCT, explainable error from the existing
+   capability_not_installed (typed error class with a stable code, per the repo's
+   error-handling conventions), so a denial is attributable to a grant rather than a
+   missing install.
+4. Preserve gate ordering: the entitlement gate stays after the billing admission gate
+   in _invokeCore. Match the existing cache pattern for the new grant lookup.
+5. Unit tests in packages/plugins for the gate logic and a kernel-level test for
+   ordering + the distinct error codes.
+
+Operating rules: read docs/specs/rbac-permissions-plane.md first — your task is one slice
+of its rollout plan. Reconcile with already-landed work on this branch: this fleet has no
+resume, so if part of this task already exists, extend it instead of duplicating. Write
+unit tests for all new/changed logic. If you can run tests, run ONLY the narrowest
+relevant command — a single test file or one package's test:unit; NEVER run `pnpm test`,
+`turbo run test`, `pnpm gate`, or any whole-repo suite. When done, COMMIT all your work
+via repo_commit with a descriptive message — uncommitted work does not land.
+'''
+
+[[tasks]]
+id = "p6-docs-registry"
+title = "Docs registry, parity reconciliation, spec status"
+depends_on = ["p2-app-parity", "p3-skill-grants", "p4-mcp-authz", "p5-plugin-grants"]
+claims = ["docs/capabilities/_index.md", "docs/specs/rbac-permissions-plane.md"]
+prompt = '''
+Final integration pass over the RBAC permissions plane work landed on this branch by the
+earlier fleet tasks.
+
+Do:
+1. Update docs/capabilities/_index.md to include every capability contract added on this
+   branch (inspect recent commits and packages/oxagen/src/contracts/ for new skill-grant
+   and related contracts) and ensure each has its per-capability doc file under
+   docs/capabilities/ (kebab-case capability name). Earlier tasks were told to write the
+   per-capability files but leave _index.md to you — verify rather than duplicate.
+2. If you have shell access, run `pnpm check:manifest --json` and fix any genuine
+   api/mcp parity gaps introduced by this branch (gaps whose `missing` includes api or
+   mcp); docs/unit/e2e-only gaps: note, don't chase.
+3. Update the Status line of docs/specs/rbac-permissions-plane.md from "Proposed" to
+   "Accepted — implementation in progress", and append a short "Implementation notes"
+   section: one line per phase (0a, 0b, 1-5) saying what landed on this branch and any
+   explicitly flagged follow-ups you find in commit messages (e.g. outstanding atlas.sum
+   regeneration, deferred service-principal-per-key).
+
+Operating rules: reconcile with already-landed work on this branch — this fleet has no
+resume, so verify before editing. If you can run tests or checks, run ONLY narrow,
+targeted commands; NEVER run `pnpm test`, `turbo run test`, `pnpm gate`, or any
+whole-repo suite. When done, COMMIT all your work via repo_commit with a descriptive
+message — uncommitted work does not land.
+'''

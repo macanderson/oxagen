@@ -59,5 +59,4 @@ GET /v1/graph/nodes/node_abc
 ## Related
 - `graph.node.list` — paginated browse of nodes
 - `graph.node.search` — text search over nodes
-- `graph.node.upsert` — create or update a node
-- `graph.node.delete` — delete a node and its relationships
+- `ontology.neighbors` — retrieve the node's governed one-hop neighborhood

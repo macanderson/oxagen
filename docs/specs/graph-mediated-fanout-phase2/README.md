@@ -1,8 +1,16 @@
 # Spec: Graph-Mediated Fleet Coordination (Phase 2 — Blackboard)
 
-**Status:** Implemented (slices 2a/2b/2c) — PR feat/graph-fanout-phase2
+**Status:** Partially superseded — durable Postgres coordination remains; the
+automatic Neo4j execution projection and semantic peer-recall slice were
+retired for launch.
 **Owner:** Mac Anderson
 **Related:** `docs/specs/graph-mediated-fanout/` (Phase 1, shipped in #527), ADR-010 (subagent fanout via Inngest), ADR-019 (unified agent engine)
+
+> **Launch boundary:** `subagent_runs` summaries, claims, leases, sibling reads,
+> and telemetry remain authoritative. The historical `:Execution` projection
+> and cross-fanout vector recall below are not active launch architecture.
+> Exact run evidence belongs in the durable trace/evidence ledger; any future
+> workspace-graph `Run` projection must be derived from that typed evidence.
 
 ## Where Phase 1 left the topology
 

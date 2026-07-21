@@ -1,9 +1,11 @@
 export * from "./types";
 export * from "./pipeline";
 export * from "./filters";
-export { parseSourceFile } from "./parsers/index";
-export type { ParsedSymbol, ParseResult, SymbolKind } from "./parsers/types";
-export { registerConnector, getConnector, listConnectors } from "./connectors/types";
+export {
+  registerConnector,
+  getConnector,
+  listConnectors,
+} from "./connectors/types";
 export type {
   ConnectorDefinition,
   AuthCredential,

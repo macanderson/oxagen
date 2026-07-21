@@ -36,16 +36,14 @@ import { logger } from "../logger";
  * Step 3: dedup-pass-b        embedding similarity (stub: always created_principal until
  *                              vector index is queryable from ingestion context)
  * Step 4: upsert-node         MERGE :EntityNode in Neo4j
- * Step 5: embed               embed text, store vector on node — gated by
- *                              shouldRunInference(DeliveryConfig.semanticInference)
- * Step 6: schedule-events     fire ingestion/entity.created (trigger matcher) always, and
- *                              ingestion/entity.infer (semantic inference) only when the
- *                              customer's semantic-inference toggle allows it.
+ * Step 5: embed               embed text and store the vector on the node.
+ * Step 6: schedule-event      fire ingestion/entity.created or entity.updated
+ *                              for downstream trigger matching.
  *
- * Filters and the inference gate come from `@oxagen/ingestion/filters` — the same
+ * Filters come from `@oxagen/ingestion/filters` — the same
  * pure functions the reference `runPipeline()` uses — so there is exactly one
  * implementation of DeliveryConfig enforcement. An absent / empty DeliveryConfig
- * is fully backward-compatible: no records are filtered and inference runs.
+ * is fully backward-compatible: no records are filtered.
  */
 export const [ingestionPipeline] = createFunction(
   {
@@ -83,7 +81,7 @@ export const [ingestionPipeline] = createFunction(
       | {
           kind: "ok";
           mutation: EntityMutation;
-          semanticInference?: DeliveryConfig["semanticInference"];
+          legacyEmbeddingPolicy?: DeliveryConfig["semanticInference"];
         };
 
     const normalizeResult: NormalizeResult = await step.run(
@@ -199,7 +197,7 @@ export const [ingestionPipeline] = createFunction(
         return {
           kind: "ok" as const,
           mutation,
-          semanticInference: deliveryConfig?.semanticInference,
+          legacyEmbeddingPolicy: deliveryConfig?.semanticInference,
         };
       },
     );
@@ -221,7 +219,10 @@ export const [ingestionPipeline] = createFunction(
     }
 
     const mutation = normalizeResult.mutation;
-    const semanticInference = normalizeResult.semanticInference;
+    const embeddingEnabled = shouldRunInference(
+      sourceRecordType,
+      normalizeResult.legacyEmbeddingPolicy,
+    );
 
     // ── Step 2: Dedup Pass A — exact naturalKey lookup in Neo4j ─────────────
     const dedupPassA = await step.run(
@@ -321,20 +322,10 @@ export const [ingestionPipeline] = createFunction(
     );
     const previousProperties = upsertResult?.previousProperties ?? null;
 
-    // The customer's semantic-inference toggle gates embedding and the async
-    // semantic-edge inference event. An absent DeliveryConfig.semanticInference
-    // means "run inference" (backward compatible) — see shouldRunInference.
-    const inferenceEnabled = shouldRunInference(
-      sourceRecordType,
-      semanticInference,
-    );
-
     // ── Step 5: Embed ─────────────────────────────────────────────────────────
     // renderEntityText is pure (no DB/Neo4j); only the embedEntity write —
     // embedEntity → upsertEmbedding → scopedSession() — needs the scope.
-    // Skipped entirely when the customer disabled semantic inference for this
-    // source / record type (the node is still upserted by Step 4).
-    if (inferenceEnabled) {
+    if (embeddingEnabled) {
       const text = renderEntityText(
         mutation.entityType,
         mutation.displayName,
@@ -362,12 +353,9 @@ export const [ingestionPipeline] = createFunction(
     //   - ingestion/entity.updated  → consumed by playbook.trigger.match on an
     //     update (node.updated triggers). Carries `previousProperties` so
     //     previous-aware operators (`changed`, X→merged) can fire.
-    //   - ingestion/entity.infer    → consumed by semantic edge inference. Only
-    //     fired when the customer's semantic-inference toggle allows it.
     // The create-vs-update decision is driven by `dedup.action`, the pipeline's
     // authoritative signal (Pass A hit → updated_principal; brand-new →
-    // created_principal). Always fired regardless of the semantic-inference
-    // toggle: the entity IS in the graph, so automations must still see it.
+    // created_principal). The entity is in the graph, so automations must see it.
     const isCreate = dedup.action === "created_principal";
     const changeEvent = isCreate
       ? {
@@ -395,27 +383,14 @@ export const [ingestionPipeline] = createFunction(
             isNew: false,
           },
         };
-    const inferEvent = {
-      name: "ingestion/entity.infer" as never,
-      data: {
-        nodeId: dedup.principalNodeId,
-        entityType: mutation.entityType,
-        propertiesSnapshot: mutation.properties,
-        workspaceId: mutation.workspaceId,
-        orgId: mutation.orgId,
-      },
-    };
-    await step.sendEvent(
-      "schedule-inference",
-      inferenceEnabled ? [changeEvent, inferEvent] : [changeEvent],
-    );
+    await step.sendEvent("schedule-change-event", changeEvent);
 
     logger.info(
       {
         naturalKey: mutation.naturalKey,
         action: dedup.action,
         orgId,
-        inferenceEnabled,
+        embeddingEnabled,
       },
       "ingestion-pipeline: done",
     );

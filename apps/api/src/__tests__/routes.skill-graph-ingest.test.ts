@@ -2,7 +2,6 @@
  * Unit tests for three thin org-scoped routes that were previously uncovered:
  *   - GET  /skill/export   (skill.export — streams canonical TOML as an attachment)
  *   - POST /skill/edit     (skill.edit)
- *   - POST /graph/ingest   (graph.ingest)
  *
  * Pattern mirrors routes.graph.test.ts: mock at the adapter seam, assert the
  * happy path forwards the invoke result, invoke is called once with the right

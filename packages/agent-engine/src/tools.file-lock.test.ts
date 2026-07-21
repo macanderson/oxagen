@@ -235,8 +235,8 @@ describe("buildWorkspaceTools — agent file locking (edit_file)", () => {
     // Simulates two runCodingAgent calls (e.g. the chat surface and a fleet
     // subagent, both funneling through the same shared engine per
     // docs/adr/ADR-017-unified-agent-engine.md) targeting the same file. A
-    // single shared, stateful fake stands in for the real Neo4j HOLDS_LOCK
-    // edge's mutual exclusion.
+    // single shared, stateful fake stands in for the real transactional
+    // Postgres lease's mutual exclusion.
     const holders = new Map<string, string>();
     const sharedLock: FileLockProvider = {
       acquire: async ({ path, agentId }) => {

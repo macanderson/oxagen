@@ -3,12 +3,10 @@
  *
  * These are PURE string builders — no I/O, no AI calls. They render a
  * ParsedSymbol or a file's metadata into the text string that will be sent to
- * the embedding model. The AI embed call itself stays in the consumers
- * (packages/ingestion for the platform, apps/cli for local search).
+ * the embedding model. The AI embed call itself stays in the local consumer.
  *
  * Module: @oxagen/code-graph/renderers
- * Moved from packages/ingestion/src/embed/index.ts — canonical location is
- * now here; ingestion re-exports for backward compat.
+ * These renderers feed the checkout-local graph only.
  */
 
 import { chunkText } from "./chunk";
@@ -68,7 +66,9 @@ export function renderMarkdownFileText(args: {
   maxChars?: number;
 }): string {
   const cap = args.maxChars ?? MARKDOWN_MAX_CHARS;
-  const { chunks } = chunkText(args.content, { maxChars: MARKDOWN_CHUNK_CHARS });
+  const { chunks } = chunkText(args.content, {
+    maxChars: MARKDOWN_CHUNK_CHARS,
+  });
 
   const picked: string[] = [];
   let used = 0;
@@ -82,7 +82,9 @@ export function renderMarkdownFileText(args: {
   }
 
   const body = picked.join("\n\n").slice(0, cap);
-  return [args.path, args.title ?? "", body].filter((p) => p.length > 0).join("\n");
+  return [args.path, args.title ?? "", body]
+    .filter((p) => p.length > 0)
+    .join("\n");
 }
 
 /**

@@ -47,7 +47,6 @@ import { browserReadRoute } from "./routes/v1/browser.read";
 import { codeDiffRoute } from "./routes/v1/code.diff";
 import { codePatchRoute } from "./routes/v1/code.patch";
 import { codeFormatRoute } from "./routes/v1/code.format";
-import { codeMapRoute } from "./routes/v1/code.map";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
@@ -96,7 +95,6 @@ import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent_fanout.g
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
-import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
@@ -231,10 +229,15 @@ import { agentFileLockListRoute } from "./routes/v1/agent.file_lock.list";
 import { agentSubagentCancelRoute } from "./routes/v1/agent.subagent.cancel";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
+import { agentDefinitionDeleteRoute } from "./routes/v1/agent.definition.delete";
 import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
 import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
+import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
+import { agentRoleListRoute } from "./routes/v1/agent.role.list";
+import { agentRoleGetRoute } from "./routes/v1/agent.role.get";
 import { agentDefinitionSuggestRoute } from "./routes/v1/agent.definition.suggest";
 import { agentDefinitionReviseRoute } from "./routes/v1/agent.definition.revise";
 import { agentDefinitionSummarizeRoute } from "./routes/v1/agent.definition.summarize";
@@ -266,20 +269,13 @@ import {
   githubOauthCallbackRoute,
 } from "./routes/v1/github-oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
-import { graphNodeUpsertRoute } from "./routes/v1/graph.node.upsert";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
-import { graphNodeDeleteRoute } from "./routes/v1/graph.node.delete";
 import { graphNodeSearchRoute } from "./routes/v1/graph.node.search";
 import { graphSearchRoute } from "./routes/v1/graph.search";
-import { graphEdgeUpsertRoute } from "./routes/v1/graph.edge.upsert";
-import { graphEdgeDeleteRoute } from "./routes/v1/graph.edge.delete";
-import { graphCypherRoute } from "./routes/v1/graph.cypher";
-import { graphIngestRoute } from "./routes/v1/graph.ingest";
 import { webSearchRoute } from "./routes/v1/web.search";
 import { webFetchRoute } from "./routes/v1/web.fetch";
 import { researchSwarmStartRoute } from "./routes/v1/research.swarm.start";
 import { researchSwarmStatusRoute } from "./routes/v1/research.swarm.status";
-import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
 import { repoRoute } from "./routes/v1/repo";
 import { integrationRoute } from "./routes/v1/integration";
 import { schemaRoute } from "./routes/v1/schema";
@@ -288,8 +284,6 @@ import {
   pluginVersionRoute,
 } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
-import { graphExportRoute } from "./routes/v1/graph.export";
-import { graphSyncPushRoute } from "./routes/v1/graph.sync.push";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
@@ -475,7 +469,6 @@ orgScoped.route("/agent/feature/verify", agentFeatureVerifyRoute);
 orgScoped.route("/code/diff", codeDiffRoute);
 orgScoped.route("/code/patch", codePatchRoute);
 orgScoped.route("/code/format", codeFormatRoute);
-orgScoped.route("/code/map", codeMapRoute);
 orgScoped.route("/agent/tools", agentToolListRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
@@ -535,9 +528,9 @@ orgScoped.route("/agent/subagent/result", agentSubagentResultGetRoute);
 orgScoped.route("/agent/subagent/siblings", agentSubagentSiblingsRoute);
 orgScoped.route("/agent/subagent/cancel", agentSubagentCancelRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
-// Agent file locking (docs/specs/agent-file-locking/plan.md §7): manual
-// acquire/force-release/introspection over the HOLDS_LOCK edge write_file/
-// edit_file acquire automatically inside every coding-agent turn.
+// Agent file locking: manual acquire/force-release/introspection over the
+// transactional Postgres leases that write_file/edit_file acquire
+// automatically inside every coding-agent turn.
 orgScoped.route("/agent/file/lock/acquire", agentFileLockAcquireRoute);
 orgScoped.route("/agent/file/lock/release", agentFileLockReleaseRoute);
 orgScoped.route("/agent/file/lock/list", agentFileLockListRoute);
@@ -553,10 +546,6 @@ orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
 // single-execution failure frame above.
 orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
-// File-level lineage of one execution — the :Execution node plus every
-// :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
-// KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
-orgScoped.route("/agent/executions/lineage", agentExecutionLineageRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
@@ -565,9 +554,18 @@ orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
 orgScoped.route("/agent/definitions/suggest", agentDefinitionSuggestRoute);
 orgScoped.route("/agent/definitions/revise", agentDefinitionReviseRoute);
 orgScoped.route("/agent/definitions/summarize", agentDefinitionSummarizeRoute);
+orgScoped.route("/agent/definitions/delete", agentDefinitionDeleteRoute);
 orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
 orgScoped.route("/agent/definitions", agentDefinitionListRoute);
 orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
+// Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2): attach/
+// detach/inspect IAM roles on an agent's delegated principal. The /assign,
+// /revoke and /get sub-paths are mounted before the base list route so its
+// GET / never swallows them.
+orgScoped.route("/agent/roles/assign", agentRoleAssignRoute);
+orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
+orgScoped.route("/agent/roles/get", agentRoleGetRoute);
+orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
 orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
 orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
@@ -731,28 +729,19 @@ orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);
 // GitHub App OAuth endpoints (workspace-scoped + auth-required)
 orgScoped.route("/connections/github", githubOauthRoute);
-orgScoped.route("/graph/node/upsert", graphNodeUpsertRoute);
 orgScoped.route("/graph/node/get", graphNodeGetRoute);
-orgScoped.route("/graph/node/delete", graphNodeDeleteRoute);
 orgScoped.route("/graph/node/search", graphNodeSearchRoute);
 orgScoped.route("/graph/search", graphSearchRoute);
-orgScoped.route("/graph/edge/upsert", graphEdgeUpsertRoute);
-orgScoped.route("/graph/edge/delete", graphEdgeDeleteRoute);
-orgScoped.route("/graph/cypher", graphCypherRoute);
-orgScoped.route("/graph/ingest", graphIngestRoute);
 orgScoped.route("/web/search", webSearchRoute);
 orgScoped.route("/web/fetch", webFetchRoute);
 orgScoped.route("/research/swarm/start", researchSwarmStartRoute);
 orgScoped.route("/research/swarm/status", researchSwarmStatusRoute);
-orgScoped.route("/semantic-edges", semanticEdgeRoute);
 orgScoped.route("/repos", repoRoute);
 orgScoped.route("/integrations", integrationRoute);
 orgScoped.route("/schema", schemaRoute);
 orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
-orgScoped.route("/graph/export", graphExportRoute);
-orgScoped.route("/graph/sync/push", graphSyncPushRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);

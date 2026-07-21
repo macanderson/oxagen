@@ -48,7 +48,6 @@ import {
   createCombinedMemory,
   createServerMemory,
   createCodeGraphProvider,
-  createGraphSyncProvider,
   createPlatformAgentAi,
   createGatewayAgentAi,
 } from "../agent/adapters/index.js";
@@ -522,7 +521,7 @@ export function ReplApp({
   // replaces it, so a session that started synthetic/BYOK can pick up a real
   // Oxagen account without restarting the REPL. Read live wherever the
   // current org/workspace/token needs to be displayed (the header scope
-  // chip); `aiRef`/`graphSyncRef`/`serverMemoryRef` below are one-time
+  // chip); `aiRef`/`serverMemoryRef` below are one-time
   // `useRef` initializers keyed off the ORIGINAL `options.session` (mirroring
   // `/coordinator local`'s pattern), so `handleLoggedIn` additionally
   // reassigns `aiRef.current`/`activeAiRef.current` directly — reassigning a
@@ -582,13 +581,6 @@ export function ReplApp({
   coordinatorLocRef.current = coordinatorLoc;
   const codeGraphRef = useRef(
     createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
-  );
-  // Graph sync posts to the platform API — skip it for the synthetic
-  // benchmark session (unauthenticated there, and bench runs shouldn't sync).
-  const graphSyncRef = useRef(
-    options.session.synthetic
-      ? null
-      : createGraphSyncProvider({ ...options.session, cwd }),
   );
   // Platform memory port — recall prior-session lessons + mirror new ones. Only
   // when authenticated and not a synthetic benchmark session; null degrades the
@@ -1450,11 +1442,9 @@ export function ReplApp({
   // on-device (`/coordinator local`), the AI port turns actually run on.
   // Reassigning `.current` takes effect starting the very next turn with no
   // workspace re-creation — the exact same mechanism `/coordinator` uses.
-  // NOTE: graph sync (`graphSyncRef`) and platform memory (`serverMemoryRef`)
-  // are NOT hot-swapped here — both are one-time `useRef` initializers with
-  // more involved setup (an Inngest-backed sync provider, a recall/mirror
-  // adapter keyed by executionRef) than a plain AI port swap, so they still
-  // pick up a freshly-logged-in session only on the next `oxagen` launch.
+  // NOTE: platform memory (`serverMemoryRef`) is NOT hot-swapped here. It is a
+  // one-time `useRef` initializer keyed by executionRef, so it picks up a
+  // freshly logged-in session on the next `oxagen` launch.
   // That's a real, intentional limitation of this pass — the AI port swap
   // covers what a user doing `/login` mid-session cares about most (running
   // turns against their real account), and is called out in the PR.
@@ -3749,7 +3739,6 @@ export function ReplApp({
           memory: turnMemory,
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,
-          graphSync: graphSyncRef.current,
           signal: runner.signal,
           // Always surface the pre-execution snapshot as a scope card in the
           // transcript, so the user ALWAYS sees both their original prompt and

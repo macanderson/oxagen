@@ -38,7 +38,14 @@ import { meterCreditsForUsage } from "@oxagen/billing";
 
 type Part =
   | { type: "text-delta"; text: string }
-  | { type: "finish"; totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
+  | {
+      type: "finish";
+      totalUsage: {
+        inputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+      };
+    }
   | { type: "error"; error: string }
   | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
   | { type: "tool-result"; toolCallId: string; output: unknown };
@@ -74,7 +81,10 @@ describe("translateAgentStream — usage event + credits", () => {
     const events: StreamEvent[] = [];
     const parts: Part[] = [
       { type: "text-delta", text: "Hello" },
-      { type: "finish", totalUsage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 } },
+      {
+        type: "finish",
+        totalUsage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      },
     ];
 
     await translateAgentStream({
@@ -85,7 +95,10 @@ describe("translateAgentStream — usage event + credits", () => {
 
     const usageEvents = collectEvents(events, "usage");
     expect(usageEvents).toHaveLength(1);
-    const usageEvent = usageEvents[0] as Extract<StreamEvent, { type: "usage" }>;
+    const usageEvent = usageEvents[0] as Extract<
+      StreamEvent,
+      { type: "usage" }
+    >;
     expect(usageEvent.usage.promptTokens).toBe(100);
     expect(usageEvent.usage.completionTokens).toBe(50);
     expect(usageEvent.usage.totalTokens).toBe(150);
@@ -106,7 +119,10 @@ describe("translateAgentStream — usage event + credits", () => {
 
     const events: StreamEvent[] = [];
     const parts: Part[] = [
-      { type: "finish", totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+      {
+        type: "finish",
+        totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      },
     ];
 
     await translateAgentStream({
@@ -118,7 +134,10 @@ describe("translateAgentStream — usage event + credits", () => {
 
     const usageEvents = collectEvents(events, "usage");
     expect(usageEvents).toHaveLength(1);
-    const usageEvent = usageEvents[0] as Extract<StreamEvent, { type: "usage" }>;
+    const usageEvent = usageEvents[0] as Extract<
+      StreamEvent,
+      { type: "usage" }
+    >;
     expect(usageEvent.usage.totalTokens).toBe(15);
     // creditsCharged must be absent (not set to 0 or NaN)
     expect(usageEvent.usage.creditsCharged).toBeUndefined();
@@ -128,9 +147,7 @@ describe("translateAgentStream — usage event + credits", () => {
     vi.mocked(meterCreditsForUsage).mockReturnValue(0n);
 
     const events: StreamEvent[] = [];
-    const parts: Part[] = [
-      { type: "error", error: "Gateway timeout" },
-    ];
+    const parts: Part[] = [{ type: "error", error: "Gateway timeout" }];
 
     await translateAgentStream({
       ...BASE_ARGS,
@@ -149,7 +166,10 @@ describe("translateAgentStream — usage event + credits", () => {
     const parts: Part[] = [
       { type: "text-delta", text: "Hello " },
       { type: "text-delta", text: "world" },
-      { type: "finish", totalUsage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
+      {
+        type: "finish",
+        totalUsage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+      },
     ];
 
     const { assistantText } = await translateAgentStream({
@@ -167,7 +187,8 @@ describe("translateAgentStream — error part surfaces a structured error event"
     const envelope = JSON.stringify({
       error: {
         code: "insufficient_credits",
-        message: "Insufficient credits: your balance is empty. Please add credits to continue.",
+        message:
+          "Insufficient credits: your balance is empty. Please add credits to continue.",
       },
       requestId: "req-err-1",
     });
@@ -184,7 +205,10 @@ describe("translateAgentStream — error part surfaces a structured error event"
     // No text event — the raw JSON must never reach the inline timeline.
     expect(collectEvents(events, "text")).toHaveLength(0);
 
-    const errEvents = collectEvents(events, "error") as Extract<StreamEvent, { type: "error" }>[];
+    const errEvents = collectEvents(events, "error") as Extract<
+      StreamEvent,
+      { type: "error" }
+    >[];
     expect(errEvents).toHaveLength(1);
     expect(errEvents[0]!.code).toBe("insufficient_credits");
     expect(errEvents[0]!.message).toBe(
@@ -207,7 +231,10 @@ describe("translateAgentStream — error part surfaces a structured error event"
       emit: (e) => events.push(e),
     });
 
-    const errEvents = collectEvents(events, "error") as Extract<StreamEvent, { type: "error" }>[];
+    const errEvents = collectEvents(events, "error") as Extract<
+      StreamEvent,
+      { type: "error" }
+    >[];
     expect(errEvents).toHaveLength(1);
     expect(errEvents[0]!.message).toBe("Gateway timeout");
     expect(errEvents[0]!.code).toBeUndefined();
@@ -223,7 +250,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
         type: "tool-call",
         toolCallId: "tc-1",
         toolName: "start_background_task",
-        input: { kind: "ingest_graph", label: "Ingest doc", payload: {} },
+        input: { kind: "index_document", label: "Index doc", payload: {} },
       },
       {
         type: "tool-result",
@@ -245,15 +272,19 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
     >[];
     expect(bg).toHaveLength(1);
     expect(bg[0]!.taskId).toBe("task-99");
-    expect(bg[0]!.kind).toBe("ingest_graph");
-    expect(bg[0]!.label).toBe("Ingest doc");
+    expect(bg[0]!.kind).toBe("index_document");
+    expect(bg[0]!.label).toBe("Index doc");
     expect(bg[0]!.status).toBe("pending");
     expect(bg[0]!.inngestRunId).toBe("run-77");
 
     // A terminal background-task block is persisted so the card survives refresh.
     const block = persistedBlocks.find((b) => b.type === "background-task");
     expect(block).toBeTruthy();
-    expect(block).toMatchObject({ taskId: "task-99", kind: "ingest_graph", status: "pending" });
+    expect(block).toMatchObject({
+      taskId: "task-99",
+      kind: "index_document",
+      status: "pending",
+    });
   });
 
   it("emits nothing when the start result has no taskId (graceful)", async () => {
@@ -275,7 +306,9 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
     });
 
     expect(collectEvents(events, "background-task-progress")).toHaveLength(0);
-    expect(persistedBlocks.find((b) => b.type === "background-task")).toBeUndefined();
+    expect(
+      persistedBlocks.find((b) => b.type === "background-task"),
+    ).toBeUndefined();
   });
 });
 
@@ -296,7 +329,10 @@ function runTranslator(parts: unknown[]): {
   turn: ReturnType<ReturnType<typeof createTurnTranslator>["finish"]>;
 } {
   const events: StreamEvent[] = [];
-  const translator = createTurnTranslator({ ...TRANSLATOR_ARGS, emit: (e) => events.push(e) });
+  const translator = createTurnTranslator({
+    ...TRANSLATOR_ARGS,
+    emit: (e) => events.push(e),
+  });
   for (const p of parts) translator.onPart(p);
   return { events, turn: translator.finish() };
 }
@@ -327,17 +363,15 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
     const { events, turn } = runTranslator(parts);
 
     // Two distinct, step-namespaced reasoning ids reach the client.
-    const starts = events.filter((e) => e.type === "reasoning-start") as Extract<
-      StreamEvent,
-      { type: "reasoning-start" }
-    >[];
+    const starts = events.filter(
+      (e) => e.type === "reasoning-start",
+    ) as Extract<StreamEvent, { type: "reasoning-start" }>[];
     expect(starts.map((e) => e.reasoningId)).toEqual(["s0:r", "s1:r"]);
 
     // Deltas route to the right namespaced card.
-    const deltas = events.filter((e) => e.type === "reasoning-delta") as Extract<
-      StreamEvent,
-      { type: "reasoning-delta" }
-    >[];
+    const deltas = events.filter(
+      (e) => e.type === "reasoning-delta",
+    ) as Extract<StreamEvent, { type: "reasoning-delta" }>[];
     expect(deltas).toEqual([
       { type: "reasoning-delta", reasoningId: "s0:r", text: "first-thought" },
       { type: "reasoning-delta", reasoningId: "s1:r", text: "second-thought" },
@@ -345,14 +379,22 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
 
     // Both reasoning cards survive with their OWN text — the second did not
     // overwrite the first (the bug namespacing prevents).
-    const reasoningBlocks = turn.persistedBlocks.filter((b) => b.type === "reasoning") as Array<{
+    const reasoningBlocks = turn.persistedBlocks.filter(
+      (b) => b.type === "reasoning",
+    ) as Array<{
       type: "reasoning";
       reasoningId: string;
       text: string;
     }>;
     expect(reasoningBlocks).toHaveLength(2);
-    expect(reasoningBlocks[0]).toMatchObject({ reasoningId: "s0:r", text: "first-thought" });
-    expect(reasoningBlocks[1]).toMatchObject({ reasoningId: "s1:r", text: "second-thought" });
+    expect(reasoningBlocks[0]).toMatchObject({
+      reasoningId: "s0:r",
+      text: "first-thought",
+    });
+    expect(reasoningBlocks[1]).toMatchObject({
+      reasoningId: "s1:r",
+      text: "second-thought",
+    });
 
     // Text from both steps accumulates in order.
     expect(turn.assistantText).toBe("onetwo");
@@ -361,7 +403,12 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
   it("does NOT namespace tool call ids (provider ids are already unique)", () => {
     const parts: unknown[] = [
       { type: "start-step" },
-      { type: "tool-call", toolCallId: "toolu_abc", toolName: "get_graph_stats", input: {} },
+      {
+        type: "tool-call",
+        toolCallId: "toolu_abc",
+        toolName: "get_graph_stats",
+        input: {},
+      },
       { type: "tool-result", toolCallId: "toolu_abc", output: { ok: true } },
       { type: "finish-step" },
     ];
@@ -382,9 +429,19 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
   it("skips preliminary tool-result parts (no premature tool-call-end)", () => {
     const parts: unknown[] = [
       { type: "start-step" },
-      { type: "tool-call", toolCallId: "tc-1", toolName: "get_graph_stats", input: {} },
+      {
+        type: "tool-call",
+        toolCallId: "tc-1",
+        toolName: "get_graph_stats",
+        input: {},
+      },
       // Streamed partial output — must be ignored.
-      { type: "tool-result", toolCallId: "tc-1", output: { partial: true }, preliminary: true },
+      {
+        type: "tool-result",
+        toolCallId: "tc-1",
+        output: { partial: true },
+        preliminary: true,
+      },
       { type: "tool-result", toolCallId: "tc-1", output: { ok: true } },
       { type: "finish-step" },
     ];
@@ -397,7 +454,10 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
   it("onPart suppresses finish and error — the caller owns usage + error", () => {
     const parts: unknown[] = [
       { type: "text-delta", text: "hi" },
-      { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      {
+        type: "finish",
+        totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      },
       { type: "error", error: "boom" },
     ];
     const { events } = runTranslator(parts);
@@ -422,7 +482,12 @@ describe("createTurnTranslator — parity with the single-pass wrapper", () => {
       { type: "reasoning-delta", id: "a", text: "think" },
       { type: "reasoning-end", id: "a" },
       { type: "text-delta", text: "answer " },
-      { type: "tool-call", toolCallId: "toolu_1", toolName: "get_graph_stats", input: { q: 1 } },
+      {
+        type: "tool-call",
+        toolCallId: "toolu_1",
+        toolName: "get_graph_stats",
+        input: { q: 1 },
+      },
       { type: "tool-result", toolCallId: "toolu_1", output: { count: 3 } },
       { type: "text-delta", text: "done" },
       { type: "finish-step" },
@@ -484,7 +549,12 @@ describe("emitUsageEvent", () => {
     const events: StreamEvent[] = [];
     emitUsageEvent(
       (e) => events.push(e),
-      { inputTokens: 1000, outputTokens: 200, totalTokens: 1200, cachedInputTokens: 800 },
+      {
+        inputTokens: 1000,
+        outputTokens: 200,
+        totalTokens: 1200,
+        cachedInputTokens: 800,
+      },
       "anthropic/claude-sonnet-5",
     );
     const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
@@ -496,7 +566,12 @@ describe("emitUsageEvent", () => {
     const events: StreamEvent[] = [];
     emitUsageEvent(
       (e) => events.push(e),
-      { inputTokens: 500, outputTokens: 0, totalTokens: 500, cachedInputTokens: 900 },
+      {
+        inputTokens: 500,
+        outputTokens: 0,
+        totalTokens: 500,
+        cachedInputTokens: 900,
+      },
       "x/y",
     );
     const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
@@ -508,7 +583,12 @@ describe("emitUsageEvent", () => {
     const events: StreamEvent[] = [];
     emitUsageEvent(
       (e) => events.push(e),
-      { inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 0 },
+      {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        cachedInputTokens: 0,
+      },
       "x/y",
     );
     const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
@@ -520,7 +600,11 @@ describe("emitUsageEvent", () => {
       throw new Error("unknown model");
     });
     const events: StreamEvent[] = [];
-    emitUsageEvent((e) => events.push(e), { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, "x/y");
+    emitUsageEvent(
+      (e) => events.push(e),
+      { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      "x/y",
+    );
     const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
     expect(usage.usage.creditsCharged).toBeUndefined();
     expect(usage.usage.totalTokens).toBe(2);

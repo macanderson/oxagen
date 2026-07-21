@@ -1,6 +1,8 @@
 # Agent Execution System — Implementation Plan
 
-**Status:** READY FOR EXECUTION  
+> **Launch update (2026-07-21):** The automatic execution-to-Neo4j mirror in this plan is retired. PostgreSQL remains authoritative for execution state and telemetry; graph lineage is admitted only through explicit, typed evidence/citation flows. The mirror worker, event, mutation, vector index, and `synced_to_graph_at` flag no longer exist. Tasks below are retained as historical planning context.
+
+**Status:** HISTORICAL — PARTIALLY SUPERSEDED
 **Duration:** ~2–3 sprints (6 developers, 2–3 weeks elapsed)  
 **Blocking:** CI gates (migrations 0014–0015 required for all test runs)
 

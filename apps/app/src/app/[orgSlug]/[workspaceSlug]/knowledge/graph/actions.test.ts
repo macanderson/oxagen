@@ -5,11 +5,6 @@
  * `{ surface }` passed to invoke(), plus the mapped `{ ok: true, ... }`
  * result), the workspace-member denial path (invoke never called), and the
  * invoke-throws path (`{ ok: false, error }`).
- *
- * The one cross-cutting assertion that matters most: `exportGraphAction`
- * invokes with `{ surface: "api" }`, NOT `"agent"` — graph.export's contract
- * declares `surfaces: ["api", "mcp"]` (no "agent"), so `{ surface: "agent" }`
- * would throw `surface_denied` in the real kernel.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -56,8 +51,6 @@ import {
   searchNodesAction,
   semanticSearchAction,
   graphStatsAction,
-  runCypherAction,
-  exportGraphAction,
   ontologyNeighborsAction,
   ontologyQueryAction,
 } from "./actions";
@@ -72,20 +65,29 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue({ id: "org-1" });
   mockResolveWorkspace.mockResolvedValue({ id: "ws-1" });
   mockAssertOrgMember.mockResolvedValue(undefined);
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
   mockWithTenantDb.mockImplementation(async () => [{ role: dbState.role }]);
 });
 
 describe("listNodesAction", () => {
   it("invokes list_nodes with { surface: agent } and maps the result", async () => {
     mockInvoke.mockResolvedValue({
-      nodes: [{ id: "pub-1", labels: ["Feature"], properties: {}, displayName: "A" }],
+      nodes: [
+        { id: "pub-1", labels: ["Feature"], properties: {}, displayName: "A" },
+      ],
       total: 1,
       hasMore: false,
       limit: 50,
       offset: 0,
     });
-    const res = await listNodesAction({ ...BASE, labels: ["Feature"], limit: 50, offset: 0 });
+    const res = await listNodesAction({
+      ...BASE,
+      labels: ["Feature"],
+      limit: 50,
+      offset: 0,
+    });
     expect(res.ok).toBe(true);
     const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
     expect(cap).toBe("list_nodes");
@@ -96,7 +98,10 @@ describe("listNodesAction", () => {
   it("denies a non-workspace-member without calling invoke", async () => {
     dbState.role = "viewer";
     const res = await listNodesAction(BASE);
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(DENY_ERROR) });
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(DENY_ERROR),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -110,12 +115,28 @@ describe("listNodesAction", () => {
 describe("searchNodesAction", () => {
   it("invokes search_nodes with { surface: agent }", async () => {
     mockInvoke.mockResolvedValue({
-      nodes: [{ nodeId: "pub-1", label: "Feature", displayName: "A", description: null, score: 1 }],
+      nodes: [
+        {
+          nodeId: "pub-1",
+          label: "Feature",
+          displayName: "A",
+          description: null,
+          score: 1,
+        },
+      ],
     });
     const res = await searchNodesAction({ ...BASE, query: "bill" });
     expect(res).toEqual({
       ok: true,
-      nodes: [{ nodeId: "pub-1", label: "Feature", displayName: "A", description: null, score: 1 }],
+      nodes: [
+        {
+          nodeId: "pub-1",
+          label: "Feature",
+          displayName: "A",
+          description: null,
+          score: 1,
+        },
+      ],
     });
     const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
     expect(cap).toBe("search_nodes");
@@ -126,7 +147,10 @@ describe("searchNodesAction", () => {
   it("denies a non-workspace-member", async () => {
     dbState.role = "";
     const res = await searchNodesAction({ ...BASE, query: "bill" });
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(DENY_ERROR) });
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(DENY_ERROR),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -145,14 +169,16 @@ describe("semanticSearchAction", () => {
           nodeId: "pub-1",
           label: "SourceFile",
           displayName: "billing.ts",
-          kind: "file",
+          kind: "entity",
           snippet: "charge()",
           score: 0.9,
-          isSystem: true,
         },
       ],
     });
-    const res = await semanticSearchAction({ ...BASE, query: "charging logic" });
+    const res = await semanticSearchAction({
+      ...BASE,
+      query: "charging logic",
+    });
     expect(res.ok).toBe(true);
     const [cap, , , opts] = mockInvoke.mock.calls[0] ?? [];
     expect(cap).toBe("search_graph");
@@ -162,7 +188,10 @@ describe("semanticSearchAction", () => {
   it("denies a non-workspace-member", async () => {
     dbState.role = "viewer";
     const res = await semanticSearchAction({ ...BASE, query: "x" });
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(DENY_ERROR) });
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(DENY_ERROR),
+    });
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -202,7 +231,10 @@ describe("graphStatsAction", () => {
   it("denies a non-workspace-member", async () => {
     dbState.role = "";
     const res = await graphStatsAction(BASE);
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(DENY_ERROR) });
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(DENY_ERROR),
+    });
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -212,75 +244,26 @@ describe("graphStatsAction", () => {
   });
 });
 
-describe("runCypherAction", () => {
-  it("invokes run_cypher with { surface: agent }, forwarding nlQuery", async () => {
-    mockInvoke.mockResolvedValue({ rows: [{ name: "Billing" }], columns: ["name"], rowCount: 1 });
-    const res = await runCypherAction({ ...BASE, query: "MATCH (n) RETURN n.displayName AS name", nlQuery: true });
-    expect(res).toEqual({ ok: true, rows: [{ name: "Billing" }], columns: ["name"], rowCount: 1 });
-    const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
-    expect(cap).toBe("run_cypher");
-    expect(input).toEqual({ query: "MATCH (n) RETURN n.displayName AS name", nlQuery: true });
-    expect(opts).toEqual({ surface: "agent" });
-  });
-
-  it("denies a non-workspace-member without calling invoke", async () => {
-    dbState.role = "viewer";
-    const res = await runCypherAction({ ...BASE, query: "MATCH (n) RETURN n" });
-    expect(res).toMatchObject({
-      ok: false,
-      error: expect.stringMatching(/you must be a workspace member to run graph queries/i),
-    });
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("returns ok:false with the raw error when invoke throws (e.g. Cypher syntax error)", async () => {
-    mockInvoke.mockRejectedValue(new Error("Invalid syntax near 'MACTH'"));
-    const res = await runCypherAction({ ...BASE, query: "MACTH (n)" });
-    expect(res).toEqual({ ok: false, error: "Invalid syntax near 'MACTH'" });
-  });
-});
-
-describe("exportGraphAction", () => {
-  it("invokes export_graph with { surface: api } — NOT agent (graph.export has no agent surface)", async () => {
-    mockInvoke.mockResolvedValue({
-      nodes: [{ id: "pub-1", labels: ["Feature"], displayName: "A", properties: {}, isSystem: false }],
-      edges: [],
-      total: 1,
-      hasMore: false,
-      limit: 500,
-      offset: 0,
-      cursor: null,
-    });
-    const res = await exportGraphAction({ ...BASE, labels: ["Feature"], includeEdges: true });
-    expect(res.ok).toBe(true);
-    const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
-    expect(cap).toBe("export_graph");
-    expect(input).toEqual({ labels: ["Feature"], includeEdges: true });
-    expect(opts).toEqual({ surface: "api" });
-  });
-
-  it("denies a non-workspace-member without calling invoke", async () => {
-    dbState.role = "";
-    const res = await exportGraphAction(BASE);
-    expect(res).toMatchObject({
-      ok: false,
-      error: expect.stringMatching(/you must be a workspace member to export the graph/i),
-    });
-    expect(mockInvoke).not.toHaveBeenCalled();
-  });
-
-  it("returns ok:false when invoke throws", async () => {
-    mockInvoke.mockRejectedValue(new Error("export failed"));
-    const res = await exportGraphAction(BASE);
-    expect(res).toEqual({ ok: false, error: "export failed" });
-  });
-});
-
 describe("ontologyNeighborsAction", () => {
   it("invokes get_ontology_neighbors with { surface: agent }", async () => {
-    mockInvoke.mockResolvedValue({ nodeId: "pub-1", found: true, truncated: false, neighbors: [] });
-    const res = await ontologyNeighborsAction({ ...BASE, nodeId: "pub-1", limit: 25 });
-    expect(res).toEqual({ ok: true, nodeId: "pub-1", found: true, truncated: false, neighbors: [] });
+    mockInvoke.mockResolvedValue({
+      nodeId: "pub-1",
+      found: true,
+      truncated: false,
+      neighbors: [],
+    });
+    const res = await ontologyNeighborsAction({
+      ...BASE,
+      nodeId: "pub-1",
+      limit: 25,
+    });
+    expect(res).toEqual({
+      ok: true,
+      nodeId: "pub-1",
+      found: true,
+      truncated: false,
+      neighbors: [],
+    });
     const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
     expect(cap).toBe("get_ontology_neighbors");
     expect(input).toEqual({ nodeId: "pub-1", limit: 25 });
@@ -290,7 +273,10 @@ describe("ontologyNeighborsAction", () => {
   it("denies a non-workspace-member without calling invoke", async () => {
     dbState.role = "viewer";
     const res = await ontologyNeighborsAction({ ...BASE, nodeId: "pub-1" });
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(DENY_ERROR) });
+    expect(res).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(DENY_ERROR),
+    });
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
@@ -304,16 +290,31 @@ describe("ontologyNeighborsAction", () => {
 describe("ontologyQueryAction", () => {
   it("invokes query_ontology with { surface: agent }", async () => {
     mockInvoke.mockResolvedValue({
-      startNode: { nodeId: "pub-1", label: "Feature", displayName: "A", description: null, depth: 0 },
+      startNode: {
+        nodeId: "pub-1",
+        label: "Feature",
+        displayName: "A",
+        description: null,
+        depth: 0,
+      },
       nodes: [],
       edges: [],
       truncated: false,
     });
-    const res = await ontologyQueryAction({ ...BASE, startNodeId: "pub-1", direction: "out", maxDepth: 2 });
+    const res = await ontologyQueryAction({
+      ...BASE,
+      startNodeId: "pub-1",
+      direction: "out",
+      maxDepth: 2,
+    });
     expect(res.ok).toBe(true);
     const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
     expect(cap).toBe("query_ontology");
-    expect(input).toEqual({ startNodeId: "pub-1", direction: "out", maxDepth: 2 });
+    expect(input).toEqual({
+      startNodeId: "pub-1",
+      direction: "out",
+      maxDepth: 2,
+    });
     expect(opts).toEqual({ surface: "agent" });
   });
 
@@ -322,7 +323,9 @@ describe("ontologyQueryAction", () => {
     const res = await ontologyQueryAction({ ...BASE, startNodeId: "pub-1" });
     expect(res).toMatchObject({
       ok: false,
-      error: expect.stringMatching(/you must be a workspace member to traverse the graph/i),
+      error: expect.stringMatching(
+        /you must be a workspace member to traverse the graph/i,
+      ),
     });
     expect(mockInvoke).not.toHaveBeenCalled();
   });

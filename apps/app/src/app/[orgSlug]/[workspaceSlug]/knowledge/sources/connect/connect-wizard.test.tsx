@@ -7,7 +7,13 @@
  * Mappings when saved mappings already exist.
  */
 
-import { render, cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  cleanup,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { ConnectSourceWizard } from "./connect-wizard";
@@ -76,15 +82,26 @@ const SCHEMA: ConnectorPluginSchema = {
         kind: "api_key",
         label: "Database Connection String",
         fields: [
-          { key: "apiKey", label: "Connection String", widget: "secret", validation: { required: true } },
+          {
+            key: "apiKey",
+            label: "Connection String",
+            widget: "secret",
+            validation: { required: true },
+          },
         ],
       },
     ],
   },
   config: {
-    fields: [{ key: "queries", label: "SQL Queries", widget: "code", validation: { required: true } }],
+    fields: [
+      {
+        key: "queries",
+        label: "SQL Queries",
+        widget: "code",
+        validation: { required: true },
+      },
+    ],
   },
-  inference: { enabled: true, defaultEnabled: true },
   sync: { delivery: "polling" },
 };
 
@@ -92,23 +109,46 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockConfigureSourceIntegrationAction.mockResolvedValue({
     ok: true,
-    value: { integrationId: "con_123", displayName: "My DB", syncCadence: "manual", inferenceEnabled: false, updatedAt: "2026-01-01T00:00:00.000Z" },
+    value: {
+      integrationId: "con_123",
+      displayName: "My DB",
+      syncCadence: "manual",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
   });
 });
 
 describe("ConnectSourceWizard", () => {
   it("drives the full happy path: pick → credentials → preview → mappings → confirm → redirect", async () => {
-    mockGetConnectSourceSchemaAction.mockResolvedValue({ ok: true, value: SCHEMA });
-    mockValidateConnectSourceConfigAction.mockResolvedValue({ ok: true, value: { valid: true, errors: [] } });
+    mockGetConnectSourceSchemaAction.mockResolvedValue({
+      ok: true,
+      value: SCHEMA,
+    });
+    mockValidateConnectSourceConfigAction.mockResolvedValue({
+      ok: true,
+      value: { valid: true, errors: [] },
+    });
     mockCreateSourceConnectionAction.mockResolvedValue({
       ok: true,
-      value: { connectionId: "uuid-1", publicId: "con_123", status: "pending_setup", connectorId: "custom-sql", displayName: "My DB" },
+      value: {
+        connectionId: "uuid-1",
+        publicId: "con_123",
+        status: "pending_setup",
+        connectorId: "custom-sql",
+        displayName: "My DB",
+      },
     });
     mockPreviewSourceConnectionAction.mockResolvedValue({
       ok: true,
       value: {
         recordTypes: [
-          { sourceRecordType: "custom", displayName: "Custom Records", sampleCount: 1, sampleFields: ["id"], sampleRecords: [{ id: "1" }] },
+          {
+            sourceRecordType: "custom",
+            displayName: "Custom Records",
+            sampleCount: 1,
+            sampleFields: ["id"],
+            sampleRecords: [{ id: "1" }],
+          },
         ],
       },
     });
@@ -129,66 +169,112 @@ describe("ConnectSourceWizard", () => {
     });
     mockConfirmSourceMappingsAction.mockResolvedValue({
       ok: true,
-      value: { mappingsCreated: 1, mappingsUpdated: 0, connectionStatus: "active" },
+      value: {
+        mappingsCreated: 1,
+        mappingsUpdated: 0,
+        connectionStatus: "active",
+      },
     });
 
-    render(<ConnectSourceWizard orgSlug="acme" workspaceSlug="main" connectors={CONNECTORS} />);
+    render(
+      <ConnectSourceWizard
+        orgSlug="acme"
+        workspaceSlug="main"
+        connectors={CONNECTORS}
+      />,
+    );
 
     // Step 1 — pick connector
     expect(screen.getByText("Step 1 of 5")).toBeInTheDocument();
     await userEvent.click(screen.getByTestId("connector-select-custom-sql"));
 
     // Step 2 — credentials
-    await waitFor(() => expect(mockGetConnectSourceSchemaAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceSlug: "main",
-      connectorId: "custom-sql",
-    }));
-    await waitFor(() => expect(screen.getByText("Step 2 of 5")).toBeInTheDocument());
-    await userEvent.type(screen.getByLabelText("Connection String", { exact: false }), "postgresql://u:p@host/db");
-    await userEvent.type(screen.getByLabelText("SQL Queries", { exact: false }), "SELECT star FROM orders");
+    await waitFor(() =>
+      expect(mockGetConnectSourceSchemaAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        connectorId: "custom-sql",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Step 2 of 5")).toBeInTheDocument(),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Connection String", { exact: false }),
+      "postgresql://u:p@host/db",
+    );
+    await userEvent.type(
+      screen.getByLabelText("SQL Queries", { exact: false }),
+      "SELECT star FROM orders",
+    );
     await userEvent.click(screen.getByTestId("credentials-next-btn"));
 
     // Step 3 — preview
-    await waitFor(() => expect(mockCreateSourceConnectionAction).toHaveBeenCalled());
-    await waitFor(() => expect(mockPreviewSourceConnectionAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceSlug: "main",
-      connectionId: "con_123",
-    }));
-    await waitFor(() => expect(screen.getByTestId("preview-record-type-custom")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(mockCreateSourceConnectionAction).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(mockPreviewSourceConnectionAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        connectionId: "con_123",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("preview-record-type-custom"),
+      ).toBeInTheDocument(),
+    );
     await userEvent.click(screen.getByTestId("preview-next-btn"));
 
     // Step 4 — mappings
-    await waitFor(() => expect(mockSuggestSourceMappingsAction).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: "con_123" }),
-    ));
-    await waitFor(() => expect(screen.getByTestId("mapping-row-custom")).toBeInTheDocument());
-    expect(within(screen.getByTestId("mapping-row-custom")).getByDisplayValue("task")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockSuggestSourceMappingsAction).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: "con_123" }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("mapping-row-custom")).toBeInTheDocument(),
+    );
+    expect(
+      within(screen.getByTestId("mapping-row-custom")).getByDisplayValue(
+        "task",
+      ),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByTestId("mappings-next-btn"));
 
     // Step 5 — confirm
-    await waitFor(() => expect(screen.getByTestId("confirm-mapping-summary")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("confirm-mapping-summary")).toBeInTheDocument(),
+    );
     await userEvent.click(screen.getByTestId("confirm-activate-btn"));
 
-    await waitFor(() => expect(mockConfirmSourceMappingsAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceSlug: "main",
-      connectionId: "con_123",
-      mappings: [{ sourceRecordType: "custom", oxagenEntityType: "task", propertyMappings: { id: "externalId" } }],
-      activateConnection: true,
-    }));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/acme/main/knowledge/sources"));
+    await waitFor(() =>
+      expect(mockConfirmSourceMappingsAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        connectionId: "con_123",
+        mappings: [
+          {
+            sourceRecordType: "custom",
+            oxagenEntityType: "task",
+            propertyMappings: { id: "externalId" },
+          },
+        ],
+        activateConnection: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/acme/main/knowledge/sources"),
+    );
 
     // Best-effort integration.configure call using the connector's own
-    // declared sync/inference defaults — see connect-wizard.tsx's handleConfirm.
+    // declared sync default — see connect-wizard.tsx's handleConfirm.
     expect(mockConfigureSourceIntegrationAction).toHaveBeenCalledWith({
       orgSlug: "acme",
       workspaceSlug: "main",
       integrationId: "con_123",
       syncCadence: "polling",
-      inferenceEnabled: true,
-      ontologyPrompt: undefined,
     });
   });
 
@@ -236,10 +322,12 @@ describe("ConnectSourceWizard", () => {
     );
 
     expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
-    await waitFor(() => expect(mockPreviewSourceConnectionAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceSlug: "main",
-      connectionId: "con_resumed",
-    }));
+    await waitFor(() =>
+      expect(mockPreviewSourceConnectionAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceSlug: "main",
+        connectionId: "con_resumed",
+      }),
+    );
   });
 });

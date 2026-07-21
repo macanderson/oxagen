@@ -9,13 +9,11 @@
 
 "use client";
 
-import * as React from "react";
-import { X, ArrowDown, Pencil, Trash2 } from "lucide-react";
+import { X, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyableId } from "./copyable-id";
 import { ConfidenceMeter } from "./confidence-meter";
-import { deleteEdge, type TenantSlugs } from "./api-client";
 import type { ExplorerEdge, ExplorerNode } from "./types";
 import { colorForLabel } from "./lib/colors";
 
@@ -24,46 +22,17 @@ export interface EdgeDetailPanelProps {
   /** Resolved endpoint nodes (for names/labels), keyed lookups done by caller. */
   sourceNode?: ExplorerNode;
   targetNode?: ExplorerNode;
-  tenant?: TenantSlugs;
   onSelectNode: (nodeId: string) => void;
   onClose: () => void;
-  onEditEdge?: (edge: ExplorerEdge) => void;
-  onDeleteEdge?: (edge: ExplorerEdge) => void;
 }
 
 export function EdgeDetailPanel({
   edge,
   sourceNode,
   targetNode,
-  tenant,
   onSelectNode,
   onClose,
-  onEditEdge,
-  onDeleteEdge,
 }: EdgeDetailPanelProps) {
-  const [deleting, setDeleting] = React.useState(false);
-
-  const handleDelete = async () => {
-    if (!tenant) return;
-    if (
-      !confirm(`Delete the "${edge.type}" relationship? This cannot be undone.`)
-    )
-      return;
-    setDeleting(true);
-    try {
-      await deleteEdge(tenant, {
-        fromNodeId: edge.source,
-        toNodeId: edge.target,
-        edgeType: edge.type,
-      });
-      onDeleteEdge?.(edge);
-    } catch {
-      // Non-fatal
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-start gap-3 border-b border-border px-4 py-3">
@@ -95,34 +64,6 @@ export function EdgeDetailPanel({
             </h3>
             <ConfidenceMeter confidence={edge.confidence} />
           </section>
-        )}
-
-        {/* CRUD actions */}
-        {(onEditEdge || onDeleteEdge) && !edge.inferred && (
-          <div className="flex flex-wrap gap-2">
-            {onEditEdge && (
-              <Button
-                size="sm"
-                variant="outline"
-                startIcon={<Pencil className="size-3.5" />}
-                onClick={() => onEditEdge(edge)}
-              >
-                Edit
-              </Button>
-            )}
-            {onDeleteEdge && (
-              <Button
-                size="sm"
-                variant="outline"
-                startIcon={<Trash2 className="size-3.5" />}
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-destructive hover:text-destructive"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </Button>
-            )}
-          </div>
         )}
 
         <section>

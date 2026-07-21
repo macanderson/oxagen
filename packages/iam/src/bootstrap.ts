@@ -41,7 +41,14 @@ import { createAccessRequest } from "./access-request";
  */
 export function bootstrapIAMRuntime(): void {
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
-    const { result, principal } = await checkIAM(args);
+    const { result, principal } = await checkIAM({
+      ...args,
+      // Agent RBAC spec §3.4: the discriminator that keeps the non-enterprise
+      // tier fast-path human-only. Derived from the run context the kernel
+      // already threads through ctx — agent runs carry ctx.agentRun; every
+      // other surface resolves as "human" exactly as before.
+      principalKind: args.ctx.agentRun?.principalKind ?? "human",
+    });
     const outcome = result.outcome;
     const reason = result.outcome === "deny" ? result.reason : undefined;
     return { outcome, reason, principal };

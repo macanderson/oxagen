@@ -68,7 +68,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -89,7 +91,10 @@ function post(path: string, body: unknown): Request {
 }
 
 function get(path: string): Request {
-  return makeRequest(`${BASE}${path}`, { method: "GET", headers: authHeaders() });
+  return makeRequest(`${BASE}${path}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 /** The capability name invoke() was called with (first positional arg). */
@@ -119,7 +124,11 @@ describe("router.policy routes", () => {
 
   it("POST /router/policy/set → 200, forwarding the merged policy fields", async () => {
     const res = await app.fetch(
-      post("/router/policy/set", { scope: "workspace", mode: "enforce", minSamples: 5 }),
+      post("/router/policy/set", {
+        scope: "workspace",
+        mode: "enforce",
+        minSamples: 5,
+      }),
     );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("set_routing_policy");
@@ -133,7 +142,9 @@ describe("router.policy routes", () => {
   });
 
   it("POST /router/policy/set rejects an out-of-range successThreshold with 400", async () => {
-    const res = await app.fetch(post("/router/policy/set", { successThreshold: 2 }));
+    const res = await app.fetch(
+      post("/router/policy/set", { successThreshold: 2 }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -141,7 +152,9 @@ describe("router.policy routes", () => {
 
 describe("router.stats + router.preview routes", () => {
   it("GET /router/stats coerces window_days / min_samples query params", async () => {
-    const res = await app.fetch(get("/router/stats?task_class=refactor&window_days=14&min_samples=8"));
+    const res = await app.fetch(
+      get("/router/stats?task_class=refactor&window_days=14&min_samples=8"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("list_routing_stats");
     const input = invokedInput();
@@ -160,7 +173,9 @@ describe("router.stats + router.preview routes", () => {
   });
 
   it("POST /router/preview → 200 and invokes preview_routing_decision", async () => {
-    const res = await app.fetch(post("/router/preview", { prompt: "refactor the auth module" }));
+    const res = await app.fetch(
+      post("/router/preview", { prompt: "refactor the auth module" }),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("preview_routing_decision");
     expect(invokedInput().prompt).toBe("refactor the auth module");
@@ -199,7 +214,9 @@ describe("eval dataset routes", () => {
 
   it("GET /eval/datasets/get coerces the limit query param", async () => {
     mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
-    const res = await app.fetch(get("/eval/datasets/get?datasetPublicId=eds_1&limit=25&cursor=c1"));
+    const res = await app.fetch(
+      get("/eval/datasets/get?datasetPublicId=eds_1&limit=25&cursor=c1"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("get_dataset");
     const input = invokedInput();
@@ -236,8 +253,13 @@ describe("eval dataset routes", () => {
   });
 
   it("POST /eval/datasets/from-traces → 201 with defaulted sinceHours/limit", async () => {
-    mocks.invoke.mockResolvedValue({ dataset: { publicId: "eds_2" }, captured: 5 });
-    const res = await app.fetch(post("/eval/datasets/from-traces", { name: "From traces" }));
+    mocks.invoke.mockResolvedValue({
+      dataset: { publicId: "eds_2" },
+      captured: 5,
+    });
+    const res = await app.fetch(
+      post("/eval/datasets/from-traces", { name: "From traces" }),
+    );
     expect(res.status).toBe(201);
     expect(invokedCapability()).toBe("create_trace_dataset");
     const input = invokedInput();
@@ -261,7 +283,9 @@ describe("eval run routes", () => {
   });
 
   it("POST /eval/runs rejects a missing datasetPublicId with 400", async () => {
-    const res = await app.fetch(post("/eval/runs", { target: { kind: "model" } }));
+    const res = await app.fetch(
+      post("/eval/runs", { target: { kind: "model" } }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -365,7 +389,9 @@ describe("agent.trace.get route", () => {
 describe("agent.debug.trace route", () => {
   it("GET /agent/debug/trace/:id coerces depth and summarize=true", async () => {
     mocks.invoke.mockResolvedValue({ frame: {} });
-    const res = await app.fetch(get("/agent/debug/trace/aex_1?summarize=true&depth=3"));
+    const res = await app.fetch(
+      get("/agent/debug/trace/aex_1?summarize=true&depth=3"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("debug_execution");
     const input = invokedInput();
@@ -428,7 +454,9 @@ describe("telemetry.error.cluster route", () => {
   it("GET /telemetry/error/cluster coerces sinceHours / limit and forwards filters", async () => {
     mocks.invoke.mockResolvedValue({ clusters: [], totalErrors: 0 });
     const res = await app.fetch(
-      get("/telemetry/error/cluster?sinceHours=48&severity=error&source=api&limit=25"),
+      get(
+        "/telemetry/error/cluster?sinceHours=48&severity=error&source=api&limit=25",
+      ),
     );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("list_error_clusters");
@@ -459,9 +487,14 @@ describe("user.workspace_preferences routes", () => {
   });
 
   it("POST /user/workspace-preferences → 200 write", async () => {
-    mocks.invoke.mockResolvedValue({ preferences: { defaultAgentId: "agt_1" } });
+    mocks.invoke.mockResolvedValue({
+      preferences: { defaultAgentId: "agt_1" },
+    });
     const res = await app.fetch(
-      post("/user/workspace-preferences", { defaultAgentId: "agt_1", markRepoPrompted: true }),
+      post("/user/workspace-preferences", {
+        defaultAgentId: "agt_1",
+        markRepoPrompted: true,
+      }),
     );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("update_workspace_user_preferences");
@@ -474,7 +507,9 @@ describe("user.workspace_preferences routes", () => {
 describe("conversation files / export routes", () => {
   it("GET /conversations/:id/files coerces the limit and forwards the kind filter", async () => {
     mocks.invoke.mockResolvedValue({ files: [], nextCursor: null });
-    const res = await app.fetch(get("/conversations/cnv_1/files?kind=image&limit=20"));
+    const res = await app.fetch(
+      get("/conversations/cnv_1/files?kind=image&limit=20"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("list_conversation_files");
     const input = invokedInput();
@@ -492,7 +527,9 @@ describe("conversation files / export routes", () => {
 
   it("GET /conversations/:id/export → 200 with the required format", async () => {
     mocks.invoke.mockResolvedValue({ content: "# Chat", format: "markdown" });
-    const res = await app.fetch(get("/conversations/cnv_1/export?format=markdown"));
+    const res = await app.fetch(
+      get("/conversations/cnv_1/export?format=markdown"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("export_conversation");
     expect(invokedInput().format).toBe("markdown");
@@ -517,47 +554,11 @@ describe("privacy.data.export route", () => {
   });
 
   it("POST /privacy/export rejects an out-of-enum scope with 400", async () => {
-    const res = await app.fetch(post("/privacy/export", { scope: "everything" }));
+    const res = await app.fetch(
+      post("/privacy/export", { scope: "everything" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── semantic-edge review routes (numeric query coercion) ─────────────────────
-
-describe("semantic-edge routes", () => {
-  it("GET /semantic-edges/suggest coerces every confidence/limit query param", async () => {
-    mocks.invoke.mockResolvedValue({ edges: [] });
-    const res = await app.fetch(
-      get("/semantic-edges/suggest?confidenceMin=0.4&confidenceMax=0.9&limit=15"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("suggest_semantic_edges");
-    const input = invokedInput();
-    expect(input.confidenceMin).toBe(0.4);
-    expect(input.confidenceMax).toBe(0.9);
-    expect(input.limit).toBe(15);
-  });
-
-  it("GET /semantic-edges/suggest with no query params leaves the filters undefined", async () => {
-    mocks.invoke.mockResolvedValue({ edges: [] });
-    const res = await app.fetch(get("/semantic-edges/suggest"));
-    expect(res.status).toBe(200);
-    expect(invokedInput().confidenceMin).toBeUndefined();
-  });
-
-  it("GET /semantic-edges browses with type/source filters and coerced numeric bounds", async () => {
-    mocks.invoke.mockResolvedValue({ edges: [], total: 0 });
-    const res = await app.fetch(
-      get("/semantic-edges?type=RELATES_TO&sourceId=n_1&confidenceMin=0.2&limit=5&offset=10"),
-    );
-    expect(res.status).toBe(200);
-    expect(invokedCapability()).toBe("list_semantic_edges");
-    const input = invokedInput();
-    expect(input.type).toBe("RELATES_TO");
-    expect(input.sourceId).toBe("n_1");
-    expect(input.limit).toBe(5);
-    expect(input.offset).toBe(10);
   });
 });
 
@@ -566,7 +567,9 @@ describe("semantic-edge routes", () => {
 describe("skill-version + document read routes", () => {
   it("GET /skill/version/get forwards skill_id + version_id", async () => {
     mocks.invoke.mockResolvedValue({ version: {} });
-    const res = await app.fetch(get("/skill/version/get?skill_id=skl_1&version_id=slv_1"));
+    const res = await app.fetch(
+      get("/skill/version/get?skill_id=skl_1&version_id=slv_1"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("get_skill_version");
     const input = invokedInput();
@@ -576,7 +579,9 @@ describe("skill-version + document read routes", () => {
 
   it("GET /skill/version/list coerces limit + offset when present", async () => {
     mocks.invoke.mockResolvedValue({ versions: [] });
-    const res = await app.fetch(get("/skill/version/list?skill_id=skl_1&limit=10&offset=5"));
+    const res = await app.fetch(
+      get("/skill/version/list?skill_id=skl_1&limit=10&offset=5"),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("list_skill_versions");
     const input = invokedInput();
@@ -623,8 +628,14 @@ describe("skill-version + document read routes", () => {
 
 describe("agent.subagent.aggregate route", () => {
   it("POST /agent/subagent/aggregate → 200 with defaulted timeout/includeOutputs", async () => {
-    mocks.invoke.mockResolvedValue({ fanoutId: "fan_1", status: "completed", children: [] });
-    const res = await app.fetch(post("/agent/subagent/aggregate", { fanoutId: "fan_1" }));
+    mocks.invoke.mockResolvedValue({
+      fanoutId: "fan_1",
+      status: "completed",
+      children: [],
+    });
+    const res = await app.fetch(
+      post("/agent/subagent/aggregate", { fanoutId: "fan_1" }),
+    );
     expect(res.status).toBe(200);
     expect(invokedCapability()).toBe("aggregate_subagents");
     const input = invokedInput();
@@ -636,13 +647,17 @@ describe("agent.subagent.aggregate route", () => {
     mocks.invoke.mockRejectedValue(
       Object.assign(new Error("nope"), { code: "fanout_not_found" }),
     );
-    const res = await app.fetch(post("/agent/subagent/aggregate", { fanoutId: "fan_missing" }));
+    const res = await app.fetch(
+      post("/agent/subagent/aggregate", { fanoutId: "fan_missing" }),
+    );
     expect(res.status).toBe(404);
   });
 
   it("POST /agent/subagent/aggregate → 500 for an unrelated error", async () => {
     mocks.invoke.mockRejectedValue(new Error("neo4j unreachable"));
-    const res = await app.fetch(post("/agent/subagent/aggregate", { fanoutId: "fan_1" }));
+    const res = await app.fetch(
+      post("/agent/subagent/aggregate", { fanoutId: "fan_1" }),
+    );
     expect(res.status).toBe(500);
     expect(mocks.invoke).toHaveBeenCalled();
   });

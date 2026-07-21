@@ -3,7 +3,7 @@ import type {
   AgentFileLockListInput,
   AgentFileLockListOutput,
 } from "@oxagen/oxagen/contracts/agent.file_lock.list";
-import { toNaturalKey } from "../adapters/graph-sync";
+import { toFileResourceKey } from "../file-lock/resource-key";
 import { listFileLeases } from "../file-lock/lease";
 
 export type { AgentFileLockListInput, AgentFileLockListOutput };
@@ -19,7 +19,9 @@ export async function agentFileLockListHandler(
   input: AgentFileLockListInput,
   ctx: CapabilityContext,
 ): Promise<AgentFileLockListOutput> {
-  const resourceKey = input.path ? toNaturalKey(input.path, input.owner, input.repo) : undefined;
+  const resourceKey = input.path
+    ? toFileResourceKey(input.path, input.owner, input.repo)
+    : undefined;
   const { leases } = await listFileLeases({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,

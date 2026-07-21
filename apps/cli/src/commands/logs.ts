@@ -23,7 +23,7 @@ export interface LogsOptions {
   path?: boolean;
   /** Number of recent entries to show (default 50). */
   lines?: string;
-  /** Only show entries in this category (e.g. code-graph, graph-sync, llm). */
+  /** Only show entries in this category (e.g. code-graph, llm, api). */
   category?: string;
   /** Follow the log live (like `tail -f`). */
   follow?: boolean;
@@ -79,7 +79,9 @@ export async function handleLogs(
   }
 
   const limit = Math.max(1, Number.parseInt(opts.lines ?? "50", 10) || 50);
-  const entries = (await readDebugLog(limit * 4)).filter((e) => matchesCategory(e, opts.category));
+  const entries = (await readDebugLog(limit * 4)).filter((e) =>
+    matchesCategory(e, opts.category),
+  );
   const shown = entries.slice(-limit);
 
   if (opts.json) {
@@ -106,10 +108,14 @@ export async function handleLogs(
       watcher = watch(file, { persistent: true }, () => {
         void (async () => {
           const all = await readDebugLog(Number.MAX_SAFE_INTEGER);
-          const fresh = all.slice(seen).filter((e) => matchesCategory(e, opts.category));
+          const fresh = all
+            .slice(seen)
+            .filter((e) => matchesCategory(e, opts.category));
           seen = all.length;
           for (const e of fresh) {
-            process.stdout.write(`${opts.json ? JSON.stringify(e) : formatEntry(e)}\n`);
+            process.stdout.write(
+              `${opts.json ? JSON.stringify(e) : formatEntry(e)}\n`,
+            );
           }
         })();
       });

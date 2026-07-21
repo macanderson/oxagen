@@ -701,6 +701,9 @@ importers:
       '@oxagen/github':
         specifier: workspace:*
         version: link:../github
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../iam
       '@oxagen/mcp-config':
         specifier: workspace:*
         version: link:../mcp-config
@@ -858,9 +861,6 @@ importers:
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../iam
-      '@oxagen/inngest-functions':
-        specifier: workspace:*
-        version: link:../inngest-functions
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
@@ -1173,18 +1173,9 @@ importers:
       '@anthropic-ai/tokenizer':
         specifier: 0.0.4
         version: 0.0.4
-      '@clickhouse/client':
-        specifier: 1.19.0
-        version: 1.19.0
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../tenancy
       tiktoken:
         specifier: 1.0.22
         version: 1.0.22
@@ -1263,9 +1254,6 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
-      '@oxagen/code-graph':
-        specifier: workspace:*
-        version: link:../code-graph
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -1388,15 +1376,15 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
 
   packages/ingestion:
     dependencies:
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
-      '@oxagen/code-graph':
-        specifier: workspace:*
-        version: link:../code-graph
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../ontology
@@ -1437,9 +1425,6 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
-      '@oxagen/code-graph':
-        specifier: workspace:*
-        version: link:../code-graph
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
@@ -1449,9 +1434,6 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
-      '@oxagen/engram':
-        specifier: workspace:*
-        version: link:../engram
       '@oxagen/functions':
         specifier: workspace:*
         version: link:../functions

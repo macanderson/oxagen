@@ -2,11 +2,11 @@
  * `oxagen code …` — sandboxed code utilities (diff, patch, format) plus
  * semantic code-map retrieval over the org-scoped /v1 API. Thin shell: each
  * command reads/writes local files and delegates the actual computation to the
- * code.diff / code.patch / code.format / code.map capabilities so the CLI stays
+ * code.diff / code.patch / code.format capabilities so the CLI stays
  * in parity with the API, MCP, and agent surfaces.
  *
  * Output discipline (ADR-023 §4): stdout carries ONLY the answer — the diff, the
- * formatted source, the patched-file list, or the code-map (and with `--json`,
+ * formatted source or the patched-file list (and with `--json`,
  * one single-line JSON value of the capability response). Progress and summaries
  * ("no changes", the +/- change count, apply/dry-run notes, the file-write
  * confirmation, "no files matched") go to stderr via out.info; every failure is
@@ -14,7 +14,13 @@
  * nothing on stdout. Each handler takes an optional trailing CommandWriter, so
  * it runs inline under the REPL's capture seam without touching process.stdout.
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { apiPostOrThrow } from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
@@ -56,7 +62,8 @@ export async function handleCodeDiff(
   const after = readFileSync(afterFile, "utf8");
   const body: Record<string, unknown> = { before, after };
   if (opts.path) body.path = opts.path;
-  if (opts.context !== undefined) body.contextLines = parseInt(opts.context, 10);
+  if (opts.context !== undefined)
+    body.contextLines = parseInt(opts.context, 10);
 
   let res: DiffResponse;
   try {
@@ -172,118 +179,6 @@ export async function handleCodePatch(
   }
 }
 
-interface CodeMapResponse {
-  files: Array<{
-    nodeId: string;
-    path: string;
-    language: string;
-    displayName: string;
-    domain?: string;
-    score: number;
-  }>;
-  symbols: Array<{
-    nodeId: string;
-    name: string;
-    kind: string;
-    path: string;
-    startLine: number;
-    endLine: number;
-    signature: string;
-    docComment?: string;
-    domain?: string;
-    score: number;
-  }>;
-  calls: Array<{
-    callerNodeId: string;
-    calleeNodeId: string;
-    callerName: string;
-    calleeName: string;
-  }>;
-  recentChanges: Array<{
-    commitSha: string;
-    message: string;
-    authorName: string;
-    committedAt: string;
-    modifiedFiles: string[];
-  }>;
-}
-
-export async function handleCodeMap(
-  query: string,
-  opts: { limit?: string; kinds?: string; domain?: string; json?: boolean },
-  writer: CommandWriter = stdoutWriter,
-): Promise<void> {
-  const out = createOutput({ json: opts.json }, writer);
-  const body: Record<string, unknown> = { query };
-  if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
-  if (opts.domain) body.domain = opts.domain;
-  if (opts.kinds) body.kinds = opts.kinds.split(",").map((k) => k.trim());
-
-  let res: CodeMapResponse;
-  try {
-    res = await apiPostOrThrow<CodeMapResponse>("code/map", body);
-  } catch (err) {
-    out.error(err, "api");
-    return;
-  }
-
-  if (out.isJson) {
-    out.data(res);
-    return;
-  }
-
-  if (res.files.length === 0) {
-    out.info(`No files matched "${query}"`);
-    return;
-  }
-
-  writer.write(prettyMap(query, res)); // the human code-map IS the answer → stdout
-}
-
-/** Render a code-map as the human-readable report (pretty-mode answer). */
-function prettyMap(query: string, res: CodeMapResponse): string {
-  const lines: string[] = [];
-  lines.push(`\nCode map for: ${query}`);
-  lines.push("─".repeat(60));
-
-  lines.push(`\nFiles (${res.files.length}):`);
-  for (const f of res.files) {
-    const domain = f.domain ? ` [${f.domain}]` : "";
-    const score = `${(f.score * 100).toFixed(0)}%`;
-    lines.push(`  ${f.path}${domain}  ${score}`);
-  }
-
-  if (res.symbols.length > 0) {
-    lines.push(`\nSymbols (${res.symbols.length}):`);
-    for (const s of res.symbols) {
-      const line = `${s.startLine}:${s.endLine}`;
-      lines.push(`  ${s.kind.padEnd(10)} ${s.name}  (${s.path}:${line})`);
-      if (s.docComment) {
-        lines.push(`             ${s.docComment.slice(0, 80)}`);
-      }
-    }
-  }
-
-  if (res.calls.length > 0) {
-    lines.push(`\nCall edges (${res.calls.length}):`);
-    for (const c of res.calls) {
-      lines.push(`  ${c.callerName} → ${c.calleeName}`);
-    }
-  }
-
-  if (res.recentChanges.length > 0) {
-    lines.push(`\nRecent changes (${res.recentChanges.length}):`);
-    for (const ch of res.recentChanges) {
-      const date = ch.committedAt.slice(0, 10);
-      lines.push(
-        `  ${ch.commitSha.slice(0, 8)}  ${date}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 60) ?? ""}`,
-      );
-    }
-  }
-
-  return lines.join("\n");
-}
-
 /** json from .json, python from .py; undefined when unknown. */
 function inferLanguage(file: string): "json" | "python" | undefined {
   if (file.endsWith(".json")) return "json";
@@ -297,7 +192,10 @@ function inferLanguage(file: string): "json" | "python" | undefined {
  * send; the authoritative apply (and path-traversal confinement) happens
  * server-side in code.patch, so this is a best-effort input gather, not a parser.
  */
-function readWorkspaceForDiff(diff: string, dir: string): Record<string, string> {
+function readWorkspaceForDiff(
+  diff: string,
+  dir: string,
+): Record<string, string> {
   const files: Record<string, string> = {};
   for (const line of diff.split("\n")) {
     const m = /^(?:---|\+\+\+) (?:[ab]\/)?(.+?)(?:\t.*)?$/.exec(line);

@@ -19,10 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/tokenizer": "0.0.4",
-    "@clickhouse/client": "1.19.0",
     "@oxagen/ai": "workspace:*",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/tenancy": "workspace:*",
     "tiktoken": "1.0.22",
     "zod": "3.25.76"
   },

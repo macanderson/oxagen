@@ -101,68 +101,6 @@ export async function dedupeLegacyKnowledgeNodes(s: Session): Promise<void> {
 }
 
 /**
- * One-time, idempotent relabel of legacy `:SEMANTIC_EDGE` relationships to the
- * descriptive relationship type they actually represent (e.g. :IMPLEMENTS,
- * :DEPENDS_ON), recording the inferred provenance on `r.inferred` / `r.origin`.
- *
- * Why this is needed: earlier builds materialised every LLM-inferred edge under a
- * single generic `:SEMANTIC_EDGE` type and stashed the real kind in `r.type`.
- * Read paths surface `type(r)` to users (graph.export, ontology.neighbors), so the
- * graph showed an unhelpful "SEMANTIC_EDGE" on every inferred edge. New writes now
- * type the relationship descriptively (see semantic.edge.approve and
- * ingestion.semantic-edge-infer); this back-fills relationships written before
- * that change. The normalization here mirrors `sanitizeRelationshipType`.
- *
- * Guarded so APOC is only ever invoked when such edges actually exist: clean and
- * freshly-built graphs short-circuit on the pure-Cypher count below, so a
- * community Neo4j without the APOC plugin is never asked to plan an apoc.* call
- * (Neo4j validates procedure names at plan time, even for zero-row statements).
- * Re-running is a no-op — no `:SEMANTIC_EDGE` remain after a successful pass.
- */
-export async function relabelLegacySemanticEdges(s: Session): Promise<void> {
-  const countCheck = await s.run(
-    `MATCH ()-[r:SEMANTIC_EDGE]->() RETURN count(r) AS legacyEdges`,
-  );
-
-  const legacy = toNumber(countCheck.records[0]?.get("legacyEdges"));
-  if (legacy === 0) return;
-
-  process.stdout.write(
-    JSON.stringify({
-      level: "info",
-      msg: "Neo4j migrate: relabelling legacy :SEMANTIC_EDGE relationships to their descriptive type",
-      relationships: legacy,
-    }) + "\n",
-  );
-
-  try {
-    await s.run(
-      `MATCH ()-[r:SEMANTIC_EDGE]->()
-       WITH r, toUpper(trim(coalesce(r.type, 'RELATED_TO'))) AS up
-       WITH r, apoc.text.replace(up, '[^A-Z0-9]+', '_') AS collapsed
-       WITH r, apoc.text.replace(collapsed, '^_+|_+$', '') AS body
-       WITH r, CASE
-                 WHEN body = ''          THEN 'RELATED_TO'
-                 WHEN body =~ '^[A-Z].*' THEN body
-                 ELSE 'REL_' + body
-               END AS typed
-       WITH r, apoc.text.replace(left(typed, 99), '_+$', '') AS newType
-       CALL apoc.refactor.setType(r, newType) YIELD output AS rel
-       SET rel.inferred = true,
-           rel.origin   = coalesce(rel.origin, 'semantic')
-       RETURN count(rel) AS relabeled`,
-    );
-  } catch (err) {
-    throw new Error(
-      `Neo4j migrate: failed to relabel ${legacy} legacy :SEMANTIC_EDGE relationship(s) ` +
-        `to their descriptive type. This requires the APOC plugin (apoc.refactor.setType, ` +
-        `apoc.text.replace). Enable APOC on this Neo4j instance, then re-run db:migrate. ` +
-        `Underlying error: ${String(err)}`,
-    );
-  }
-}
-
-/**
  * One-time, idempotent recasing of every domain node identifier to PascalCase —
  * both the structural Neo4j `:Label` and the `label` display property the graph
  * explorer groups/colours/filters on.
@@ -170,8 +108,8 @@ export async function relabelLegacySemanticEdges(s: Session): Promise<void> {
  * Why this is needed: earlier builds wrote the customer/connector entity type to
  * the graph verbatim (e.g. `:pull_request` with `label: "pull_request"`), so a
  * user browsing the graph saw lower-/snake-cased type chips. Writes now coerce
- * every label to PascalCase via `sanitizeLabel` (see upsert-entity, graph.ingest,
- * graph.node.upsert); this back-fills nodes written before that change so the
+ * every label to PascalCase via `sanitizeLabel` in the governed ingestion path;
+ * this back-fills nodes written before that change so the
  * existing graph reads consistently (`PullRequest`, never `pull_request`). The
  * `entityType` registry-key property is deliberately left untouched — it is the
  * lowercase vocabulary slug, not a display label.
@@ -197,7 +135,10 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
   const propRenames = propProbe.records
     .map((r) => r.get("label") as string)
     .map((old) => ({ old, next: sanitizeLabel(old) }))
-    .filter((r): r is { old: string; next: string } => r.next !== null && r.next !== r.old);
+    .filter(
+      (r): r is { old: string; next: string } =>
+        r.next !== null && r.next !== r.old,
+    );
 
   if (propRenames.length > 0) {
     process.stdout.write(
@@ -208,7 +149,10 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
       }) + "\n",
     );
     for (const { old, next } of propRenames) {
-      await s.run(`MATCH (n:GraphNode) WHERE n.label = $old SET n.label = $next`, { old, next });
+      await s.run(
+        `MATCH (n:GraphNode) WHERE n.label = $old SET n.label = $next`,
+        { old, next },
+      );
     }
   }
 
@@ -217,7 +161,10 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
   const labelRenames = labelProbe.records
     .map((r) => r.get("label") as string)
     .map((old) => ({ old, next: sanitizeLabel(old) }))
-    .filter((r): r is { old: string; next: string } => r.next !== null && r.next !== r.old);
+    .filter(
+      (r): r is { old: string; next: string } =>
+        r.next !== null && r.next !== r.old,
+    );
 
   if (labelRenames.length === 0) return;
 
@@ -235,7 +182,10 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
       // it, graph-wide. Labels are not tenant-scoped, so a single rename per
       // distinct label is correct. apoc merges cleanly if the PascalCase target
       // already coexists (partially-migrated graph), keeping the pass idempotent.
-      await s.run(`CALL apoc.refactor.rename.label($old, $next)`, { old, next });
+      await s.run(`CALL apoc.refactor.rename.label($old, $next)`, {
+        old,
+        next,
+      });
     }
   } catch (err) {
     throw new Error(
@@ -260,9 +210,6 @@ export async function migrate(): Promise<void> {
     for (const stmt of statements) {
       await s.run(stmt);
     }
-    // Back-fill any legacy generic :SEMANTIC_EDGE relationships to the descriptive
-    // type they represent, now that the schema is in place. No-op on clean graphs.
-    await relabelLegacySemanticEdges(s);
     // Recase any legacy lower-/snake-cased domain node labels (and `label`
     // properties) to the canonical PascalCase convention. No-op on clean graphs.
     await pascalCaseDomainLabels(s);
@@ -276,12 +223,19 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrate()
     .then(() => closeDriver())
     .then(() => {
-      process.stdout.write(JSON.stringify({ level: "info", msg: "Neo4j migration complete" }) + "\n");
+      process.stdout.write(
+        JSON.stringify({ level: "info", msg: "Neo4j migration complete" }) +
+          "\n",
+      );
       process.exit(0);
     })
     .catch((err: unknown) => {
       process.stderr.write(
-        JSON.stringify({ level: "error", msg: "Neo4j migration failed", err: String(err) }) + "\n",
+        JSON.stringify({
+          level: "error",
+          msg: "Neo4j migration failed",
+          err: String(err),
+        }) + "\n",
       );
       process.exit(1);
     });

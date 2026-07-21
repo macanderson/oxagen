@@ -6,8 +6,7 @@
  *   - Calls embedText with executionStepId: null (billing correctness)
  *   - Cypher scopes by BOTH orgId AND workspaceId (tenant isolation)
  *   - Maps result rows into the contract output shape
- *   - Derives correct kind from nodeLabels
- *   - Post-filters by kinds when supplied
+ *   - Restricts generic search to customer-context entities
  *   - Builds snippet from properties.content, falling back to displayName
  *   - Closes the session even when run throws
  *   - BigInt-wraps the LIMIT for Neo4j
@@ -83,8 +82,6 @@ describe("graphSearchHandler", () => {
           label: "AgentMemory",
           displayName: "OAuth token expired",
           properties: null,
-          isSystem: true,
-          nodeLabels: ["GraphNode", "AgentMemory"],
           score: 0.95,
         },
       ]),
@@ -97,46 +94,11 @@ describe("graphSearchHandler", () => {
         nodeId: "n-1",
         label: "AgentMemory",
         displayName: "OAuth token expired",
-        kind: "memory",
+        kind: "entity",
         snippet: "OAuth token expired",
         score: 0.95,
-        isSystem: true,
       },
     ]);
-  });
-
-  it("derives kind correctly from nodeLabels", async () => {
-    const cases: [string[], string][] = [
-      [["GraphNode", "SourceFile"], "file"],
-      [["GraphNode", "SourceSymbol"], "symbol"],
-      [["GraphNode", "SourceChunk"], "chunk"],
-      [["GraphNode", "Execution"], "execution"],
-      [["GraphNode", "AgentMemory"], "memory"],
-      [["GraphNode", "Document"], "document"],
-      [["GraphNode", "Message"], "message"],
-      [["GraphNode", "Person"], "entity"],
-    ];
-
-    for (const [nodeLabels, expectedKind] of cases) {
-      mocks.run.mockResolvedValueOnce(
-        makeRows([
-          {
-            nodeId: "n-kind",
-            label: nodeLabels[1] ?? "Person",
-            displayName: "test",
-            properties: null,
-            isSystem: false,
-            nodeLabels,
-            score: 0.9,
-          },
-        ]),
-      );
-      const result = await graphSearchHandler({ query: "test", limit: 10 }, CTX);
-      expect(result.results[0]?.kind).toBe(expectedKind);
-      vi.clearAllMocks();
-      mocks.embedText.mockResolvedValue(VECTOR);
-      mocks.run.mockResolvedValue(makeRows([]));
-    }
   });
 
   it("builds snippet from properties.content when present", async () => {
@@ -144,17 +106,22 @@ describe("graphSearchHandler", () => {
       makeRows([
         {
           nodeId: "n-content",
-          label: "SourceChunk",
-          displayName: "chunk-1",
-          properties: JSON.stringify({ content: "function authenticate()" }),
-          isSystem: true,
-          nodeLabels: ["GraphNode", "SourceChunk"],
+          label: "Document",
+          displayName: "Authentication policy",
+          properties: JSON.stringify({
+            content: "Refresh tokens expire after 30 days.",
+          }),
           score: 0.88,
         },
       ]),
     );
-    const result = await graphSearchHandler({ query: "authenticate", limit: 5 }, CTX);
-    expect(result.results[0]?.snippet).toBe("function authenticate()");
+    const result = await graphSearchHandler(
+      { query: "authenticate", limit: 5 },
+      CTX,
+    );
+    expect(result.results[0]?.snippet).toBe(
+      "Refresh tokens expire after 30 days.",
+    );
   });
 
   it("falls back to displayName for snippet when properties has no content", async () => {
@@ -165,47 +132,12 @@ describe("graphSearchHandler", () => {
           label: "Person",
           displayName: "Alice Smith",
           properties: JSON.stringify({ age: 30 }),
-          isSystem: false,
-          nodeLabels: ["GraphNode", "Person"],
           score: 0.85,
         },
       ]),
     );
     const result = await graphSearchHandler({ query: "alice", limit: 5 }, CTX);
     expect(result.results[0]?.snippet).toBe("Alice Smith");
-  });
-
-  it("post-filters results by kinds when provided", async () => {
-    mocks.run.mockResolvedValueOnce(
-      makeRows([
-        {
-          nodeId: "n-file",
-          label: "SourceFile",
-          displayName: "auth.ts",
-          properties: null,
-          isSystem: true,
-          nodeLabels: ["GraphNode", "SourceFile"],
-          score: 0.92,
-        },
-        {
-          nodeId: "n-person",
-          label: "Person",
-          displayName: "Alice",
-          properties: null,
-          isSystem: false,
-          nodeLabels: ["GraphNode", "Person"],
-          score: 0.90,
-        },
-      ]),
-    );
-
-    const result = await graphSearchHandler(
-      { query: "auth", limit: 10, kinds: ["file"] },
-      CTX,
-    );
-
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]?.nodeId).toBe("n-file");
   });
 
   it("returns empty array when nothing matches", async () => {
@@ -220,11 +152,11 @@ describe("graphSearchHandler", () => {
     expect(typeof params.k).toBe("bigint");
   });
 
-  it("over-fetches the index by 3x even without a kinds filter (tenant predicate always post-filters)", async () => {
+  it("over-fetches the index by 3x because tenant predicates post-filter", async () => {
     await graphSearchHandler({ query: "x", limit: 7 }, CTX);
     const params = mocks.run.mock.calls[0]![1] as Record<string, unknown>;
     // The tenant filter (orgId/workspaceId) is applied AFTER the index call on
-    // every query, so k must over-sample regardless of the kinds filter.
+    // every query, so k must over-sample.
     expect(params.k).toBe(BigInt(21)); // 7 x 3
   });
 
@@ -237,8 +169,6 @@ describe("graphSearchHandler", () => {
           label: "Entity",
           displayName: `node ${i}`,
           properties: null,
-          isSystem: false,
-          nodeLabels: ["Entity"],
           score: 1 - i * 0.1,
         })),
       ),
@@ -249,20 +179,16 @@ describe("graphSearchHandler", () => {
 
   it("closes the session even when run throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
-    await expect(graphSearchHandler({ query: "x", limit: 5 }, CTX)).rejects.toThrow("Neo4j down");
+    await expect(
+      graphSearchHandler({ query: "x", limit: 5 }, CTX),
+    ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
   });
 
-  it("includes isSystem filter in Cypher when isSystem option is provided", async () => {
-    await graphSearchHandler({ query: "x", limit: 5, isSystem: false }, CTX);
-    const cypher = mocks.run.mock.calls[0]![0] as string;
-    expect(cypher).toContain("coalesce(n.is_system, false) = $isSystem");
-  });
-
-  it("omits isSystem clause from Cypher when isSystem option is not provided", async () => {
+  it("always excludes product-owned runtime nodes with a fail-closed predicate", async () => {
     await graphSearchHandler({ query: "x", limit: 5 }, CTX);
     const cypher = mocks.run.mock.calls[0]![0] as string;
-    expect(cypher).not.toContain("coalesce(n.is_system, false) = $isSystem");
+    expect(cypher).toContain("n.is_system = false");
   });
 
   // Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
@@ -295,25 +221,27 @@ describe("graphSearchHandler", () => {
 
     // Sanity check the scenario is a genuine regression case: an unfixed
     // k === limit query against this exact pool starves the target tenant.
-    expect(globalPool.slice(0, limit).filter((r) => r.isTarget)).toHaveLength(0);
+    expect(globalPool.slice(0, limit).filter((r) => r.isTarget)).toHaveLength(
+      0,
+    );
 
-    mocks.run.mockImplementation(async (_cypher: string, params: Record<string, unknown>) => {
-      const k = Number(params.k as bigint);
-      const topK = globalPool.slice(0, k);
-      const tenantFiltered = topK.filter((r) => r.isTarget);
-      const trimmed = tenantFiltered.slice(0, limit);
-      return makeRows(
-        trimmed.map((r) => ({
-          nodeId: r.nodeId,
-          label: "Entity",
-          displayName: r.nodeId,
-          properties: null,
-          isSystem: false,
-          nodeLabels: ["Entity"],
-          score: r.score,
-        })),
-      );
-    });
+    mocks.run.mockImplementation(
+      async (_cypher: string, params: Record<string, unknown>) => {
+        const k = Number(params.k as bigint);
+        const topK = globalPool.slice(0, k);
+        const tenantFiltered = topK.filter((r) => r.isTarget);
+        const trimmed = tenantFiltered.slice(0, limit);
+        return makeRows(
+          trimmed.map((r) => ({
+            nodeId: r.nodeId,
+            label: "Entity",
+            displayName: r.nodeId,
+            properties: null,
+            score: r.score,
+          })),
+        );
+      },
+    );
 
     const result = await graphSearchHandler({ query: "x", limit }, CTX);
     expect(result.results).toHaveLength(limit);

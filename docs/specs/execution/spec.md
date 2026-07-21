@@ -1,5 +1,10 @@
 # Agent Execution System — Design Spec
 
+> **Launch update:** PostgreSQL execution, step, and tool-call records remain
+> authoritative. The historical automatic Neo4j mirror described below was
+> retired; typed immutable run evidence will be the source for any future
+> coarse workspace-graph projection.
+
 > **Authoritative document:** [`../agent-execution/design-spec.md`](../agent-execution/design-spec.md)
 >
 > This file is an index entry. The full specification lives in `agent-execution/design-spec.md`.

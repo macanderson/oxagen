@@ -77,4 +77,3 @@ GET /v1/graph/nodes?labels=Issue&query=auth&limit=5
 - `graph.node.get` — retrieve a single node by external ID
 - `graph.node.search` — vector + full-text search
 - `graph.stats` — aggregate node and edge counts
-- `semantic.edge.list` — browse edges between nodes

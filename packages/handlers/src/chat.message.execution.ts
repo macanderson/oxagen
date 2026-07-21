@@ -2,7 +2,6 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
-import { emitExecutionSyncEvent } from "./agent.execution.sync-event";
 import { logger } from "./logger";
 
 /**
@@ -10,10 +9,9 @@ import { logger } from "./logger";
  * Delegates to agent.execution.record with origin_type='chat', origin_id=message_id.
  * Validates that the message exists in the current workspace before recording execution.
  */
-export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageExecution> = async (
-  input,
-  ctx,
-) => {
+export const chatMessageExecutionHandler: CapabilityHandler<
+  typeof chatMessageExecution
+> = async (input, ctx) => {
   const result = await withTenantDb(async (tx) => {
     // 1. Verify message exists and belongs to current workspace
     const message = await tx.query.messages.findFirst({
@@ -27,7 +25,11 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
 
     if (!message) {
       logger.warn(
-        { messageId: input.messageId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        {
+          messageId: input.messageId,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
         "chat.message.execution: message not found in workspace",
       );
       throw new Error("message not found in this workspace");
@@ -52,12 +54,17 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
         latencyMs: input.latencyMs ?? null,
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
-        estimatedCostUsd: input.estimatedCostUsd != null ? String(input.estimatedCostUsd) : null,
-        syncedToGraphAt: null,
+        estimatedCostUsd:
+          input.estimatedCostUsd != null
+            ? String(input.estimatedCostUsd)
+            : null,
         createdByUserId: ctx.userId ?? null,
         updatedByUserId: ctx.userId ?? null,
       })
-      .returning({ id: schema.agentExecutions.id, createdAt: schema.agentExecutions.createdAt });
+      .returning({
+        id: schema.agentExecutions.id,
+        createdAt: schema.agentExecutions.createdAt,
+      });
 
     if (!execution) throw new Error("execution insert returned no row");
 
@@ -90,7 +97,9 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
         .returning({ id: schema.agentExecutionSteps.id });
 
       if (stepRows.length !== input.steps.length) {
-        throw new Error("execution step bulk insert returned unexpected row count");
+        throw new Error(
+          "execution step bulk insert returned unexpected row count",
+        );
       }
 
       const toolCallRows = input.steps.flatMap((step, i) =>
@@ -149,26 +158,6 @@ export const chatMessageExecutionHandler: CapabilityHandler<typeof chatMessageEx
     );
 
     return executionResult;
-  });
-
-  // Mirror the finished chat run into the knowledge graph as lineage
-  // (best-effort, terminal-only — see emitExecutionSyncEvent). origin is the
-  // chat message, matching the origin_type='chat' row written above.
-  await emitExecutionSyncEvent({
-    executionId: result.executionId,
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-    status: input.status,
-    originType: "chat",
-    originId: input.messageId,
-    agentId: input.agentId,
-    startedAt: input.startedAt ?? null,
-    completedAt: input.completedAt ?? null,
-    latencyMs: input.latencyMs ?? null,
-    inputTokens: input.inputTokens ?? null,
-    outputTokens: input.outputTokens ?? null,
-    estimatedCostUsd: input.estimatedCostUsd ?? null,
-    steps: input.steps,
   });
 
   return result;

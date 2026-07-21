@@ -70,34 +70,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    conference_record: true
-    participant: false
-    transcript: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer team collaboration patterns from Google Meet sessions.
-
-    Look for:
-    - Recurring meeting spaces that indicate team rituals (standups, retros, planning)
-    - Participant lists correlating to known team membership
-    - Transcript content referencing decisions, action items, or product features
-
-    Create edges:
-    - ConferenceRecord -[involves]-> Person (link participant emails to known person nodes)
-    - Transcript -[records]-> ConferenceRecord (transcript belongs to its meeting)
-    - ConferenceRecord -[discusses]-> Feature (when transcript content mentions a product feature)
-
-    Cross-source links:
-    - If a participant email matches a known GitHub or Linear user, create an ALIAS_OF edge
-
 sync:
   delivery: polling
   pollingSupported: true

@@ -33,49 +33,49 @@ const {
   canvasProps,
   explorerState,
 } = vi.hoisted(() => {
-    const NODES = [
-      {
-        id: "n1",
-        label: "Person",
-        displayName: "Ada Lovelace",
-        degree: 1,
-        hydrated: true,
-        properties: {},
-      },
-      {
-        id: "n2",
-        label: "Company",
-        displayName: "Analytical Engines",
-        degree: 1,
-        hydrated: true,
-        properties: {},
-      },
-    ];
-    const EDGES = [
-      {
-        id: "e1",
-        source: "n1",
-        target: "n2",
-        type: "WORKS_AT",
-        inferred: false,
-      },
-    ];
-    return {
-      NODES,
-      EDGES,
-      expandMock: vi.fn(() => Promise.resolve()),
-      reloadMock: vi.fn(),
-      addSubgraphMock: vi.fn(),
-      canvasProps: { current: null as Record<string, unknown> | null },
-      // Mutable so a test can drive the empty / filtered-empty branches; reset
-      // to the populated defaults in the global beforeEach.
-      explorerState: {
-        nodes: NODES as unknown[],
-        edges: EDGES as unknown[],
-        stats: null as unknown,
-      },
-    };
-  });
+  const NODES = [
+    {
+      id: "n1",
+      label: "Person",
+      displayName: "Ada Lovelace",
+      degree: 1,
+      hydrated: true,
+      properties: {},
+    },
+    {
+      id: "n2",
+      label: "Company",
+      displayName: "Analytical Engines",
+      degree: 1,
+      hydrated: true,
+      properties: {},
+    },
+  ];
+  const EDGES = [
+    {
+      id: "e1",
+      source: "n1",
+      target: "n2",
+      type: "WORKS_AT",
+      inferred: false,
+    },
+  ];
+  return {
+    NODES,
+    EDGES,
+    expandMock: vi.fn(() => Promise.resolve()),
+    reloadMock: vi.fn(),
+    addSubgraphMock: vi.fn(),
+    canvasProps: { current: null as Record<string, unknown> | null },
+    // Mutable so a test can drive the empty / filtered-empty branches; reset
+    // to the populated defaults in the global beforeEach.
+    explorerState: {
+      nodes: NODES as unknown[],
+      edges: EDGES as unknown[],
+      stats: null as unknown,
+    },
+  };
+});
 
 vi.mock("@/lib/tenant/tenant-context", () => ({
   useTenant: () => ({ orgSlug: "acme", workspaceSlug: "main" }),
@@ -107,9 +107,6 @@ vi.mock("next/dynamic", () => ({
 }));
 
 vi.mock("./api-client", () => ({
-  fetchVocab: vi.fn(() =>
-    Promise.resolve({ labels: [], relationshipTypes: [] }),
-  ),
   fetchNodeDetail: vi.fn((_tenant: unknown, nodeId: string) =>
     Promise.resolve({
       node: NODES.find((n) => n.id === nodeId) ?? null,
@@ -120,14 +117,7 @@ vi.mock("./api-client", () => ({
     Promise.resolve({ nodes: [], total: 0, hasMore: false }),
   ),
   searchNodes: vi.fn(() => Promise.resolve({ nodes: [] })),
-  deleteNode: vi.fn(() => Promise.resolve({ deleted: true })),
-  deleteEdge: vi.fn(() => Promise.resolve({ deleted: true })),
 }));
-
-// CRUD dialogs are covered by their own suites; keep this one focused.
-vi.mock("./node-dialog", () => ({ NodeDialog: () => null }));
-vi.mock("./create-edge-dialog", () => ({ CreateEdgeDialog: () => null }));
-vi.mock("./edit-edge-dialog", () => ({ EditEdgeDialog: () => null }));
 
 // Base UI sheet renders through a portal/backdrop stack that jsdom does not
 // need — a minimal open-gate keeps the assertions about what the explorer

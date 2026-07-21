@@ -27,11 +27,10 @@ import { logger } from "../logger";
  *      NO TTL, and the SOP §9 retention table does not cover ClickHouse. Whether
  *      these rows are erased or retained-under-policy is an undecided PRIVACY +
  *      LEGAL policy decision — not something this function may invent.
- *   2. Neo4j (`@oxagen/ontology`) has NO owner-scoped delete path — the only
- *      mutations write nodes (`record-execution`, `record-generated-file`).
- *      Agent-memory / entity nodes owned by the subject cannot be erased until a
- *      graph-layer erase-by-owner path exists, and org-scope graph semantics are
- *      undefined.
+ *   2. Neo4j (`@oxagen/ontology`) has NO owner-scoped delete path. Explicit
+ *      memory/citation and entity nodes owned by the subject cannot be erased
+ *      until a graph-layer erase-by-owner path exists, and org-scope graph
+ *      semantics are undefined.
  *   3. Blob storage (`@oxagen/storage`) cascade is still pending (SOP §7): the
  *      subject's `content.generated_assets` blobs are enumerable by `storageKey`
  *      but there is no wired enumerate-by-user + delete path.

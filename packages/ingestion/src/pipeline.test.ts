@@ -66,7 +66,6 @@ function makeCtx(
   return {
     orgId: "org-1",
     getMapping: vi.fn().mockResolvedValue(mapping),
-    scheduleInference: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -97,12 +96,14 @@ describe("runPipeline", () => {
     expect(pr.dedup.principalNodeId).toBe("node-principal-1");
     expect(pr.dedup.action).toBe("created_principal");
     expect(pr.embedded).toBe(true);
-    expect(pr.inferenceQueued).toBe(true);
   });
 
   it("calls resolveEntity with the correct entityMutation", async () => {
     const event = makeEvent();
-    const ctx = makeCtx({ oxagenEntityType: "code_change", propertyMappings: {} });
+    const ctx = makeCtx({
+      oxagenEntityType: "code_change",
+      propertyMappings: {},
+    });
 
     await runPipeline(event, ctx);
 
@@ -143,19 +144,6 @@ describe("runPipeline", () => {
     );
   });
 
-  it("calls scheduleInference with the principal node ID", async () => {
-    const event = makeEvent();
-    const ctx = makeCtx({ oxagenEntityType: "task", propertyMappings: {} });
-
-    await runPipeline(event, ctx);
-
-    expect(ctx.scheduleInference).toHaveBeenCalledWith(
-      "node-principal-1",
-      "task",
-      expect.any(Object),
-    );
-  });
-
   it("applies propertyMappings to rename source fields", async () => {
     const event = makeEvent();
     const ctx = makeCtx({
@@ -166,7 +154,8 @@ describe("runPipeline", () => {
     await runPipeline(event, ctx);
 
     // The mutation passed to resolveEntity should have 'summary' not 'title'
-    const callArg = (resolveEntity as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+    const callArg = (resolveEntity as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as {
       properties: Record<string, unknown>;
     };
     expect(callArg.properties["summary"]).toBeDefined();
@@ -179,7 +168,8 @@ describe("runPipeline", () => {
 
     await runPipeline(event, ctx);
 
-    const callArg = (resolveEntity as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+    const callArg = (resolveEntity as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as {
       sourceRecordType: string;
     };
     expect(callArg.sourceRecordType).toBe("issue");
@@ -215,7 +205,8 @@ describe("runPipeline — §8 schema validation seam", () => {
     expect(getPinnedSchema).toHaveBeenCalledOnce();
     expect(getPinnedSchema).toHaveBeenCalledWith("org-1", "ws-1");
     // The pinned schema is threaded into resolveEntity's validation opts.
-    const opts = (resolveEntity as ReturnType<typeof vi.fn>).mock.calls[0]?.[2] as {
+    const opts = (resolveEntity as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[2] as {
       pinnedSchema: PinnedSchema | null;
     };
     expect(opts.pinnedSchema?.enforcementMode).toBe("lenient");
@@ -223,7 +214,7 @@ describe("runPipeline — §8 schema validation seam", () => {
     expect(result.conformanceScore).toBe(0.8);
   });
 
-  it("strict reject → returns a filtered result (schema_nonconformant), no embed/infer", async () => {
+  it("strict reject → returns a filtered result (schema_nonconformant), no embed", async () => {
     (resolveEntity as ReturnType<typeof vi.fn>).mockResolvedValue({
       principalNodeId: null,
       action: "rejected_nonconformant",
@@ -240,8 +231,7 @@ describe("runPipeline — §8 schema validation seam", () => {
 
     expect(result.filtered).toBe(true);
     expect(result.reason).toBe("schema_nonconformant");
-    // A rejected write never embeds or schedules inference.
+    // A rejected write never embeds.
     expect(embedEntity).not.toHaveBeenCalled();
-    expect(ctx.scheduleInference).not.toHaveBeenCalled();
   });
 });

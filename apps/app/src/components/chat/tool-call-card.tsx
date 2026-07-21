@@ -17,7 +17,6 @@ const JSON_RESULT_CAPS = new Set([
   "search_graph",
   "query_ontology",
   "get_ontology_neighbors",
-  "run_cypher",
   "search_nodes",
   "get_graph_stats",
 ]);

@@ -10,22 +10,13 @@
 "use client";
 
 import * as React from "react";
-import {
-  Loader2,
-  X,
-  Boxes,
-  ArrowRight,
-  ArrowLeft,
-  Plus,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { Loader2, X, Boxes, ArrowRight, ArrowLeft, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyableId } from "./copyable-id";
 import { PropertyList } from "./property-list";
-import { fetchNodeDetail, deleteNode, type TenantSlugs } from "./api-client";
+import { fetchNodeDetail, type TenantSlugs } from "./api-client";
 import type { ExplorerNeighbor, ExplorerNode } from "./types";
 import { colorForLabel } from "./lib/colors";
 
@@ -37,8 +28,6 @@ export interface NodeDetailPanelProps {
   onSelectNode: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
   onClose: () => void;
-  onEditNode?: (node: ExplorerNode) => void;
-  onDeleteNode?: (nodeId: string) => void;
 }
 
 interface DetailState {
@@ -54,15 +43,12 @@ export function NodeDetailPanel({
   onSelectNode,
   onExpand,
   onClose,
-  onEditNode,
-  onDeleteNode,
 }: NodeDetailPanelProps) {
   const [state, setState] = React.useState<DetailState>({
     status: "loading",
     node: null,
     neighbors: [],
   });
-  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -91,24 +77,6 @@ export function NodeDetailPanel({
   const displayName =
     state.node?.displayName ?? fallback?.displayName ?? nodeId;
 
-  const handleDelete = async () => {
-    if (
-      !confirm(
-        `Delete "${displayName}" and all its relationships? This cannot be undone.`,
-      )
-    )
-      return;
-    setDeleting(true);
-    try {
-      await deleteNode(tenant, nodeId);
-      onDeleteNode?.(nodeId);
-    } catch {
-      // Deletion failure is non-fatal; leave the panel intact.
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col">
       <DetailHeader
@@ -128,28 +96,6 @@ export function NodeDetailPanel({
           >
             Expand neighbours
           </Button>
-          {onEditNode && state.node && (
-            <Button
-              size="sm"
-              variant="outline"
-              startIcon={<Pencil className="size-3.5" />}
-              onClick={() => onEditNode(state.node!)}
-            >
-              Edit
-            </Button>
-          )}
-          {onDeleteNode && (
-            <Button
-              size="sm"
-              variant="outline"
-              startIcon={<Trash2 className="size-3.5" />}
-              onClick={handleDelete}
-              disabled={deleting}
-              className="text-destructive hover:text-destructive"
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-          )}
         </div>
 
         <section>

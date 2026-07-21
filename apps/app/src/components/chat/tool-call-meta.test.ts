@@ -84,8 +84,8 @@ describe("toolCallMeta — curated map", () => {
 
 describe("deriveToolCallLabel — fallback derivation", () => {
   it("converts verb.noun ordering into 'Verb noun' title case", () => {
-    expect(deriveToolCallLabel("suggest_semantic_edges")).toBe(
-      "Suggest semantic edges",
+    expect(deriveToolCallLabel("get_ontology_neighbors")).toBe(
+      "Get ontology neighbors",
     );
   });
 
@@ -114,9 +114,7 @@ describe("deriveToolCallLabel — fallback derivation", () => {
   });
 
   it("is used by toolCallMeta for uncurated capabilities", () => {
-    expect(toolCallMeta("suggest_semantic_edges").label).toBe(
-      "Suggest semantic edges",
-    );
+    expect(toolCallMeta("query_ontology").label).toBe("Query knowledge graph");
   });
 
   it("never returns the raw dotted string for a dotted capability", () => {
@@ -131,7 +129,7 @@ describe("toolCallIcon — domain icons", () => {
     expect(toolCallIcon("analyze_image")).toBe(ImageIcon);
     expect(toolCallIcon("generate_video")).toBe(Video);
     expect(toolCallIcon("read_document")).toBe(FileText);
-    expect(toolCallIcon("infer_semantic_edges")).toBe(Network);
+    expect(toolCallIcon("query_ontology")).toBe(Network);
     expect(toolCallIcon("send_message")).toBe(MessageSquare);
     expect(toolCallIcon("add_conversation_attachment")).toBe(MessageSquare);
     expect(toolCallIcon("upload_asset")).toBe(Paperclip);

@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-const KINDS = ["entity", "file", "symbol", "chunk", "memory", "execution", "document", "message", "asset"] as const;
-
 export const graphSearch = registerCapability({
   name: "search_graph",
   domain: "graph",
   description:
-    "Natural-language semantic (vector) search across the entire knowledge graph — customer entities, source code (files/symbols/chunks), agent memories, executions, documents and messages — ranked by embedding similarity. Distinct from graph.node.search, which is a lexical substring match.",
+    "Natural-language semantic (vector) search across customer-context entities in the shared workspace graph, ranked by embedding similarity. Product-owned runtime data is read through its typed memory, execution, trace, and asset capabilities.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -20,14 +18,24 @@ export const graphSearch = registerCapability({
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({
-    query: z.string().min(1).max(1000).describe("Natural-language query to embed and search by vector similarity"),
-    limit: z.number().int().min(1).max(50).default(10).describe("Maximum number of results (1–50, default 10)"),
-    kinds: z
-      .array(z.enum(KINDS))
+    query: z
+      .string()
+      .min(1)
+      .max(1000)
+      .describe(
+        "Natural-language query to embed and search by vector similarity",
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .default(10)
+      .describe("Maximum number of results (1–50, default 10)"),
+    labels: z
+      .array(z.string())
       .optional()
-      .describe("Optional filter by node kind (entity, file, symbol, chunk, memory, execution, document, message, asset). `asset` = files the agent generated (markdown/docx/pdf/images/video)."),
-    isSystem: z.boolean().optional().describe("Filter by is_system flag — true for product-owned nodes, false for customer nodes"),
-    labels: z.array(z.string()).optional().describe("Optional domain-label filter (e.g. [\"Person\", \"SourceFile\"])"),
+      .describe('Optional domain-label filter (e.g. ["Person", "Company"])'),
   }),
   output: z.object({
     results: z.array(
@@ -35,10 +43,9 @@ export const graphSearch = registerCapability({
         nodeId: z.string(),
         label: z.string(),
         displayName: z.string(),
-        kind: z.string(),
+        kind: z.literal("entity"),
         snippet: z.string(),
         score: z.number(),
-        isSystem: z.boolean(),
       }),
     ),
   }),

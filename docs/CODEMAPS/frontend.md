@@ -73,7 +73,7 @@ apps/app/src/app/[orgSlug]/[workspaceSlug]/layout.tsx → workspace shell
 
   /activity
     /                                    → ActivityPage (execution list)
-    /[executionId]                       → ExecutionDetailPage (span tree, lineage)
+    /[executionId]                       → ExecutionDetailPage (span tree, child-run trace, debug)
 
   /workbench                             → redirects to /workbench/agents
     /agents                              → WorkbenchAgentsPage + AgentBuilder (new/[agentId])
@@ -198,7 +198,7 @@ oxagen "<prompt>"               → one-shot mode (root positional argument;
                                     program.tsx `.argument("[prompt...]")`)
 oxagen init                     → project init
 oxagen fleet                    → multi-agent fleet view
-oxagen trace                    → agent execution lineage viewer (incl. A2A runs)
+oxagen trace                    → agent execution span-tree viewer (incl. A2A child runs)
 ```
 `apps/cli/src/commands/` has 35 command modules (count drifts — don't hard-code
 it; regenerate via `find apps/cli/src/commands -maxdepth 1 -type f | wc -l`).
@@ -217,12 +217,10 @@ apps/cli/src/agent/
   timeouts.ts                   → per-tool timeout config
   memory.ts                     → project-scoped memory
   code-graph.ts                 → local code graph provider
-  lineage-projection.ts         → trace lineage (projectTrace)
   project-context.ts            → cwd/git context
   adapters/
     code-graph-provider.ts
     code-map-provider.ts
-    graph-sync-provider.ts
     memory-provider.ts
     platform-agent-ai.ts        → API gateway adapter
     workspace.ts                → workspace context

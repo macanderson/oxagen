@@ -65,30 +65,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    task: true
-    task_list: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer work items and project relationships from Google Tasks.
-
-    Look for:
-    - Task titles referencing product features, bug fixes, or project milestones
-    - Task notes containing Linear issue IDs or GitHub PR references
-    - Task list names mapping to team names or project areas
-
-    Create edges:
-    - Task -[part_of]-> TaskList (task belongs to its parent list)
-    - Task -[references]-> LinearIssue (when title or notes contain a Linear ticket ID)
-    - Task -[related_to]-> Feature (when title references a known product feature)
-
 sync:
   delivery: polling
   pollingSupported: true

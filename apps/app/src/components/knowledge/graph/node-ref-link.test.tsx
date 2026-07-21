@@ -48,7 +48,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { NodeRefLink } from "./node-ref-link";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 
 afterEach(cleanup);
 
@@ -64,13 +64,21 @@ function makeNode(overrides: Partial<KnowledgeNodeRef> = {}): KnowledgeNodeRef {
 
 describe("NodeRefLink", () => {
   it("renders the NodeRef chip citation", () => {
-    render(<NodeRefLink node={makeNode()} href="/acme/main/knowledge/graph/kn_1" />);
-    expect(screen.getByTestId("node-ref")).toHaveTextContent("Billing Subscription");
+    render(
+      <NodeRefLink node={makeNode()} href="/acme/main/knowledge/graph/kn_1" />,
+    );
+    expect(screen.getByTestId("node-ref")).toHaveTextContent(
+      "Billing Subscription",
+    );
   });
 
   it("renders a link to the given href with an accessible open-detail label", () => {
-    render(<NodeRefLink node={makeNode()} href="/acme/main/knowledge/graph/kn_1" />);
-    const link = screen.getByRole("link", { name: /open billing subscription detail/i });
+    render(
+      <NodeRefLink node={makeNode()} href="/acme/main/knowledge/graph/kn_1" />,
+    );
+    const link = screen.getByRole("link", {
+      name: /open billing subscription detail/i,
+    });
     expect(link).toHaveAttribute("href", "/acme/main/knowledge/graph/kn_1");
   });
 
@@ -93,6 +101,8 @@ describe("NodeRefLink", () => {
         href="/acme/main/knowledge/graph/kn_1"
       />,
     );
-    expect(screen.getByRole("link", { name: /open feature detail/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open feature detail/i }),
+    ).toBeInTheDocument();
   });
 });

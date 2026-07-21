@@ -27,8 +27,6 @@ export interface GraphTableViewProps {
   tenant: TenantSlugs;
   /** Visible node labels — when set (and not all), filters the server query. */
   visibleLabels?: string[];
-  /** Include agent runtime lineage (is_system) rows. Defaults to customer data only. */
-  includeSystem?: boolean;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
 }
@@ -43,7 +41,6 @@ interface TableState {
 export function GraphTableView({
   tenant,
   visibleLabels,
-  includeSystem,
   selectedNodeId,
   onSelectNode,
 }: GraphTableViewProps) {
@@ -79,7 +76,6 @@ export function GraphTableView({
         ...(visibleLabels && visibleLabels.length > 0
           ? { labels: visibleLabels }
           : {}),
-        ...(includeSystem ? { includeSystem: true } : {}),
         limit: PAGE_SIZE,
         offset,
       },
@@ -102,7 +98,7 @@ export function GraphTableView({
       active = false;
       controller.abort();
     };
-  }, [tenant, query, offset, labelsKey, visibleLabels, includeSystem]);
+  }, [tenant, query, offset, labelsKey, visibleLabels]);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(state.total / PAGE_SIZE));

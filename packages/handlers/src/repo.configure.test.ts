@@ -6,7 +6,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { repoConfigureHandler } from "./repo.configure";
 
@@ -20,18 +22,23 @@ type Existing = {
 } | null;
 
 function setup(existing: Existing, setSpy = vi.fn()) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(existing ? [existing] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: () => Promise.resolve(existing ? [existing] : []),
+            }),
+          }),
+        }),
+        update: () => ({
+          set: (v: { deliveryConfig?: Record<string, unknown> }) => {
+            setSpy(v.deliveryConfig);
+            return { where: () => Promise.resolve() };
+          },
+        }),
       }),
-      update: () => ({
-        set: (v: { deliveryConfig?: Record<string, unknown> }) => {
-          setSpy(v.deliveryConfig);
-          return { where: () => Promise.resolve() };
-        },
-      }),
-    }),
   );
   return { setSpy };
 }
@@ -51,9 +58,11 @@ describe("repo.configure handler", () => {
       {
         repoId: "con_1",
         recordTypes: ["pull_request", "issue"],
-        pathFilters: { include: ["src/**"], exclude: ["node_modules/**", "dist/**"] },
+        pathFilters: {
+          include: ["src/**"],
+          exclude: ["node_modules/**", "dist/**"],
+        },
         labelFilters: { include: ["bug"], exclude: ["wontfix"] },
-        inferenceEnabled: true,
         syncCadence: "polling",
         pollingIntervalSeconds: 600,
       },
@@ -63,9 +72,14 @@ describe("repo.configure handler", () => {
     expect(out.repoId).toBe("con_1");
     expect(out.displayName).toBe("acme/app");
     expect(out.recordTypes).toEqual(["pull_request", "issue"]);
-    expect(out.pathFilters).toEqual({ include: ["src/**"], exclude: ["node_modules/**", "dist/**"] });
-    expect(out.labelFilters).toEqual({ include: ["bug"], exclude: ["wontfix"] });
-    expect(out.inferenceEnabled).toBe(true);
+    expect(out.pathFilters).toEqual({
+      include: ["src/**"],
+      exclude: ["node_modules/**", "dist/**"],
+    });
+    expect(out.labelFilters).toEqual({
+      include: ["bug"],
+      exclude: ["wontfix"],
+    });
     expect(out.syncCadence).toBe("polling");
     expect(out.pollingIntervalSeconds).toBe(600);
 
@@ -79,7 +93,6 @@ describe("repo.configure handler", () => {
     expect(persisted["recordTypeFilters"]).toEqual(["pull_request", "issue"]);
     expect(persisted["syncMethod"]).toBe("polling");
     expect(persisted["syncIntervalSeconds"]).toBe(600);
-    expect((persisted["semanticInference"] as Record<string, unknown>)["enabled"]).toBe(true);
     // connector-specific fields survive the merge
     expect(persisted["owner"]).toBe("acme");
     expect(persisted["repo"]).toBe("app");
@@ -98,24 +111,34 @@ describe("repo.configure handler", () => {
       deliveryMethod: "webhook",
     });
 
-    const out = await repoConfigureHandler({ repoId: "con_1", inferenceEnabled: true }, CTX);
+    const out = await repoConfigureHandler({ repoId: "con_1" }, CTX);
 
     expect(out.recordTypes).toEqual(["commit"]);
-    expect(out.pathFilters).toEqual({ include: ["lib/**"], exclude: ["vendor/**"] });
+    expect(out.pathFilters).toEqual({
+      include: ["lib/**"],
+      exclude: ["vendor/**"],
+    });
     expect(out.syncCadence).toBe("manual");
-    expect(out.inferenceEnabled).toBe(true);
   });
 
   it("returns null filters when neither include nor exclude is configured", async () => {
-    setup({ id: "c1", displayName: "acme/app", deliveryConfig: null, deliveryMethod: "webhook" });
-    const out = await repoConfigureHandler({ repoId: "con_1", syncCadence: "manual" }, CTX);
+    setup({
+      id: "c1",
+      displayName: "acme/app",
+      deliveryConfig: null,
+      deliveryMethod: "webhook",
+    });
+    const out = await repoConfigureHandler(
+      { repoId: "con_1", syncCadence: "manual" },
+      CTX,
+    );
     expect(out.pathFilters).toBeNull();
     expect(out.labelFilters).toBeNull();
     expect(out.recordTypes).toEqual([]);
     expect(out.pollingIntervalSeconds).toBeNull();
   });
 
-  it("round-trips ontologyPrompt and fieldMappings into deliveryConfig", async () => {
+  it("round-trips fieldMappings into deliveryConfig", async () => {
     const { setSpy } = setup({
       id: "c1",
       displayName: "acme/app",
@@ -125,23 +148,22 @@ describe("repo.configure handler", () => {
     await repoConfigureHandler(
       {
         repoId: "con_1",
-        ontologyPrompt: "Extract product features from issues",
         fieldMappings: { title: "name", body: "description" },
         syncCadence: "manual",
       },
       CTX,
     );
     const persisted = setSpy.mock.calls[0]![0] as Record<string, unknown>;
-    expect((persisted["semanticInference"] as Record<string, unknown>)["ontologyPrompt"]).toBe(
-      "Extract product features from issues",
-    );
-    expect(persisted["fieldMappings"]).toEqual({ title: "name", body: "description" });
+    expect(persisted["fieldMappings"]).toEqual({
+      title: "name",
+      body: "description",
+    });
   });
 
   it("throws 404 when the connection does not exist", async () => {
     setup(null);
-    await expect(repoConfigureHandler({ repoId: "con_missing" }, CTX)).rejects.toThrow(
-      "Repository connection not found",
-    );
+    await expect(
+      repoConfigureHandler({ repoId: "con_missing" }, CTX),
+    ).rejects.toThrow("Repository connection not found");
   });
 });

@@ -26,8 +26,6 @@ import {
   Camera,
   RefreshCw,
   Move,
-  Plus,
-  GitBranch,
   Play,
   Pause,
   MoreVertical,
@@ -67,8 +65,6 @@ export interface GraphToolbarProps {
   onZoomOut: () => void;
   onScreenshot: () => void;
   onReload: () => void;
-  onCreateNode: () => void;
-  onCreateEdge: () => void;
 }
 
 export function GraphToolbar(props: GraphToolbarProps) {
@@ -141,96 +137,74 @@ export function GraphToolbar(props: GraphToolbarProps) {
       {compact ? (
         <CompactActions {...props} canvasDisabled={canvasDisabled} />
       ) : (
-      <div className="ml-auto flex items-center gap-2">
-        {!isTable && (
-          <div className="flex items-center gap-0.5">
-            <IconAction
-              label="Fit to view"
-              onClick={props.onFit}
-              disabled={canvasDisabled}
-            >
-              <Maximize2 className="size-4" />
-            </IconAction>
-            <IconAction
-              label="Zoom in"
-              onClick={props.onZoomIn}
-              disabled={canvasDisabled}
-            >
-              <ZoomIn className="size-4" />
-            </IconAction>
-            <IconAction
-              label="Zoom out"
-              onClick={props.onZoomOut}
-              disabled={canvasDisabled}
-            >
-              <ZoomOut className="size-4" />
-            </IconAction>
-            <IconAction
-              label={props.draggable ? "Dragging on" : "Dragging off"}
-              onClick={props.onToggleDraggable}
-              disabled={canvasDisabled}
-              active={props.draggable}
-            >
-              <Move className="size-4" />
-            </IconAction>
-            <IconAction
-              label="Download screenshot"
-              onClick={props.onScreenshot}
-              disabled={canvasDisabled}
-            >
-              <Camera className="size-4" />
-            </IconAction>
-            <Button
-              size="sm"
-              variant={props.animated ? "default" : "outline"}
-              onClick={props.onToggleAnimated}
-              disabled={canvasDisabled}
-              className="gap-1.5"
-              title={props.animated ? "Pause animation" : "Resume animation"}
-            >
-              {props.animated ? (
-                <>
-                  <Pause className="size-3.5" />
-                  <span className="hidden sm:inline text-xs">Pause</span>
-                </>
-              ) : (
-                <>
-                  <Play className="size-3.5" />
-                  <span className="hidden sm:inline text-xs">Play</span>
-                </>
-              )}
-            </Button>
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {!isTable && (
+            <div className="flex items-center gap-0.5">
+              <IconAction
+                label="Fit to view"
+                onClick={props.onFit}
+                disabled={canvasDisabled}
+              >
+                <Maximize2 className="size-4" />
+              </IconAction>
+              <IconAction
+                label="Zoom in"
+                onClick={props.onZoomIn}
+                disabled={canvasDisabled}
+              >
+                <ZoomIn className="size-4" />
+              </IconAction>
+              <IconAction
+                label="Zoom out"
+                onClick={props.onZoomOut}
+                disabled={canvasDisabled}
+              >
+                <ZoomOut className="size-4" />
+              </IconAction>
+              <IconAction
+                label={props.draggable ? "Dragging on" : "Dragging off"}
+                onClick={props.onToggleDraggable}
+                disabled={canvasDisabled}
+                active={props.draggable}
+              >
+                <Move className="size-4" />
+              </IconAction>
+              <IconAction
+                label="Download screenshot"
+                onClick={props.onScreenshot}
+                disabled={canvasDisabled}
+              >
+                <Camera className="size-4" />
+              </IconAction>
+              <Button
+                size="sm"
+                variant={props.animated ? "default" : "outline"}
+                onClick={props.onToggleAnimated}
+                disabled={canvasDisabled}
+                className="gap-1.5"
+                title={props.animated ? "Pause animation" : "Resume animation"}
+              >
+                {props.animated ? (
+                  <>
+                    <Pause className="size-3.5" />
+                    <span className="hidden sm:inline text-xs">Pause</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-3.5" />
+                    <span className="hidden sm:inline text-xs">Play</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
 
-        {/* Create actions */}
-        <div className="flex items-center gap-0.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={props.onCreateNode}
-            className="gap-1.5"
-          >
-            <Plus className="size-3.5" />
-            <span className="hidden sm:inline">Node</span>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={props.onCreateEdge}
-            className="gap-1.5"
-          >
-            <GitBranch className="size-3.5" />
-            <span className="hidden sm:inline">Edge</span>
-          </Button>
+          <IconAction label="Reload graph" onClick={props.onReload}>
+            <RefreshCw className="size-4" />
+          </IconAction>
+
+          <ViewSwitch view={props.view} onViewChange={props.onViewChange} />
         </div>
-
-        <IconAction label="Reload graph" onClick={props.onReload}>
-          <RefreshCw className="size-4" />
-        </IconAction>
-
-        <ViewSwitch view={props.view} onViewChange={props.onViewChange} />
-      </div>
       )}
     </div>
   );
@@ -315,13 +289,6 @@ function CompactActions(
               <MenuSeparator />
             </>
           )}
-          <MenuItem onClick={props.onCreateNode}>
-            <Plus className="size-4" /> Add node
-          </MenuItem>
-          <MenuItem onClick={props.onCreateEdge}>
-            <GitBranch className="size-4" /> Add edge
-          </MenuItem>
-          <MenuSeparator />
           <MenuItem onClick={props.onReload}>
             <RefreshCw className="size-4" /> Reload graph
           </MenuItem>

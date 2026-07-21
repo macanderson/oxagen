@@ -18,7 +18,6 @@ import {
   createCombinedMemory,
   createServerMemory,
   createCodeGraphProvider,
-  createGraphSyncProvider,
   createPlatformAgentAi,
   createGatewayAgentAi,
 } from "../agent/adapters/index.js";
@@ -365,11 +364,6 @@ export async function runOneShot(
         queryCodeGraph(cwd, op, q, l),
       ),
       trace: traceStore,
-      // Graph sync posts to the platform API — meaningless (and unauthenticated)
-      // for the synthetic benchmark session, so skip it entirely there.
-      graphSync: options.session.synthetic
-        ? null
-        : createGraphSyncProvider({ ...options.session, cwd }),
       effort: resolveEffort(options.effort),
       signal: runner.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.

@@ -1003,17 +1003,16 @@ flowchart LR
 
 ### 13.2 New Step Type: `knowledge_search`
 
-Executes a Cypher query against the workspace's Neo4j ontology graph:
+Executes a typed, allow-listed ontology traversal against the workspace graph. A playbook
+cannot submit raw Cypher:
 
 ```typescript
 interface KnowledgeSearchConfig {
-  // Raw Cypher query with $param placeholders
-  query: string;
-  // Parameters to bind (supports template interpolation)
-  parameters?: Record<string, unknown>;
-  // Max rows returned
+  startNodeId: string;
+  edgeTypes?: string[];
+  direction?: "out" | "in" | "both";
+  maxDepth?: number;
   limit?: number;
-  // Map result columns to output fields
   outputMapping?: Record<string, string>;
 }
 ```

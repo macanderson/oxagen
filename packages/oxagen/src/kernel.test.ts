@@ -870,6 +870,41 @@ describe("billing admission gate", () => {
     clearRegistryForTests();
     clearHandlersForTests();
     clearBillingAdmissionGate();
+    clearKernelIAMRuntime();
+  });
+
+  it("skips billing for noBillingGate while still running IAM and the handler", async () => {
+    registerCapability({
+      name: "test.billing_bypass",
+      domain: "test",
+      description: "billing bypass witness",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      scoped: true,
+      noBillingGate: true,
+      sensitivity: "high" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ value: z.string() }),
+      output: z.object({ value: z.string() }),
+    });
+    const iamCheck = vi.fn<KernelIAMCheckFn>(async () => ({
+      outcome: "allow",
+      principal: null,
+    }));
+    const handler = vi.fn(async (input: unknown) => input);
+    const billingGate = vi.fn(async () => {});
+    setKernelIAMRuntime(iamCheck, true);
+    registerHandler("test.billing_bypass", async () => handler);
+    setBillingAdmissionGate(billingGate);
+
+    const out = await invoke("test.billing_bypass", { value: "accepted" }, ctx);
+
+    expect(out).toEqual({ value: "accepted" });
+    expect(iamCheck).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(billingGate).not.toHaveBeenCalled();
   });
 
   it("invokes the registered gate for a scoped capability carrying an orgId", async () => {
@@ -908,6 +943,125 @@ describe("billing admission gate", () => {
 
     expect(out).toEqual({ value: "hi" });
     expect(gate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent-run unconditional enforcement (Agent RBAC Phase 2 — spec §3.4/§3.5)
+//
+// An invocation whose ctx carries an agent-run context (ctx.agentRun,
+// principalKind='agent') blocks on a non-allow IAM outcome REGARDLESS of the
+// IAM_ENFORCEMENT_ENABLED rollout flag: an unattended automation must never
+// proceed on a would-deny. Human traffic (no ctx.agentRun) keeps the existing
+// flag semantics — proven by the enforcement-off tests above.
+// ---------------------------------------------------------------------------
+
+describe("invoke() agent-run enforcement", () => {
+  const agentRunCtx = (): CapabilityContext => ({
+    ...ctx,
+    userId: null,
+    surface: "runner",
+    agentRun: {
+      principalKind: "agent",
+      agentPrincipal: {
+        id: "00000000-0000-0000-0000-0000000000a1",
+        kind: "agent",
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      },
+      humanPrincipal: {
+        id: "00000000-0000-0000-0000-0000000000a2",
+        kind: "human",
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      },
+      agentId: "agt_kernel_test",
+      runId: "run_kernel_test",
+      parentRunId: null,
+    },
+  });
+
+  const denyFn: KernelIAMCheckFn = async () => ({
+    outcome: "deny",
+    reason: "no_grant",
+    principal: null,
+  });
+  const pendingFn: KernelIAMCheckFn = async () => ({
+    outcome: "pending_approval",
+    principal: null,
+  });
+
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearKernelAccessRequestCreator();
+    clearSecurityEventEmitter();
+  });
+
+  it("blocks a denied agent-run invocation even with enforcement OFF", async () => {
+    setKernelIAMRuntime(denyFn, /* enforced */ false);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    await expect(
+      invoke("test.echo", { value: "poisoned" }, agentRunCtx()),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+  });
+
+  it("routes an agent-run pending_approval through the access-request flow even with enforcement OFF", async () => {
+    setKernelIAMRuntime(pendingFn, /* enforced */ false);
+    const creator = vi.fn(async () => "arq_agent_run");
+    setKernelAccessRequestCreator(creator);
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    let thrown: unknown;
+    try {
+      await invoke("test.echo", { value: "x" }, agentRunCtx());
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(handlerRan).toBe(false);
+    expect(thrown).toBeInstanceOf(CapabilityError);
+    expect((thrown as CapabilityError).code).toBe("pending_approval");
+    expect((thrown as CapabilityError).accessRequestId).toBe("arq_agent_run");
+    expect(creator).toHaveBeenCalledTimes(1);
+  });
+
+  it("still allows an allowed agent-run invocation", async () => {
+    setKernelIAMRuntime(
+      async () => ({ outcome: "allow", principal: null }),
+      false,
+    );
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    const out = await invoke("test.echo", { value: "ok" }, agentRunCtx());
+    expect(out).toEqual({ value: "ok" });
+  });
+
+  it("authorizeExternalCapability fails closed for an agent run with enforcement OFF", async () => {
+    setKernelIAMRuntime(denyFn, /* enforced */ false);
+
+    const res = await authorizeExternalCapability(
+      "mcp.github.merge_pr",
+      agentRunCtx(),
+      "deny",
+    );
+
+    expect(res.allowed).toBe(false);
+    expect(res.outcome).toBe("deny");
   });
 });
 

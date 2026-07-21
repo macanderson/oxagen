@@ -339,8 +339,6 @@ export function ConfigureRepoDrawer({
 }) {
   const { add: toast } = useToast();
   const [recordTypes, setRecordTypes] = React.useState("");
-  const [inferenceEnabled, setInferenceEnabled] = React.useState(true);
-  const [ontologyPrompt, setOntologyPrompt] = React.useState("");
   const [syncCadence, setSyncCadence] = React.useState<
     "manual" | "polling" | "webhook"
   >("polling");
@@ -352,8 +350,6 @@ export function ConfigureRepoDrawer({
   React.useEffect(() => {
     if (!target) return;
     setRecordTypes("");
-    setInferenceEnabled(true);
-    setOntologyPrompt("");
     setSyncCadence("polling");
     setPollingIntervalSeconds("300");
     setError(null);
@@ -372,8 +368,6 @@ export function ConfigureRepoDrawer({
       workspaceSlug,
       repoId: target.publicId,
       recordTypes: parsedTypes.length > 0 ? parsedTypes : undefined,
-      inferenceEnabled,
-      ontologyPrompt: ontologyPrompt.trim() || undefined,
       syncCadence,
       pollingIntervalSeconds:
         syncCadence === "polling" && pollingIntervalSeconds
@@ -395,7 +389,7 @@ export function ConfigureRepoDrawer({
       open={target !== null}
       onOpenChange={onOpenChange}
       title={target ? `Configure ${target.displayName}` : "Configure repo"}
-      description="Ingestion filters, inference, and sync cadence for this repo connection."
+      description="Ingestion filters and sync cadence for this repo connection."
     >
       <form
         className="flex flex-col gap-4"
@@ -413,24 +407,6 @@ export function ConfigureRepoDrawer({
             value={recordTypes}
             onChange={(e) => setRecordTypes(e.target.value)}
             placeholder="pull_request, issue, commit"
-          />
-        </div>
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <Switch
-            checked={inferenceEnabled}
-            onCheckedChange={(c) => setInferenceEnabled(c === true)}
-          />
-          Enable LLM-driven semantic inference
-        </label>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="configure-ontology-prompt">
-            Ontology prompt (optional)
-          </Label>
-          <Textarea
-            id="configure-ontology-prompt"
-            value={ontologyPrompt}
-            onChange={(e) => setOntologyPrompt(e.target.value)}
-            placeholder="Custom entity-extraction instructions"
           />
         </div>
         <div className="flex flex-col gap-1.5">

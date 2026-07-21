@@ -35,6 +35,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
         await session.run(
           `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+             AND n.is_system = false
            RETURN count(n) AS nodeCount,
                   count(DISTINCT n.sourceId) AS sourceCount`,
           { orgId, workspaceId },
@@ -45,6 +46,8 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
           `MATCH (n:GraphNode)-[r]->(m:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
              AND m.orgId = $orgId AND m.workspaceId = $workspaceId
+             AND n.is_system = false
+             AND m.is_system = false
            RETURN count(r) AS edgeCount,
                   count(CASE WHEN r.inferred = true THEN 1 END) AS inferredEdgeCount`,
           { orgId, workspaceId },
@@ -54,6 +57,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
         await session.run(
           `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+             AND n.is_system = false
            RETURN max(coalesce(n.updatedAt, n.createdAt)) AS lastModifiedAt`,
           { orgId, workspaceId },
         ),
@@ -64,6 +68,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
           await session.run(
             `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+               AND n.is_system = false
              RETURN n.label AS label, count(n) AS count`,
             { orgId, workspaceId },
           ),
@@ -73,6 +78,8 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
             `MATCH (n:GraphNode)-[r]->(m:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
                AND m.orgId = $orgId AND m.workspaceId = $workspaceId
+               AND n.is_system = false
+               AND m.is_system = false
              RETURN type(r) AS edgeType, count(r) AS count`,
             { orgId, workspaceId },
           ),
@@ -99,6 +106,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
         const growthResult = await session.run(
           `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+             AND n.is_system = false
              AND n.createdAt IS NOT NULL
              AND n.createdAt >= datetime($windowStart)
            RETURN toString(date(n.createdAt)) AS day, count(n) AS count`,

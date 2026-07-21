@@ -4,6 +4,14 @@
 > retrieval, entitlements + metering, outcome verification) with file:line evidence.
 > Companion to `docs/VISION.md` → "The gap — nobody enforces the accountability chain".
 
+> **2026-07-21 launch-boundary correction:** the client-authored execution/file
+> graph and its `get_execution_lineage` read surface were retired. The exact live
+> code graph stays local to each checkout/worktree; Oxagen retains stable provider,
+> repository, ref, commit, pull-request, workflow-run, and changed-file metadata.
+> Canonical topology derived from configured protected/default refs and a typed
+> evidence ledger for verified execution-to-artifact/file claims are follow-ups.
+> Durable execution traces and the hash-chained audit log remain.
+
 ## The three plays (from the wedge stack rank)
 
 1. **Permission-scoped context plane** — RBAC enforced *inside* graph retrieval, per
@@ -28,7 +36,7 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
 | | Play 1: Permission-scoped context | Play 2: ISV entitlements + metering | Play 3: Outcome verification |
 |---|---|---|---|
 | **Verdict** | Not close — tenant-scoped, never principal-scoped | Real single-tenant primitive; reseller story not built | Strong raw material; verification-to-signed-meter spine missing |
-| **Strongest existing asset** | Fail-closed org+workspace scoping (`packages/tenancy/src/scope.ts`) | Entitlement gate at `invoke()` (`packages/plugins/src/entitlements/`) + per-turn budgets | Execution lineage graph (`agent.execution.lineage`, `TOUCHED_FILE` edges) + hash-chained audit log |
+| **Strongest existing asset** | Fail-closed org+workspace scoping (`packages/tenancy/src/scope.ts`) | Entitlement gate at `invoke()` (`packages/plugins/src/entitlements/`) + per-turn budgets | Durable execution trace + hash-chained audit log; typed file-evidence ingest remains a gap |
 | **Biggest gap** | No node/edge ACLs; principal never reaches Cypher | No sub-tenancy; usage never reported to Stripe; org-grained metering only | No first-class outcome events; meter rows unsigned and mutable |
 
 ### What genuinely exists (the assets to build on)
@@ -43,10 +51,11 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
 - **Metering and budget enforcement work — at org grain.** Single charge chokepoint
   (`packages/billing/src/metering.ts:124`), atomic credit debits, pre-turn admission,
   and 3-mode per-turn USD budgets shared across CLI/API/app.
-- **Lineage is the strongest area.** `agent.execution.record` persists nested steps
-  with per-tool tokens/latency; Neo4j joins `:Execution` to every `:SourceFile`
-  touched; ClickHouse rows are OTEL-stamped with trace/span ids. IAM audit events are
-  principal-attributed and hash-chained (`packages/iam/src/emit-audit.ts:117`).
+- **Trace capture is the strongest area.** `agent.execution.record` persists nested
+  steps with per-tool tokens/latency; ClickHouse rows are OTEL-stamped with
+  trace/span ids. IAM audit events are principal-attributed and hash-chained
+  (`packages/iam/src/emit-audit.ts:117`). Verified file attribution remains an
+  evidence-ledger gap rather than an automatic graph edge.
 - **An eval loop and CI/PR readers exist** (`eval.run.start` with LLM judge;
   `repo.ci.status`, `repo.pr.get`) — the ingredients of verification, unwired.
 
@@ -54,11 +63,10 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
 
 - **Play 1:** Retrieval is a pure function of `(orgId, workspaceId)` — two users in a
   workspace see identical graphs by construction. No ACL field exists on any node or
-  edge; connectors never fetch source-system permissions (Google Drive's sharing list
-  is not retrieved); the **code graph filters by org only** — a workspace-level leak
-  (`packages/agent/src/adapters/code-graph.ts:62`); audit rows have `target_id`
-  hard-coded null, so "who read node N" is unanswerable; `IAM_ENFORCEMENT_ENABLED=false`
-  is a global bypass.
+  edge, and connectors do not fetch source-system permissions (Google Drive's sharing
+  list is not retrieved). Audit rows have `target_id` hard-coded null, so "who read
+  node N" is unanswerable; `IAM_ENFORCEMENT_ENABLED=false` is a global bypass. The
+  local code graph is outside this shared retrieval plane.
 - **Play 2:** `token_usage` has no principal/agent/capability/end-customer column —
   per-seat or per-customer pricing is structurally impossible. Billing is a **prepaid
   credit wallet**, not a metered Stripe loop: usage is never pushed to Stripe. No
@@ -99,7 +107,8 @@ Carry the resolved principal from IAM through the kernel into every downstream l
 
 ### Epic 2 — Tenant-isolation trust floor *(play 1 credibility; small, urgent)*
 Fix the defects that would sink a governance pitch in the first security review.
-- Filter the code graph by workspace, not just org (`packages/agent/src/adapters/code-graph.ts:62,71,93`).
+- Verify every remaining workspace-graph query and provider-metadata projection
+  constrains both org and workspace; the exact code graph remains local.
 - Replace the substring `SCOPE_GUARD` regex with a predicate that requires org AND
   workspace (and later principal) clauses (`packages/ontology/src/tenant.ts:8`).
 - Remove or break-glass-gate the `IAM_ENFORCEMENT_ENABLED=false` global bypass
@@ -113,8 +122,8 @@ Make "the agent can only know what its principal could know" true at the Cypher 
 - ACL dimension on graph nodes/edges (`allowedPrincipalIds` / group refs /
   `sourceAclHash`) stamped at ingest (`packages/ingestion/src/mutations/upsert-entity.ts:131`).
 - Principal-membership predicate compiled into every retrieval query
-  (`ontology.query.ts:157`, `ontology.neighbors.ts:131`, code-graph adapter), default
-  fail-closed for ACL-bearing nodes; IAM group/role resolution feeding the predicate.
+  (`ontology.query.ts:157`, `ontology.neighbors.ts:131`, provider/evidence projections),
+  default fail-closed for ACL-bearing nodes; IAM group/role resolution feeding the predicate.
 - Per-principal retrieval audit: every graph read logs the node/edge ids returned
   (audit `target_id` from Epic 1).
 - **Done when:** two users in one workspace get different graph slices matching their
@@ -123,11 +132,12 @@ Make "the agent can only know what its principal could know" true at the Cypher 
 ### Epic 4 — Source-ACL sync in connectors *(play 1 completion)*
 Ground the ACLs in the source systems the graph ingests.
 - Fetch native permissions at ingest (start: Google Drive `permissions` list, GitHub
-  repo collaborators/teams for the code graph) and map them to Oxagen principals.
+  repo collaborators/teams for shared provider metadata) and map them to Oxagen principals.
 - Re-sync/drift handling: permission revocations propagate to graph ACLs (async
   Inngest, same dual-write pattern as connector ingestion).
-- Repo-level permission model for code-graph ingestion — a repo an engineer can't
-  read in GitHub is invisible to their agent's retrieval.
+- Repo-level permission model for shared repository metadata and any future
+  protected-ref topology — a repo an engineer cannot read in GitHub is invisible to
+  their Oxagen retrieval. Local code-graph access follows the checkout's own credentials.
 - **Done when:** revoking a document/repo in the source removes it from that
   principal's retrieval within the sync SLA.
 
@@ -157,8 +167,8 @@ Persist verified outcomes as durable, joinable facts — not live reads.
 - New `outcome.record` / `verification.assert` contracts: Postgres outcome table +
   ClickHouse events + Neo4j edge joining outcome → `:Execution` lineage.
 - Persist CI/PR verdicts (webhook or poll) against the execution that produced the
-  change: `tests_passed@sha`, `pr_merged`, blast-radius (files touched vs. declared
-  scope, from `TOUCHED_FILE` lineage).
+  change: `tests_passed@sha`, `pr_merged`, and blast radius from an immutable,
+  typed run-evidence manifest bound to the exact commit and declared scope.
 - Bring the `packages/bench` executed-test harness in-runtime as deterministic
   verification rules; LLM-judge evals become one (subjective) verifier among several.
 - **Done when:** "show me executions whose diffs merged with green CI" is a query,

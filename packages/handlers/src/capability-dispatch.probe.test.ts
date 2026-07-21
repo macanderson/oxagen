@@ -66,7 +66,7 @@ describe("ADR-025 naming realignment — dispatch probe", () => {
       "set_plugin_enabled",
       "send_message",
       "list_agent_tools",
-      "ingest_graph",
+      "search_graph",
     ]) {
       expect(getCapability(name), `contract ${name}`).toBeDefined();
       expect(hasHandler(name), `handler ${name}`).toBe(true);

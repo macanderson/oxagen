@@ -64,7 +64,6 @@ Oxagen reviews submitted connectors for:
 - **Schema validity**: `apiVersion`, `kind`, required `metadata` fields.
 - **Auth security**: credential fields use `widget: secret`; no plaintext
   secrets in `config` fields; OAuth scopes are minimal and justified.
-- **Prompt quality**: `ontologyPrompt` is coherent, specific, and under 800 tokens.
 - **Record type stability**: IDs are stable and non-ambiguous.
 - **Compliance**: data synced does not include PII beyond what is justified in
   the description.
@@ -132,7 +131,6 @@ Before submission, verify:
 - [ ] All credential fields use `widget: secret` (not `text`).
 - [ ] No secrets, tokens, or keys appear in `config` field `defaultValue`s.
 - [ ] OAuth scopes are the minimum required for the declared record types.
-- [ ] `ontologyPrompt` does not instruct the LLM to access external systems.
 - [ ] Schema URL is served over HTTPS (no HTTP).
 - [ ] Schema URL does not redirect to an untrusted origin.
 - [ ] `metadata.id` is unique and does not impersonate a built-in connector

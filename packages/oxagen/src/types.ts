@@ -310,6 +310,20 @@ export interface CapabilityContext {
    * The IAM layer is the enforcing surface.
    */
   clientIp?: string | null;
+  /**
+   * Present when this capability call originates from an AGENT RUN (Agent
+   * RBAC Phase 2, docs/specs/agent-rbac/spec.md §3.4/§3.5). Carries the two
+   * principals of the delegation ceiling (agent ∩ invoking human), the run
+   * lineage for audit rows, and the mutable per-run resolution cache slot the
+   * kernel IAM check populates on first use. Absent on every human / API-key
+   * / service invocation — those paths are behaviorally untouched.
+   *
+   * When present, the kernel resolves IAM against the agent principal at ALL
+   * org tiers (the non-enterprise tier fast-path applies only to non-agent
+   * principals) and BLOCKS non-allow outcomes unconditionally — agent RBAC is
+   * a core safety property, not an enterprise feature.
+   */
+  agentRun?: AgentRunIAMContext;
 }
 
 /**

@@ -6,10 +6,17 @@ description: "Archived spec & plan — status: partially shipped (audited 2026-0
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
 > The Workspace Schema Registry v1 is substantially shipped with contracts (30+), database schema, handlers, API/MCP routes, and full UI. Core implementation complete: Postgres schema_registry tables, property validation with enforcement modes, graph_observed_labels telemetry, auto-publish-on-activate via schema.toggle, AI-assisted schema builder with deterministic intents plus precise-tier LLM (schema.chat), and getPinnedSchema resolver with active vocabulary. However, CLI commands (schema list/enable/disable/version/export) were implemented in PR #150 but deleted in later commit 6239d4e1; reconcile workers stubbed as v2.
+>
+> **Launch-boundary update (2026-07-21):** the schema registry and typed
+> connector validation remain, but the generic graph mutation, raw Cypher,
+> semantic-inference/review, and bulk graph export surfaces described below are
+> retired. Those sections are historical design context, not supported launch
+> APIs. Shared context enters the workspace graph through governed providers;
+> checkout-specific code graphs remain local to Stella.
 
 **Implementation evidence**
 
-- packages/oxagen/src/contracts/schema.*.ts — 30 contracts; RELATIONSHIP_TYPE_PATTERN shared module; graph.edge.upsert/semantic.edge.* deprecation aliases
+- packages/oxagen/src/contracts/schema.*.ts — schema registry contracts and shared RELATIONSHIP_TYPE_PATTERN validation
 - packages/database/src/schema/schema-registry.ts — Drizzle Postgres schema with registries, schema_versions, schemas, schema_activations, node_labels, relationship_types, schemaProperties
 - packages/database/atlas/migrations/20260623120000_schema_registry.sql — Postgres migration
 - packages/handlers/src/schema.pinned.ts — getPinnedSchema resolver filtering to enabled schemas (active vocabulary)
@@ -1588,4 +1595,3 @@ Not in this build; deferred per spec §14:
   export→toggle journeys, screenshots to `e2e/screenshots/`.
 - **Batch `:EntityNode {entityType}` → first-class-label relabel** migration (§3.3).
 ```
-

@@ -3,7 +3,7 @@
  *
  * Composes the toolbar, type-filter panel, the (lazily loaded) WebGL canvas or
  * the table view, and the node/edge detail panels. Owns view mode, type
- * visibility, selection, hover, search, and CRUD dialogs; reads tenant slugs
+ * visibility, selection, hover, and search; reads tenant slugs
  * from context and the live graph from `useExplorerData`.
  *
  * The reagraph canvas is `next/dynamic({ ssr:false })` so the page paints its
@@ -23,7 +23,6 @@ import {
   SlidersHorizontal,
   EyeOff,
 } from "lucide-react";
-import { NodeLabels } from "@oxagen/ontology/types";
 import { useTenant } from "@/lib/tenant/tenant-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,17 +40,9 @@ import { GraphTableView } from "./graph-table-view";
 import { NodeDetailPanel } from "./node-detail-panel";
 import { EdgeDetailPanel } from "./edge-detail-panel";
 import { EdgeHoverPopover } from "./edge-hover-popover";
-import { NodeDialog } from "./node-dialog";
-import { CreateEdgeDialog } from "./create-edge-dialog";
-import { EditEdgeDialog } from "./edit-edge-dialog";
-import { searchNodes, fetchVocab } from "./api-client";
+import { searchNodes } from "./api-client";
 import { countEdgesByType, countNodesByLabel } from "./lib/transform";
-import type {
-  ExploreView,
-  ExplorerEdge,
-  ExplorerNode,
-  ExplorerVocabPayload,
-} from "./types";
+import type { ExploreView, ExplorerEdge, ExplorerNode } from "./types";
 import type { GraphCanvasApi } from "./graph-canvas-view";
 
 // Lazy, client-only. The fallback keeps layout stable while WebGL hydrates.
@@ -83,13 +74,7 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     [tenant.orgSlug, tenant.workspaceSlug],
   );
 
-  // Agent runtime lineage (executions, agents, tools — is_system nodes) is
-  // hidden by default: the explorer exists to inspect the source-system
-  // ontology the agents act on, not the activity they generate. Flipping the
-  // toggle reseeds the graph with lineage included (server-side opt-in).
-  const [systemHidden, setSystemHidden] = React.useState(true);
-
-  const data = useExplorerData(slugs, { includeSystem: !systemHidden });
+  const data = useExplorerData(slugs);
 
   // Responsive behaviour: below `lg` the side panels become bottom sheets, and
   // touch devices (no real hover) never see the cursor-anchored edge popover.
@@ -115,7 +100,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
   const [isDark, setIsDark] = React.useState(false);
 
-  // CRUD dialog state
   const [animated, setAnimated] = React.useState(false);
 
   // Mobile canvas defaults, applied once when a small viewport is detected:
@@ -129,19 +113,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     setAnimated(false);
     setView((v) => (v === "3d" ? "2d" : v));
   }, [isMobile]);
-  const [vocab, setVocab] = React.useState<ExplorerVocabPayload>({
-    labels: [],
-    relationshipTypes: [],
-  });
-  const [createNodeOpen, setCreateNodeOpen] = React.useState(false);
-  const [createEdgeOpen, setCreateEdgeOpen] = React.useState(false);
-  const [editingNode, setEditingNode] = React.useState<ExplorerNode | null>(
-    null,
-  );
-  const [editingEdge, setEditingEdge] = React.useState<ExplorerEdge | null>(
-    null,
-  );
-
   const canvasApi = React.useRef<GraphCanvasApi | null>(null);
   const [canvasReady, setCanvasReady] = React.useState(false);
 
@@ -177,21 +148,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
     return () => observer.disconnect();
   }, []);
 
-  // Fetch workspace vocabulary (labels + relationship types) for create/edit selects.
-  React.useEffect(() => {
-    let active = true;
-    fetchVocab(slugs)
-      .then((v) => {
-        if (active) setVocab(v);
-      })
-      .catch(() => {
-        /* Non-fatal; forms work without pre-populated vocab */
-      });
-    return () => {
-      active = false;
-    };
-  }, [slugs]);
-
   // ── Derived view data ────────────────────────────────────────────────────
   const nodeById = React.useMemo(
     () => new Map(data.nodes.map((n) => [n.id, n])),
@@ -199,18 +155,8 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
   );
 
   const visibleNodes = React.useMemo(
-    () =>
-      data.nodes.filter(
-        (n) =>
-          !hiddenNodeTypes.has(n.label) && (!systemHidden || !isSystemNode(n)),
-      ),
-    [data.nodes, hiddenNodeTypes, systemHidden],
-  );
-  // Lineage nodes currently in view (pulled in by expansion) — shown as the
-  // count on the visibility toggle so the user knows what's being suppressed.
-  const systemCount = React.useMemo(
-    () => data.nodes.filter(isSystemNode).length,
-    [data.nodes],
+    () => data.nodes.filter((n) => !hiddenNodeTypes.has(n.label)),
+    [data.nodes, hiddenNodeTypes],
   );
   const visibleNodeIds = React.useMemo(
     () => new Set(visibleNodes.map((n) => n.id)),
@@ -322,16 +268,10 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
       onSelectNode={(id) => setSelection({ type: "node", id })}
       onExpand={(id) => void data.expand(id)}
       onClose={() => setSelection(null)}
-      onEditNode={(node) => setEditingNode(node)}
-      onDeleteNode={() => {
-        setSelection(null);
-        data.reload();
-      }}
     />
   ) : selectedEdge ? (
     <EdgeDetailPanel
       edge={selectedEdge}
-      tenant={slugs}
       {...(nodeById.get(selectedEdge.source)
         ? { sourceNode: nodeById.get(selectedEdge.source)! }
         : {})}
@@ -340,11 +280,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
         : {})}
       onSelectNode={(id) => setSelection({ type: "node", id })}
       onClose={() => setSelection(null)}
-      onEditEdge={(edge) => setEditingEdge(edge)}
-      onDeleteEdge={() => {
-        setSelection(null);
-        data.reload();
-      }}
     />
   ) : null;
 
@@ -355,14 +290,11 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
       hiddenNodeTypes={hiddenNodeTypes}
       hiddenEdgeTypes={hiddenEdgeTypes}
       inferredHidden={inferredHidden}
-      systemHidden={systemHidden}
       inferredCount={inferredCount}
       confirmedCount={confirmedCount}
-      systemCount={systemCount}
       onToggleNodeType={toggleNodeType}
       onToggleEdgeType={toggleEdgeType}
       onToggleInferred={() => setInferredHidden((v) => !v)}
-      onToggleSystem={() => setSystemHidden((v) => !v)}
       onShowAllNodeTypes={() => setHiddenNodeTypes(new Set())}
       onHideAllNodeTypes={() =>
         setHiddenNodeTypes(new Set(nodeCounts.map((c) => c.type)))
@@ -391,8 +323,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
         onZoomOut={() => canvasApi.current?.zoomOut()}
         onScreenshot={onScreenshot}
         onReload={data.reload}
-        onCreateNode={() => setCreateNodeOpen(true)}
-        onCreateEdge={() => setCreateEdgeOpen(true)}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -417,24 +347,10 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           ) : data.status === "loading" ? (
             <CanvasSkeleton />
           ) : data.nodes.length === 0 ? (
-            // The graph really is empty ONLY when the whole-graph stats agree.
-            // When stats report nodes but the seed came back empty, they were
-            // all excluded server-side by the default "hide agent activity"
-            // toggle — say so and offer to reveal them, never claim "no data".
-            systemHidden && (data.stats?.nodeCount ?? 0) > 0 ? (
-              <FilteredEmptyState
-                count={data.stats?.nodeCount ?? 0}
-                description="They're agent-activity nodes (executions, tools, generated files), hidden by default."
-                actionLabel="Show agent activity"
-                onAction={() => setSystemHidden(false)}
-              />
-            ) : (
-              <EmptyState />
-            )
+            <EmptyState />
           ) : view === "table" ? (
             <GraphTableView
               tenant={slugs}
-              includeSystem={!systemHidden}
               visibleLabels={
                 hiddenNodeTypes.size > 0
                   ? nodeCounts
@@ -550,52 +466,6 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
             : {})}
         />
       )}
-
-      {/* CRUD Dialogs */}
-      <NodeDialog
-        open={createNodeOpen}
-        onOpenChange={setCreateNodeOpen}
-        tenant={slugs}
-        labels={vocab.labels}
-        onSaved={() => data.reload()}
-      />
-      <CreateEdgeDialog
-        open={createEdgeOpen}
-        onOpenChange={setCreateEdgeOpen}
-        tenant={slugs}
-        relationshipTypes={vocab.relationshipTypes}
-        onCreated={() => data.reload()}
-      />
-      {editingNode && (
-        <NodeDialog
-          open={!!editingNode}
-          onOpenChange={(open) => {
-            if (!open) setEditingNode(null);
-          }}
-          tenant={slugs}
-          node={editingNode}
-          labels={vocab.labels}
-          onSaved={() => data.reload()}
-        />
-      )}
-      {editingEdge && (
-        <EditEdgeDialog
-          open={!!editingEdge}
-          onOpenChange={(open) => {
-            if (!open) setEditingEdge(null);
-          }}
-          tenant={slugs}
-          edge={editingEdge}
-          sourceNode={nodeById.get(editingEdge.source)}
-          targetNode={nodeById.get(editingEdge.target)}
-          onUpdated={() => data.reload()}
-          onDeleted={() => {
-            setEditingEdge(null);
-            setSelection(null);
-            data.reload();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -605,42 +475,6 @@ function toggleInSet(prev: Set<string>, value: string): Set<string> {
   if (next.has(value)) next.delete(value);
   else next.add(value);
   return next;
-}
-
-/**
- * Runtime lineage labels — mirrors the platform's fixed `NodeLabels` vocabulary
- * (minus customer-facing kinds like EntityNode/Document/Conversation/Message,
- * whose names can legitimately collide with ingested customer entity types).
- * Only a fallback: the server's `isSystem` flag is the source of truth.
- */
-const RUNTIME_LINEAGE_LABELS: ReadonlySet<string> = new Set([
-  NodeLabels.Agent,
-  NodeLabels.AgentVersion,
-  NodeLabels.Tool,
-  NodeLabels.ToolVersion,
-  NodeLabels.Playbook,
-  NodeLabels.PlaybookVersion,
-  NodeLabels.Execution,
-  NodeLabels.GeneratedFile,
-  NodeLabels.AgentMemory,
-  NodeLabels.WorkflowRun,
-  NodeLabels.Skill,
-  NodeLabels.SkillVersion,
-  NodeLabels.BackgroundTask,
-  NodeLabels.Plan,
-  NodeLabels.Fanout,
-]);
-
-/**
- * True when the node is agent-runtime lineage rather than customer knowledge.
- * The wire flag wins when present; unflagged neighbor stubs (payloads that
- * predate the `isSystem` field) fall back to the runtime label vocabulary.
- * Hydrated seed rows are filtered server-side, so the fallback never needs to
- * judge them — and can't misfire on a customer entity type of the same name.
- */
-function isSystemNode(node: ExplorerNode): boolean {
-  if (node.isSystem !== undefined) return node.isSystem;
-  return !node.hydrated && RUNTIME_LINEAGE_LABELS.has(node.label);
 }
 
 function FilterToggle({

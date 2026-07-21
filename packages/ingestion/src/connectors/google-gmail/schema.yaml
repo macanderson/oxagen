@@ -68,36 +68,6 @@ filters:
       - thread
       - message
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    thread: true
-    message: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer project context and relationships from Gmail email content.
-
-    Look for:
-    - Email subjects or bodies mentioning product feature names, project codenames, or service names
-    - Threads involving customers or partners (external email domains)
-    - Emails referencing GitHub PR URLs, Linear ticket IDs, or feature flags
-    - Decision announcements or approval emails
-
-    Create edges:
-    - Email -[discusses]-> Feature (when subject or body references a known product feature)
-    - Email -[references]-> PullRequest (when body contains a GitHub PR URL or number)
-    - Email -[involves]-> Person (link sender and recipients to known person nodes)
-    - Thread -[contains]-> Email (thread groups its constituent messages)
-
-    Cross-source links:
-    - If sender email matches a known GitHub or Linear contributor, link to that person node
-    - If body contains a Linear ticket ID (e.g. OXA-123), reference that issue node
-
 sync:
   delivery: webhook
   pollingSupported: true

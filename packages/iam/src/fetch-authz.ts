@@ -220,8 +220,14 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           eq(schema.principals.orgId, orgId),
           // Match by the effective user's ID stored in parent_user_id. The
           // partial unique index principals_org_parent_user_uniq makes this at
-          // most one row, so LIMIT 1 is deterministic.
+          // most one row per (org, effectiveUserId, kind='human'), so LIMIT 1 is
+          // deterministic. kind='human' is REQUIRED here (Agent RBAC Phase 1,
+          // migration 20260805120000): a delegated agent principal shares the
+          // same parent_user_id as its creator, so without this filter a human
+          // caller could non-deterministically resolve to one of their own
+          // agents' principals instead of their own.
           eq(schema.principals.parentUserId, effectiveUserId as string),
+          eq(schema.principals.kind, "human"),
         ),
       )
       .limit(1);

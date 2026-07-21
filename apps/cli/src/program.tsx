@@ -705,24 +705,16 @@ export function buildProgram(): Command {
     .description("Query the knowledge graph");
   graph
     .command("search")
-    .description(
-      "Unified semantic (vector) search across the entire knowledge graph",
-    )
+    .description("Semantic (vector) search across the customer context graph")
     .requiredOption(
       "-q, --query <text>",
       "Natural-language query to search by vector similarity",
     )
     .option(
-      "-k, --kinds <kinds>",
-      "Comma-separated node kinds (entity,file,symbol,chunk,memory,execution,document,message)",
-    )
-    .option(
       "-l, --labels <labels>",
-      "Comma-separated domain labels (e.g. Person,SourceFile)",
+      "Comma-separated domain labels (e.g. Person,Company)",
     )
     .option("-n, --limit <n>", "Maximum number of results (1–50)", "10")
-    .option("--system", "Only return product-owned (system) nodes")
-    .option("--no-system", "Only return customer nodes (exclude system nodes)")
     .option(
       "--json",
       "One machine JSON line (also the default when stdout is piped)",
@@ -730,99 +722,13 @@ export function buildProgram(): Command {
     )
     .option("--quiet", "Suppress progress chrome (stderr)", false)
     .action(
-      async (opts: {
-        query: string;
-        kinds?: string;
-        labels?: string;
-        limit?: string;
-        system?: boolean;
-      }) => {
+      async (opts: { query: string; labels?: string; limit?: string }) => {
         const { handleGraphSearch } = await import(
           "./commands/graph.search.js"
         );
         await handleGraphSearch(opts);
       },
     );
-
-  graph
-    .command("pull")
-    .description(
-      "Download an incremental snapshot of the workspace graph into a local DuckDB replica",
-    )
-    .option(
-      "--full",
-      "Ignore the saved cursor and re-pull the entire graph",
-      false,
-    )
-    .option(
-      "-l, --labels <csv>",
-      "Comma-separated domain labels to filter (e.g. Person,SourceFile)",
-    )
-    .option("--no-system", "Exclude product-owned (system) nodes")
-    .option("--json", "Output summary as JSON")
-    .action(
-      async (opts: {
-        full?: boolean;
-        labels?: string;
-        system?: boolean;
-        json?: boolean;
-      }) => {
-        const { handleGraphPull } = await import("./commands/graph.pull.js");
-        await handleGraphPull({
-          full: opts.full,
-          labels: opts.labels,
-          noSystem: opts.system === false,
-          json: opts.json,
-        });
-      },
-    );
-
-  graph
-    .command("status")
-    .description("Show the state of the local workspace-graph replica")
-    .option("--json", "Output as JSON")
-    .action(async (opts: { json?: boolean }) => {
-      const { handleGraphStatus } = await import("./commands/graph.status.js");
-      await handleGraphStatus(opts);
-    });
-
-  graph
-    .command("push")
-    .description(
-      "Compute a git code delta and push it to the workspace knowledge graph (ADR-018 up-sync)",
-    )
-    .option(
-      "--full",
-      "Ignore the saved cursor and push all tracked source files",
-      false,
-    )
-    .option("--repo <id>", "Override the repo identifier")
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { full?: boolean; repo?: string; json?: boolean }) => {
-      const { handleGraphPush } = await import("./commands/graph.push.js");
-      await handleGraphPush({
-        full: opts.full,
-        repo: opts.repo,
-        json: opts.json,
-      });
-    });
-
-  graph
-    .command("lineage")
-    .description(
-      "Push CLI session execution lineage into the workspace knowledge graph (ADR-018 slice 3)",
-    )
-    .option(
-      "--repo <id>",
-      "Override the repo identifier used to link touched files to the code subgraph",
-    )
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { repo?: string; json?: boolean }) => {
-      const { handleGraphLineage } = await import(
-        "./commands/graph.lineage.js"
-      );
-      await handleGraphLineage({ repo: opts.repo, json: opts.json });
-    });
 
   // ── a2a: Agent2Agent protocol surface ───────────────────────────────────────
   const a2a = program
@@ -843,7 +749,7 @@ export function buildProgram(): Command {
   const fileLock = program
     .command("file-lock")
     .description(
-      "Inspect or manage the workspace's agent file locks (HOLDS_LOCK edges) — the same locks write_file/edit_file acquire automatically",
+      "Inspect or manage the workspace's transactional agent file-lock leases — the same locks write_file/edit_file acquire automatically",
     );
   fileLock
     .command("list")
@@ -1177,41 +1083,11 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── code: code-map retrieval + diff/patch/format utilities ──────────────────
+  // ── code: diff/patch/format utilities ───────────────────────────────────────
 
   const code = program
     .command("code")
-    .description(
-      "Code utilities: semantic code-map retrieval, diff, patch, format",
-    );
-
-  code
-    .command("map <query>")
-    .description(
-      "Return a structured code-map for a natural-language concept: relevant files, " +
-        "symbols, call edges, and recent commits. Faster than grep for conceptual queries.",
-    )
-    .option("-l, --limit <n>", "Max files to return (default 20)")
-    .option(
-      "--kinds <list>",
-      "Comma-separated result kinds: file,symbol,chunk,commit",
-    )
-    .option("--domain <domain>", "Filter by domain label (e.g. billing, auth)")
-    .option("--json", "Emit raw JSON output")
-    .action(
-      async (
-        query: string,
-        opts: {
-          limit?: string;
-          kinds?: string;
-          domain?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleCodeMap } = await import("./commands/code.js");
-        await handleCodeMap(query, opts);
-      },
-    );
+    .description("Code utilities: diff, patch, format");
 
   code
     .command("diff <before> <after>")
@@ -1831,14 +1707,13 @@ export function buildProgram(): Command {
     .command("logs")
     .description(
       "See and debug the CLI's log (~/.oxagen/logs/cli.output). Captures invocations, " +
-        "LLM telemetry, and the lineage + code-graph data synced to the workspace graph " +
-        "when OXAGEN_CLI_DEBUG=1.",
+        "LLM telemetry, and local code-graph activity when OXAGEN_CLI_DEBUG=1.",
     )
     .option("--path", "Print the log file path and exit", false)
     .option("-n, --lines <n>", "Number of recent entries to show (default 50)")
     .option(
       "--category <category>",
-      "Filter by category: invoke | turn | api | code-graph | graph-sync | llm | error",
+      "Filter by category: invoke | turn | api | code-graph | llm | error",
     )
     .option("-f, --follow", "Follow the log live (like tail -f)", false)
     .option("--clear", "Truncate the log to empty and exit", false)
@@ -2944,6 +2819,14 @@ export function buildProgram(): Command {
       "--quiet",
       "Suppress progress chrome (stderr); data still emits",
       false,
+    )
+    .addHelpText(
+      "after",
+      "\nInside the interactive REPL, `/dispatch` mode routes plain prompts through\n" +
+        "this same detached-worker mechanism (trailing ` &` forces background, a\n" +
+        "leading `=` forces inline), with completions folded back into the REPL\n" +
+        "transcript and a live Background panel roster — see\n" +
+        "docs/specs/repl-async-dispatch.md.",
     )
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetRoot } = await import("./commands/fleet.js");

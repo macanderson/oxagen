@@ -52,7 +52,7 @@ oxagen --version
 ```
 
 <Callout type="info">
-The bundle leaves two **optional** native dependencies (`duckdb`, `blake3`) external. If they are not present in the runtime environment the CLI still runs the full agent loop — it just skips persistent on-disk memory and the local graph replica. Install them in the same environment if you want those features.
+The bundle leaves two **optional** native dependencies (`duckdb`, `blake3`) external. If they are not present in the runtime environment the CLI still runs the full agent loop — it just skips persistent on-disk memory and any checkout-local cache that requires them. DuckDB is not used for a downloaded workspace-graph replica.
 </Callout>
 
 ## From npm
@@ -82,7 +82,7 @@ oxagen --version
 oxagen --help
 ```
 
-`oxagen --help` lists every command group. You can append `--help` to any command (e.g. `oxagen graph pull --help`) for its flags.
+`oxagen --help` lists every command group. You can append `--help` to any command (e.g. `oxagen graph search --help`) for its flags.
 
 ## Next step
 

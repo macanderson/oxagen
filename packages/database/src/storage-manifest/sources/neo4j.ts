@@ -124,10 +124,8 @@ export function parseCypherSchema(cypher: string): ManifestTable[] {
         primaryKey: name === "publicId" || name === "id",
       }));
 
-    // Dedupe + sort each inventory: schema.cypher legitimately declares a few
-    // indexes twice (e.g. execution_embedding_index appears in two sections),
-    // and a duplicate would make the meta value — and thus the content hash —
-    // depend on how many times the DDL repeated it.
+    // Dedupe + sort each inventory so repeated declarations cannot make the
+    // meta value — and thus the content hash — depend on declaration count.
     const uniqSorted = (xs: string[]): string =>
       [...new Set(xs)].sort().join(",");
     const meta: Record<string, string> = {};

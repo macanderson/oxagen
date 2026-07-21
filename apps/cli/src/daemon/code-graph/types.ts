@@ -30,8 +30,7 @@ export interface CodeNode {
   docstring?: string;
   /**
    * LLM-inferred application domain (e.g. "payments", "auth", "billing").
-   * Set by graph push via inferDomains() and propagated to both DuckDB
-   * (local persistence) and Neo4j (workspace knowledge graph).
+   * Set by local initialization via inferDomains() and persisted in DuckDB.
    */
   domain?: string;
   /**
@@ -56,8 +55,8 @@ export type CodeEdgeType =
   | "references";
 
 export interface CodeEdge {
-  source: string;   // CodeNode ID
-  target: string;   // CodeNode ID
+  source: string; // CodeNode ID
+  target: string; // CodeNode ID
   type: CodeEdgeType;
   /**
    * LLM-inferred application domain, inherited from the file that declares

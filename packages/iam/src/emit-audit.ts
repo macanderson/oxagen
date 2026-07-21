@@ -26,7 +26,12 @@
 // (non-empty) chain_hash for this row — it never produces the OXA-2058 empty
 // string.
 
-import { insertAuditEvent, latestAuditChainHash, retryWithBackoff, type AuditEventRow } from "@oxagen/telemetry";
+import {
+  insertAuditEvent,
+  latestAuditChainHash,
+  retryWithBackoff,
+  type AuditEventRow,
+} from "@oxagen/telemetry";
 import type { ResolveResult, Trace } from "@oxagen/oxagen/iam";
 import type { CapabilityContext, ResolvedPrincipal } from "@oxagen/oxagen";
 import { logger } from "./logger";
@@ -35,7 +40,9 @@ import { logger } from "./logger";
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 export interface EmitAuditArgs {
@@ -52,6 +59,25 @@ export interface EmitAuditArgs {
    * the contract declares no audit target.
    */
   target?: { kind: string; id: string } | null;
+  /**
+   * When the ACTING principal is an agent: the delegating human principal it
+   * acts on behalf of (Agent RBAC spec §5 — the delegation ceiling's other
+   * half). Recorded as human_principal_id so "which human's authority did
+   * this agent exercise" is queryable. Ignored when the acting principal is
+   * itself human (the acting id already fills the column).
+   */
+  humanPrincipalId?: string | null;
+  /**
+   * Agent-run lineage (Agent RBAC spec §5): the agent's public id, the run,
+   * and — for subagent dispatches — the parent run. `runId` lands in
+   * correlation_id (correlating every capability check of one run); the full
+   * lineage is embedded in trace_jsonb under `agentRun`.
+   */
+  runLineage?: {
+    agentId: string;
+    runId: string;
+    parentRunId?: string | null;
+  } | null;
 }
 
 /**
@@ -63,7 +89,17 @@ export interface EmitAuditArgs {
  * top of this file. Callers are expected to `.catch()` this and alert.
  */
 export async function emitAudit(args: EmitAuditArgs): Promise<void> {
-  const { capability, ctx, principal, result, trace, rawInputJson, target } = args;
+  const {
+    capability,
+    ctx,
+    principal,
+    result,
+    trace,
+    rawInputJson,
+    target,
+    humanPrincipalId,
+    runLineage,
+  } = args;
   const now = new Date().toISOString();
   const eventId = globalThis.crypto.randomUUID();
 
@@ -98,7 +134,10 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
       capability,
     });
   } catch (err) {
-    logger.warn({ err }, "[iam:emit-audit] Failed to read latest chain hash — chaining from empty prevHash");
+    logger.warn(
+      { err },
+      "[iam:emit-audit] Failed to read latest chain hash — chaining from empty prevHash",
+    );
   }
 
   // Compute this event's chain hash over (prev_hash || event_id || capability).
@@ -120,8 +159,10 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
   const outcome = result.outcome;
   const decisionReason = result.trace.decidedBy.rule;
 
-  const actingPrincipalId = principal?.id ?? "00000000-0000-0000-0000-000000000000";
-  const actingPrincipalKind: "human" | "agent" | "service" = principal?.kind ?? "service";
+  const actingPrincipalId =
+    principal?.id ?? "00000000-0000-0000-0000-000000000000";
+  const actingPrincipalKind: "human" | "agent" | "service" =
+    principal?.kind ?? "service";
 
   const row: AuditEventRow = {
     occurred_at: now,
@@ -134,7 +175,9 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
     acting_principal_id: actingPrincipalId,
     acting_principal_kind: actingPrincipalKind,
     human_principal_id:
-      actingPrincipalKind === "human" ? actingPrincipalId : null,
+      actingPrincipalKind === "human"
+        ? actingPrincipalId
+        : (humanPrincipalId ?? null),
     outcome,
     decision_reason: decisionReason,
     // Accountability chain: what was acted on (from the contract's
@@ -147,10 +190,21 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
     ip: ctx.clientIp ?? null,
     ua: null,
     request_id: ctx.requestId,
-    correlation_id: null,
+    // Agent runs correlate every capability check of one run via the run id
+    // (Agent RBAC spec §5); non-agent invocations keep null as before.
+    correlation_id: runLineage?.runId ?? null,
     trace_jsonb: JSON.stringify({
       steps: trace.steps,
       decidedBy: trace.decidedBy,
+      ...(runLineage
+        ? {
+            agentRun: {
+              agentId: runLineage.agentId,
+              runId: runLineage.runId,
+              parentRunId: runLineage.parentRunId ?? null,
+            },
+          }
+        : {}),
     }),
   };
 
@@ -159,5 +213,8 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
   // the first blip). A still-failing insert propagates to the caller's
   // `.catch()`, which is expected to alert loudly (see check-iam.ts) — never
   // silently dropped.
-  await retryWithBackoff(() => insertAuditEvent(row), { attempts: 3, baseDelayMs: 25 });
+  await retryWithBackoff(() => insertAuditEvent(row), {
+    attempts: 3,
+    baseDelayMs: 25,
+  });
 }

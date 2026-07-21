@@ -89,37 +89,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    message: true
-    channel: false
-    user: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Extract decisions, action items, and project signals from Slack messages.
-
-    Look for:
-    - Messages mentioning GitHub PR numbers, issue references, or feature names
-    - Decision announcements in engineering channels (e.g. "We decided to...", "Shipping X tomorrow")
-    - Incident or outage reports mentioning services or components
-    - Cross-team coordination signals linking people to projects or features
-
-    Create edges:
-    - SlackMessage -[discusses]-> Feature (when message references a feature by name)
-    - SlackMessage -[references]-> PullRequest (when message contains a GitHub PR URL or number)
-    - SlackMessage -[reports_incident_for]-> Service (when message is an incident/outage report)
-    - SlackUser -[member_of]-> Team (when user's channel membership indicates team affiliation)
-    - SlackMessage -[authored_by]-> SlackUser
-
-    Extract decision metadata:
-    - Decision text, stakeholders present, date, affected components.
-
 sync:
   delivery: webhook
   pollingSupported: true

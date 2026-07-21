@@ -51,32 +51,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    person: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer person-to-organization relationships from Google Contacts.
-
-    Look for:
-    - Contact organization names matching known customer accounts or partner companies
-    - Job titles indicating engineering, product, or leadership roles
-    - Email domains that identify the person's company or organization
-
-    Create edges:
-    - Person -[member_of]-> Organization (when organization field matches a known account)
-    - Person -[has_role]-> JobFunction (when job title maps to engineering, product, sales, etc.)
-
-    Cross-source links:
-    - If contact email matches a known GitHub or Linear user, create an ALIAS_OF edge
-    - If organization name matches a Salesforce Account, link to that node
-
 sync:
   delivery: polling
   pollingSupported: true

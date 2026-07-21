@@ -21,13 +21,13 @@ billing-conscious admins a reason to land here first.
   - See what's automated and whether automations are active or paused
   - Watch the knowledge graph grow (nodes created today vs yesterday, this week vs last) and stay grounded
   - Review what the agents are remembering
-  - Jump straight to anything awaiting review (inferred edges pending approval, memory promotions)
+  - Jump straight to governed memory promotions awaiting review
 
 ## Functionality
 - **KPI strip (metering wedge):** month-to-date spend, tokens used, agent runs — each with a daily-trend sparkline — plus credit balance remaining. Billing-gated as a group; a non-billing member sees a single "requires billing access" card. Sources: `billing.usage.breakdown` (daily series) + `billing.subscription.read` (`creditBalanceCents` — the one true "remaining" number, never a fabricated quota).
 - **Knowledge-graph hero (grounding wedge, made visual):**
-  - a tiny live subgraph preview (`graph.export` sample → reagraph canvas, client-only, dashed edges = inferred);
-  - stat cells: nodes, edges, inferred edges **pending approval** (`semantic.edge.suggest.total`), connected repos + data sources (`connection.list`, split by connector);
+  - a tiny bounded live graph preview seeded by `graph.node.list` and expanded with `ontology.neighbors` (reagraph canvas, client-only);
+  - stat cells: nodes, edges, connected repos + data sources (`connection.list`, split by connector);
   - node-creation growth: today vs yesterday and this week vs last week (delta chips), plus a 14-day daily-node bar (`graph.stats` `includeGrowth`).
 - **Agent activity:** runs-per-day mini-bars + succeeded/failed/running summary + the five most recent runs (`agent.execution.list`).
 - **Automations:** active vs paused counts + recent automations (`automation.list`).
@@ -44,16 +44,15 @@ billing-conscious admins a reason to land here first.
 - `automation.list` (`list_automations`) — automations panel.
 - `agent.memory.list` (`list_memories`) — memory panel.
 - `graph.stats` (`get_graph_stats`, `includeGrowth`) — graph counts + node-creation growth.
-- `graph.export` (`export_graph`) — sample subgraph for the live preview.
-- `semantic.edge.suggest` (`suggest_semantic_edges`) — inferred edges pending approval count.
+- `graph.node.list` (`list_nodes`) — bounded seed set for the live preview.
+- `ontology.neighbors` (`get_ontology_neighbors`) — bounded expansion for the live preview.
 - `connection.list` (`list_connections`) — repos / data sources / source health.
 
 ## Data sources
 ClickHouse via `billing.usage.breakdown` (usage/cost/token events); Postgres via
 `billing.subscription.read`, `agent.execution.list`, `automation.list`,
-`connection.list` (transactional state); Neo4j via `graph.stats`, `graph.export`,
-`semantic.edge.suggest`, `agent.memory.list` (graph, subgraph, inferred edges,
-memory).
+`connection.list` (transactional state); Neo4j via `graph.stats`,
+`graph.node.list`, `ontology.neighbors`, and `agent.memory.list` (graph and memory).
 
 ## States
 - **Empty:** brand-new workspace — each section shows a zero-state inviting the first Ask, connector, automation, or memory instead of blank tiles.

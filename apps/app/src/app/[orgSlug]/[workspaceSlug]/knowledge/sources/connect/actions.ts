@@ -38,7 +38,12 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+  getOrgRole,
+} from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import type { ConnectorPluginSchema } from "@oxagen/oxagen/contracts/plugin.schema.get";
 import type { ConnectionCreateOutput } from "@oxagen/oxagen/contracts/connection.create";
@@ -48,7 +53,9 @@ import type { ConnectionMappingsGetOutput } from "@oxagen/oxagen/contracts/conne
 import type { ConnectionMappingsSetOutput } from "@oxagen/oxagen/contracts/connection.mappings.set";
 import type { IntegrationConfigureOutput } from "@oxagen/oxagen/contracts/integration.configure";
 
-export type ActionResult<T> = { ok: true; value: T } | { ok: false; error: string };
+export type ActionResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
 
 interface OrgWorkspaceSlugs {
   orgSlug: string;
@@ -63,7 +70,10 @@ interface OrgWorkspaceSlugs {
 // the allow-lists each capability's `defaultRoles` declares.
 // ---------------------------------------------------------------------------
 
-async function getWorkspaceRole(workspaceId: string, userId: string): Promise<string> {
+async function getWorkspaceRole(
+  workspaceId: string,
+  userId: string,
+): Promise<string> {
   const rows = await withTenantDb((tx) =>
     tx
       .select({ role: schema.workspaceUsers.role })
@@ -92,10 +102,22 @@ async function assertCapabilityAccess(
 }
 
 // Mirrors each contract's `defaultRoles` (packages/oxagen/src/contracts/*.ts).
-const ROLES_SCHEMA_READ = { org: ["owner", "admin"], workspace: ["owner", "member"] } as const;
-const ROLES_CONNECTION_WRITE = { org: ["owner", "admin"], workspace: ["owner"] } as const;
-const ROLES_MAPPINGS_READ = { org: ["owner", "admin"], workspace: ["owner", "member"] } as const;
-const ROLES_INTEGRATION_CONFIGURE = { org: ["owner", "admin"], workspace: ["owner", "member"] } as const;
+const ROLES_SCHEMA_READ = {
+  org: ["owner", "admin"],
+  workspace: ["owner", "member"],
+} as const;
+const ROLES_CONNECTION_WRITE = {
+  org: ["owner", "admin"],
+  workspace: ["owner"],
+} as const;
+const ROLES_MAPPINGS_READ = {
+  org: ["owner", "admin"],
+  workspace: ["owner", "member"],
+} as const;
+const ROLES_INTEGRATION_CONFIGURE = {
+  org: ["owner", "admin"],
+  workspace: ["owner", "member"],
+} as const;
 
 async function resolveScope(orgSlug: string, workspaceSlug: string) {
   const session = await getSessionOrRedirect();
@@ -133,9 +155,18 @@ export async function getConnectSourceSchemaAction(
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_SCHEMA_READ);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_SCHEMA_READ,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to connect a source in this workspace." };
+      return {
+        ok: false,
+        error:
+          "You do not have permission to connect a source in this workspace.",
+      };
     }
     try {
       const out = (await invoke(
@@ -146,8 +177,14 @@ export async function getConnectSourceSchemaAction(
       )) as ConnectorPluginSchema;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectorId }, "knowledge.sources.connect: getConnectSourceSchemaAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to load connector schema.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectorId },
+        "knowledge.sources.connect: getConnectSourceSchemaAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to load connector schema."),
+      };
     }
   });
 }
@@ -174,9 +211,18 @@ export async function validateConnectSourceConfigAction(
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_SCHEMA_READ);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_SCHEMA_READ,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to connect a source in this workspace." };
+      return {
+        ok: false,
+        error:
+          "You do not have permission to connect a source in this workspace.",
+      };
     }
     try {
       const out = (await invoke(
@@ -187,8 +233,14 @@ export async function validateConnectSourceConfigAction(
       )) as ValidateConnectSourceConfigOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectorId }, "knowledge.sources.connect: validateConnectSourceConfigAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to validate configuration.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectorId },
+        "knowledge.sources.connect: validateConnectSourceConfigAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to validate configuration."),
+      };
     }
   });
 }
@@ -207,13 +259,29 @@ export interface CreateSourceConnectionInput extends OrgWorkspaceSlugs {
 export async function createSourceConnectionAction(
   input: CreateSourceConnectionInput,
 ): Promise<ActionResult<ConnectionCreateOutput>> {
-  const { orgSlug, workspaceSlug, connectorId, displayName, connectionConfig, authCredential } = input;
+  const {
+    orgSlug,
+    workspaceSlug,
+    connectorId,
+    displayName,
+    connectionConfig,
+    authCredential,
+  } = input;
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_CONNECTION_WRITE);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_CONNECTION_WRITE,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace owner (or org owner/admin) to connect a source." };
+      return {
+        ok: false,
+        error:
+          "You must be a workspace owner (or org owner/admin) to connect a source.",
+      };
     }
     try {
       const out = (await invoke(
@@ -224,8 +292,14 @@ export async function createSourceConnectionAction(
       )) as ConnectionCreateOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectorId }, "knowledge.sources.connect: createSourceConnectionAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to create the connection.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectorId },
+        "knowledge.sources.connect: createSourceConnectionAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to create the connection."),
+      };
     }
   });
 }
@@ -241,9 +315,17 @@ export async function previewSourceConnectionAction(
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_CONNECTION_WRITE);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_CONNECTION_WRITE,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to preview this connection." };
+      return {
+        ok: false,
+        error: "You do not have permission to preview this connection.",
+      };
     }
     try {
       const out = (await invoke(
@@ -254,10 +336,16 @@ export async function previewSourceConnectionAction(
       )) as ConnectionPreviewOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectionId }, "knowledge.sources.connect: previewSourceConnectionAction failed");
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectionId },
+        "knowledge.sources.connect: previewSourceConnectionAction failed",
+      );
       // Preserve the raw connector error message per spec ("Error states" — preview
       // failure shows a retry with the raw connector error, not a generic failure).
-      return { ok: false, error: errorMessage(err, "Failed to preview this connection.") };
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to preview this connection."),
+      };
     }
   });
 }
@@ -281,13 +369,28 @@ export interface SuggestSourceMappingsInput extends OrgWorkspaceSlugs {
 export async function suggestSourceMappingsAction(
   input: SuggestSourceMappingsInput,
 ): Promise<ActionResult<ConnectionMappingsSuggestOutput>> {
-  const { orgSlug, workspaceSlug, connectionId, recordTypes, existingEntityTypes } = input;
+  const {
+    orgSlug,
+    workspaceSlug,
+    connectionId,
+    recordTypes,
+    existingEntityTypes,
+  } = input;
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_CONNECTION_WRITE);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_CONNECTION_WRITE,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to generate mappings for this connection." };
+      return {
+        ok: false,
+        error:
+          "You do not have permission to generate mappings for this connection.",
+      };
     }
     try {
       const out = (await invoke(
@@ -298,8 +401,14 @@ export async function suggestSourceMappingsAction(
       )) as ConnectionMappingsSuggestOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectionId }, "knowledge.sources.connect: suggestSourceMappingsAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to generate mapping suggestions.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectionId },
+        "knowledge.sources.connect: suggestSourceMappingsAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to generate mapping suggestions."),
+      };
     }
   });
 }
@@ -316,9 +425,17 @@ export async function getSourceMappingsAction(
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_MAPPINGS_READ);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_MAPPINGS_READ,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to view this connection's mappings." };
+      return {
+        ok: false,
+        error: "You do not have permission to view this connection's mappings.",
+      };
     }
     try {
       const out = (await invoke(
@@ -329,8 +446,14 @@ export async function getSourceMappingsAction(
       )) as ConnectionMappingsGetOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectionId }, "knowledge.sources.connect: getSourceMappingsAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to load saved mappings.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectionId },
+        "knowledge.sources.connect: getSourceMappingsAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to load saved mappings."),
+      };
     }
   });
 }
@@ -352,32 +475,55 @@ export interface ConfirmSourceMappingsInput extends OrgWorkspaceSlugs {
 export async function confirmSourceMappingsAction(
   input: ConfirmSourceMappingsInput,
 ): Promise<ActionResult<ConnectionMappingsSetOutput>> {
-  const { orgSlug, workspaceSlug, connectionId, mappings, activateConnection } = input;
+  const { orgSlug, workspaceSlug, connectionId, mappings, activateConnection } =
+    input;
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_CONNECTION_WRITE);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_CONNECTION_WRITE,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You must be a workspace owner (or org owner/admin) to activate this connection." };
+      return {
+        ok: false,
+        error:
+          "You must be a workspace owner (or org owner/admin) to activate this connection.",
+      };
     }
     try {
       const out = (await invoke(
         "set_connection_mappings",
-        { connectionId, mappings, activateConnection: activateConnection ?? true },
+        {
+          connectionId,
+          mappings,
+          activateConnection: activateConnection ?? true,
+        },
         buildCtx(org.id, ws.id, session.user.id),
         { surface: "agent" },
       )) as ConnectionMappingsSetOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, connectionId }, "knowledge.sources.connect: confirmSourceMappingsAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to save and activate this connection.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, connectionId },
+        "knowledge.sources.connect: confirmSourceMappingsAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(
+          err,
+          "Failed to save and activate this connection.",
+        ),
+      };
     }
   });
 }
 
 // ---------------------------------------------------------------------------
-// configure_integration — optional advanced settings (sync cadence, AI
-// inference) applied alongside the connection. integrationId is the same
+// configure_integration — optional sync settings applied alongside the
+// connection. integrationId is the same
 // `source_connections.publicId` returned by create_connection (see
 // packages/handlers/src/integration.configure.ts, which resolves by public
 // ID against the same table connection.create writes to).
@@ -386,32 +532,44 @@ export async function confirmSourceMappingsAction(
 export interface ConfigureSourceIntegrationInput extends OrgWorkspaceSlugs {
   integrationId: string;
   syncCadence?: "manual" | "polling" | "webhook";
-  inferenceEnabled?: boolean;
-  ontologyPrompt?: string;
 }
 
 export async function configureSourceIntegrationAction(
   input: ConfigureSourceIntegrationInput,
 ): Promise<ActionResult<IntegrationConfigureOutput>> {
-  const { orgSlug, workspaceSlug, integrationId, syncCadence, inferenceEnabled, ontologyPrompt } = input;
+  const { orgSlug, workspaceSlug, integrationId, syncCadence } = input;
   const { session, org, ws } = await resolveScope(orgSlug, workspaceSlug);
 
   return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const gate = await assertCapabilityAccess(org.id, ws.id, session.user.id, ROLES_INTEGRATION_CONFIGURE);
+    const gate = await assertCapabilityAccess(
+      org.id,
+      ws.id,
+      session.user.id,
+      ROLES_INTEGRATION_CONFIGURE,
+    );
     if (gate === "denied") {
-      return { ok: false, error: "You do not have permission to configure this integration." };
+      return {
+        ok: false,
+        error: "You do not have permission to configure this integration.",
+      };
     }
     try {
       const out = (await invoke(
         "configure_integration",
-        { integrationId, syncCadence, inferenceEnabled, ontologyPrompt },
+        { integrationId, syncCadence },
         buildCtx(org.id, ws.id, session.user.id),
         { surface: "agent" },
       )) as IntegrationConfigureOutput;
       return { ok: true, value: out };
     } catch (err) {
-      logger.error({ err, orgId: org.id, workspaceId: ws.id, integrationId }, "knowledge.sources.connect: configureSourceIntegrationAction failed");
-      return { ok: false, error: errorMessage(err, "Failed to save advanced settings.") };
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, integrationId },
+        "knowledge.sources.connect: configureSourceIntegrationAction failed",
+      );
+      return {
+        ok: false,
+        error: errorMessage(err, "Failed to save advanced settings."),
+      };
     }
   });
 }

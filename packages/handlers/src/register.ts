@@ -49,12 +49,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "ingest_graph",
-    async () =>
-      (await import("./graph.ingest"))
-        .graphIngestHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_subagent_logs",
     async () =>
       (await import("./agent.subagent.logs"))
@@ -833,24 +827,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .connectionMappingsSuggestHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "upsert_node",
-    async () =>
-      (await import("./graph.node.upsert"))
-        .graphNodeUpsertHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "add_node_label",
-    async () =>
-      (await import("./graph.node_label.add"))
-        .graphNodeLabelAddHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "remove_node_label",
-    async () =>
-      (await import("./graph.node_label.remove"))
-        .graphNodeLabelRemoveHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_node_labels",
     async () =>
       (await import("./graph.node_label.get"))
@@ -863,12 +839,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphNodeGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "delete_node",
-    async () =>
-      (await import("./graph.node.delete"))
-        .graphNodeDeleteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "search_nodes",
     async () =>
       (await import("./graph.node.search"))
@@ -879,24 +849,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./graph.search"))
         .graphSearchHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "upsert_edge",
-    async () =>
-      (await import("./graph.edge.upsert"))
-        .graphEdgeUpsertHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "delete_edge",
-    async () =>
-      (await import("./graph.edge.delete"))
-        .graphEdgeDeleteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "run_cypher",
-    async () =>
-      (await import("./graph.cypher"))
-        .graphCypherHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "search_web",
@@ -1063,46 +1015,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .pluginVersionListHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "approve_semantic_edge",
-    async () =>
-      (await import("./semantic.edge.approve"))
-        .semanticEdgeApproveHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "infer_semantic_edges",
-    async () =>
-      (await import("./semantic.edge.infer"))
-        .semanticEdgeInferHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "list_semantic_edges",
-    async () =>
-      (await import("./semantic.edge.list"))
-        .semanticEdgeListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "suggest_semantic_edges",
-    async () =>
-      (await import("./semantic.edge.suggest"))
-        .semanticEdgeSuggestHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "list_nodes",
     async () =>
       (await import("./graph.node.list"))
         .graphNodeListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "export_graph",
-    async () =>
-      (await import("./graph.export"))
-        .graphExportHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "push_graph",
-    async () =>
-      (await import("./graph.sync.push"))
-        .graphSyncPushHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_graph_stats",
@@ -1126,6 +1042,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./audit.log.query"))
         .auditLogQueryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "ingest_stella_operational_telemetry",
+    async () =>
+      (await import("./telemetry.stella.ingest"))
+        .telemetryStellaIngestHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_capability_registry",
@@ -1463,11 +1385,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./secret.export"))
         .secretExportHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_code_map",
-    async () =>
-      (await import("./code.map")).codeMapHandler as CapabilityHandlerFn,
   );
   // ── Evals v1 ──────────────────────────────────────────────────────────────────
   registerHandler(

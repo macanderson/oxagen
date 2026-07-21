@@ -5,7 +5,7 @@
  * The explorer never talks to Neo4j directly. It exchanges these plain JSON
  * shapes with the route handler, which composes the wired graph capabilities
  * (`graph.stats`, `graph.node.list`, `graph.node.search`, `graph.node.get`,
- * `ontology.neighbors`, `semantic.edge.list`) server-side. Keeping the wire
+ * `ontology.neighbors`) server-side. Keeping the wire
  * shapes here means the route handler and the React tree share one source of
  * truth and can never drift.
  */
@@ -28,13 +28,6 @@ export interface ExplorerNode {
   degree: number;
   /** True once full properties have been hydrated (vs. a stub from a neighbor walk). */
   hydrated: boolean;
-  /**
-   * True when the node is product-owned runtime lineage (executions, agents,
-   * tools, generated files) rather than customer knowledge. Set on neighbor
-   * stubs pulled in by expansion; the seeded view is already filtered
-   * server-side, so hydrated seed nodes omit it.
-   */
-  isSystem?: boolean;
 }
 
 /** Relationship between two nodes. */
@@ -113,48 +106,6 @@ export interface ExplorerNodeDetailPayload {
 }
 
 // ---------------------------------------------------------------------------
-// Mutation payloads — responses from CRUD operations.
-// ---------------------------------------------------------------------------
-
-/** Response for the `upsertNode` op — create or update a node. */
-export interface ExplorerUpsertNodePayload {
-  nodeId: string;
-  created: boolean;
-}
-
-/** Response for the `deleteNode` op. */
-export interface ExplorerDeleteNodePayload {
-  deleted: boolean;
-}
-
-/** Response for the `upsertEdge` op — create or update an edge. */
-export interface ExplorerUpsertEdgePayload {
-  edgeId: string;
-  created: boolean;
-}
-
-/** Response for the `deleteEdge` op. */
-export interface ExplorerDeleteEdgePayload {
-  deleted: boolean;
-}
-
-/** Response for `vocab` op — distinct labels and relationship types in the workspace graph. */
-export interface ExplorerVocabPayload {
-  labels: string[];
-  relationshipTypes: string[];
-}
-
-/** Response for `similaritySearch` op — embedding-based node search for edge endpoint pickers. */
-export interface ExplorerSimilaritySearchPayload {
-  nodes: Array<{
-    nodeId: string;
-    label: string;
-    displayName: string;
-    score: number;
-  }>;
-}
-
-// ---------------------------------------------------------------------------
 // Request bodies (discriminated by `op`). orgSlug/workspaceSlug identify the
 // tenant; the route handler still asserts membership before honouring them.
 // ---------------------------------------------------------------------------
@@ -170,7 +121,6 @@ export type ExploreRequest = BaseRequest &
         op: "graph";
         labels?: string[];
         limit?: number;
-        includeSystem?: boolean;
       }
     | { op: "expand"; nodeId: string }
     | {
@@ -179,34 +129,9 @@ export type ExploreRequest = BaseRequest &
         query?: string;
         limit?: number;
         offset?: number;
-        includeSystem?: boolean;
       }
     | { op: "search"; query: string; labels?: string[] }
     | { op: "node"; nodeId: string }
-    | {
-        op: "upsertNode";
-        label: string;
-        displayName: string;
-        description?: string;
-        properties?: Record<string, unknown>;
-        externalId?: string;
-      }
-    | { op: "deleteNode"; nodeId: string }
-    | {
-        op: "upsertEdge";
-        fromNodeId: string;
-        toNodeId: string;
-        relationshipType: string;
-        properties?: Record<string, string>;
-      }
-    | {
-        op: "deleteEdge";
-        fromNodeId: string;
-        toNodeId: string;
-        edgeType: string;
-      }
-    | { op: "vocab" }
-    | { op: "similaritySearch"; query: string; limit?: number }
   );
 
 export type ExploreView = "2d" | "3d" | "table";

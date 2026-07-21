@@ -2,12 +2,6 @@ import { embedText } from "@oxagen/ai";
 import { upsertEmbedding } from "../mutations/upsert-entity";
 import type { EmbedRequest } from "../types";
 
-// Pure renderers and chunker now live in @oxagen/code-graph; re-export for
-// backward compat so callers of "@oxagen/ingestion/embed" still find them.
-export { chunkText } from "@oxagen/code-graph/chunk";
-export type { TextChunk, ChunkOptions, ChunkResult } from "@oxagen/code-graph/chunk";
-export { renderFileText, renderSymbolText, renderMarkdownFileText } from "@oxagen/code-graph/renderers";
-
 // 1536 dims = text-embedding-3-small, matches all EntityNode vector indexes.
 const EMBED_MODEL = "openai/text-embedding-3-small";
 
@@ -20,7 +14,11 @@ export function renderEntityText(
   if (displayName) parts.push(displayName);
   for (const [k, v] of Object.entries(properties)) {
     if (v == null) continue;
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+    if (
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean"
+    ) {
       parts.push(`${k}:${v}`);
     }
   }

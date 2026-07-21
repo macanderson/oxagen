@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
-import { asOfField, asKnownAtField, edgeValiditySchema } from "../lib/temporal-query";
+import {
+  asOfField,
+  asKnownAtField,
+  edgeValiditySchema,
+} from "../lib/temporal-query";
 
 /**
  * ontology.query — first-class, typed multi-hop traversal over the knowledge
- * graph. Unlike `graph.cypher`, the caller never writes Cypher: they name a
+ * customer-context graph. The caller never writes Cypher: they name a
  * start node, the relationship type(s) to follow, a direction, and a depth, and
  * the handler walks the graph (org + workspace scoped) and returns the reachable
  * subgraph as nodes + edges. This is the safe, agent-callable traversal primitive
@@ -23,7 +27,10 @@ const traversedNode = z.object({
   label: z.string().describe("Domain label (e.g. Issue, Topic)"),
   displayName: z.string(),
   description: z.string().nullable(),
-  depth: z.number().int().describe("Hop distance from the start node (0 = start node)"),
+  depth: z
+    .number()
+    .int()
+    .describe("Hop distance from the start node (0 = start node)"),
 });
 
 const traversedEdge = z
@@ -43,7 +50,7 @@ export const ontologyQuery = registerCapability({
   domain: "ontology",
   description:
     "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); " +
-    "returns the reachable subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. " +
+    "returns the reachable customer-context subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. " +
     "Prefer over ontology.neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not " +
     "nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or " +
     "keyword (use graph.search for semantic lookup or graph.node.search for name/label lookup first).",
@@ -59,7 +66,9 @@ export const ontologyQuery = registerCapability({
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({
-    startNodeId: z.string().describe("publicId of the node to start the traversal from"),
+    startNodeId: z
+      .string()
+      .describe("publicId of the node to start the traversal from"),
     edgeTypes: z
       .array(z.string().regex(RELATIONSHIP_TYPE_PATTERN))
       .optional()
@@ -81,21 +90,31 @@ export const ontologyQuery = registerCapability({
       .min(1)
       .max(500)
       .default(100)
-      .describe("Maximum number of reachable nodes to return (1–500, default 100)"),
+      .describe(
+        "Maximum number of reachable nodes to return (1–500, default 100)",
+      ),
     asOf: asOfField,
     asKnownAt: asKnownAtField,
   }),
   output: z.object({
     startNode: traversedNode
       .nullable()
-      .describe("The start node, or null if it does not exist in this org + workspace"),
+      .describe(
+        "The start node, or null if it does not exist in this org + workspace",
+      ),
     nodes: z
       .array(traversedNode)
-      .describe("Reachable nodes including the start node (depth 0), deduplicated by nodeId"),
-    edges: z.array(traversedEdge).describe("Edges traversed between the returned nodes"),
+      .describe(
+        "Reachable nodes including the start node (depth 0), deduplicated by nodeId",
+      ),
+    edges: z
+      .array(traversedEdge)
+      .describe("Edges traversed between the returned nodes"),
     truncated: z
       .boolean()
-      .describe("True when the result was capped by `limit` and more nodes were reachable"),
+      .describe(
+        "True when the result was capped by `limit` and more nodes were reachable",
+      ),
   }),
 });
 

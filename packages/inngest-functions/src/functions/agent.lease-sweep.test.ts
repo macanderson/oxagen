@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   createFunction: vi.fn(),
   withSystemDb: vi.fn(),
   insertEvents: vi.fn(),
-  sweepExpiredFileLocks: vi.fn().mockResolvedValue({ sweptCount: 0 }),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   // Per-test canned SELECT results, keyed by a marker in the SQL text.
   expiredRuns: [] as unknown[],
@@ -22,10 +21,6 @@ vi.mock("../create-function", () => ({
 
 vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
-}));
-
-vi.mock("@oxagen/ontology", () => ({
-  sweepExpiredFileLocks: mocks.sweepExpiredFileLocks,
 }));
 
 vi.mock("drizzle-orm", () => {
@@ -176,7 +171,6 @@ describe("agentLeaseSweep handler", () => {
     mocks.stuckExecutions = [];
     mocks.executedSql.length = 0;
     mocks.insertEvents.mockResolvedValue(undefined);
-    mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 0 });
     mocks.withSystemDb.mockImplementation(
       async (fn: (tx: unknown) => unknown) => fn(makeFakeTx()),
     );
@@ -199,39 +193,9 @@ describe("agentLeaseSweep handler", () => {
       agentRunsCancelled: 0,
       fanoutsFinalized: 0,
       executionsFinalized: 0,
-      fileLocksSwept: 0,
     });
     expect(step.sendEvent).not.toHaveBeenCalled();
     expect(mocks.insertEvents).not.toHaveBeenCalled();
-  });
-
-  // OXA-2070 (docs/specs/agent-file-locking/plan.md §6): the sweep also reaps
-  // expired HOLDS_LOCK Neo4j edges as a reclaim-only backstop.
-  it("sweeps expired agent file locks and reports the count", async () => {
-    mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 3 });
-
-    const result = (await sweepHandler!({
-      step: makeStep(),
-      event: { data: {} },
-    })) as Record<string, number>;
-
-    expect(mocks.sweepExpiredFileLocks).toHaveBeenCalledOnce();
-    expect(result.fileLocksSwept).toBe(3);
-  });
-
-  it("swallows a sweepExpiredFileLocks failure without failing the rest of the sweep", async () => {
-    mocks.sweepExpiredFileLocks.mockRejectedValue(new Error("neo4j down"));
-
-    const result = (await sweepHandler!({
-      step: makeStep(),
-      event: { data: {} },
-    })) as Record<string, number>;
-
-    expect(result.fileLocksSwept).toBe(0);
-    expect(mocks.logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
-      expect.stringContaining("sweepExpiredFileLocks failed"),
-    );
   });
 
   it("requeues expired runs below the cap and fails runs at the cap", async () => {

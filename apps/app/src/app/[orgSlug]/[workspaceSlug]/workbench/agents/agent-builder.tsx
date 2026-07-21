@@ -955,8 +955,8 @@ export function AgentBuilder({
           {step.key === "ground" ? (
             <div className="flex flex-col gap-5" data-testid="step-ground">
               <p className="text-sm text-muted-foreground">
-                Bind the agent to an ontology and bound its graph pulls.
-                Defaults are safe — you can skip this.
+                Bind the agent to an ontology and bound its scoped graph
+                queries. Defaults are safe — you can skip this.
               </p>
               <div className="space-y-1">
                 <Label htmlFor="agent-ontology">Ontology id</Label>

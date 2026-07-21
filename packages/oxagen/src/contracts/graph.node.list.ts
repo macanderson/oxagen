@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const graphNodeList = registerCapability({
   name: "list_nodes",
   domain: "graph",
-  description: "Paginated browse of all nodes in the workspace graph. Enables graph explorer UI.",
+  description:
+    "Paginated browse of customer-context nodes in the workspace graph. Enables graph explorer UI.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -17,18 +18,23 @@ export const graphNodeList = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    labels: z.array(z.string()).optional().describe("Filter by node labels (e.g., Feature, Issue)"),
-    sourceId: z.string().optional().describe("Filter by source connector ID"),
-    isSystem: z
-      .boolean()
+    labels: z
+      .array(z.string())
       .optional()
-      .describe(
-        "Filter by ownership: false = customer ontology only, true = product-owned artifacts only " +
-          "(executions, code, memories, chunks). Omit to return both. Lets the explorer hide system nodes.",
-      ),
-    limit: z.number().int().min(1).max(250).default(50).describe("Max results (default 50)"),
+      .describe("Filter by node labels (e.g., Feature, Issue)"),
+    sourceId: z.string().optional().describe("Filter by source connector ID"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(250)
+      .default(50)
+      .describe("Max results (default 50)"),
     offset: z.number().int().min(0).default(0).describe("Pagination offset"),
-    query: z.string().optional().describe("Text search in displayName and description"),
+    query: z
+      .string()
+      .optional()
+      .describe("Text search in displayName and description"),
   }),
   output: z.object({
     nodes: z.array(

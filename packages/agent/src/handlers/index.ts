@@ -90,9 +90,8 @@ const LOADERS: Record<string, LoaderEntry> = {
   aggregate_subagents: () => import("./agent.subagent.aggregate"),
   cancel_subagent: () => import("./agent.subagent.cancel"),
   dispatch_subagent: () => import("./agent.subagent.dispatch"),
-  // Agent file locking (docs/specs/agent-file-locking/plan.md §7) — manual
-  // acquire/force-release/introspection over the same HOLDS_LOCK edge
-  // write_file/edit_file in @oxagen/agent-engine's tools.ts acquire automatically.
+  // Manual acquire/force-release/introspection over the same transactional
+  // Postgres leases write_file/edit_file acquire automatically.
   acquire_file_lock: () => import("./agent.file_lock.acquire"),
   release_file_lock: () => import("./agent.file_lock.release"),
   list_file_locks: () => import("./agent.file_lock.list"),
@@ -107,9 +106,9 @@ const LOADERS: Record<string, LoaderEntry> = {
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
   list_error_clusters: () => import("./telemetry.error.cluster"),
-  get_execution_lineage: () => import("./agent.execution.lineage"),
   render_agent_ui: () => import("./agent.ui.render"),
   create_agent_def: () => import("./agent.definition.create"),
+  delete_agent_def: () => import("./agent.definition.delete"),
   update_agent_def: () => import("./agent.definition.update"),
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),
@@ -120,6 +119,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   update_trigger: () => import("./agent.trigger.update"),
   delete_trigger: () => import("./agent.trigger.delete"),
   list_triggers: () => import("./agent.trigger.list"),
+  // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
+  // detach/inspect IAM roles on an agent's delegated principal.
+  assign_agent_role: () => import("./agent.role.assign"),
+  revoke_agent_role: () => import("./agent.role.revoke"),
+  list_agent_roles: () => import("./agent.role.list"),
+  get_agent_role: () => import("./agent.role.get"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

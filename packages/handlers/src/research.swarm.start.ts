@@ -6,13 +6,9 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import type { AgentSubagentDispatchOutput } from "@oxagen/oxagen/contracts/agent.subagent.dispatch";
 import { logger } from "./logger";
 
-// Result → knowledge-graph projection happens at the web.search handler, not
-// here: every fanned-out web.search child runs through the kernel
-// (agent.execute-subagent → invoke("search_web")), and that handler emits
-// `web/search.completed`, which `web.search.ingest-graph` feeds to graph.ingest
-// (LLM extraction → idempotent node/edge upserts). So swarm searches AND the
-// in-chat agent's direct searches build the graph through the same path. The
-// swarm stays fire-and-forget here.
+// Search results remain task output. They are not auto-materialized into the
+// governed workspace graph; promotion requires a future typed, attributable
+// context/evidence contract.
 
 const DEPTH_QUERY_COUNTS: Record<string, number> = {
   shallow: 3,
@@ -24,10 +20,9 @@ const queriesSchema = z.object({
   queries: z.array(z.string()).min(1).max(15),
 });
 
-export const researchSwarmStartHandler: CapabilityHandler<typeof researchSwarmStart> = async (
-  input,
-  ctx,
-) => {
+export const researchSwarmStartHandler: CapabilityHandler<
+  typeof researchSwarmStart
+> = async (input, ctx) => {
   const queryCount = DEPTH_QUERY_COUNTS[input.depth] ?? 8;
 
   // Generate diverse search queries for the topic using the AI layer.
