@@ -1,7 +1,7 @@
 /**
  * CLI adapters for the `@oxagen/agent-engine` ports. Each implements one engine
  * port with local CLI resources (filesystem, local memory/code-graph) or the
- * platform REST surface (graph-sync, metered AI). See ADR-019.
+ * platform REST surface (metered AI). See ADR-019.
  */
 export { createCwdWorkspace, createGatedWorkspace } from "./workspace.js";
 export {
@@ -12,10 +12,6 @@ export {
   type CombinedMemoryOptions,
 } from "./memory-provider.js";
 export { createCodeGraphProvider } from "./code-graph-provider.js";
-export {
-  createGraphSyncProvider,
-  type GraphSyncOptions,
-} from "./graph-sync-provider.js";
 export {
   createPlatformAgentAi,
   type PlatformAgentAiOptions,

@@ -7,7 +7,15 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 
 const HOME = mkdtempSync(join(tmpdir(), "oxa-logscmd-"));
 
@@ -17,7 +25,12 @@ vi.mock("node:os", async (importOriginal) => {
 });
 
 import { handleLogs } from "../logs.js";
-import { debugLog, clearDebugLog, debugLogFile, DEBUG_ENV } from "../../lib/debug-log.js";
+import {
+  debugLog,
+  clearDebugLog,
+  debugLogFile,
+  DEBUG_ENV,
+} from "../../lib/debug-log.js";
 
 let out = "";
 let err = "";
@@ -65,18 +78,18 @@ describe("oxagen logs", () => {
 
   it("tails recent entries in the default formatted view", async () => {
     await debugLog("invoke", "cli.start", { argv: ["logs"] });
-    await debugLog("code-graph", "api.post.request", { path: "graph/sync/push" });
+    await debugLog("code-graph", "query", { symbol: "handleLogs" });
     await handleLogs({});
     expect(out).toContain("cli.start");
     expect(out).toContain("code-graph");
-    expect(out).toContain("api.post.request");
+    expect(out).toContain("query");
   });
 
   it("--category filters to one category", async () => {
     await debugLog("llm", "llm.stream.request", { model: "m" });
-    await debugLog("graph-sync", "lineage.push.request", { executionId: "e" });
-    await handleLogs({ category: "graph-sync" });
-    expect(out).toContain("lineage.push.request");
+    await debugLog("code-graph", "query", { symbol: "handleLogs" });
+    await handleLogs({ category: "code-graph" });
+    expect(out).toContain("query");
     expect(out).not.toContain("llm.stream.request");
   });
 

@@ -72,9 +72,9 @@ describe("appending entries", () => {
   it("appends each call as one JSONL entry and reads it back", async () => {
     enable();
     await debugLog("invoke", "cli.start", { argv: ["logs"] });
-    await debugLog("code-graph", "api.post.request", { path: "graph/sync/push" });
+    await debugLog("code-graph", "query", { symbol: "readDebugLog" });
     const entries = await readDebugLog();
-    expect(entries.map((e) => e.event)).toEqual(["cli.start", "api.post.request"]);
+    expect(entries.map((e) => e.event)).toEqual(["cli.start", "query"]);
     expect(entries[0]?.category).toBe("invoke");
     expect(entries[1]?.category).toBe("code-graph");
     expect(entries[0]?.ts).toMatch(/^\d{4}-\d\d-\d\dT/);
@@ -84,14 +84,20 @@ describe("appending entries", () => {
     enable();
     await debugLog("api", "api.post.request", {
       token: "sk-secret",
-      body: { Authorization: "Bearer abc", nested: { password: "p" }, keep: "visible" },
+      body: {
+        Authorization: "Bearer abc",
+        nested: { password: "p" },
+        keep: "visible",
+      },
     });
     const [entry] = await readDebugLog();
     const data = entry?.data as Record<string, unknown>;
     expect(data["token"]).toBe("[redacted]");
     const body = data["body"] as Record<string, unknown>;
     expect(body["Authorization"]).toBe("[redacted]");
-    expect((body["nested"] as Record<string, unknown>)["password"]).toBe("[redacted]");
+    expect((body["nested"] as Record<string, unknown>)["password"]).toBe(
+      "[redacted]",
+    );
     expect(body["keep"]).toBe("visible");
   });
 

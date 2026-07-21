@@ -4,8 +4,8 @@
  * Covers:
  *   - promptConfirm: TTY (real prompt) vs non-TTY (auto-approve) behaviour.
  *   - initializeProject: the logged-out graceful-degrade path (no throw, no
- *     network) and the authenticated path (live code-graph push + markdown
- *     ingest). The API client and the graph-push command are mocked.
+ *     network) and the authenticated path (live markdown ingest). The API
+ *     client is mocked.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
@@ -30,13 +30,6 @@ vi.mock("../lib/api.js", () => ({
   apiPostOrThrow: apiMocks.apiPostOrThrow,
 }));
 
-const graphMocks = vi.hoisted(() => ({
-  handleGraphPush: vi.fn(async () => undefined),
-}));
-vi.mock("../commands/graph.push.js", () => ({
-  handleGraphPush: graphMocks.handleGraphPush,
-}));
-
 // readline is only exercised by the TTY promptConfirm test.
 const rlMock = vi.hoisted(() => ({
   question: vi.fn(async () => "y"),
@@ -46,7 +39,11 @@ vi.mock("node:readline/promises", () => ({
   createInterface: vi.fn(() => rlMock),
 }));
 
-import { initializeProject, isProjectInitialized, promptConfirm } from "./init.js";
+import {
+  initializeProject,
+  isProjectInitialized,
+  promptConfirm,
+} from "./init.js";
 
 const AUTHED_CTX = {
   apiUrl: "https://api.test",
@@ -63,7 +60,6 @@ beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "oxagen-init-"));
   apiMocks.resolveApiContext.mockReset().mockReturnValue(null);
   apiMocks.apiPostOrThrow.mockReset().mockResolvedValue({});
-  graphMocks.handleGraphPush.mockReset().mockResolvedValue(undefined);
   rlMock.question.mockReset().mockResolvedValue("y");
   rlMock.close.mockReset();
   logSpy.mockClear();
@@ -116,14 +112,12 @@ describe("initializeProject", () => {
     const ok = await initializeProject({ cwd, approver: async () => false });
     expect(ok).toBe(false);
     expect(existsSync(join(cwd, ".oxagen"))).toBe(false);
-    expect(graphMocks.handleGraphPush).not.toHaveBeenCalled();
     expect(apiMocks.apiPostOrThrow).not.toHaveBeenCalled();
   });
 
   it("returns false when the project is already initialized", async () => {
     await initializeProject({ cwd, approver: async () => true });
     expect(isProjectInitialized(cwd)).toBe(true);
-    graphMocks.handleGraphPush.mockClear();
     const ok = await initializeProject({ cwd, approver: async () => true });
     expect(ok).toBe(false);
   });
@@ -137,7 +131,6 @@ describe("initializeProject", () => {
     expect(ok).toBe(true);
     expect(existsSync(join(cwd, ".oxagen", "settings.json"))).toBe(true);
     // No platform calls attempted while logged out.
-    expect(graphMocks.handleGraphPush).not.toHaveBeenCalled();
     expect(apiMocks.apiPostOrThrow).not.toHaveBeenCalled();
     // The skip is announced clearly, not silently.
     const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
@@ -145,7 +138,7 @@ describe("initializeProject", () => {
     expect(logged).toContain("oxagen login");
   });
 
-  it("pushes the code graph and ingests markdown when authenticated", async () => {
+  it("ingests markdown when authenticated", async () => {
     apiMocks.resolveApiContext.mockReturnValue(AUTHED_CTX);
     writeFileSync(join(cwd, "README.md"), "# readme\ncontent");
     writeFileSync(join(cwd, "GUIDE.md"), "# guide\nmore content");
@@ -153,12 +146,6 @@ describe("initializeProject", () => {
     const ok = await initializeProject({ cwd, approver: async () => true });
 
     expect(ok).toBe(true);
-    // Live code-graph push via the graceful (throwOnError) seam.
-    expect(graphMocks.handleGraphPush).toHaveBeenCalledTimes(1);
-    expect(graphMocks.handleGraphPush).toHaveBeenCalledWith({
-      full: true,
-      throwOnError: true,
-    });
     // Each markdown file ingested via the live graph.ingest capability.
     const ingestCalls = apiMocks.apiPostOrThrow.mock.calls.filter(
       (c) => c[0] === "graph/ingest",
@@ -170,22 +157,6 @@ describe("initializeProject", () => {
       expect(body.text.length).toBeGreaterThan(0);
       expect(body.sourceUrl).toMatch(/\.md$/);
     }
-  });
-
-  it("stays non-fatal when the code-graph push fails, still ingesting markdown", async () => {
-    apiMocks.resolveApiContext.mockReturnValue(AUTHED_CTX);
-    graphMocks.handleGraphPush.mockRejectedValue(new Error("network down"));
-    writeFileSync(join(cwd, "README.md"), "# readme");
-
-    const ok = await initializeProject({ cwd, approver: async () => true });
-
-    expect(ok).toBe(true);
-    const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(logged).toContain("Code-graph sync skipped");
-    // Ingest still ran despite the push failure.
-    expect(
-      apiMocks.apiPostOrThrow.mock.calls.some((c) => c[0] === "graph/ingest"),
-    ).toBe(true);
   });
 
   it("reports when authenticated but there are no markdown files", async () => {

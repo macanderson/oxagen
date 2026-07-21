@@ -3,8 +3,7 @@
  *
  * When `OXAGEN_CLI_DEBUG=1` (either exported in the shell or projected from
  * `settings.json` `env` via {@link applySettingsToEnv}), every CLI invocation and
- * every payload the CLI syncs back to the workspace knowledge graph is appended
- * as one JSON object per line (JSONL) to:
+ * every request the CLI makes is appended as one JSON object per line (JSONL) to:
  *
  *   ~/.oxagen/logs/cli.output
  *
@@ -12,13 +11,19 @@
  * (see settings/resolve.ts `userSettingsFile()`), so the debug log lives beside
  * the global settings it belongs to. This is the machine-readable record you
  * `tail`/`jq` (or `oxagen logs`) to see exactly what the CLI is sending: the
- * command invoked, the per-turn LLM telemetry, the execution-lineage sync, and
- * the code-graph push envelope.
+ * command invoked, the per-turn LLM telemetry, and local code-graph queries.
  *
  * Writes are best-effort and fire-and-forget: a failed log write must never
  * break a command or a turn. Callers use `void debugLog(...)`.
  */
-import { appendFile, mkdir, rename, stat, readFile, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  rename,
+  stat,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -50,8 +55,7 @@ export type DebugCategory =
   | "invoke" // CLI process start (argv, cwd)
   | "turn" // agent turn lifecycle: stages, tool calls, output
   | "api" // generic org-scoped /v1 request+response
-  | "code-graph" // code-graph push envelope synced to the workspace graph
-  | "graph-sync" // execution-lineage telemetry synced to the workspace graph
+  | "code-graph" // local code-graph queries (symbols, calls, refs) served from the daemon store
   | "llm" // per-turn LLM telemetry (model, usage) routed through the platform
   | "pipeline" // assist-tool lifecycle: prompt enhancer, judge, survey (Group 4)
   | "timeout" // per-model-call timeout retries + turn inactivity guard (Group 8)
@@ -93,7 +97,9 @@ function sanitize(value: unknown, depth = 0): unknown {
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = REDACT_KEYS.has(key.toLowerCase()) ? "[redacted]" : sanitize(v, depth + 1);
+      out[key] = REDACT_KEYS.has(key.toLowerCase())
+        ? "[redacted]"
+        : sanitize(v, depth + 1);
     }
     return out;
   }

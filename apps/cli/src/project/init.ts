@@ -4,16 +4,15 @@
  * On first turn in an uninitialized project (no .oxagen directory):
  * 1. Prompt user to initialize the project
  * 2. Create .oxagen/ structure
- * 3. Push the initial code graph to the workspace knowledge graph
- * 4. Ingest markdown files into the knowledge graph
- * 5. Save settings
+ * 3. Ingest markdown files into the knowledge graph
+ * 4. Save settings
  *
- * Steps 3 and 4 use LIVE platform capabilities (`graph.sync.push` and
- * `graph.ingest`). They require an authenticated org+workspace context; when
- * that is absent (logged out, or BYOK-only with no platform scope) the local
- * scaffold still succeeds and we degrade GRACEFULLY — telling the user exactly
- * what was skipped and how to run it later, instead of falsely promising it
- * will happen "on the next agent run".
+ * Step 3 uses the LIVE platform `graph.ingest` capability. It requires an
+ * authenticated org+workspace context; when that is absent (logged out, or
+ * BYOK-only with no platform scope) the local scaffold still succeeds and we
+ * degrade GRACEFULLY — telling the user exactly what was skipped and how to
+ * run it later, instead of falsely promising it will happen "on the next
+ * agent run".
  */
 
 import {
@@ -59,7 +58,9 @@ export function isProjectInitialized(cwd: string): boolean {
 }
 
 /** Initialize a project's .oxagen directory and code graph. */
-export async function initializeProject(opts: ProjectInitOptions): Promise<boolean> {
+export async function initializeProject(
+  opts: ProjectInitOptions,
+): Promise<boolean> {
   const oxagenDir = resolve(opts.cwd, ".oxagen");
 
   // Skip if already initialized
@@ -70,10 +71,10 @@ export async function initializeProject(opts: ProjectInitOptions): Promise<boole
   // Prompt user
   const approved = await opts.approver(
     `Initialize project? This will:\n` +
-    `  · Create .oxagen/ directory with settings and graphs\n` +
-    `  · Generate code graph and ingest markdown files\n` +
-    `  · Set up knowledge graph for semantic search\n` +
-    `\nContinue? (y/n)`,
+      `  · Create .oxagen/ directory with settings and graphs\n` +
+      `  · Generate code graph and ingest markdown files\n` +
+      `  · Set up knowledge graph for semantic search\n` +
+      `\nContinue? (y/n)`,
   );
 
   if (!approved) {
@@ -112,50 +113,28 @@ export async function initializeProject(opts: ProjectInitOptions): Promise<boole
   console.log(`✓ Created .oxagen structure at ${oxagenDir}`);
   console.log(`  · Settings: ${settingsPath}`);
 
-  // Kick off the live code-graph push + markdown ingest (or a graceful skip).
+  // Kick off the live markdown ingest (or a graceful skip).
   await runInitialIndexing(opts.cwd);
 
   return true;
 }
 
-/** `err` → a short human string for a skip message. */
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /**
- * Push the initial code graph and ingest project markdown into the workspace
- * knowledge graph. Both are platform capabilities: when there is no
- * authenticated org+workspace context we skip them with a clear, non-fatal
- * message. Every network step is best-effort — a failure never aborts init.
+ * Ingest project markdown into the workspace knowledge graph. This is a
+ * platform capability: when there is no authenticated org+workspace context
+ * we skip it with a clear, non-fatal message. Best-effort — a failure never
+ * aborts init.
  */
 async function runInitialIndexing(cwd: string): Promise<void> {
   const ctx = resolveApiContext();
   if (!ctx) {
     // Graceful degrade — say exactly what was skipped and how to run it later.
-    console.log(
-      "  · Not signed in — skipped code-graph sync and markdown ingest.",
-    );
-    console.log(
-      "    Run `oxagen login`, then `oxagen graph push` to sync the code graph.",
-    );
+    console.log("  · Not signed in — skipped markdown ingest.");
+    console.log("    Run `oxagen login` to ingest project docs later.");
     return;
   }
 
-  // 1. Code graph — push the initial full snapshot via the live `graph.sync.push`
-  //    path. `throwOnError` makes any failure catchable so it stays non-fatal to
-  //    init (the command's own exit-on-error contract is unchanged).
-  try {
-    const { handleGraphPush } = await import("../commands/graph.push.js");
-    await handleGraphPush({ full: true, throwOnError: true });
-    console.log("  · Code graph pushed to the workspace knowledge graph.");
-  } catch (err) {
-    console.log(
-      `  · Code-graph sync skipped (${errText(err)}). Run \`oxagen graph push\` to retry.`,
-    );
-  }
-
-  // 2. Markdown — ingest project docs into the knowledge graph via `graph.ingest`.
+  // Markdown — ingest project docs into the knowledge graph via `graph.ingest`.
   const md = await ingestProjectMarkdown(cwd);
   if (md.found === 0) {
     console.log("  · No markdown files found to ingest.");
