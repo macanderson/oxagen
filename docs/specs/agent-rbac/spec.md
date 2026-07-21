@@ -1,6 +1,6 @@
 # Enterprise Agent IAM and Graph Context Permissions
 
-- **Status:** Design approved; written specification awaiting final review
+- **Status:** Approved for implementation
 - **Date:** 2026-07-21
 - **Owner:** Platform
 - **Canonical scope:** Agent identity, RBAC, graph context authorization, tool authorization, administration UI, and audit evidence
@@ -1057,6 +1057,10 @@ Evolve `list_iam_roles` to the versioned resource model and add:
 - `list_iam_role_versions`
 - `restore_iam_role_version`
 - `search_iam_principals`
+- `get_iam_principal`
+- `create_iam_service_account`
+- `suspend_iam_service_account`
+- `restore_iam_service_account`
 - `list_iam_role_assignments`
 - `assign_principal_role`
 - `revoke_principal_role`
@@ -1074,6 +1078,19 @@ Evolve `list_iam_roles` to the versioned resource model and add:
 - `decide_iam_access_review_assignment`
 - `complete_iam_access_review`
 - `export_iam_access_review`
+
+The service-account lifecycle contracts create or change the service-account
+record and its sibling `kind=service` principal in one transaction. Service
+accounts are listed through `search_iam_principals`; a second, divergent service
+directory is prohibited. Phase 1 delivers the role, principal, resource,
+simulator, permission-export, and access-request contracts through
+`deny_iam_access_request`. The access-review contract family is implemented in
+Phase 5 when review evidence and signed exports are hardened for launch.
+
+`export_iam_permissions` is schema-stable in Phase 1: deterministic JSON,
+NDJSON, and CSV payloads carry a canonical manifest hash and explicit unsigned
+integrity metadata. Phase 5 adds the signing key, signature, retention, and
+review-evidence workflow without changing the exported access-matrix model.
 
 Management contracts are no-billing, high-sensitivity capabilities with default
 deny and explicit Owner/Admin grants. Compliance receives read, simulation, and
@@ -1119,6 +1136,13 @@ The implementation plan must include migrations for:
 - immutable authorization snapshots referenced by durable runs;
 - transactional IAM audit outbox records; and
 - assignment review/export coverage for all principal kinds.
+
+This is the program-wide persistence inventory. Phase 1 creates principal,
+service-account, credential-binding, role/version/grant, assignment,
+policy-version, access-request, approval-authorization, runtime-obligation, and
+transactional audit-outbox state. Phase 2 adds principal delegations and
+authorization snapshots alongside `RunSpecV2`; Phase 5 adds durable access
+review state.
 
 There are no production customers. Do not add `Agent Legacy`, permissive
 backfills, dual-read compatibility, or default-all migrations. Reset and reseed
