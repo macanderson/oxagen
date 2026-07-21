@@ -295,6 +295,23 @@ export function createPlatformTurnDriver(): TurnDriver {
     return runInTenantScope(
       { orgId: run.orgId, workspaceId: run.workspaceId },
       async () => {
+        // An agent run must carry BOTH halves of the principal pair or
+        // neither — a run with an agent principal but no invoking human
+        // principal (or vice versa) is a caller bug upstream (whoever
+        // enqueued the run) and must fail closed rather than silently
+        // degrade to a bare conversational turn with no delegation ceiling
+        // (docs/specs/agent-rbac/spec.md §3.1/§3.4).
+        if (run.agentPrincipal && !run.humanPrincipal) {
+          throw new Error(
+            `Agent run ${run.runId} carries an agent principal but is missing its invoking human principal`,
+          );
+        }
+        if (run.humanPrincipal && !run.agentPrincipal) {
+          throw new Error(
+            `Agent run ${run.runId} carries a human principal but is missing its agent principal`,
+          );
+        }
+
         const ctx: CapabilityContext = {
           orgId: run.orgId,
           workspaceId: run.workspaceId,
