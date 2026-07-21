@@ -18,6 +18,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
 - [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
 - [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
+- [assign_agent_role](agent.role.assign.md) — Assign an IAM role to an agent's delegated principal; system agent roles at every tier, custom roles enterprise-only, rejected when the role's grants exceed the assigner's own effective grants (delegation ceiling)
+- [revoke_agent_role](agent.role.revoke.md) — Revoke an IAM role from an agent's delegated principal — soft-deletes the assignment (audit trail preserved); idempotent
+- [list_agent_roles](agent.role.list.md) — List the IAM roles attached to an agent's delegated principal with assignment provenance
+- [get_agent_role](agent.role.get.md) — Get one IAM role's status relative to an agent: held or not, assignment provenance, and the role's capability grant list
 - [bind_agent_environment](agent.environment.bind.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
 - [list_agent_environments](agent.environment.list.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
 - [unbind_agent_environment](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary

@@ -26,6 +26,7 @@
   "devDependencies": {
     "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9"
+    "vitest": "2.1.9",
+    "zod": "3.25.76"
   }
 }

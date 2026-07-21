@@ -231,10 +231,15 @@ import { agentFileLockListRoute } from "./routes/v1/agent.file_lock.list";
 import { agentSubagentCancelRoute } from "./routes/v1/agent.subagent.cancel";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
+import { agentDefinitionDeleteRoute } from "./routes/v1/agent.definition.delete";
 import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
 import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
+import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
+import { agentRoleListRoute } from "./routes/v1/agent.role.list";
+import { agentRoleGetRoute } from "./routes/v1/agent.role.get";
 import { agentDefinitionSuggestRoute } from "./routes/v1/agent.definition.suggest";
 import { agentDefinitionReviseRoute } from "./routes/v1/agent.definition.revise";
 import { agentDefinitionSummarizeRoute } from "./routes/v1/agent.definition.summarize";
@@ -565,9 +570,18 @@ orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
 orgScoped.route("/agent/definitions/suggest", agentDefinitionSuggestRoute);
 orgScoped.route("/agent/definitions/revise", agentDefinitionReviseRoute);
 orgScoped.route("/agent/definitions/summarize", agentDefinitionSummarizeRoute);
+orgScoped.route("/agent/definitions/delete", agentDefinitionDeleteRoute);
 orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
 orgScoped.route("/agent/definitions", agentDefinitionListRoute);
 orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
+// Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2): attach/
+// detach/inspect IAM roles on an agent's delegated principal. The /assign,
+// /revoke and /get sub-paths are mounted before the base list route so its
+// GET / never swallows them.
+orgScoped.route("/agent/roles/assign", agentRoleAssignRoute);
+orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
+orgScoped.route("/agent/roles/get", agentRoleGetRoute);
+orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
 orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
 orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);

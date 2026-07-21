@@ -58,8 +58,20 @@ const CTX: CapabilityContext = {
 };
 
 const ALLOW_TRACE = {
-  steps: [{ rule: "7:role_grant", description: "allow", decided: true, outcome: "allow" as const }],
-  decidedBy: { rule: "7:role_grant", description: "allow", decided: true, outcome: "allow" as const },
+  steps: [
+    {
+      rule: "7:role_grant",
+      description: "allow",
+      decided: true,
+      outcome: "allow" as const,
+    },
+  ],
+  decidedBy: {
+    rule: "7:role_grant",
+    description: "allow",
+    decided: true,
+    outcome: "allow" as const,
+  },
 };
 
 const ALLOW_RESULT = { outcome: "allow" as const, trace: ALLOW_TRACE };
@@ -139,7 +151,9 @@ describe("emitAudit()", () => {
   });
 
   it("proceeds and calls insertAuditEvent even when latestAuditChainHash fails", async () => {
-    mocks.latestAuditChainHash.mockRejectedValue(new Error("clickhouse read failed"));
+    mocks.latestAuditChainHash.mockRejectedValue(
+      new Error("clickhouse read failed"),
+    );
 
     await emitAudit({
       capability: "send_message",
@@ -189,15 +203,31 @@ describe("emitAudit()", () => {
 
   it("sets decision_reason from trace.decidedBy.rule", async () => {
     const DENY_TRACE = {
-      steps: [{ rule: "2:org_enforced_deny", description: "deny", decided: true, outcome: "deny" as const }],
-      decidedBy: { rule: "2:org_enforced_deny", description: "deny", decided: true, outcome: "deny" as const },
+      steps: [
+        {
+          rule: "2:org_enforced_deny",
+          description: "deny",
+          decided: true,
+          outcome: "deny" as const,
+        },
+      ],
+      decidedBy: {
+        rule: "2:org_enforced_deny",
+        description: "deny",
+        decided: true,
+        outcome: "deny" as const,
+      },
     };
 
     await emitAudit({
       capability: "send_message",
       ctx: CTX,
       principal: null,
-      result: { outcome: "deny", reason: "org_enforced_deny", trace: DENY_TRACE },
+      result: {
+        outcome: "deny",
+        reason: "org_enforced_deny",
+        trace: DENY_TRACE,
+      },
       trace: DENY_TRACE,
       rawInputJson: "{}",
     });
@@ -252,7 +282,9 @@ describe("emitAudit()", () => {
     });
 
     const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
-    expect(row.acting_principal_id).toBe("00000000-0000-0000-0000-000000000000");
+    expect(row.acting_principal_id).toBe(
+      "00000000-0000-0000-0000-000000000000",
+    );
     expect(row.acting_principal_kind).toBe("service");
     expect(row.human_principal_id).toBeNull();
   });
@@ -436,7 +468,9 @@ describe("emitAudit()", () => {
 
   it("OXA-2058: chain-hash computation failure (payload hash succeeds, chain hash fails) also rejects and writes nothing", async () => {
     // Payload hash uses the real digest; the SECOND call (chain hash) fails.
-    const realDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+    const realDigest = globalThis.crypto.subtle.digest.bind(
+      globalThis.crypto.subtle,
+    );
     let callCount = 0;
     const digestSpy = vi
       .spyOn(globalThis.crypto.subtle, "digest")
@@ -474,7 +508,9 @@ describe("emitAudit()", () => {
     let attempts = 0;
     mocks.insertAuditEvent.mockImplementation(() => {
       attempts += 1;
-      return attempts === 1 ? Promise.reject(new Error("transient CH blip")) : Promise.resolve();
+      return attempts === 1
+        ? Promise.reject(new Error("transient CH blip"))
+        : Promise.resolve();
     });
 
     await expect(
@@ -599,5 +635,60 @@ describe("emitAudit() — audit target and client IP", () => {
 
     const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
     expect(row.ip).toBeNull();
+  });
+
+  // ── Agent-run lineage (Agent RBAC Phase 2, spec §5) ────────────────────────
+
+  it("records agent-run lineage: correlation_id = runId, lineage in trace_jsonb, delegating human on human_principal_id", async () => {
+    await emitAudit({
+      capability: "send_message",
+      ctx: CTX,
+      principal: {
+        id: "prn_agent_1",
+        kind: "agent",
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+      },
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+      humanPrincipalId: "prn_human_1",
+      runLineage: {
+        agentId: "agt_audit_test",
+        runId: "run_audit_test",
+        parentRunId: "run_audit_parent",
+      },
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.acting_principal_id).toBe("prn_agent_1");
+    expect(row.acting_principal_kind).toBe("agent");
+    // The delegating human's principal id fills human_principal_id when the
+    // acting principal is an agent — "which human's authority" is queryable.
+    expect(row.human_principal_id).toBe("prn_human_1");
+    expect(row.correlation_id).toBe("run_audit_test");
+    const traceJson = JSON.parse(row.trace_jsonb) as {
+      agentRun?: { agentId: string; runId: string; parentRunId: string | null };
+    };
+    expect(traceJson.agentRun).toEqual({
+      agentId: "agt_audit_test",
+      runId: "run_audit_test",
+      parentRunId: "run_audit_parent",
+    });
+  });
+
+  it("keeps correlation_id null and trace_jsonb lineage-free without runLineage (non-agent invocations unchanged)", async () => {
+    await emitAudit({
+      capability: "send_message",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.correlation_id).toBeNull();
+    expect(row.trace_jsonb).not.toContain("agentRun");
   });
 });

@@ -36,6 +36,7 @@ import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentDefinitionDelete } from "./agent.definition.delete";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
 import { agentDefinitionRevise } from "./agent.definition.revise";
 import { agentDefinitionSummarize } from "./agent.definition.summarize";
@@ -43,6 +44,10 @@ import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
 import { agentDefinitionList } from "./agent.definition.list";
+import { agentRoleAssign } from "./agent.role.assign";
+import { agentRoleRevoke } from "./agent.role.revoke";
+import { agentRoleList } from "./agent.role.list";
+import { agentRoleGet } from "./agent.role.get";
 import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentTriggerCreate } from "./agent.trigger.create";
@@ -554,6 +559,7 @@ export {
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionDelete,
   agentDefinitionSuggest,
   agentDefinitionRevise,
   agentDefinitionSummarize,
@@ -561,6 +567,10 @@ export {
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  agentRoleAssign,
+  agentRoleRevoke,
+  agentRoleList,
+  agentRoleGet,
   a2aCardGet,
   agentDeploy,
   agentTriggerCreate,
@@ -910,6 +920,7 @@ export const contracts = [
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionDelete,
   agentDefinitionSuggest,
   agentDefinitionRevise,
   agentDefinitionSummarize,
@@ -917,6 +928,10 @@ export const contracts = [
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  agentRoleAssign,
+  agentRoleRevoke,
+  agentRoleList,
+  agentRoleGet,
   agentDeploy,
   agentTriggerCreate,
   agentTriggerUpdate,

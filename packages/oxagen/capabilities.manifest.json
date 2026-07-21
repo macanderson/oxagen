@@ -132,6 +132,22 @@
       }
     },
     {
+      "name": "delete_agent_def",
+      "file": "agent.definition.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_agent_def",
       "file": "agent.definition.get.ts",
       "domain": "agent",
@@ -835,6 +851,58 @@
         "unit": false,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "assign_agent_role",
+      "file": "agent.role.assign.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_agent_role",
+      "file": "agent.role.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_agent_roles",
+      "file": "agent.role.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "revoke_agent_role",
+      "file": "agent.role.revoke.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

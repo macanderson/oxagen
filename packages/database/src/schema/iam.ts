@@ -69,9 +69,13 @@ export const principals = iamSchema.table(
     // and the LIMIT 1 would pick one non-deterministically (an owner could
     // resolve to a role-less principal and be spuriously denied). Partial so
     // org-level service principals (parent_user_id NULL) are unconstrained.
+    // Narrowed to kind='human' (Agent RBAC Phase 1, migration
+    // 20260805120000): a delegated agent principal legitimately shares the
+    // same (org_id, parent_user_id) pair as its creator's human principal —
+    // one human may create many agents, each with its own principal row.
     orgParentUserUniq: uniqueIndex("principals_org_parent_user_uniq")
       .on(t.orgId, t.parentUserId)
-      .where(sql`${t.parentUserId} IS NOT NULL`),
+      .where(sql`${t.parentUserId} IS NOT NULL AND ${t.kind} = 'human'`),
     kindCheck: check(
       "principals_kind_check",
       sql`${t.kind} IN ('human', 'agent', 'service')`,
@@ -128,6 +132,14 @@ export const roleGrants = iamSchema.table(
     capabilityId: text("capability_id").notNull(),
     // CHECK: effect IN ('allow','deny','require_approval')
     effect: text("effect").notNull(),
+    // Agent RBAC (docs/specs/agent-rbac/spec.md §3.3): same conditionsJsonb
+    // shape as a future direct-grant conditions column — currently only the
+    // typed `resourceScope` key is populated (by tools/scripts/seed-iam-defaults.ts
+    // for the three system agent roles). Nullable/absent means "no ceiling
+    // beyond the effect" — packages/oxagen/src/iam/resolve.ts's RoleGrant type
+    // and collectResourceScope() are the readers; this column is what makes
+    // that already-landed resolver logic reachable from real data.
+    conditionsJsonb: jsonb("conditions_jsonb"),
   },
   (t) => ({
     // Hot path: "what effect does this role have on this capability?"

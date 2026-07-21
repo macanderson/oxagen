@@ -40,6 +40,8 @@ describe("agent.definition.create handler", () => {
   it("inserts the agent row and v1 version, returning identity", async () => {
     fake.enqueue(
       [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert returning
+      [{ id: "prn-uuid" }], // principals insert returning
+      [], // update agents.principalId (awaited, no returning)
       [{ version: 1 }], // agent_versions insert returning
     );
     const out = await agentDefinitionCreateHandler(INPUT, CTX);
@@ -61,10 +63,35 @@ describe("agent.definition.create handler", () => {
     );
   });
 
+  it("throws when the principals insert returns no row", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert returning
+      [], // principals insert returns nothing
+    );
+    await expect(agentDefinitionCreateHandler(INPUT, CTX)).rejects.toThrow(
+      /principals insert failed/,
+    );
+  });
+
+  it("provisions the delegated principal with kind='agent' and parentUserId = the creating user", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }],
+      [{ id: "prn-uuid" }],
+      [],
+      [{ version: 1 }],
+    );
+    await agentDefinitionCreateHandler(INPUT, CTX);
+    // Exactly one principal insert: one per agent IDENTITY, not per version/run.
+    expect(fake.mutations.insert).toBe(3); // agents, principals, agent_versions
+  });
+
   it("rejects a config that violates the schema", async () => {
     await expect(
       agentDefinitionCreateHandler(
-        { ...INPUT, config: { ...CONFIG, graph: { ontologyId: "x" } } as never },
+        {
+          ...INPUT,
+          config: { ...CONFIG, graph: { ontologyId: "x" } } as never,
+        },
         CTX,
       ),
     ).rejects.toThrow();
@@ -76,7 +103,9 @@ describe("agent.definition.create handler", () => {
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
-    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+    expect((err as AgentManagedReadOnlyError).code).toBe(
+      "agent_managed_read_only",
+    );
   });
 
   it("throws AgentManagedReadOnlyError when slug collides with the built-in 'qa-chat'", async () => {
@@ -85,7 +114,9 @@ describe("agent.definition.create handler", () => {
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
-    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+    expect((err as AgentManagedReadOnlyError).code).toBe(
+      "agent_managed_read_only",
+    );
   });
 
   it("throws before any DB write when identity is reserved", async () => {
@@ -96,5 +127,34 @@ describe("agent.definition.create handler", () => {
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
     // The guard short-circuits before any write — no insert was issued.
     expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
+  it("auto-assigns the default 'Agent Contributor' role when the seeded role exists (spec §3.2)", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert
+      [{ id: "prn-uuid" }], // principals insert
+      [], // agents.principalId update
+      [{ version: 1 }], // agent_versions insert
+      [{ id: "role-contrib", scopeKind: "org" }], // default role lookup HIT
+      [], // principal_role_assignments insert
+    );
+    const out = await agentDefinitionCreateHandler(INPUT, CTX);
+    expect(out.version).toBe(1);
+    // agents + principals + agent_versions + principal_role_assignments.
+    expect(fake.mutations.insert).toBe(4);
+  });
+
+  it("skips the default role assignment gracefully when the role is not seeded (dev DB)", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }],
+      [{ id: "prn-uuid" }],
+      [],
+      [{ version: 1 }],
+      [], // default role lookup MISS — seeding is an ops step
+    );
+    const out = await agentDefinitionCreateHandler(INPUT, CTX);
+    expect(out.publicId).toBe("agt_1");
+    // No principal_role_assignments insert was attempted.
+    expect(fake.mutations.insert).toBe(3);
   });
 });

@@ -10,6 +10,9 @@ export type { DenialResponse } from "./denial";
 export { fetchAuthz } from "./fetch-authz";
 export type { AuthzData, FetchAuthzArgs } from "./fetch-authz";
 
+export { fetchAgentRunAuthz } from "./fetch-agent-authz";
+export type { FetchAgentRunAuthzArgs } from "./fetch-agent-authz";
+
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";
 
@@ -20,3 +23,9 @@ export { createAccessRequest } from "./access-request";
 export type { CreateAccessRequestArgs } from "./access-request";
 
 export { bootstrapIAMRuntime } from "./bootstrap";
+
+export { resolveAgentRunAuthzContext } from "./agent-run-context";
+export type {
+  AgentRunAuthzContext,
+  ResolveAgentRunAuthzContextArgs,
+} from "./agent-run-context";

@@ -110,6 +110,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   get_execution_lineage: () => import("./agent.execution.lineage"),
   render_agent_ui: () => import("./agent.ui.render"),
   create_agent_def: () => import("./agent.definition.create"),
+  delete_agent_def: () => import("./agent.definition.delete"),
   update_agent_def: () => import("./agent.definition.update"),
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),
@@ -120,6 +121,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   update_trigger: () => import("./agent.trigger.update"),
   delete_trigger: () => import("./agent.trigger.delete"),
   list_triggers: () => import("./agent.trigger.list"),
+  // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
+  // detach/inspect IAM roles on an agent's delegated principal.
+  assign_agent_role: () => import("./agent.role.assign"),
+  revoke_agent_role: () => import("./agent.role.revoke"),
+  list_agent_roles: () => import("./agent.role.list"),
+  get_agent_role: () => import("./agent.role.get"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by
