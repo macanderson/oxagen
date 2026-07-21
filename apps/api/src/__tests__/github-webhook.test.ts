@@ -61,7 +61,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -100,17 +102,23 @@ const PATH = "/webhooks/github/app";
 function signedPost(
   event: string,
   bodyObj: unknown,
-  opts: { secret?: string; badSig?: boolean } = {},
+  opts: { secret?: string; badSig?: boolean; delivery?: string } = {},
 ): Request {
   const body = JSON.stringify(bodyObj);
   const sig =
-    "sha256=" + createHmac("sha256", opts.secret ?? SECRET).update(Buffer.from(body)).digest("hex");
+    "sha256=" +
+    createHmac("sha256", opts.secret ?? SECRET)
+      .update(Buffer.from(body))
+      .digest("hex");
   return makeRequest(PATH, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-github-event": event,
       "x-hub-signature-256": opts.badSig ? "sha256=deadbeef" : sig,
+      // GitHub stamps every delivery with this GUID; it is the dedupe key the
+      // projection lifecycle keys its ref observations on.
+      ...(opts.delivery ? { "x-github-delivery": opts.delivery } : {}),
     },
     body,
   });
@@ -144,12 +152,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.GITHUB_APP_WEBHOOK_SECRET = SECRET;
   mocks.inngestSend.mockResolvedValue({});
-  mocks.getConnector.mockReturnValue({ parseWebhookEvent: mocks.parseWebhookEvent });
+  mocks.getConnector.mockReturnValue({
+    parseWebhookEvent: mocks.parseWebhookEvent,
+  });
   mocks.parseWebhookEvent.mockReturnValue([
     { sourceRecordType: "pull_request", record: { number: 7, title: "PR" } },
   ]);
-  mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn(makeTx([CONNECTED_ROW])),
+  mocks.withSystemDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([CONNECTED_ROW])),
   );
 });
 
@@ -166,9 +176,15 @@ describe("github app webhook – configuration & signature", () => {
     // GitHub retrying, and log loudly so operators catch the misconfiguration.
     // The real fix is setting GITHUB_APP_WEBHOOK_SECRET in Vercel.
     delete process.env.GITHUB_APP_WEBHOOK_SECRET;
-    const res = await app.fetch(signedPost("pull_request", { installation: { id: 555 } }));
+    const res = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }),
+    );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { received: boolean; dispatched: number; reason?: string };
+    const body = (await res.json()) as {
+      received: boolean;
+      dispatched: number;
+      reason?: string;
+    };
     expect(body.received).toBe(true);
     expect(body.dispatched).toBe(0);
     // Operators must see the misconfiguration — assert it was logged at error.
@@ -203,7 +219,10 @@ describe("github app webhook – configuration & signature", () => {
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "pull_request" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "pull_request",
+        },
         body: JSON.stringify({ installation: { id: 555 } }),
       }),
     );
@@ -212,7 +231,11 @@ describe("github app webhook – configuration & signature", () => {
 
   it("returns 401 on an invalid signature", async () => {
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, { badSig: true }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        { badSig: true },
+      ),
     );
     expect(res.status).toBe(401);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
@@ -220,7 +243,11 @@ describe("github app webhook – configuration & signature", () => {
 
   it("returns 401 when signed with the wrong secret", async () => {
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, { secret: "wrong" }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        { secret: "wrong" },
+      ),
     );
     expect(res.status).toBe(401);
   });
@@ -228,7 +255,8 @@ describe("github app webhook – configuration & signature", () => {
   it("returns 400 on a validly-signed but non-JSON body", async () => {
     const body = "this-is-not-json";
     const sig =
-      "sha256=" + createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
+      "sha256=" +
+      createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
@@ -246,7 +274,9 @@ describe("github app webhook – configuration & signature", () => {
 
 describe("github app webhook – lifecycle events", () => {
   it("acks ping without touching DB or inngest", async () => {
-    const res = await app.fetch(signedPost("ping", { zen: "Keep it logically awesome." }));
+    const res = await app.fetch(
+      signedPost("ping", { zen: "Keep it logically awesome." }),
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { pong: boolean };
     expect(body.pong).toBe(true);
@@ -256,9 +286,14 @@ describe("github app webhook – lifecycle events", () => {
 
   it("pauses connections when an installation is deleted", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
     const res = await app.fetch(
-      signedPost("installation", { action: "deleted", installation: { id: 555 } }),
+      signedPost("installation", {
+        action: "deleted",
+        installation: { id: 555 },
+      }),
     );
     expect(res.status).toBe(200);
     expect(tx.update).toHaveBeenCalled();
@@ -270,9 +305,14 @@ describe("github app webhook – lifecycle events", () => {
 
   it("acks installation events that are not deletions without pausing", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
     const res = await app.fetch(
-      signedPost("installation", { action: "created", installation: { id: 555 } }),
+      signedPost("installation", {
+        action: "created",
+        installation: { id: 555 },
+      }),
     );
     expect(res.status).toBe(200);
     expect(tx.update).not.toHaveBeenCalled();
@@ -280,8 +320,12 @@ describe("github app webhook – lifecycle events", () => {
 
   it("acks an installation event with no action field", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
-    const res = await app.fetch(signedPost("installation", { installation: { id: 555 } }));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
+    const res = await app.fetch(
+      signedPost("installation", { installation: { id: 555 } }),
+    );
     expect(res.status).toBe(200);
     expect(tx.update).not.toHaveBeenCalled();
   });
@@ -304,7 +348,12 @@ describe("github app webhook – routing & dispatch", () => {
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
     const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
       name: string;
-      data: { connectionId: string; connectorType: string; sourceRecordType: string; payload: unknown };
+      data: {
+        connectionId: string;
+        connectorType: string;
+        sourceRecordType: string;
+        payload: unknown;
+      };
     }>;
     expect(sent).toHaveLength(1);
     expect(sent[0]?.name).toBe("ingestion/entity.received");
@@ -340,7 +389,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("handles a null extracted record without throwing", async () => {
-    mocks.parseWebhookEvent.mockReturnValue([{ sourceRecordType: "repository", record: null }]);
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "repository", record: null },
+    ]);
     const res = await app.fetch(
       signedPost("repository", {
         installation: { id: 555 },
@@ -358,11 +409,15 @@ describe("github app webhook – routing & dispatch", () => {
       pull_request: { number: 7 },
     });
     const sig =
-      "sha256=" + createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
+      "sha256=" +
+      createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-hub-signature-256": sig },
+        headers: {
+          "content-type": "application/json",
+          "x-hub-signature-256": sig,
+        },
         body,
       }),
     );
@@ -384,7 +439,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("returns dispatched:0 when the payload carries no installation id", async () => {
-    const res = await app.fetch(signedPost("pull_request", { pull_request: { number: 1 } }));
+    const res = await app.fetch(
+      signedPost("pull_request", { pull_request: { number: 1 } }),
+    );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(0);
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
@@ -405,7 +462,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("dispatches records that lack sha/id/number (idempotency key falls back)", async () => {
-    mocks.parseWebhookEvent.mockReturnValue([{ sourceRecordType: "repository", record: {} }]);
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "repository", record: {} },
+    ]);
     const res = await app.fetch(
       signedPost("repository", {
         action: "edited",
@@ -415,7 +474,9 @@ describe("github app webhook – routing & dispatch", () => {
     );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
-    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{ data: { idempotencyKey: string } }>;
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
+      data: { idempotencyKey: string };
+    }>;
     expect(sent[0]?.data.idempotencyKey).toContain(":record");
   });
 
@@ -436,5 +497,203 @@ describe("github app webhook – routing & dispatch", () => {
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(2);
     const sent = mocks.inngestSend.mock.calls[0]?.[0] as unknown[];
     expect(sent).toHaveLength(2);
+  });
+});
+
+// ── Canonical-ref projection trigger ────────────────────────────────────────
+// docs/specs/workspace-graph-boundary/spec.md §"Push to the canonical ref":
+// the webhook only TRIGGERS the projection and hands over the signed delivery
+// id. It never decides canonicality and never fetches a tree.
+describe("github app webhook – repository.ref-updated trigger", () => {
+  const PUSH_BODY = {
+    installation: { id: 555 },
+    repository: { full_name: "acme/widgets", id: 987654 },
+    ref: "refs/heads/main",
+    before: "sha-before",
+    after: "sha-after",
+    forced: false,
+    deleted: false,
+  };
+
+  /** Every ingestion/repository.ref-updated event handed to inngest.send. */
+  function refUpdates() {
+    return (
+      mocks.inngestSend.mock.calls[0]?.[0] as Array<{
+        name: string;
+        data: Record<string, unknown>;
+      }>
+    ).filter((e) => e.name === "ingestion/repository.ref-updated");
+  }
+
+  beforeEach(() => {
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "commit", record: { sha: "sha-after" } },
+    ]);
+  });
+
+  it("emits ref-updated carrying the X-GitHub-Delivery GUID as deliveryId", async () => {
+    const res = await app.fetch(
+      signedPost("push", PUSH_BODY, { delivery: "delivery-guid-1" }),
+    );
+    expect(res.status).toBe(200);
+
+    const refs = refUpdates();
+    expect(refs).toHaveLength(1);
+    expect(refs[0]!.data).toEqual({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      connectionId: "conn-uuid-1",
+      installationId: "555",
+      providerRepoId: "987654",
+      owner: "acme",
+      repo: "widgets",
+      ref: "refs/heads/main",
+      beforeSha: "sha-before",
+      afterSha: "sha-after",
+      forced: false,
+      deleted: false,
+      deliveryId: "delivery-guid-1",
+      observedAt: expect.any(String) as unknown as string,
+    });
+  });
+
+  it("keeps the entity.received fan-out working alongside the trigger", async () => {
+    const res = await app.fetch(
+      signedPost("push", PUSH_BODY, { delivery: "delivery-guid-2" }),
+    );
+    // `dispatched` stays the entity count; ref updates are reported separately.
+    expect((await res.json()) as unknown).toMatchObject({
+      received: true,
+      dispatched: 1,
+      refUpdates: 1,
+    });
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
+      name: string;
+    }>;
+    expect(
+      sent.filter((e) => e.name === "ingestion/entity.received"),
+    ).toHaveLength(1);
+  });
+
+  it("emits ref-updated even when the connector extracts no records", async () => {
+    // A push with nothing ingestable still has to advance the projection — the
+    // old no_ingestable_records early return must not swallow the trigger.
+    mocks.parseWebhookEvent.mockReturnValue([]);
+    const res = await app.fetch(
+      signedPost("push", PUSH_BODY, { delivery: "delivery-guid-3" }),
+    );
+    expect((await res.json()) as unknown).toMatchObject({
+      dispatched: 0,
+      refUpdates: 1,
+    });
+    expect(refUpdates()).toHaveLength(1);
+  });
+
+  it("normalizes GitHub's all-zeros SHA sentinel to null on a branch create", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "push",
+        { ...PUSH_BODY, before: "0".repeat(40), forced: true },
+        { delivery: "delivery-guid-4" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(refUpdates()[0]!.data).toMatchObject({
+      beforeSha: null,
+      afterSha: "sha-after",
+      forced: true,
+    });
+  });
+
+  it("passes a branch delete through verbatim — the lifecycle decides, not the route", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "push",
+        { ...PUSH_BODY, after: "0".repeat(40), deleted: true },
+        { delivery: "delivery-guid-5" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(refUpdates()[0]!.data).toMatchObject({
+      afterSha: null,
+      deleted: true,
+    });
+  });
+
+  it("forwards a NONCANONICAL ref unchanged — canonicality is not decided here", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "push",
+        { ...PUSH_BODY, ref: "refs/heads/feature-x" },
+        { delivery: "delivery-guid-6" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(refUpdates()[0]!.data).toMatchObject({
+      ref: "refs/heads/feature-x",
+    });
+  });
+
+  it("suffixes the delivery id per connection when one push resolves to several", async () => {
+    // delivery_id is UNIQUE, so two connections sharing one delivery would
+    // collide and silently drop the second repository's projection.
+    const second = {
+      id: "conn-uuid-2",
+      orgId: "org-2",
+      workspaceId: "ws-2",
+      deliveryConfig: { installationId: "555", owner: "acme", repo: "widgets" },
+    };
+    mocks.withSystemDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) =>
+        fn(makeTx([CONNECTED_ROW, second])),
+    );
+    const res = await app.fetch(
+      signedPost("push", PUSH_BODY, { delivery: "shared-guid" }),
+    );
+    expect(res.status).toBe(200);
+
+    const refs = refUpdates();
+    expect(refs).toHaveLength(2);
+    expect(refs.map((e) => e.data["deliveryId"]).sort()).toEqual([
+      "shared-guid:conn-uuid-1",
+      "shared-guid:conn-uuid-2",
+    ]);
+  });
+
+  it("does NOT emit ref-updated for a non-push event", async () => {
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "pull_request", record: { number: 7 } },
+    ]);
+    const res = await app.fetch(
+      signedPost(
+        "pull_request",
+        {
+          action: "opened",
+          installation: { id: 555 },
+          repository: { full_name: "acme/widgets", id: 987654 },
+        },
+        { delivery: "delivery-guid-7" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(refUpdates()).toHaveLength(0);
+  });
+
+  it("does NOT emit ref-updated when GitHub sent no delivery id", async () => {
+    const res = await app.fetch(signedPost("push", PUSH_BODY));
+    expect(res.status).toBe(200);
+    expect(refUpdates()).toHaveLength(0);
+  });
+
+  it("does NOT emit ref-updated when the payload carries no repository id", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "push",
+        { ...PUSH_BODY, repository: { full_name: "acme/widgets" } },
+        { delivery: "delivery-guid-8" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(refUpdates()).toHaveLength(0);
   });
 });

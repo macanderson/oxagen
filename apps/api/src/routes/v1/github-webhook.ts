@@ -19,6 +19,13 @@
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
  *      6-step pipeline then maps/dedups/embeds exactly as the initial sync does.
+ *   6. Additionally, for a `push`, fan out one
+ *      `ingestion/repository.ref-updated` per connection carrying the signed
+ *      delivery id (docs/specs/workspace-graph-boundary/spec.md §"Push to the
+ *      canonical ref"). This route only TRIGGERS the projection — it never
+ *      decides canonicality or fetches trees; repository-ref-updated re-reads
+ *      the authoritative head from GitHub. The two fan-outs are independent:
+ *      a push whose connector extraction is empty still emits ref-updated.
  */
 
 import { Hono } from "hono";
@@ -48,13 +55,44 @@ type EntityReceivedEvent = {
   };
 };
 
+type RefUpdatedEvent = {
+  name: "ingestion/repository.ref-updated";
+  data: {
+    orgId: string;
+    workspaceId: string;
+    connectionId: string;
+    installationId: string;
+    providerRepoId: string;
+    owner: string;
+    repo: string;
+    ref: string;
+    beforeSha: string | null;
+    afterSha: string | null;
+    forced: boolean;
+    deleted: boolean;
+    deliveryId: string;
+    observedAt: string;
+  };
+};
+
+/** GitHub's "no commit" sentinel for a branch create (before) or delete (after). */
+const ZERO_SHA = "0".repeat(40);
+
+/** Normalize a push SHA: the all-zeros sentinel and "" both mean "no commit". */
+function pushSha(value: unknown): string | null {
+  if (typeof value !== "string" || value === "" || value === ZERO_SHA)
+    return null;
+  return value;
+}
+
 function verifySignature(
   payload: Uint8Array,
   signatureHeader: string | undefined,
   secret: string,
 ): boolean {
   if (!signatureHeader) return false;
-  const expected = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
   const got = Buffer.from(signatureHeader, "utf8");
   const exp = Buffer.from(expected, "utf8");
   // Equal length is required before timingSafeEqual (which throws on a length
@@ -67,7 +105,8 @@ function verifySignature(
 function recordKey(record: unknown): string {
   const r = (record ?? {}) as Record<string, unknown>;
   if (typeof r["sha"] === "string") return r["sha"];
-  if (typeof r["id"] === "number" || typeof r["id"] === "string") return String(r["id"]);
+  if (typeof r["id"] === "number" || typeof r["id"] === "string")
+    return String(r["id"]);
   if (typeof r["number"] === "number") return String(r["number"]);
   return "record";
 }
@@ -89,7 +128,9 @@ async function pauseGithubConnections(installationId: string): Promise<void> {
 }
 
 githubAppWebhookRoute.post("/", async (c) => {
-  const { GITHUB_APP_WEBHOOK_SECRET: secret } = requireEnv(["GITHUB_APP_WEBHOOK_SECRET"] as const);
+  const { GITHUB_APP_WEBHOOK_SECRET: secret } = requireEnv([
+    "GITHUB_APP_WEBHOOK_SECRET",
+  ] as const);
   if (!secret) {
     // Missing webhook secret is a SERVER misconfiguration, not something the
     // request can fix. GitHub records every non-2xx (4xx AND 5xx, including
@@ -105,7 +146,11 @@ githubAppWebhookRoute.post("/", async (c) => {
         "acking with 200 to stop GitHub retries; set GITHUB_APP_WEBHOOK_SECRET in Vercel to process events",
     );
     return c.json(
-      { received: true, dispatched: 0, reason: "webhook secret not configured" },
+      {
+        received: true,
+        dispatched: 0,
+        reason: "webhook secret not configured",
+      },
       200,
     );
   }
@@ -122,7 +167,10 @@ githubAppWebhookRoute.post("/", async (c) => {
 
   let body: Record<string, unknown>;
   try {
-    body = JSON.parse(Buffer.from(payload).toString("utf8")) as Record<string, unknown>;
+    body = JSON.parse(Buffer.from(payload).toString("utf8")) as Record<
+      string,
+      unknown
+    >;
   } catch {
     return c.json({ error: "Invalid JSON payload" }, 400);
   }
@@ -132,13 +180,19 @@ githubAppWebhookRoute.post("/", async (c) => {
     return c.json({ received: true, pong: true }, 200);
   }
 
-  const installation = body["installation"] as { id?: number | string } | null | undefined;
+  const installation = body["installation"] as
+    | { id?: number | string }
+    | null
+    | undefined;
   const installationId =
     installation && installation.id != null ? String(installation.id) : null;
 
   // ── Installation lifecycle ────────────────────────────────────────────────
   // GitHub delivers these to the App webhook automatically (no subscription).
-  if (eventName === "installation" || eventName === "installation_repositories") {
+  if (
+    eventName === "installation" ||
+    eventName === "installation_repositories"
+  ) {
     const action = typeof body["action"] === "string" ? body["action"] : "";
     const now = new Date();
 
@@ -146,7 +200,11 @@ githubAppWebhookRoute.post("/", async (c) => {
       // The installation payload (present on both event types) carries the
       // account + app details we keep in the registry.
       const inst = (body["installation"] ?? {}) as {
-        account?: { login?: string; id?: number | string; type?: string } | null;
+        account?: {
+          login?: string;
+          id?: number | string;
+          type?: string;
+        } | null;
         app_slug?: string;
         repository_selection?: string;
       };
@@ -175,7 +233,11 @@ githubAppWebhookRoute.post("/", async (c) => {
         // connections — without a paused-reason column we cannot distinguish an
         // app-suspend pause from a user pause, so the user re-activates after an
         // unsuspend rather than risk silently un-pausing a user-paused connection.
-        await upsertGithubInstallation({ installationId, ...meta, reactivate: true });
+        await upsertGithubInstallation({
+          installationId,
+          ...meta,
+          reactivate: true,
+        });
       }
     }
 
@@ -188,7 +250,10 @@ githubAppWebhookRoute.post("/", async (c) => {
   }
 
   // ── Resolve target connection(s) ──────────────────────────────────────────
-  const repository = body["repository"] as { full_name?: string } | null | undefined;
+  const repository = body["repository"] as
+    | { full_name?: string }
+    | null
+    | undefined;
   const repoFullName = repository?.full_name ?? null; // "owner/repo"
 
   const rows = await withSystemDb((tx) =>
@@ -227,9 +292,6 @@ githubAppWebhookRoute.post("/", async (c) => {
   // ── Extract ingestable records and fan out ────────────────────────────────
   const connector = getConnector("github");
   const extractions = connector.parseWebhookEvent?.(eventName, body) ?? [];
-  if (extractions.length === 0) {
-    return c.json({ received: true, dispatched: 0, reason: "no_ingestable_records" }, 200);
-  }
 
   const receivedAt = new Date().toISOString();
   const events: EntityReceivedEvent[] = [];
@@ -251,7 +313,61 @@ githubAppWebhookRoute.post("/", async (c) => {
     }
   }
 
-  await eventClient.send(events);
+  // ── Canonical-ref projection trigger (push only) ──────────────────────────
+  // Independent of the entity extraction above: a push with no ingestable
+  // records still has to advance the projection. The delivery GUID rides along
+  // as deliveryId — repository_ref_observations UNIQUEs on it, so GitHub's
+  // at-least-once redelivery is idempotent. Whether this ref is canonical is
+  // NOT decided here: repository-ref-updated compares it against the
+  // repository's discovered default_ref.
+  const refEvents: RefUpdatedEvent[] = [];
+  const providerRepoIdRaw = (
+    body["repository"] as { id?: number | string } | null | undefined
+  )?.id;
+  const deliveryId = c.req.header("x-github-delivery") ?? "";
+  if (eventName === "push" && providerRepoIdRaw != null && deliveryId) {
+    const ref = typeof body["ref"] === "string" ? body["ref"] : "";
+    if (ref) {
+      for (const target of targets) {
+        const dc = (target.deliveryConfig ?? {}) as Record<string, unknown>;
+        refEvents.push({
+          name: "ingestion/repository.ref-updated",
+          data: {
+            orgId: target.orgId,
+            workspaceId: target.workspaceId,
+            connectionId: target.id,
+            installationId,
+            providerRepoId: String(providerRepoIdRaw),
+            owner: typeof dc["owner"] === "string" ? dc["owner"] : "",
+            repo: typeof dc["repo"] === "string" ? dc["repo"] : "",
+            ref,
+            beforeSha: pushSha(body["before"]),
+            afterSha: pushSha(body["after"]),
+            forced: body["forced"] === true,
+            deleted: body["deleted"] === true,
+            // One delivery can resolve to several connections; suffix the
+            // connection so each gets its own dedupe row rather than all but
+            // the first silently colliding on the UNIQUE delivery_id.
+            deliveryId:
+              targets.length > 1 ? `${deliveryId}:${target.id}` : deliveryId,
+            observedAt: receivedAt,
+          },
+        });
+      }
+    }
+  }
 
-  return c.json({ received: true, dispatched: events.length }, 200);
+  if (events.length === 0 && refEvents.length === 0) {
+    return c.json(
+      { received: true, dispatched: 0, reason: "no_ingestable_records" },
+      200,
+    );
+  }
+
+  await eventClient.send([...events, ...refEvents]);
+
+  return c.json(
+    { received: true, dispatched: events.length, refUpdates: refEvents.length },
+    200,
+  );
 });
