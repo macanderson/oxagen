@@ -311,6 +311,21 @@ export function createPlatformTurnDriver(): TurnDriver {
             `Agent run ${run.runId} carries a human principal but is missing its agent principal`,
           );
         }
+        // Both principals must carry the RIGHT kind, not just be present — a
+        // claim row with the pair swapped (or otherwise mislabeled) would
+        // silently invert the delegation ceiling (docs/specs/agent-rbac/spec.md
+        // §3.1/§3.4): the agent side must be kind='agent' and the human side
+        // must be kind='human'. Fail closed rather than trust the claim.
+        if (run.agentPrincipal && run.agentPrincipal.kind !== "agent") {
+          throw new Error(
+            `Agent run ${run.runId} carries an agent principal whose kind is "${run.agentPrincipal.kind}", not "agent"`,
+          );
+        }
+        if (run.humanPrincipal && run.humanPrincipal.kind !== "human") {
+          throw new Error(
+            `Agent run ${run.runId} carries a human principal whose kind is "${run.humanPrincipal.kind}", not "human"`,
+          );
+        }
 
         const ctx: CapabilityContext = {
           orgId: run.orgId,
