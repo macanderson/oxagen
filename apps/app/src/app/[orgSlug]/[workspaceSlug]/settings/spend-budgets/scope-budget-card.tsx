@@ -1,15 +1,25 @@
 "use client";
 /**
  * scope-budget-card.tsx — one scope's (org or workspace) ceiling card for the
- * Spend Budgets panel (OXA-1079). Renders either:
- *   - an EmptyState ("No ceiling configured") with a control to set one, or
- *   - the configured ceiling's live burn (limit, spend, projection, ratio,
- *     window, state) with an edit affordance,
- * and, in both cases, an inline edit form (enabled / period / windowDays /
- * limitUsd) that mirrors the contract's rolling/monthly refine client-side.
+ * Spend Budgets panel (OXA-1079). Renders one of:
+ *   - an EmptyState ("No ceiling configured") with a control to set one,
+ *   - a configured, DISABLED ceiling — saved but not gating anything right
+ *     now (getAllScopeBudgets returns disabled rows too, so this is a real,
+ *     reachable state, not dead code) — shown distinctly from both the
+ *     empty state and an active ceiling, never with the "exceeded/denied"
+ *     framing (a disabled ceiling isn't denying runs even if spend has
+ *     crossed the configured limit), or
+ *   - a configured, ENABLED ceiling's live burn (limit, spend, projection,
+ *     ratio, window, state), with an "exceeded" ceiling getting a dedicated
+ *     alert banner (agent runs are being denied right now),
+ * plus, in every case, an inline edit form (enabled / period / windowDays /
+ * limitUsd) that mirrors the contract's rolling/monthly refine client-side —
+ * gated behind `canManage` (a Member can view the burn but not edit it; the
+ * real enforcement is setSpendBudgetAction's server-side billing-manager gate,
+ * this is UI-gating only).
  */
 import * as React from "react";
-import { AlertTriangle, PiggyBank, Save } from "lucide-react";
+import { AlertTriangle, PiggyBank, Save, ShieldOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,18 +56,29 @@ import {
   type SpendBudgetStatus,
 } from "./spend-budget-format";
 
+const MANAGE_DENIED_NOTE =
+  "Only owners, admins, and billing managers can change spend ceilings.";
+
 export interface ScopeBudgetCardProps {
   scope: SpendBudgetScope;
   orgSlug: string;
   workspaceSlug: string;
   /** Current status, or null when no ceiling is configured for this scope. */
   budget: SpendBudgetStatus | null;
+  /** Whether the viewer may create/edit this scope's ceiling. UI-gating
+   *  only — setSpendBudgetAction re-checks server-side regardless. */
+  canManage: boolean;
   onSaved: (scope: SpendBudgetScope, budget: SpendBudgetStatus) => void;
 }
 
-function barColorClass(state: SpendBudgetStatus["state"]): string {
-  if (state === "exceeded") return "bg-destructive";
-  if (state === "threshold_80" || state === "threshold_95") return "bg-warning";
+/** Bar color reflects enforcement, not just the raw ratio: a disabled
+ *  ceiling renders neutral even if spend has crossed the configured limit,
+ *  since it isn't gating anything right now. */
+function barColorClass(budget: SpendBudgetStatus): string {
+  if (!budget.enabled) return "bg-muted-foreground/40";
+  if (budget.state === "exceeded") return "bg-destructive";
+  if (budget.state === "threshold_80" || budget.state === "threshold_95")
+    return "bg-warning";
   return "bg-success";
 }
 
@@ -66,6 +87,7 @@ export function ScopeBudgetCard({
   orgSlug,
   workspaceSlug,
   budget,
+  canManage,
   onSaved,
 }: ScopeBudgetCardProps) {
   const [isEditing, setIsEditing] = React.useState(false);
@@ -84,6 +106,9 @@ export function ScopeBudgetCard({
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
 
   function startEdit() {
+    // Defensive — the buttons that call this are hidden when !canManage, but
+    // guard the entry point too rather than trusting only the render branch.
+    if (!canManage) return;
     setEnabled(budget?.enabled ?? true);
     setPeriod(budget?.period ?? "monthly");
     setWindowDays(budget?.windowDays ?? null);
@@ -134,7 +159,14 @@ export function ScopeBudgetCard({
   }
 
   const testBase = `spend-budget-${scope}`;
-  const stateMeta = budget ? STATE_META[budget.state] : null;
+  // A disabled ceiling is a distinct third state — never "exceeded/denied"
+  // (that framing would be actively misleading: disabled means nothing is
+  // being gated right now, however high the ratio reads) and never the
+  // active-ceiling badge either.
+  const isDisabledCeiling = budget !== null && !budget.enabled;
+  const isExceeded =
+    budget !== null && budget.enabled && budget.state === "exceeded";
+  const stateMeta = budget && budget.enabled ? STATE_META[budget.state] : null;
 
   return (
     <Card data-testid={`${testBase}-card`}>
@@ -143,18 +175,22 @@ export function ScopeBudgetCard({
           <CardTitle className="text-base">{SCOPE_LABEL[scope]}</CardTitle>
           <CardDescription>{SCOPE_DESCRIPTION[scope]}</CardDescription>
         </div>
-        {budget && stateMeta ? (
+        {budget ? (
           <Badge
-            variant={stateMeta.badgeVariant}
+            variant={
+              isDisabledCeiling ? "muted" : (stateMeta?.badgeVariant ?? "muted")
+            }
             data-testid={`${testBase}-state`}
           >
-            {stateMeta.label}
+            {isDisabledCeiling
+              ? "Disabled — not enforced"
+              : (stateMeta?.label ?? "")}
           </Badge>
         ) : null}
       </CardHeader>
 
       <CardPanel className="flex flex-col gap-4 pt-4">
-        {budget && budget.state === "exceeded" ? (
+        {isExceeded ? (
           <Alert variant="error" data-testid={`${testBase}-exceeded-alert`}>
             <AlertTriangle aria-hidden="true" />
             <AlertTitle>
@@ -168,6 +204,18 @@ export function ScopeBudgetCard({
           </Alert>
         ) : null}
 
+        {isDisabledCeiling ? (
+          <Alert variant="warning" data-testid={`${testBase}-disabled-alert`}>
+            <ShieldOff aria-hidden="true" />
+            <AlertTitle>Ceiling disabled — not enforced</AlertTitle>
+            <AlertDescription>
+              This ceiling is saved but is not currently gating agent runs in
+              this scope, even if spend below has crossed the configured limit.
+              Turn it back on below to enforce it again.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {!budget && !isEditing ? (
           <EmptyState
             data-testid={`${testBase}-empty`}
@@ -175,26 +223,29 @@ export function ScopeBudgetCard({
             title="No ceiling configured"
             description={`This scope has no spend ceiling yet. ${SCOPE_DESCRIPTION[scope]}`}
             action={
-              <Button
-                size="sm"
-                variant="outline"
-                data-testid={`${testBase}-set-button`}
-                onClick={startEdit}
-              >
-                Set a ceiling
-              </Button>
+              canManage ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid={`${testBase}-set-button`}
+                  onClick={startEdit}
+                >
+                  Set a ceiling
+                </Button>
+              ) : (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid={`${testBase}-readonly-note`}
+                >
+                  {MANAGE_DENIED_NOTE}
+                </p>
+              )
             }
           />
         ) : null}
 
         {budget && !isEditing ? (
           <div className="flex flex-col gap-3">
-            {!budget.enabled ? (
-              <p className="text-xs text-muted-foreground">
-                Saved but not enforced — this ceiling is currently disabled.
-              </p>
-            ) : null}
-
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <div>
                 <p className="text-xs text-muted-foreground">Limit</p>
@@ -242,7 +293,7 @@ export function ScopeBudgetCard({
                 <div
                   className={cn(
                     "h-full rounded-full transition-[width]",
-                    barColorClass(budget.state),
+                    barColorClass(budget),
                   )}
                   style={{ width: `${Math.min(budget.ratio * 100, 100)}%` }}
                 />
@@ -250,14 +301,25 @@ export function ScopeBudgetCard({
             </div>
 
             <div>
-              <Button
-                size="sm"
-                variant="outline"
-                data-testid={`${testBase}-edit-button`}
-                onClick={startEdit}
-              >
-                Edit ceiling
-              </Button>
+              {canManage ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid={`${testBase}-edit-button`}
+                  onClick={startEdit}
+                >
+                  {isDisabledCeiling
+                    ? "Edit / re-enable ceiling"
+                    : "Edit ceiling"}
+                </Button>
+              ) : (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid={`${testBase}-readonly-note`}
+                >
+                  {MANAGE_DENIED_NOTE}
+                </p>
+              )}
               {savedAt !== null ? (
                 <span className="ml-3 text-xs text-muted-foreground">
                   Saved at{" "}
@@ -271,7 +333,7 @@ export function ScopeBudgetCard({
           </div>
         ) : null}
 
-        {isEditing ? (
+        {isEditing && canManage ? (
           <form
             onSubmit={handleSave}
             aria-label={`${SCOPE_LABEL[scope]} spend ceiling`}

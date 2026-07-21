@@ -19,15 +19,20 @@ vi.mock("./scope-budget-card", () => ({
   ScopeBudgetCard: ({
     scope,
     budget,
+    canManage,
     onSaved,
   }: {
     scope: SpendBudgetScope;
     budget: SpendBudgetStatus | null;
+    canManage: boolean;
     onSaved: (scope: SpendBudgetScope, budget: SpendBudgetStatus) => void;
   }) => (
     <div data-testid={`mock-card-${scope}`}>
       <span data-testid={`mock-card-${scope}-limit`}>
         {budget?.limitUsd ?? "empty"}
+      </span>
+      <span data-testid={`mock-card-${scope}-can-manage`}>
+        {String(canManage)}
       </span>
       <button
         type="button"
@@ -87,6 +92,7 @@ describe("SpendBudgetsPanel", () => {
         orgSlug="acme"
         workspaceSlug="main"
         initialBudgets={[]}
+        canManage={true}
       />,
     );
     expect(screen.getByTestId("mock-card-org")).toBeInTheDocument();
@@ -105,6 +111,7 @@ describe("SpendBudgetsPanel", () => {
         orgSlug="acme"
         workspaceSlug="main"
         initialBudgets={[budget("org", 1000), budget("workspace", 100)]}
+        canManage={true}
       />,
     );
     expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
@@ -120,6 +127,7 @@ describe("SpendBudgetsPanel", () => {
         orgSlug="acme"
         workspaceSlug="main"
         initialBudgets={[budget("org", 1000)]}
+        canManage={true}
       />,
     );
 
@@ -135,5 +143,37 @@ describe("SpendBudgetsPanel", () => {
     );
     // Org scope's original value is unaffected by the workspace-scope save.
     expect(screen.getByTestId("mock-card-org-limit")).toHaveTextContent("1000");
+  });
+
+  it("threads canManage to both scope cards", () => {
+    const { rerender } = render(
+      <SpendBudgetsPanel
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialBudgets={[]}
+        canManage={true}
+      />,
+    );
+    expect(screen.getByTestId("mock-card-org-can-manage")).toHaveTextContent(
+      "true",
+    );
+    expect(
+      screen.getByTestId("mock-card-workspace-can-manage"),
+    ).toHaveTextContent("true");
+
+    rerender(
+      <SpendBudgetsPanel
+        orgSlug="acme"
+        workspaceSlug="main"
+        initialBudgets={[]}
+        canManage={false}
+      />,
+    );
+    expect(screen.getByTestId("mock-card-org-can-manage")).toHaveTextContent(
+      "false",
+    );
+    expect(
+      screen.getByTestId("mock-card-workspace-can-manage"),
+    ).toHaveTextContent("false");
   });
 });

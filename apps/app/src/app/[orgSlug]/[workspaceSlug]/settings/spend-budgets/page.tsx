@@ -14,6 +14,8 @@ import {
   resolveOrg,
   resolveWorkspace,
   assertOrgMember,
+  getOrgRole,
+  BILLING_MANAGER_ROLES,
 } from "@/lib/resolve-org";
 import { getSpendBudgetsAction } from "./actions";
 import { SpendBudgetsPanel } from "./spend-budgets-panel";
@@ -33,11 +35,24 @@ export default async function SpendBudgetsPage({
   const org = await resolveOrg(orgSlug);
   await resolveWorkspace(org.id, workspaceSlug);
   // Membership gate for page access (404 for non-members, consistent with
-  // every other settings page); the billing-manager gate that governs
-  // reading/editing the ceilings themselves lives in actions.ts.
+  // every other settings page). The actual authorization boundary lives in
+  // actions.ts: getSpendBudgetsAction reads at Member level (mirroring
+  // get_spend_budget's own `defaultRoles`), setSpendBudgetAction writes at
+  // billing-manager level. `canManage` below is UI-gating only (hide/disable
+  // the edit controls for a Member) — the real enforcement is re-checked
+  // server-side by setSpendBudgetAction on every write regardless of what the
+  // client renders.
   await assertOrgMember(org.id, session.user.id);
 
-  const result = await getSpendBudgetsAction(orgSlug, workspaceSlug);
+  const [result, role] = await Promise.all([
+    getSpendBudgetsAction(orgSlug, workspaceSlug),
+    getOrgRole(org.id, session.user.id),
+  ]);
+  // getOrgRole + BILLING_MANAGER_ROLES (not a hand-rolled duplicate list) —
+  // same pattern as security/audit/page.tsx's `isManager`, reusing the
+  // exported constant resolve-org.ts already keeps in sync with
+  // assertBillingManager rather than re-deriving the role list here.
+  const canManage = role !== null && BILLING_MANAGER_ROLES.has(role);
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">
@@ -62,6 +77,7 @@ export default async function SpendBudgetsPage({
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
           initialBudgets={result.budgets}
+          canManage={canManage}
         />
       ) : (
         <Alert variant="error" data-testid="spend-budgets-error">

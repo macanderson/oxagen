@@ -21,12 +21,17 @@ export interface SpendBudgetsPanelProps {
   orgSlug: string;
   workspaceSlug: string;
   initialBudgets: SpendBudgetStatus[];
+  /** Whether the viewer holds a billing-manager role (owner/admin/billing).
+   *  UI-gating only — setSpendBudgetAction re-checks this server-side on
+   *  every write regardless of what the client renders. */
+  canManage: boolean;
 }
 
 export function SpendBudgetsPanel({
   orgSlug,
   workspaceSlug,
   initialBudgets,
+  canManage,
 }: SpendBudgetsPanelProps) {
   const [budgets, setBudgets] = React.useState<
     Record<SpendBudgetScope, SpendBudgetStatus | null>
@@ -49,6 +54,7 @@ export function SpendBudgetsPanel({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         budget={budgets.org}
+        canManage={canManage}
         onSaved={handleSaved}
       />
       <ScopeBudgetCard
@@ -56,6 +62,7 @@ export function SpendBudgetsPanel({
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
         budget={budgets.workspace}
+        canManage={canManage}
         onSaved={handleSaved}
       />
     </div>

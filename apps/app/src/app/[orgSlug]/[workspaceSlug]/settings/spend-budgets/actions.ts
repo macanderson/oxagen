@@ -14,12 +14,11 @@
  *
  * Authorization: apps/app does NOT bootstrap kernel IAM (invoke() called
  * from apps/app skips the kernel's role checks entirely — see CLAUDE.md),
- * so assertBillingManager here IS the authorization gate for BOTH actions —
- * mirroring the identical gate() shape in ../../billing/revenue/actions.ts.
- * Note this is intentionally narrower than the contracts' own
- * `defaultRoles` (get_spend_budget allows any org/workspace Member to read);
- * the app surface keeps a single, well-understood boundary — billing
- * managers only — for both viewing and editing this panel.
+ * so the gates here ARE the authorization boundary. They mirror each
+ * contract's own `defaultRoles` so the app agrees with the api/mcp/cli
+ * surfaces rather than inventing a stricter rule: reading is Member-level
+ * (assertOrgMember), writing is billing-manager only (assertBillingManager).
+ * A Member who can see the burn cannot raise the ceiling.
  */
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import binds every handler into the kernel — without it
@@ -32,12 +31,14 @@ import { getSession } from "@/lib/session";
 import {
   resolveOrg,
   resolveWorkspace,
+  assertOrgMember,
   assertBillingManager,
 } from "@/lib/resolve-org";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import type { SpendBudgetStatus } from "./spend-budget-format";
 
+const NOT_A_MEMBER = "You don't have access to this workspace.";
 const NOT_AUTHORIZED =
   "You don't have permission to manage spend budgets for this workspace.";
 
@@ -46,21 +47,28 @@ type Gate =
   | { error: string };
 
 /**
- * Billing-manager gate for both spend-budget actions: resolve the org +
- * workspace, require an authenticated principal, and assert an
- * owner/admin/billing role (assertBillingManager calls notFound(), which
- * throws — caught below and converted into a graceful {error}).
+ * Resolve the org + workspace and require an authenticated principal holding
+ * `role`. Both assert helpers call notFound(), which throws — caught here and
+ * converted into a graceful {error} the panel can render.
  */
-async function gate(orgSlug: string, workspaceSlug: string): Promise<Gate> {
+async function gate(
+  orgSlug: string,
+  workspaceSlug: string,
+  role: "member" | "billingManager",
+): Promise<Gate> {
   const session = await getSession();
   const userId = session?.user?.id;
   if (!userId) return { error: "Not authenticated." };
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   try {
-    await assertBillingManager(org.id, userId);
+    if (role === "billingManager") {
+      await assertBillingManager(org.id, userId);
+    } else {
+      await assertOrgMember(org.id, userId);
+    }
   } catch {
-    return { error: NOT_AUTHORIZED };
+    return { error: role === "billingManager" ? NOT_AUTHORIZED : NOT_A_MEMBER };
   }
   return { orgId: org.id, workspaceId: ws.id, userId };
 }
@@ -90,7 +98,7 @@ export async function getSpendBudgetsAction(
   orgSlug: string,
   workspaceSlug: string,
 ): Promise<GetSpendBudgetsResult> {
-  const g = await gate(orgSlug, workspaceSlug);
+  const g = await gate(orgSlug, workspaceSlug, "member");
   if ("error" in g) return { ok: false, error: g.error };
   try {
     const ctx = buildCtx(g.orgId, g.workspaceId, g.userId);
@@ -118,7 +126,7 @@ export async function setSpendBudgetAction(
   workspaceSlug: string,
   input: SetSpendBudgetActionInput,
 ): Promise<SetSpendBudgetResult> {
-  const g = await gate(orgSlug, workspaceSlug);
+  const g = await gate(orgSlug, workspaceSlug, "billingManager");
   if ("error" in g) return { ok: false, error: g.error };
   try {
     const ctx = buildCtx(g.orgId, g.workspaceId, g.userId);

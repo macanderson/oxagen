@@ -23,6 +23,13 @@
  *       alert banner in addition to the status badge.
  *   (g) A server-side failure surfaces inline without throwing, and does not
  *       call onSaved.
+ *   (h) A configured, DISABLED ceiling renders a distinct "Disabled — not
+ *       enforced" badge + alert — never the empty state, never the
+ *       exceeded/denied framing even when its ratio reads >= 100% — and the
+ *       edit form still lets the user flip it back on.
+ *   (i) canManage=false hides the "Set a ceiling" / "Edit ceiling" controls
+ *       (empty and configured cases) and shows a read-only explanation
+ *       instead, for both a fresh scope and a disabled one.
  */
 
 import * as React from "react";
@@ -125,6 +132,7 @@ function baseProps(
     orgSlug: "acme",
     workspaceSlug: "main",
     budget: null,
+    canManage: true,
     onSaved: vi.fn(),
     ...overrides,
   };
@@ -379,6 +387,133 @@ describe("ScopeBudgetCard — server error", () => {
     // Form stays open so the user can retry rather than losing their input.
     expect(
       screen.getByTestId("spend-budget-workspace-form"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("ScopeBudgetCard — disabled ceiling", () => {
+  it("renders a distinct 'Disabled — not enforced' badge and alert, not the empty state", () => {
+    const disabled = workspaceBudget({
+      enabled: false,
+      state: "ok",
+      ratio: 0.25,
+    });
+    render(<ScopeBudgetCard {...baseProps({ budget: disabled })} />);
+
+    expect(
+      screen.queryByTestId("spend-budget-workspace-empty"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-state"),
+    ).toHaveTextContent("Disabled — not enforced");
+    expect(
+      screen.getByTestId("spend-budget-workspace-disabled-alert"),
+    ).toBeInTheDocument();
+    // The configured numbers still render — a disabled ceiling is informational.
+    expect(screen.getByText("$100.00")).toBeInTheDocument();
+  });
+
+  it("never shows the exceeded/denied framing for a disabled ceiling, even when ratio >= 100%", () => {
+    const disabledButOverLimit = workspaceBudget({
+      enabled: false,
+      state: "exceeded",
+      ratio: 1.4,
+      spentUsd: 140,
+    });
+    render(
+      <ScopeBudgetCard {...baseProps({ budget: disabledButOverLimit })} />,
+    );
+
+    expect(
+      screen.queryByTestId("spend-budget-workspace-exceeded-alert"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-disabled-alert"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-state"),
+    ).not.toHaveTextContent("Exceeded");
+  });
+
+  it("the edit form pre-fills enabled=false but lets the user flip it back on and save", async () => {
+    const disabled = workspaceBudget({ enabled: false });
+    const reEnabled = workspaceBudget({ enabled: true });
+    mockSetSpendBudgetAction.mockResolvedValue({ ok: true, budget: reEnabled });
+
+    render(<ScopeBudgetCard {...baseProps({ budget: disabled })} />);
+    await userEvent.click(
+      screen.getByTestId("spend-budget-workspace-edit-button"),
+    );
+
+    const enforceSwitch = screen.getByRole("switch");
+    expect(enforceSwitch).not.toBeChecked();
+
+    await userEvent.click(enforceSwitch);
+    expect(enforceSwitch).toBeChecked();
+
+    await userEvent.click(screen.getByTestId("spend-budget-workspace-save"));
+
+    await waitFor(() =>
+      expect(mockSetSpendBudgetAction).toHaveBeenCalledTimes(1),
+    );
+    expect(mockSetSpendBudgetAction).toHaveBeenCalledWith(
+      "acme",
+      "main",
+      expect.objectContaining({ enabled: true }),
+    );
+  });
+});
+
+describe("ScopeBudgetCard — canManage=false (read-only)", () => {
+  it("hides the 'Set a ceiling' control on an empty scope and explains why", () => {
+    render(<ScopeBudgetCard {...baseProps({ canManage: false })} />);
+
+    expect(
+      screen.getByTestId("spend-budget-workspace-empty"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("spend-budget-workspace-set-button"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-readonly-note"),
+    ).toHaveTextContent(
+      "Only owners, admins, and billing managers can change spend ceilings.",
+    );
+  });
+
+  it("hides the 'Edit ceiling' control on a configured scope and explains why", () => {
+    render(
+      <ScopeBudgetCard
+        {...baseProps({ canManage: false, budget: workspaceBudget() })}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("spend-budget-workspace-edit-button"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-readonly-note"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the edit control for a disabled ceiling too", () => {
+    render(
+      <ScopeBudgetCard
+        {...baseProps({
+          canManage: false,
+          budget: workspaceBudget({ enabled: false }),
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("spend-budget-workspace-edit-button"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-disabled-alert"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("spend-budget-workspace-readonly-note"),
     ).toBeInTheDocument();
   });
 });

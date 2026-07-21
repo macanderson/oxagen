@@ -2,10 +2,17 @@
  * actions.test.ts — unit tests for the Spend Budgets server actions
  * (OXA-1079).
  *
- * Mocking strategy mirrors ../../billing/revenue/actions.test.ts's gate()
- * shape (getSession → resolveOrg/resolveWorkspace → assertBillingManager):
+ * The gate is role-conditional: getSpendBudgetsAction reads at Member level
+ * (assertOrgMember — mirrors get_spend_budget's own `defaultRoles`, which
+ * allow any org/workspace Member to read); setSpendBudgetAction writes at
+ * billing-manager level (assertBillingManager). A Member who can see the
+ * burn cannot raise the ceiling.
+ *
+ * Mocking strategy:
  *   - @/lib/session → vi.mock (getSession)
- *   - @/lib/resolve-org → vi.mock (resolveOrg, resolveWorkspace, assertBillingManager)
+ *   - @/lib/resolve-org → vi.mock (resolveOrg, resolveWorkspace,
+ *     assertOrgMember, assertBillingManager — both assert helpers mocked
+ *     independently so a test can grant one role and deny the other)
  *   - @oxagen/tenancy → vi.mock (runInTenantScope invokes its callback inline)
  *   - @oxagen/oxagen → vi.mock (invoke)
  *   - @oxagen/handlers/register → vi.mock (no-op side effect)
@@ -14,11 +21,18 @@
  *
  * Coverage:
  *   1. unauthenticated (no session) → {ok:false} on both actions, invoke not called
- *   2. non-billing-manager (assertBillingManager throws) → {ok:false}, invoke not called
- *   3. getSpendBudgetsAction happy path → {ok:true, budgets:[org, workspace]}
- *   4. setSpendBudgetAction happy path → {ok:true, budget}, revalidatePath called
- *   5. invoke throws on get → {ok:false, error message}
- *   6. invoke throws on set → {ok:false, error message}
+ *   2. Member (assertOrgMember resolves, assertBillingManager rejects):
+ *      CAN read → {ok:true}; CANNOT write → {ok:false, NOT_AUTHORIZED
+ *      message}, invoke not called
+ *   3. Non-member (assertOrgMember rejects) → getSpendBudgetsAction
+ *      {ok:false, NOT_A_MEMBER message}, invoke not called
+ *   4. Billing manager (assertBillingManager resolves) → setSpendBudgetAction
+ *      succeeds; assertOrgMember is irrelevant to the write gate (never
+ *      called for role="billingManager")
+ *   5. getSpendBudgetsAction happy path → {ok:true, budgets:[org, workspace]},
+ *      including a disabled ceiling passed through unchanged
+ *   6. setSpendBudgetAction happy path → {ok:true, budget}, revalidatePath called
+ *   7. invoke throws on get / set → {ok:false, error message}
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -29,6 +43,7 @@ const {
   mockGetSession,
   mockResolveOrg,
   mockResolveWorkspace,
+  mockAssertOrgMember,
   mockAssertBillingManager,
 } = vi.hoisted(() => ({
   mockRunInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
@@ -37,6 +52,7 @@ const {
   mockGetSession: vi.fn(),
   mockResolveOrg: vi.fn(),
   mockResolveWorkspace: vi.fn(),
+  mockAssertOrgMember: vi.fn(),
   mockAssertBillingManager: vi.fn(),
 }));
 
@@ -44,6 +60,7 @@ vi.mock("@/lib/session", () => ({ getSession: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
   resolveWorkspace: mockResolveWorkspace,
+  assertOrgMember: mockAssertOrgMember,
   assertBillingManager: mockAssertBillingManager,
 }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
@@ -122,6 +139,9 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue(SESSION);
   mockResolveOrg.mockResolvedValue(ORG);
   mockResolveWorkspace.mockResolvedValue(WS);
+  // Default: both roles granted. Individual describe blocks narrow this to
+  // exercise the split gate.
+  mockAssertOrgMember.mockResolvedValue(undefined);
   mockAssertBillingManager.mockResolvedValue(undefined);
 });
 
@@ -148,16 +168,59 @@ describe("unauthenticated — no session", () => {
   });
 });
 
-describe("non-billing-manager — assertBillingManager denies", () => {
+describe("Member — can read, cannot write", () => {
   beforeEach(() => {
+    // Member: org membership holds, billing-manager role does not.
+    mockAssertOrgMember.mockResolvedValue(undefined);
     mockAssertBillingManager.mockRejectedValue(new Error("not found"));
   });
 
-  it("getSpendBudgetsAction returns {ok:false, error} mentioning permission, invoke not called", async () => {
+  it("getSpendBudgetsAction succeeds ({ok:true}) for a plain Member", async () => {
+    mockInvoke.mockResolvedValue({ budgets: [orgBudget()] });
+    const result = await getSpendBudgetsAction("acme", "main");
+    expect(result.ok).toBe(true);
+    expect(mockAssertOrgMember).toHaveBeenCalledWith("org-1", "user-1");
+    expect(mockAssertBillingManager).not.toHaveBeenCalled();
+  });
+
+  it("setSpendBudgetAction fails ({ok:false}) with the billing-manager message for the same Member, invoke not called", async () => {
+    const result = await setSpendBudgetAction("acme", "main", {
+      scope: "org",
+      enabled: true,
+      period: "monthly",
+      limitUsd: 1000,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe(
+        "You don't have permission to manage spend budgets for this workspace.",
+      );
+    }
+    expect(mockInvoke).not.toHaveBeenCalled();
+    // The write gate checks billing-manager only — it never re-derives
+    // membership via assertOrgMember for role="billingManager".
+    expect(mockAssertOrgMember).not.toHaveBeenCalled();
+  });
+});
+
+describe("non-member — assertOrgMember denies", () => {
+  beforeEach(() => {
+    mockAssertOrgMember.mockRejectedValue(new Error("not found"));
+  });
+
+  it("getSpendBudgetsAction returns {ok:false} with the member-access message, invoke not called", async () => {
     const result = await getSpendBudgetsAction("acme", "main");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain("permission");
+    if (!result.ok) {
+      expect(result.error).toBe("You don't have access to this workspace.");
+    }
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("non-billing-manager — assertBillingManager denies", () => {
+  beforeEach(() => {
+    mockAssertBillingManager.mockRejectedValue(new Error("not found"));
   });
 
   it("setSpendBudgetAction returns {ok:false, error} mentioning permission, invoke not called", async () => {
@@ -170,6 +233,25 @@ describe("non-billing-manager — assertBillingManager denies", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("permission");
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("billing manager — can read and write", () => {
+  it("getSpendBudgetsAction succeeds for a billing manager", async () => {
+    mockInvoke.mockResolvedValue({ budgets: [orgBudget()] });
+    const result = await getSpendBudgetsAction("acme", "main");
+    expect(result.ok).toBe(true);
+  });
+
+  it("setSpendBudgetAction succeeds for a billing manager", async () => {
+    mockInvoke.mockResolvedValue(orgBudget());
+    const result = await setSpendBudgetAction("acme", "main", {
+      scope: "org",
+      enabled: true,
+      period: "monthly",
+      limitUsd: 1000,
+    });
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -206,6 +288,18 @@ describe("getSpendBudgetsAction — happy path", () => {
     const result = await getSpendBudgetsAction("acme", "main");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.budgets).toEqual([]);
+  });
+
+  it("passes a disabled ceiling through unchanged (the store now returns disabled rows too)", async () => {
+    const disabled = workspaceBudget({
+      enabled: false,
+      state: "exceeded",
+      ratio: 1.4,
+    });
+    mockInvoke.mockResolvedValue({ budgets: [disabled] });
+    const result = await getSpendBudgetsAction("acme", "main");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.budgets[0]).toEqual(disabled);
   });
 });
 
@@ -274,6 +368,24 @@ describe("setSpendBudgetAction — happy path", () => {
         windowDays: 14,
         limitUsd: 1000,
       },
+      expect.anything(),
+      { surface: "agent" },
+    );
+  });
+
+  it("re-enabling a disabled ceiling sends enabled:true through to invoke", async () => {
+    mockInvoke.mockResolvedValue(workspaceBudget({ enabled: true }));
+
+    await setSpendBudgetAction("acme", "main", {
+      scope: "workspace",
+      enabled: true,
+      period: "monthly",
+      limitUsd: 100,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "set_spend_budget",
+      expect.objectContaining({ enabled: true }),
       expect.anything(),
       { surface: "agent" },
     );
