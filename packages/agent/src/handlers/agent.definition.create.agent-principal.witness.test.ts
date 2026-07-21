@@ -38,6 +38,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         },
       };
     },
+    // The default "Agent Contributor" role lookup (Agent RBAC §3.2) — this
+    // witness pins principal provisioning, so the role row is absent here and
+    // the handler skips the auto-assignment.
+    select() {
+      return {
+        from: () => ({ where: () => ({ limit: async () => [] }) }),
+      };
+    },
   };
 
   return {

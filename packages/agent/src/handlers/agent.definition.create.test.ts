@@ -128,4 +128,33 @@ describe("agent.definition.create handler", () => {
     // The guard short-circuits before any write — no insert was issued.
     expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
   });
+
+  it("auto-assigns the default 'Agent Contributor' role when the seeded role exists (spec §3.2)", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert
+      [{ id: "prn-uuid" }], // principals insert
+      [], // agents.principalId update
+      [{ version: 1 }], // agent_versions insert
+      [{ id: "role-contrib", scopeKind: "org" }], // default role lookup HIT
+      [], // principal_role_assignments insert
+    );
+    const out = await agentDefinitionCreateHandler(INPUT, CTX);
+    expect(out.version).toBe(1);
+    // agents + principals + agent_versions + principal_role_assignments.
+    expect(fake.mutations.insert).toBe(4);
+  });
+
+  it("skips the default role assignment gracefully when the role is not seeded (dev DB)", async () => {
+    fake.enqueue(
+      [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }],
+      [{ id: "prn-uuid" }],
+      [],
+      [{ version: 1 }],
+      [], // default role lookup MISS — seeding is an ops step
+    );
+    const out = await agentDefinitionCreateHandler(INPUT, CTX);
+    expect(out.publicId).toBe("agt_1");
+    // No principal_role_assignments insert was attempted.
+    expect(fake.mutations.insert).toBe(3);
+  });
 });

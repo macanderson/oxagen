@@ -121,6 +121,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   update_trigger: () => import("./agent.trigger.update"),
   delete_trigger: () => import("./agent.trigger.delete"),
   list_triggers: () => import("./agent.trigger.list"),
+  // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
+  // detach/inspect IAM roles on an agent's delegated principal.
+  assign_agent_role: () => import("./agent.role.assign"),
+  revoke_agent_role: () => import("./agent.role.revoke"),
+  list_agent_roles: () => import("./agent.role.list"),
+  get_agent_role: () => import("./agent.role.get"),
 };
 
 /** Capability names this package supplies handlers for. Consumed by

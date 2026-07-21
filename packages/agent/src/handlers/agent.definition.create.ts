@@ -1,5 +1,6 @@
 import { withTenantDb, schema } from "@oxagen/database";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import pino from "pino";
 import { agentDefinitionConfigSchema } from "@oxagen/oxagen/agent-schema";
 import type {
   AgentDefinitionCreateInput,
@@ -11,8 +12,14 @@ import {
   INTERACTIVE_AGENT_SLUG,
 } from "@oxagen/oxagen/interactive-agent";
 import { AgentManagedReadOnlyError } from "./_agent-definition";
+import { DEFAULT_AGENT_ROLE_NAME } from "./_agent-role";
 
 export type { AgentDefinitionCreateInput, AgentDefinitionCreateOutput };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.definition" },
+});
 
 /**
  * Create a new agent definition: the identity row (status 'draft',
@@ -99,6 +106,42 @@ export async function agentDefinitionCreateHandler(
       })
       .returning({ version: schema.agentVersions.version });
     if (!version) throw new Error("agent_versions insert failed");
+
+    // Agent RBAC Phase 1 (spec §3.2): new agents default to the "Agent
+    // Contributor" system role, looked up BY NAME — seeding the role rows is
+    // an ops step (pnpm db:seed-iam), so a dev DB without them logs and
+    // skips rather than failing agent creation. agent.role.assign/revoke
+    // manage the assignment from here on.
+    const [defaultRole] = await tx
+      .select({ id: schema.roles.id, scopeKind: schema.roles.scopeKind })
+      .from(schema.roles)
+      .where(
+        and(
+          eq(schema.roles.orgId, ctx.orgId),
+          eq(schema.roles.name, DEFAULT_AGENT_ROLE_NAME),
+        ),
+      )
+      .limit(1);
+    if (defaultRole) {
+      await tx
+        .insert(schema.principalRoleAssignments)
+        .values({
+          principalId: principal.id,
+          roleId: defaultRole.id,
+          orgId: ctx.orgId,
+          workspaceId:
+            defaultRole.scopeKind === "workspace" ? ctx.workspaceId : null,
+          assignedBy: userId,
+          createdByUserId: userId,
+          updatedByUserId: userId,
+        })
+        .onConflictDoNothing();
+    } else {
+      logger.warn(
+        { orgId: ctx.orgId, agentId: agent.publicId },
+        `agent.definition.create: default agent role "${DEFAULT_AGENT_ROLE_NAME}" not seeded in this org — skipping auto-assignment (run pnpm db:seed-iam)`,
+      );
+    }
 
     return {
       agentId: agent.publicId,

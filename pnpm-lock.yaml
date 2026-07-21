@@ -689,6 +689,9 @@ importers:
       '@oxagen/github':
         specifier: workspace:*
         version: link:../github
+      '@oxagen/iam':
+        specifier: workspace:*
+        version: link:../iam
       '@oxagen/mcp-config':
         specifier: workspace:*
         version: link:../mcp-config
