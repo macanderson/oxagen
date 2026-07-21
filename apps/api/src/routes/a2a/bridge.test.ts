@@ -60,6 +60,27 @@ const h = vi.hoisted(() => {
       null,
   );
 
+  // Agent RBAC Q2: agent-run authz doubles. Default = a live agent principal
+  // with no attached human (pure API-key caller) and an empty grants snapshot.
+  const resolveAgentRunAuthzContext = vi.fn(
+    async (args: { orgId: string; workspaceId: string; agentId: string }) => ({
+      principalKind: "agent" as const,
+      agentPrincipal: {
+        id: "prn_agent_1",
+        kind: "agent" as const,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+      },
+      humanPrincipal: null,
+    }),
+  );
+  const fetchAgentRunAuthz = vi.fn(async () => ({
+    grants: [],
+    roles: [],
+    roleGrants: [],
+    policies: [],
+  }));
+
   // Minimal Postgres double for the agent_executions lineage writes
   // (insertExecutionRow/updateExecutionRow/findExecutionIdForTask in
   // bridge.ts). Records what was inserted/updated so lifecycle tests can
@@ -102,10 +123,17 @@ const h = vi.hoisted(() => {
     updateTask,
     loadTask,
     resolveAgentForA2A,
+    resolveAgentRunAuthzContext,
+    fetchAgentRunAuthz,
     dbState,
     fakeTx,
   };
 });
+
+vi.mock("@oxagen/iam", () => ({
+  resolveAgentRunAuthzContext: h.resolveAgentRunAuthzContext,
+  fetchAgentRunAuthz: h.fetchAgentRunAuthz,
+}));
 const {
   runCodingAgent,
   insertEvents,
@@ -646,5 +674,79 @@ describe("runA2ATask — JSON-RPC wire snapshot (task D)", () => {
       JSON.stringify(normalized, null, 2) + "\n",
       "utf8",
     );
+  });
+});
+
+// ── Agent RBAC Q2 — target-agent principal ∩ caller scope (spec §6 Q2) ─────────
+
+describe("runA2ATask — agent RBAC delegation (Q2)", () => {
+  const AGENT_ROW = {
+    id: "agt-uuid-1",
+    publicId: "agt_1",
+    slug: "billing-bot",
+    name: "Billing Bot",
+    description: null,
+    avatarUrl: null,
+    summary: null,
+    summaryChecksum: null,
+    agentType: "custom" as const,
+    status: "active",
+    deploymentStatus: "active",
+    activeVersionId: "ver-1",
+    activeVersion: { id: "ver-1", instructions: "Only discuss billing." },
+  };
+
+  it("threads the target agent's agentRun into tool materialization", async () => {
+    resolveAgentForA2A.mockResolvedValueOnce(AGENT_ROW as never);
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const { materializeTools } = await import("@oxagen/agent");
+    vi.mocked(materializeTools).mockClear();
+
+    await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: { ...USER_MESSAGE, metadata: { skillId: "billing-bot" } },
+    });
+
+    expect(h.resolveAgentRunAuthzContext).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: "agt_1", invokingUserId: null }),
+    );
+    const matCtx = vi.mocked(materializeTools).mock.calls[0]?.[0] as {
+      agentRun?: { agentId: string; resolution?: unknown };
+    };
+    expect(matCtx.agentRun).toBeDefined();
+    expect(matCtx.agentRun!.agentId).toBe("agt_1");
+    // The one-per-run snapshot is prefetched so BOTH layers read it.
+    expect(matCtx.agentRun!.resolution).toBeDefined();
+    expect(h.fetchAgentRunAuthz).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the task closed when the target agent has no live principal", async () => {
+    resolveAgentForA2A.mockResolvedValueOnce(AGENT_ROW as never);
+    h.resolveAgentRunAuthzContext.mockResolvedValueOnce(null as never);
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+
+    await expect(
+      runA2ATask({
+        ctx: CTX,
+        task: TASK,
+        history: HISTORY,
+        message: { ...USER_MESSAGE, metadata: { skillId: "billing-bot" } },
+      }),
+    ).rejects.toThrow(/failing closed/);
+  });
+
+  it("attaches no agentRun for a generic non-agent-addressed task", async () => {
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const { materializeTools } = await import("@oxagen/agent");
+    vi.mocked(materializeTools).mockClear();
+
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+
+    const matCtx = vi.mocked(materializeTools).mock.calls[0]?.[0] as {
+      agentRun?: unknown;
+    };
+    expect(matCtx.agentRun).toBeUndefined();
   });
 });
