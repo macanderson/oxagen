@@ -5,7 +5,7 @@ export const skillRevise = registerCapability({
   name: "revise_skill",
   domain: "skill",
   description:
-    "AI-driven edit of an existing skill: take a plain-language description of the change you want and the skill's current body, have the model redesign the .skill.md body (and description/weight) accordingly, then save it as a NEW immutable version — the version number is bumped and, by default, activated. The skill's identity (slug) never changes. This is the edit counterpart to skill.author (AI-create). Returns the new version id/number, whether it was activated, and a human-readable change summary.",
+    "AI-driven edit of an existing skill that emits canonical TOML and saves a new immutable version while preserving the slug",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -19,9 +19,7 @@ export const skillRevise = registerCapability({
     workspace: { Owner: "allow", Admin: "allow" },
   },
   input: z.object({
-    skill_id: z
-      .string()
-      .describe("Public ID of the skill to revise (skl_…)."),
+    skill_id: z.string().describe("Public ID of the skill to revise (skl_…)."),
     prompt: z
       .string()
       .min(10)
@@ -43,7 +41,9 @@ export const skillRevise = registerCapability({
   }),
   output: z.object({
     skill_id: z.string().describe("Public ID of the parent skill (skl_…)."),
-    version_id: z.string().describe("Public ID of the new skill version (slv_…)."),
+    version_id: z
+      .string()
+      .describe("Public ID of the new skill version (slv_…)."),
     version_number: z
       .number()
       .int()
@@ -52,9 +52,7 @@ export const skillRevise = registerCapability({
     activated: z
       .boolean()
       .describe("Whether this version is now the skill's active version."),
-    body: z
-      .string()
-      .describe("The revised .skill.md content (YAML frontmatter + body)."),
+    content: z.string().describe("The revised canonical skill.toml content."),
     changeSummary: z
       .array(z.string())
       .default([])

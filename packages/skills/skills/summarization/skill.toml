@@ -1,0 +1,10 @@
+schema_version = 1
+kind = "skill"
+name = "summarization"
+description = "How to summarize a conversation, a document, or a set of results — lead with the conclusion, anchor every point to its source, and never drop a pending action."
+instructions = "# Summarizing\n\nLoad this skill when asked for a summary, or when a long context must be\ncompacted. A good summary lets the reader act without reading the\noriginal.\n\n## Lead with the conclusion\n\nThe first sentence states the outcome, the recommendation, or the\ncurrent status — not the journey that got there and not the caveats.\nThe reader is scanning; make the first line carry the answer.\n\n## Anchor the evidence\n\nFollow with a short list of points, each tied to a concrete source — a\nfile, a document, an identifier, a link, a quoted line. Anchors are how\nthe reader verifies the claim. An anchorless point reads as a guess.\n\n## Never drop a pending action\n\nIf anything still needs doing, list every item. A summary that silently\nomits the last open task is the most damaging kind, because the reader\nassumes the list is complete and moves on.\n\n## Compacting your own context\n\nWhen summarizing to save room rather than to inform a person, prefer a\nreference over a restatement: point back to where the detail lives\ninstead of copying it. Drop the wrapping around tool results once their\ncontent is captured. Keep the user's own words verbatim wherever they\nencode intent or a decision.\n\n## Tone\n\nWrite in active voice and present tense. Cut hedging (\"it seems\",\n\"perhaps\", \"it might be the case that\") unless the uncertainty is itself\nthe point worth reporting."
+references = []
+
+[metadata]
+weight = "high"
+category = "writing"

@@ -1,63 +1,54 @@
-/**
- * loader.ts — Discover and parse user-defined slash commands.
- *
- * Sources, lowest → highest precedence (later overrides by name):
- *   1. ~/.config/oxagen/commands/*.md   (user)
- *   2. <project>/.claude/commands/*.md  (Claude Code interop)
- *   3. <project>/.oxagen/commands/*.md  (oxagen project commands)
- *
- * Reuses the shared markdown-registry frontmatter parser. Frontmatter keys:
- * description, `argument-hint`, model. The body is the prompt template.
- */
-import { join, basename } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import {
-  loadMarkdownRegistry,
-  readMarkdownFile,
-} from "../lib/markdown-registry.js";
+import { join } from "node:path";
+import { parseArtifactToml } from "@oxagen/agent-artifacts";
 import type { SlashCommand } from "./types.js";
 
 export interface LoadCommandsOptions {
-  /** Project root. Defaults to process.cwd(). */
   cwd?: string;
-  /** Override the user commands dir (testing). */
   userCommandsDir?: string;
 }
 
-function defFromFile(
-  path: string,
-): { key: string; value: SlashCommand } | null {
-  const fm = readMarkdownFile(path);
-  if (!fm) return null;
-  const { data, body } = fm;
-  const name = data["name"] || basename(path).replace(/\.md$/, "");
-  if (!name || !body.trim()) return null; // a command needs a name and a template
-  return {
-    key: name,
-    value: {
-      name,
-      description: data["description"] ?? "",
-      template: body,
-      argumentHint: data["argument-hint"] || undefined,
-      model: data["model"] || undefined,
-      source: path,
-    },
-  };
+function loadDirectory(
+  directory: string,
+  registry: Map<string, SlashCommand>,
+): void {
+  if (!existsSync(directory)) return;
+  let names: string[];
+  try {
+    names = readdirSync(directory)
+      .filter((name) => name.endsWith(".toml"))
+      .sort();
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const source = join(directory, name);
+    try {
+      const artifact = parseArtifactToml(readFileSync(source, "utf8"));
+      if (artifact.kind !== "command") continue;
+      registry.set(artifact.name, {
+        name: artifact.name,
+        description: artifact.description,
+        template: artifact.prompt,
+        argumentHint: artifact.argument_hint,
+        model: artifact.model,
+        source,
+      });
+    } catch {
+      // Invalid manifests are non-executable and isolated from valid siblings.
+    }
+  }
 }
 
-/** Load every slash command visible from `cwd`, merged by name across sources. */
 export function loadCommands(
-  opts: LoadCommandsOptions = {},
+  options: LoadCommandsOptions = {},
 ): Map<string, SlashCommand> {
-  const cwd = opts.cwd ?? process.cwd();
-  const userDir =
-    opts.userCommandsDir ?? join(homedir(), ".config", "oxagen", "commands");
-  return loadMarkdownRegistry(
-    [
-      userDir,
-      join(cwd, ".claude", "commands"),
-      join(cwd, ".oxagen", "commands"),
-    ],
-    defFromFile,
-  );
+  const cwd = options.cwd ?? process.cwd();
+  const userDirectory =
+    options.userCommandsDir ?? join(homedir(), ".config", "oxagen", "commands");
+  const registry = new Map<string, SlashCommand>();
+  loadDirectory(userDirectory, registry);
+  loadDirectory(join(cwd, ".oxagen", "commands"), registry);
+  return registry;
 }

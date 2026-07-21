@@ -44,6 +44,7 @@
     "@ai-sdk/provider": "4.0.2",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
@@ -56,6 +57,7 @@
     "marked": "15.0.12",
     "marked-terminal": "7.3.0",
     "react": "19.2.6",
+    "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "optionalDependencies": {

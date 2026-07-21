@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { loadSkillFile } from "./loader";
 import type { Skill } from "./types";
 
-// Recursive scan for `*.skill.md` so authors can organise built-in skills
+// Recursive scan for `skill.toml` bundles so authors can organise built-in skills
 // into category subdirectories without touching the loader. The depth is
 // bounded by the filesystem; we do not follow symlinks.
 export async function scanSkillsDir(root: string): Promise<Skill[]> {
@@ -28,7 +28,7 @@ async function walk(dir: string, out: Skill[]): Promise<void> {
       await walk(full, out);
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(".skill.md")) {
+    if (entry.isFile() && entry.name === "skill.toml") {
       try {
         const skill = await loadSkillFile(full, { source: "builtin" });
         out.push(skill);

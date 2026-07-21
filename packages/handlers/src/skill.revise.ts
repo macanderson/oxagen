@@ -15,10 +15,10 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillRevise } from "@oxagen/oxagen/contracts/skill.revise";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { parse as parseYaml } from "yaml";
 import { logger } from "./logger";
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 import {
-  assembleSkillMd,
+  assembleSkillToml,
   buildSystemPrompt,
   synthesisSchema,
   type SkillSynthesis,
@@ -32,16 +32,6 @@ export class SkillReviseError extends Error {
     super(message);
     this.name = "SkillReviseError";
   }
-}
-
-// Frontmatter delimiter — matches FRONTMATTER_RE in packages/skills/src/loader.ts
-// and skill.version.get.ts.
-const FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---\s*\n/;
-
-function extractFrontmatter(body: string): Record<string, unknown> {
-  const match = FRONTMATTER_RE.exec(body);
-  if (!match) return {};
-  return (parseYaml(match[1] ?? "") as Record<string, unknown>) ?? {};
 }
 
 // Shared skill synthesis, extended with a change summary the model fills
@@ -112,7 +102,10 @@ async function loadCurrentSkill(
   });
 }
 
-export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (input, ctx) => {
+export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (
+  input,
+  ctx,
+) => {
   if (!ctx.workspaceId) {
     throw new SkillReviseError("workspaceId is required (scoped capability).");
   }
@@ -121,19 +114,17 @@ export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (
 
   // ── Load the current skill body + immutable slug ─────────────────────────────
   const current = await loadCurrentSkill(input.skill_id, ctx.workspaceId);
-  const currentFrontmatter = extractFrontmatter(current.body);
-  const currentCategory =
-    typeof currentFrontmatter.metadata === "object" && currentFrontmatter.metadata
-      ? (currentFrontmatter.metadata as Record<string, unknown>).category
-      : undefined;
-  const categoryHint = typeof currentCategory === "string" ? currentCategory : undefined;
+  const currentArtifact = canonicalizeSkillArtifact(current.body).artifact;
+  const currentCategory = currentArtifact.metadata?.category;
+  const categoryHint =
+    typeof currentCategory === "string" ? currentCategory : undefined;
 
   // The system prompt is the shared skill-authoring guidance; nameHint pins the
   // existing slug so the model keeps the skill's identity.
   const systemPrompt = buildSystemPrompt(current.slug, categoryHint);
 
   const prompt = [
-    "CURRENT SKILL (.skill.md — revise THIS, preserving whatever the change request does not touch):",
+    "CURRENT SKILL (canonical TOML — revise this while preserving anything the change request does not touch):",
     current.body,
     "",
     "CHANGE REQUEST:",
@@ -161,7 +152,12 @@ export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (
     synthesis = result.object;
   } catch (err) {
     logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, skillId: input.skill_id },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        skillId: input.skill_id,
+      },
       "skill.revise: generateObjectFor failed",
     );
     throw new SkillReviseError(
@@ -176,12 +172,12 @@ export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (
     // Preserve the current category when the model dropped it.
     category: synthesis.category ?? categoryHint,
   };
-  const body = assembleSkillMd(pinned);
+  const { content } = canonicalizeSkillArtifact(assembleSkillToml(pinned));
 
   // ── Persist as a new immutable version via the shared version-bump helper ────
   const result = await createNewSkillVersion({
     skillPublicId: input.skill_id,
-    body,
+    content,
     activate: input.activate,
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -205,7 +201,7 @@ export const skillReviseHandler: CapabilityHandler<typeof skillRevise> = async (
     version_id: result.versionId,
     version_number: result.versionNumber,
     activated: result.activated,
-    body,
+    content,
     changeSummary: synthesis.changeSummary,
   };
 };

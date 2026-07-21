@@ -4,6 +4,7 @@ import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { skillBodyChecksum } from "./skill-checksum";
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 
 export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
   input,
@@ -15,7 +16,10 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
     );
   }
 
-  const { name, slug, description, body, activate } = input;
+  const { content, activate } = input;
+  const canonical = canonicalizeSkillArtifact(content);
+  const { name: slug, description } = canonical.artifact;
+  const name = canonical.artifact.metadata?.display_name ?? slug;
   const orgId = ctx.orgId;
   const workspaceId = ctx.workspaceId;
 
@@ -65,6 +69,7 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
       slug: existingSkill.slug,
       activeVersion,
       created: false,
+      artifact: canonical.artifact,
     };
   }
 
@@ -104,9 +109,9 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
           skillId: skillRow.id,
           versionNumber: 1,
           isLatest: true,
-          body,
-          checksum: skillBodyChecksum(body),
-          referencesPayload: [],
+          body: canonical.content,
+          checksum: skillBodyChecksum(canonical.content),
+          referencesPayload: canonical.referencesPayload,
           createdByUserId: ctx.userId ?? undefined,
           updatedByUserId: ctx.userId ?? undefined,
         })
@@ -183,6 +188,7 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
           slug: raceSkill.slug,
           activeVersion,
           created: false,
+          artifact: canonical.artifact,
         };
       }
     }
@@ -199,5 +205,6 @@ export const skillCreateHandler: CapabilityHandler<typeof skillCreate> = async (
     slug: result.slug,
     activeVersion: result.activeVersion,
     created: true,
+    artifact: canonical.artifact,
   };
 };

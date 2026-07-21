@@ -5,19 +5,19 @@ import { getCapability } from "../registry";
 describe("skill.version.upload capability", () => {
   // ── input: required fields ─────────────────────────────────────────────────
 
-  it("parses valid input with skill_id and body", () => {
+  it("parses valid input with skill_id and content", () => {
     const parsed = skillVersionUpload.input.parse({
       skill_id: "skl_abc123",
-      body: "---\nname: demo\n---\nbody",
+      content: 'schema_version = 1\nkind = "skill"',
     });
     expect(parsed.skill_id).toBe("skl_abc123");
-    expect(parsed.body).toBe("---\nname: demo\n---\nbody");
+    expect(parsed.content).toContain("schema_version");
   });
 
   it("defaults activate to true when omitted", () => {
     const parsed = skillVersionUpload.input.parse({
       skill_id: "skl_abc",
-      body: "content",
+      content: "content",
     });
     expect(parsed.activate).toBe(true);
   });
@@ -25,7 +25,7 @@ describe("skill.version.upload capability", () => {
   it("accepts explicit activate=false", () => {
     const parsed = skillVersionUpload.input.parse({
       skill_id: "skl_abc",
-      body: "content",
+      content: "content",
       activate: false,
     });
     expect(parsed.activate).toBe(false);
@@ -34,7 +34,7 @@ describe("skill.version.upload capability", () => {
   it("accepts an optional workspace_id", () => {
     const parsed = skillVersionUpload.input.parse({
       skill_id: "skl_abc",
-      body: "content",
+      content: "content",
       workspace_id: "ws_123",
     });
     expect(parsed.workspace_id).toBe("ws_123");
@@ -43,24 +43,26 @@ describe("skill.version.upload capability", () => {
   // ── input: validation ──────────────────────────────────────────────────────
 
   it("rejects missing skill_id", () => {
-    expect(() => skillVersionUpload.input.parse({ body: "content" })).toThrow();
+    expect(() =>
+      skillVersionUpload.input.parse({ content: "content" }),
+    ).toThrow();
   });
 
-  it("rejects missing body", () => {
+  it("rejects missing content", () => {
     expect(() =>
       skillVersionUpload.input.parse({ skill_id: "skl_abc" }),
     ).toThrow();
   });
 
-  it("rejects an empty body", () => {
+  it("rejects empty content", () => {
     expect(() =>
-      skillVersionUpload.input.parse({ skill_id: "skl_abc", body: "" }),
+      skillVersionUpload.input.parse({ skill_id: "skl_abc", content: "" }),
     ).toThrow();
   });
 
   it("rejects a non-string skill_id", () => {
     expect(() =>
-      skillVersionUpload.input.parse({ skill_id: 42, body: "content" }),
+      skillVersionUpload.input.parse({ skill_id: 42, content: "content" }),
     ).toThrow();
   });
 

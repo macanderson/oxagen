@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { skillArtifactSchema } from "@oxagen/agent-artifacts";
 import { registerCapability } from "../registry";
 
 export const skillVersionGet = registerCapability({
   name: "get_skill_version",
   domain: "skill",
   description:
-    "Fetch a specific version of a workspace skill, returning the full body, parsed frontmatter, and version metadata",
+    "Fetch a specific immutable workspace skill version with canonical TOML and its parsed artifact projection",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp", "app"],
@@ -51,13 +52,11 @@ export const skillVersionGet = registerCapability({
     isActive: z
       .boolean()
       .describe("True when this version matches the skill's active_version_id"),
-    body: z.string().describe("Raw skill body (frontmatter + content)"),
-    frontmatter: z
-      .record(z.unknown())
-      .describe("Parsed YAML frontmatter extracted from the skill body"),
+    content: z.string().describe("Canonical skill.toml content"),
+    artifact: skillArtifactSchema,
     referencesPayload: z
       .array(z.unknown())
-      .describe("Graph node + file references from frontmatter"),
+      .describe("Graph node + file references projected from the artifact"),
     changeSummary: z
       .string()
       .nullable()
@@ -65,7 +64,7 @@ export const skillVersionGet = registerCapability({
     checksum: z
       .string()
       .nullable()
-      .describe("SHA-256 hex over body; null on rows predating checksums"),
+      .describe("SHA-256 hex over content; null on rows predating checksums"),
     createdAt: z.string().datetime(),
     createdBy: z
       .string()

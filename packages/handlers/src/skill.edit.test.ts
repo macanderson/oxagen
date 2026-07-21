@@ -18,12 +18,12 @@ const mocks = vi.hoisted(() => ({
   insertedValues: [] as Record<string, unknown>[],
 }));
 
-const VALID_BODY = `---
-name: edited-skill
-description: An edited skill
----
-
-Updated skill instructions.
+const VALID_CONTENT = `schema_version = 1
+kind = "skill"
+name = "edited-skill"
+description = "An edited skill"
+instructions = "Updated skill instructions."
+references = []
 `;
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -80,7 +80,7 @@ const VERSION_ROW = {
 function setupHappyPath(
   overrides: Partial<{
     skill_id: string;
-    body: string;
+    content: string;
     activate: boolean;
   }> = {},
 ) {
@@ -103,7 +103,7 @@ function setupHappyPath(
 
   return {
     skill_id: "skl_edit",
-    body: VALID_BODY,
+    content: VALID_CONTENT,
     activate: true,
     workspace_id: undefined as string | undefined,
     ...overrides,
@@ -149,20 +149,18 @@ describe("skillEditHandler (@oxagen/handlers)", () => {
     expect(mocks.versionUpdateWhere).toHaveBeenCalledTimes(1);
   });
 
-  it("throws when body is not valid .skill.md", async () => {
-    const input = setupHappyPath({ body: "# No frontmatter" });
+  it("throws when content is not valid skill TOML", async () => {
+    const input = setupHappyPath({ content: "not toml" });
 
     await expect(skillEditHandler(input, CTX)).rejects.toThrow(
-      /missing YAML frontmatter/i,
+      /invalid_artifact/i,
     );
   });
 
-  it("throws when body frontmatter fails schema validation (missing description)", async () => {
-    const badBody = `---
-name: ok-slug
----
-body`;
-    const input = setupHappyPath({ body: badBody });
+  it("throws when content fails the skill schema", async () => {
+    const input = setupHappyPath({
+      content: 'schema_version = 1\nkind = "skill"\nname = "ok-slug"',
+    });
 
     await expect(skillEditHandler(input, CTX)).rejects.toThrow();
   });

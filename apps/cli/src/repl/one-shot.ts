@@ -541,7 +541,7 @@ export async function runAgentOneShot(
     settings,
     readOnly: options.readOnly,
     agentTools: agent.tools,
-    // Per-agent skills (full SKILL.md bodies) + MCP-server selection —
+    // Per-agent skill instructions + MCP-server selection —
     // AgentDefinition.skills / .mcpServers, parsed by agents/loader.ts.
     agentSkills: agent.skills,
     agentMcpServers: agent.mcpServers,

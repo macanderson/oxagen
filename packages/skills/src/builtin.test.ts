@@ -48,6 +48,19 @@ describe("embeddedBuiltinSkills", () => {
     expect(createAgent!.body.length).toBeGreaterThan(500);
   });
 
+  it("teaches the canonical TOML skill contract", () => {
+    const skillBuilder = embeddedBuiltinSkills().find(
+      (skill: Skill) => skill.slug === "skill-builder",
+    );
+    expect(skillBuilder?.body).toContain("skill.toml");
+    expect(skillBuilder?.body).toContain("schema_version = 1");
+    expect(skillBuilder?.body).toContain("references =");
+    expect(skillBuilder?.body).not.toContain("*.skill.md");
+    expect(skillBuilder?.body).not.toContain(
+      "A skill is a single `*.skill.md`",
+    );
+  });
+
   it("returns a fresh array each call (no shared mutable state)", () => {
     const a = embeddedBuiltinSkills();
     const b = embeddedBuiltinSkills();
@@ -84,7 +97,9 @@ describe("createBuiltinSkillRegistry", () => {
       source: "tenant",
       version: "2.0.0",
     };
-    const registry = createBuiltinSkillRegistry(async () => [tenantCreateAgent]);
+    const registry = createBuiltinSkillRegistry(async () => [
+      tenantCreateAgent,
+    ]);
     const resolved = await registry.get("create-agent");
     expect(resolved?.source).toBe("tenant");
     expect(resolved?.body).toBe("TENANT BODY");

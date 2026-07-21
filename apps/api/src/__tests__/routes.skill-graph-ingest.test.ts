@@ -1,6 +1,6 @@
 /**
  * Unit tests for three thin org-scoped routes that were previously uncovered:
- *   - GET  /skill/export   (skill.export — streams .skill.md as an attachment)
+ *   - GET  /skill/export   (skill.export — streams canonical TOML as an attachment)
  *   - POST /skill/edit     (skill.edit)
  *
  * Pattern mirrors routes.graph.test.ts: mock at the adapter seam, assert the
@@ -103,8 +103,8 @@ async function authPost(path: string, body: unknown): Promise<Response> {
 
 describe("GET /skill/export", () => {
   const validOutput = {
-    filename: "my-skill.skill.md",
-    content: "---\nname: my-skill\n---\n# Body",
+    filename: "my-skill.toml",
+    content: 'schema_version = 1\nkind = "skill"\nname = "my-skill"\n',
     versionNumber: 3,
   };
 
@@ -113,9 +113,7 @@ describe("GET /skill/export", () => {
     const res = await authGet("/skill/export?skillId=skl_ABC");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
-    expect(res.headers.get("content-disposition")).toContain(
-      "my-skill.skill.md",
-    );
+    expect(res.headers.get("content-disposition")).toContain("my-skill.toml");
     expect(res.headers.get("x-skill-version")).toBe("3");
     expect(await res.text()).toBe(validOutput.content);
     const [name, input] = mocks.invoke.mock.calls[0] as [
@@ -146,7 +144,7 @@ describe("GET /skill/export", () => {
 describe("POST /skill/edit", () => {
   const validBody = {
     skill_id: "skl_ABC",
-    body: "---\nname: my-skill\n---\n# Updated",
+    content: 'schema_version = 1\nkind = "skill"\nname = "my-skill"\n',
   };
 
   it("forwards a valid edit to skill.edit and returns the result", async () => {
@@ -166,14 +164,40 @@ describe("POST /skill/edit", () => {
     ];
     expect(name).toBe("edit_skill");
     expect(input.skill_id).toBe("skl_ABC");
-    expect(input.body).toBe(validBody.body);
+    expect(input.content).toBe(validBody.content);
   });
 
-  it("returns 400 when body is empty", async () => {
+  it("returns 400 when content is empty", async () => {
     const res = await authPost("/skill/edit", {
       skill_id: "skl_ABC",
-      body: "",
+      content: "",
     });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── POST /graph/ingest ────────────────────────────────────────────────────────
+
+describe("POST /graph/ingest", () => {
+  it("forwards extracted-text ingest to graph.ingest with default maxEntities", async () => {
+    mocks.invoke.mockResolvedValue({ entities: [], edges: [] });
+    const res = await authPost("/graph/ingest", {
+      text: "Acme depends on Stripe.",
+    });
+    expect(res.status).toBe(200);
+    const [name, input] = mocks.invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(name).toBe("ingest_graph");
+    expect(input.text).toBe("Acme depends on Stripe.");
+    // maxEntities has a schema default of 25 applied at parse time.
+    expect(input.maxEntities).toBe(25);
+  });
+
+  it("returns 400 when text is empty", async () => {
+    const res = await authPost("/graph/ingest", { text: "" });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

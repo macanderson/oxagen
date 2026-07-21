@@ -8,8 +8,8 @@ export const schema = {
   skill_id: skillEdit.input.shape.skill_id.describe(
     "Public ID of the skill to edit (e.g. 'skl_...')",
   ),
-  body: skillEdit.input.shape.body.describe(
-    "Full updated .skill.md content including YAML frontmatter",
+  content: skillEdit.input.shape.content.describe(
+    "Full updated canonical skill.toml content",
   ),
   activate: skillEdit.input.shape.activate.describe(
     "Set the new version as active immediately (default: true)",

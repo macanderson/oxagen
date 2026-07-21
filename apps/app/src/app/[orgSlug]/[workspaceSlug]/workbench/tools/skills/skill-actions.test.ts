@@ -302,20 +302,20 @@ describe("editSkill", () => {
     expect(result.versionNumber).toBe(2);
     expect(mockInvoke).toHaveBeenCalledOnce();
 
-    // Contract shapes: skill_id (slug accepted), body, change_summary — and
+    // Contract shapes: skill_id (slug accepted), content, change_summary — and
     // activate:false so the edit is a draft until the user confirms the pin.
     const [capability, payload] = mockInvoke.mock.calls[0] as [
       string,
       {
         skill_id: string;
-        body: string;
+        content: string;
         change_summary?: string;
         activate: boolean;
       },
     ];
     expect(capability).toBe("upload_skill_version");
     expect(payload.skill_id).toBe("summarizer");
-    expect(payload.body).toBe("You are a summarizer.");
+    expect(payload.content).toBe("You are a summarizer.");
     expect(payload.change_summary).toBe("Added detail");
     expect(payload.activate).toBe(false);
     expect(mockRevalidatePath).toHaveBeenCalledWith(

@@ -21,6 +21,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { invoke } from "@oxagen/oxagen";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 import "@oxagen/handlers/register";
 import type { SkillVersionUploadOutput } from "@oxagen/oxagen/contracts/skill.version.upload";
 import type { SkillExportOutput } from "@oxagen/oxagen/contracts/skill.export";
@@ -112,7 +113,7 @@ export async function editSkill(
       "upload_skill_version",
       {
         skill_id: parsed.data.skillSlug,
-        body: parsed.data.content,
+        content: parsed.data.content,
         change_summary: parsed.data.commitMessage,
         activate: false,
       },
@@ -271,13 +272,7 @@ export async function draftSkillAction(
 
 // ── createSkillAction ─────────────────────────────────────────────────────────
 //
-// Composes the YAML frontmatter that the skill loader expects (see
-// packages/skills/src/types.ts skillFrontmatterSchema — name/description
-// required, metadata.weight optional low|high|critical) around the user's
-// markdown body, then calls skill.create. skill.create itself stores `body`
-// verbatim (no server-side frontmatter validation — see
-// packages/handlers/src/skill.create.ts) so composing here is the only place
-// this shape gets applied.
+// Serializes the reviewed form into canonical TOML before invoking create_skill.
 
 const CreateSkillSchema = z.object({
   orgSlug: z.string().min(1),
@@ -294,12 +289,7 @@ const CreateSkillSchema = z.object({
   activate: z.boolean(),
 });
 
-const MAX_SKILL_MD_LENGTH = 32_000;
-
-/** YAML-safe double-quoted scalar (JSON strings are valid YAML strings). */
-function yamlQuote(value: string): string {
-  return JSON.stringify(value);
-}
+const MAX_SKILL_TOML_LENGTH = 32_000;
 
 export async function createSkillAction(
   input: z.infer<typeof CreateSkillSchema>,
@@ -326,30 +316,25 @@ export async function createSkillAction(
   if (!auth.ok) return { ok: false, error: auth.error };
   const { ctx } = auth.scope;
 
-  const frontmatter = [
-    "---",
-    `name: ${yamlQuote(slug)}`,
-    `description: ${yamlQuote(description)}`,
-    "metadata:",
-    `  weight: ${weight}`,
-    "---",
-    "",
-  ].join("\n");
-  const fullBody = `${frontmatter}\n${body}`;
+  const content = serializeArtifactToml({
+    schema_version: 1,
+    kind: "skill",
+    name: slug,
+    description,
+    instructions: body,
+    references: [],
+    metadata: { weight, display_name: name },
+  });
 
-  if (fullBody.length > MAX_SKILL_MD_LENGTH) {
+  if (content.length > MAX_SKILL_TOML_LENGTH) {
     return {
       ok: false,
-      error: `Skill content is too long (${fullBody.length} chars incl. frontmatter; max ${MAX_SKILL_MD_LENGTH}).`,
+      error: `Skill content is too long (${content.length} chars; max ${MAX_SKILL_TOML_LENGTH}).`,
     };
   }
 
   try {
-    const out = await invoke(
-      "create_skill",
-      { name, slug, description, body: fullBody, activate },
-      ctx,
-    );
+    const out = await invoke("create_skill", { content, activate }, ctx);
     const typed = out as { slug: string; created: boolean };
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(skillsPath(routeCtx));

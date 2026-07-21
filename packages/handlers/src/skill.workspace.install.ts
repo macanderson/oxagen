@@ -1,18 +1,23 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 import { skillWorkspaceInstall } from "@oxagen/oxagen/contracts/skill.workspace.install";
 import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
 import { skillBodyChecksum } from "./skill-checksum";
+import {
+  canonicalizeSkillArtifact,
+  canonicalSkillMetadata,
+} from "./skill-artifact";
 
 // Builtin templates are resolved from EMBEDDED module data, never a runtime
-// filesystem read: serverless bundlers drop packages/skills/skills/*.md, so a
+// filesystem read: serverless bundlers drop packages/skills/skills data, so a
 // `readdir` there returns ENOENT in prod (postmortem 2026-06-12).
 
 /**
  * Derive a workspace-safe slug from a custom skill name. The name must already
- * be a valid kebab-case identifier per the skill frontmatter schema; we strip
+ * be a valid kebab-case identifier per the skill artifact schema; we strip
  * any surrounding whitespace but otherwise trust the caller. The contract
  * validates min-length; the DB unique index guards duplicates.
  */
@@ -59,7 +64,19 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<
     }
     targetSlug = builtin.slug;
     skillName = builtin.name;
-    skillBody = builtin.body;
+    skillBody = canonicalizeSkillArtifact(
+      serializeArtifactToml({
+        schema_version: 1,
+        kind: "skill",
+        name: builtin.slug,
+        description: builtin.description,
+        instructions: builtin.body,
+        references: builtin.references.map((reference) => reference.path),
+        ...(canonicalSkillMetadata(builtin.metadata)
+          ? { metadata: canonicalSkillMetadata(builtin.metadata) }
+          : {}),
+      }),
+    ).content;
     skillDescription = builtin.description;
     skillSource = "builtin";
     referencesPayload = builtin.references.map((r) => ({
@@ -69,15 +86,14 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<
     installedFromSlug = templateSlug;
   } else {
     // Custom upload path.
-    targetSlug = slugFromName(custom!.name);
-    skillName = custom!.name;
-    skillBody = custom!.body;
-    skillDescription = "";
+    const canonical = canonicalizeSkillArtifact(custom!.content);
+    targetSlug = slugFromName(canonical.artifact.name);
+    skillName =
+      canonical.artifact.metadata?.display_name ?? canonical.artifact.name;
+    skillBody = canonical.content;
+    skillDescription = canonical.artifact.description;
     skillSource = "tenant";
-    referencesPayload = (custom!.references ?? []).map((path) => ({
-      path,
-      body: "",
-    }));
+    referencesPayload = canonical.referencesPayload;
     installedFromSlug = null;
   }
 

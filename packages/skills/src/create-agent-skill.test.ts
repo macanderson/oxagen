@@ -6,15 +6,15 @@ import { parseSkill } from "./loader";
 
 // The builtin create-agent skill is the single source of truth for how the
 // agent.definition.suggest handler turns a description into a config. It must
-// always parse as a valid .skill.md so the seeder and the handler's filesystem
+// always parse as valid canonical TOML so the seeder and the handler's filesystem
 // fallback can load it.
 const SKILL_PATH = join(
   fileURLToPath(import.meta.url),
-  "../../skills/create-agent.skill.md",
+  "../../skills/create-agent/skill.toml",
 );
 
 describe("create-agent builtin skill", () => {
-  it("parses via parseSkill with the expected frontmatter", async () => {
+  it("parses via parseSkill with the expected metadata", async () => {
     const raw = await readFile(SKILL_PATH, "utf8");
     const skill = parseSkill(raw, { source: "builtin" });
 

@@ -1,43 +1,31 @@
-/**
- * write.ts — Scaffold a new skill for `oxagen skill new`.
- *
- * A skill is a directory, not a flat file, so this can't reuse
- * `scaffoldMarkdownFile` directly: it creates `.oxagen/skills/<name>/SKILL.md`
- * (never overwriting an existing manifest) with the same non-clobbering
- * semantics.
- */
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 
-const TEMPLATE = (name: string) => `---
-name: ${name}
-description: Describe when this skill should be used (this line is always shown to the agent).
----
-
-# ${name}
-
-Describe the skill: what it does, when to reach for it, and the concrete steps
-to follow. This whole body is injected into the agent's system prompt only when
-the skill is explicitly selected.
-`;
-
-/**
- * Write a starter skill to `.oxagen/skills/<name>/SKILL.md`. Returns the
- * manifest path and whether it was created (false if one already existed).
- */
-export function scaffoldSkill(opts: {
+export function scaffoldSkill(options: {
   name: string;
   cwd?: string;
   dir?: string;
-}): {
-  path: string;
-  created: boolean;
-} {
-  const skillsDir =
-    opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "skills");
-  const path = join(skillsDir, opts.name, "SKILL.md");
-  if (existsSync(path)) return { path, created: false };
-  mkdirSync(join(skillsDir, opts.name), { recursive: true });
-  writeFileSync(path, TEMPLATE(opts.name), "utf8");
-  return { path, created: true };
+}): { path: string; created: boolean } {
+  const skillsDirectory =
+    options.dir ?? join(options.cwd ?? process.cwd(), ".oxagen", "skills");
+  const directory = join(skillsDirectory, options.name);
+  const path = join(directory, "skill.toml");
+  const content = serializeArtifactToml({
+    schema_version: 1,
+    kind: "skill",
+    name: options.name,
+    description: "Describe when this skill should be used.",
+    instructions: `# ${options.name}\n\nDescribe the skill and the concrete steps to follow.`,
+    references: [],
+  });
+  mkdirSync(directory, { recursive: true });
+  try {
+    writeFileSync(path, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return { path, created: true };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST")
+      return { path, created: false };
+    throw error;
+  }
 }

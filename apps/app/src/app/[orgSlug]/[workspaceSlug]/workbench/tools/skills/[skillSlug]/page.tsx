@@ -79,7 +79,7 @@ export default async function WorkbenchSkillDetailPage({ params }: PageProps) {
       installedFromSlug: out.installedFromSlug,
       activeVersion: `v${out.versionNumber}`,
       activeVersionIsPinned: out.isActive,
-      content: out.body,
+      content: out.content,
       updatedAt: out.createdAt,
     };
   } catch (err) {

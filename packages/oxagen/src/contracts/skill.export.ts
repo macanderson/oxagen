@@ -5,7 +5,7 @@ export const skillExport = registerCapability({
   name: "export_skill",
   domain: "skill",
   description:
-    "Export the active (or a specified) version of a skill as a downloadable .skill.md string that round-trips through parseSkill",
+    "Export the active or specified immutable skill version as canonical TOML",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "docs", "mcp", "app"],
@@ -30,10 +30,8 @@ export const skillExport = registerCapability({
   output: z.object({
     filename: z
       .string()
-      .describe("Suggested filename for the download (e.g. my-skill.skill.md)"),
-    content: z
-      .string()
-      .describe("Full .skill.md text including YAML frontmatter and body"),
+      .describe("Suggested filename for the download (e.g. my-skill.toml)"),
+    content: z.string().describe("Canonical skill.toml content"),
     versionNumber: z
       .number()
       .int()
