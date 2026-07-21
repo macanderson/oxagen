@@ -1,10 +1,35 @@
 #!/usr/bin/env tsx
 /**
- * seed-iam-defaults.ts — OXA-1389 Phase 2
+ * seed-iam-defaults.ts — OXA-1389 Phase 2 + Agent RBAC Phase 1
  *
- * Seeds `org.role_grants` rows for every system role in every org by walking
- * the exported capability contracts and reading each contract's `defaultRoles`
- * field. This is idempotent: all INSERTs use ON CONFLICT DO NOTHING.
+ * Two independent seed phases against the SAME capability registry:
+ *
+ *   Phase 2 (legacy):  seeds `iam.role_grants` for the 7 pre-existing system
+ *     roles (org: Owner/Admin/Compliance/Billing, workspace: Owner/Member/
+ *     Viewer) by walking each capability contract's `defaultRoles` field.
+ *
+ *   Agent RBAC Phase 1 (docs/specs/agent-rbac/spec.md §3.2): seeds exactly
+ *     THREE system workspace roles for agent principals —
+ *       "Agent Observer"    — read/answer only
+ *       "Agent Contributor" — standard worker
+ *       "Agent Operator"    — trusted automation
+ *     No unrestricted/legacy fourth role exists — pre-launch, there is no
+ *     backwards-compatibility path to preserve (§6, open question 1).
+ *     Grant effects are derived from each capability's `agent.category` /
+ *     `agent.riskLevel` metadata (packages/oxagen/src/contracts/*.ts), and
+ *     every grant row carries a `resourceScope` condition (a CEILING, not an
+ *     allow/deny gate — see packages/oxagen/src/iam/conditions.ts) so the
+ *     resolver can intersect it against the agent definition's own
+ *     graphAccess/agentTools declaration. This script only SEEDS the data;
+ *     enforcement lives in the resolver (a separate change).
+ *
+ * Both phases are idempotent:
+ *   - role_grants (legacy phase): INSERT ... ON CONFLICT DO NOTHING.
+ *   - iam.roles (agent phase): INSERT ... ON CONFLICT (public_id) DO UPDATE
+ *     so re-running updates an existing role's description/flags in place.
+ *   - iam.role_grants (agent phase): INSERT ... ON CONFLICT (public_id) DO
+ *     UPDATE so a capability's effect/resourceScope changing on re-run is
+ *     reflected, not silently skipped.
  *
  * Run via:
  *   pnpm db:seed-iam
@@ -22,6 +47,7 @@ import postgres from "postgres";
 import kleur from "kleur";
 import { loadEnv } from "@oxagen/config/env";
 import { formatError } from "./lib/format-error";
+import type { ResourceScope } from "@oxagen/oxagen/iam";
 
 // System role names seeded in 0008_iam_seed_defaults.sql.
 const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
@@ -38,6 +64,139 @@ interface RoleGrantSpec {
   effect: Effect;
 }
 
+// ── Agent RBAC (docs/specs/agent-rbac/spec.md §3.2) ───────────────────────────
+//
+// Exactly three system agent roles — no unrestricted/legacy fourth role.
+// Pre-launch, there is no backwards-compatibility path (§6 open question 1
+// answer: reset, not preserve).
+
+const AGENT_ROLE_NAMES = [
+  "Agent Observer",
+  "Agent Contributor",
+  "Agent Operator",
+] as const;
+type AgentRoleName = (typeof AGENT_ROLE_NAMES)[number];
+
+const AGENT_ROLE_DESCRIPTIONS: Record<AgentRoleName, string> = {
+  "Agent Observer":
+    "Read/answer only. Reads (category: read, introspection, graph, memory) " +
+    "are allowed; every mutation is denied. Graph access is forced to " +
+    "mode='read'; all MCP tool calls are denied.",
+  "Agent Contributor":
+    "Standard worker. Reads are allowed; low/medium riskLevel mutations are " +
+    "allowed; high riskLevel mutations require approval. Graph access is " +
+    "as-configured by the agent definition (no extra ceiling); MCP tool " +
+    "calls are asked per-tool on the servers the agent declares.",
+  "Agent Operator":
+    "Trusted automation. Contributor posture plus high riskLevel mutations " +
+    "are allowed, EXCEPT vcs/billing/secret-category capabilities which " +
+    "stay require_approval or deny per their own category metadata. Graph " +
+    "access is as-configured including mode='extend'; MCP tool calls are " +
+    "allowed on the servers the agent declares.",
+};
+
+// Categories treated as read/answer-only — allowed for every agent role,
+// denied as mutations for Agent Observer.
+const READ_CATEGORIES: ReadonlySet<string> = new Set([
+  "read",
+  "introspection",
+  "graph",
+  "memory",
+]);
+
+// Categories that stay at Contributor's (never Operator's uncapped) posture
+// even for Agent Operator — vcs/billing/security-sensitive capabilities.
+// There is no "security" category in the registry; "secret" is the closest
+// match (secret.key.*, secret.value.*, secret.export, secret.import_env).
+const OPERATOR_RESTRICTED_CATEGORIES: ReadonlySet<string> = new Set([
+  "vcs",
+  "billing",
+  "secret",
+]);
+
+/** Agent RBAC resourceScope ceiling, identical across every grant row for a role. */
+const AGENT_ROLE_RESOURCE_SCOPE: Record<AgentRoleName, ResourceScope> = {
+  "Agent Observer": {
+    graph: { mode: "read" },
+    mcp: { rules: [{ pattern: "*", effect: "deny" }] },
+  },
+  "Agent Contributor": {
+    mcp: { rules: [{ pattern: "*", effect: "ask" }] },
+  },
+  "Agent Operator": {
+    graph: { mode: "extend" },
+    mcp: { rules: [{ pattern: "*", effect: "allow" }] },
+  },
+};
+
+/**
+ * Contributor's mutation effect for a capability outside the read
+ * categories: low/medium riskLevel allow, high riskLevel (or undeclared —
+ * fail-closed) require_approval.
+ */
+function contributorMutationEffect(
+  riskLevel: "low" | "medium" | "high" | undefined,
+): Effect {
+  if (riskLevel === "low" || riskLevel === "medium") return "allow";
+  return "require_approval"; // riskLevel "high" or undeclared
+}
+
+/** Per-agent-role effect for one capability, derived from category/riskLevel. */
+function agentRoleEffect(
+  roleName: AgentRoleName,
+  category: string | undefined,
+  riskLevel: "low" | "medium" | "high" | undefined,
+): Effect {
+  const isRead = category !== undefined && READ_CATEGORIES.has(category);
+
+  if (roleName === "Agent Observer") {
+    return isRead ? "allow" : "deny";
+  }
+
+  if (isRead) return "allow";
+
+  if (roleName === "Agent Contributor") {
+    return contributorMutationEffect(riskLevel);
+  }
+
+  // Agent Operator: Contributor posture, plus riskLevel=high allow — except
+  // vcs/billing/secret categories, which stay at Contributor's posture.
+  const isOperatorRestricted =
+    category !== undefined && OPERATOR_RESTRICTED_CATEGORIES.has(category);
+  if (isOperatorRestricted) {
+    return contributorMutationEffect(riskLevel);
+  }
+  return riskLevel === "low" || riskLevel === "medium" || riskLevel === "high"
+    ? "allow"
+    : "require_approval"; // undeclared riskLevel — fail closed
+}
+
+/** rol_<sha256(orgId:scopeKind:name)[:22]> — matches iam-provision.ts. */
+function makeRolePublicId(
+  orgId: string,
+  scopeKind: "org" | "workspace",
+  name: string,
+): string {
+  const digest = createHash("sha256")
+    .update(`${orgId}:${scopeKind}:${name}`)
+    .digest("hex")
+    .slice(0, 22);
+  return `rol_${digest}`;
+}
+
+// Generate a stable, collision-free public_id for a role_grant row.
+// Deterministic so re-runs are idempotent against the public_id UNIQUE
+// constraint. A previous version truncated the capability id to 14 chars,
+// which collided for capabilities sharing a prefix (e.g.
+// agent.task.background.{start,read,cancel}) and silently dropped grants.
+function makeRoleGrantPublicId(roleId: string, capabilityId: string): string {
+  const digest = createHash("sha256")
+    .update(`${roleId}:${capabilityId}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `rlg_${digest}`;
+}
+
 async function main(): Promise<void> {
   const env = loadEnv();
   const sql = postgres(env.DATABASE_URL, { max: 1, prepare: false });
@@ -47,9 +206,11 @@ async function main(): Promise<void> {
     const { listCapabilities } = await import("@oxagen/oxagen");
     const capabilities = listCapabilities();
 
-    console.log(kleur.cyan(`[seed-iam] found ${capabilities.length} capabilities`));
+    console.log(
+      kleur.cyan(`[seed-iam] found ${capabilities.length} capabilities`),
+    );
 
-    // Build role_grants specs from each capability's defaultRoles declaration.
+    // ── Phase 2 (legacy): role_grants from each contract's defaultRoles ─────
     const specs: RoleGrantSpec[] = [];
 
     for (const cap of capabilities) {
@@ -61,7 +222,12 @@ async function main(): Promise<void> {
         for (const roleName of ORG_ROLES) {
           const effect = org[roleName as OrgRoleName];
           if (effect) {
-            specs.push({ roleName, scopeKind: "org", capabilityId: cap.name, effect });
+            specs.push({
+              roleName,
+              scopeKind: "org",
+              capabilityId: cap.name,
+              effect,
+            });
           }
         }
       }
@@ -70,21 +236,27 @@ async function main(): Promise<void> {
         for (const roleName of WORKSPACE_ROLES) {
           const effect = workspace[roleName as WorkspaceRoleName];
           if (effect) {
-            specs.push({ roleName, scopeKind: "workspace", capabilityId: cap.name, effect });
+            specs.push({
+              roleName,
+              scopeKind: "workspace",
+              capabilityId: cap.name,
+              effect,
+            });
           }
         }
       }
     }
 
-    console.log(kleur.cyan(`[seed-iam] ${specs.length} role_grant specs derived from contracts`));
-
-    if (specs.length === 0) {
-      console.log(kleur.yellow("[seed-iam] no defaultRoles found — nothing to seed"));
-      return;
-    }
+    console.log(
+      kleur.cyan(
+        `[seed-iam] ${specs.length} role_grant specs derived from contracts`,
+      ),
+    );
 
     // Fetch all existing system roles to obtain their UUIDs.
-    const systemRoles = await sql<{ id: string; org_id: string; scope_kind: string; name: string }[]>`
+    const systemRoles = await sql<
+      { id: string; org_id: string; scope_kind: string; name: string }[]
+    >`
       SELECT id, org_id, scope_kind, name
       FROM iam.roles
       WHERE is_system_default = 'true'
@@ -92,79 +264,160 @@ async function main(): Promise<void> {
 
     if (systemRoles.length === 0) {
       console.log(
-        kleur.yellow("[seed-iam] no system roles found — run pnpm db:migrate first"),
+        kleur.yellow(
+          "[seed-iam] no system roles found — run pnpm db:migrate first",
+        ),
       );
       return;
     }
 
-    // Generate a stable, collision-free public_id for a role_grant row.
-    // Deterministic so re-runs are idempotent against the public_id UNIQUE
-    // constraint. A previous version truncated the capability id to 14 chars,
-    // which collided for capabilities sharing a prefix (e.g.
-    // agent.task.background.{start,read,cancel}) and silently dropped grants.
-    function makePublicId(roleId: string, capabilityId: string): string {
-      const digest = createHash("sha256")
-        .update(`${roleId}:${capabilityId}`)
-        .digest("hex")
-        .slice(0, 24);
-      return `rlg_${digest}`;
-    }
-
-    // Materialize every row client-side, then bulk-insert in chunks. The
-    // previous one-INSERT-per-row loop meant ~specs × orgs sequential
-    // round-trips (~30k against prod over a WAN — an hour-plus); chunked
-    // multi-row inserts finish in seconds. ON CONFLICT DO NOTHING also
-    // resolves duplicates arising within a single statement, so re-runs and
-    // intra-chunk collisions stay idempotent.
-    interface GrantRow {
-      id: string;
-      public_id: string;
-      org_id: string;
-      role_id: string;
-      capability_id: string;
-      effect: Effect;
-    }
-
-    const rows: GrantRow[] = [];
-    for (const spec of specs) {
-      // Find all system roles matching (scope_kind, name) across all orgs.
-      const matchingRoles = systemRoles.filter(
-        (r) => r.scope_kind === spec.scopeKind && r.name === spec.roleName,
-      );
-
-      for (const role of matchingRoles) {
-        rows.push({
-          id: crypto.randomUUID(),
-          public_id: makePublicId(role.id, spec.capabilityId),
-          org_id: role.org_id,
-          role_id: role.id,
-          capability_id: spec.capabilityId,
-          effect: spec.effect,
-        });
+    if (specs.length > 0) {
+      // Materialize every row client-side, then bulk-insert in chunks. The
+      // previous one-INSERT-per-row loop meant ~specs × orgs sequential
+      // round-trips (~30k against prod over a WAN — an hour-plus); chunked
+      // multi-row inserts finish in seconds. ON CONFLICT DO NOTHING also
+      // resolves duplicates arising within a single statement, so re-runs and
+      // intra-chunk collisions stay idempotent.
+      interface GrantRow {
+        id: string;
+        public_id: string;
+        org_id: string;
+        role_id: string;
+        capability_id: string;
+        effect: Effect;
       }
-    }
 
-    let inserted = 0;
-    const CHUNK = 500;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const result = await sql`
-        INSERT INTO iam.role_grants ${sql(chunk, "id", "public_id", "org_id", "role_id", "capability_id", "effect")}
-        ON CONFLICT DO NOTHING
-        RETURNING id
-      `;
-      inserted += result.length;
+      const rows: GrantRow[] = [];
+      for (const spec of specs) {
+        // Find all system roles matching (scope_kind, name) across all orgs.
+        const matchingRoles = systemRoles.filter(
+          (r) => r.scope_kind === spec.scopeKind && r.name === spec.roleName,
+        );
+
+        for (const role of matchingRoles) {
+          rows.push({
+            id: crypto.randomUUID(),
+            public_id: makeRoleGrantPublicId(role.id, spec.capabilityId),
+            org_id: role.org_id,
+            role_id: role.id,
+            capability_id: spec.capabilityId,
+            effect: spec.effect,
+          });
+        }
+      }
+
+      let inserted = 0;
+      const CHUNK = 500;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        const result = await sql`
+          INSERT INTO iam.role_grants ${sql(chunk, "id", "public_id", "org_id", "role_id", "capability_id", "effect")}
+          ON CONFLICT DO NOTHING
+          RETURNING id
+        `;
+        inserted += result.length;
+        console.log(
+          kleur.dim(
+            `[seed-iam] ${Math.min(i + CHUNK, rows.length)}/${rows.length} legacy rows processed`,
+          ),
+        );
+      }
+      const skipped = rows.length - inserted;
+
       console.log(
-        kleur.dim(
-          `[seed-iam] ${Math.min(i + CHUNK, rows.length)}/${rows.length} rows processed`,
+        kleur.green(
+          `[seed-iam] legacy role_grants: ${inserted} inserted, ${skipped} already existed`,
+        ),
+      );
+    } else {
+      console.log(
+        kleur.yellow(
+          "[seed-iam] no legacy defaultRoles found — nothing to seed there",
         ),
       );
     }
-    const skipped = rows.length - inserted;
+
+    // ── Agent RBAC Phase 1: three system workspace roles + role_grants ─────
+    // One row per org per role name, distinct from the legacy workspace
+    // Owner/Member/Viewer roles fetched above.
+    const orgIds = Array.from(new Set(systemRoles.map((r) => r.org_id)));
+
+    console.log(
+      kleur.cyan(
+        `[seed-iam] seeding ${AGENT_ROLE_NAMES.length} agent system role(s) across ${orgIds.length} org(s)`,
+      ),
+    );
+
+    // agentCapabilities: only capabilities with agent-surface metadata are
+    // relevant to agent-role grants — an agent role has no opinion on a
+    // capability the agent surface never exposes.
+    const agentCapabilities = capabilities.filter(
+      (cap) => cap.agent !== undefined,
+    );
+
+    let agentRolesUpserted = 0;
+    let agentGrantsUpserted = 0;
+
+    for (const orgId of orgIds) {
+      // roleId per (org, agent role name).
+      const agentRoleIdByName = new Map<AgentRoleName, string>();
+
+      for (const roleName of AGENT_ROLE_NAMES) {
+        const publicId = makeRolePublicId(orgId, "workspace", roleName);
+        const [row] = await sql<{ id: string }[]>`
+          INSERT INTO iam.roles (public_id, org_id, scope_kind, name, description, is_system_default)
+          VALUES (${publicId}, ${orgId}, 'workspace', ${roleName}, ${AGENT_ROLE_DESCRIPTIONS[roleName]}, true)
+          ON CONFLICT (public_id) DO UPDATE
+            SET description = EXCLUDED.description,
+                is_system_default = true,
+                scope_kind = EXCLUDED.scope_kind,
+                updated_at = now()
+          RETURNING id
+        `;
+        if (!row) {
+          throw new Error(
+            `[seed-iam] failed to upsert agent role "${roleName}" for org ${orgId}`,
+          );
+        }
+        agentRoleIdByName.set(roleName, row.id);
+        agentRolesUpserted += 1;
+      }
+
+      // role_grants: one row per (agent role, agent-surfaced capability),
+      // carrying the role's resourceScope ceiling as a conditions_jsonb
+      // condition (packages/oxagen/src/iam/conditions.ts). Seed data only —
+      // the resolver's role-grant resourceScope read path is a separate
+      // change.
+      for (const roleName of AGENT_ROLE_NAMES) {
+        const roleId = agentRoleIdByName.get(roleName);
+        if (!roleId) continue;
+        const resourceScope = AGENT_ROLE_RESOURCE_SCOPE[roleName];
+        const conditionsJsonb = JSON.stringify({ resourceScope });
+
+        for (const cap of agentCapabilities) {
+          const category = cap.agent?.category;
+          const riskLevel = cap.agent?.riskLevel;
+          const effect = agentRoleEffect(roleName, category, riskLevel);
+          const publicId = makeRoleGrantPublicId(roleId, cap.name);
+
+          await sql`
+            INSERT INTO iam.role_grants
+              (public_id, org_id, role_id, capability_id, effect, conditions_jsonb)
+            VALUES
+              (${publicId}, ${orgId}, ${roleId}, ${cap.name}, ${effect}, ${conditionsJsonb}::jsonb)
+            ON CONFLICT (public_id) DO UPDATE
+              SET effect = EXCLUDED.effect,
+                  conditions_jsonb = EXCLUDED.conditions_jsonb,
+                  updated_at = now()
+          `;
+          agentGrantsUpserted += 1;
+        }
+      }
+    }
 
     console.log(
       kleur.green(
-        `[seed-iam] role_grants: ${inserted} inserted, ${skipped} already existed`,
+        `[seed-iam] agent roles upserted: ${agentRolesUpserted}; agent role_grants upserted: ${agentGrantsUpserted}`,
       ),
     );
   } finally {

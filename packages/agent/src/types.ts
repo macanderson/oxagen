@@ -22,4 +22,33 @@ export interface CapabilityContext {
    * When absent, IP-based conditions fail-closed (deny).
    */
   clientIp?: string | null;
+  /**
+   * Discriminates who is acting: 'human' for a direct human request, 'agent'
+   * for a deployed agent run. Undefined ≡ 'human' for enforcement purposes.
+   * docs/specs/agent-rbac/spec.md §3.1/§3.4 — see the oxagen package's
+   * CapabilityContext for the full rationale. Set via
+   * `buildAgentRunContext` (packages/oxagen/src/types.ts), never hand-rolled.
+   */
+  principalKind?: "human" | "agent";
+  /**
+   * The AGENT principal (iam.principals kind='agent') driving this run, when
+   * principalKind='agent'. Never minted per-invocation — always the agent's
+   * one persistent identity principal (agents.principalId).
+   */
+  agentPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
+  /**
+   * The invoking HUMAN principal an agent run acts on behalf of. Populated
+   * whenever principalKind='agent'; undefined for direct human invocations.
+   */
+  humanPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
 }

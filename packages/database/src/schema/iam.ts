@@ -101,7 +101,8 @@ export const roles = iamSchema.table(
     scopeKind: text("scope_kind").notNull(),
     name: text("name").notNull(),
     description: text("description"),
-    // true for system-seeded roles (Owner, Admin, etc.) — not user-deletable.
+    // true for system-seeded roles (Owner, Admin, Agent Observer, etc.) —
+    // not user-deletable, read-only in UIs.
     isSystemDefault: boolean("is_system_default").notNull().default(false),
     version: text("version").notNull().default("1"),
     parentRoleId: uuid("parent_role_id"),
@@ -132,6 +133,13 @@ export const roleGrants = iamSchema.table(
     capabilityId: text("capability_id").notNull(),
     // CHECK: effect IN ('allow','deny','require_approval')
     effect: text("effect").notNull(),
+    // Agent RBAC (docs/specs/agent-rbac/spec.md): optional condition payload,
+    // same shape/evaluator as iam.grants.conditions_jsonb and
+    // iam.policies.conditions_jsonb (see packages/oxagen/src/iam/conditions.ts).
+    // Carries the `resourceScope` ceiling for the three system agent roles
+    // (Agent Observer/Contributor/Operator) — a CEILING enforced by the
+    // resolver, never an allow/deny gate on its own.
+    conditionsJsonb: jsonb("conditions_jsonb"),
   },
   (t) => ({
     // Hot path: "what effect does this role have on this capability?"

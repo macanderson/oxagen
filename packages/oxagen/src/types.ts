@@ -292,6 +292,41 @@ export interface CapabilityContext {
    * The IAM layer is the enforcing surface.
    */
   clientIp?: string | null;
+  /**
+   * Discriminates who is acting in this invocation: 'human' for a direct
+   * human request, 'agent' for a deployed agent run. Undefined/absent means
+   * the capability was invoked outside a run (no agent delegation in play)
+   * — treat the same as 'human' for enforcement purposes.
+   *
+   * docs/specs/agent-rbac/spec.md §3.1/§3.4: `checkIAM` and the kernel's
+   * `invoke()` read THIS field (on the pre-resolution CapabilityContext, not
+   * just the post-resolution CheckedContext) to decide whether to bypass the
+   * non-enterprise tier fast-path and resolve BOTH principals below — the
+   * fast-path only ever applies when principalKind='human'. Declared here
+   * (not only on CheckedContext) so any CapabilityContext-shaped object —
+   * built by a future agent-run entry seam — can legally carry it before the
+   * kernel/IAM layer ever sees it.
+   */
+  principalKind?: "human" | "agent";
+  /**
+   * The AGENT principal (iam.principals kind='agent') driving this
+   * invocation, when principalKind='agent'. Undefined for human-originated
+   * invocations. Always an ALREADY-RESOLVED principal supplied by the
+   * caller/entry-seam that built this context — the kernel and this type
+   * NEVER mint a new principal row per run (docs/specs/agent-rbac/spec.md
+   * §3.1: one principal per agent IDENTITY, not per version, not per run).
+   * Run lineage (runId/parentRunId) lives on the durable run row instead.
+   */
+  agentPrincipal?: ResolvedPrincipal | null;
+  /**
+   * The invoking HUMAN principal an agent run acts on behalf of — the
+   * delegation ceiling every agent-run effective-permission resolution
+   * intersects against (packages/oxagen/src/iam/resolve.ts
+   * resolveAgentEffectivePermissions). Populated whenever principalKind is
+   * 'agent'; undefined for direct human invocations, where `principal` on
+   * CheckedContext already carries the human identity.
+   */
+  humanPrincipal?: ResolvedPrincipal | null;
 }
 
 /**
@@ -311,6 +346,13 @@ export interface ResolvedPrincipal {
  * The context passed to the handler after the IAM resolver decides 'allow'.
  * Extends CapabilityContext with the resolved principal so handlers can
  * record authoring metadata without re-querying the DB.
+ *
+ * `principalKind`/`agentPrincipal`/`humanPrincipal` are declared on
+ * CapabilityContext itself (not re-declared here) — see that interface's
+ * doc comments. Declaring them upstream lets a future agent-run entry seam
+ * set them on the CapabilityContext it hands to checkIAM/kernel.invoke()
+ * BEFORE resolution happens; CheckedContext inherits them unchanged as the
+ * already-resolved values the kernel threads through to the handler.
  */
 export interface CheckedContext extends CapabilityContext {
   /**
@@ -319,36 +361,47 @@ export interface CheckedContext extends CapabilityContext {
    * applied — graceful degradation to defaultEffect). Optional so that a
    * plain CapabilityContext remains assignable (absent ≡ null): the kernel
    * ALWAYS supplies the field on the real invocation path; handlers read it
-   * as `ctx.principal ?? null` and must treat null/absent identically.
+   * as `ctx.principal ?? null` and must treat null/absent identically. For a
+   * human invocation this is the human's principal; for an agent run, the
+   * agent/human pair lives on `agentPrincipal`/`humanPrincipal` instead —
+   * `principal` is left unset in that case (see buildAgentRunContext).
    */
   principal?: ResolvedPrincipal | null;
-  /**
-   * Discriminates who is acting in this run: 'human' for a direct human
-   * request, 'agent' for a deployed agent run. Undefined/absent means the
-   * capability was invoked outside a run (no agent delegation in play) —
-   * treat the same as 'human' for enforcement purposes.
-   *
-   * docs/specs/agent-rbac/spec.md §3.1: a deployed agent's run carries BOTH
-   * its own principal AND the invoking human's principal — an agent acts
-   * FOR a human, never in place of one. Run lineage (runId/parentRunId)
-   * already lives on the durable run row; this is per-invocation context
-   * only, never persisted as a new principal row.
-   */
-  principalKind?: "human" | "agent";
-  /**
-   * The AGENT principal (iam.principals kind='agent') driving this run, when
-   * principalKind='agent'. Undefined for human-originated invocations.
-   */
-  agentPrincipal?: ResolvedPrincipal | null;
-  /**
-   * The invoking HUMAN principal an agent run acts on behalf of — the
-   * delegation ceiling every agent-run effective-permission resolution
-   * intersects against (packages/oxagen/src/iam/resolve.ts
-   * resolveAgentEffectivePermissions). Populated whenever principalKind is
-   * 'agent'; undefined for direct human invocations, where `principal`
-   * above already carries the human identity.
-   */
-  humanPrincipal?: ResolvedPrincipal | null;
+}
+
+/**
+ * Construct the CapabilityContext for a deployed-agent run: carries BOTH the
+ * AGENT principal and the invoking human principal it acts on behalf of,
+ * discriminated via `principalKind='agent'` (docs/specs/agent-rbac/spec.md
+ * §3.1/§3.4). This is the single construction point every agent-run entry
+ * seam (durable-run worker, A2A bridge, in-chat agent dispatch) should call
+ * instead of hand-assembling the three fields — it exists precisely so no
+ * call site accidentally sets `principalKind='agent'` without both
+ * principals, or vice versa.
+ *
+ * Deliberately does NOT mint or look up anything — both principals must
+ * already be resolved (e.g. `agents.principalId` for the agent side,
+ * `fetch-authz`'s human resolution for the human side) by the caller. This
+ * function only ever produces per-INVOCATION context; it never creates a new
+ * `iam.principals` row and carries no run-lineage fields of its own — a
+ * run's `runId`/`parentRunId` already live on its durable run row.
+ *
+ * `agentPrincipal.kind` is asserted 'agent' and `humanPrincipal.kind` is
+ * asserted 'human' at the type level via the parameter types below; callers
+ * passing a mismatched principal are a caller bug, not something this
+ * function silently repairs.
+ */
+export function buildAgentRunContext(
+  base: CapabilityContext,
+  agentPrincipal: ResolvedPrincipal & { kind: "agent" },
+  humanPrincipal: ResolvedPrincipal & { kind: "human" },
+): CapabilityContext {
+  return {
+    ...base,
+    principalKind: "agent",
+    agentPrincipal,
+    humanPrincipal,
+  };
 }
 
 export interface CapabilityManifestEntry {
