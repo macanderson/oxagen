@@ -285,7 +285,10 @@ type Events = {
     };
   };
 
-  // Parse a single file blob fetched from the GitHub tree.
+  // Parse a single file blob fetched from the GitHub tree at a PINNED canonical
+  // snapshot. The projection-binding fields (workspace-graph-boundary spec) tie
+  // each file to its immutable snapshot + projection generation + code scope so
+  // parse-file can attribute the projection and emit generation-file-done.
   "ingestion/github.parse-file": {
     data: {
       connectionId: string;
@@ -293,8 +296,75 @@ type Events = {
       workspaceId: string;
       owner: string;
       repo: string;
+      // Blob SHA of the file content to fetch (unchanged name).
       sha: string;
       path: string;
+      // ── Canonical-snapshot projection binding ──────────────────────────────
+      /** ingestion.code_repositories row this file's repository projects to. */
+      repositoryId: string;
+      /** ingestion.projection_generations row this parse belongs to. */
+      generationId: string;
+      /** Immutable commit SHA of the canonical snapshot being projected. */
+      commitSha: string;
+      /** Immutable tree SHA of the canonical snapshot being projected. */
+      treeSha: string;
+      /** Stable code-scope key this file maps to, e.g. "packages/billing". */
+      scopeKey: string;
+      /** ingestion.code_scopes row for scopeKey within this generation. */
+      codeScopeId: string;
+    };
+  };
+
+  // Emitted by parse-file after each file in a projection generation finishes
+  // (or is skipped). generation-file-done atomically advances the generation's
+  // files_processed / files_skipped counters and activates the generation once
+  // processed + skipped >= files_total (spec §"GitHub projection lifecycle").
+  "ingestion/github.generation-file-done": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      generationId: string;
+      /**
+       * True when parse-file SKIPPED the file (too large, unfetchable, etc.)
+       * rather than projecting it — counted into files_skipped instead of
+       * files_processed. Either way it advances the completion gate.
+       */
+      skipped: boolean;
+    };
+  };
+
+  // A canonical-ref update TRIGGER (spec §"Push to the canonical ref"). Emitted
+  // by the GitHub App webhook per resolved connection on a `push`, and by the
+  // hourly reconcile cron as a synthetic delivery. The webhook is a trigger, not
+  // the source of truth — repository.ref-updated re-fetches the authoritative
+  // head from GitHub before staging a projection generation.
+  "ingestion/repository.ref-updated": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+      /** GitHub App installation id (text), retained for authoritative re-fetch. */
+      installationId: string;
+      /** Provider's immutable repository id (GitHub's numeric repo id as text). */
+      providerRepoId: string;
+      owner: string;
+      repo: string;
+      /** The updated ref, e.g. "refs/heads/main". */
+      ref: string;
+      /** Commit SHA before the push (all-zeros sentinel / null on branch create). */
+      beforeSha: string | null;
+      /** Commit SHA after the push (all-zeros sentinel / null on branch delete). */
+      afterSha: string | null;
+      forced: boolean;
+      deleted: boolean;
+      /**
+       * GitHub `X-GitHub-Delivery` GUID, or a synthetic "reconcile:…" id from the
+       * reconcile cron. The UNIQUE dedupe key for at-least-once webhook delivery
+       * and idempotent hourly reconciles.
+       */
+      deliveryId: string;
+      /** ISO-8601 observation time. */
+      observedAt: string;
     };
   };
 
