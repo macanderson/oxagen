@@ -108,7 +108,7 @@ interface RefUpdatedData {
   orgId: string;
   workspaceId: string;
   connectionId: string;
-  installationId: string;
+  installationId: string | null;
   providerRepoId: string;
   owner: string;
   repo: string;
@@ -586,6 +586,23 @@ describe("ingestion.repository-ref-updated", () => {
       observedHeadSha: "sha-after",
       snapshotSource: "provider_observed",
       truncated: false,
+    });
+  });
+
+  it("never blanks a stored installation id with an empty-string placeholder", async () => {
+    // stageGeneration COALESCEs a NULL installation id so an OAuth-connected
+    // caller cannot clear one a webhook already set — but "" is not NULL and
+    // WOULD win that COALESCE, so it has to be normalized here.
+    await run({ installationId: "" });
+    expect(mocks.stageGeneration.mock.calls[0]![0]).toMatchObject({
+      installationId: null,
+    });
+  });
+
+  it("passes a null installation id straight through", async () => {
+    await run({ installationId: null });
+    expect(mocks.stageGeneration.mock.calls[0]![0]).toMatchObject({
+      installationId: null,
     });
   });
 });

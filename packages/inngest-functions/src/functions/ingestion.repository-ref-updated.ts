@@ -75,7 +75,7 @@ export const [ingestionRepositoryRefUpdated] = createFunction(
       orgId: string;
       workspaceId: string;
       connectionId: string;
-      installationId: string;
+      installationId: string | null;
       providerRepoId: string;
       owner: string;
       repo: string;
@@ -267,7 +267,10 @@ export const [ingestionRepositoryRefUpdated] = createFunction(
           providerRepoId,
           owner,
           name: repo,
-          installationId,
+          // Empty string → null: stageGeneration COALESCEs a null so it never
+          // clears a stored installation id, but "" would win the COALESCE and
+          // blank it.
+          installationId: installationId || null,
           sourceConnectionId: connectionId,
           defaultRef: obs.defaultRef,
           commitSha: head.commitSha,

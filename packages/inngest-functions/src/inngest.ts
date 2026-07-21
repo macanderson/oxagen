@@ -343,8 +343,13 @@ type Events = {
       orgId: string;
       workspaceId: string;
       connectionId: string;
-      /** GitHub App installation id (text), retained for authoritative re-fetch. */
-      installationId: string;
+      /**
+       * GitHub App installation id (text), retained for authoritative re-fetch.
+       * NULL when the repository was connected via OAuth rather than the App —
+       * stageGeneration COALESCEs a null so it never clears a stored id, which
+       * an empty-string placeholder WOULD do.
+       */
+      installationId: string | null;
       /** Provider's immutable repository id (GitHub's numeric repo id as text). */
       providerRepoId: string;
       owner: string;

@@ -157,7 +157,9 @@ export const [ingestionRepositoryReconcile] = createFunction(
           orgId: repo.org_id,
           workspaceId: repo.workspace_id,
           connectionId: repo.source_connection_id,
-          installationId: repo.installation_id ?? "",
+          // Pass the stored id through verbatim — an "" placeholder would beat
+          // stageGeneration's COALESCE and blank a real installation id.
+          installationId: repo.installation_id,
           providerRepoId: repo.provider_repo_id,
           owner: repo.owner,
           repo: repo.name,

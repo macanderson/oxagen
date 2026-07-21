@@ -82,7 +82,23 @@ vi.mock("../../logger", () => ({
 await import("../ingestion.repository-reconcile");
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
-const REPO_ROW = {
+/** One ingestion.code_repositories row as the cron's candidate query reads it.
+ *  The nullable columns are load-bearing — an OAuth-connected repository has no
+ *  installation id, and an unprojected one has no head. */
+interface CodeRepositoryRow {
+  id: string;
+  org_id: string;
+  workspace_id: string;
+  provider_repo_id: string;
+  owner: string;
+  name: string;
+  installation_id: string | null;
+  source_connection_id: string;
+  default_ref: string;
+  projected_head_sha: string | null;
+}
+
+const REPO_ROW: CodeRepositoryRow = {
   id: "repo-1",
   org_id: "org-1",
   workspace_id: "ws-1",
@@ -95,7 +111,7 @@ const REPO_ROW = {
   projected_head_sha: "sha-projected",
 };
 
-let candidateRows: Array<typeof REPO_ROW>;
+let candidateRows: CodeRepositoryRow[];
 let executed: Array<{ text: string; values: unknown[] }>;
 
 function sqlTextOf(q: unknown): string {
@@ -271,5 +287,15 @@ describe("ingestion.repository-reconcile (hourly ref reconciliation)", () => {
       "conn-1",
       "org-1",
     );
+  });
+
+  it("forwards a null installation id verbatim rather than an empty-string placeholder", async () => {
+    // "" is not NULL, so it would beat stageGeneration's COALESCE downstream
+    // and blank the repository's stored installation id.
+    candidateRows = [{ ...REPO_ROW, installation_id: null }];
+    const { step } = await run();
+    expect(
+      eventsFrom(step.sendEvent as ReturnType<typeof vi.fn>)[0]!.data,
+    ).toMatchObject({ installationId: null });
   });
 });
