@@ -1,6 +1,10 @@
 # Graph-mediated file locking for agent fleets
 
-**Status:** proposed · **Owner:** platform · **Branch:** `claude/ai-agent-file-locking-ltzzc3`
+**Status:** superseded by ADR-021 and the workspace-graph boundary · **Owner:** platform · **Branch:** `claude/ai-agent-file-locking-ltzzc3`
+
+> This document is historical. Neo4j file locks and lock projections are not a
+> launch surface. Transactional Postgres leases are the sole authority; future
+> exact file lineage belongs in the immutable run-evidence ledger.
 
 Let a fleet of coding agents work one tree at once **without a single
 coordinator process**: before an agent edits a file it claims a lock, and the

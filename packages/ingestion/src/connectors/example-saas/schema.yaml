@@ -9,7 +9,7 @@
 #   2. Choose one or both auth schemes (OAuth 2 and/or API Key).
 #   3. Define `config.fields` for your platform-specific settings.
 #   4. List the entity types your connector produces under `recordTypes`.
-#   5. Configure `filters`, `inference`, and `sync` for your data model.
+#   5. Configure `filters` and `sync` for your data model.
 #   6. Host this file at a stable HTTPS URL (your CDN or GitHub raw).
 #   7. Register the URL with Oxagen (see docs/guides/partner-registration.md).
 
@@ -228,52 +228,6 @@ filters:
     appliesTo:
       - account
       - user
-
-# ── Semantic inference ─────────────────────────────────────────────────────────
-# Controls whether Oxagen runs LLM-based relationship inference on synced data.
-# The `ontologyPrompt` is the most important field — write it carefully.
-inference:
-  enabled: true
-  # defaultEnabled: false — user must explicitly enable inference. Recommended
-  # for connectors where inference quality depends on account-specific context.
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  # perRecordType: fine-grained control over which types get LLM processing.
-  # Disable inference for low-signal types to reduce cost and latency.
-  perRecordType:
-    account: true
-    user: true
-    event: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  # ontologyPrompt: system-level instructions for the inference LLM.
-  # This is rendered as the "system" context alongside each entity's properties.
-  # Guidelines for writing effective ontology prompts:
-  #   - Name the node types you expect to infer (Account, User, Feature, etc.)
-  #   - List the edge types you want created (with direction notation)
-  #   - Give concrete examples of what signals to look for
-  #   - Mention cross-source links where relevant (e.g. GitHub/Linear cross-refs)
-  #   - Keep it under 800 tokens; every entity pays this cost
-  ontologyPrompt: |
-    Infer product relationships from ExampleSaaS account and user data.
-
-    Look for:
-    - Account names that match known product features, services, or team names
-    - User job titles indicating engineering, product, or leadership roles
-    - Account industry tags that map to market segments or use-case categories
-    - Conversion events that link users to specific product features or plans
-
-    Create edges:
-    - Account -[uses]-> Feature (when account name or tags reference a known product feature)
-    - User -[member_of]-> Account (when user belongs to a company account)
-    - Account -[in_segment]-> MarketSegment (when industry or plan data indicates market fit)
-    - User -[converted_on]-> Feature (when conversion event references a feature by name or path)
-
-    Cross-source links:
-    - If an account domain matches a GitHub organization name, create an ALIAS_OF edge
-    - If a user email domain matches a known customer in Linear, link to the org node
 
 # ── Sync configuration ─────────────────────────────────────────────────────────
 # How Oxagen fetches data from your platform.

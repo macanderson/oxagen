@@ -15,6 +15,7 @@
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
     "./capability-meta": "./src/capability-meta.ts",
+    "./lib/relationship-type-pattern": "./src/lib/relationship-type-pattern.ts",
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",

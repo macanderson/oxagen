@@ -87,9 +87,9 @@ last because everything above ships without it, and until it lands those filters
    chokepoint work** — do it once at `insertTokenUsage`, not per caller.
 3. **Extend `readUsageBreakdown`** with `byAgent[]`/`byRepo[]`/`byEnvironment[]` + the enrichment
    filters; flip the disabled UI filters live.
-4. **Graph "updated" metric** (the single hardest gap): add a shared graph-mutation emit in the
-   `graph.node.upsert`/`graph.edge.upsert` handlers (a `tool_invocations`-style row with
-   `created|updated` distinguished) so node/edge *updates* become discrete, countable events.
+4. **Graph "updated" metric** (the single hardest gap): emit a shared telemetry event from
+   governed connector-ingestion and semantic-approval chokepoints, with `created|updated`
+   distinguished. Do not recreate a generic client graph-mutation surface for analytics.
 5. **PR merges:** extend `apps/api/src/routes/v1/github-webhook.ts` (today ingestion-only) to emit
    a usage event on `pull_request.closed & merged`.
 6. Backfill note: enrichment columns are **forward-only** (historical rows have nulls) — the UI

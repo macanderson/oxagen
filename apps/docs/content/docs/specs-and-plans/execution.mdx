@@ -3,23 +3,23 @@ title: "Execution Layer"
 description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
 ---
 
-> **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
+> **Status: Partially superseded** — PostgreSQL execution recording and durable
+> trace reads remain. The automatic Neo4j execution mirror was retired for
+> launch; the source material below is retained as historical design context.
 >
-> Core agent execution tracking infrastructure is implemented and functional for basic recording and Neo4j syncing. The Postgres tables (agent_executions, agent_execution_steps, agent_tool_calls) exist with proper schema and RLS; the record handler, API routes, MCP tools, and Inngest Neo4j sync worker are wired and operational. However, three major spec components are not shipped: (1) Dead schema sunset—execution.*, workflow.playbooks, event.triggers, integration.connections, content.documents, and agent.tools tables still exist in Postgres and are referenced in code; (2) Limited origin-type coverage—only 'chat' is wired; 'event_trigger', 'scheduled_job', 'mcp_request' handlers are unimplemented (event_trigger marked BLOCKED); (3) ClickHouse analytics—no execution_events table or async sink emits execution data to ClickHouse, despite spec scope requiring time-series analytics.
+> The Postgres tables (`agent_executions`, `agent_execution_steps`, and
+> `agent_tool_calls`) remain the trace authority with workspace-scoped RLS.
 
 **Implementation evidence**
 
 - packages/database/src/schema/agent.ts — agentExecutions, agentExecutionSteps, agentToolCalls with indexes and constraints
 - packages/database/atlas/migrations/20260611233016_initial_schema.sql — three execution tables created with RLS policies
 - packages/handlers/src/agent.execution.record.ts — CapabilityHandler for recording executions with step and tool-call nesting
-- packages/handlers/src/agent.execution.sync-event.ts — Emitter for agent/execution.sync event with embedding and summary generation
 - packages/handlers/src/chat.message.execution.ts — Chat-origin execution recording wired into message flow
 - packages/oxagen/src/contracts/agent.execution.record.ts — Contract with AGENT_EXECUTION_ORIGIN_TYPES enum including chat, event_trigger, scheduled_job, mcp_request, workflow_run, fanout
 - apps/api/src/routes/v1/agent.execution.record.ts — REST POST route invoking record capability
 - apps/api/src/routes/v1/chat.message.execution.ts — REST route for chat execution
 - apps/mcp/src/tools/agent.execution.record.ts — MCP tool wrapper using same contract
-- packages/inngest-functions/src/functions/agent.sync-execution-to-graph.ts — Inngest worker consuming agent/execution.sync event, creating Neo4j nodes and relationships, updating synced_to_graph_at flag
-- packages/ontology/src/mutations/record-execution.ts — Neo4j MERGE logic for Execution node and relationships
 - docs/capabilities/agent.execution.record.md — Capability documentation for the record endpoint
 
 **Known gaps at time of archive**
@@ -28,8 +28,8 @@ description: "Archived spec & plan — status: partially shipped (audited 2026-0
 - Event trigger execution handler (OXA-XXXX.6) — marked BLOCKED in implementation plan; no handler for origin_type=event_trigger
 - Scheduled job execution handler (OXA-XXXX.7) — origin_type=scheduled_job not wired
 - MCP request execution handler (OXA-XXXX.8) — origin_type=mcp_request not wired
-- ClickHouse execution_events table and async sink (OXA-XXXX.11) — no execution_events table in ClickHouse; no event emitted from agent/execution.sync to ClickHouse; telemetry/src/migrations contain no execution_events schema
-- Retry cron job for unsync'd executions (OXA-XXXX.10) — no daily cron to find WHERE synced_to_graph_at IS NULL and retry Neo4j sync
+- Typed immutable run-evidence ingest and projection are future work; the
+  retired graph mirror is not a launch dependency.
 
 **Source documents** (archived verbatim below)
 
@@ -213,4 +213,3 @@ Tracked in Linear. Not in current sprint.
 - Design spec: [`spec.md`](./spec.md)
 - Full plan: [`../agent-execution/implementation-plan.md`](../agent-execution/implementation-plan.md)
 - Workflow runs clarification: [`../workflows/workflow_runs_clarification.md`](../workflows/workflow_runs_clarification.md)
-

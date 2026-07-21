@@ -87,7 +87,6 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   Execution: "agent",
   Fanout: "agent",
   Document: "content",
-  GeneratedFile: "content",
   Conversation: "chat",
   Message: "chat",
   Citation: "agent",
@@ -95,11 +94,6 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   Evidence: "agent",
   SourceConnection: "ingestion",
   EntityNode: "ingestion",
-  EngramMemory: "agent",
-  SourceFile: "ingestion",
-  SourceSymbol: "ingestion",
-  SourceChunk: "ingestion",
-  Feature: "ingestion",
   GraphNode: "graph", // the universal anchor label — no single business domain
 };
 

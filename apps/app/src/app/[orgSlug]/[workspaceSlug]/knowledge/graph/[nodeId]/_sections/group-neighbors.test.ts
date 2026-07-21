@@ -13,7 +13,6 @@ function neighbor(overrides: Partial<NeighborEntry> = {}): NeighborEntry {
     description: null,
     edgeType: "RELATES_TO",
     direction: "out",
-    isSystem: false,
     validFrom: null,
     validTo: null,
     recordedAt: null,

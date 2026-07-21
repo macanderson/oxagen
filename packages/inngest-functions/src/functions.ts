@@ -4,7 +4,6 @@ import { stripeSyncInvoice } from "./functions/stripe.sync-invoice";
 import { chatPersistStream } from "./functions/chat.persist-stream";
 import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
 import { agentAggregateFanout } from "./functions/agent.aggregate-fanout";
-import { webSearchIngestGraph } from "./functions/web.search.ingest-graph";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
 import {
   agentVideoRender,
@@ -14,11 +13,8 @@ import { securityAuditPartitionRollover } from "./functions/security.audit-parti
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
 import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
-import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
-import { agentProjectFileLockToGraph } from "./functions/agent.project-file-lock-to-graph";
 import { agentLeaseSweep } from "./functions/agent.lease-sweep";
 import { agentSandboxReaper } from "./functions/agent.sandbox-reaper";
-import { contentSyncGeneratedFileToGraph } from "./functions/content.sync-generated-file-to-graph";
 import {
   privacyExportProcess,
   privacyExportProcessOnFailure,
@@ -35,13 +31,6 @@ import {
 } from "./functions/ingestion.delete";
 import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
-import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
-import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
-import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
-import { ingestionGithubInferFeaturesBatch } from "./functions/ingestion.github-infer-features-batch";
-import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-domains";
-import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
-import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
 import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
@@ -55,9 +44,6 @@ import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
-import { engramSyncMemoryToGraph } from "./functions/engram.sync-memory-to-graph";
-import { engramEmbedMemory } from "./functions/engram.embed-memory";
-import { engramConsolidationRun } from "./functions/engram.consolidation.run";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 import { evalRunExecute } from "./functions/eval.run.execute";
@@ -74,7 +60,6 @@ export const functions: any[] = [
   chatPersistStream,
   agentExecuteSubagent,
   agentAggregateFanout,
-  webSearchIngestGraph,
   agentBackgroundTaskExecute,
   agentVideoRender,
   agentVideoRenderOnFailure,
@@ -82,11 +67,8 @@ export const functions: any[] = [
   pluginOauthRefreshWatcher,
   agentWorkflowSupervisor,
   agentWorkflowTaskExecute,
-  agentSyncExecutionToGraph,
-  agentProjectFileLockToGraph,
   agentLeaseSweep,
   agentSandboxReaper,
-  contentSyncGeneratedFileToGraph,
   privacyExportProcess,
   privacyExportProcessOnFailure,
   privacyErasureExecute,
@@ -97,13 +79,6 @@ export const functions: any[] = [
   ingestionDeleteConnectionOnFailure,
   ingestionOauthRefresh,
   ingestionGithubInitialSync,
-  ingestionGithubCommitFiles,
-  ingestionGithubParseFile,
-  ingestionGithubInferFeatures,
-  ingestionGithubInferFeaturesBatch,
-  ingestionGithubInferDomains,
-  ingestionSemanticEdgeInfer,
-  ingestionBatchReconcile,
   ingestionSyncRequested,
   ingestionPollScheduler,
   ingestionConnectionPoll,
@@ -115,9 +90,6 @@ export const functions: any[] = [
   mcpToolSnapshotRetention,
   pluginCatalogSync,
   schemaReconcile,
-  engramSyncMemoryToGraph,
-  engramEmbedMemory,
-  engramConsolidationRun,
   memoryDecayPass,
   observabilityCaptureFailure,
   evalRunExecute,

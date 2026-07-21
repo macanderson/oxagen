@@ -12,7 +12,8 @@ export const ExecutedChain: Story = {
   args: {
     output: {
       goal: "Research USS Nautilus and add the key entities to the graph",
-      summary: "Searched the web for the Nautilus, then ingested 8 entities and 5 relationships into the knowledge graph.",
+      summary:
+        "Searched the web for the Nautilus, then ingested 8 entities and 5 relationships into the knowledge graph.",
       executed: true,
       steps: [
         {
@@ -20,7 +21,10 @@ export const ExecutedChain: Story = {
           capability: "start_research_swarm",
           rationale: "Kick off a deep multi-query web research swarm.",
           status: "success",
-          input: { topic: "USS Nautilus SSN-571 history crew reactor", depth: "deep" },
+          input: {
+            topic: "USS Nautilus SSN-571 history crew reactor",
+            depth: "deep",
+          },
           output: { swarmId: "swm_1", estimatedTasks: 15 },
           durationMs: 8500,
         },
@@ -35,8 +39,9 @@ export const ExecutedChain: Story = {
         },
         {
           id: "step3",
-          capability: "ingest_graph",
-          rationale: "Extract entities + relationships and commit to the graph.",
+          capability: "query_ontology",
+          rationale:
+            "Extract entities + relationships and commit to the graph.",
           status: "success",
           input: { text: "…aggregated search text…" },
           output: { entities: 8, relationships: 5 },
@@ -48,7 +53,8 @@ export const ExecutedChain: Story = {
           rationale: "Would top up credits (not auto-run).",
           status: "skipped",
           input: null,
-          error: "Capability is destructive or requires approval — not auto-executed.",
+          error:
+            "Capability is destructive or requires approval — not auto-executed.",
           durationMs: 0,
         },
       ],

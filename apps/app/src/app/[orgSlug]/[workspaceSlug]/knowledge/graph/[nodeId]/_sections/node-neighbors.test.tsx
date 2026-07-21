@@ -45,7 +45,9 @@ import { NodeNeighbors } from "./node-neighbors";
 afterEach(cleanup);
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockRunInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mockRunInTenantScope.mockImplementation(
+    (_scope: unknown, fn: () => unknown) => fn(),
+  );
 });
 
 const BASE = {
@@ -65,7 +67,6 @@ function neighbor(overrides: Record<string, unknown> = {}) {
     description: null,
     edgeType: "OWNS",
     direction: "out",
-    isSystem: false,
     validFrom: null,
     validTo: null,
     recordedAt: null,
@@ -76,7 +77,12 @@ function neighbor(overrides: Record<string, unknown> = {}) {
 
 describe("NodeNeighbors", () => {
   it("shows the empty state when there are no neighbors", async () => {
-    mockInvoke.mockResolvedValue({ nodeId: "kn_1", found: true, neighbors: [], truncated: false });
+    mockInvoke.mockResolvedValue({
+      nodeId: "kn_1",
+      found: true,
+      neighbors: [],
+      truncated: false,
+    });
     const jsx = await NodeNeighbors(BASE);
     render(jsx);
     expect(screen.getByText("No connected nodes.")).toBeInTheDocument();
@@ -90,10 +96,18 @@ describe("NodeNeighbors", () => {
   });
 
   it("calls get_ontology_neighbors scoped to the node with the agent surface override", async () => {
-    mockInvoke.mockResolvedValue({ nodeId: "kn_1", found: true, neighbors: [], truncated: false });
+    mockInvoke.mockResolvedValue({
+      nodeId: "kn_1",
+      found: true,
+      neighbors: [],
+      truncated: false,
+    });
     await NodeNeighbors(BASE);
     expect(mockInvoke.mock.calls[0]?.[0]).toBe("get_ontology_neighbors");
-    expect(mockInvoke.mock.calls[0]?.[1]).toMatchObject({ nodeId: "kn_1", direction: "both" });
+    expect(mockInvoke.mock.calls[0]?.[1]).toMatchObject({
+      nodeId: "kn_1",
+      direction: "both",
+    });
     expect(mockInvoke.mock.calls[0]?.[3]).toEqual({ surface: "agent" });
   });
 
@@ -103,7 +117,12 @@ describe("NodeNeighbors", () => {
       found: true,
       truncated: false,
       neighbors: [
-        neighbor({ nodeId: "kn_2", displayName: "oxagen-platform", edgeType: "OWNS", direction: "out" }),
+        neighbor({
+          nodeId: "kn_2",
+          displayName: "oxagen-platform",
+          edgeType: "OWNS",
+          direction: "out",
+        }),
         neighbor({
           nodeId: "kn_3",
           label: "Person",
@@ -124,12 +143,17 @@ describe("NodeNeighbors", () => {
     expect(repoChip).toHaveAttribute("href", "/acme/main/knowledge/graph/kn_2");
 
     const personChip = screen.getByText("Ada Lovelace");
-    expect(personChip).toHaveAttribute("href", "/acme/main/knowledge/graph/kn_3");
+    expect(personChip).toHaveAttribute(
+      "href",
+      "/acme/main/knowledge/graph/kn_3",
+    );
 
     // Two distinct relationship-type groups render their own heading (mixed
     // text + icon content, so assert on the headings' combined text rather
     // than a leaf-text match).
-    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent ?? "");
+    const headings = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((h) => h.textContent ?? "");
     expect(headings.some((t) => t.includes("OWNS"))).toBe(true);
     expect(headings.some((t) => t.includes("AUTHORED"))).toBe(true);
   });

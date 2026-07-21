@@ -2,9 +2,8 @@
 /**
  * MessageFooter — rendered below every assistant message (live turn + persisted).
  *
- * Shows a token / credit summary and three action buttons:
+ * Shows a token / credit summary and two action buttons:
  *   Copy          — write the assistant's text to the clipboard
- *   Save as Knowledge — graph.ingest via a scoped server action
  *   Save as Memory    — agent.memory.write via a scoped server action
  *
  * Each button flips to a check icon on success and resets after 2 seconds.
@@ -13,16 +12,13 @@
 
 import * as React from "react";
 import { useState, useCallback } from "react";
-import { Copy, Check, BookOpen, Brain } from "lucide-react";
+import { Copy, Check, Brain } from "lucide-react";
 import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import type { TurnUsage } from "./stream-event-types";
-import {
-  saveAsKnowledgeAction,
-  saveAsMemoryAction,
-} from "./message-footer-actions";
+import { saveAsMemoryAction } from "./message-footer-actions";
 import { PromptCacheBar } from "./prompt-cache-bar";
 
 export interface MessageFooterProps {
@@ -35,7 +31,7 @@ export interface MessageFooterProps {
   workspaceSlug: string;
 }
 
-type ButtonId = "copy" | "knowledge" | "memory";
+type ButtonId = "copy" | "memory";
 
 /**
  * A small icon-button that flips to a check on success.
@@ -117,26 +113,12 @@ export function MessageFooter({
         if (id === "copy") {
           // useCopyToClipboard's own `copied` flag is unused here — this
           // footer's `done`/markDone Set already generalizes the "flip to a
-          // check icon" behavior across copy/knowledge/memory, so `copy` is
+          // check icon" behavior across copy/memory, so `copy` is
           // used only for its shared, guarded clipboard write. A `false`
           // return (write failed) falls through to the catch below via the
           // thrown error, preserving the existing "Action failed" toast.
           if (!(await copy(text))) throw new Error("clipboard write failed");
           markDone("copy");
-        } else if (id === "knowledge") {
-          const result = await saveAsKnowledgeAction(
-            { orgSlug, workspaceSlug },
-            text,
-          );
-          if (result.ok) {
-            markDone("knowledge");
-          } else {
-            addToast({
-              title: "Could not save knowledge",
-              description: result.error,
-              type: "error",
-            });
-          }
         } else if (id === "memory") {
           const result = await saveAsMemoryAction(
             { orgSlug, workspaceSlug },
@@ -196,14 +178,6 @@ export function MessageFooter({
           icon={<Copy className="size-3.5" aria-hidden="true" />}
           done={done.has("copy")}
           loading={loading === "copy"}
-          onClick={handleClick}
-        />
-        <ActionButton
-          id="knowledge"
-          label="Save as Knowledge"
-          icon={<BookOpen className="size-3.5" aria-hidden="true" />}
-          done={done.has("knowledge")}
-          loading={loading === "knowledge"}
           onClick={handleClick}
         />
         <ActionButton

@@ -4,53 +4,18 @@
  * On first turn in an uninitialized project (no .oxagen directory):
  * 1. Prompt user to initialize the project
  * 2. Create .oxagen/ structure
- * 3. Push the initial code graph to the workspace knowledge graph
- * 4. Ingest markdown files into the knowledge graph
- * 5. Save settings
- *
- * Steps 3 and 4 use LIVE platform capabilities (`graph.sync.push` and
- * `graph.ingest`). They require an authenticated org+workspace context; when
- * that is absent (logged out, or BYOK-only with no platform scope) the local
- * scaffold still succeeds and we degrade GRACEFULLY — telling the user exactly
- * what was skipped and how to run it later, instead of falsely promising it
- * will happen "on the next agent run".
+ * 3. Save settings
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  type Dirent,
-} from "node:fs";
-import { execFileSync } from "node:child_process";
-import { resolve, relative } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
-import { resolveApiContext, apiPostOrThrow } from "../lib/api.js";
 
 export interface ProjectInitOptions {
   cwd: string;
   approver: (prompt: string) => Promise<boolean>;
 }
-
-/** The `graph.ingest` contract caps input text at 100k chars. */
-const MAX_INGEST_BYTES = 100_000;
-/** Bound the number of docs ingested in one init so a huge repo can't stall it. */
-const MAX_INGEST_FILES = 200;
-/** Directories never worth walking for project docs. */
-const MARKDOWN_EXCLUDE_DIRS = new Set([
-  "node_modules",
-  ".git",
-  ".oxagen",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-  ".turbo",
-  ".vercel",
-]);
 
 /** Check if a project is already initialized. */
 export function isProjectInitialized(cwd: string): boolean {
@@ -59,7 +24,9 @@ export function isProjectInitialized(cwd: string): boolean {
 }
 
 /** Initialize a project's .oxagen directory and code graph. */
-export async function initializeProject(opts: ProjectInitOptions): Promise<boolean> {
+export async function initializeProject(
+  opts: ProjectInitOptions,
+): Promise<boolean> {
   const oxagenDir = resolve(opts.cwd, ".oxagen");
 
   // Skip if already initialized
@@ -70,10 +37,9 @@ export async function initializeProject(opts: ProjectInitOptions): Promise<boole
   // Prompt user
   const approved = await opts.approver(
     `Initialize project? This will:\n` +
-    `  · Create .oxagen/ directory with settings and graphs\n` +
-    `  · Generate code graph and ingest markdown files\n` +
-    `  · Set up knowledge graph for semantic search\n` +
-    `\nContinue? (y/n)`,
+      `  · Create .oxagen/ directory with settings and graphs\n` +
+      `  · Keep the working code graph local to this checkout\n` +
+      `\nContinue? (y/n)`,
   );
 
   if (!approved) {
@@ -112,147 +78,7 @@ export async function initializeProject(opts: ProjectInitOptions): Promise<boole
   console.log(`✓ Created .oxagen structure at ${oxagenDir}`);
   console.log(`  · Settings: ${settingsPath}`);
 
-  // Kick off the live code-graph push + markdown ingest (or a graceful skip).
-  await runInitialIndexing(opts.cwd);
-
   return true;
-}
-
-/** `err` → a short human string for a skip message. */
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/**
- * Push the initial code graph and ingest project markdown into the workspace
- * knowledge graph. Both are platform capabilities: when there is no
- * authenticated org+workspace context we skip them with a clear, non-fatal
- * message. Every network step is best-effort — a failure never aborts init.
- */
-async function runInitialIndexing(cwd: string): Promise<void> {
-  const ctx = resolveApiContext();
-  if (!ctx) {
-    // Graceful degrade — say exactly what was skipped and how to run it later.
-    console.log(
-      "  · Not signed in — skipped code-graph sync and markdown ingest.",
-    );
-    console.log(
-      "    Run `oxagen login`, then `oxagen graph push` to sync the code graph.",
-    );
-    return;
-  }
-
-  // 1. Code graph — push the initial full snapshot via the live `graph.sync.push`
-  //    path. `throwOnError` makes any failure catchable so it stays non-fatal to
-  //    init (the command's own exit-on-error contract is unchanged).
-  try {
-    const { handleGraphPush } = await import("../commands/graph.push.js");
-    await handleGraphPush({ full: true, throwOnError: true });
-    console.log("  · Code graph pushed to the workspace knowledge graph.");
-  } catch (err) {
-    console.log(
-      `  · Code-graph sync skipped (${errText(err)}). Run \`oxagen graph push\` to retry.`,
-    );
-  }
-
-  // 2. Markdown — ingest project docs into the knowledge graph via `graph.ingest`.
-  const md = await ingestProjectMarkdown(cwd);
-  if (md.found === 0) {
-    console.log("  · No markdown files found to ingest.");
-  } else if (md.ingested > 0) {
-    console.log(
-      `  · Ingested ${md.ingested}/${md.found} markdown file(s) into the knowledge graph` +
-        (md.failed > 0 ? ` (${md.failed} failed).` : "."),
-    );
-  } else {
-    console.log(
-      `  · Markdown ingest skipped — all ${md.failed} file(s) failed. ` +
-        "Check your connection and retry with the agent.",
-    );
-  }
-}
-
-/**
- * Ingest every project markdown file into the knowledge graph via `graph.ingest`.
- * Returns counts for a summary line. Per-file failures are isolated.
- */
-async function ingestProjectMarkdown(
-  cwd: string,
-): Promise<{ found: number; ingested: number; failed: number }> {
-  const files = findMarkdownFiles(cwd).slice(0, MAX_INGEST_FILES);
-  let ingested = 0;
-  let failed = 0;
-
-  for (const abs of files) {
-    let text: string;
-    try {
-      text = readFileSync(abs, "utf8").trim();
-    } catch {
-      failed++;
-      continue;
-    }
-    // Empty docs have nothing to extract — skip without counting as a failure.
-    if (!text) continue;
-    const clipped =
-      text.length > MAX_INGEST_BYTES ? text.slice(0, MAX_INGEST_BYTES) : text;
-    try {
-      await apiPostOrThrow("graph/ingest", {
-        text: clipped,
-        sourceUrl: relative(cwd, abs),
-      });
-      ingested++;
-    } catch {
-      failed++;
-    }
-  }
-
-  return { found: files.length, ingested, failed };
-}
-
-/**
- * Locate project markdown files. Prefers `git ls-files` (respects .gitignore,
- * fast) and falls back to a bounded filesystem walk when `cwd` is not a git repo.
- */
-function findMarkdownFiles(cwd: string): string[] {
-  try {
-    const out = execFileSync("git", ["ls-files", "-z", "*.md", "*.mdx"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    const rels = out.split("\0").filter((r) => r.length > 0);
-    if (rels.length > 0) {
-      // De-dup (pathspecs can overlap) and resolve to absolute paths.
-      return [...new Set(rels)].map((r) => resolve(cwd, r));
-    }
-  } catch {
-    // Not a git repo / git unavailable — fall through to the walk.
-  }
-  const acc: string[] = [];
-  walkMarkdown(cwd, acc);
-  return acc;
-}
-
-/** Recursively collect `*.md`/`*.mdx` files, skipping noise dirs, up to the cap. */
-function walkMarkdown(dir: string, acc: string[]): void {
-  if (acc.length >= MAX_INGEST_FILES) return;
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (acc.length >= MAX_INGEST_FILES) return;
-    const full = resolve(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (MARKDOWN_EXCLUDE_DIRS.has(entry.name) || entry.name.startsWith("."))
-        continue;
-      walkMarkdown(full, acc);
-    } else if (entry.isFile() && /\.mdx?$/i.test(entry.name)) {
-      acc.push(full);
-    }
-  }
 }
 
 /**

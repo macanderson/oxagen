@@ -55,15 +55,6 @@
       "writes": []
     },
     {
-      "domain": "graph",
-      "name": "add_node_label",
-      "reads": [],
-      "surfaces": [
-        "agent"
-      ],
-      "writes": []
-    },
-    {
       "domain": "org",
       "name": "add_org_member",
       "reads": [],
@@ -118,17 +109,6 @@
       "writes": []
     },
     {
-      "domain": "semantic",
-      "name": "approve_semantic_edge",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "conversation",
       "name": "archive_conversation",
       "reads": [],
@@ -144,6 +124,17 @@
       "name": "archive_reseller_customer",
       "reads": [],
       "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "assign_agent_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -575,6 +566,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "delete_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "connection",
       "name": "delete_connection",
       "reads": [],
@@ -592,18 +594,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "delete_edge",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -648,18 +638,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "delete_node",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -751,6 +729,17 @@
     },
     {
       "domain": "agent",
+      "name": "demote_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "deploy_agent",
       "reads": [],
       "surfaces": [
@@ -790,6 +779,17 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "dismiss_memory_promotion",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
         "mcp"
       ],
       "writes": []
@@ -899,16 +899,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "export_graph",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1100,6 +1090,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "get_agent_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "get_auth_alerts",
       "reads": [],
@@ -1178,13 +1179,12 @@
       "writes": []
     },
     {
-      "domain": "code",
-      "name": "get_code_map",
+      "domain": "agent",
+      "name": "get_citation_stats",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -1262,17 +1262,6 @@
       "surfaces": [
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_execution_lineage",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -1401,6 +1390,17 @@
     {
       "domain": "org",
       "name": "get_org_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "get_plan",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1696,30 +1696,6 @@
       "writes": []
     },
     {
-      "domain": "semantic",
-      "name": "infer_semantic_edges",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "ingest_graph",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": [
-        "neo4j:GraphNode"
-      ]
-    },
-    {
       "domain": "integration",
       "name": "install_integration",
       "reads": [],
@@ -1787,6 +1763,17 @@
     },
     {
       "domain": "agent",
+      "name": "list_agent_roles",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
       "name": "list_agent_skills",
       "reads": [],
       "surfaces": [
@@ -1815,6 +1802,17 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "list_branches",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
         "mcp"
       ],
       "writes": []
@@ -2061,6 +2059,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_plans",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "list_plugin_registries",
       "reads": [],
@@ -2221,17 +2230,6 @@
     {
       "domain": "secret",
       "name": "list_secret_keys",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "semantic",
-      "name": "list_semantic_edges",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2502,17 +2500,6 @@
       "writes": []
     },
     {
-      "domain": "graph",
-      "name": "push_graph",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "billing",
       "name": "push_reseller_rebill",
       "reads": [],
@@ -2667,15 +2654,6 @@
       "writes": []
     },
     {
-      "domain": "graph",
-      "name": "remove_node_label",
-      "reads": [],
-      "surfaces": [
-        "agent"
-      ],
-      "writes": []
-    },
-    {
       "domain": "org",
       "name": "remove_org_member",
       "reads": [],
@@ -2805,6 +2783,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "revoke_agent_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "api_key",
       "name": "revoke_api_key",
       "reads": [],
@@ -2842,18 +2831,6 @@
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "run_cypher",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -3251,8 +3228,8 @@
       "writes": []
     },
     {
-      "domain": "semantic",
-      "name": "suggest_semantic_edges",
+      "domain": "agent",
+      "name": "suggest_promotion_rationales",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3579,30 +3556,6 @@
       "writes": []
     },
     {
-      "domain": "graph",
-      "name": "upsert_edge",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "upsert_node",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "upsert_schema_label",
       "reads": [],
@@ -3707,7 +3660,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2616fa86df3b983053c369d29a0fc1553c5a7c57385e57c8d9307c02c86d828b",
+  "contentHash": "9e7ab1e1da75b6ba02d7d296350ca0d358de69747be401d9759c4abd21365830",
   "domains": [
     {
       "name": "agent",
@@ -3724,7 +3677,6 @@
         "neo4j:AgentVersion",
         "neo4j:BackgroundTask",
         "neo4j:Citation",
-        "neo4j:EngramMemory",
         "neo4j:Evidence",
         "neo4j:Execution",
         "neo4j:Fanout",
@@ -3738,6 +3690,8 @@
         "postgres:agent.agent_execution_steps",
         "postgres:agent.agent_executions",
         "postgres:agent.agent_plans",
+        "postgres:agent.agent_run_events",
+        "postgres:agent.agent_runs",
         "postgres:agent.agent_tool_calls",
         "postgres:agent.agent_triggers",
         "postgres:agent.agent_versions",
@@ -3773,7 +3727,6 @@
         "neo4j:User",
         "postgres:auth.accounts",
         "postgres:auth.api_keys",
-        "postgres:auth.credentials",
         "postgres:auth.rate_limit",
         "postgres:auth.sessions",
         "postgres:auth.two_factor",
@@ -3796,9 +3749,7 @@
         "postgres:billing.credit_balances",
         "postgres:billing.credit_ledger",
         "postgres:billing.credit_lots",
-        "postgres:billing.invoice_line_items",
         "postgres:billing.invoices",
-        "postgres:billing.org_billing_profiles",
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
         "postgres:billing.plans",
@@ -3810,8 +3761,7 @@
         "postgres:billing.reseller_settings",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
-        "postgres:billing.subscriptions",
-        "postgres:billing.usage_records"
+        "postgres:billing.subscriptions"
       ]
     },
     {
@@ -3849,7 +3799,6 @@
         "blob:avatar",
         "blob:generated_asset",
         "neo4j:Document",
-        "neo4j:GeneratedFile",
         "postgres:content.documents",
         "postgres:content.generated_assets"
       ]
@@ -3890,6 +3839,7 @@
         "neo4j"
       ],
       "tables": [
+        "neo4j:Demotion",
         "neo4j:GraphNode"
       ]
     },
@@ -3914,11 +3864,7 @@
       ],
       "tables": [
         "neo4j:EntityNode",
-        "neo4j:Feature",
-        "neo4j:SourceChunk",
         "neo4j:SourceConnection",
-        "neo4j:SourceFile",
-        "neo4j:SourceSymbol",
         "postgres:ingestion.auth_credentials",
         "postgres:ingestion.connector_schemas",
         "postgres:ingestion.deletion_jobs",
@@ -4098,7 +4044,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 121
+      "tableCount": 119
     },
     {
       "domains": [
@@ -4125,7 +4071,7 @@
       ],
       "kind": "neo4j",
       "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 31
+      "tableCount": 26
     },
     {
       "domains": [
@@ -5378,6 +5324,12 @@
           "type": "property"
         },
         {
+          "name": "promotion_dismissed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
           "name": "publicId",
           "nullable": true,
           "primaryKey": true,
@@ -5394,7 +5346,7 @@
       "id": "neo4j:AgentMemory",
       "meta": {
         "constraints": "agent_memory_public_id",
-        "indexes": "agent_memory_class_kind,agent_memory_org,agent_memory_promotion_pressure,agent_memory_status",
+        "indexes": "agent_memory_class_kind,agent_memory_org,agent_memory_promotion_dismissed,agent_memory_promotion_pressure,agent_memory_status",
         "vectorIndexes": "memory_embedding_index"
       },
       "name": "AgentMemory",
@@ -5490,6 +5442,31 @@
     {
       "columns": [
         {
+          "name": "id",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:Demotion",
+      "meta": {
+        "constraints": "demotion_id",
+        "indexes": "demotion_org"
+      },
+      "name": "Demotion",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "embedding",
           "nullable": true,
           "primaryKey": false,
@@ -5516,31 +5493,6 @@
         "vectorIndexes": "document_embedding_index"
       },
       "name": "Document",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "agent",
-      "id": "neo4j:EngramMemory",
-      "meta": {
-        "indexes": "engram_memory_org",
-        "vectorIndexes": "engram_memory_embedding_index"
-      },
-      "name": "EngramMemory",
       "store": "neo4j",
       "tenantScoped": true
     },
@@ -5615,12 +5567,6 @@
     {
       "columns": [
         {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
           "name": "orgId",
           "nullable": true,
           "primaryKey": false,
@@ -5637,8 +5583,7 @@
       "id": "neo4j:Execution",
       "meta": {
         "constraints": "execution_public_id",
-        "indexes": "execution_org",
-        "vectorIndexes": "execution_embedding_index"
+        "indexes": "execution_org"
       },
       "name": "Execution",
       "store": "neo4j",
@@ -5666,75 +5611,6 @@
         "indexes": "fanout_org"
       },
       "name": "Fanout",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "naturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        },
-        {
-          "name": "workspaceId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:Feature",
-      "meta": {
-        "constraints": "feature_public_id",
-        "indexes": "feature_natural_key,feature_org",
-        "vectorIndexes": "feature_embedding_index"
-      },
-      "name": "Feature",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "content",
-      "id": "neo4j:GeneratedFile",
-      "meta": {
-        "constraints": "generated_file_public_id",
-        "indexes": "generated_file_org"
-      },
-      "name": "GeneratedFile",
       "store": "neo4j",
       "tenantScoped": true
     },
@@ -5932,50 +5808,6 @@
     {
       "columns": [
         {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "fileNaturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "naturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:SourceChunk",
-      "meta": {
-        "constraints": "source_chunk_public_id",
-        "indexes": "source_chunk_file,source_chunk_natural_key,source_chunk_org",
-        "vectorIndexes": "source_chunk_embedding_index"
-      },
-      "name": "SourceChunk",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
           "name": "id",
           "nullable": true,
           "primaryKey": true,
@@ -5995,94 +5827,6 @@
         "indexes": "ingestion_org_source"
       },
       "name": "SourceConnection",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "connectionId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "naturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:SourceFile",
-      "meta": {
-        "constraints": "source_file_natural_key_org_unique,source_file_public_id",
-        "indexes": "source_file_connection,source_file_natural_key,source_file_org",
-        "vectorIndexes": "source_file_embedding_index"
-      },
-      "name": "SourceFile",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "fileNaturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "naturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:SourceSymbol",
-      "meta": {
-        "constraints": "source_symbol_public_id",
-        "indexes": "source_symbol_file,source_symbol_natural_key,source_symbol_org",
-        "vectorIndexes": "source_symbol_embedding_index"
-      },
-      "name": "SourceSymbol",
       "store": "neo4j",
       "tenantScoped": true
     },
@@ -6282,12 +6026,6 @@
         },
         {
           "name": "agent_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "fanout_run_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
@@ -6586,22 +6324,10 @@
           "type": "numeric(10, 6)"
         },
         {
-          "name": "synced_to_graph_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
           "name": "parent_execution_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
-        },
-        {
-          "name": "debug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
         },
         {
           "name": "state",
@@ -6725,6 +6451,200 @@
       "domain": "agent",
       "id": "postgres:agent.agent_plans",
       "name": "agent_plans",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "type",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.agent_run_events",
+      "name": "agent_run_events",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "spec",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "claimed_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "lease_expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attempts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "checkpoint",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "checkpoint_seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "result",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cancel_requested",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "started_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.agent_runs",
+      "name": "agent_runs",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -7140,6 +7060,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "agent",
@@ -7806,6 +7732,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "change_summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checksum",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -8683,112 +8621,6 @@
           "name": "id",
           "nullable": false,
           "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "credential_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "encrypted_payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bytea"
-        },
-        {
-          "name": "kms_key_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "expires_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "last_used_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "auth",
-      "id": "postgres:auth.credentials",
-      "name": "credentials",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
           "type": "text"
         },
         {
@@ -9129,12 +8961,6 @@
           "type": "citext"
         },
         {
-          "name": "username",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
           "name": "display_name",
           "nullable": true,
           "primaryKey": false,
@@ -9157,18 +8983,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
-        },
-        {
-          "name": "email_verified_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "last_login_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
         },
         {
           "name": "two_factor_enabled",
@@ -9658,72 +9472,6 @@
           "type": "uuid"
         },
         {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "invoice_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.invoices",
-          "type": "uuid"
-        },
-        {
-          "name": "description",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "numeric(18, 4)"
-        },
-        {
-          "name": "unit_amount_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "total_cents",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "integer"
-        },
-        {
-          "name": "metric",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.invoice_line_items",
-      "name": "invoice_line_items",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -9849,101 +9597,6 @@
       "domain": "billing",
       "id": "postgres:billing.invoices",
       "name": "invoices",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "billing_email",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "address_line1",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_line2",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_city",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_region",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_postal_code",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_country",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "address_place_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.org_billing_profiles",
-      "name": "org_billing_profiles",
       "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
@@ -11085,96 +10738,6 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:org.organizations",
-          "type": "uuid"
-        },
-        {
-          "name": "subscription_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:billing.subscriptions",
-          "type": "uuid"
-        },
-        {
-          "name": "metric",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "quantity",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "numeric(20, 6)"
-        },
-        {
-          "name": "unit_cost_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "total_cost_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "bigint"
-        },
-        {
-          "name": "period_start",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "period_end",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "source_query_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        }
-      ],
-      "domain": "billing",
-      "id": "postgres:billing.usage_records",
-      "name": "usage_records",
-      "rls": "org_only",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
           "name": "updated_at",
           "nullable": false,
           "primaryKey": false,
@@ -11351,12 +10914,6 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "is_active_in_branch",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
         },
         {
           "name": "metadata",
@@ -11542,18 +11099,6 @@
         {
           "name": "title",
           "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "description",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "og_image_url",
-          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },
@@ -11968,12 +11513,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
-        },
-        {
-          "name": "synced_to_graph_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
         }
       ],
       "domain": "content",
@@ -12958,12 +12497,6 @@
           "type": "jsonb"
         },
         {
-          "name": "inngest_event_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
           "name": "started_at",
           "nullable": true,
           "primaryKey": false,
@@ -13270,12 +12803,6 @@
           "type": "text"
         },
         {
-          "name": "mfa_status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
           "name": "idp_subject",
           "nullable": true,
           "primaryKey": false,
@@ -13362,6 +12889,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "conditions_jsonb",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
         }
       ],
       "domain": "iam",
@@ -14072,18 +13605,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "resolved_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "resolved_by",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
         }
       ],
       "domain": "ingestion",
@@ -14330,6 +13851,18 @@
         {
           "name": "last_received_at",
           "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
           "primaryKey": false,
           "type": "timestamp with time zone"
         }
@@ -15326,12 +14859,6 @@
           "type": "text"
         },
         {
-          "name": "permissions",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
           "name": "joined_at",
           "nullable": false,
           "primaryKey": false,
@@ -15898,12 +15425,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
         }
       ],
       "domain": "schema_registry",
@@ -17594,7 +17115,7 @@
           "name": "limit_usd",
           "nullable": true,
           "primaryKey": false,
-          "type": "real"
+          "type": "numeric(12, 2)"
         },
         {
           "name": "mode",
@@ -17819,12 +17340,6 @@
           "type": "text"
         },
         {
-          "name": "permissions",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
           "name": "joined_at",
           "nullable": false,
           "primaryKey": false,
@@ -17905,6 +17420,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "description",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "prompt_config",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "settings",

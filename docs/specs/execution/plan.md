@@ -1,5 +1,9 @@
 # Agent Execution System — Implementation Plan
 
+> **Launch update:** Phase 2's automatic Neo4j execution mirror was retired.
+> Preserve the Postgres trace path; redesign graph lineage around typed run
+> evidence rather than an eventually consistent duplicate.
+
 > **Authoritative document:** [`../agent-execution/implementation-plan.md`](../agent-execution/implementation-plan.md)
 >
 > This file is a focused summary. The full plan with sprint breakdown and risk

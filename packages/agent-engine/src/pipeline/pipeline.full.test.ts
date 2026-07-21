@@ -6,7 +6,7 @@
  * (structured output for the evaluator/judge, a streaming tool loop that edits a
  * file and runs a command). Covers: stage emission, trace assembly, the routing
  * safety floor, the auto-revise loop + gotcha memory, readOnly disabling revise,
- * a pinned model, verbose telemetry, the judge panel, graph sync, and every
+ * a pinned model, verbose telemetry, the judge panel, and every
  * streamed callback.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -24,7 +24,7 @@ afterAll(() => {
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import { modelForTier } from "../router/model-router";
-import type { AgentAi, ModelRunArgs, GraphSyncProvider } from "../ports";
+import type { AgentAi, ModelRunArgs } from "../ports";
 
 const tick = (): Promise<void> => new Promise((r) => setImmediate(r));
 
@@ -55,12 +55,19 @@ function makeStream(args: ModelRunArgs, b: StreamBehavior) {
           type: "tool-call",
           toolName: "edit_file",
           toolCallId: "e1",
-          input: { path: b.editFile, old_string: "before", new_string: "after" },
+          input: {
+            path: b.editFile,
+            old_string: "before",
+            new_string: "after",
+          },
         };
         const editTool = args.tools["edit_file"] as {
           execute: (i: unknown, o: unknown) => Promise<unknown>;
         };
-        await editTool.execute({ path: b.editFile, old_string: "before", new_string: "after" }, {});
+        await editTool.execute(
+          { path: b.editFile, old_string: "before", new_string: "after" },
+          {},
+        );
         yield {
           type: "tool-result",
           toolName: "edit_file",
@@ -112,34 +119,42 @@ interface AiConfig {
 function makeAi(cfg: AiConfig = {}) {
   let streamRound = 0;
   let judgeCall = 0;
-  const generateObject = vi.fn().mockImplementation((args: { system?: string }) => {
-    if (args.system?.includes("evaluation stage")) {
+  const generateObject = vi
+    .fn()
+    .mockImplementation((args: { system?: string }) => {
+      if (args.system?.includes("evaluation stage")) {
+        return Promise.resolve({
+          object: cfg.evalObject ?? DEFAULT_EVAL,
+          usage: { inputTokens: 2, outputTokens: 1 },
+        });
+      }
+      // Judge branch.
+      const verdicts = cfg.judgeVerdicts ?? [{ complete: true }];
+      const spec = verdicts[Math.min(judgeCall, verdicts.length - 1)]!;
+      judgeCall++;
       return Promise.resolve({
-        object: cfg.evalObject ?? DEFAULT_EVAL,
-        usage: { inputTokens: 2, outputTokens: 1 },
+        object: {
+          complete: spec.complete,
+          confidence: spec.confidence ?? 90,
+          findings:
+            spec.findings ?? (spec.complete ? [] : ["tests were not added"]),
+          remainingWork:
+            spec.remainingWork ?? (spec.complete ? [] : ["add tests"]),
+          reasoning: spec.complete ? "looks done" : "incomplete",
+        },
+        usage: { inputTokens: 3, outputTokens: 2 },
       });
-    }
-    // Judge branch.
-    const verdicts = cfg.judgeVerdicts ?? [{ complete: true }];
-    const spec = verdicts[Math.min(judgeCall, verdicts.length - 1)]!;
-    judgeCall++;
-    return Promise.resolve({
-      object: {
-        complete: spec.complete,
-        confidence: spec.confidence ?? 90,
-        findings: spec.findings ?? (spec.complete ? [] : ["tests were not added"]),
-        remainingWork: spec.remainingWork ?? (spec.complete ? [] : ["add tests"]),
-        reasoning: spec.complete ? "looks done" : "incomplete",
-      },
-      usage: { inputTokens: 3, outputTokens: 2 },
     });
-  });
   const ai: AgentAi = {
     stream(args: ModelRunArgs) {
       const round = streamRound++;
       const b = cfg.stream
         ? cfg.stream(round)
-        : { editFile: round === 0 ? "src/a.ts" : undefined, bash: round === 0, reasoning: "thinking hard" };
+        : {
+            editFile: round === 0 ? "src/a.ts" : undefined,
+            bash: round === 0,
+            reasoning: "thinking hard",
+          };
       return makeStream(args, b);
     },
     generateObject,
@@ -161,7 +176,14 @@ describe("runTurn — full pipeline path", () => {
     });
 
     expect(stages).toEqual(
-      expect.arrayContaining(["evaluate", "enhance", "route", "execute", "judge", "complete"]),
+      expect.arrayContaining([
+        "evaluate",
+        "enhance",
+        "route",
+        "execute",
+        "judge",
+        "complete",
+      ]),
     );
     expect(result.text).toBe("done");
     expect(result.trace.evaluation.fallback).toBe(false);
@@ -194,8 +216,14 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const remember = vi.fn();
     const { ai } = makeAi({
-      judgeVerdicts: [{ complete: false, findings: ["no tests"] }, { complete: true }],
-      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, reasoning: "r" }),
+      judgeVerdicts: [
+        { complete: false, findings: ["no tests"] },
+        { complete: true },
+      ],
+      stream: (round) => ({
+        editFile: round === 0 ? "src/a.ts" : undefined,
+        reasoning: "r",
+      }),
     });
 
     const result = await runTurn({
@@ -215,8 +243,14 @@ describe("runTurn — full pipeline path", () => {
   it("reads OXAGEN_MAX_REVISE_ROUNDS as the default when maxReviseRounds is not passed", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi({
-      judgeVerdicts: [{ complete: false, findings: ["no tests"] }, { complete: true }],
-      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, reasoning: "r" }),
+      judgeVerdicts: [
+        { complete: false, findings: ["no tests"] },
+        { complete: true },
+      ],
+      stream: (round) => ({
+        editFile: round === 0 ? "src/a.ts" : undefined,
+        reasoning: "r",
+      }),
     });
 
     process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "1";
@@ -238,7 +272,10 @@ describe("runTurn — full pipeline path", () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi({
       judgeVerdicts: [{ complete: false, findings: ["no tests"] }],
-      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, reasoning: "r" }),
+      stream: (round) => ({
+        editFile: round === 0 ? "src/a.ts" : undefined,
+        reasoning: "r",
+      }),
     });
 
     process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "5";
@@ -268,7 +305,12 @@ describe("runTurn — full pipeline path", () => {
     // still holds even when the judge says the work is incomplete.
     process.env["OXAGEN_LADDER"] = "0";
     try {
-      const result = await runTurn({ prompt: "explain src/a.ts", workspace: ws, ai, readOnly: true });
+      const result = await runTurn({
+        prompt: "explain src/a.ts",
+        workspace: ws,
+        ai,
+        readOnly: true,
+      });
       expect(result.trace.judgeRounds).toHaveLength(1);
       expect(result.trace.finalComplete).toBe(false);
     } finally {
@@ -285,7 +327,12 @@ describe("runTurn — full pipeline path", () => {
     });
 
     // Default behavior (judge-skip ON): no OXAGEN_LADDER set.
-    const result = await runTurn({ prompt: "explain src/a.ts", workspace: ws, ai, readOnly: true });
+    const result = await runTurn({
+      prompt: "explain src/a.ts",
+      workspace: ws,
+      ai,
+      readOnly: true,
+    });
 
     // The judge (completeness) model was never invoked — only the evaluator.
     const judgeCalls = generateObject.mock.calls.filter(([a]) =>
@@ -307,7 +354,12 @@ describe("runTurn — full pipeline path", () => {
 
     // A lookup turn: NOT readOnly (so the ADR-021 read-only skip does not apply),
     // but fastPath opts into skipping the judge on a zero diff.
-    const result = await runTurn({ prompt: "what's the command to add an MCP server?", workspace: ws, ai, fastPath: true });
+    const result = await runTurn({
+      prompt: "what's the command to add an MCP server?",
+      workspace: ws,
+      ai,
+      fastPath: true,
+    });
 
     const judgeCalls = generateObject.mock.calls.filter(([a]) =>
       (a as { system?: string }).system?.includes("completeness judge"),
@@ -329,11 +381,18 @@ describe("runTurn — full pipeline path", () => {
     // prove the fast-path deterministic skip did not swallow it on a diff turn.
     process.env["OXAGEN_LADDER"] = "0";
     try {
-      const result = await runTurn({ prompt: "add a filesystem MCP", workspace: ws, ai, fastPath: true });
+      const result = await runTurn({
+        prompt: "add a filesystem MCP",
+        workspace: ws,
+        ai,
+        fastPath: true,
+      });
       // The real judge ran — the verdict carries an advisor model slug, NOT the
       // fast-path deterministic marker (which only fires on a zero diff).
       expect(result.trace.judgeRounds).toHaveLength(1);
-      expect(result.trace.judgeRounds[0]!.model).not.toBe("deterministic/fast-path");
+      expect(result.trace.judgeRounds[0]!.model).not.toBe(
+        "deterministic/fast-path",
+      );
       expect(result.trace.judgeRounds[0]!.model).toContain("/");
     } finally {
       delete process.env["OXAGEN_LADDER"];
@@ -343,7 +402,12 @@ describe("runTurn — full pipeline path", () => {
   it("honours a pinned model and skips auto-routing", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
-    const result = await runTurn({ prompt: "do it", workspace: ws, ai, model: "openai/gpt-5" });
+    const result = await runTurn({
+      prompt: "do it",
+      workspace: ws,
+      ai,
+      model: "openai/gpt-5",
+    });
     expect(result.trace.selectedModel).toBe("openai/gpt-5");
     expect(result.trace.selectionRationale).toBe("pinned model");
     expect(result.trace.selectedTier).toBe("precise"); // gpt-5 → precise tier
@@ -352,7 +416,12 @@ describe("runTurn — full pipeline path", () => {
   it("captures per-phase + tool telemetry in verbose mode", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
-    const result = await runTurn({ prompt: "do it", workspace: ws, ai, verbose: true });
+    const result = await runTurn({
+      prompt: "do it",
+      workspace: ws,
+      ai,
+      verbose: true,
+    });
     expect(result.trace.verbose).toBe(true);
     expect(result.trace.phases?.length).toBeGreaterThan(0);
     // edit + bash tool results both captured.
@@ -372,20 +441,6 @@ describe("runTurn — full pipeline path", () => {
     expect(result.trace.judgeRounds[0]!.model).toContain("panel(");
   });
 
-  it("fires graph sync (ensureGraph + recordLineage) after touching files", async () => {
-    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
-    const ensureGraph = vi.fn().mockResolvedValue(undefined);
-    const recordLineage = vi.fn().mockResolvedValue(undefined);
-    const graphSync: GraphSyncProvider = { ensureGraph, recordLineage };
-    const { ai } = makeAi();
-
-    await runTurn({ prompt: "do it", workspace: ws, ai, graphSync });
-    await tick();
-
-    expect(ensureGraph).toHaveBeenCalledWith(expect.arrayContaining(["src/a.ts"]));
-    expect(recordLineage).toHaveBeenCalledOnce();
-  });
-
   it("records the trace through the injected trace store", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const record = vi.fn();
@@ -395,36 +450,27 @@ describe("runTurn — full pipeline path", () => {
     expect(record).toHaveBeenCalledOnce();
   });
 
-  it("surfaces a failing graph sync through onError instead of swallowing it", async () => {
-    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
-    const graphSync: GraphSyncProvider = {
-      ensureGraph: vi.fn().mockRejectedValue(new Error("neo4j down")),
-      recordLineage: vi.fn().mockRejectedValue(new Error("neo4j down")),
-    };
-    const onError = vi.fn();
-    const { ai } = makeAi();
-
-    await runTurn({ prompt: "do it", workspace: ws, ai, graphSync, onError });
-    await tick();
-    await tick();
-
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: "graph-sync", error: expect.any(Error) }),
-    );
-  });
-
   it("surfaces a failing trace record through onError instead of swallowing it", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const record = vi.fn().mockRejectedValue(new Error("clickhouse timeout"));
     const onError = vi.fn();
     const { ai } = makeAi();
 
-    await runTurn({ prompt: "do it", workspace: ws, ai, trace: { record }, onError });
+    await runTurn({
+      prompt: "do it",
+      workspace: ws,
+      ai,
+      trace: { record },
+      onError,
+    });
     await tick();
     await tick();
 
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: "trace-record", error: expect.any(Error) }),
+      expect.objectContaining({
+        phase: "trace-record",
+        error: expect.any(Error),
+      }),
     );
   });
 
@@ -459,9 +505,17 @@ describe("runTurn — full pipeline path", () => {
   it("keeps the raw command string when a bash tool-result input is not JSON", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi({
-      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, bash: true, bashRawInput: true }),
+      stream: (round) => ({
+        editFile: round === 0 ? "src/a.ts" : undefined,
+        bash: true,
+        bashRawInput: true,
+      }),
     });
-    const result = await runTurn({ prompt: "run the tests", workspace: ws, ai });
+    const result = await runTurn({
+      prompt: "run the tests",
+      workspace: ws,
+      ai,
+    });
     // The pipeline could not JSON.parse the input, so it kept the stringified form.
     expect(result.text).toBe("done");
     expect(result.trace.judgeRounds).toHaveLength(1);
@@ -469,13 +523,28 @@ describe("runTurn — full pipeline path", () => {
 
   it("marks the enhancement source when both code graph and memory contribute", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
-    const codeGraph = { query: vi.fn().mockResolvedValue("src/a.ts:1: something defined here") };
-    const memory = { recallContext: vi.fn().mockResolvedValue("recalled lesson"), remember: vi.fn() };
+    const codeGraph = {
+      query: vi.fn().mockResolvedValue("src/a.ts:1: something defined here"),
+    };
+    const memory = {
+      recallContext: vi.fn().mockResolvedValue("recalled lesson"),
+      remember: vi.fn(),
+    };
     const { ai } = makeAi({
-      evalObject: { ...DEFAULT_EVAL, contextQueries: ["something"], refinedPrompt: "fix `something`" },
+      evalObject: {
+        ...DEFAULT_EVAL,
+        contextQueries: ["something"],
+        refinedPrompt: "fix `something`",
+      },
     });
 
-    const result = await runTurn({ prompt: "fix `something`", workspace: ws, ai, codeGraph, memory });
+    const result = await runTurn({
+      prompt: "fix `something`",
+      workspace: ws,
+      ai,
+      codeGraph,
+      memory,
+    });
     expect(result.trace.enhancement.source).toBe("code-graph+memory");
     expect(result.trace.enhancement.lessonCount).toBe(1);
     expect(result.trace.enhancement.resolved).toContain("something");
@@ -491,11 +560,13 @@ describe("runTurn — full pipeline path", () => {
     // "search"/"file_symbols" miss (no literal candidate in this prompt);
     // "semantic_search" hits — this is the fallback path exactly.
     const codeGraph = {
-      query: vi.fn().mockImplementation((op: string) =>
-        op === "semantic_search"
-          ? Promise.resolve("src/related.ts (0.82)")
-          : Promise.resolve("No symbols matching."),
-      ),
+      query: vi
+        .fn()
+        .mockImplementation((op: string) =>
+          op === "semantic_search"
+            ? Promise.resolve("src/related.ts (0.82)")
+            : Promise.resolve("No symbols matching."),
+        ),
     };
     const { ai } = makeAi({
       evalObject: { ...DEFAULT_EVAL, refinedPrompt: "improve the login flow" },

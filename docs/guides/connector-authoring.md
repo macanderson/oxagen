@@ -2,8 +2,8 @@
 
 This guide explains how to author an Oxagen connector schema as a partner or
 third-party developer. A connector schema is a YAML file that describes your
-platform's authentication options, configuration fields, entity types, and
-inference settings. Oxagen fetches this file at install time, renders a dynamic
+platform's authentication options, configuration fields, and entity types.
+Oxagen fetches this file at install time, renders a dynamic
 form from it, and routes synced data through the knowledge-graph pipeline.
 
 No code deployment is required. Your connector is fully described by a single
@@ -21,7 +21,7 @@ platform:
 2. Parses and validates it against the `ConnectorPluginSchema` interface.
 3. Caches the schema in the `ingestion.connector_schemas` database table.
 4. Renders a dynamic form using the schema's `auth`, `config`, `recordTypes`,
-   `filters`, `inference`, and `sync` sections.
+   `filters`, and `sync` sections.
 5. Stores the user's submitted config and begins the ingestion pipeline.
 
 Built-in connectors (GitHub, Google Drive, Slack, Linear) ship as bundled YAML
@@ -43,7 +43,6 @@ auth          (required unless kind: none)
 config        (optional — platform-specific settings)
 recordTypes   (optional — entity types your connector produces)
 filters       (optional — path and label filtering)
-inference     (optional — LLM relationship inference)
 sync          (required)
 defaultFieldMappings (optional — API field → graph property mapping)
 ```
@@ -261,32 +260,6 @@ record type IDs where label filtering is meaningful.
 
 ---
 
-### `inference`
-
-Controls whether Oxagen runs LLM-based relationship inference on synced data.
-
-```yaml
-inference:
-  enabled: true
-  defaultEnabled: false   # require explicit opt-in (recommended)
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    account: true
-    user: true
-    event: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Your prompt here...
-```
-
-**`ontologyPrompt`** is the most important field. It is prepended to every
-inference LLM call as a system prompt. See "AI prompt best practices" below.
-
----
-
 ### `sync`
 
 ```yaml
@@ -434,37 +407,7 @@ recordTypes:
       defaultEnabled: false
 ```
 
-**Step 5: Inference with ontologyPrompt**
-
-```yaml
-inference:
-  enabled: true
-  defaultEnabled: false
-  perRecordType:
-    issue: true
-    epic: true
-    sprint: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer product features and engineering work items from Jira data.
-
-    Look for:
-    - Issues with "Feature", "Story", or "Enhancement" issue types
-    - Epics whose names correspond to product areas (billing, auth, onboarding)
-    - Issues referencing GitHub PRs or commit SHAs in descriptions or comments
-    - Sprint names indicating quarterly or release milestones
-
-    Create edges:
-    - Feature -[tracked_by]-> JiraIssue (when issue type is Story or Feature)
-    - JiraEpic -[contains]-> Feature (when epic groups feature issues)
-    - JiraIssue -[implemented_by]-> PullRequest (when description references a PR URL)
-    - JiraIssue -[blocked_by]-> JiraIssue (when issue has a "blocks" link)
-```
-
-**Step 6: Sync config**
+**Step 5: Sync config**
 
 ```yaml
 sync:
@@ -494,36 +437,6 @@ Common regular expression patterns for config field validation:
 | Jira project key | `^[A-Z][A-Z0-9_]{0,9}$` |
 | AWS region | `^(us\|eu\|ap\|sa\|ca\|me\|af)-[a-z]+-\d$` |
 | ISO 8601 date | `^\d{4}-\d{2}-\d{2}$` |
-
----
-
-## AI prompt best practices
-
-The `inference.ontologyPrompt` field is sent as a system prompt to the
-inference LLM for every entity processed. Writing it well is the biggest
-leverage point for graph quality.
-
-### Do
-
-- **Name the node types explicitly.** List `Feature`, `PullRequest`, `Sprint` —
-  the LLM needs to know what node labels to use.
-- **Specify edge direction.** Use `A -[edge_type]-> B` notation so the LLM
-  produces correctly directed edges.
-- **Give signal examples.** "Issues with `enhancement` labels" is better than
-  "feature issues" — concrete signals reduce hallucination.
-- **Include cross-source links.** Mention when your entity references another
-  connected source (GitHub, Slack, Linear) so the LLM can create cross-source
-  edges.
-- **Stay under 800 tokens.** Every entity in your workspace pays this prompt
-  cost on every inference call. Verbose prompts inflate token usage.
-
-### Avoid
-
-- Instructing the LLM to invent data not present in the entity properties.
-- Over-specifying — leave room for the LLM to discover signals you did not
-  anticipate.
-- Mixing inference instructions with formatting instructions — keep the prompt
-  focused on ontology.
 
 ---
 

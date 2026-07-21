@@ -5,7 +5,7 @@ export const researchSwarmStatus = registerCapability({
   name: "get_research_status",
   domain: "research",
   description:
-    "Poll the status of a running research swarm. Returns task completion progress AND the actual web-search results collected by each subagent — title, url, and content snippet per hit — so the agent can summarize them and feed them into graph ingestion. Delegates to agent.subagent.aggregate internally.",
+    "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to agent.subagent.aggregate internally.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -17,12 +17,12 @@ export const researchSwarmStatus = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  // After a swarm completes, the agent reads `results` to (a) summarize for the
-  // user and (b) feed the collected text into graph.ingest for entity/edge
-  // extraction. graph.ingest is the natural next step.
+  // After a swarm completes, the agent reads `results` to summarize for the
+  // user or package the findings as an explicit artifact. Search results are
+  // never promoted into the workspace graph as a hidden side effect.
   produces: ["search.results"],
   consumes: ["swarm.id"],
-  chainHints: ["ingest_graph", "generate_document"],
+  chainHints: ["generate_document"],
   render: { componentId: "research-swarm-card" },
   input: z.object({
     swarmId: z.string().describe("Swarm ID returned by research.swarm.start"),
@@ -60,5 +60,9 @@ export const researchSwarmStatus = registerCapability({
   }),
 });
 
-export type ResearchSwarmStatusInput = z.output<typeof researchSwarmStatus.input>;
-export type ResearchSwarmStatusOutput = z.output<typeof researchSwarmStatus.output>;
+export type ResearchSwarmStatusInput = z.output<
+  typeof researchSwarmStatus.input
+>;
+export type ResearchSwarmStatusOutput = z.output<
+  typeof researchSwarmStatus.output
+>;

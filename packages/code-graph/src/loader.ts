@@ -7,14 +7,12 @@
  *
  * WASM bundle note:
  *   The .wasm files from web-tree-sitter, tree-sitter-typescript, and
- *   tree-sitter-python are binary assets esbuild cannot inline. The API's
- *   build.mjs and the CLI's bundle.mjs copy them into the function/bundle
- *   directory next to the bundle; resolveWasm() below checks there first
- *   and falls back to the monorepo node_modules walk-up for dev/vitest.
+ *   tree-sitter-python are binary assets esbuild cannot inline. The CLI bundle
+ *   copies them beside the executable; resolveWasm() checks there first and
+ *   falls back to the monorepo node_modules walk-up for dev/vitest.
  *
  * Module: @oxagen/code-graph/loader
- * Moved from packages/ingestion/src/parsers/loader.ts — canonical location is
- * now here; ingestion re-exports for backward compat.
+ * This loader is part of the checkout-local graph runtime.
  */
 
 import Parser from "web-tree-sitter";
@@ -24,10 +22,8 @@ import { fileURLToPath } from "url";
 import { createRequire } from "module";
 
 // Resolve this module's directory LAZILY and in both module systems. This must
-// never run at module scope: esbuild's CJS bundle (apps/api → Vercel function)
-// rewrites `import.meta` to an empty object, so a module-scope
-// `fileURLToPath(import.meta.url)` throws ERR_INVALID_ARG_TYPE on every cold
-// start and takes the whole API function down (P0 2026-06-12).
+// never run at module scope: the CLI's CJS bundle rewrites `import.meta`, so a
+// module-scope `fileURLToPath(import.meta.url)` can fail at startup.
 function moduleDir(): string {
   try {
     // Real ESM (tsx dev, vitest): import.meta.url is a file:// string.
@@ -87,7 +83,9 @@ function resolveWasm(pkgRelativePath: string): string {
   const req = moduleRequire();
   if (req && pkgName) {
     try {
-      candidates.push(resolve(dirname(req.resolve(`${pkgName}/package.json`)), fileName));
+      candidates.push(
+        resolve(dirname(req.resolve(`${pkgName}/package.json`)), fileName),
+      );
     } catch {
       /* package.json not resolvable from here — fall back to walk-ups */
     }

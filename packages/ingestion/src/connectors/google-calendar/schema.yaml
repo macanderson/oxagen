@@ -65,35 +65,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    event: true
-    calendar: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer team collaboration patterns and project context from Google Calendar events.
-
-    Look for:
-    - Event titles referencing product features, sprints, or project codenames
-    - Recurring events that indicate team rituals (standup, retro, planning)
-    - Attendee lists correlating to known team or squad membership
-    - Events with external participants suggesting customer or partner meetings
-
-    Create edges:
-    - CalendarEvent -[discusses]-> Feature (when event title references a product feature)
-    - CalendarEvent -[involves]-> Person (link attendee emails to known person nodes)
-    - CalendarEvent -[part_of]-> Sprint (when event title includes sprint name or cycle reference)
-
-    Cross-source links:
-    - If an attendee email matches a known GitHub or Linear user, create an ALIAS_OF edge
-    - If event description references a Linear ticket (OXA-123) or GitHub PR, link to that node
-
 sync:
   delivery: webhook
   pollingSupported: true

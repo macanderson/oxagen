@@ -46,31 +46,5 @@ describe("ontology.neighbors contract", () => {
       truncated: false,
     });
     expect(parsed.neighbors[0]?.edgeType).toBe("RELATES_TO");
-    // isSystem defaults to false so payloads from pre-flag handlers stay valid.
-    expect(parsed.neighbors[0]?.isSystem).toBe(false);
-  });
-
-  it("accepts an explicit isSystem lineage flag on a neighbor", () => {
-    const parsed = ontologyNeighbors.output.parse({
-      nodeId: "n_1",
-      found: true,
-      neighbors: [
-        {
-          nodeId: "exec_1",
-          label: "Execution",
-          displayName: "chat execution",
-          description: null,
-          edgeType: "EXECUTED",
-          direction: "in",
-          isSystem: true,
-          validFrom: null,
-          validTo: null,
-          recordedAt: null,
-          invalidatedAt: null,
-        },
-      ],
-      truncated: false,
-    });
-    expect(parsed.neighbors[0]?.isSystem).toBe(true);
   });
 });

@@ -7,8 +7,7 @@
  * - resolveEntity is called with a correctly-shaped EntityMutation
  * - upsertEntityNode is invoked with the right naturalKey + MERGE params
  * - embedEntity (via embedText) is called after dedup resolves a principal
- * - inferenceQueued is true when a principal node is resolved
- * - All 6 stages run without throwing for a well-formed connector event
+ * - All ingestion stages run without throwing for a well-formed connector event
  *
  * The test mocks:
  *   - scopedSession   (Neo4j — no live graph required)
@@ -52,7 +51,9 @@ import type { PipelineContext } from "../pipeline";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Build a RawIngestEvent for a GitHub push event. */
-function makeGithubEvent(overrides: Partial<RawIngestEvent> = {}): RawIngestEvent {
+function makeGithubEvent(
+  overrides: Partial<RawIngestEvent> = {},
+): RawIngestEvent {
   return {
     connectionId: "conn-integration-1",
     workspaceId: "ws-integration",
@@ -90,7 +91,6 @@ function makeCtx(overrides?: {
             propertyMappings: overrides?.propertyMappings ?? {},
           },
     ),
-    scheduleInference: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -147,12 +147,15 @@ describe("runPipeline — full 6-stage integration", () => {
     const result = await runPipeline(event, ctx);
 
     expect(result).toBeNull();
-    expect(ctx.getMapping).toHaveBeenCalledWith("conn-integration-1", "pull_request");
+    expect(ctx.getMapping).toHaveBeenCalledWith(
+      "conn-integration-1",
+      "pull_request",
+    );
     // No Neo4j queries should have run
     expect(mocks.sessionRun).not.toHaveBeenCalled();
   });
 
-  it("all 6 stages run without throwing for a well-formed github event", async () => {
+  it("all stages run without throwing for a well-formed github event", async () => {
     setupNeo4jMocks();
     const event = makeGithubEvent();
     const ctx = makeCtx();
@@ -165,13 +168,12 @@ describe("runPipeline — full 6-stage integration", () => {
     const event = makeGithubEvent();
     const ctx = makeCtx();
 
-    const result = await runPipeline(event, ctx) as PipelineResult;
+    const result = (await runPipeline(event, ctx)) as PipelineResult;
 
     expect(result).not.toBeNull();
     expect(result.naturalKey).toBe("github:conn-integration-1:99");
     expect(result.operation).toBe("insert");
     expect(result.embedded).toBe(true);
-    expect(result.inferenceQueued).toBe(true);
     expect(typeof result.dedup.principalNodeId).toBe("string");
     expect(result.dedup.principalNodeId ?? "").not.toBe("");
   });
@@ -179,7 +181,10 @@ describe("runPipeline — full 6-stage integration", () => {
   it("upsertEntityNode is called with correct MERGE params", async () => {
     setupNeo4jMocks();
     const event = makeGithubEvent();
-    const ctx = makeCtx({ oxagenEntityType: "code_change", propertyMappings: {} });
+    const ctx = makeCtx({
+      oxagenEntityType: "code_change",
+      propertyMappings: {},
+    });
 
     await runPipeline(event, ctx);
 
@@ -187,17 +192,20 @@ describe("runPipeline — full 6-stage integration", () => {
     // §3.3 dual-write: the real label (`CodeChange`) is PRIMARY, `:EntityNode` secondary.
     // Labels are PascalCase (sanitizeLabel); the entityType *property* stays the
     // lowercase slug (`code_change`).
-    const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
-      typeof cypher === "string" &&
-      cypher.includes("MERGE (n:`CodeChange`:`EntityNode`") &&
-      cypher.includes("RETURN n.publicId AS nodeId"),
+    const upsertCall = mocks.sessionRun.mock.calls.find(
+      ([cypher]) =>
+        typeof cypher === "string" &&
+        cypher.includes("MERGE (n:`CodeChange`:`EntityNode`") &&
+        cypher.includes("RETURN n.publicId AS nodeId"),
     ) as [string, Record<string, unknown>] | undefined;
 
     expect(upsertCall).toBeDefined();
     const [cypher, params] = upsertCall!;
 
     // naturalKey convention: {connectorType}:{connectionId}:{externalId}
-    expect(cypher).toContain("MERGE (n:`CodeChange`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})");
+    expect(cypher).toContain(
+      "MERGE (n:`CodeChange`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})",
+    );
     expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
     expect(params["entityType"]).toBe("code_change");
     // OXA-2062 (#608): upsertEntityNode now binds $orgId EXPLICITLY in its params,
@@ -211,7 +219,10 @@ describe("runPipeline — full 6-stage integration", () => {
 
     // properties must be JSON-serialized (Neo4j stores strings)
     expect(typeof params["properties"]).toBe("string");
-    const props = JSON.parse(params["properties"] as string) as Record<string, unknown>;
+    const props = JSON.parse(params["properties"] as string) as Record<
+      string,
+      unknown
+    >;
     expect(props["title"]).toBe("Add user onboarding flow");
     expect(props["state"]).toBe("open");
   });
@@ -227,28 +238,22 @@ describe("runPipeline — full 6-stage integration", () => {
     expect(mocks.embedText).toHaveBeenCalledTimes(2);
 
     // The first call is for dedup — telemetry surface must be "ingestion"
-    const [_text1, opts1] = mocks.embedText.mock.calls[0] as [string, { telemetry: { surface: string; orgId: string; executionStepId: string | null } }];
+    const [_text1, opts1] = mocks.embedText.mock.calls[0] as [
+      string,
+      {
+        telemetry: {
+          surface: string;
+          orgId: string;
+          executionStepId: string | null;
+        };
+      },
+    ];
     expect(opts1.telemetry.surface).toBe("ingestion");
     expect(opts1.telemetry.orgId).toBe("org-integration");
     // No execution step for ingestion dedup embeds: executionStepId must be null,
     // never a synthesized `dedup:<key>` string (that non-UUID value flooded the
     // token_usage UUID column with CANNOT_PARSE_INPUT_ASSERTION_FAILED).
     expect(opts1.telemetry.executionStepId).toBeNull();
-  });
-
-  it("scheduleInference is called with the principal node ID + entity type", async () => {
-    setupNeo4jMocks();
-    const event = makeGithubEvent();
-    const ctx = makeCtx({ oxagenEntityType: "task" });
-
-    await runPipeline(event, ctx);
-
-    expect(ctx.scheduleInference).toHaveBeenCalledOnce();
-    const [nodeId, entityType, snapshot] = (ctx.scheduleInference as ReturnType<typeof vi.fn>).mock.calls[0] as [string, string, Record<string, unknown>];
-    expect(typeof nodeId).toBe("string");
-    expect(nodeId.length).toBeGreaterThan(0);
-    expect(entityType).toBe("task");
-    expect(typeof snapshot).toBe("object");
   });
 
   it("applies property mappings — renames source field to canonical name", async () => {
@@ -264,12 +269,18 @@ describe("runPipeline — full 6-stage integration", () => {
 
     // Find the upsertEntityNode MERGE call (§3.3 dual-write: `Task` PRIMARY label —
     // PascalCase via sanitizeLabel)
-    const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
-      typeof cypher === "string" && cypher.includes("MERGE (n:`Task`:`EntityNode`") && cypher.includes("RETURN n.publicId"),
+    const upsertCall = mocks.sessionRun.mock.calls.find(
+      ([cypher]) =>
+        typeof cypher === "string" &&
+        cypher.includes("MERGE (n:`Task`:`EntityNode`") &&
+        cypher.includes("RETURN n.publicId"),
     ) as [string, Record<string, unknown>] | undefined;
 
     expect(upsertCall).toBeDefined();
-    const props = JSON.parse(upsertCall![1]["properties"] as string) as Record<string, unknown>;
+    const props = JSON.parse(upsertCall![1]["properties"] as string) as Record<
+      string,
+      unknown
+    >;
     expect(props["summary"]).toBe("Add user onboarding flow"); // renamed
     expect(props["title"]).toBeUndefined(); // original key removed
   });
@@ -295,7 +306,7 @@ describe("runPipeline — full 6-stage integration", () => {
 
     const event = makeGithubEvent();
     const ctx = makeCtx();
-    const result = await runPipeline(event, ctx) as PipelineResult;
+    const result = (await runPipeline(event, ctx)) as PipelineResult;
 
     expect(result.dedup.action).toBe("updated_principal");
     expect(result.dedup.principalNodeId).toBe("existing-principal-uuid");

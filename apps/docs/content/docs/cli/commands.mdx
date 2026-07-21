@@ -192,21 +192,15 @@ oxagen models use <id>         # choose the coordinator (on-device is always all
 
 ## oxagen graph — knowledge graph
 
-Query and replicate your workspace knowledge graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
+Query your governed workspace graph through an online, scoped read. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
 
 ```bash
 oxagen graph search  -q <text> [--kinds <csv>] [--labels <csv>] [--limit <n>] [--system|--no-system]
-oxagen graph pull    [--full] [--labels <csv>] [--no-system] [--json]
-oxagen graph push    [--full] [--repo <id>] [--json]
-oxagen graph lineage [--repo <id>] [--json]
-oxagen graph status  [--json]
 ```
 
-`graph search` node kinds: `entity, file, symbol, chunk, memory, execution, document, message`. Limit is 1–50 (default 10).
+`graph search` node kinds: `entity, memory, execution, document, message, asset`. Limit is 1–50 (default 10).
 
-`graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. Use `--full` to ignore the saved cursor and push all tracked source files. `--repo <id>` overrides the repo identifier.
-
-`graph lineage` pushes CLI session execution lineage (touched files, turn edges) into the workspace knowledge graph. `--repo <id>` overrides the repo identifier used to link files to the code subgraph.
+Each query is evaluated online under the current organization, workspace, and capability grants. There is no graph export, pull/status workflow, or local workspace replica. The exact file/symbol graph built by `oxagen init` follows the current checkout and stays local; canonical shared code topology must come from verified provider snapshots, not uploads from a developer branch. Agent traces likewise do not mutate the workspace graph through this command group.
 
 ## oxagen memory & remember — agent memory
 

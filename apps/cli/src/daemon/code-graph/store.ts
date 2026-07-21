@@ -19,7 +19,13 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CodeGraph, CodeNode, CodeEdge, CodeNodeKind, CodeEdgeType } from "./types";
+import type {
+  CodeGraph,
+  CodeNode,
+  CodeEdge,
+  CodeNodeKind,
+  CodeEdgeType,
+} from "./types";
 
 // Minimal structural types for the (native, CJS) `duckdb` module. The CLI pulls
 // duckdb in transitively via @oxagen/engram and shims `require` at its entry
@@ -45,8 +51,15 @@ export function defaultCodeGraphDbPath(): string {
 }
 
 /** Deterministic edge id so re-indexing a file replaces, never duplicates. */
-export function computeEdgeId(source: string, target: string, type: string): string {
-  return createHash("sha256").update(`${source}:${target}:${type}`).digest("hex").slice(0, 32);
+export function computeEdgeId(
+  source: string,
+  target: string,
+  type: string,
+): string {
+  return createHash("sha256")
+    .update(`${source}:${target}:${type}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 /** blake3-free content hash of a file's text (sha256 hex). */
@@ -173,14 +186,20 @@ export class CodeGraphStore {
               // Group 3: add the semantic-index columns (embedding + provider).
               this.conn.run(MIGRATE_ADD_EMBEDDING_SQL, (e5: Error | null) => {
                 if (e5) return reject(e5);
-                this.conn.run(MIGRATE_ADD_EMBEDDING_PROVIDER_SQL, (e6: Error | null) => {
-                  if (e6) return reject(e6);
-                  // Edge domain tagging: mirrors the node-level migration above.
-                  this.conn.run(MIGRATE_ADD_EDGE_DOMAIN_SQL, (e7: Error | null) => {
-                    if (e7) return reject(e7);
-                    resolve();
-                  });
-                });
+                this.conn.run(
+                  MIGRATE_ADD_EMBEDDING_PROVIDER_SQL,
+                  (e6: Error | null) => {
+                    if (e6) return reject(e6);
+                    // Edge domain tagging: mirrors the node-level migration above.
+                    this.conn.run(
+                      MIGRATE_ADD_EDGE_DOMAIN_SQL,
+                      (e7: Error | null) => {
+                        if (e7) return reject(e7);
+                        resolve();
+                      },
+                    );
+                  },
+                );
               });
             });
           });
@@ -203,12 +222,19 @@ export class CodeGraphStore {
     });
   }
 
-  private querySql(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+  private querySql(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<Record<string, unknown>[]> {
     return new Promise((resolve, reject) => {
-      this.conn.all(sql, ...params, (err: Error | null, rows: Record<string, unknown>[]) => {
-        if (err) reject(err);
-        else resolve(rows ?? []);
-      });
+      this.conn.all(
+        sql,
+        ...params,
+        (err: Error | null, rows: Record<string, unknown>[]) => {
+          if (err) reject(err);
+          else resolve(rows ?? []);
+        },
+      );
     });
   }
 
@@ -229,7 +255,10 @@ export class CodeGraphStore {
   /** All file paths currently indexed for a root (used to detect deletions). */
   async indexedFiles(root: string): Promise<string[]> {
     await this.ready;
-    const rows = await this.querySql("SELECT path FROM code_files WHERE root = ?", [root]);
+    const rows = await this.querySql(
+      "SELECT path FROM code_files WHERE root = ?",
+      [root],
+    );
     return rows.map((r) => r["path"] as string);
   }
 
@@ -239,12 +268,22 @@ export class CodeGraphStore {
    * inserts the new subgraph, and records the content hash. Idempotent: calling
    * twice with the same hash yields the same rows.
    */
-  async replaceFile(root: string, relPath: string, fileGraph: FileGraph): Promise<void> {
+  async replaceFile(
+    root: string,
+    relPath: string,
+    fileGraph: FileGraph,
+  ): Promise<void> {
     await this.ready;
     await this.runSql("BEGIN TRANSACTION");
     try {
-      await this.runSql("DELETE FROM code_nodes WHERE root = ? AND path = ?", [root, relPath]);
-      await this.runSql("DELETE FROM code_edges WHERE root = ? AND file_path = ?", [root, relPath]);
+      await this.runSql("DELETE FROM code_nodes WHERE root = ? AND path = ?", [
+        root,
+        relPath,
+      ]);
+      await this.runSql(
+        "DELETE FROM code_edges WHERE root = ? AND file_path = ?",
+        [root, relPath],
+      );
       for (const n of fileGraph.nodes) {
         await this.runSql(
           `INSERT INTO code_nodes
@@ -257,10 +296,19 @@ export class CodeGraphStore {
              docstring = excluded.docstring, domain = excluded.domain,
              embedding = excluded.embedding, embedding_provider = excluded.embedding_provider`,
           [
-            root, n.id, n.kind, n.name, n.path,
-            n.range.start, n.range.end, n.language,
-            n.signature ?? null, n.docstring ?? null, n.domain ?? null,
-            n.embedding ? JSON.stringify(n.embedding) : null, n.embeddingProvider ?? null,
+            root,
+            n.id,
+            n.kind,
+            n.name,
+            n.path,
+            n.range.start,
+            n.range.end,
+            n.language,
+            n.signature ?? null,
+            n.docstring ?? null,
+            n.domain ?? null,
+            n.embedding ? JSON.stringify(n.embedding) : null,
+            n.embeddingProvider ?? null,
           ],
         );
       }
@@ -294,9 +342,18 @@ export class CodeGraphStore {
     await this.ready;
     await this.runSql("BEGIN TRANSACTION");
     try {
-      await this.runSql("DELETE FROM code_nodes WHERE root = ? AND path = ?", [root, relPath]);
-      await this.runSql("DELETE FROM code_edges WHERE root = ? AND file_path = ?", [root, relPath]);
-      await this.runSql("DELETE FROM code_files WHERE root = ? AND path = ?", [root, relPath]);
+      await this.runSql("DELETE FROM code_nodes WHERE root = ? AND path = ?", [
+        root,
+        relPath,
+      ]);
+      await this.runSql(
+        "DELETE FROM code_edges WHERE root = ? AND file_path = ?",
+        [root, relPath],
+      );
+      await this.runSql("DELETE FROM code_files WHERE root = ? AND path = ?", [
+        root,
+        relPath,
+      ]);
       await this.runSql("COMMIT");
     } catch (err) {
       await this.runSql("ROLLBACK");
@@ -312,12 +369,15 @@ export class CodeGraphStore {
    * Bulk-stamp the `domain` property on all code_nodes (file + symbol nodes)
    * whose relative path matches a key in `domainMap`.
    *
-   * Called by `graph push` after `inferDomains()` so the local DuckDB store
-   * stays in sync with the domain tags sent to Neo4j.
+   * Called by local graph initialization after `inferDomains()` so DuckDB
+   * queries can filter and summarize application domains.
    *
    * Idempotent: re-running with the same map is a no-op.
    */
-  async updateNodeDomains(root: string, domainMap: Map<string, string>): Promise<void> {
+  async updateNodeDomains(
+    root: string,
+    domainMap: Map<string, string>,
+  ): Promise<void> {
     await this.ready;
     if (domainMap.size === 0) return;
 
@@ -348,7 +408,10 @@ export class CodeGraphStore {
    *
    * Idempotent: re-running with the same map is a no-op.
    */
-  async updateEdgeDomains(root: string, domainMap: Map<string, string>): Promise<void> {
+  async updateEdgeDomains(
+    root: string,
+    domainMap: Map<string, string>,
+  ): Promise<void> {
     await this.ready;
     if (domainMap.size === 0) return;
 
@@ -479,7 +542,8 @@ function rowToNode(row: Record<string, unknown>): CodeNode {
     docstring: (row["docstring"] as string | null) ?? undefined,
     domain: (row["domain"] as string | null) ?? undefined,
     embedding: parseEmbedding(row["embedding"]),
-    embeddingProvider: (row["embedding_provider"] as string | null) ?? undefined,
+    embeddingProvider:
+      (row["embedding_provider"] as string | null) ?? undefined,
   };
 }
 

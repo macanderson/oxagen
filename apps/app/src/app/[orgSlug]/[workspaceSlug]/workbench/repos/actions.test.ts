@@ -240,7 +240,6 @@ describe("configureRepoAction", () => {
     const res = await configureRepoAction({
       ...SCOPE,
       repoId: "con_1",
-      inferenceEnabled: false,
       syncCadence: "manual",
     });
     expect(res.ok).toBe(true);
@@ -248,7 +247,6 @@ describe("configureRepoAction", () => {
       CTX,
       expect.objectContaining({
         repoId: "con_1",
-        inferenceEnabled: false,
         syncCadence: "manual",
       }),
     );

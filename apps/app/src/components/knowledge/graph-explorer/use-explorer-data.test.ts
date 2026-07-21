@@ -80,29 +80,11 @@ describe("useExplorerData — initial load", () => {
   });
 });
 
-describe("useExplorerData — system-node opt-in", () => {
-  it("omits includeSystem by default (source ontology only)", async () => {
+describe("useExplorerData — customer context", () => {
+  it("fetches the graph without an ownership override", async () => {
     const { result } = renderHook(() => useExplorerData(tenant));
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(mockFetchGraph).toHaveBeenCalledWith(tenant, {}, expect.anything());
-  });
-
-  it("reseeds with includeSystem:true when the option flips on", async () => {
-    const { result, rerender } = renderHook(
-      ({ includeSystem }: { includeSystem: boolean }) =>
-        useExplorerData(tenant, { includeSystem }),
-      { initialProps: { includeSystem: false } },
-    );
-    await waitFor(() => expect(result.current.status).toBe("ready"));
-    expect(mockFetchGraph).toHaveBeenCalledTimes(1);
-
-    rerender({ includeSystem: true });
-    await waitFor(() => expect(mockFetchGraph).toHaveBeenCalledTimes(2));
-    expect(mockFetchGraph).toHaveBeenLastCalledWith(
-      tenant,
-      { includeSystem: true },
-      expect.anything(),
-    );
   });
 });
 

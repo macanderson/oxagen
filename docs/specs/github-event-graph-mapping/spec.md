@@ -1,5 +1,12 @@
 # GitHub Webhook Events → Knowledge-Graph Mapping
 
+> **Superseded for launch (2026-07-21).** This design is preserved as a historical
+> proposal, not an implementation contract. Exact code graphs stay local; Oxagen keeps
+> stable GitHub provider metadata. Central `SourceFile`/`SourceSymbol` indexing, source
+> embeddings, automatic intent-to-code/file lineage, and confidence-based materialization
+> described below are retired. Canonical protected/default-ref topology and a typed
+> evidence ledger remain follow-ups, and all semantic candidates require approval.
+
 **Status:** Design / requirements
 **Owner:** Knowledge graph + connectors
 **Related:** [ADR-012 Connector dual-write](../../adr/ADR-012-connector-dual-write-pattern.md) · [Workspace schema registry](../workspace-schema-registry/spec.md) · webhook handler `apps/api/src/routes/v1/github-webhook.ts` · GitHub connector `packages/ingestion/src/connectors/github/index.ts`

@@ -2,7 +2,6 @@
  * Unit tests for three thin org-scoped routes that were previously uncovered:
  *   - GET  /skill/export   (skill.export — streams .skill.md as an attachment)
  *   - POST /skill/edit     (skill.edit)
- *   - POST /graph/ingest   (graph.ingest)
  *
  * Pattern mirrors routes.graph.test.ts: mock at the adapter seam, assert the
  * happy path forwards the invoke result, invoke is called once with the right
@@ -49,16 +48,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -72,14 +79,21 @@ beforeEach(() => {
 });
 
 async function authGet(path: string): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, { headers: { authorization: bearerHeader("oxk_key") } }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
+  );
 }
 
 async function authPost(path: string, body: unknown): Promise<Response> {
   return app.fetch(
     makeRequest(`${BASE}${path}`, {
       method: "POST",
-      headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -99,10 +113,15 @@ describe("GET /skill/export", () => {
     const res = await authGet("/skill/export?skillId=skl_ABC");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
-    expect(res.headers.get("content-disposition")).toContain("my-skill.skill.md");
+    expect(res.headers.get("content-disposition")).toContain(
+      "my-skill.skill.md",
+    );
     expect(res.headers.get("x-skill-version")).toBe("3");
     expect(await res.text()).toBe(validOutput.content);
-    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    const [name, input] = mocks.invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(name).toBe("export_skill");
     expect(input.skillId).toBe("skl_ABC");
     expect(input.versionNumber).toBeUndefined();
@@ -141,35 +160,20 @@ describe("POST /skill/edit", () => {
     expect(res.status).toBe(200);
     const out = (await res.json()) as { version_id: string };
     expect(out.version_id).toBe("slv_1");
-    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    const [name, input] = mocks.invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
     expect(name).toBe("edit_skill");
     expect(input.skill_id).toBe("skl_ABC");
     expect(input.body).toBe(validBody.body);
   });
 
   it("returns 400 when body is empty", async () => {
-    const res = await authPost("/skill/edit", { skill_id: "skl_ABC", body: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── POST /graph/ingest ────────────────────────────────────────────────────────
-
-describe("POST /graph/ingest", () => {
-  it("forwards extracted-text ingest to graph.ingest with default maxEntities", async () => {
-    mocks.invoke.mockResolvedValue({ entities: [], edges: [] });
-    const res = await authPost("/graph/ingest", { text: "Acme depends on Stripe." });
-    expect(res.status).toBe(200);
-    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
-    expect(name).toBe("ingest_graph");
-    expect(input.text).toBe("Acme depends on Stripe.");
-    // maxEntities has a schema default of 25 applied at parse time.
-    expect(input.maxEntities).toBe(25);
-  });
-
-  it("returns 400 when text is empty", async () => {
-    const res = await authPost("/graph/ingest", { text: "" });
+    const res = await authPost("/skill/edit", {
+      skill_id: "skl_ABC",
+      body: "",
+    });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

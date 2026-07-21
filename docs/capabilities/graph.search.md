@@ -1,6 +1,8 @@
 # graph.search
 
-Natural-language semantic (vector) search across the entire knowledge graph — customer entities, source code files, symbols, code chunks, agent memories, executions, documents, and messages — ranked by embedding similarity using the universal `graph_node_embedding_index`.
+Natural-language semantic search across eligible shared workspace knowledge — customer entities, provider metadata, agent memories, execution metadata, documents, messages, and generated assets — ranked by vector similarity.
+
+This is a search over governed central context, not a remote code index. Repository source text, symbols, chunks, code embeddings, imports, and uncommitted checkout state remain in the local code graph and are never returned by this capability.
 
 Distinct from `graph.node.search`, which performs lexical substring matching on `displayName` and `description`.
 
@@ -18,19 +20,19 @@ Distinct from `graph.node.search`, which performs lexical substring matching on 
 |-----------|------|----------|-------------|
 | `query` | string | yes | Natural-language query to embed and search by cosine similarity |
 | `limit` | integer | no | Max results (1–50, default 10) |
-| `kinds` | string[] | no | Filter by node kind: `entity`, `file`, `symbol`, `chunk`, `memory`, `execution`, `document`, `message` |
+| `kinds` | string[] | no | Filter by node kind: `entity`, `memory`, `execution`, `document`, `message`, `asset` |
 | `isSystem` | boolean | no | `true` = product-owned nodes only; `false` = customer nodes only; omit for all |
-| `labels` | string[] | no | Domain-label filter (e.g. `["Person", "SourceFile"]`) |
+| `labels` | string[] | no | Domain-label filter (e.g. `["Person", "Repository", "PullRequest"]`) |
 
 ## Output
 | Field | Type | Description |
 |-------|------|-------------|
 | `results` | object[] | Results ranked by cosine similarity score |
 | `results[].nodeId` | string | `publicId` of the matching node |
-| `results[].label` | string | Domain label (e.g. `SourceFile`, `Person`) |
+| `results[].label` | string | Domain label (e.g. `Person`, `Repository`, `PullRequest`) |
 | `results[].displayName` | string | Human-readable name |
-| `results[].kind` | string | Derived kind (`entity`, `file`, `symbol`, etc.) |
-| `results[].snippet` | string | Content snippet (from `properties.content`, max 240 chars) or displayName |
+| `results[].kind` | string | Derived shared-context kind (`entity`, `memory`, `execution`, `document`, `message`, or `asset`) |
+| `results[].snippet` | string | Short eligible-content snippet (max 240 chars) or display name |
 | `results[].score` | number | Cosine similarity score from the vector index |
 | `results[].isSystem` | boolean | Whether this is a product-owned node |
 
@@ -42,9 +44,9 @@ POST /v1/acme/main/graph/search
 Content-Type: application/json
 
 {
-  "query": "authentication token refresh",
+  "query": "which pull request changed the authentication flow",
   "limit": 5,
-  "kinds": ["file", "symbol"]
+  "labels": ["PullRequest", "Commit"]
 }
 ```
 
@@ -54,27 +56,26 @@ Content-Type: application/json
   "results": [
     {
       "nodeId": "node_abc",
-      "label": "SourceFile",
-      "displayName": "auth/token.ts",
-      "kind": "file",
-      "snippet": "auth/token.ts",
+      "label": "PullRequest",
+      "displayName": "Harden authentication token refresh",
+      "kind": "entity",
+      "snippet": "Harden authentication token refresh",
       "score": 0.94,
-      "isSystem": true
+      "isSystem": false
     }
   ]
 }
 ```
 
 ## Notes
-- **Vector index:** uses the universal `graph_node_embedding_index FOR (n:GraphNode) ON (n.embedding)` (cosine, 1536 dims).
-- **Embedding model:** `openai/text-embedding-3-small` via Vercel AI Gateway (pinned; same model used by `graph.node.upsert` and ingestion).
+- **Eligibility:** only graph records admitted by governed ingestion or an explicit approval flow are searchable. Local code-graph records are excluded.
+- **Vector index:** the query runs against embeddings for eligible shared knowledge. It does not create or search source-code embeddings.
 - **Access:** Owner or Admin at org level; Owner, Member, or Viewer at workspace level. Read-only; no side effects.
 - **Tenant isolation:** results are always scoped by **both** `orgId` **and** `workspaceId`.
-- **Kind derivation:** derived from Neo4j labels at query time (`SourceFile`→`file`, `SourceSymbol`→`symbol`, `SourceChunk`→`chunk`, `Execution`→`execution`, `AgentMemory`→`memory`, `Document`→`document`, `Message`→`message`, else `entity`).
-- **Nodes are embedded on upsert:** `graph.node.upsert` embeds the node text immediately after MERGE (best-effort, non-blocking). Nodes created before this change may not have embeddings yet.
+- **Provider metadata:** repository, ref, commit, pull-request, workflow-run, and changed-file facts use their domain labels and normally derive to `entity`.
+- **Follow-ups:** canonical topology from configured protected/default refs and typed execution evidence are not implied by a semantic-search result.
 
 ## Related
 - `graph.node.search` — lexical substring search on displayName and description
-- `graph.node.upsert` — create or update a node (also embeds it for semantic search)
 - `graph.node.list` — paginated browse with filters
 - `graph.stats` — aggregate node and edge counts

@@ -63,4 +63,3 @@ POST /v1/ontology/neighbors
 ## Related
 - `ontology.query` — typed multi-hop traversal
 - `graph.node.get` — retrieve a single node by `publicId`
-- `graph.edge.upsert` — create a directed relationship

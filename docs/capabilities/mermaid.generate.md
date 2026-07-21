@@ -63,8 +63,7 @@ handler persisted the source (`sourceUrl` prop present) — downloading the `.mm
 ## Side effects
 
 - Blob storage + Postgres: one `generated_assets` row (`document` kind,
-  `text/vnd.mermaid`) holding the `.mmd` source, linked to the conversation, and
-  mirrored to the knowledge graph as a `:GeneratedFile` node (best-effort).
+  `text/vnd.mermaid`) holding the `.mmd` source and linked to the conversation.
 
 ## Example (flowchart)
 

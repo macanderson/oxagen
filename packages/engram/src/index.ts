@@ -59,17 +59,6 @@ export { createStore } from "./store/index";
 export type { EpisodicStore, EpisodicQuery } from "./store/episodic";
 export type { StoreConfig } from "./store/index";
 
-// Graph store (local DuckDB projection of the workspace knowledge graph)
-export { GraphStore, createGraphStore } from "./store/graph-store";
-export type {
-  GraphNode,
-  GraphEdge,
-  SyncCursor,
-  GraphStoreStats,
-  GraphStoreOpts,
-  CreateGraphStoreOpts,
-} from "./store/graph-store";
-
 // Write API
 export { remember } from "./api/remember";
 export { assert } from "./api/assert";
@@ -92,19 +81,6 @@ export {
   WEIGHT_TO_SALIENCE,
   parseCreatedAt,
 } from "./migration/types";
-
-// Graph sync
-export {
-  emitGraphSync,
-  emitEmbedEvent,
-  setGraphSyncClient,
-  clearGraphSyncClientForTests,
-} from "./graph/emit-sync";
-export type {
-  GraphSyncEvent,
-  EmbedEvent,
-  GraphSyncEventClient,
-} from "./graph/emit-sync";
 
 // ---------------------------------------------------------------------------
 // Engram facade — convenience object wrapping all write operations with a
@@ -169,10 +145,6 @@ export type {
   TaskFrame,
 } from "./retrieval/types";
 export { TemporalRetrievalEngine } from "./retrieval/temporal";
-export { GraphRetrievalEngine } from "./retrieval/graph";
-export type { GraphQueryFn } from "./retrieval/graph";
-export { VectorRetrievalEngine } from "./retrieval/vector";
-export type { EmbedFn, VectorQueryFn } from "./retrieval/vector";
 export { LexicalRetrievalEngine } from "./retrieval/lexical";
 export type { LexicalSearchFn } from "./retrieval/lexical";
 export { fuseAndRank, DEFAULT_WEIGHTS } from "./retrieval/fusion";

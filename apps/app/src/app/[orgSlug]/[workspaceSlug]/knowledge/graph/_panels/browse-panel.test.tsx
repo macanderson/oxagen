@@ -10,7 +10,14 @@
  */
 import * as React from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const { mockListNodes, mockOntologyNeighbors } = vi.hoisted(() => ({
   mockListNodes: vi.fn(),
@@ -29,7 +36,14 @@ vi.mock("@/components/knowledge/graph/node-ref", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => (
     <a href={String(href)} {...rest}>
       {children}
     </a>
@@ -50,22 +64,41 @@ vi.mock("@/components/ui/select", () => ({
   }) => (
     <div>
       {children}
-      <button type="button" aria-label="Sort: Name (A–Z)" onClick={() => onValueChange?.("name")} />
+      <button
+        type="button"
+        aria-label="Sort: Name (A–Z)"
+        onClick={() => onValueChange?.("name")}
+      />
     </div>
   ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
+  SelectValue: () => null,
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div data-value={value}>{children}</div>,
 }));
 
 import { BrowsePanel } from "./browse-panel";
 
 afterEach(cleanup);
 
-function node(overrides: Partial<{ id: string; labels: string[]; displayName: string; createdAt: string }> = {}) {
+function node(
+  overrides: Partial<{
+    id: string;
+    labels: string[];
+    displayName: string;
+    createdAt: string;
+  }> = {},
+) {
   return {
     id: "pub-1",
     labels: ["Feature"],
@@ -90,33 +123,75 @@ beforeEach(() => {
 
 describe("BrowsePanel", () => {
   it("loads and renders nodes on mount", async () => {
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
     await waitFor(() => expect(screen.getByText("Node A")).toBeInTheDocument());
     expect(mockListNodes).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "core", limit: 25, offset: 0 }),
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "core",
+        limit: 25,
+        offset: 0,
+      }),
     );
   });
 
   it("shows 'Connect a source' when the graph is genuinely empty (zero total, no filter)", async () => {
-    mockListNodes.mockResolvedValue({ ok: true, nodes: [], total: 0, hasMore: false, limit: 25, offset: 0 });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
-    await waitFor(() => expect(screen.getByText("Connect a source")).toBeInTheDocument());
+    mockListNodes.mockResolvedValue({
+      ok: true,
+      nodes: [],
+      total: 0,
+      hasMore: false,
+      limit: 25,
+      offset: 0,
+    });
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Connect a source")).toBeInTheDocument(),
+    );
     const link = screen.getByRole("link", { name: /go to sources/i });
     expect(link).toHaveAttribute("href", "/acme/core/knowledge/sources");
   });
 
   it("shows the narrower no-match empty state when a label filter yields zero results", async () => {
-    mockListNodes.mockResolvedValue({ ok: true, nodes: [], total: 0, hasMore: false, limit: 25, offset: 0 });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={["Feature"]} />);
+    mockListNodes.mockResolvedValue({
+      ok: true,
+      nodes: [],
+      total: 0,
+      hasMore: false,
+      limit: 25,
+      offset: 0,
+    });
+    render(
+      <BrowsePanel
+        orgSlug="acme"
+        workspaceSlug="core"
+        availableLabels={["Feature"]}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Feature" }));
-    await waitFor(() => expect(screen.getByText("No nodes match this filter")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText("No nodes match this filter"),
+      ).toBeInTheDocument(),
+    );
     expect(screen.queryByText("Connect a source")).not.toBeInTheDocument();
   });
 
   it("shows an error state with a working retry", async () => {
-    mockListNodes.mockResolvedValueOnce({ ok: false, error: "graph unavailable" });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
-    await waitFor(() => expect(screen.getByText("graph unavailable")).toBeInTheDocument());
+    mockListNodes.mockResolvedValueOnce({
+      ok: false,
+      error: "graph unavailable",
+    });
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("graph unavailable")).toBeInTheDocument(),
+    );
 
     mockListNodes.mockResolvedValueOnce({
       ok: true,
@@ -160,7 +235,9 @@ describe("BrowsePanel", () => {
       limit: 25,
       offset: 0,
     });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
     await waitFor(() => expect(screen.getByText("Node A")).toBeInTheDocument());
 
     const nextButton = screen.getByRole("button", { name: /next/i });
@@ -168,7 +245,9 @@ describe("BrowsePanel", () => {
 
     fireEvent.click(nextButton);
     await waitFor(() =>
-      expect(mockListNodes).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 25 })),
+      expect(mockListNodes).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 25 }),
+      ),
     );
   });
 
@@ -186,7 +265,6 @@ describe("BrowsePanel", () => {
           description: null,
           edgeType: "OWNS",
           direction: "out",
-          isSystem: false,
           validFrom: null,
           validTo: null,
           recordedAt: null,
@@ -194,20 +272,36 @@ describe("BrowsePanel", () => {
         },
       ],
     });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
     await waitFor(() => expect(screen.getByText("Node A")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: /expand node a neighbors/i }));
-    await waitFor(() => expect(screen.getByText("Neighbor A")).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand node a neighbors/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Neighbor A")).toBeInTheDocument(),
+    );
     expect(mockOntologyNeighbors).toHaveBeenCalledWith(
-      expect.objectContaining({ orgSlug: "acme", workspaceSlug: "core", nodeId: "pub-1" }),
+      expect.objectContaining({
+        orgSlug: "acme",
+        workspaceSlug: "core",
+        nodeId: "pub-1",
+      }),
     );
 
     // Collapse then re-expand — cached, no second fetch.
-    fireEvent.click(screen.getByRole("button", { name: /collapse node a neighbors/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /collapse node a neighbors/i }),
+    );
     expect(screen.queryByText("Neighbor A")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /expand node a neighbors/i }));
-    await waitFor(() => expect(screen.getByText("Neighbor A")).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand node a neighbors/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Neighbor A")).toBeInTheDocument(),
+    );
     expect(mockOntologyNeighbors).toHaveBeenCalledTimes(1);
   });
 
@@ -215,26 +309,42 @@ describe("BrowsePanel", () => {
     mockListNodes.mockResolvedValue({
       ok: true,
       nodes: [
-        node({ id: "pub-b", displayName: "Bravo", createdAt: "2026-01-02T00:00:00.000Z" }),
-        node({ id: "pub-a", displayName: "Alpha", createdAt: "2026-01-01T00:00:00.000Z" }),
+        node({
+          id: "pub-b",
+          displayName: "Bravo",
+          createdAt: "2026-01-02T00:00:00.000Z",
+        }),
+        node({
+          id: "pub-a",
+          displayName: "Alpha",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
       ],
       total: 2,
       hasMore: false,
       limit: 25,
       offset: 0,
     });
-    render(<BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />);
-    await waitFor(() => expect(screen.getAllByTestId("node-ref")).toHaveLength(2));
+    render(
+      <BrowsePanel orgSlug="acme" workspaceSlug="core" availableLabels={[]} />,
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId("node-ref")).toHaveLength(2),
+    );
 
     // Default "recent" sort: Bravo (newer createdAt) first.
     let refs = screen.getAllByTestId("node-ref");
-    expect(within(refs[0] as HTMLElement).getByText("Bravo")).toBeInTheDocument();
+    expect(
+      within(refs[0] as HTMLElement).getByText("Bravo"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Sort: Name (A–Z)" }));
 
     await waitFor(() => {
       refs = screen.getAllByTestId("node-ref");
-      expect(within(refs[0] as HTMLElement).getByText("Alpha")).toBeInTheDocument();
+      expect(
+        within(refs[0] as HTMLElement).getByText("Alpha"),
+      ).toBeInTheDocument();
     });
   });
 });

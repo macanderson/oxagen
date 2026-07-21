@@ -13,7 +13,6 @@
     "get_node",
     "get_skill_metrics",
     "get_skill_version",
-    "ingest_graph",
     "install_skill",
     "list_notifications",
     "list_plugin_registries",

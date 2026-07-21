@@ -75,7 +75,7 @@ Findings below were produced by four parallel read-only audits (agent-engine/ai;
 - ✅ **Memory recall stays out of the cached block (PR #437 rule held).** Recall rides as a user message inserted near the tail on both the engine path (`engine.ts:91-132`) and the chat route (`apps/app/.../recall-context.ts:142-160`), never folded into `system`.
 - ✅ **The CLI gateway/BYOK adapter does caching correctly** — system block + the **last 2 transcript messages** marked each call so the growing prefix re-reads at 0.1× and the 20-block lookback still hits after a new message lands (`apps/cli/src/agent/adapters/gateway-agent-ai.ts:120-144,178`). This is the reference implementation for P1.
 - ✅ **Cache-read accounting is wired end-to-end.** `cacheReadTokens` → `cachedTokens` → priced as a subset of input (`packages/billing/src/pricing.ts:133-144`), metered to ClickHouse `token_usage.cached_tokens` and OTEL (`stream.ts:312-347`).
-- ✅ **Local code-graph caching is well-built.** DuckDB store with sha256 content-hash incremental parsing (`apps/cli/src/daemon/code-graph/store.ts`), embeddings persisted and reused by provider/dimension (`context/semantic-index.ts:99-148`), byte-compatible with cloud so `graph push` skips server re-embed (`graph.push.ts:184-202`, `packages/handlers/src/graph.sync.push.ts:54-86`).
+- ✅ **Local code-graph caching is well-built.** The checkout-local DuckDB store uses sha256 content hashes for incremental parsing (`apps/cli/src/daemon/code-graph/store.ts`), and embeddings are persisted and reused by provider/dimension (`context/semantic-index.ts:99-148`). This cache stays local; it is not a client-authored workspace-graph upload path.
 - ✅ **Turbo remote caching enabled** in CI and locally (`turbo.json:28`, `pipeline.yml:14-15`).
 - ✅ **Entitlement gate has a real TTL cache** — 30s in-memory Map keyed `${orgId}:${workspaceId}` (`packages/plugins/src/entitlements/entitlement-service.ts:24-82`). This is the pattern P4 generalizes.
 
@@ -103,7 +103,7 @@ Findings below were produced by four parallel read-only audits (agent-engine/ai;
 - ⚠️ **No distributed cache exists anywhere** (no redis/upstash/kv dependency in the repo). Rate limiter is a per-process fixed-window Map that self-documents "swap for Redis/Upstash later" and enforces per-warm-instance, not global, limits (`apps/api/src/middleware/rate-limit.ts:39-74`).
 - ⚠️ **No cross-request Next.js data caching** in `apps/app` — request-scoped React `cache()` + `revalidatePath` only; no `unstable_cache`/`"use cache"`/fetch revalidation anywhere.
 - ⚠️ **No app-level caching of graph reads** — `ontology.query`/`ontology.neighbors` hit Neo4j fresh on every call and agent loops repeat identical queries across steps (`packages/handlers/src/ontology.{query,neighbors}.ts`).
-- ⚠️ **No content-hash dedupe on the general embedding path** — `packages/ai/src/embed.ts:51-55` re-embeds identical text every call (the byte-compat skip covers only code-graph push).
+- ⚠️ **No content-hash dedupe on the general embedding path** — `packages/ai/src/embed.ts:51-55` re-embeds identical text every call; the local code-graph cache does not cover this shared embedding path.
 
 ### 3.5 Cache-hygiene defects (small but real)
 

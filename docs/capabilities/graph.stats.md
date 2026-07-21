@@ -110,11 +110,10 @@ GET /v1/graph/stats?includeGrowth=true
 - **Access:** Owner or Admin at org level; Owner or Member at workspace level.
 - Read-only; no side effects.
 - Statistics are computed in real time from Neo4j; on very large graphs this call may take a few seconds.
-- `inferredEdgeCount` counts edges from `semantic.edge.infer` only; manually-created edges via `graph.edge.upsert` are counted in `edgeCount` but not `inferredEdgeCount`.
+- `inferredEdgeCount` is a legacy provenance count for already-materialized relationships. No launch mutation or review surface creates new inferred edges.
 - `growth` is opt-in via `includeGrowth=true` and is absent otherwise, so existing consumers (chat render, knowledge page) are unaffected. Buckets are computed from `GraphNode.createdAt` (a Neo4j temporal `datetime`) over **UTC** calendar days: `nodesThisWeek` is a rolling 7-day window including today, `nodesLastWeek` the 7 days before it, and `daily` is the last 14 UTC days ascending and zero-filled. Nodes missing `createdAt` are excluded.
 
 ## Related
 - `graph.node.list` — browse individual nodes
 - `graph.node.search` — search nodes by text or vector
-- `semantic.edge.list` — browse inferred semantic edges
 - `integration.metrics` — per-integration entity counts

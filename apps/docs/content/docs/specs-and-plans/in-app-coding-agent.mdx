@@ -3,6 +3,15 @@ title: "In-App Coding Agent"
 description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
 ---
 
+> **Superseded for launch (2026-07-21).** This archived document is retained as
+> historical design context. The exact live code graph stays local to the agent's
+> checkout/worktree; Oxagen does not ingest repository source text, symbols, chunks,
+> or code embeddings into the workspace graph. Provider metadata and durable run
+> traces remain. Verified execution-to-commit/artifact/file claims require a future
+> typed evidence ledger, and canonical shared topology must be derived from a
+> configured protected/default ref. References in the preserved body below to a
+> central `SourceFile`/`SourceSymbol` graph or automatic file lineage are obsolete.
+
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
 > The original spec/plan for "In-App Coding Agent" (Phase 1 Coding Runner) was superseded by ADR-019 (Unified Agent Engine) on 2026-06-27. The unified agent engine foundation was implemented: `@oxagen/agent-engine` package shipped with the full CLI agent pipeline (evaluate/enhance/route/execute/judge/revise), workspace abstraction, and tools. However, the user-facing "in-app coding agent" features remained incomplete: no `agent.coding.session.*` contracts, no `coding_sessions` database schema, no Inngest orchestration for persistent sandbox workspaces with connected-repo editing, and no API/MCP/CLI surfaces or in-app UI integration for triggering and monitoring cloud coding sessions.
@@ -1296,4 +1305,3 @@ gh run watch
 - **Spec coverage:** every Phase-1 spec section maps to a task — engine (T1–T4), CLI convergence (T5), persistent sandbox (T6), DB (T7), contracts (T8), orchestration + KMS token + tenant scope + caps (T9), parity surfaces (T10), in-app streaming via tray (T11), docs/guardrails/gate (T12). Phases 2–3 + `@`-mention are explicitly deferred (matches the spec's phasing).
 - **Type consistency:** `Workspace`/`CommandResult`/`CodingEvent`/`RunCodingAgentOptions`/`RunCodingAgentResult` defined in T1 are consumed unchanged in T2–T6, T9; `SandboxWorkspaceHandle` defined in T6 is consumed by `SandboxWorkspace` (T6) and the orchestrator (T9); contract input/output types (T8) are consumed by handlers (T9) and surfaces (T10).
 - **Guardrail coverage:** RLS+grants (T7), tenant-scoped steps + KMS decrypt + token redaction + sandbox-availability fail-closed + caps (T9), IAM via high-risk contract + defaultRoles (T8), instrumentation via `@oxagen/ai`/`invoke` telemetry (engine + handlers), metering via `invoke()` (T9/T10).
-

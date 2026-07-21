@@ -1,12 +1,4 @@
-import {
-  bigint,
-  check,
-  index,
-  jsonb,
-  text,
-  timestamp,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { bigint, check, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
 import {
@@ -44,8 +36,8 @@ export const generatedAssets = contentSchema.table(
     // Provenance discriminator. 'generated' = produced by the in-app agent
     // (has a real `prompt` + `model`); 'user_upload' = a chat/agent attachment
     // the user supplied (no prompt — `prompt` defaults to ''). Reusing this
-    // table keeps conversation.files.list, the serve route, access policy, and
-    // graph sync working for uploads without a second table.
+    // table keeps conversation.files.list, the serve route, and access policy
+    // working for uploads without a second table.
     source: text("source").notNull().default("generated"),
     accessPolicy: text("access_policy").notNull().default("user"),
     status: text("status").notNull().default("ready"),
@@ -63,8 +55,6 @@ export const generatedAssets = contentSchema.table(
     conversationId: uuid("conversation_id"),
     messageId: uuid("message_id"),
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
-    // NULL until the async Inngest job syncs this asset to Neo4j as a Document node.
-    syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true }),
   },
   (t) => ({
     orgIdx: index("generated_assets_org_idx").on(t.orgId, t.workspaceId),

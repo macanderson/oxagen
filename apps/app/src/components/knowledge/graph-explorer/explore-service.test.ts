@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("dispatchExplore — graph", () => {
-  it("assembles seed nodes, confirmed + inferred edges, and stats", async () => {
+  it("assembles seed nodes, confirmed edges, and stats", async () => {
     routeInvoke({
       get_graph_stats: () => ({
         nodeCount: 3,
@@ -86,22 +86,6 @@ describe("dispatchExplore — graph", () => {
         total: 3,
         hasMore: true,
         limit: 60,
-        offset: 0,
-      }),
-      list_semantic_edges: () => ({
-        edges: [
-          {
-            id: "s1",
-            sourceNodeId: "a",
-            targetNodeId: "b",
-            type: "CAUSES",
-            confidence: 0.8,
-            source: { connectorId: "c", sourceId: "s" },
-            inferredAt: "",
-          },
-        ],
-        total: 1,
-        limit: 120,
         offset: 0,
       }),
       get_ontology_neighbors: (input) => {
@@ -133,16 +117,11 @@ describe("dispatchExplore — graph", () => {
     )) as ExplorerGraphPayload;
 
     expect(result.nodes.map((n) => n.id).sort()).toEqual(["a", "b"]);
-    // Confirmed edge from the neighbor walk + inferred edge from semantic.
+    // Confirmed edge from the neighbor walk.
     expect(
       result.edges.find((e) => e.type === "REL" && !e.inferred),
     ).toBeTruthy();
-    const inferred = result.edges.find((e) => e.inferred);
-    expect(inferred).toMatchObject({
-      source: "a",
-      target: "b",
-      confidence: 0.8,
-    });
+    expect(result.edges).toHaveLength(1);
     expect(result.stats).toMatchObject({
       nodeCount: 3,
       edgeCount: 2,
@@ -155,7 +134,7 @@ describe("dispatchExplore — graph", () => {
     expect(result.truncated).toBe(true); // 3 total > 2 in view
   });
 
-  it("excludes runtime lineage (isSystem:false) from the seed by default", async () => {
+  it("does not expose an ownership override to list_nodes", async () => {
     routeInvoke({
       get_graph_stats: () => ({
         nodeCount: 0,
@@ -170,87 +149,13 @@ describe("dispatchExplore — graph", () => {
         total: 0,
         hasMore: false,
         limit: 60,
-        offset: 0,
-      }),
-      list_semantic_edges: () => ({
-        edges: [],
-        total: 0,
-        limit: 120,
         offset: 0,
       }),
     });
 
     await dispatchExplore({ op: "graph", ...tenant }, ctx);
     const listCall = invokeMock.mock.calls.find((c) => c[0] === "list_nodes");
-    expect(listCall?.[1]).toMatchObject({ isSystem: false });
-  });
-
-  it("seeds lineage nodes too when includeSystem is set", async () => {
-    routeInvoke({
-      get_graph_stats: () => ({
-        nodeCount: 0,
-        edgeCount: 0,
-        inferredEdgeCount: 0,
-        nodesByLabel: {},
-        edgesByType: {},
-        lastModifiedAt: "",
-      }),
-      list_nodes: () => ({
-        nodes: [],
-        total: 0,
-        hasMore: false,
-        limit: 60,
-        offset: 0,
-      }),
-      list_semantic_edges: () => ({
-        edges: [],
-        total: 0,
-        limit: 120,
-        offset: 0,
-      }),
-    });
-
-    await dispatchExplore({ op: "graph", ...tenant, includeSystem: true }, ctx);
-    const listCall = invokeMock.mock.calls.find((c) => c[0] === "list_nodes");
     expect(listCall?.[1]).not.toHaveProperty("isSystem");
-  });
-
-  it("tolerates a failing semantic.edge.list", async () => {
-    routeInvoke({
-      get_graph_stats: () => ({
-        nodeCount: 1,
-        edgeCount: 0,
-        inferredEdgeCount: 0,
-        nodesByLabel: {},
-        edgesByType: {},
-        lastModifiedAt: "",
-      }),
-      list_nodes: () => ({
-        nodes: [
-          { id: "a", labels: ["Issue"], displayName: "A", properties: {} },
-        ],
-        total: 1,
-        hasMore: false,
-        limit: 60,
-        offset: 0,
-      }),
-      list_semantic_edges: () => {
-        throw new Error("boom");
-      },
-      get_ontology_neighbors: () => ({
-        nodeId: "a",
-        found: true,
-        neighbors: [],
-        truncated: false,
-      }),
-    });
-
-    const result = (await dispatchExplore(
-      { op: "graph", ...tenant },
-      ctx,
-    )) as ExplorerGraphPayload;
-    expect(result.nodes).toHaveLength(1);
-    expect(result.edges).toHaveLength(0);
   });
 });
 
@@ -284,47 +189,6 @@ describe("dispatchExplore — expand", () => {
       source: "b",
       target: "a",
       type: "REL",
-    });
-  });
-
-  it("carries the neighbor's isSystem flag so the client can keep lineage hidden", async () => {
-    routeInvoke({
-      get_ontology_neighbors: () => ({
-        nodeId: "a",
-        found: true,
-        neighbors: [
-          {
-            nodeId: "exec",
-            label: "Execution",
-            displayName: "run",
-            description: null,
-            edgeType: "EXECUTED",
-            direction: "in",
-            isSystem: true,
-          },
-          {
-            nodeId: "b",
-            label: "Topic",
-            displayName: "B",
-            description: null,
-            edgeType: "REL",
-            direction: "out",
-            isSystem: false,
-          },
-        ],
-        truncated: false,
-      }),
-    });
-
-    const result = (await dispatchExplore(
-      { op: "expand", ...tenant, nodeId: "a" },
-      ctx,
-    )) as ExplorerExpandPayload;
-    expect(result.nodes.find((n) => n.id === "exec")).toMatchObject({
-      isSystem: true,
-    });
-    expect(result.nodes.find((n) => n.id === "b")).toMatchObject({
-      isSystem: false,
     });
   });
 });
@@ -364,27 +228,7 @@ describe("dispatchExplore — nodes", () => {
       label: "Issue",
       hydrated: true,
     });
-    // The table mirrors the graph seed: customer data only unless opted in.
-    expect(
-      invokeMock.mock.calls.find((c) => c[0] === "list_nodes")?.[1],
-    ).toMatchObject({ isSystem: false });
-  });
-
-  it("lists lineage rows when includeSystem is set", async () => {
-    routeInvoke({
-      list_nodes: () => ({
-        nodes: [],
-        total: 0,
-        hasMore: false,
-        limit: 25,
-        offset: 0,
-      }),
-    });
-
-    await dispatchExplore(
-      { op: "nodes", ...tenant, limit: 25, offset: 0, includeSystem: true },
-      ctx,
-    );
+    // Customer-only ownership is enforced by list_nodes itself.
     expect(
       invokeMock.mock.calls.find((c) => c[0] === "list_nodes")?.[1],
     ).not.toHaveProperty("isSystem");

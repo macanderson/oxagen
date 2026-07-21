@@ -1,8 +1,6 @@
 /**
  * Unit tests for graph route handlers:
- *   graph.cypher, graph.stats, graph.node.list, graph.node.get,
- *   graph.node.delete, graph.node.search, graph.node.upsert,
- *   graph.edge.delete, graph.edge.upsert
+ *   graph.stats, graph.node.list, graph.node.get, graph.node.search
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
  * @oxagen/billing, @oxagen/handlers, middleware/logger), assert happy path
@@ -50,16 +48,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -74,70 +80,25 @@ beforeEach(() => {
 });
 
 async function authGet(path: string): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, { headers: { authorization: bearerHeader("oxk_key") } }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      headers: { authorization: bearerHeader("oxk_key") },
+    }),
+  );
 }
 
 async function authPost(path: string, body: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "POST",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  return app.fetch(
+    makeRequest(`${BASE}${path}`, {
+      method: "POST",
+      headers: {
+        authorization: bearerHeader("oxk_key"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }),
+  );
 }
-
-async function authDelete(path: string, body?: unknown): Promise<Response> {
-  return app.fetch(makeRequest(`${BASE}${path}`, {
-    method: "DELETE",
-    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  }));
-}
-
-// ── graph.cypher ──────────────────────────────────────────────────────────────
-
-describe("graph.cypher route", () => {
-  const PATH = "/graph/cypher";
-
-  it("happy path POST: returns 200 with invoke result", async () => {
-    const invokeResult = { records: [] };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await authPost(PATH, { query: "MATCH (n) RETURN n LIMIT 10" });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke once with contract name 'run_cypher' and surface 'api'", async () => {
-    await authPost(PATH, { query: "MATCH (n) RETURN n" });
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("run_cypher");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes query and optional fields to invoke", async () => {
-    await authPost(PATH, {
-      query: "MATCH (n:Person) RETURN n",
-      nlQuery: true,
-      params: { name: "Alice" },
-    });
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.query).toBe("MATCH (n:Person) RETURN n");
-    expect(body.nlQuery).toBe(true);
-    expect(body.params).toEqual({ name: "Alice" });
-  });
-
-  it("empty query string → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { query: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing query field → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { nlQuery: true });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
 
 // ── graph.stats ───────────────────────────────────────────────────────────────
 
@@ -260,35 +221,6 @@ describe("graph.node.get route", () => {
   });
 });
 
-// ── graph.node.delete ─────────────────────────────────────────────────────────
-
-describe("graph.node.delete route", () => {
-  const nodeId = "node-del-456";
-  const PATH = `/graph/node/delete/${nodeId}`;
-
-  it("happy path DELETE /:nodeId: returns 200 with invoke result", async () => {
-    const invokeResult = { deleted: true };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await authDelete(PATH);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke once with contract name 'delete_node' and surface 'api'", async () => {
-    await authDelete(PATH);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_node");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes nodeId from path param to invoke", async () => {
-    await authDelete(PATH);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.nodeId).toBe(nodeId);
-  });
-});
-
 // ── graph.node.search ─────────────────────────────────────────────────────────
 
 describe("graph.node.search route", () => {
@@ -328,196 +260,5 @@ describe("graph.node.search route", () => {
     const res = await authPost(PATH, { labels: ["Person"] });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── graph.node.upsert ─────────────────────────────────────────────────────────
-
-describe("graph.node.upsert route", () => {
-  const PATH = "/graph/node/upsert";
-  const VALID_BODY = {
-    label: "Person",
-    displayName: "Alice Smith",
-    description: "A test person node",
-    properties: { age: 30 },
-  };
-
-  it("happy path POST: returns 201 with invoke result", async () => {
-    const invokeResult = { nodeId: "node-new-1", label: "Person" };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await authPost(PATH, VALID_BODY);
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke once with contract name 'upsert_node' and surface 'api'", async () => {
-    await authPost(PATH, VALID_BODY);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_node");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes label, displayName, description, properties to invoke", async () => {
-    await authPost(PATH, VALID_BODY);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.label).toBe("Person");
-    expect(body.displayName).toBe("Alice Smith");
-    expect(body.description).toBe("A test person node");
-    expect(body.properties).toEqual({ age: 30 });
-  });
-
-  it("empty label → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { ...VALID_BODY, label: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("empty displayName → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { ...VALID_BODY, displayName: "" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing required fields → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { description: "no label or displayName" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── graph.edge.delete ─────────────────────────────────────────────────────────
-
-describe("graph.edge.delete route", () => {
-  const PATH = "/graph/edge/delete";
-  const VALID_BODY = {
-    fromNodeId: "node-from-1",
-    toNodeId: "node-to-1",
-    edgeType: "RELATED_TO",
-  };
-
-  it("happy path DELETE: returns 200 with invoke result", async () => {
-    const invokeResult = { deleted: true };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await authDelete(PATH, VALID_BODY);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke once with contract name 'delete_edge' and surface 'api'", async () => {
-    await authDelete(PATH, VALID_BODY);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("delete_edge");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes fromNodeId, toNodeId, edgeType to invoke", async () => {
-    await authDelete(PATH, VALID_BODY);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.fromNodeId).toBe("node-from-1");
-    expect(body.toNodeId).toBe("node-to-1");
-    expect(body.edgeType).toBe("RELATED_TO");
-  });
-
-  it("lowercase edgeType fails RELATIONSHIP_TYPE_PATTERN → 400, invoke not called", async () => {
-    const res = await authDelete(PATH, { ...VALID_BODY, edgeType: "invalid_edge" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing fromNodeId → 400, invoke not called", async () => {
-    const res = await authDelete(PATH, { toNodeId: "node-to-1", edgeType: "RELATED_TO" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("each relationship type matching RELATIONSHIP_TYPE_PATTERN is accepted", async () => {
-    const edgeTypes = [
-      "RELATED_TO",
-      "PART_OF",
-      "CAUSED_BY",
-      "REFERENCES",
-      "SIMILAR_TO",
-      "DEPENDS_ON",
-      "CREATED_BY",
-      "MENTIONS",
-    ] as const;
-
-    for (const edgeType of edgeTypes) {
-      vi.clearAllMocks();
-      mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
-      mocks.invoke.mockResolvedValue({ deleted: true });
-
-      const res = await authDelete(PATH, {
-        fromNodeId: "node-a",
-        toNodeId: "node-b",
-        edgeType,
-      });
-      expect(res.status).toBe(200);
-      expect(mocks.invoke).toHaveBeenCalledOnce();
-    }
-  });
-});
-
-// ── graph.edge.upsert ─────────────────────────────────────────────────────────
-
-describe("graph.edge.upsert route", () => {
-  const PATH = "/graph/edge/upsert";
-  const VALID_BODY = {
-    fromNodeId: "node-from-2",
-    toNodeId: "node-to-2",
-    relationshipType: "DEPENDS_ON",
-    properties: { weight: "0.9" },
-  };
-
-  it("happy path POST: returns 201 with invoke result", async () => {
-    const invokeResult = { edgeId: "edge-new-1", created: false };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await authPost(PATH, VALID_BODY);
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke once with contract name 'upsert_edge' and surface 'api'", async () => {
-    await authPost(PATH, VALID_BODY);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("upsert_edge");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes fromNodeId, toNodeId, relationshipType, properties to invoke", async () => {
-    await authPost(PATH, VALID_BODY);
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.fromNodeId).toBe("node-from-2");
-    expect(body.toNodeId).toBe("node-to-2");
-    expect(body.relationshipType).toBe("DEPENDS_ON");
-    expect(body.properties).toEqual({ weight: "0.9" });
-  });
-
-  it("Cypher-injection relationshipType fails RELATIONSHIP_TYPE_PATTERN → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { ...VALID_BODY, relationshipType: "]->()-[:x" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing toNodeId → 400, invoke not called", async () => {
-    const res = await authPost(PATH, {
-      fromNodeId: "node-from-2",
-      relationshipType: "DEPENDS_ON",
-    });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("optional properties field omitted → invoke still called successfully", async () => {
-    const res = await authPost(PATH, {
-      fromNodeId: "node-from-2",
-      toNodeId: "node-to-2",
-      relationshipType: "MENTIONS",
-    });
-    expect(res.status).toBe(201);
-    expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });

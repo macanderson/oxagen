@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
-import { knowledgeNodeRefSchema } from "./semantic.edge.list";
+import { knowledgeNodeRefSchema } from "./knowledge.node-ref";
 
 /**
  * agent.memory.citations.stats — workspace-wide citation analytics across all

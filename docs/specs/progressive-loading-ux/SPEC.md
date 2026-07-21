@@ -25,8 +25,8 @@
 - **Route-level error convention:** only `apps/app/src/app/global-error.tsx`. No per-segment `error.tsx`
   (out of scope for this change).
 - **Waterfalls in the heavy segments:**
-  - `knowledge/graph/page.tsx` — 3 **sequential** `invoke()` calls (`semantic.edge.suggest`,
-    `semantic.edge.list`, `graph.stats`). Worst offender.
+  - the former knowledge inference page — 3 **sequential** capability reads. This page and
+    its legacy semantic review family were later retired for launch.
   - `activity/runs/page.tsx` — sequential resolves, then `invoke("agent.subagent_fanout.list")` then a
     `withTenantDb` executions query, serial inside `runInTenantScope`.
   - `knowledge/sources/page.tsx` — single blocking `invoke("connection.list")` gates the whole page.

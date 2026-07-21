@@ -64,8 +64,7 @@ Two passes:
 - Billing: debits org credits at the solved meter rate.
 - Blob storage + Postgres: one `generated_assets` row (`image` kind,
   `image/svg+xml`, org access policy) holding the sanitized markup, linked to
-  the conversation, and mirrored to the knowledge graph as a `:GeneratedFile`
-  node (best-effort).
+  the conversation.
 
 ## Serving & display security
 

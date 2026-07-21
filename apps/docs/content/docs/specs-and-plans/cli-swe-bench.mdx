@@ -205,7 +205,7 @@ Timeout policy (landed on this branch, keep): no wall-clock turn cap; progress-b
 
 ### 9. SWE-bench run profile (config, not fork)
 
-`--mode bypass --output-format stream-json --max-steps 200`, pinned worker model + high effort, memory OFF, graph-sync OFF, judge ON with evidence gate (or `--no-pipeline` for ablation), headless prompt profile, per-instance wall cap in the harness, `OXAGEN_ALLOW_NO_SESSION=1` + `AI_GATEWAY_API_KEY`. Ablations the harness supports: ±pipeline, ±code-graph, ±best-of-N, model matrix.
+`--mode bypass --output-format stream-json --max-steps 200`, pinned worker model + high effort, memory OFF, judge ON with evidence gate (or `--no-pipeline` for ablation), headless prompt profile, per-instance wall cap in the harness, `OXAGEN_ALLOW_NO_SESSION=1` + `AI_GATEWAY_API_KEY`. The retired client graph-upsync path is absent rather than benchmark-disabled. Ablations the harness supports: ±pipeline, ±code-graph, ±best-of-N, model matrix.
 
 ### 10. Cleanups bound to this spec
 
@@ -366,4 +366,3 @@ oxagen-protocol/      # serde types for the boundary above; shared by every crat
 - **tree-sitter grammar parity** (WASM vs native versions) → pin grammar versions; fixture-diff the symbol/edge output.
 - **Model nondeterminism** makes live parity noisy → determinism only claimed on recorded inputs; live comparison is statistical (bench parity gate), not exact.
 - **Porting a moving target** → hard rule: freeze the TS spec (tag it) before step 4; spec changes go to TS first, re-record goldens, then Rust.
-

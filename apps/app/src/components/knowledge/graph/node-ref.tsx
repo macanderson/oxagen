@@ -16,7 +16,7 @@
 "use client";
 
 import * as React from "react";
-import type { KnowledgeNodeRef, SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import { Popover, PopoverTrigger, PopoverPopup } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -27,31 +27,13 @@ import { truncate } from "../graph-explorer/lib/format";
 
 // Property keys already shown in the citation header — omit them from the bag so
 // the inspect panel doesn't repeat the name/label/id.
-const OMITTED_PROPERTY_KEYS = ["displayName", "name", "publicId", "label", "id"];
-
-/** Resolve a friendly citation for an inferred edge's source node. */
-export function sourceNodeRef(edge: SemanticEdge): KnowledgeNodeRef {
-  return (
-    edge.sourceNode ?? {
-      id: edge.sourceNodeId,
-      label: "Node",
-      displayName: edge.sourceNodeId,
-      properties: {},
-    }
-  );
-}
-
-/** Resolve a friendly citation for an inferred edge's target node. */
-export function targetNodeRef(edge: SemanticEdge): KnowledgeNodeRef {
-  return (
-    edge.targetNode ?? {
-      id: null,
-      label: "Node",
-      displayName: edge.targetNodeId,
-      properties: {},
-    }
-  );
-}
+const OMITTED_PROPERTY_KEYS = [
+  "displayName",
+  "name",
+  "publicId",
+  "label",
+  "id",
+];
 
 /**
  * The best human label for a node — never an empty string, and never the raw
@@ -81,7 +63,11 @@ export interface NodeRefProps {
  * A node citation chip. Hovering/focusing/clicking opens a popover with the
  * node's domain label, copyable id, and full property list.
  */
-export function NodeRef({ node, emphasis = "default", className }: NodeRefProps) {
+export function NodeRef({
+  node,
+  emphasis = "default",
+  className,
+}: NodeRefProps) {
   const label = nodeCitationLabel(node);
   const properties = node.properties ?? {};
   const color = colorForLabel(node.label);
@@ -129,7 +115,9 @@ export function NodeRef({ node, emphasis = "default", className }: NodeRefProps)
             <Badge variant="outline" size="sm">
               {node.label}
             </Badge>
-            <p className="mt-1 break-words text-sm font-semibold text-foreground">{label}</p>
+            <p className="mt-1 break-words text-sm font-semibold text-foreground">
+              {label}
+            </p>
             {node.id ? (
               <div className="mt-1.5">
                 <CopyableId value={node.id} label="ID" max={24} />
@@ -142,7 +130,11 @@ export function NodeRef({ node, emphasis = "default", className }: NodeRefProps)
           </div>
         </div>
         <div className="max-h-72 overflow-y-auto px-3 py-2.5">
-          <PropertyList properties={properties} omit={OMITTED_PROPERTY_KEYS} dense />
+          <PropertyList
+            properties={properties}
+            omit={OMITTED_PROPERTY_KEYS}
+            dense
+          />
         </div>
       </PopoverPopup>
     </Popover>

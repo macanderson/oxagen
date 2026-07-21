@@ -835,8 +835,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
         .map(([name, files]) => ({ name, files }));
 
       // Persist domains onto the local DuckDB store (reopened — step 2 already
-      // closed its handle) so `code_graph` queries see them without requiring a
-      // `graph push` first. Mirrors graph.push.ts's persistence step exactly.
+      // closed its handle) so local `code_graph` queries see them immediately.
       if (domainMap.size > 0) {
         const domainStore = createCodeGraphStore({ duckdbPath });
         try {

@@ -86,7 +86,6 @@ import type {
   AgentAi,
   MemoryProvider,
   TraceStore,
-  GraphSyncProvider,
   FileLockProvider,
 } from "../ports";
 import type {
@@ -218,26 +217,16 @@ export interface RunTurnOptions {
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
   /**
-   * Graph-sync port: on every turn, (1) materialize/refresh the touched files
-   * as `:SourceFile` nodes in Neo4j and (2) record an `:Execution` node with
-   * `[:TOUCHED_FILE]` edges to each file. Both writes are async and
-   * fire-and-forget — a failure here NEVER blocks or fails the turn.
-   *
-   * CLI: omit or pass null (no platform Neo4j session).
-   * Platform: inject the adapter from `@oxagen/agent/adapters`.
-   */
-  graphSync?: GraphSyncProvider | null;
-  /**
-   * Graph-backed file lock (docs/specs/agent-file-locking/plan.md) — the
+   * Transactional file lock (ADR-021) — the
    * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which
    * `runCodingAgent` (via `engine.ts`) threads this straight through to.
    * `runTurn` generates one stable lock identity per turn (`lockContext`,
    * below) and passes BOTH down to every `runCodingAgent` call this turn
    * makes (including revision rounds), then batch-releases everything the
    * turn holds in its `lockContext.executionId` once the turn ends — the
-   * backstop alongside `graphSync.recordLineage`.
+   * final backstop after per-call release.
    *
-   * CLI: omit or pass null (no platform Neo4j session — unlocked).
+   * CLI: omit or pass null (single-process, no shared lease store — unlocked).
    * Platform: inject the adapter from `@oxagen/agent/adapters`, used by both
    * the chat surface and `agent.repo.edit` (fleet dispatch) since both funnel
    * through this same shared engine (docs/adr/ADR-017-unified-agent-engine.md).
@@ -1244,11 +1233,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       const gate = await runMutationGate(
         opts.workspace,
         result.diff,
-        { lastOutcomes: tracker.lastOutcomes(), flippedBy: tracker.flippedBy() },
+        {
+          lastOutcomes: tracker.lastOutcomes(),
+          flippedBy: tracker.flippedBy(),
+        },
         {
           score:
-            opts.mutationScore ??
-            Boolean(process.env["OXAGEN_MUTATION_SCORE"]),
+            opts.mutationScore ?? Boolean(process.env["OXAGEN_MUTATION_SCORE"]),
           ...(Number.isFinite(timeoutEnv) && timeoutEnv > 0
             ? { timeoutMsPerCommand: timeoutEnv }
             : {}),
@@ -1256,7 +1247,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           onStart: ({ commands }) =>
             opts.onStage?.({
               kind: "judge",
-              label: "mutation gate: reverting fix to prove the tests witness it",
+              label:
+                "mutation gate: reverting fix to prove the tests witness it",
               ...(commands[0] ? { detail: commands[0] } : {}),
             }),
         },
@@ -1422,30 +1414,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     mutationGates,
   });
 
-  // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
-  // (1) Upsert :SourceFile nodes for every file touched this turn.
-  // (2) Record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) edges in Neo4j.
-  // Both use the trace id as the executionId so lineage ties back to the turn.
-  // A throwing sync MUST NOT fail the turn — both are wrapped in void/catch.
-  if (opts.graphSync && filesTouched.size > 0) {
-    const touchedArr = [...filesTouched];
-    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
-      (error: unknown) => opts.onError?.({ phase: "graph-sync", error }),
-    );
-    void Promise.resolve(
-      opts.graphSync.recordLineage({
-        executionId: trace.id,
-        touchedFiles: touchedArr,
-      }),
-    ).catch((error: unknown) => opts.onError?.({ phase: "graph-sync", error }));
-  }
-
   // Turn-end batch release (docs/specs/agent-file-locking/plan.md §5): every
-  // HOLDS_LOCK edge this turn's lockContext.executionId holds is released
+  // Postgres lease this turn's lockContext.executionId holds is released
   // here, as a backstop alongside the per-call release in tools.ts —
   // covering a lock that leaked because a tool call didn't reach its own
   // `finally` (e.g. the turn was aborted between rounds). Fire-and-forget,
-  // same fail-soft shape as graphSync above: a throwing release must never
+  // A throwing release must never
   // fail the turn — the lock's own TTL is the ultimate backstop — but the
   // failure is surfaced through `onError` rather than swallowed.
   if (opts.fileLock && lockContext) {
@@ -1873,7 +1847,7 @@ async function runBare(
   phases.push(phaseStat("execute", 0, execStart, model, usage));
 
   // Union git-diff file list into filesTouched — ground truth for changed files,
-  // supplements tool-call events (bare mode also fires graphSync).
+  // supplements tool-call events in bare mode.
   for (const f of result.changedFiles) filesTouched.add(f);
 
   // Bare mode has no judge loop, so emit the terminal `complete` stage here so
@@ -1925,19 +1899,6 @@ async function runBare(
     toolEvents,
     thinkingLog,
   });
-
-  if (opts.graphSync && filesTouched.size > 0) {
-    const touchedArr = [...filesTouched];
-    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(
-      (error: unknown) => opts.onError?.({ phase: "graph-sync", error }),
-    );
-    void Promise.resolve(
-      opts.graphSync.recordLineage({
-        executionId: trace.id,
-        touchedFiles: touchedArr,
-      }),
-    ).catch((error: unknown) => opts.onError?.({ phase: "graph-sync", error }));
-  }
 
   // Turn-end batch release — see the full-pipeline path's identical block above.
   if (opts.fileLock && lockContext) {

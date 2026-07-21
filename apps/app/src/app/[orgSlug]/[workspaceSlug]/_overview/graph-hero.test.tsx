@@ -4,8 +4,6 @@ import * as React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, screen } from "@testing-library/react";
 import type { GraphStatsOutput } from "@oxagen/oxagen/contracts/graph.stats";
-import type { GraphExportOutput } from "@oxagen/oxagen/contracts/graph.export";
-import type { SemanticEdgeSuggestOutput } from "@oxagen/oxagen/contracts/semantic.edge.suggest";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
 
 vi.mock("next/link", () => ({
@@ -32,18 +30,6 @@ vi.mock("@oxagen/tenancy", () => ({
 const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 
-// GraphMiniViz is a "use client" component that dynamically imports reagraph;
-// stub it entirely so reagraph never loads in this RSC-focused test.
-vi.mock("./graph-mini-viz", () => ({
-  GraphMiniViz: ({ nodes, edges }: { nodes: unknown[]; edges: unknown[] }) => (
-    <div
-      data-testid="stub-graph-mini-viz"
-      data-node-count={nodes.length}
-      data-edge-count={edges.length}
-    />
-  ),
-}));
-
 import { GraphHero } from "./graph-hero";
 
 const PROPS = {
@@ -63,21 +49,6 @@ function graphStats(
     inferredEdgeCount: 0,
     sourceCount: 0,
     lastModifiedAt: "2026-07-12T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
-function graphExport(
-  overrides: Partial<GraphExportOutput> = {},
-): GraphExportOutput {
-  return {
-    nodes: [],
-    edges: [],
-    total: 0,
-    hasMore: false,
-    limit: 30,
-    offset: 0,
-    cursor: null,
     ...overrides,
   };
 }
@@ -121,7 +92,7 @@ afterEach(() => {
 });
 
 describe("GraphHero", () => {
-  it("renders stat cells, repo/source counts, and pending approval count on the populated path", async () => {
+  it("renders graph, repo, and source counts on the populated path", async () => {
     invokeByCapability({
       get_graph_stats: () =>
         Promise.resolve(
@@ -142,44 +113,6 @@ describe("GraphHero", () => {
             },
           }),
         ),
-      export_graph: () =>
-        Promise.resolve(
-          graphExport({
-            nodes: [
-              {
-                id: "n1",
-                labels: ["Feature"],
-                displayName: "Feature A",
-                properties: {},
-                isSystem: false,
-              },
-              {
-                id: "n2",
-                labels: ["Issue"],
-                displayName: "Issue B",
-                properties: {},
-                isSystem: false,
-              },
-            ],
-            edges: [
-              {
-                id: "e1",
-                sourceId: "n1",
-                targetId: "n2",
-                type: "RELATES_TO",
-                properties: {},
-                inferred: false,
-              },
-            ],
-            total: 2,
-          }),
-        ),
-      suggest_semantic_edges: () =>
-        Promise.resolve({
-          suggestions: [],
-          total: 3,
-          limit: 1,
-        } satisfies SemanticEdgeSuggestOutput),
       list_connections: () =>
         Promise.resolve(
           connections([{ connectorId: "github" }, { connectorId: "notion" }]),
@@ -197,19 +130,12 @@ describe("GraphHero", () => {
     expect(screen.getByTestId("overview-graph-stat-edges")).toHaveTextContent(
       "340",
     );
-    expect(screen.getByTestId("overview-graph-stat-pending")).toHaveTextContent(
-      "3",
-    );
     expect(screen.getByTestId("overview-graph-stat-repos")).toHaveTextContent(
       "1",
     );
     expect(screen.getByTestId("overview-graph-stat-sources")).toHaveTextContent(
       "2",
     );
-
-    expect(
-      screen.getByRole("link", { name: /review 3 pending/i }),
-    ).toHaveAttribute("href", "/acme/prod/knowledge/inference");
   });
 
   it("renders the growth block with two DeltaChips and a MiniBars trend", async () => {
@@ -230,22 +156,6 @@ describe("GraphHero", () => {
             },
           }),
         ),
-      export_graph: () =>
-        Promise.resolve(
-          graphExport({
-            nodes: [
-              {
-                id: "n1",
-                labels: ["Feature"],
-                displayName: "Feature A",
-                properties: {},
-                isSystem: false,
-              },
-            ],
-          }),
-        ),
-      suggest_semantic_edges: () =>
-        Promise.resolve({ suggestions: [], total: 0, limit: 1 }),
       list_connections: () => Promise.resolve(connections([])),
     });
 
@@ -262,9 +172,6 @@ describe("GraphHero", () => {
   it("renders the empty state when there are no nodes at all", async () => {
     invokeByCapability({
       get_graph_stats: () => Promise.resolve(graphStats({ nodeCount: 0 })),
-      export_graph: () => Promise.resolve(graphExport({ nodes: [] })),
-      suggest_semantic_edges: () =>
-        Promise.resolve({ suggestions: [], total: 0, limit: 1 }),
       list_connections: () => Promise.resolve(connections([])),
     });
 
@@ -275,6 +182,5 @@ describe("GraphHero", () => {
     expect(
       screen.getByRole("link", { name: /connect a source/i }),
     ).toHaveAttribute("href", "/acme/prod/knowledge/sources");
-    expect(screen.queryByTestId("stub-graph-mini-viz")).not.toBeInTheDocument();
   });
 });

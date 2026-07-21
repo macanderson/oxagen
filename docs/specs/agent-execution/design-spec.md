@@ -1,7 +1,9 @@
 # Agent Execution & Telemetry System Design Spec
 
+> **Launch update (2026-07-21):** The automatic execution-to-Neo4j mirror described below is retired. PostgreSQL remains authoritative for execution state and telemetry; graph lineage is admitted only through explicit, typed evidence/citation flows. The mirror worker, event, mutation, vector index, and `synced_to_graph_at` flag no longer exist. The remainder of this document is retained as historical design context.
+
 **Version:** 1.0  
-**Status:** APPROVED FOR IMPLEMENTATION  
+**Status:** HISTORICAL — PARTIALLY SUPERSEDED
 **Date:** 2026-06-07  
 **Owner:** Platform Team
 

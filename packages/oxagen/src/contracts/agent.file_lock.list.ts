@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-// Introspection: who holds what (docs/specs/agent-file-locking/plan.md §7).
-// Lists every currently-LIVE HOLDS_LOCK edge in the tenant, optionally
-// filtered to one file — useful for debugging a stuck fleet (a lock that
-// outlives its owning turn is visible here until TTL/sweep reap it).
+// Introspection over the transactional Postgres lease authority. Lists every
+// currently-live lease in the tenant, optionally filtered to one file — useful
+// for debugging a stuck fleet until TTL/sweep reaps the stale lease.
 export const agentFileLockList = registerCapability({
   name: "list_file_locks",
   domain: "agent",

@@ -149,7 +149,7 @@ type Events = {
   // ── Ingestion pipeline ─────────────────────────────────────────────────────
 
   // Stage 1: raw record arrives from a connector (webhook or poller).
-  // The 6-stage pipeline (normalize → map → dedup → embed → infer) runs next.
+  // The pipeline (normalize → map → dedup → embed) runs next.
   "ingestion/entity.received": {
     data: {
       connectionId: string;
@@ -204,35 +204,6 @@ type Events = {
     };
   };
 
-  // Stage 6: async semantic inference after a node has been embedded.
-  // LLM worker infers IMPLEMENTS / PART_OF / ASSIGNED_TO / etc. edges.
-  "ingestion/entity.infer": {
-    data: {
-      nodeId: string;
-      entityType: string;
-      propertiesSnapshot: Record<string, unknown>;
-      workspaceId: string;
-      orgId: string;
-      contextHops?: number;
-    };
-  };
-
-  // Bulk inference request dispatched by the semantic.edge.infer handler.
-  // The worker fans out per-entity infer events for all matched connections.
-  "ingestion/semantic.edge.infer.requested": {
-    data: {
-      jobId: string;
-      connectionIds: string[];
-      orgId: string;
-      workspaceId: string;
-      maxEdgesPerNode: number;
-      confidenceThreshold: number;
-      semanticEdgePrompt: string;
-      dryRun: boolean;
-      requestedAt: string; // ISO-8601
-    };
-  };
-
   // Manual or polling sync request dispatched by the integration.sync handler.
   // The worker resolves the connector type and dispatches the appropriate sync event.
   "ingestion/sync.requested": {
@@ -271,7 +242,7 @@ type Events = {
     };
   };
 
-  // ── GitHub source-code ingestion ───────────────────────────────────────────
+  // ── GitHub provider metadata ingestion ─────────────────────────────────────
 
   // Kick off the initial sync for a newly-connected GitHub repository.
   "ingestion/github.initial-sync": {
@@ -285,72 +256,6 @@ type Events = {
     };
   };
 
-  // Parse a single file blob fetched from the GitHub tree.
-  "ingestion/github.parse-file": {
-    data: {
-      connectionId: string;
-      orgId: string;
-      workspaceId: string;
-      owner: string;
-      repo: string;
-      sha: string;
-      path: string;
-    };
-  };
-
-  // Infer product-level features from parsed source symbols.
-  "ingestion/github.infer-features": {
-    data: {
-      fileNaturalKey: string;
-      symbols: Array<{
-        name: string;
-        kind: string;
-        startLine: number;
-        endLine: number;
-        docComment?: string;
-      }>;
-      orgId: string;
-      workspaceId: string;
-      connectionId: string;
-    };
-  };
-
-  // Batched variant of infer-features: same per-file payload, but consumed via
-  // Inngest batchEvents and submitted as one Anthropic Message Batch. Emitted by
-  // parse-file instead of infer-features when INGESTION_FEATURE_BATCH=1.
-  "ingestion/github.infer-features-batch": {
-    data: {
-      fileNaturalKey: string;
-      symbols: Array<{
-        name: string;
-        kind: string;
-        startLine: number;
-        endLine: number;
-        docComment?: string;
-      }>;
-      orgId: string;
-      workspaceId: string;
-      connectionId: string;
-    };
-  };
-
-  // Infer application domains from the full repo file-path list and stamp
-  // `domain` on SourceFile + SourceSymbol nodes in Neo4j. Triggered once
-  // per initial sync (and per incremental re-sync) by the initial-sync function.
-  "ingestion/github.infer-domains": {
-    data: {
-      /** All relative file paths in the repo being analysed. */
-      filePaths: string[];
-      orgId: string;
-      workspaceId: string;
-      connectionId: string;
-      /** GitHub repo owner (user or org). */
-      owner: string;
-      /** GitHub repo name. */
-      repo: string;
-    };
-  };
-
   // ── Playbook execution ─────────────────────────────────────────────────────
   // Fired after a playbook_runs row is inserted (status='pending') by either
   // automation.trigger.ts (manual/api) or playbook.trigger.match.ts (event-driven).
@@ -360,71 +265,6 @@ type Events = {
       runId: string;
       orgId: string;
       workspaceId: string;
-    };
-  };
-
-  // ── Execution graph sync ────────────────────────────────────────────────────
-  // Fired by recordExecution() after a completed execution row is committed to
-  // Postgres. The Inngest worker picks this up and mirrors the execution to
-  // the Neo4j knowledge graph (async, best-effort, 24 h retry window).
-  "agent/execution.sync": {
-    data: {
-      executionId: string;
-      orgId: string;
-      workspaceId: string;
-      status: string;
-      originType: string;
-      originId: string;
-      agentId?: string | null;
-      startedAt?: string | null;
-      completedAt?: string | null;
-      latencyMs?: number | null;
-      inputTokens?: number | null;
-      outputTokens?: number | null;
-      estimatedCostUsd?: string | null;
-      toolCalls?: Array<{ toolName: string; toolType: string }>;
-    };
-  };
-
-  // ── File-lock graph projection (ADR-021 §5) ─────────────────────────────────
-  // Fired fire-and-forget by the Postgres file-lock lease on acquire/release.
-  // agent.project-file-lock-to-graph MERGEs an (:Agent)-[:LOCKED]->(:SourceFile)
-  // lineage edge for hot-file analytics + conflict prediction. NEVER
-  // load-bearing for mutual exclusion — the lock authority is the Postgres lease.
-  "agent/file-lock.projected": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      resourceKey: string;
-      holder: string;
-      executionId: string;
-      action: string;
-      event: "acquired" | "released";
-      fencingToken?: number;
-      expiresAt?: number;
-    };
-  };
-
-  // ── Generated-file graph sync ───────────────────────────────────────────────
-  // Fired by persistGeneratedAsset() after a generated_assets row is committed.
-  // content.sync-generated-file-to-graph mirrors the file into Neo4j as a
-  // searchable :GeneratedFile node (embedding + lineage to the producing
-  // execution) so NL queries like "find the files I made about X" return it.
-  "content/generated-asset.sync": {
-    data: {
-      assetId: string;
-      publicId: string;
-      orgId: string;
-      workspaceId: string;
-      kind: string;
-      mimeType: string;
-      model: string;
-      displayName: string;
-      prompt?: string | null;
-      conversationId?: string | null;
-      messageId?: string | null;
-      summary?: string | null;
-      embedding?: number[] | null;
     };
   };
 
@@ -441,58 +281,6 @@ type Events = {
       versionId: string;
       /** When true, properties NOT in the target schema are pruned from existing nodes. */
       prune: boolean;
-    };
-  };
-  // ── Web-search → knowledge-graph ingestion ──────────────────────────────────
-  // Fired by the web.search handler after every search that returns hits (chat
-  // agent, research swarm, API, MCP, CLI — all route through the same handler).
-  // web.search.ingest-graph picks this up and feeds the hits to graph.ingest so
-  // the entities a search uncovers become workspace knowledge-graph nodes/edges.
-  "web/search.completed": {
-    data: {
-      orgId: string;
-      workspaceId: string;
-      userId?: string | null;
-      query: string;
-      results: Array<{ title?: string; url?: string; content?: string }>;
-    };
-  };
-
-  // ── Engram memory graph sync ────────────────────────────────────────────────
-  // Fired by the engram writer after a memory record is appended to the
-  // episodic store. The async worker writes :REMEMBERS and :ABOUT edges into
-  // Neo4j so the memory is anchored to its related entities in the graph.
-  // Eventually consistent: the record in DuckDB/ClickHouse is the source of
-  // truth; graph edges are best-effort with 24 h retry.
-  "engram/memory.graph-sync": {
-    data: {
-      /** Content-addressed record ID (sha256 hex). */
-      recordId: string;
-      orgId: string;
-      workspaceId: string;
-      /** Graph node reference this memory is about (creates :REMEMBERS edge). */
-      nodeRef?: string | null;
-      /** KnowledgeNode IDs this memory relates to (creates :ABOUT edges). */
-      entityRefs?: string[] | null;
-      /** The lesson/fact text for the memory node label. */
-      body: string;
-      /** Record kind (episodic, semantic, procedural, entity, edge). */
-      kind: string;
-      /** Salience score 0–1. */
-      salience: number;
-    };
-  };
-
-  // ── Engram embedding pipeline ───────────────────────────────────────────────
-  // Fired after a memory record is written. The async worker generates a vector
-  // embedding and stores it back on the record for vector retrieval.
-  "engram/memory.embed": {
-    data: {
-      recordId: string;
-      orgId: string;
-      workspaceId: string;
-      kind: string;
-      body: string;
     };
   };
 };

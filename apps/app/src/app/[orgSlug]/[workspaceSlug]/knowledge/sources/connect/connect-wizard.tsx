@@ -68,7 +68,9 @@ export interface ConnectSourceWizardProps {
   initialMappings?: ConnectionMappingsGetOutput["mappings"];
 }
 
-function draftsFromSaved(mappings: ConnectionMappingsGetOutput["mappings"]): MappingDraft[] {
+function draftsFromSaved(
+  mappings: ConnectionMappingsGetOutput["mappings"],
+): MappingDraft[] {
   return mappings.map((m) => ({
     sourceRecordType: m.sourceRecordType,
     oxagenEntityType: m.oxagenEntityType,
@@ -87,7 +89,9 @@ export function ConnectSourceWizard({
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
   const sourcesHref = workspace.knowledge.sources(ctx);
 
-  const hasInitialMappings = Boolean(initialMappings && initialMappings.length > 0);
+  const hasInitialMappings = Boolean(
+    initialMappings && initialMappings.length > 0,
+  );
   const initialStep: WizardStepId = initialConnectionId
     ? hasInitialMappings
       ? "mappings"
@@ -95,17 +99,25 @@ export function ConnectSourceWizard({
     : "pick";
 
   const [step, setStep] = React.useState<WizardStepId>(initialStep);
-  const [selectedConnector, setSelectedConnector] = React.useState<ConnectorCatalogEntry | null>(null);
+  const [selectedConnector, setSelectedConnector] =
+    React.useState<ConnectorCatalogEntry | null>(null);
 
-  const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(null);
+  const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(
+    null,
+  );
   const [schemaLoading, setSchemaLoading] = React.useState(false);
   const [schemaError, setSchemaError] = React.useState<string | null>(null);
 
-  const [connectionId, setConnectionId] = React.useState<string | null>(initialConnectionId ?? null);
+  const [connectionId, setConnectionId] = React.useState<string | null>(
+    initialConnectionId ?? null,
+  );
   const [connectionDisplayName, setConnectionDisplayName] = React.useState("");
 
-  const [credentialsSubmitting, setCredentialsSubmitting] = React.useState(false);
-  const [credentialsError, setCredentialsError] = React.useState<string | null>(null);
+  const [credentialsSubmitting, setCredentialsSubmitting] =
+    React.useState(false);
+  const [credentialsError, setCredentialsError] = React.useState<string | null>(
+    null,
+  );
 
   const [previewLoading, setPreviewLoading] = React.useState(false);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -141,7 +153,11 @@ export function ConnectSourceWizard({
     async (connectorId: string) => {
       setSchemaLoading(true);
       setSchemaError(null);
-      const result = await getConnectSourceSchemaAction({ orgSlug, workspaceSlug, connectorId });
+      const result = await getConnectSourceSchemaAction({
+        orgSlug,
+        workspaceSlug,
+        connectorId,
+      });
       setSchemaLoading(false);
       if (!result.ok) {
         setSchemaError(result.error);
@@ -172,7 +188,10 @@ export function ConnectSourceWizard({
   // ---- Step 2: credentials ----------------------------------------------------
 
   const handleValidateCredentials = React.useCallback(
-    async (config: Record<string, unknown>, authSchemeId: string | null): Promise<ValidateOutcome> => {
+    async (
+      config: Record<string, unknown>,
+      authSchemeId: string | null,
+    ): Promise<ValidateOutcome> => {
       if (!selectedConnector) return { error: "No connector selected." };
       const result = await validateConnectSourceConfigAction({
         orgSlug,
@@ -220,7 +239,11 @@ export function ConnectSourceWizard({
     if (!connectionId) return;
     setPreviewLoading(true);
     setPreviewError(null);
-    const result = await previewSourceConnectionAction({ orgSlug, workspaceSlug, connectionId });
+    const result = await previewSourceConnectionAction({
+      orgSlug,
+      workspaceSlug,
+      connectionId,
+    });
     setPreviewLoading(false);
     if (!result.ok) {
       setPreviewError(result.error);
@@ -231,10 +254,23 @@ export function ConnectSourceWizard({
   }, [connectionId, orgSlug, workspaceSlug]);
 
   React.useEffect(() => {
-    if (step === "preview" && connectionId && !previewLoaded && !previewLoading && !previewError) {
+    if (
+      step === "preview" &&
+      connectionId &&
+      !previewLoaded &&
+      !previewLoading &&
+      !previewError
+    ) {
       void loadPreview();
     }
-  }, [step, connectionId, previewLoaded, previewLoading, previewError, loadPreview]);
+  }, [
+    step,
+    connectionId,
+    previewLoaded,
+    previewLoading,
+    previewError,
+    loadPreview,
+  ]);
 
   const handlePreviewNext = React.useCallback(async () => {
     if (!connectionId) return;
@@ -288,9 +324,14 @@ export function ConnectSourceWizard({
 
   // ---- Step 4: mappings --------------------------------------------------------
 
-  const handleChangeDraft = React.useCallback((index: number, patch: Partial<MappingDraft>) => {
-    setMappingDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
-  }, []);
+  const handleChangeDraft = React.useCallback(
+    (index: number, patch: Partial<MappingDraft>) => {
+      setMappingDrafts((prev) =>
+        prev.map((d, i) => (i === index ? { ...d, ...patch } : d)),
+      );
+    },
+    [],
+  );
 
   const handleMappingsRetry = React.useCallback(() => {
     void handlePreviewNext();
@@ -324,8 +365,8 @@ export function ConnectSourceWizard({
       return;
     }
 
-    // Best-effort: apply the connector's own declared sync cadence + inference
-    // defaults as integration-level settings alongside the now-active
+    // Best-effort: apply the connector's declared sync cadence as an
+    // integration-level setting alongside the now-active
     // connection (spec: "integration.configure — integration-level settings
     // alongside the connection"). Not on resume (schema is null there — Step 2
     // never ran to fetch it) and never blocks activation success on failure;
@@ -336,14 +377,20 @@ export function ConnectSourceWizard({
         workspaceSlug,
         integrationId: connectionId,
         syncCadence: schema.sync.delivery,
-        inferenceEnabled: schema.inference?.defaultEnabled ?? false,
-        ontologyPrompt: schema.inference?.ontologyPrompt,
       });
     }
 
     setDone(true);
     router.push(sourcesHref);
-  }, [connectionId, orgSlug, workspaceSlug, mappingDrafts, schema, router, sourcesHref]);
+  }, [
+    connectionId,
+    orgSlug,
+    workspaceSlug,
+    mappingDrafts,
+    schema,
+    router,
+    sourcesHref,
+  ]);
 
   return (
     <div className="flex flex-col gap-6" data-testid="connect-source-wizard">
@@ -401,8 +448,12 @@ export function ConnectSourceWizard({
 
       {step === "confirm" && (
         <ConfirmStep
-          connectorDisplayName={selectedConnector?.displayName ?? "This connection"}
-          connectionDisplayName={connectionDisplayName || "This source connection"}
+          connectorDisplayName={
+            selectedConnector?.displayName ?? "This connection"
+          }
+          connectionDisplayName={
+            connectionDisplayName || "This source connection"
+          }
           mappings={mappingDrafts}
           submitting={confirmSubmitting}
           error={confirmError}

@@ -15,22 +15,35 @@ afterEach(cleanup);
 describe("BackgroundTaskCard", () => {
   it("renders the label when provided, otherwise the raw kind", () => {
     render(
-      <BackgroundTaskCard taskId="t-1" kind="ingest_graph" status="pending" label="Ingest large doc" />,
+      <BackgroundTaskCard
+        taskId="t-1"
+        kind="index_document"
+        status="pending"
+        label="Index large doc"
+      />,
     );
-    expect(screen.getByText("Ingest large doc")).toBeTruthy();
-    expect(screen.getByText("ingest_graph")).toBeTruthy();
+    expect(screen.getByText("Index large doc")).toBeTruthy();
+    expect(screen.getByText("index_document")).toBeTruthy();
   });
 
   it("falls back to the kind when no label is set", () => {
-    render(<BackgroundTaskCard taskId="t-1" kind="ingest_graph" status="pending" />);
-    expect(screen.getAllByText("ingest_graph").length).toBeGreaterThan(0);
+    render(
+      <BackgroundTaskCard
+        taskId="t-1"
+        kind="index_document"
+        status="pending"
+      />,
+    );
+    expect(screen.getAllByText("index_document").length).toBeGreaterThan(0);
   });
 
   it("surfaces the status as a data attribute and a human label", () => {
     const { container } = render(
       <BackgroundTaskCard taskId="t-7" kind="agent.task" status="running" />,
     );
-    const card = container.querySelector('[data-component="background-task-card"]');
+    const card = container.querySelector(
+      '[data-component="background-task-card"]',
+    );
     expect(card?.getAttribute("data-status")).toBe("running");
     expect(card?.getAttribute("data-task-id")).toBe("t-7");
     expect(screen.getByText("Running")).toBeTruthy();
@@ -42,7 +55,12 @@ describe("BackgroundTaskCard", () => {
     );
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     rerender(
-      <BackgroundTaskCard taskId="t-1" kind="agent.task" status="running" progressPct={42} />,
+      <BackgroundTaskCard
+        taskId="t-1"
+        kind="agent.task"
+        status="running"
+        progressPct={42}
+      />,
     );
     const bar = container.querySelector('[role="progressbar"]');
     expect(bar).toBeTruthy();
@@ -51,16 +69,28 @@ describe("BackgroundTaskCard", () => {
 
   it("renders no progress bar in terminal states even when progressPct is provided", () => {
     const { container } = render(
-      <BackgroundTaskCard taskId="t-1" kind="agent.task" status="completed" progressPct={100} />,
+      <BackgroundTaskCard
+        taskId="t-1"
+        kind="agent.task"
+        status="completed"
+        progressPct={100}
+      />,
     );
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
   });
 
   it("clamps progressPct into 0–100 for the bar width", () => {
     const { container } = render(
-      <BackgroundTaskCard taskId="t-1" kind="agent.task" status="running" progressPct={250} />,
+      <BackgroundTaskCard
+        taskId="t-1"
+        kind="agent.task"
+        status="running"
+        progressPct={250}
+      />,
     );
-    const fill = container.querySelector('[role="progressbar"] > div') as HTMLDivElement | null;
+    const fill = container.querySelector(
+      '[role="progressbar"] > div',
+    ) as HTMLDivElement | null;
     expect(fill?.style.width).toBe("100%");
   });
 });

@@ -31,7 +31,6 @@ import {
 } from "@oxagen/agent";
 import {
   createPlatformAgentAi,
-  createNeo4jCodeGraphProvider,
   ModalSandboxWorkspace,
   isSandboxAvailable,
 } from "@oxagen/agent/adapters";
@@ -81,11 +80,6 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
-import {
-  createChatEngramOnEvent,
-  emitChatTurnMemory,
-  type AgentEventContext,
-} from "./memory-capture";
 import { buildPageContextMessage } from "./page-context";
 import { evaluateTurnCreditGate } from "./credit-gate";
 import {
@@ -213,7 +207,7 @@ const BodySchema = z.object({
   // present, the turn runs the coding engine against a durable sandbox with the
   // repo cloned and the environment's vault secrets injected, using the
   // code-mode system prompt and the full workspace toolset (read_file/write_file/
-  // edit_file/list_dir/glob/grep/bash/code_graph). `null`/omitted ⇒ normal chat.
+  // edit_file/list_dir/glob/grep/bash). `null`/omitted ⇒ normal chat.
   // owner/name come from the client's repo picker (the workspace GitHub token
   // gates access, exactly like repo.branch.create); the sandbox only activates
   // when a driver is configured (SANDBOX_ENABLED) — otherwise the turn still uses
@@ -728,12 +722,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       // down. Null unless the turn is a code-mode turn with a configured driver.
       let codeWorkspace: ModalSandboxWorkspace | null = null;
 
-      // Agent memory capture (Engram episodic events, memory-capture.ts).
-      // Declared here (not inside the try) so the catch can still emit a
-      // turn-level failure event — null until the try block resolves the
-      // tenant-scoped ids it needs (never emitted with partial/ambient state).
-      let memoryCtx: AgentEventContext | null = null;
-
       // Persist the assistant reply so it survives a refresh and is included in
       // the next turn's history (OXA-1509). Best-effort: a DB failure here must
       // NOT corrupt the SSE response the client already consumed, and must not
@@ -879,20 +867,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         for (const message of bindingResolution.warnings) {
           emit({ type: "warning", message, code: "code_binding_locked" });
         }
-
-        // Agent memory capture (memory-capture.ts wraps @oxagen/agent/runtime/
-        // engram-writer): rides the SAME tenant-asserted org/workspace ids as
-        // every other capability call in this turn — never ambient state, so
-        // this request can only ever write into ITS OWN namespace. Wired into
-        // the engine's onEvent (per-tool-call) below and a turn-level summary
-        // once the turn resolves. Fire-and-forget everywhere it's used.
-        memoryCtx = {
-          orgId: tenant.id,
-          workspaceId: workspace.id,
-          sessionId: conversationId ?? undefined,
-          agentId: effectiveAgentId ?? undefined,
-          messageId: capCtx.messageId,
-        };
 
         // ── Optional agent binding (launch a published agent into this session) ─
         // When the request carries an `agentId`, load that agent's definition ONCE
@@ -1345,16 +1319,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
         );
 
-        // ── Code mode: bind the durable sandbox workspace + code graph ────────
+        // ── Code mode: bind the durable sandbox workspace ─────────────────────
         // When this conversation's coding target is active (`codeMode` — the
         // code agent + effective repo/env resolved through the conversation
         // code binding and the authoritative agent gate above
         // materializeTools), run the coding engine against a sandbox with the
         // repo cloned. The per-turn repo/env context rides as a USER message
         // (ADR-021 §2), never the cached system prompt.
-        let codeGraphForTurn:
-          | ReturnType<typeof createNeo4jCodeGraphProvider>
-          | undefined;
         let codeContextMessage: ModelMessage | undefined;
         if (codeMode) {
           const branch = codeMode.defaultBranch ?? "main";
@@ -1432,7 +1403,6 @@ export async function POST(request: NextRequest): Promise<Response> {
                 token,
               },
             });
-            codeGraphForTurn = createNeo4jCodeGraphProvider();
           }
         }
 
@@ -1580,7 +1550,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           ai,
           instruction: content,
           ...(codeWorkspace ? { workspace: codeWorkspace } : {}),
-          ...(codeGraphForTurn ? { codeGraph: codeGraphForTurn } : {}),
           // Current-turn image attachments (Phase 1) — resolved + fetched
           // above, org-scoped. Omitted entirely for a no-attachment turn so
           // the engine's plain-string content shape is unchanged (byte-
@@ -1676,10 +1645,6 @@ export async function POST(request: NextRequest): Promise<Response> {
           // through the metered AI port's streamAgentReply.
           signal: request.signal,
           onStreamPart: (part) => translator?.onPart(part),
-          // Agent memory capture: fires emitToolCall (memory-capture.ts) for
-          // every completed tool call this turn, so consolidation has real
-          // episodic events from the chat surface to distill/reinforce/decay.
-          onEvent: createChatEngramOnEvent(memoryCtx),
           // Per-turn dollar budget (OXA — turn-budget). undefined when the
           // resolved policy is off — an unbudgeted turn runs exactly as
           // before this feature.
@@ -1687,18 +1652,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
         const { assistantText, persistedBlocks } = translator.finish();
-
-        // Turn-level memory capture (memory-capture.ts): ONE episodic event
-        // summarizing the whole turn, so a tool-free Q&A turn still populates
-        // agent memory (the per-tool-call events above only fire when the
-        // turn actually calls a tool). Fire-and-forget.
-        emitChatTurnMemory(memoryCtx, {
-          instruction: content,
-          responseLength: assistantText.length,
-          changedFiles: result.changedFiles,
-          steps: result.steps,
-          outcome: "success",
-        });
 
         // ── Per-turn next-step suggestions ─────────────────────────────────
         // Kick off conversation-aware suggestion generation NOW — the moment the
@@ -1801,25 +1754,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         // abort (where today an error PART did not throw). Flush + persist the
         // partial turn BEFORE emitting the error so a refresh still shows what
         // streamed, matching the old behaviour.
-        let partialAssistantText = "";
         if (translator) {
           const { assistantText, persistedBlocks } = translator.finish();
-          partialAssistantText = assistantText;
           await persistAssistantTurn(assistantText, persistedBlocks);
-        }
-        // Agent memory capture: a failed turn is a real outcome the nightly
-        // consolidation reinforcement step should learn from too, not only
-        // successful ones. Only fires once tenant ids were resolved — a
-        // failure before capCtx/memoryCtx were set has no tenant-scoped
-        // namespace to attribute the event to.
-        if (memoryCtx) {
-          emitChatTurnMemory(memoryCtx, {
-            instruction: content,
-            responseLength: partialAssistantText.length,
-            changedFiles: [],
-            steps: 0,
-            outcome: "failure",
-          });
         }
         // Surface stream errors as a structured `error` event so the client can
         // show a readable toast. `formatStreamError` unwraps an API error

@@ -10,7 +10,8 @@ import {
 /**
  * ontology.neighbors — the one-hop neighborhood of a node. A focused, cheap
  * traversal primitive (depth 1) for "what is directly connected to X?" without
- * the caller writing Cypher. Org + workspace scoped, read-only. Pairs with
+ * the caller writing Cypher. Customer-context only, org + workspace scoped,
+ * and read-only. Pairs with
  * `ontology.query` for deeper multi-hop walks.
  */
 
@@ -36,13 +37,6 @@ const neighborEntry = z
       .describe(
         "'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node",
       ),
-    isSystem: z
-      .boolean()
-      .default(false)
-      .describe(
-        "True when the neighbor is product-owned runtime lineage (executions, agents, tools, generated files) " +
-          "rather than customer knowledge — lets callers separate the source-system ontology from agent activity",
-      ),
   })
   // Bi-temporal validity of the connecting edge, so the citation can show "true as of X".
   .merge(edgeValiditySchema);
@@ -52,7 +46,7 @@ export const ontologyNeighbors = registerCapability({
   domain: "ontology",
   description:
     "Return the one-hop neighborhood of a node — directly connected nodes, optionally filtered by " +
-    "relationship type and direction. Org + workspace scoped. Read-only; no Cypher required.",
+    "relationship type and direction. Customer-context only, org + workspace scoped. Read-only; no Cypher required.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
