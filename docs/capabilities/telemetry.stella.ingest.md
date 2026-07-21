@@ -13,7 +13,7 @@ Accept content-free Stella execution rollups for an explicitly enrolled Oxagen E
 - Content type: `application/json`
 - Maximum request body: 256 KiB
 
-The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and cannot change the storage tenant or idempotency key.
+The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and are not used by Oxagen to derive or partition the deduplication key. Oxagen uses the submitted `event_id` as the tenant-scoped deduplication key and cannot verify the client's hash preimage.
 
 ## Access and governance
 
