@@ -3,7 +3,7 @@
  *
  *   oxagen agent list            List available agents (name, description, source)
  *   oxagen agent show <name>     Show an agent's full definition + system prompt
- *   oxagen agent new <name>      Scaffold .oxagen/agents/<name>.md
+ *   oxagen agent new <name>      Scaffold .oxagen/agents/<name>.toml
  *
  * Run a single turn as an agent with `oxagen --agent <name> "<prompt>"`.
  *

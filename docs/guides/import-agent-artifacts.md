@@ -300,6 +300,26 @@ decision applied, the review state, the outcome, and every diagnostic. Receipts
 are written for failures and skips too, not only successes — a skipped conflict
 is a recorded outcome, not a silent no-op.
 
+### Outcomes
+
+| Outcome | Meaning |
+| --- | --- |
+| `imported` | Written (or, in a dry run, would be written). |
+| `unchanged` | An identical artifact is already at the destination. Nothing written, no conflict prompt. |
+| `skipped` | A real conflict was left alone, by default or by decision. |
+| `rejected` | The source could not be converted — invalid frontmatter, a reference escaping the bundle, or a failed write. |
+
+`unchanged` is what makes reruns readable: a second import over an
+already-converted tree reports every item as `unchanged` rather than burying a
+genuine conflict among identical "skipped" lines. Comparison is by canonical
+artifact hash, so a destination rewritten by an older serializer still counts as
+unchanged.
+
+`rejected` items are isolated. A hostile or corrupt source — a skill whose
+`references` point outside its bundle, say — is recorded with an
+`artifact_rejected` diagnostic and the run continues; it can neither be
+activated nor hide its valid siblings. Its source file is left untouched.
+
 ## Exit codes
 
 | Code | Meaning |
