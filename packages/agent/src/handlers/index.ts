@@ -114,6 +114,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   publish_agent_def: () => import("./agent.definition.publish"),
   get_agent_def: () => import("./agent.definition.get"),
   list_agent_defs: () => import("./agent.definition.list"),
+  archive_agent_def: () => import("./agent.definition.archive"),
   get_a2a_card: () => import("./a2a.card.get"),
   deploy_agent: () => import("./agent.deploy"),
   create_trigger: () => import("./agent.trigger.create"),

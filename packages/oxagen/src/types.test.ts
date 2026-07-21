@@ -3,7 +3,9 @@ import {
   DEFAULT_SURFACES,
   getSurfaces,
   isDenial,
+  type CheckedContext,
   type DenialResponse,
+  type ResolvedPrincipal,
 } from "./types";
 
 describe("isDenial", () => {
@@ -63,7 +65,10 @@ describe("isDenial", () => {
 
 describe("getSurfaces", () => {
   it("returns the declared surfaces when present", () => {
-    expect(getSurfaces({ surfaces: ["api", "agent"] })).toEqual(["api", "agent"]);
+    expect(getSurfaces({ surfaces: ["api", "agent"] })).toEqual([
+      "api",
+      "agent",
+    ]);
   });
 
   it("falls back to DEFAULT_SURFACES when surfaces is undefined", () => {
@@ -73,5 +78,71 @@ describe("getSurfaces", () => {
 
   it("DEFAULT_SURFACES is the public api+mcp pair", () => {
     expect(DEFAULT_SURFACES).toEqual(["api", "mcp"]);
+  });
+});
+
+describe("CheckedContext — agent-run principal plumbing (docs/specs/agent-rbac)", () => {
+  const orgId = "org_1";
+  const workspaceId = "ws_1";
+
+  const human: ResolvedPrincipal = {
+    id: "prn_human_1",
+    kind: "human",
+    orgId,
+    workspaceId,
+  };
+  const agent: ResolvedPrincipal = {
+    id: "prn_agent_1",
+    kind: "agent",
+    orgId,
+    workspaceId,
+  };
+
+  it("carries both the agent principal and the invoking human principal, discriminated by principalKind='agent'", () => {
+    const ctx: CheckedContext = {
+      orgId,
+      workspaceId,
+      userId: "u_1",
+      apiKeyId: null,
+      requestId: "req_1",
+      surface: "runner",
+      messageId: null,
+      principalKind: "agent",
+      agentPrincipal: agent,
+      humanPrincipal: human,
+    };
+
+    expect(ctx.principalKind).toBe("agent");
+    expect(ctx.agentPrincipal?.kind).toBe("agent");
+    expect(ctx.humanPrincipal?.kind).toBe("human");
+    // The two principals are distinct rows — an agent run never collapses
+    // to a single principal.
+    expect(ctx.agentPrincipal?.id).not.toBe(ctx.humanPrincipal?.id);
+  });
+
+  it("leaves agentPrincipal/humanPrincipal undefined for a direct human invocation", () => {
+    const ctx: CheckedContext = {
+      orgId,
+      workspaceId,
+      userId: "u_1",
+      apiKeyId: null,
+      requestId: "req_2",
+      surface: "api",
+      messageId: null,
+      principal: human,
+    };
+
+    expect(ctx.principalKind).toBeUndefined();
+    expect(ctx.agentPrincipal).toBeUndefined();
+    expect(ctx.humanPrincipal).toBeUndefined();
+    expect(ctx.principal).toEqual(human);
+  });
+
+  it("does not persist a new principal per run — no runId/principal-row fields on ResolvedPrincipal", () => {
+    // ResolvedPrincipal is the identity row shape (id/kind/org/workspace) —
+    // it carries no run lineage. Lineage lives on the durable run row
+    // (runId/parentRunId), never fabricated into a new principal here.
+    const keys = Object.keys(agent);
+    expect(keys).toEqual(["id", "kind", "orgId", "workspaceId"]);
   });
 });

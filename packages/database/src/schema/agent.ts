@@ -55,6 +55,12 @@ export const agents = agentSchema.table(
     // canonicalization as agent_versions.checksum). When it no longer matches the
     // current config, the summary is stale and gets regenerated.
     summaryChecksum: text("summary_checksum"),
+    // The agent's IAM identity (iam.principals kind='agent'), provisioned once
+    // at agent.definition.create and soft-deleted together with the agent
+    // (docs/specs/agent-rbac/spec.md §3.1: one principal per agent IDENTITY,
+    // not per version/run). App-enforced — no FK across the agent/iam schema
+    // boundary per CLAUDE.md storage rules.
+    principalId: uuid("principal_id"),
   },
   (t) => ({
     // NON-partial on purpose: covers soft-deleted rows too, so a slug a
@@ -72,6 +78,8 @@ export const agents = agentSchema.table(
       t.workspaceId,
       t.deploymentStatus,
     ),
+    // Resolve the owning agent from its principal (soft-delete-on-archive path).
+    principalIdx: index("agents_principal_idx").on(t.principalId),
     statusCheck: check(
       "agents_status_check",
       sql`${t.status} IN ('draft', 'active', 'archived')`,

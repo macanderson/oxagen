@@ -117,6 +117,20 @@
       }
     },
     {
+      "name": "archive_agent_def",
+      "file": "agent.definition.archive.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "create_agent_def",
       "file": "agent.definition.create.ts",
       "domain": "agent",

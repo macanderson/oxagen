@@ -28,7 +28,10 @@ export async function agentDefinitionCreateHandler(
 
   // Reject attempts to create an agent that masquerades as a product-managed
   // built-in (either by claiming the reserved agentType or the reserved slug).
-  if (isManagedAgentType(input.agentType) || input.slug === INTERACTIVE_AGENT_SLUG) {
+  if (
+    isManagedAgentType(input.agentType) ||
+    input.slug === INTERACTIVE_AGENT_SLUG
+  ) {
     throw new AgentManagedReadOnlyError(input.slug);
   }
 
@@ -38,6 +41,26 @@ export async function agentDefinitionCreateHandler(
   const userId = ctx.userId;
 
   return withTenantDb(async (tx) => {
+    // Provision the agent's IAM identity FIRST: exactly one iam.principals row
+    // (kind='agent', parentUserId=creator) per agent IDENTITY — not per
+    // version, not per run (docs/specs/agent-rbac/spec.md §3.1). The principal
+    // id is persisted on the agent row below so the two are created together
+    // and never drift.
+    const [principal] = await tx
+      .insert(schema.principals)
+      .values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        kind: "agent",
+        displayName: input.name,
+        status: "active",
+        parentUserId: userId,
+        createdByUserId: userId,
+        updatedByUserId: userId,
+      })
+      .returning({ id: schema.principals.id });
+    if (!principal) throw new Error("principals insert failed");
+
     const [agent] = await tx
       .insert(schema.agents)
       .values({
@@ -50,6 +73,7 @@ export async function agentDefinitionCreateHandler(
         agentType: input.agentType,
         status: "draft",
         deploymentStatus: "inactive",
+        principalId: principal.id,
         createdByUserId: userId,
         updatedByUserId: userId,
       })

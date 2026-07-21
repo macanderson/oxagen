@@ -43,6 +43,7 @@ import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
 import { agentDefinitionList } from "./agent.definition.list";
+import { agentDefinitionArchive } from "./agent.definition.archive";
 import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentTriggerCreate } from "./agent.trigger.create";
@@ -561,6 +562,7 @@ export {
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  agentDefinitionArchive,
   a2aCardGet,
   agentDeploy,
   agentTriggerCreate,
@@ -917,6 +919,7 @@ export const contracts = [
   agentDefinitionPublish,
   agentDefinitionGet,
   agentDefinitionList,
+  agentDefinitionArchive,
   agentDeploy,
   agentTriggerCreate,
   agentTriggerUpdate,

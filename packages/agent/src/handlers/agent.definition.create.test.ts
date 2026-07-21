@@ -39,6 +39,7 @@ beforeEach(() => fake.reset());
 describe("agent.definition.create handler", () => {
   it("inserts the agent row and v1 version, returning identity", async () => {
     fake.enqueue(
+      [{ id: "prn-1" }], // principals insert returning
       [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert returning
       [{ version: 1 }], // agent_versions insert returning
     );
@@ -54,8 +55,15 @@ describe("agent.definition.create handler", () => {
     ).rejects.toThrow(/authenticated user/);
   });
 
+  it("throws when the principals insert returns no row", async () => {
+    fake.enqueue([]); // principals insert returns nothing
+    await expect(agentDefinitionCreateHandler(INPUT, CTX)).rejects.toThrow(
+      /principals insert failed/,
+    );
+  });
+
   it("throws when the agents insert returns no row", async () => {
-    fake.enqueue([]); // agents insert returns nothing
+    fake.enqueue([{ id: "prn-1" }], []); // principals ok, agents insert returns nothing
     await expect(agentDefinitionCreateHandler(INPUT, CTX)).rejects.toThrow(
       /agents insert failed/,
     );
@@ -64,7 +72,10 @@ describe("agent.definition.create handler", () => {
   it("rejects a config that violates the schema", async () => {
     await expect(
       agentDefinitionCreateHandler(
-        { ...INPUT, config: { ...CONFIG, graph: { ontologyId: "x" } } as never },
+        {
+          ...INPUT,
+          config: { ...CONFIG, graph: { ontologyId: "x" } } as never,
+        },
         CTX,
       ),
     ).rejects.toThrow();
@@ -76,7 +87,9 @@ describe("agent.definition.create handler", () => {
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
-    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+    expect((err as AgentManagedReadOnlyError).code).toBe(
+      "agent_managed_read_only",
+    );
   });
 
   it("throws AgentManagedReadOnlyError when slug collides with the built-in 'qa-chat'", async () => {
@@ -85,7 +98,9 @@ describe("agent.definition.create handler", () => {
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
-    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+    expect((err as AgentManagedReadOnlyError).code).toBe(
+      "agent_managed_read_only",
+    );
   });
 
   it("throws before any DB write when identity is reserved", async () => {

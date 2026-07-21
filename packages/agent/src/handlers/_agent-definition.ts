@@ -19,9 +19,7 @@ import {
 export class AgentManagedReadOnlyError extends Error {
   readonly code = MANAGED_AGENT_READONLY_CODE;
   constructor(identifier: string) {
-    super(
-      `Agent "${identifier}" is managed by Oxagen and cannot be modified.`,
-    );
+    super(`Agent "${identifier}" is managed by Oxagen and cannot be modified.`);
     this.name = "AgentManagedReadOnlyError";
   }
 }
@@ -119,6 +117,9 @@ export interface AgentRow {
   summary: string | null;
   /** SHA-256 of the config `summary` was derived from; null until summarized. */
   summaryChecksum: string | null;
+  /** The agent's IAM identity (iam.principals kind='agent'); null for
+   * agents created before principal provisioning shipped, if any survive. */
+  principalId: string | null;
 }
 
 const agentColumns = {
@@ -134,6 +135,7 @@ const agentColumns = {
   avatarUrl: schema.agents.avatarUrl,
   summary: schema.agents.summary,
   summaryChecksum: schema.agents.summaryChecksum,
+  principalId: schema.agents.principalId,
 } as const;
 
 /**
@@ -234,8 +236,12 @@ export async function resolveAgentForA2A(
       avatarUrl: row.avatarUrl,
       summary: row.summary,
       summaryChecksum: row.summaryChecksum,
+      principalId: row.principalId,
       activeVersion: row.activeVersionId2
-        ? { id: row.activeVersionId2, instructions: config?.instructions ?? null }
+        ? {
+            id: row.activeVersionId2,
+            instructions: config?.instructions ?? null,
+          }
         : null,
     };
   };

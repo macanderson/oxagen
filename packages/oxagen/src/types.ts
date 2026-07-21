@@ -322,6 +322,33 @@ export interface CheckedContext extends CapabilityContext {
    * as `ctx.principal ?? null` and must treat null/absent identically.
    */
   principal?: ResolvedPrincipal | null;
+  /**
+   * Discriminates who is acting in this run: 'human' for a direct human
+   * request, 'agent' for a deployed agent run. Undefined/absent means the
+   * capability was invoked outside a run (no agent delegation in play) —
+   * treat the same as 'human' for enforcement purposes.
+   *
+   * docs/specs/agent-rbac/spec.md §3.1: a deployed agent's run carries BOTH
+   * its own principal AND the invoking human's principal — an agent acts
+   * FOR a human, never in place of one. Run lineage (runId/parentRunId)
+   * already lives on the durable run row; this is per-invocation context
+   * only, never persisted as a new principal row.
+   */
+  principalKind?: "human" | "agent";
+  /**
+   * The AGENT principal (iam.principals kind='agent') driving this run, when
+   * principalKind='agent'. Undefined for human-originated invocations.
+   */
+  agentPrincipal?: ResolvedPrincipal | null;
+  /**
+   * The invoking HUMAN principal an agent run acts on behalf of — the
+   * delegation ceiling every agent-run effective-permission resolution
+   * intersects against (packages/oxagen/src/iam/resolve.ts
+   * resolveAgentEffectivePermissions). Populated whenever principalKind is
+   * 'agent'; undefined for direct human invocations, where `principal`
+   * above already carries the human identity.
+   */
+  humanPrincipal?: ResolvedPrincipal | null;
 }
 
 export interface CapabilityManifestEntry {
