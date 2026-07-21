@@ -32,6 +32,14 @@ export {
 export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
 export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";
+// Canonical JSON + content hashing — needed by handlers that compute a stable
+// digest of a structured payload (e.g. the run-evidence ledger's manifest_digest
+// for idempotent resubmission). Keys sorted recursively, array order preserved.
+export {
+  canonicalize,
+  canonicalJson,
+  contentHashOf,
+} from "./storage-manifest/canonical-json";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,

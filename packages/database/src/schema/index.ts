@@ -19,6 +19,8 @@ export * from "./plugin";
 export * from "./notification";
 export * from "./privacy";
 export * from "./ingestion";
+export * from "./code-projection";
+export * from "./run-evidence";
 export * from "./schema-registry";
 export * from "./environments";
 export * from "./ai";
