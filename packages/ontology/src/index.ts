@@ -8,6 +8,7 @@ export type { GraphScope } from "./graph-scope";
 export {
   oversampledLimit,
   DEFAULT_OVERSAMPLE_FACTOR,
+  SCOPE_OVERSAMPLE_FACTOR,
   DEFAULT_OVERSAMPLE_CAP,
 } from "./ann";
 export { recordExecutionInGraph } from "./mutations/record-execution";

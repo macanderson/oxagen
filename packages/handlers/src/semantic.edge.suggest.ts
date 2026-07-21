@@ -5,6 +5,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { logger } from "./logger";
 import { parseNodeProperties, buildRelationshipProperties } from "./lib/semantic-edge-refs";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
 
 /**
  * semantic.edge.suggest handler.
@@ -19,8 +20,28 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
 ) => {
   const { confidenceMin, confidenceMax, limit } = input;
 
+  // Agent RBAC Phase 3 (spec §3.6 + §6 Q3): filter pending proposals to the
+  // agent's effective GraphScope so an out-of-scope inferred edge is never even
+  // surfaced for review (fail-fast at proposal-review time). The InferredEdge
+  // carries the PROPOSED target label + relationship type as PROPERTIES
+  // (`ie.targetType` / `ie.relationshipType`), so those are what the reserved
+  // scope markers filter — REAL predicates, added only for constrained
+  // dimensions. `undefined` for humans → byte-identical pass-through.
+  const scope = effectiveGraphScope(ctx, semanticEdgeSuggest.name);
+  const scoped = scope !== undefined;
+  const scopeLabelClause =
+    scope?.labels !== undefined ? "AND ie.targetType IN $__scopeLabels" : "";
+  const scopeRelClause =
+    scope?.relationshipTypes !== undefined
+      ? "AND ie.relationshipType IN $__scopeRelTypes"
+      : "";
+  // The seam fails closed on a parameterized `LIMIT $x` under a maxNodes budget,
+  // so an agent-scoped read uses a literal LIMIT (`limit` is contract-bounded
+  // 1–250). Humans keep the BigInt-typed `$limit` parameter (byte-identical).
+  const limitLine = scoped ? `LIMIT ${limit}` : "LIMIT $limit";
+
   const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
-    const sess = scopedSession();
+    const sess = scopedSession(scope);
     try {
       // OPTIONAL MATCH the source node by its publicId so we can cite it by its
       // human label + properties (never a bare UUID). publicId is unique, so the
@@ -31,6 +52,8 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
         `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId, approvalStatus: 'pending'})
          WHERE ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
            AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+           ${scopeLabelClause}
+           ${scopeRelClause}
          OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN
            ie.id               AS id,
@@ -47,13 +70,13 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
            ie.llmModel         AS llmModel,
            toString(ie.inferredAt) AS inferredAt
          ORDER BY ie.confidence DESC
-         LIMIT $limit`,
+         ${limitLine}`,
         {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           confidenceMin: confidenceMin ?? null,
           confidenceMax: confidenceMax ?? null,
-          limit: BigInt(limit),
+          ...(scoped ? {} : { limit: BigInt(limit) }),
         },
       );
 
@@ -111,11 +134,14 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
       });
 
 
-      // Count query (separate, cheaper than counting all via COLLECT)
+      // Count query (separate, cheaper than counting all via COLLECT). Carries
+      // the SAME scope predicates so the total reflects only in-scope proposals.
       const countRow = await sess.run(
         `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId, approvalStatus: 'pending'})
          WHERE ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
            AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+           ${scopeLabelClause}
+           ${scopeRelClause}
          RETURN count(ie) AS total`,
         {
           orgId: ctx.orgId,
@@ -141,6 +167,8 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
       returned: result.suggestions.length,
       confidenceMin,
       confidenceMax,
+      // Observability (spec §5): proposals were filtered to the agent's scope.
+      scopeApplied: scoped,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     },

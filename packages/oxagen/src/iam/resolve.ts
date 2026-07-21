@@ -829,7 +829,14 @@ function intersectBudget(
   return cleaned;
 }
 
-function intersectGraphScope(
+/**
+ * Intersect two optional GraphScope ceilings (labels/rel-types set-intersect,
+ * mode min, budget element-wise min). Exported for the ONE shared
+ * effective-scope computation downstream (role ceiling ∩ agent `graphAccess`
+ * declaration, spec §3.3/§3.6) — packages/handlers' effectiveGraphScope helper.
+ * Do not reimplement this intersection anywhere else.
+ */
+export function intersectGraphScope(
   a: GraphScope | undefined,
   b: GraphScope | undefined,
 ): GraphScope | undefined {

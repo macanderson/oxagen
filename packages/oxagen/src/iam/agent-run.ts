@@ -20,6 +20,8 @@
 // rest of @oxagen/oxagen/iam.
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
+// Type-only — erased at compile time, so no runtime cycle with agent-schema.
+import type { GraphAccess } from "../agent-schema";
 import {
   resolveAgentEffectivePermissions,
   type EffectivePermissions,
@@ -88,6 +90,17 @@ export interface AgentRunIAMContext {
   readonly runId: string;
   /** Parent run for subagent dispatches; null/absent for top-level runs. */
   readonly parentRunId?: string | null;
+  /**
+   * The agent DEFINITION's `graphAccess` declaration (agent-schema.ts),
+   * populated by the run driver from the deployed definition version when the
+   * run context is constructed. Phase 3 (spec §3.6) intersects this — the
+   * *request* — with the role ceiling (`resolution`'s resourceScope.graph) to
+   * produce the effective GraphScope every ontology / semantic graph query
+   * runs under. Absent ⇒ the declaration contributes no restriction (the role
+   * ceiling alone applies); a missing declaration can never widen access
+   * because the ceiling still binds.
+   */
+  readonly graphAccess?: GraphAccess;
   /**
    * Per-run resolution cache. Written by the first kernel IAM check of the
    * run (packages/iam/src/check-iam.ts); read by every subsequent invoke()

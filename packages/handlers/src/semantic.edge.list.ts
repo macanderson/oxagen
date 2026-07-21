@@ -6,6 +6,7 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { edgeValidityReturn, readEdgeValidity, type EdgeValidity } from "@oxagen/ontology/temporal";
 import { logger } from "./logger";
 import { parseNodeProperties, buildRelationshipProperties } from "./lib/semantic-edge-refs";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
 
 /**
  * semantic.edge.list handler.
@@ -20,8 +21,26 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
 ) => {
   const { type, sourceId, confidenceMin, confidenceMax, limit, offset } = input;
 
+  // Agent RBAC Phase 3 (spec §3.6): constrain the browse to the agent's
+  // effective GraphScope on the proposed target label + relationship type
+  // (InferredEdge properties). `undefined` for humans → byte-identical.
+  const scope = effectiveGraphScope(ctx, semanticEdgeList.name);
+  const scoped = scope !== undefined;
+  const scopeLabelClause =
+    scope?.labels !== undefined ? "AND ie.targetType IN $__scopeLabels" : "";
+  const scopeRelClause =
+    scope?.relationshipTypes !== undefined
+      ? "AND ie.relationshipType IN $__scopeRelTypes"
+      : "";
+  // Literal LIMIT under an agent scope (the seam fails closed on `LIMIT $x`
+  // when a maxNodes budget is set); `limit` is contract-bounded. SKIP stays a
+  // parameter — the seam only clamps LIMIT.
+  const limitLine = scoped
+    ? `SKIP $offset LIMIT ${limit}`
+    : "SKIP $offset LIMIT $limit";
+
   const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
-    const sess = scopedSession();
+    const sess = scopedSession(scope);
     try {
       // Parallelize page and count queries (independent, same filter parameters)
       const params = {
@@ -32,7 +51,7 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
         confidenceMin: confidenceMin ?? null,
         confidenceMax: confidenceMax ?? null,
         offset: BigInt(offset),
-        limit: BigInt(limit),
+        ...(scoped ? {} : { limit: BigInt(limit) }),
       };
 
       // Rows then count, run SEQUENTIALLY on the one scoped session — NOT via
@@ -47,6 +66,8 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
              AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
              AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
              AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+             ${scopeLabelClause}
+             ${scopeRelClause}
            OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
            OPTIONAL MATCH (src)-[matEdge {inferredEdgeId: ie.id}]->(:GraphNode)
            RETURN
@@ -68,8 +89,7 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
              toString(ie.inferredAt)  AS inferredAt,
              ${edgeValidityReturn("matEdge", "edge")}
            ORDER BY ie.confidence DESC
-           SKIP $offset
-           LIMIT $limit`,
+           ${limitLine}`,
         params,
       );
       const countRow = await sess.run(
@@ -78,6 +98,8 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
              AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
              AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
              AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+             ${scopeLabelClause}
+             ${scopeRelClause}
            RETURN count(ie) AS total`,
         params,
       );
@@ -159,6 +181,7 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
       returned: result.edges.length,
       type,
       sourceId,
+      scopeApplied: scoped,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     },
