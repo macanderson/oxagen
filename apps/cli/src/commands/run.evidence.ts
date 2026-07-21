@@ -82,10 +82,10 @@ export async function handleRunEvidenceSubmit(
     return;
   }
 
-  cmd.data(result, (r) =>
-    r.deduplicated
-      ? `Evidence already recorded (deduplicated): ${r.manifestId}`
-      : `Submitted evidence manifest ${r.manifestId} (digest ${r.manifestDigest.slice(0, 12)}…)`,
+  cmd.data(result, () =>
+    result.deduplicated
+      ? `Evidence already recorded (deduplicated): ${result.manifestId}`
+      : `Submitted evidence manifest ${result.manifestId} (digest ${result.manifestDigest.slice(0, 12)}…)`,
   );
 }
 
