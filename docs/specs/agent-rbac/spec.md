@@ -38,7 +38,7 @@ Out of scope (deferred):
 ## 2. Goals and acceptance criteria
 
 1. Every non-managed agent has exactly one `iam.principals` row (`kind='agent'`, `parentUserId` = creator) created at `agent.definition.create` and soft-deleted with the agent.
-2. An agent with no role assignment behaves exactly as today (back-compat default role, see §3.2) — zero behavior change until a role is attached.
+2. Every agent is assigned exactly one of the three system roles at creation (`Agent Contributor` by default) or a custom role (enterprise) — there is no unassigned/legacy state.
 3. A capability call from an agent run resolves IAM against the agent principal ∩ invoking-user principal; a `deny` blocks the tool at materialization AND at `invoke()`; `require_approval` routes through the existing consent/approval flow.
 4. A graph query issued by an agent whose role scopes labels/relationship types never returns a node/edge outside that scope, and never exceeds the role's traversal budget — enforced inside `scopedSession`, not in callers.
 5. An agent may reach only MCP servers/tools its role's glob rules allow; `ask` rules reuse the first-use consent flow.
@@ -54,18 +54,17 @@ Out of scope (deferred):
 
 Rejected alternative — per-run principals: explodes the principal table, breaks role-assignment UX, and lineage already lives in run records.
 
-### 3.2 Roles, defaults, and the back-compat role
+### 3.2 Roles and defaults — exactly three, no back-compat role
 
-Reuse `iam.roles` + `iam.role_grants` + `iam.principal_role_assignments` unchanged for capability grants. Add four **system default agent roles**, seeded by `seed-iam-defaults.ts`:
+Reuse `iam.roles` + `iam.role_grants` + `iam.principal_role_assignments` unchanged for capability grants. Add exactly **three system default agent roles**, seeded by `seed-iam-defaults.ts`. Per §6 open-question 1 (pre-launch, no customers, no backwards-compatibility path — reset instead of migrate), there is **no** fourth "Agent Legacy (unrestricted)" role and **no backfill**: every agent, existing or new, is governed by one of these three from day one.
 
-| Role                          | Intent             | Capability posture                                                            | Graph posture                                                            | MCP posture                          |
-| ----------------------------- | ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------ |
-| `Agent Observer`              | read/answer only   | `category in {read, introspection, graph, memory}` allow; mutations deny      | labels/rels: as-configured, `mode=read` forced                           | deny all                             |
-| `Agent Contributor`           | standard worker    | reads allow; `riskLevel=low\|medium` mutations allow; `high` require_approval | as-configured                                                            | allow listed servers, `ask` per tool |
-| `Agent Operator`              | trusted automation | Contributor + `high` allow except `category=vcs`/billing/security             | as-configured incl. `extend`                                             | allow listed servers/tools           |
-| `Agent Legacy (unrestricted)` | back-compat        | mirror of today's behavior: everything the **invoking user** may do           | unenforced scopes ignored → enforced as declared (§4 Phase 3 flips this) | today's additive behavior            |
+| Role                | Intent             | Capability posture                                                                                                                                                       | Graph posture                    | MCP posture                          |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------- |
+| `Agent Observer`    | read/answer only    | `category in {read, introspection, graph, memory}` allow; every mutation deny                                                                                            | `mode=read` forced (ceiling)      | deny all (`pattern:"*" → deny`)       |
+| `Agent Contributor` | standard worker     | reads allow; mutations: a capability's own `requiresApproval:true` always wins → `require_approval`; else `riskLevel=low\|medium` allow, `high`/undeclared → `require_approval` | as-configured (no extra ceiling)  | `ask` per tool (`pattern:"*" → ask`)  |
+| `Agent Operator`    | trusted automation  | Contributor posture, plus `riskLevel=high` allow — **except** `category ∈ {vcs, billing, secret}`, which stays at Contributor's posture (a capability's `requiresApproval:true` still wins there too) | as-configured incl. `mode=extend` | allow (`pattern:"*" → allow`; agent config still narrows which servers exist) |
 
-`Agent Legacy` is auto-assigned to existing agents by backfill so shipping enforcement changes nothing until a workspace opts an agent into a real role. New agents created after Phase 1 default to `Agent Contributor`.
+New agents default to `Agent Contributor`; there is no "no role assigned" state to reason about since every agent is assigned one of the three at creation.
 
 ### 3.3 Resource scopes ride on grants as typed conditions
 
@@ -89,7 +88,7 @@ resourceScope: {
 
 ### 3.4 Enforcement runs at every tier — this is not enterprise ACL
 
-`checkIAM` short-circuits to unconditional allow for non-enterprise orgs (`canAccessACL(tier)`). Decision: **agent-principal resolution bypasses that fast-path.** Rationale: agent RBAC is a core product safety property (an agent is an unattended automation; a human clicking a button is not), and it is the wedge's "governed" claim. Tier gating applies only to _custom_ agent roles: non-enterprise orgs get the four system roles; custom role authoring stays enterprise. Implementation: `checkIAM` takes `principalKind`; the fast-path applies only when `principalKind='human'`.
+`checkIAM` short-circuits to unconditional allow for non-enterprise orgs (`canAccessACL(tier)`). Decision: **agent-principal resolution bypasses that fast-path.** Rationale: agent RBAC is a core product safety property (an agent is an unattended automation; a human clicking a button is not), and it is the wedge's "governed" claim. Tier gating applies only to _custom_ agent roles: non-enterprise orgs get the three system roles; custom role authoring stays enterprise. Implementation: `checkIAM` takes `principalKind`; the fast-path applies only when `principalKind='human'`.
 
 ### 3.5 Deny wins, and the two-layer gate stays
 
@@ -109,35 +108,35 @@ Do not invent a second matcher. `evaluatePermission(serverName, toolName, rules)
 
 ## 4. Phase ordering and dependencies
 
-Phases land independently, each behind its own flag, each with back-compat defaults. Order: 1 → 2 → (3 ∥ 4) → 5.
+Phases land independently, each behind its own flag. Order: 1 → 2 → (3 ∥ 4) → 5.
 
 ### Phase 1 — Agent principals + role spine
 
-Scope: provision principal on `agent.definition.create` (backfill script for existing agents → `Agent Legacy`); seed four system roles; `resource_scope` condition type + resolver support (resolution only, no enforcement); contracts `agent.role.assign`, `agent.role.revoke`, `agent.role.list`, `agent.role.get` (API+MCP parity, docs); audit events carry `principal_kind`.
+Scope: provision principal on `agent.definition.create`, assigned `Agent Contributor` by default (no backfill needed — no pre-existing agents to migrate, per §6 open-question 1); seed the three system roles; `resource_scope` condition type + resolver support (resolution only, no enforcement); contracts `agent.role.assign`, `agent.role.revoke`, `agent.role.list`, `agent.role.get` (API+MCP parity, docs); audit events carry `principal_kind`.
 Acceptance: principals exist for all live agents; assigning/revoking roles round-trips; resolver unit tests cover intersection + delegation ceiling; zero runtime behavior change.
-Risks: principal backfill on shared local DB (verify with SELECT, not logs). Rollback: roles unassigned → `Agent Legacy` semantics; principal rows are inert.
+Risks: none — pre-launch reset, no legacy data to preserve. Rollback: roles unassigned → capability resolution has no grant to match, defaults to `defaultEffect` (fail-closed for most capabilities).
 
 ### Phase 2 — Capability enforcement (tools + kernel)
 
 Scope: run context carries resolved agent grants; `materializeTools.allowlist` populated restrictively; kernel `invoke()` resolves agent principal (∩ user) when `ctx.principalKind='agent'`, bypassing the tier fast-path per §3.4; `require_approval` routes to the existing approval flow (`agent.approval.resolve`).
-Acceptance: an `Agent Observer` cannot call a mutation capability even when named directly in a poisoned prompt (kernel-level test); legacy-role agents unchanged; denial audit rows in ClickHouse.
+Acceptance: an `Agent Observer` cannot call a mutation capability even when named directly in a poisoned prompt (kernel-level test); denial audit rows in ClickHouse.
 Risks: latency — one resolution per run, cached; fast-path change is `principalKind`-guarded so human traffic is untouched. Rollback: flag off → allowlist never populated, kernel skips agent resolution.
 
 ### Phase 3 — Graph scope enforcement
 
 Scope: `GraphScope` support in `scopedSession` + predicate/budget injection in `ontology.*` / `semantic.*` query builders; effective scope = role ceiling ∩ `graphAccess` declaration (finally enforcing `scopeToTypes` and `budget`); subagent narrowing on dispatch.
-Acceptance: integration test against live Neo4j proving out-of-scope labels/rel-types never return; budget clamps observable; `Agent Legacy` + humans unaffected.
+Acceptance: integration test against live Neo4j proving out-of-scope labels/rel-types never return; budget clamps observable.
 Risks: Cypher predicate injection must not break existing query plans — measure; label filters interact with vector-index entry points (filter post-ANN with oversampling, per the known ANN pattern). Rollback: scope param optional; flag off restores pass-through.
 
 ### Phase 4 — MCP + skills enforcement
 
 Scope: shared glob engine; role `mcp.rules` evaluated in `applyAgentBinding` (intersection) and per-call (`ask` → consent with agent principal); `skills.slugs` filter on skill index + `agent.skill.load`; `agents.refs` filter on `agent.subagent.dispatch`.
 Acceptance: e2e — agent with `deny github:*` cannot see or call those tools; consent rows record the agent principal; skill index in the system prompt excludes unauthorized slugs.
-Risks: consent UX confusion between user- and agent-scoped consents — label clearly. Rollback: flag off → today's additive union.
+Risks: consent UX confusion between user- and agent-scoped consents — label clearly. Rollback: flag off → glob-rule intersection skipped, `applyAgentBinding` falls back to the agent config's own server list unfiltered.
 
 ### Phase 5 — Surfaces: builder, review, AI-assisted setup
 
-Scope: role picker in the agent builder (create + edit) with the four system roles + custom (enterprise); the review step renders effective scope (role ∩ config) as the single accountability view; `agent.definition.suggest` proposes the narrowest adequate role (`suggestedRole` output field, additive change) and the create flow assigns it on draft save; `docs/capabilities/` + user docs.
+Scope: role picker in the agent builder (create + edit) with the three system roles + custom (enterprise); the review step renders effective scope (role ∩ config) as the single accountability view; `agent.definition.suggest` proposes the narrowest adequate role (`suggestedRole` output field, additive change) and the create flow assigns it on draft save; `docs/capabilities/` + user docs.
 Acceptance: e2e with screenshots — describe → generate → review shows proposed role → save draft → agent lists with role badge; non-managers cannot assign roles above their own grants (delegation ceiling in UI and contract).
 Risks: none structural. Rollback: UI hides picker; drafts default to `Agent Contributor`.
 
@@ -149,10 +148,9 @@ Risks: none structural. Rollback: UI hides picker; drafts default to `Agent Cont
 
 ## 6. Open questions
 
-1-Question: Should `Agent Legacy` be time-boxed (auto-migrate to `Agent Contributor` after N releases)? Recommend yes,
-  with a workspace-level override.
+1-Question: Should the system provide a back-compat/unrestricted role and time-box it (auto-migrate to `Agent Contributor` after N releases)?
 1-Answer: No - we need to simply reset the entire system before going live we have no customers so we don't need
-  to do backwards compatibility work - build the feature as if it all should work and we will address any data issues between here and launch as one offs.
+  to do backwards compatibility work - build the feature as if it all should work and we will address any data issues between here and launch as one offs. Resolved: exactly three system roles (Observer/Contributor/Operator), no fourth "Agent Legacy" role, no backfill.
 2-Question: Do A2A inbound tasks (`/a2a`) map to the target agent's principal alone, or intersect with the caller's API-key scope?
 2-Answer: Intersect to be consistent with the delegation.
 3-Question: Graph scope for `extend` proposals: are proposed nodes/edges validated against the label allowlist at proposal time or approval time?
@@ -162,3 +160,4 @@ Risks: none structural. Rollback: UI hides picker; drafts default to `Agent Cont
 ## Changelog
 
 - 2026-07-07 — Initial proposal (recommendation + four-seam design + five phases).
+- 2026-08-06 — Reconciled §3.2/§4/§6 with the landed decision (§6 open-question 1): exactly three system roles (Observer/Contributor/Operator), no fourth "Agent Legacy (unrestricted)" role, no backfill — matches `tools/scripts/seed-iam-defaults.ts` and migration `20260806120000_agent_rbac_role_grants_conditions.sql`. Also documented that a capability's own `requiresApproval:true` always wins over riskLevel-derived effects for Contributor/Operator.
