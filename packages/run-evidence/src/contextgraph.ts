@@ -1,10 +1,15 @@
 import { z } from "zod";
+import { snapshotJsonWire } from "./json-wire.js";
 
 export const CONTEXTGRAPH_PROTOCOL_VERSION = "contextgraph/1.0-draft" as const;
 export const CONTEXTGRAPH_FIXTURE_PROFILE_VERSION = "1.1.0" as const;
 
 const u32Schema = z.number().int().min(0).max(0xffff_ffff);
 const finiteNumberSchema = z.number().finite();
+const f32NumberSchema = finiteNumberSchema.refine(
+  (value) => Number.isFinite(Math.fround(value)),
+  { message: "embedding value must be representable as a finite f32" },
+);
 
 export const contextFrameKindV1Schema = z.enum([
   "snippet",
@@ -30,7 +35,7 @@ export const contextProvenanceV1Schema = z
 export const contextFrameEmbeddingV1Schema = z
   .object({
     fingerprint: z.string(),
-    vector: z.array(finiteNumberSchema).optional(),
+    vector: z.array(f32NumberSchema).optional(),
   })
   .strict();
 
@@ -67,7 +72,7 @@ export const contextQueryV1Schema = z
   .object({
     goal: z.string(),
     query_text: z.string().optional(),
-    embedding: z.array(finiteNumberSchema).optional(),
+    embedding: z.array(f32NumberSchema).optional(),
     kinds: z.array(contextFrameKindV1Schema).default([]),
     anchors: z.array(z.string()).default([]),
     max_frames: u32Schema,
@@ -86,9 +91,9 @@ export type ContextFrameV1 = z.infer<typeof contextFrameV1Schema>;
 export type ContextQueryV1 = z.infer<typeof contextQueryV1Schema>;
 
 export function normalizeContextFrameV1(input: unknown): ContextFrameV1 {
-  return contextFrameV1Schema.parse(input);
+  return contextFrameV1Schema.parse(snapshotJsonWire(input));
 }
 
 export function normalizeContextQueryV1(input: unknown): ContextQueryV1 {
-  return contextQueryV1Schema.parse(input);
+  return contextQueryV1Schema.parse(snapshotJsonWire(input));
 }

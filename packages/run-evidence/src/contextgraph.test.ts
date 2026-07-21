@@ -76,6 +76,18 @@ function minimalQuery(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function restoreOwnProperty(
+  target: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): void {
+  if (descriptor === undefined) {
+    Reflect.deleteProperty(target, key);
+  } else {
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
 describe("locked Context Graph fixtures", () => {
   it("pins the upstream source, profile, exact file set, and file digests", () => {
     const manifest = readFixture<FixtureManifest>("manifest.json");
@@ -188,11 +200,17 @@ describe("normalizeContextFrameV1", () => {
     },
   );
 
-  it.each([-0.01, 1.01, Number.NaN, Number.POSITIVE_INFINITY])(
-    "rejects invalid score %s",
+  it.each([-0.01, 1.01])("rejects finite out-of-range score %s", (score) => {
+    expect(() => normalizeContextFrameV1(minimalFrame({ score }))).toThrow(
+      ZodError,
+    );
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects non-I-JSON score %s at the JSON-wire boundary",
     (score) => {
       expect(() => normalizeContextFrameV1(minimalFrame({ score }))).toThrow(
-        ZodError,
+        TypeError,
       );
     },
   );
@@ -278,8 +296,40 @@ describe("normalizeContextFrameV1", () => {
           },
         }),
       ),
-    ).toThrow(ZodError);
+    ).toThrow(TypeError);
   });
+
+  it("accepts the finite f32 bounds without rounding source numbers", () => {
+    const maxF32 = 3.4028234663852886e38;
+    const sourceValue = 0.1;
+
+    expect(Math.fround(maxF32)).toBe(maxF32);
+    expect(
+      normalizeContextFrameV1(
+        minimalFrame({
+          embedding: {
+            fingerprint: "embedding:v1",
+            vector: [maxF32, -maxF32, sourceValue],
+          },
+        }),
+      ).embedding?.vector,
+    ).toEqual([maxF32, -maxF32, sourceValue]);
+  });
+
+  it.each([3.4028236e38, -3.4028236e38])(
+    "rejects frame embedding value %s when f32 conversion overflows",
+    (value) => {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(Number.isFinite(Math.fround(value))).toBe(false);
+      expect(() =>
+        normalizeContextFrameV1(
+          minimalFrame({
+            embedding: { fingerprint: "embedding:v1", vector: [value] },
+          }),
+        ),
+      ).toThrow(ZodError);
+    },
+  );
 
   it.each(["id", "kind", "title", "content", "score", "token_cost"])(
     "rejects a missing required %s field",
@@ -370,8 +420,31 @@ describe("normalizeContextQueryV1", () => {
       normalizeContextQueryV1(
         minimalQuery({ embedding: [Number.NEGATIVE_INFINITY] }),
       ),
-    ).toThrow(ZodError);
+    ).toThrow(TypeError);
   });
+
+  it("accepts the finite f32 bounds without rounding source numbers", () => {
+    const maxF32 = 3.4028234663852886e38;
+    const sourceValue = 0.1;
+
+    expect(Math.fround(maxF32)).toBe(maxF32);
+    expect(
+      normalizeContextQueryV1(
+        minimalQuery({ embedding: [maxF32, -maxF32, sourceValue] }),
+      ).embedding,
+    ).toEqual([maxF32, -maxF32, sourceValue]);
+  });
+
+  it.each([3.4028236e38, -3.4028236e38])(
+    "rejects query embedding value %s when f32 conversion overflows",
+    (value) => {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(Number.isFinite(Math.fround(value))).toBe(false);
+      expect(() =>
+        normalizeContextQueryV1(minimalQuery({ embedding: [value] })),
+      ).toThrow(ZodError);
+    },
+  );
 
   it.each(["goal", "max_frames", "max_tokens"])(
     "rejects a missing required %s field",
@@ -381,6 +454,151 @@ describe("normalizeContextQueryV1", () => {
       expect(() => normalizeContextQueryV1(query)).toThrow(ZodError);
     },
   );
+});
+
+describe("JSON-wire normalization boundary", () => {
+  it("does not accept an inherited citation label", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      "citation_label",
+    );
+    Object.defineProperty(Object.prototype, "citation_label", {
+      configurable: true,
+      value: "polluted citation",
+    });
+    const frame = minimalFrame();
+    delete (frame as Partial<typeof frame>).citation_label;
+
+    try {
+      expect(() => normalizeContextFrameV1(frame)).toThrow();
+    } finally {
+      restoreOwnProperty(Object.prototype, "citation_label", previous);
+    }
+  });
+
+  it("does not accept inherited required query fields", () => {
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, "goal");
+    Object.defineProperty(Object.prototype, "goal", {
+      configurable: true,
+      value: "polluted goal",
+    });
+
+    try {
+      expect(() =>
+        normalizeContextQueryV1({ max_frames: 8, max_tokens: 2048 }),
+      ).toThrow();
+    } finally {
+      restoreOwnProperty(Object.prototype, "goal", previous);
+    }
+  });
+
+  it("rejects class instances", () => {
+    class FrameInput {}
+    const frame = Object.assign(new FrameInput(), minimalFrame());
+
+    expect(() => normalizeContextFrameV1(frame)).toThrow(TypeError);
+  });
+
+  it("rejects accessors without invoking them", () => {
+    let getterCalls = 0;
+    const frame = Object.defineProperty(minimalFrame(), "content", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return "getter content";
+      },
+    });
+
+    expect(() => normalizeContextFrameV1(frame)).toThrow(TypeError);
+    expect(getterCalls).toBe(0);
+  });
+
+  it("rejects symbol and explicit undefined fields recursively", () => {
+    const provenanceWithSymbol = {
+      type: "file",
+      [Symbol("hidden")]: true,
+    };
+
+    expect(() =>
+      normalizeContextFrameV1(
+        minimalFrame({ provenance: [provenanceWithSymbol] }),
+      ),
+    ).toThrow(TypeError);
+    expect(() =>
+      normalizeContextFrameV1(
+        minimalFrame({ provenance: [{ type: "file", uri: undefined }] }),
+      ),
+    ).toThrow(TypeError);
+    expect(() =>
+      normalizeContextQueryV1(minimalQuery({ query_text: undefined })),
+    ).toThrow(TypeError);
+  });
+
+  it("rejects unpaired surrogates recursively", () => {
+    expect(() =>
+      normalizeContextFrameV1(
+        minimalFrame({ provenance: [{ type: "file", uri: "\ud800" }] }),
+      ),
+    ).toThrow(TypeError);
+    expect(() =>
+      normalizeContextQueryV1(minimalQuery({ anchors: ["\udc00"] })),
+    ).toThrow(TypeError);
+  });
+
+  it("rejects nested Proxies without invoking their traps", () => {
+    let trapCalls = 0;
+    const provenance = new Proxy(
+      { type: "file" },
+      {
+        getPrototypeOf: (target) => {
+          trapCalls += 1;
+          return Reflect.getPrototypeOf(target);
+        },
+        ownKeys: (target) => {
+          trapCalls += 1;
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor: (target, key) => {
+          trapCalls += 1;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        get: (target, key, receiver) => {
+          trapCalls += 1;
+          return Reflect.get(target, key, receiver);
+        },
+      },
+    );
+
+    expect(() =>
+      normalizeContextFrameV1(minimalFrame({ provenance: [provenance] })),
+    ).toThrow(TypeError);
+    expect(trapCalls).toBe(0);
+  });
+
+  it("rejects root query Proxies without invoking their traps", () => {
+    let trapCalls = 0;
+    const query = new Proxy(minimalQuery(), {
+      getPrototypeOf: (target) => {
+        trapCalls += 1;
+        return Reflect.getPrototypeOf(target);
+      },
+      ownKeys: (target) => {
+        trapCalls += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        trapCalls += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      get: (target, key, receiver) => {
+        trapCalls += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+
+    expect(() => normalizeContextQueryV1(query)).toThrow(TypeError);
+    expect(trapCalls).toBe(0);
+  });
 });
 
 describe("strict current-CGP profile", () => {

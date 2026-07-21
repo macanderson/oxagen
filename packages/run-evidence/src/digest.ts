@@ -1,120 +1,104 @@
 import { createHash } from "node:crypto";
 import canonicalize from "canonicalize";
+import { type JsonWireValue, snapshotJsonWire } from "./json-wire.js";
 
 export type Sha256Digest = `sha256:${string}`;
 
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
-function assertUnicodeScalarString(value: string, path: string): void {
-  for (let index = 0; index < value.length; index += 1) {
-    const codeUnit = value.charCodeAt(index);
-    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
-      if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) {
-        throw new TypeError(`${path} contains an unpaired high surrogate`);
-      }
-      index += 1;
-    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
-      throw new TypeError(`${path} contains an unpaired low surrogate`);
+function canonicalizePrimitive(
+  value: null | boolean | number | string,
+): string {
+  const result = canonicalize(value);
+  if (result === undefined) {
+    throw new TypeError("primitive cannot be represented as JCS");
+  }
+  return result;
+}
+
+function sortUtf16(keys: string[]): void {
+  for (let index = 1; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) {
+      throw new TypeError("invalid JCS object key");
     }
+    let insertionIndex = index;
+    while (insertionIndex > 0) {
+      const previous = keys[insertionIndex - 1];
+      if (previous === undefined || previous <= key) {
+        break;
+      }
+      keys[insertionIndex] = previous;
+      insertionIndex -= 1;
+    }
+    keys[insertionIndex] = key;
   }
 }
 
-function assertArrayShape(value: unknown[], path: string): void {
-  const allowedKeys = new Set<PropertyKey>(["length"]);
-  for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index)) {
-      throw new TypeError(`${path} must not be sparse`);
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(value, index);
-    if (
-      descriptor === undefined ||
-      !descriptor.enumerable ||
-      !("value" in descriptor)
-    ) {
-      throw new TypeError(
-        `${path}[${index}] must be an enumerable data property`,
-      );
-    }
-    allowedKeys.add(String(index));
+function serializeSnapshot(value: JsonWireValue): string {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return canonicalizePrimitive(value);
   }
 
-  for (const key of Reflect.ownKeys(value)) {
-    if (!allowedKeys.has(key)) {
-      throw new TypeError(`${path} contains a non-JSON array property`);
-    }
-  }
-}
-
-function assertIJsonValue(
-  value: unknown,
-  path: string,
-  ancestors: Set<object>,
-): void {
-  if (value === null || typeof value === "boolean") {
-    return;
-  }
-  if (typeof value === "string") {
-    assertUnicodeScalarString(value, path);
-    return;
-  }
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite binary64 number`);
-    }
-    return;
-  }
-  if (typeof value !== "object") {
-    throw new TypeError(`${path} is not an I-JSON value`);
-  }
-  if (ancestors.has(value)) {
-    throw new TypeError(`${path} contains a cycle`);
-  }
-
-  ancestors.add(value);
-  try {
-    if (Array.isArray(value)) {
-      assertArrayShape(value, path);
-      for (let index = 0; index < value.length; index += 1) {
-        assertIJsonValue(value[index], `${path}[${index}]`, ancestors);
+  if (Array.isArray(value)) {
+    let result = "[";
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new TypeError("invalid JSON snapshot array");
       }
-      return;
-    }
-
-    if (Object.getPrototypeOf(value) !== Object.prototype) {
-      throw new TypeError(`${path} must be a plain object`);
-    }
-
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== "string") {
-        throw new TypeError(`${path} contains a symbol property`);
+      if (index > 0) {
+        result += ",";
       }
-      assertUnicodeScalarString(key, `${path} property name`);
-
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (
-        descriptor === undefined ||
-        !descriptor.enumerable ||
-        !("value" in descriptor)
-      ) {
-        throw new TypeError(
-          `${path}.${key} must be an enumerable data property`,
-        );
-      }
-      assertIJsonValue(descriptor.value, `${path}.${key}`, ancestors);
+      result += serializeSnapshot(descriptor.value as JsonWireValue);
     }
-  } finally {
-    ancestors.delete(value);
+    return `${result}]`;
   }
+
+  const ownKeys = Reflect.ownKeys(value);
+  const keys: string[] = [];
+  keys.length = ownKeys.length;
+  for (let index = 0; index < ownKeys.length; index += 1) {
+    const key = ownKeys[index];
+    if (typeof key !== "string") {
+      throw new TypeError("invalid JSON snapshot object");
+    }
+    Object.defineProperty(keys, String(index), {
+      configurable: true,
+      enumerable: true,
+      value: key,
+      writable: true,
+    });
+  }
+  sortUtf16(keys);
+
+  let result = "{";
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === undefined) {
+      throw new TypeError("invalid JSON snapshot object key");
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) {
+      throw new TypeError("invalid JSON snapshot object property");
+    }
+    if (index > 0) {
+      result += ",";
+    }
+    result += `${canonicalizePrimitive(key)}:${serializeSnapshot(
+      descriptor.value as JsonWireValue,
+    )}`;
+  }
+  return `${result}}`;
 }
 
 export function jcsBytes(value: unknown): Uint8Array {
-  assertIJsonValue(value, "$", new Set());
-  const canonical = canonicalize(value);
-  if (canonical === undefined) {
-    throw new TypeError("value cannot be represented as JCS");
-  }
-  return new TextEncoder().encode(canonical);
+  return new TextEncoder().encode(serializeSnapshot(snapshotJsonWire(value)));
 }
 
 export function sha256Digest(bytes: Uint8Array): Sha256Digest {

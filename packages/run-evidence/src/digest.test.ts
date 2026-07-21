@@ -27,6 +27,18 @@ function expectDigestCase(value: unknown, fixture: DigestCase): void {
   expect(assertDigest(fixture.sha256)).toBe(fixture.sha256);
 }
 
+function restoreOwnProperty(
+  target: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): void {
+  if (descriptor === undefined) {
+    Reflect.deleteProperty(target, key);
+  } else {
+    Object.defineProperty(target, key, descriptor);
+  }
+}
+
 describe("JCS digest fixtures", () => {
   it("matches every upstream generic RFC 8785 vector exactly", () => {
     const fixture = readFixture<{ vectors: NormalizationVector[] }>(
@@ -81,6 +93,127 @@ describe("jcsBytes", () => {
     const expected = '{"😀":"grinning","דּ":"dalet"}';
 
     expect(jcsBytes(value)).toEqual(new TextEncoder().encode(expected));
+  });
+
+  it("treats an own non-function toJSON property as ordinary JSON data", () => {
+    const value = { z: 3, toJSON: "data", a: 1 };
+
+    expect(new TextDecoder().decode(jcsBytes(value))).toBe(
+      '{"a":1,"toJSON":"data","z":3}',
+    );
+  });
+
+  it("ignores ambient Object.prototype pollution", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      "toJSON",
+    );
+    Object.defineProperty(Object.prototype, "toJSON", {
+      configurable: true,
+      value: () => ({ polluted: true }),
+    });
+
+    try {
+      expect(new TextDecoder().decode(jcsBytes({ z: 2, a: 1 }))).toBe(
+        '{"a":1,"z":2}',
+      );
+    } finally {
+      restoreOwnProperty(Object.prototype, "toJSON", previous);
+    }
+  });
+
+  it("ignores ambient Array.prototype pollution", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON");
+    Object.defineProperty(Array.prototype, "toJSON", {
+      configurable: true,
+      value: () => ["polluted"],
+    });
+
+    try {
+      expect(new TextDecoder().decode(jcsBytes([1, 2]))).toBe("[1,2]");
+    } finally {
+      restoreOwnProperty(Array.prototype, "toJSON", previous);
+    }
+  });
+
+  it("does not consult the inherited array iterator", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    );
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, Symbol.iterator, {
+      configurable: true,
+      value: () => {
+        throw new Error("polluted array iterator was invoked");
+      },
+    });
+
+    try {
+      result = jcsBytes({ values: [1, 2] });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, Symbol.iterator, previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(new TextDecoder().decode(result)).toBe('{"values":[1,2]}');
+  });
+
+  it("does not consult an inherited array reduce implementation", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "reduce");
+    Object.defineProperty(Array.prototype, "reduce", {
+      configurable: true,
+      value: () => "polluted",
+    });
+
+    try {
+      expect(new TextDecoder().decode(jcsBytes([1, 2]))).toBe("[1,2]");
+    } finally {
+      restoreOwnProperty(Array.prototype, "reduce", previous);
+    }
+  });
+
+  it("rejects arrays with custom prototypes", () => {
+    const value = [1, 2];
+    Object.setPrototypeOf(value, Object.create(Array.prototype));
+
+    expect(() => jcsBytes(value)).toThrow(TypeError);
+  });
+
+  it("rejects a Proxy before descriptor and get traps can disagree", () => {
+    let trapCalls = 0;
+    const value = new Proxy(
+      { value: "descriptor value" },
+      {
+        getPrototypeOf: () => {
+          trapCalls += 1;
+          return Object.prototype;
+        },
+        ownKeys: () => {
+          trapCalls += 1;
+          return ["value"];
+        },
+        getOwnPropertyDescriptor: () => {
+          trapCalls += 1;
+          return {
+            configurable: true,
+            enumerable: true,
+            value: "descriptor value",
+            writable: true,
+          };
+        },
+        get: () => {
+          trapCalls += 1;
+          return "different get value";
+        },
+      },
+    );
+
+    expect(() => jcsBytes(value)).toThrow(TypeError);
+    expect(trapCalls).toBe(0);
   });
 
   it.each([
