@@ -249,7 +249,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (16)
+## Graph (15)
 
 | Capability                  | Notes                                                                                                                                                     |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -268,7 +268,6 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
 | `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
 | `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
-| `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
 | `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
 | `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
@@ -380,6 +379,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [set_routing_policy](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
 - [list_routing_stats](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
 - [preview_routing_decision](router.decision.preview.md) — Dry-run the market router for a prompt: task class, observed outcomes, and the full decision (chosen model + candidate audit trail); changes nothing
+
+## Run (2)
+
+- [submit_run_evidence](run.evidence.submit.md) — Submit an immutable RunEvidenceManifestV1 for one governed agent attempt (checkout, context frames, changed files, commits, PRs, receipts, artifacts); idempotent, always stamped client_attested
+- [list_run_evidence](run.evidence.list.md) — List RunEvidenceManifestV1 summaries for the workspace, newest first, with keyset pagination — run/attempt, evidence authority, digest, and changed-file + context-frame counts
 
 ## Sandbox (9)
 
