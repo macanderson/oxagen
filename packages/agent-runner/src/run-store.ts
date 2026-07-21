@@ -87,11 +87,29 @@ export const RUN_LEASE_SECONDS = 600;
 /** Default page size for readEventsSince when the caller doesn't cap it. */
 export const DEFAULT_READ_EVENTS_LIMIT = 500;
 
+/** A resolved IAM principal, threaded through without being re-minted. */
+export interface RunPrincipal {
+  id: string;
+  kind: "human" | "agent" | "service";
+  orgId: string;
+  workspaceId: string | null;
+}
+
 export interface EnqueueRunInput {
   orgId: string;
   workspaceId: string;
   surface: PlatformSurface;
   spec: unknown;
+  /**
+   * The AGENT/HUMAN principal pair for a deployed-agent run
+   * (docs/specs/agent-rbac/spec.md §3.1/§3.4). Both or neither — a bare
+   * conversational turn omits both. NEVER minted here: the agent's single
+   * persistent identity principal (agent.agents.principalId) and the
+   * invoking human's already-resolved principal must be supplied by the
+   * caller that enqueues the run.
+   */
+  agentPrincipal?: RunPrincipal;
+  humanPrincipal?: RunPrincipal;
 }
 
 export interface ClaimedRun {
@@ -104,6 +122,21 @@ export interface ClaimedRun {
   attempts: number;
   checkpoint: unknown | null;
   checkpointSeq: number;
+  /**
+   * The run's persistent AGENT principal, present when this run was
+   * dispatched as a deployed agent run. When set together with
+   * `humanPrincipal`, callers (e.g. @oxagen/agent's turn-driver) thread
+   * `principalKind: "agent"` plus both principals into the CapabilityContext
+   * they build for this turn — never minted here, always supplied by
+   * whoever enqueued the run.
+   */
+  agentPrincipal?: RunPrincipal | null;
+  /**
+   * The invoking HUMAN principal this agent run acts on behalf of — the
+   * delegation ceiling for effective-permission resolution. Present
+   * whenever `agentPrincipal` is.
+   */
+  humanPrincipal?: RunPrincipal | null;
 }
 
 export interface RunEventRecord {
@@ -199,10 +232,34 @@ type ClaimedRunRow = {
   attempts: number | string;
   checkpoint: unknown | null;
   checkpoint_seq: number | string;
+  agent_principal_id?: string | null;
+  agent_principal_org_id?: string | null;
+  agent_principal_workspace_id?: string | null;
+  human_principal_id?: string | null;
+  human_principal_org_id?: string | null;
+  human_principal_workspace_id?: string | null;
 };
 
 /** Map a claimed agent_runs row (snake_case, driver-typed) to ClaimedRun. */
 export function mapClaimedRunRow(row: ClaimedRunRow): ClaimedRun {
+  const agentPrincipal =
+    row.agent_principal_id && row.agent_principal_org_id
+      ? {
+          id: row.agent_principal_id,
+          kind: "agent" as const,
+          orgId: row.agent_principal_org_id,
+          workspaceId: row.agent_principal_workspace_id ?? null,
+        }
+      : null;
+  const humanPrincipal =
+    row.human_principal_id && row.human_principal_org_id
+      ? {
+          id: row.human_principal_id,
+          kind: "human" as const,
+          orgId: row.human_principal_org_id,
+          workspaceId: row.human_principal_workspace_id ?? null,
+        }
+      : null;
   return {
     runId: row.id,
     publicId: row.public_id,
@@ -213,6 +270,8 @@ export function mapClaimedRunRow(row: ClaimedRunRow): ClaimedRun {
     attempts: Number(row.attempts),
     checkpoint: row.checkpoint ?? null,
     checkpointSeq: Number(row.checkpoint_seq),
+    ...(agentPrincipal ? { agentPrincipal } : {}),
+    ...(humanPrincipal ? { humanPrincipal } : {}),
   };
 }
 
@@ -281,14 +340,24 @@ export function buildEnqueueRunSql(
   input: EnqueueRunInput,
 ): SQL {
   return sql`
-    INSERT INTO agent.agent_runs (public_id, org_id, workspace_id, surface, status, spec)
+    INSERT INTO agent.agent_runs (
+      public_id, org_id, workspace_id, surface, status, spec,
+      agent_principal_id, agent_principal_org_id, agent_principal_workspace_id,
+      human_principal_id, human_principal_org_id, human_principal_workspace_id
+    )
     VALUES (
       ${publicId},
       ${input.orgId}::uuid,
       ${input.workspaceId}::uuid,
       ${input.surface},
       'pending',
-      ${JSON.stringify(input.spec)}::jsonb
+      ${JSON.stringify(input.spec)}::jsonb,
+      ${input.agentPrincipal?.id ?? null}::uuid,
+      ${input.agentPrincipal?.orgId ?? null}::uuid,
+      ${input.agentPrincipal?.workspaceId ?? null}::uuid,
+      ${input.humanPrincipal?.id ?? null}::uuid,
+      ${input.humanPrincipal?.orgId ?? null}::uuid,
+      ${input.humanPrincipal?.workspaceId ?? null}::uuid
     )
     RETURNING id, public_id
   `;
@@ -315,7 +384,9 @@ export function buildClaimNextRunSql(
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, public_id, org_id, workspace_id, surface, spec, attempts, checkpoint, checkpoint_seq
+    RETURNING id, public_id, org_id, workspace_id, surface, spec, attempts, checkpoint, checkpoint_seq,
+      agent_principal_id, agent_principal_org_id, agent_principal_workspace_id,
+      human_principal_id, human_principal_org_id, human_principal_workspace_id
   `;
 }
 

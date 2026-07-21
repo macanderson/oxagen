@@ -83,8 +83,10 @@ const KNOWN_CONDITION_KEYS: ReadonlySet<string> = new Set([
 //   - undefined (or empty array) on a dimension = unrestricted on that side
 //   - graph.mode is ordered read < extend; agent config may narrow, never widen
 //   - graph.budget values are ceilings (element-wise min on intersection)
-//   - mcp.rules are "server:tool" globs, first-match-wins — the same semantics
-//     as packages/mcp-config/src/permissions.ts
+//   - mcp.rules are "server:tool" globs, first-match-wins. Evaluation (in
+//     resolve.ts) reuses the exact `matchGlob` implementation exported by
+//     packages/mcp-config/src/permissions.ts, so this is not a parallel
+//     glob dialect — it is the identical matcher, imported.
 
 /** Traversal/expansion budget ceilings for graph access. */
 export const graphBudgetSchema = z

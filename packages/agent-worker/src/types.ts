@@ -25,6 +25,26 @@ export interface ClaimedRun {
   checkpoint: unknown | null;
   /** Seq of the last event durably appended as of the restored checkpoint. 0 for a fresh run. */
   checkpointSeq: number;
+  /**
+   * The run's persistent AGENT principal (iam.principals kind='agent'),
+   * present when this run was dispatched as a deployed agent run rather than
+   * a bare conversational turn (docs/specs/agent-rbac/spec.md §3.1/§3.4).
+   * Present together with `humanPrincipal` or not at all — never minted by
+   * this package, always supplied by whoever enqueued the run.
+   */
+  agentPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
+  /** The invoking HUMAN principal this agent run acts on behalf of. */
+  humanPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
 }
 
 /** One event in a run's append-only event log, seq assigned by the worker (never the store). */

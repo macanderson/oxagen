@@ -1557,6 +1557,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/mcp-config':
+        specifier: workspace:*
+        version: link:../mcp-config
       '@oxagen/sandbox':
         specifier: workspace:*
         version: link:../sandbox

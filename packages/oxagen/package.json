@@ -29,6 +29,7 @@
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"

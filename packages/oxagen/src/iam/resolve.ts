@@ -15,6 +15,7 @@
 //   Rule 7.5: Org owner super-user    → ALLOW (system org Owner role)
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
 
+import { matchGlob } from "@oxagen/mcp-config/permissions";
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
 import {
   evaluateConditions,
@@ -717,18 +718,11 @@ export interface EffectiveScope {
  * list) or an already-effective scope (mcp rule sets). */
 export type ScopeLike = ResourceScope | EffectiveScope | Record<string, never>;
 
-// ── Glob matching (same semantics as packages/mcp-config/src/permissions.ts) ──
-// Re-implemented locally so this module stays dependency-free.
-function matchGlob(pattern: string, value: string): boolean {
-  if (!pattern.includes("*")) return pattern === value;
-  if (pattern === "*") return true;
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  try {
-    return new RegExp(`^${escaped.replace(/\*/g, ".*")}$`).test(value);
-  } catch {
-    return false; // invalid pattern — no match rather than crash
-  }
-}
+// ── Glob matching ──────────────────────────────────────────────────────────────
+// Reuses the exact glob matcher from packages/mcp-config/src/permissions.ts
+// (evaluatePermission's per-server allow/deny rule matching) so "server:tool"
+// resourceScope.mcp patterns behave identically to mcp-config's own rules —
+// one implementation of glob semantics, not two that could drift.
 
 // ── Scope intersection helpers ────────────────────────────────────────────────
 

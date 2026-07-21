@@ -885,6 +885,23 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Denormalized reference to the run's AGENT/HUMAN principal pair
+    // (docs/specs/agent-rbac/spec.md §3.1/§3.4) — present only when this run
+    // was dispatched as a deployed agent run rather than a bare
+    // conversational turn. NEVER a new principal per run: agentPrincipalId
+    // is always the agent's one persistent identity principal
+    // (agent.agents.principal_id); humanPrincipalId is the invoking human's
+    // existing principal. Denormalized (rather than joined at claim time)
+    // because claimNextRun runs cross-org via withSystemDb with no tenant
+    // session to resolve the agent's org/workspace-scoped principal row.
+    // App-enforced references — no FK across the agent/iam schema boundary
+    // per CLAUDE.md storage rules (same convention as agents.principalId).
+    agentPrincipalId: uuid("agent_principal_id"),
+    agentPrincipalOrgId: uuid("agent_principal_org_id"),
+    agentPrincipalWorkspaceId: uuid("agent_principal_workspace_id"),
+    humanPrincipalId: uuid("human_principal_id"),
+    humanPrincipalOrgId: uuid("human_principal_org_id"),
+    humanPrincipalWorkspaceId: uuid("human_principal_workspace_id"),
   },
   (t) => ({
     orgIdx: index("agent_runs_org_idx").on(t.orgId, t.workspaceId),
