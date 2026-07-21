@@ -72,9 +72,19 @@ helper (role ceiling ∩ graphAccess); `extend-proposal.ts` validation lib;
    observable, ANN oversampling, proposal fail-fast/re-verify/completeness).
 5. Amend or follow-up commit; then drop `--no-verify` (tree should pass the hook).
 
-## NOT STARTED
+## DONE — Phase 4b (commits 7d31fdc23, e7e9fca91, c1172e445)
 
-- **Phase 4a — MCP globs.** Shared `evaluatePermission` (re-export from
+skills.slugs enforced at agent.skill.load (soft-failure + audit) AND filtered
+from the agent.skill.list index; subagent dispatch narrowing (tasks must be in
+agents.refs AND resolve non-deny via the run's cached resolution — no
+capability laundering); parentEffectiveScope threaded through
+resolveAgentRunCapability; A2A skill-addressed tasks build the target agent's
+AgentRunIAMContext (∩ caller API-key gate, fail-closed when no principal).
+Tests: skill.load 15/15, skill.list 7/7, dispatch 13/13, bridge 20/20.
+
+## NOT STARTED / IN FLIGHT
+
+- **Phase 4a — MCP globs (subagent IN FLIGHT, partial on disk).** Shared `evaluatePermission` (re-export from
   `packages/mcp-config/src/permissions.ts`); `apply-agent-binding.ts` serverAllowlist
   becomes an intersection (not union); per-call deny (hide+block) / ask (→ mcp_consents
   first-use, **agent principal as subject**, distinct from user consents, needs a
@@ -86,7 +96,7 @@ helper (role ceiling ∩ graphAccess); `extend-proposal.ts` validation lib;
   hand-roll); A2A inbound (`apps/api/src/routes/a2a`) intersects target-agent principal
   with caller API-key scope (Q2 resolution); audit; tests. **Depends on 3b** (shares
   the effective-scope helper).
-- **Phase 5a — builder UI.** Role picker (create+edit), effective-scope review step
+- **Phase 5a — builder UI (subagent IN FLIGHT).** Role picker (create+edit), effective-scope review step
   (role ∩ config across all four dimensions), role badge in the agent list,
   delegation-ceiling disable+tooltip; e2e with screenshots.
 - **Phase 5b — suggest + docs.** `agent.definition.suggest` gains an additive
