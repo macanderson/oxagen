@@ -132,6 +132,14 @@ export const roleGrants = iamSchema.table(
     capabilityId: text("capability_id").notNull(),
     // CHECK: effect IN ('allow','deny','require_approval')
     effect: text("effect").notNull(),
+    // Agent RBAC (docs/specs/agent-rbac/spec.md §3.3): same conditionsJsonb
+    // shape as a future direct-grant conditions column — currently only the
+    // typed `resourceScope` key is populated (by tools/scripts/seed-iam-defaults.ts
+    // for the three system agent roles). Nullable/absent means "no ceiling
+    // beyond the effect" — packages/oxagen/src/iam/resolve.ts's RoleGrant type
+    // and collectResourceScope() are the readers; this column is what makes
+    // that already-landed resolver logic reachable from real data.
+    conditionsJsonb: jsonb("conditions_jsonb"),
   },
   (t) => ({
     // Hot path: "what effect does this role have on this capability?"
