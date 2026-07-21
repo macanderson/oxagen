@@ -431,6 +431,31 @@ export function resolve(input: ResolveInput): ResolveResult {
   });
 
   // ── Rule 6: Org default grant ──────────────────────────────────────────────
+  // Deny-wins: when a principal holds multiple conflicting org grants for the
+  // same capability + scope, deny must be checked BEFORE allow/require_approval
+  // — a principal can never escape an explicit org-level deny by also holding
+  // an allow grant at the same scope. (Mirrors the deny-before-allow ordering
+  // already enforced across rules 1/3 at the workspace level.)
+  const orgDenyGrant = orgGrants.find(
+    (g) =>
+      g.effect === "deny" &&
+      !isExpired(g) &&
+      conditionsMet(g.conditionsJsonb, evalCtx),
+  );
+  if (orgDenyGrant) {
+    const step: TraceStep = {
+      rule: "6:org_grant",
+      description: "Org deny grant inherited",
+      decided: true,
+      outcome: "deny",
+    };
+    steps.push(step);
+    return {
+      outcome: "deny",
+      reason: "no_grant",
+      trace: { steps, decidedBy: step },
+    };
+  }
   const orgAllowGrant = orgGrants.find(
     (g) =>
       g.effect === "allow" &&
@@ -462,26 +487,6 @@ export function resolve(input: ResolveInput): ResolveResult {
     };
     steps.push(step);
     return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
-  }
-  const orgDenyGrant = orgGrants.find(
-    (g) =>
-      g.effect === "deny" &&
-      !isExpired(g) &&
-      conditionsMet(g.conditionsJsonb, evalCtx),
-  );
-  if (orgDenyGrant) {
-    const step: TraceStep = {
-      rule: "6:org_grant",
-      description: "Org deny grant inherited",
-      decided: true,
-      outcome: "deny",
-    };
-    steps.push(step);
-    return {
-      outcome: "deny",
-      reason: "no_grant",
-      trace: { steps, decidedBy: step },
-    };
   }
   // Check expired org grants.
   const orgExpiredGrant = orgGrants.find((g) => isExpired(g));
