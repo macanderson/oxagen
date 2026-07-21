@@ -264,6 +264,74 @@ export async function resolveCanonicalHead(
   return { commitSha, treeSha, parentShas };
 }
 
+/** One entry from a GitHub commit `compare` file list. */
+export interface CompareFile {
+  filename: string;
+  status: string; // added | modified | removed | renamed | changed | copied
+  /** Blob SHA at the head of the compare range. */
+  sha?: string;
+  /** Prior path for a renamed file (its old canonical identity to remove). */
+  previous_filename?: string;
+}
+
+/** Compare-file statuses whose file still exists at head → fan out for parsing. */
+const FAN_OUT_STATUSES = new Set([
+  "added",
+  "modified",
+  "renamed",
+  "changed",
+  "copied",
+]);
+
+/**
+ * GET the commit `compare` between two SHAs (spec §"Push to the canonical ref"
+ * step 5 — apply a delta only when the stored head and event ancestry line up).
+ */
+export async function fetchCompare(
+  installationToken: string,
+  owner: string,
+  repo: string,
+  base: string,
+  head: string,
+): Promise<CompareFile[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/compare/${base}...${head}`;
+  const resp = await fetch(url, { headers: ghHeaders(installationToken) });
+  if (!resp.ok) {
+    throw new Error(
+      `github-projection: compare ${base}...${head} returned ${resp.status} for ${owner}/${repo}`,
+    );
+  }
+  const body = (await resp.json()) as { files?: CompareFile[] };
+  return body.files ?? [];
+}
+
+/**
+ * Split a compare file list into the parseable files to re-project (added /
+ * modified / renamed-to / changed / copied) and the canonical paths to remove
+ * (deleted, plus the old path of a rename). Pure.
+ */
+export function classifyCompareFiles(files: CompareFile[]): {
+  fanOut: Array<{ path: string; sha: string }>;
+  removed: string[];
+} {
+  const fanOut: Array<{ path: string; sha: string }> = [];
+  const removed: string[] = [];
+  for (const f of files) {
+    if (f.status === "removed") {
+      removed.push(f.filename);
+      continue;
+    }
+    // A rename retires the old path's canonical node.
+    if (f.status === "renamed" && f.previous_filename) {
+      removed.push(f.previous_filename);
+    }
+    if (FAN_OUT_STATUSES.has(f.status) && f.sha && isParseablePath(f.filename)) {
+      fanOut.push({ path: f.filename, sha: f.sha });
+    }
+  }
+  return { fanOut, removed };
+}
+
 /**
  * Fetch the recursive tree by its immutable SHA (spec: never by branch name).
  * `truncated` is surfaced so the generation records partial coverage honestly.
@@ -300,8 +368,17 @@ export function isParseableFile(entry: {
 }): boolean {
   if (entry.type !== "blob") return false;
   if (!entry.size || entry.size === 0) return false;
-  if (EXCLUDED_PREFIXES.some((pfx) => entry.path.startsWith(pfx))) return false;
-  const ext = entry.path.slice(entry.path.lastIndexOf(".")).toLowerCase();
+  return isParseablePath(entry.path);
+}
+
+/**
+ * Path-only variant of {@link isParseableFile} for callers that lack a tree
+ * entry's type/size — e.g. the delta path deriving fan-out from a commit
+ * `compare` file list (which carries filename + blob sha but no size).
+ */
+export function isParseablePath(path: string): boolean {
+  if (EXCLUDED_PREFIXES.some((pfx) => path.startsWith(pfx))) return false;
+  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
   return ALLOWED_EXTENSIONS.includes(ext);
 }
 

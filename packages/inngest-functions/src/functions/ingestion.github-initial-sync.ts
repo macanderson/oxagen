@@ -2,19 +2,21 @@ import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
-import { resolveIngestionCryptoAdapterForKeyId, decrypt } from "@oxagen/crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { upsertSourceConnectionMeta } from "@oxagen/ingestion/mutations";
+import {
+  fetchConnectionAccessToken,
+  resolveCanonicalHead,
+  fetchTreeBySha,
+  deriveScopes,
+  isParseableFile,
+  stageGeneration,
+  EXCLUDED_PREFIXES,
+  MAX_FILES,
+  PROJECTION_PARSER_VERSION,
+} from "../lib/github-projection";
 import { logger } from "../logger";
 
-// Paths to exclude from the file tree (not worth parsing).
-const EXCLUDED_PREFIXES = ["node_modules/", "dist/", ".git/", "__pycache__/"];
-// Extensions we process. Code (tree-sitter parsed into symbols) + markdown
-// documentation (parsed into heading sections). Every matched file has its full
-// content embedded for natural-language search regardless of symbol extraction.
-const ALLOWED_EXTENSIONS = [".ts", ".tsx", ".py", ".md", ".mdx", ".markdown"];
-// Maximum files dispatched per sync to keep fan-out bounded.
-const MAX_FILES = 500;
 // Maximum events sent per step.sendEvent batch call.
 const BATCH_SIZE = 50;
 // Cap on historical domain records (PRs/issues/releases) pulled per type on the
@@ -36,22 +38,6 @@ const MAX_COMMITS_BACKFILL = 500;
 // relative to the 5000 req/hr OAuth rate limit while covering the backfilled
 // history window far deeper than the previous cap of 20.
 const MAX_COMMIT_FILE_SYNC = 100;
-
-interface GitTreeItem {
-  path: string;
-  mode: string;
-  type: string;
-  sha: string;
-  size?: number;
-  url: string;
-}
-
-interface GitTreeResponse {
-  sha: string;
-  url: string;
-  tree: GitTreeItem[];
-  truncated: boolean;
-}
 
 function ghHeaders(token: string): Record<string, string> {
   return {
@@ -84,19 +70,23 @@ async function ghList(url: string, token: string): Promise<unknown[]> {
  * GitHub initial-sync Inngest function.
  *
  * Triggered by "ingestion/github.initial-sync". For a single repo it:
- *   1. resolves an access token and the repo's real default branch,
+ *   1. resolves an access token and the repo's real default branch, then pins
+ *      the sync to the IMMUTABLE commit + tree SHA at that ref
+ *      (resolveCanonicalHead) — never a moving branch name (spec §"Canonical-ref
+ *      policy", §"GitHub projection lifecycle");
  *   2. backfills domain entities — the repository itself plus recent pull
  *      requests, issues, and releases (first page each) and commit history
  *      date-bounded by syncDepthDays (paginated, hard-capped at
- *      MAX_COMMITS_BACKFILL) — by emitting one "ingestion/entity.received" per
- *      record (the ingestion pipeline normalizes, maps, and upserts each into
- *      the Neo4j knowledge graph),
- *   3. fans out one "ingestion/github.parse-file" per parseable source file,
- *   4. upserts the SourceConnection meta-node and marks the connection connected.
+ *      MAX_COMMITS_BACKFILL, pinned to the resolved commit SHA) — by emitting one
+ *      "ingestion/entity.received" per record;
+ *   3. fetches the tree BY ITS SHA, derives a stable code-scope topology, and
+ *      stages a projection generation ('building') in Postgres;
+ *   4. fans out one extended "ingestion/github.parse-file" per parseable source
+ *      file (carrying its generation + code-scope binding), so the projection
+ *      completes and activates atomically once every file reports done;
+ *   5. upserts the SourceConnection meta-node and marks the connection connected.
  *
- * Previously this only walked the file tree, so connecting a repo populated the
- * graph with source-file symbols but NO repository/PR/issue/release entities —
- * the graph looked empty. Concurrency is limited to 2 syncs per org.
+ * Concurrency is limited to 2 syncs per org.
  */
 export const [ingestionGithubInitialSync] = createFunction(
   {
@@ -139,41 +129,12 @@ export const [ingestionGithubInitialSync] = createFunction(
 
     const repoBase = `https://api.github.com/repos/${owner}/${repo}`;
 
-    // ── Step 1: Fetch access token from Postgres ─────────────────────────────
-    const accessToken = await step.run("fetch-access-token", async () => {
-      const rows = await withSystemDb(async (tx) => {
-        const result = await tx.execute(sql`
-          SELECT oa.access_token_enc
-          FROM   ingestion.oauth_accounts oa
-          JOIN   ingestion.source_connections sc
-                 ON sc.oauth_account_id = oa.id
-          WHERE  sc.id     = ${connectionId}::uuid
-          AND    sc.org_id = ${orgId}::uuid
-          LIMIT  1
-        `);
-        return Array.from(result) as Array<{
-          access_token_enc: { keyId: string; ciphertext: string } | null;
-        }>;
-      });
+    // ── Step 1: Resolve the connection's GitHub access token ──────────────────
+    const accessToken = await step.run("fetch-access-token", () =>
+      fetchConnectionAccessToken(connectionId, orgId),
+    );
 
-      const row = rows[0];
-      if (!row?.access_token_enc) {
-        throw new Error(`ingestion-github-initial-sync: no oauth token for connectionId=${connectionId}`);
-      }
-
-      // Route by the envelope's stored keyId, not the current provider env var,
-      // so tokens wrapped under a previous INGESTION_CRYPTO_PROVIDER still decrypt.
-      const cryptoAdapter = resolveIngestionCryptoAdapterForKeyId(
-        row.access_token_enc.keyId,
-      );
-      const cipherBuf = Buffer.from(row.access_token_enc.ciphertext, "base64");
-      const decrypted: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
-        adapter: cryptoAdapter.adapter,
-      });
-      return Buffer.isBuffer(decrypted) ? decrypted.toString("utf8") : String(decrypted);
-    });
-
-    // ── Step 2: Fetch repository metadata (also gives the real default branch) ─
+    // ── Step 2: Fetch repository metadata (real default branch + provider id) ──
     const repoMeta = await step.run("fetch-repo", async () => {
       const resp = await fetch(repoBase, { headers: ghHeaders(accessToken) });
       if (!resp.ok) {
@@ -186,6 +147,14 @@ export const [ingestionGithubInitialSync] = createFunction(
 
     const defaultBranch =
       typeof repoMeta["default_branch"] === "string" ? (repoMeta["default_branch"] as string) : "main";
+    // Provider's IMMUTABLE repository id — stable across owner/name renames.
+    const providerRepoId =
+      repoMeta["id"] != null ? String(repoMeta["id"]) : `${owner}/${repo}`;
+
+    // ── Step 2b: Pin the sync to the immutable commit + tree SHA at the ref ────
+    const head = await step.run("resolve-canonical-head", () =>
+      resolveCanonicalHead(accessToken, owner, repo, defaultBranch),
+    );
 
     // Helper: build an entity.received event for one raw GitHub record.
     const entityEvent = (sourceRecordType: string, payload: unknown) =>
@@ -239,14 +208,10 @@ export const [ingestionGithubInitialSync] = createFunction(
     );
     await dispatchEntities("releases", "release", releases);
 
-    // ── Step 7: Backfill commit history on the default branch, date-bounded by
-    //            syncDepthDays (the wizard's "sync history depth" selector) and
-    //            paginated up to a hard MAX_COMMITS_BACKFILL safety cap. The
-    //            whole loop lives in one step.run so the `since` window and the
-    //            accumulated pages are memoized together — a retry refetches at
-    //            most 5 list pages, and replays reuse the same result. The
-    //            branch is injected so trigger conditions can match on
-    //            git_branch. ─────────────────────────────────────────────────
+    // ── Step 7: Backfill commit history, date-bounded by syncDepthDays and
+    //            PINNED TO THE RESOLVED COMMIT SHA (spec: the immutable snapshot
+    //            identity, not the moving branch name). Paginated up to a hard
+    //            MAX_COMMITS_BACKFILL safety cap. ─────────────────────────────
     const commitBackfill = await step.run("fetch-commits", async () => {
       const since = new Date(Date.now() - syncDepthDays * 24 * 60 * 60 * 1000).toISOString();
       const maxPages = Math.ceil(MAX_COMMITS_BACKFILL / COMMITS_PER_PAGE);
@@ -254,7 +219,7 @@ export const [ingestionGithubInitialSync] = createFunction(
       let cappedAtMax = false;
       for (let page = 1; page <= maxPages; page++) {
         const pageItems = await ghList(
-          `${repoBase}/commits?sha=${encodeURIComponent(defaultBranch)}&since=${encodeURIComponent(since)}&per_page=${COMMITS_PER_PAGE}&page=${page}`,
+          `${repoBase}/commits?sha=${encodeURIComponent(head.commitSha)}&since=${encodeURIComponent(since)}&per_page=${COMMITS_PER_PAGE}&page=${page}`,
           accessToken,
         );
         collected.push(...pageItems);
@@ -291,9 +256,6 @@ export const [ingestionGithubInitialSync] = createFunction(
     // backfilled window (GitHub lists newest first), emit one
     // "ingestion/github.commit-files" event so the commit-files function can fetch
     // per-commit file lists and write (:Commit)-[:MODIFIED]->(:SourceFile) edges.
-    // Each fan-out is its own retryable Inngest event, so a per-commit failure
-    // stays isolated. We log (don't silently drop) when the full commit list is
-    // capped so the operator knows partial coverage is intentional.
     const commitsForFileSyncRaw = commits.slice(0, MAX_COMMIT_FILE_SYNC);
     if (commits.length > MAX_COMMIT_FILE_SYNC) {
       logger.info(
@@ -338,39 +300,64 @@ export const [ingestionGithubInitialSync] = createFunction(
       }
     }
 
-    // ── Step 8: Fetch the repo file tree from GitHub (real default branch) ────
-    const filteredFiles = await step.run("fetch-repo-tree", async () => {
-      const url = `${repoBase}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`;
-
-      const response = await fetch(url, { headers: ghHeaders(accessToken) });
-
-      if (!response.ok) {
-        throw new Error(
-          `ingestion-github-initial-sync: GitHub tree API returned ${response.status} for ${owner}/${repo}`,
-        );
-      }
-
-      const data = (await response.json()) as GitTreeResponse;
-
-      const files = data.tree.filter((item) => {
-        if (item.type !== "blob") return false;
-        if (!item.size || item.size === 0) return false;
-
-        // Exclude noisy directories.
-        const isExcluded = EXCLUDED_PREFIXES.some((prefix) => item.path.startsWith(prefix));
-        if (isExcluded) return false;
-
-        // Only allowed extensions.
-        const ext = item.path.slice(item.path.lastIndexOf(".")).toLowerCase();
-        return ALLOWED_EXTENSIONS.includes(ext);
-      });
-
-      // Cap at MAX_FILES to bound fan-out.
-      return files.slice(0, MAX_FILES).map((f) => ({
-        sha: f.sha,
-        path: f.path,
-      }));
+    // ── Step 8: Fetch the tree BY ITS IMMUTABLE SHA, derive code scopes, and
+    //            select parseable files. Everything is computed inside the step
+    //            so the memoized state stays compact (parseable files capped at
+    //            MAX_FILES; scopes bounded). ───────────────────────────────────
+    const treeProjection = await step.run("fetch-repo-tree", async () => {
+      const { entries, truncated } = await fetchTreeBySha(
+        accessToken,
+        owner,
+        repo,
+        head.treeSha,
+      );
+      // Derive scopes from blob paths, EXCLUDING the noisy prefixes (node_modules,
+      // dist, …) so they never become junk scopes — but keeping non-parseable
+      // manifests (package.json, go.mod, …) so their directories become package
+      // scopes.
+      const scopePaths = entries
+        .filter((e) => e.type === "blob")
+        .map((e) => e.path)
+        .filter((p) => !EXCLUDED_PREFIXES.some((pfx) => p.startsWith(pfx)));
+      const { scopes, scopeKeyByPath } = deriveScopes(scopePaths);
+      const parseable = entries
+        .filter(isParseableFile)
+        .slice(0, MAX_FILES)
+        .map((f) => ({
+          sha: f.sha,
+          path: f.path,
+          scopeKey: scopeKeyByPath[f.path] as string,
+        }));
+      return { parseable, scopes, truncated };
     });
+
+    const parseableFiles = treeProjection.parseable;
+
+    // ── Step 8b: Stage the projection generation in Postgres (canonical truth) ─
+    const staged = await step.run("stage-generation", () =>
+      runInTenantScope({ orgId, workspaceId }, () =>
+        stageGeneration({
+          orgId,
+          workspaceId,
+          provider: "github",
+          providerRepoId,
+          owner,
+          name: repo,
+          installationId: null, // initial sync uses the OAuth token, not the App
+          sourceConnectionId: connectionId,
+          defaultRef: `refs/heads/${defaultBranch}`,
+          commitSha: head.commitSha,
+          treeSha: head.treeSha,
+          parentShas: head.parentShas,
+          observedHeadSha: head.commitSha,
+          filesTotal: parseableFiles.length,
+          truncated: treeProjection.truncated,
+          parserVersion: PROJECTION_PARSER_VERSION,
+          scopes: treeProjection.scopes,
+          snapshotSource: "provider_observed",
+        }),
+      ),
+    );
 
     logger.info(
       {
@@ -378,13 +365,17 @@ export const [ingestionGithubInitialSync] = createFunction(
         orgId,
         owner,
         repo,
-        fileCount: filteredFiles.length,
+        commitSha: head.commitSha,
+        treeSha: head.treeSha,
+        generationId: staged.generationId,
+        alreadyExists: staged.alreadyExists,
+        fileCount: parseableFiles.length,
         prCount: pulls.length,
         issueCount: issues.length,
         releaseCount: releases.length,
         commitCount: commitsWithBranch.length,
       },
-      "ingestion-github-initial-sync: fetched repo + domain records",
+      "ingestion-github-initial-sync: staged generation + fetched domain records",
     );
 
     // ── Step 9: Upsert the SourceConnection meta-node in Neo4j ───────────────
@@ -398,7 +389,7 @@ export const [ingestionGithubInitialSync] = createFunction(
             cursor: null,
             lastSyncAt: new Date().toISOString(),
             entityCountDelta:
-              filteredFiles.length +
+              parseableFiles.length +
               1 + // repository
               pulls.length +
               issues.length +
@@ -411,35 +402,39 @@ export const [ingestionGithubInitialSync] = createFunction(
       ),
     );
 
-    // ── Step 10: Dispatch parse-file events in batches of BATCH_SIZE ──────────
-    // `step.sendEvent` MUST be called at the top level — Inngest only memoizes
-    // top-level `step.*` calls. Nesting `step.sendEvent` inside a `step.run`
-    // closure means the sends are not durably checkpointed: any retry of the
-    // outer step re-fires every event, fanning out duplicate parse-file jobs
-    // (N×cost explosion on large repos). Each batch is its own memoized step
-    // with a stable, index-derived id so replays are deterministic.
-    const batches: Array<typeof filteredFiles> = [];
-    for (let i = 0; i < filteredFiles.length; i += BATCH_SIZE) {
-      batches.push(filteredFiles.slice(i, i + BATCH_SIZE));
-    }
+    // ── Step 10: Fan out extended parse-file events per parseable file ────────
+    // Skip re-fan-out when the generation for this exact commit was already
+    // staged (dedupe-by-after-sha) — the original run's fan-out drives it.
+    if (!staged.alreadyExists) {
+      const batches: Array<typeof parseableFiles> = [];
+      for (let i = 0; i < parseableFiles.length; i += BATCH_SIZE) {
+        batches.push(parseableFiles.slice(i, i + BATCH_SIZE));
+      }
 
-    for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
-      const batch = batches[batchIdx]!;
-      await step.sendEvent(
-        `dispatch-files-batch-${batchIdx}`,
-        batch.map((file) => ({
-          name: "ingestion/github.parse-file" as const,
-          data: {
-            connectionId,
-            orgId,
-            workspaceId,
-            owner,
-            repo,
-            sha: file.sha,
-            path: file.path,
-          },
-        })),
-      );
+      for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+        const batch = batches[batchIdx]!;
+        await step.sendEvent(
+          `dispatch-files-batch-${batchIdx}`,
+          batch.map((file) => ({
+            name: "ingestion/github.parse-file" as const,
+            data: {
+              connectionId,
+              orgId,
+              workspaceId,
+              owner,
+              repo,
+              sha: file.sha,
+              path: file.path,
+              repositoryId: staged.repositoryId,
+              generationId: staged.generationId,
+              commitSha: head.commitSha,
+              treeSha: head.treeSha,
+              scopeKey: file.scopeKey,
+              codeScopeId: staged.codeScopeIdByKey[file.scopeKey] as string,
+            },
+          })),
+        );
+      }
     }
 
     // ── Step 11: Mark connection as connected ─────────────────────────────────
@@ -460,15 +455,12 @@ export const [ingestionGithubInitialSync] = createFunction(
 
     // ── Step 12: Trigger LLM domain inference over the full file tree ───────────
     // Emitted once per initial sync. The infer-domains function classifies every
-    // file into an application domain (e.g. "payments", "auth") and stamps
-    // `domain` on SourceFile + SourceSymbol nodes in Neo4j, enabling domain-
-    // sliced knowledge-graph queries:
-    //   MATCH (n:SourceFile {orgId: $orgId, domain: 'payments'})
-    if (filteredFiles.length > 0) {
+    // file into an application domain and stamps `domain` on graph nodes.
+    if (parseableFiles.length > 0 && !staged.alreadyExists) {
       await step.sendEvent("infer-domains", {
         name: "ingestion/github.infer-domains" as const,
         data: {
-          filePaths: filteredFiles.map((f) => f.path),
+          filePaths: parseableFiles.map((f) => f.path),
           orgId,
           workspaceId,
           connectionId,
@@ -479,7 +471,7 @@ export const [ingestionGithubInitialSync] = createFunction(
     }
 
     logger.info(
-      { connectionId, orgId, owner, repo, fileCount: filteredFiles.length },
+      { connectionId, orgId, owner, repo, fileCount: parseableFiles.length },
       "ingestion-github-initial-sync: completed",
     );
 
@@ -487,7 +479,11 @@ export const [ingestionGithubInitialSync] = createFunction(
       connectionId,
       owner,
       repo,
-      fileCount: filteredFiles.length,
+      commitSha: head.commitSha,
+      treeSha: head.treeSha,
+      generationId: staged.generationId,
+      alreadyExists: staged.alreadyExists,
+      fileCount: parseableFiles.length,
       entityCount: 1 + pulls.length + issues.length + releases.length + commitsWithBranch.length,
     };
   },

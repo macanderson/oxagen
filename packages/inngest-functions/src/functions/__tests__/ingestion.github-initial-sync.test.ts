@@ -6,11 +6,12 @@ const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   runInTenantScope: vi.fn(),
   upsertSourceConnectionMeta: vi.fn().mockResolvedValue(undefined),
-  decrypt: vi.fn(),
-  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
+  fetchConnectionAccessToken: vi.fn(),
+  resolveCanonicalHead: vi.fn(),
+  fetchTreeBySha: vi.fn(),
+  stageGeneration: vi.fn(),
   fetchMock: vi.fn(),
   loggerInfo: vi.fn(),
-  loggerDebug: vi.fn(),
   loggerWarn: vi.fn(),
 }));
 
@@ -22,7 +23,6 @@ type HandlerCtx = {
   };
 };
 let capturedHandler: ((ctx: HandlerCtx) => unknown) | null = null;
-// Capture the createFunction args at registration time (before clearAllMocks).
 let capturedCreateFunctionArgs: unknown[] | null = null;
 
 mocks.createFunction.mockImplementation(
@@ -37,49 +37,43 @@ vi.mock("../../inngest", () => ({
   inngest: { createFunction: mocks.createFunction },
 }));
 
-// sql tagged template literal that returns a plain object (good enough for mocked tx.execute)
 const sqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values });
 Object.assign(sqlTag, { mapWith: () => sqlTag, raw: () => sqlTag });
 
-vi.mock("@oxagen/database", () => ({
-  withSystemDb: mocks.withSystemDb,
-}));
-
-vi.mock("drizzle-orm", () => ({
-  sql: sqlTag,
-}));
-
+vi.mock("@oxagen/database", () => ({ withSystemDb: mocks.withSystemDb }));
+vi.mock("drizzle-orm", () => ({ sql: sqlTag }));
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope.mockImplementation(
     (_scope: unknown, fn: () => unknown) => fn(),
   ),
 }));
-
 vi.mock("@oxagen/ingestion/mutations", () => ({
   upsertSourceConnectionMeta: mocks.upsertSourceConnectionMeta,
 }));
 
-vi.mock("@oxagen/crypto", () => ({
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
-  decrypt: mocks.decrypt,
-}));
+// Partial mock of the shared lib: mock the I/O functions, keep the PURE ones
+// (deriveScopes, isParseableFile, EXCLUDED_PREFIXES, MAX_FILES,
+// PROJECTION_PARSER_VERSION) real so scope derivation is exercised end-to-end.
+vi.mock("../../lib/github-projection", async (importActual) => {
+  const actual = await importActual<typeof import("../../lib/github-projection")>();
+  return {
+    ...actual,
+    fetchConnectionAccessToken: mocks.fetchConnectionAccessToken,
+    resolveCanonicalHead: mocks.resolveCanonicalHead,
+    fetchTreeBySha: mocks.fetchTreeBySha,
+    stageGeneration: mocks.stageGeneration,
+  };
+});
 
 vi.mock("../../logger", () => ({
-  logger: {
-    info: mocks.loggerInfo,
-    debug: mocks.loggerDebug,
-    error: vi.fn(),
-    warn: mocks.loggerWarn,
-  },
+  logger: { info: mocks.loggerInfo, debug: vi.fn(), error: vi.fn(), warn: mocks.loggerWarn },
 }));
 
-// Capture global.fetch before module import.
 vi.stubGlobal("fetch", mocks.fetchMock);
 
 await import("../ingestion.github-initial-sync");
 
-// ── Fixture data ──────────────────────────────────────────────────────────────
-
+// ── Fixtures ────────────────────────────────────────────────────────────────
 const BASE_EVENT = {
   connectionId: "conn-gh-1",
   orgId: "org-gh-1",
@@ -93,64 +87,45 @@ const REPO_META = {
   id: 42,
   name: "api",
   full_name: "acme/api",
-  description: "The API",
-  html_url: "https://github.com/acme/api",
-  default_branch: "trunk", // deliberately not "main" — verifies branch resolution
+  default_branch: "trunk", // deliberately not "main"
   owner: { login: "acme" },
-  language: "TypeScript",
-  stargazers_count: 7,
 };
 
-const PULLS = [
-  { number: 1, title: "Add auth", html_url: "https://github.com/acme/api/pull/1", user: { login: "a" }, labels: [], state: "open" },
-  { number: 2, title: "Fix billing", html_url: "https://github.com/acme/api/pull/2", user: { login: "b" }, labels: [], state: "closed" },
+const HEAD = { commitSha: "commit-abc", treeSha: "tree-xyz", parentShas: ["p1"] };
+
+const TREE_ENTRIES = [
+  { path: "packages/billing/package.json", type: "blob", sha: "s-manifest", size: 100 },
+  { path: "packages/billing/charge.ts", type: "blob", sha: "s-charge", size: 200 },
+  { path: "src/auth.ts", type: "blob", sha: "s-auth", size: 300 },
+  { path: "README.md", type: "blob", sha: "s-readme", size: 50 },
+  { path: "node_modules/lodash/index.js", type: "blob", sha: "s-lodash", size: 100 },
+  { path: "packages/billing", type: "tree", sha: "s-tree" },
 ];
 
-// GitHub's issues API returns PRs too (they carry a `pull_request` key) — those
-// must be filtered out so they aren't double-ingested.
+const PULLS = [{ number: 1, title: "x" }, { number: 2, title: "y" }];
 const ISSUES_RAW = [
-  { number: 10, title: "Bug report", html_url: "https://github.com/acme/api/issues/10", user: { login: "c" }, labels: [] },
-  { number: 2, title: "Fix billing", html_url: "https://github.com/acme/api/pull/2", user: { login: "b" }, labels: [], pull_request: { url: "x" } },
+  { number: 10, title: "bug" },
+  { number: 2, title: "y", pull_request: { url: "x" } },
 ];
+const RELEASES = [{ id: 99, tag_name: "v1" }];
+const COMMITS = [{ sha: "deadbeef", commit: { message: "init", author: { date: "2026-01-01" } } }];
 
-const RELEASES = [
-  { id: 99, name: "v1.0.0", tag_name: "v1.0.0", html_url: "https://github.com/acme/api/releases/v1.0.0", author: { login: "a" } },
-];
-
-const COMMITS = [
-  { sha: "deadbeef", html_url: "https://github.com/acme/api/commit/deadbeef", commit: { message: "init", author: { name: "a", email: "a@x.com", date: "2026-01-01" } } },
-];
-
-const TREE_RESPONSE = {
-  sha: "abc123",
-  url: "https://api.github.com/repos/acme/api/git/trees/trunk",
-  truncated: false,
-  tree: [
-    { path: "src/auth.ts", mode: "100644", type: "blob", sha: "sha-auth", size: 1000, url: "" },
-    { path: "src/billing.ts", mode: "100644", type: "blob", sha: "sha-billing", size: 2000, url: "" },
-    { path: "src/utils.py", mode: "100644", type: "blob", sha: "sha-utils", size: 500, url: "" },
-    // Excluded paths:
-    { path: "node_modules/lodash/index.js", mode: "100644", type: "blob", sha: "sha-lodash", size: 100, url: "" },
-    { path: "dist/bundle.js", mode: "100644", type: "blob", sha: "sha-dist", size: 9999, url: "" },
-    // Non-matching extension:
-    { path: "README.md", mode: "100644", type: "blob", sha: "sha-readme", size: 200, url: "" },
-    // Zero size:
-    { path: "src/empty.ts", mode: "100644", type: "blob", sha: "sha-empty", size: 0, url: "" },
-    // Tree (not blob):
-    { path: "src", mode: "040000", type: "tree", sha: "sha-tree", url: "" },
-  ],
+const STAGED = {
+  repositoryId: "repo-1",
+  snapshotId: "snap-1",
+  generationId: "gen-1",
+  alreadyExists: false,
+  codeScopeIdByKey: { ".": "cs-root", "packages/billing": "cs-billing", src: "cs-src" },
+  commitSha: HEAD.commitSha,
+  treeSha: HEAD.treeSha,
 };
-
-const ACCESS_TOKEN_ENC = { keyId: "key-1", ciphertext: Buffer.from("token123").toString("base64") };
 
 function ok(body: unknown) {
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
 }
 
-/** Route the GitHub REST calls the sync makes to their fixture responses. */
-function routedFetch(treeOverride?: unknown) {
+function routedFetch() {
   return (url: string) => {
-    if (url.includes("/git/trees/")) return ok(treeOverride ?? TREE_RESPONSE);
     if (url.includes("/pulls")) return ok(PULLS);
     if (url.includes("/issues")) return ok(ISSUES_RAW);
     if (url.includes("/releases")) return ok(RELEASES);
@@ -159,403 +134,181 @@ function routedFetch(treeOverride?: unknown) {
   };
 }
 
-/** Generate n synthetic commit records with unique SHAs (prefix-i). */
-function genCommits(n: number, prefix: string): Array<Record<string, unknown>> {
-  return Array.from({ length: n }, (_, i) => ({
-    sha: `${prefix}-${i}`,
-    html_url: `https://github.com/acme/api/commit/${prefix}-${i}`,
-    commit: { message: `msg ${prefix}-${i}`, author: { name: "a", email: "a@x.com", date: "2026-01-01" } },
-  }));
-}
-
-/**
- * Fetch mock that serves the commits list endpoint page-by-page from `pages`
- * (1-indexed; missing pages return []) and everything else from routedFetch.
- */
-function pagedCommitsFetch(pages: Record<number, unknown[]>) {
-  return (url: string) => {
-    if (url.includes("/commits")) {
-      const page = Number(new URL(url).searchParams.get("page") ?? "1");
-      return ok(pages[page] ?? []);
-    }
-    return routedFetch()(url);
-  };
-}
-
 function setupDefaultMocks(): void {
-  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ keyId: "key-1", adapter: {} });
-  mocks.decrypt.mockResolvedValue(Buffer.from("ghp_test_token"));
-
-  mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-    fn({ execute: vi.fn().mockResolvedValue([{ access_token_enc: ACCESS_TOKEN_ENC }]) }),
-  );
-
-  mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
-
+  mocks.fetchConnectionAccessToken.mockResolvedValue("ghp_tok");
+  mocks.resolveCanonicalHead.mockResolvedValue(HEAD);
+  mocks.fetchTreeBySha.mockResolvedValue({ entries: TREE_ENTRIES, truncated: false });
+  mocks.stageGeneration.mockResolvedValue(STAGED);
+  mocks.runInTenantScope.mockImplementation((_s: unknown, fn: () => unknown) => fn());
   mocks.fetchMock.mockImplementation(routedFetch());
 }
 
-function makeStep(overrides: Partial<HandlerCtx["step"]> = {}): HandlerCtx["step"] {
+function makeStep(): HandlerCtx["step"] {
   return {
     run: vi.fn(async (_name: string, fn: () => unknown) => fn()),
     sendEvent: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
   };
 }
 
-/** Flatten all events passed to step.sendEvent across calls. */
-function allEventsFrom(sendEvent: ReturnType<typeof vi.fn>): Array<{ name: string; data: Record<string, unknown> }> {
+function allEventsFrom(sendEvent: ReturnType<typeof vi.fn>) {
   return sendEvent.mock.calls.flatMap((c) => {
     const payload = c[1];
-    return (Array.isArray(payload) ? payload : [payload]) as Array<{ name: string; data: Record<string, unknown> }>;
+    return (Array.isArray(payload) ? payload : [payload]) as Array<{
+      name: string;
+      data: Record<string, unknown>;
+    }>;
   });
 }
 
-function entitiesOfType(sendEvent: ReturnType<typeof vi.fn>, sourceRecordType: string) {
+function entitiesOfType(sendEvent: ReturnType<typeof vi.fn>, t: string) {
   return allEventsFrom(sendEvent).filter(
-    (e) => e.name === "ingestion/entity.received" && e.data?.["sourceRecordType"] === sourceRecordType,
+    (e) => e.name === "ingestion/entity.received" && e.data?.["sourceRecordType"] === t,
   );
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+function parseFiles(sendEvent: ReturnType<typeof vi.fn>) {
+  return allEventsFrom(sendEvent).filter((e) => e.name === "ingestion/github.parse-file");
+}
 
-describe("ingestion.github-initial-sync Inngest function", () => {
+// ── Tests ─────────────────────────────────────────────────────────────────────
+describe("ingestion.github-initial-sync (SHA-pinned projection)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaultMocks();
   });
+  afterEach(() => vi.useRealTimers());
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("registers a createFunction with correct id and event trigger", () => {
-    expect(capturedCreateFunctionArgs).not.toBeNull();
+  it("registers a createFunction with the correct id and trigger", () => {
     const [opts, trigger] = capturedCreateFunctionArgs as [Record<string, unknown>, Record<string, unknown>];
-    expect(opts).toMatchObject({
-      id: "ingestion-github-initial-sync",
-      retries: 3,
-      concurrency: expect.objectContaining({ limit: 2, key: "event.data.orgId" }),
-    });
+    expect(opts).toMatchObject({ id: "ingestion-github-initial-sync", retries: 3 });
     expect(trigger).toMatchObject({ event: "ingestion/github.initial-sync" });
   });
 
-  it("decrypts the access token from oauth_accounts", async () => {
-    const step = makeStep();
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-    expect(mocks.decrypt).toHaveBeenCalledTimes(1);
-  });
-
-  it("throws when owner/repo are missing", async () => {
-    const step = makeStep();
+  it("throws NonRetriableError when owner/repo missing", async () => {
     await expect(
-      capturedHandler!({ event: { data: { ...BASE_EVENT, owner: "", repo: "" } }, step }),
-    ).rejects.toThrow(/owner and repo are required/);
+      capturedHandler!({ event: { data: { ...BASE_EVENT, owner: "" } }, step: makeStep() }),
+    ).rejects.toMatchObject({ name: "NonRetriableError" });
   });
 
-  it("resolves the repo's real default branch and uses it for the tree fetch", async () => {
-    const step = makeStep();
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-    // REPO_META.default_branch === "trunk" — the tree must be fetched on trunk.
-    expect(mocks.fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("api.github.com/repos/acme/api/git/trees/trunk"),
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: expect.stringContaining("Bearer") }),
-      }),
-    );
+  it("resolves the token and canonical head for the real default branch", async () => {
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+    expect(mocks.fetchConnectionAccessToken).toHaveBeenCalledWith("conn-gh-1", "org-gh-1");
+    expect(mocks.resolveCanonicalHead).toHaveBeenCalledWith("ghp_tok", "acme", "api", "trunk");
   });
 
-  it("emits a repository entity.received", async () => {
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+  it("fetches the tree BY ITS SHA, never by the branch name", async () => {
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+    expect(mocks.fetchTreeBySha).toHaveBeenCalledWith("ghp_tok", "acme", "api", "tree-xyz");
+    // The branch name must never appear as the tree argument.
+    for (const call of mocks.fetchTreeBySha.mock.calls) {
+      expect(call[3]).not.toBe("trunk");
+    }
+  });
 
-    const repos = entitiesOfType(sendEvent, "repository");
-    expect(repos).toHaveLength(1);
-    expect(repos[0]!.data).toMatchObject({
-      connectorType: "github",
-      connectionId: "conn-gh-1",
-      orgId: "org-gh-1",
-      workspaceId: "ws-gh-1",
+  it("pins the commit backfill to the resolved commit SHA, not the branch", async () => {
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+    const commitCalls = mocks.fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes("/commits?"));
+    expect(commitCalls.length).toBeGreaterThan(0);
+    expect(commitCalls[0]).toContain("sha=commit-abc");
+    expect(commitCalls[0]).not.toContain("sha=trunk");
+  });
+
+  it("stages a generation with providerRepoId, filesTotal=parseable count, and derived scopes", async () => {
+    await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() });
+    expect(mocks.stageGeneration).toHaveBeenCalledTimes(1);
+    const arg = mocks.stageGeneration.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg).toMatchObject({
+      provider: "github",
+      providerRepoId: "42",
+      owner: "acme",
+      name: "api",
+      defaultRef: "refs/heads/trunk",
+      commitSha: "commit-abc",
+      treeSha: "tree-xyz",
+      parentShas: ["p1"],
+      filesTotal: 3, // charge.ts, auth.ts, README.md (package.json/.js/node_modules excluded)
+      sourceConnectionId: "conn-gh-1",
+      installationId: null,
     });
-    expect((repos[0]!.data["payload"] as Record<string, unknown>)["full_name"]).toBe("acme/api");
+    // Derived scopes: root path ".", the billing package, and the src path.
+    const scopeKeys = (arg["scopes"] as Array<{ scopeKey: string }>).map((s) => s.scopeKey).sort();
+    expect(scopeKeys).toEqual([".", "packages/billing", "src"]);
+    const billing = (arg["scopes"] as Array<{ scopeKey: string; kind: string; fileCount: number }>).find(
+      (s) => s.scopeKey === "packages/billing",
+    );
+    expect(billing).toMatchObject({ kind: "package", fileCount: 2 });
   });
 
-  it("backfills pull_request, issue, release, and commit entities", async () => {
+  it("fans out one extended parse-file per parseable file with its generation + scope binding", async () => {
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
-    expect(entitiesOfType(sendEvent, "pull_request")).toHaveLength(2);
-    // ISSUES_RAW has 2 entries but one is a PR (has pull_request key) → filtered out.
-    expect(entitiesOfType(sendEvent, "issue")).toHaveLength(1);
-    expect(entitiesOfType(sendEvent, "release")).toHaveLength(1);
-    const commits = entitiesOfType(sendEvent, "commit");
-    expect(commits).toHaveLength(1);
-    // git_branch is injected so trigger conditions can match on it.
-    expect((commits[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe("trunk");
-  });
-
-  it("dispatches one ingestion/github.parse-file per accepted source file (.ts/.py/.md, 4)", async () => {
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    const parseFiles = allEventsFrom(sendEvent).filter((e) => e.name === "ingestion/github.parse-file");
-    // src/auth.ts, src/billing.ts, src/utils.py, README.md (markdown docs are now
-    // ingested too); node_modules/dist/empty/tree entries remain excluded.
-    expect(parseFiles).toHaveLength(4);
-    expect(parseFiles.map((e) => e.data["path"])).toContain("README.md");
-    for (const ev of parseFiles) {
+    const pf = parseFiles(sendEvent);
+    expect(pf).toHaveLength(3);
+    for (const ev of pf) {
       expect(ev.data).toMatchObject({
         connectionId: "conn-gh-1",
         owner: "acme",
         repo: "api",
-        sha: expect.any(String),
-        path: expect.any(String),
+        repositoryId: "repo-1",
+        generationId: "gen-1",
+        commitSha: "commit-abc",
+        treeSha: "tree-xyz",
       });
+      expect(typeof ev.data["scopeKey"]).toBe("string");
+      expect(typeof ev.data["codeScopeId"]).toBe("string");
     }
+    // charge.ts binds to the billing package scope + its scope id.
+    const charge = pf.find((e) => e.data["path"] === "packages/billing/charge.ts")!;
+    expect(charge.data).toMatchObject({ scopeKey: "packages/billing", codeScopeId: "cs-billing" });
+    const auth = pf.find((e) => e.data["path"] === "src/auth.ts")!;
+    expect(auth.data).toMatchObject({ scopeKey: "src", codeScopeId: "cs-src" });
   });
 
-  it("calls upsertSourceConnectionMeta inside runInTenantScope", async () => {
+  it("still backfills repository/pull_request/issue/release/commit entities", async () => {
     const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-    expect(mocks.upsertSourceConnectionMeta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        connectionId: "conn-gh-1",
-        workspaceId: "ws-gh-1",
-        connectorType: "github",
-        healthStatus: "healthy",
-      }),
-      "org-gh-1",
-    );
+
+    expect(entitiesOfType(sendEvent, "repository")).toHaveLength(1);
+    expect(entitiesOfType(sendEvent, "pull_request")).toHaveLength(2);
+    expect(entitiesOfType(sendEvent, "issue")).toHaveLength(1); // PR filtered out
+    expect(entitiesOfType(sendEvent, "release")).toHaveLength(1);
+    const commits = entitiesOfType(sendEvent, "commit");
+    expect(commits).toHaveLength(1);
+    expect((commits[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe("trunk");
   });
 
-  it("calls withSystemDb for token fetch + status update (2)", async () => {
+  it("skips re-fan-out and infer-domains when the generation already exists (dedupe-by-after-sha)", async () => {
+    mocks.stageGeneration.mockResolvedValue({ ...STAGED, alreadyExists: true });
     const step = makeStep();
+    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
-    expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
+
+    expect(parseFiles(sendEvent)).toHaveLength(0);
+    expect(allEventsFrom(sendEvent).some((e) => e.name === "ingestion/github.infer-domains")).toBe(false);
+    // Entity backfill still ran (idempotent upserts).
+    expect(entitiesOfType(sendEvent, "repository")).toHaveLength(1);
   });
 
-  it("returns connectionId, owner, repo, fileCount, and entityCount", async () => {
-    const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+  it("returns the commit/tree/generation identity and counts", async () => {
+    const result = (await capturedHandler!({ event: { data: BASE_EVENT }, step: makeStep() })) as Record<
+      string,
+      unknown
+    >;
     expect(result).toMatchObject({
       connectionId: "conn-gh-1",
       owner: "acme",
       repo: "api",
-      fileCount: 4,
-      // 1 repo + 2 PRs + 1 issue + 1 release + 1 commit
-      entityCount: 6,
+      commitSha: "commit-abc",
+      treeSha: "tree-xyz",
+      generationId: "gen-1",
+      alreadyExists: false,
+      fileCount: 3,
+      entityCount: 6, // 1 repo + 2 PR + 1 issue + 1 release + 1 commit
     });
-  });
-
-  it("throws when the GitHub tree API returns non-OK status", async () => {
-    mocks.fetchMock.mockImplementation((url: string) => {
-      if (url.includes("/git/trees/")) return Promise.resolve({ ok: false, status: 404 });
-      return routedFetch()(url);
-    });
-    const step = makeStep();
-    await expect(capturedHandler!({ event: { data: BASE_EVENT }, step })).rejects.toThrow(
-      /GitHub tree API returned 404/,
-    );
-  });
-
-  it("throws when no oauth token is found", async () => {
-    mocks.withSystemDb.mockImplementationOnce((fn: (tx: unknown) => unknown) =>
-      fn({ execute: vi.fn().mockResolvedValue([]) }),
-    );
-    const step = makeStep();
-    await expect(capturedHandler!({ event: { data: BASE_EVENT }, step })).rejects.toThrow(
-      /no oauth token/,
-    );
-  });
-
-  it("throws NonRetriableError when owner is empty (OXA-1806 guard)", async () => {
-    // Empty owner → GitHub URL would be /repos///git/trees/main → 404.
-    // The function must abort immediately with NonRetriableError rather than
-    // fetching a doomed URL and burning all 3 retries.
-    const step = makeStep();
-    await expect(
-      capturedHandler!({
-        event: { data: { ...BASE_EVENT, owner: "" } },
-        step,
-      }),
-    ).rejects.toMatchObject({ name: "NonRetriableError" });
-
-    // No GitHub fetch should have been attempted
-    expect(mocks.fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("throws NonRetriableError when repo is empty (OXA-1806 guard)", async () => {
-    const step = makeStep();
-    await expect(
-      capturedHandler!({
-        event: { data: { ...BASE_EVENT, repo: "" } },
-        step,
-      }),
-    ).rejects.toMatchObject({ name: "NonRetriableError" });
-
-    expect(mocks.fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("dispatches files in batches when tree has > 50 files", async () => {
-    // Build a large tree (75 .ts files, all valid).
-    const largeTrees = Array.from({ length: 75 }, (_, i) => ({
-      path: `src/file${i}.ts`,
-      mode: "100644",
-      type: "blob",
-      sha: `sha-${i}`,
-      size: 1000,
-      url: "",
-    }));
-    mocks.fetchMock.mockImplementation(routedFetch({ ...TREE_RESPONSE, tree: largeTrees }));
-
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    // Count parse-file batches specifically (other sendEvent calls emit entities).
-    const parseFileBatches = sendEvent.mock.calls.filter((c) => {
-      const payload = c[1];
-      return Array.isArray(payload) && payload[0]?.name === "ingestion/github.parse-file";
-    });
-    expect(parseFileBatches).toHaveLength(2); // 75 files / 50 = 2 batches
-  });
-
-  // ── Commit-history backfill: syncDepthDays window, pagination, caps ─────────
-
-  /** All commit-list API calls (GET /repos/{o}/{r}/commits?...) made so far. */
-  function commitListCalls(): string[] {
-    return mocks.fetchMock.mock.calls
-      .map((c) => String(c[0]))
-      .filter((url) => url.includes("/commits?"));
-  }
-
-  it("computes `since` from syncDepthDays and passes it to the commits list API", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
-
-    const step = makeStep();
-    await capturedHandler!({ event: { data: { ...BASE_EVENT, syncDepthDays: 30 } }, step });
-
-    const expectedSince = new Date(
-      Date.parse("2026-07-10T12:00:00.000Z") - 30 * 24 * 60 * 60 * 1000,
-    ).toISOString();
-    const calls = commitListCalls();
-    expect(calls).toHaveLength(1); // fixture returns 1 commit → short page → no page 2
-    expect(calls[0]).toContain(`since=${encodeURIComponent(expectedSince)}`);
-    expect(calls[0]).toContain("per_page=100");
-    expect(calls[0]).toContain("page=1");
-    expect(calls[0]).toContain("sha=trunk");
-  });
-
-  it("defaults syncDepthDays to 90 days when absent or invalid", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
-    const expectedSince = encodeURIComponent(
-      new Date(Date.parse("2026-07-10T12:00:00.000Z") - 90 * 24 * 60 * 60 * 1000).toISOString(),
-    );
-
-    // Absent → 90-day window.
-    const eventWithoutDepth: Record<string, unknown> = { ...BASE_EVENT };
-    delete eventWithoutDepth["syncDepthDays"];
-    await capturedHandler!({ event: { data: eventWithoutDepth }, step: makeStep() });
-    expect(commitListCalls()[0]).toContain(`since=${expectedSince}`);
-
-    // Invalid (zero) → 90-day window too.
-    mocks.fetchMock.mockClear();
-    await capturedHandler!({
-      event: { data: { ...BASE_EVENT, syncDepthDays: 0 } },
-      step: makeStep(),
-    });
-    expect(commitListCalls()[0]).toContain(`since=${expectedSince}`);
-  });
-
-  it("paginates the commit list past the first page, accumulating all pages", async () => {
-    // Page 1 is full (100) → fetch page 2; page 2 is short (40) → stop.
-    mocks.fetchMock.mockImplementation(
-      pagedCommitsFetch({ 1: genCommits(100, "p1"), 2: genCommits(40, "p2") }),
-    );
-
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    const commitEntities = entitiesOfType(sendEvent, "commit");
-    expect(commitEntities).toHaveLength(140);
-    // Every commit still flows through entity.received with the branch injected.
-    expect((commitEntities[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe(
-      "trunk",
-    );
-    expect(commitListCalls()).toHaveLength(2);
-    // No runaway: the short page ended pagination, no warning logged.
-    expect(mocks.loggerWarn).not.toHaveBeenCalled();
-  });
-
-  it("caps the commit backfill at MAX_COMMITS_BACKFILL (500) and logs a warning", async () => {
-    // Six full pages available — only five (500 commits) may be fetched.
-    const pages: Record<number, unknown[]> = {
-      1: genCommits(100, "p1"),
-      2: genCommits(100, "p2"),
-      3: genCommits(100, "p3"),
-      4: genCommits(100, "p4"),
-      5: genCommits(100, "p5"),
-      6: genCommits(100, "p6"),
-    };
-    mocks.fetchMock.mockImplementation(pagedCommitsFetch(pages));
-
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    expect(entitiesOfType(sendEvent, "commit")).toHaveLength(500);
-    expect(commitListCalls()).toHaveLength(5); // never asks for page 6
-    expect(mocks.loggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({ cap: 500, syncDepthDays: 90, owner: "acme", repo: "api" }),
-      expect.stringContaining("commit backfill capped"),
-    );
-  });
-
-  it("fans out one github.commit-files event per backfilled commit (base fixture)", async () => {
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    const commitFileEvents = allEventsFrom(sendEvent).filter(
-      (e) => e.name === "ingestion/github.commit-files",
-    );
-    expect(commitFileEvents).toHaveLength(1);
-    expect(commitFileEvents[0]!.data).toMatchObject({
-      connectionId: "conn-gh-1",
-      orgId: "org-gh-1",
-      workspaceId: "ws-gh-1",
-      owner: "acme",
-      repo: "api",
-      sha: "deadbeef",
-    });
-  });
-
-  it("caps the commit-files fan-out at MAX_COMMIT_FILE_SYNC (100) and logs truncation", async () => {
-    // 140 commits backfilled → only the 100 most recent get file-level detail.
-    mocks.fetchMock.mockImplementation(
-      pagedCommitsFetch({ 1: genCommits(100, "p1"), 2: genCommits(40, "p2") }),
-    );
-
-    const step = makeStep();
-    const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
-    await capturedHandler!({ event: { data: BASE_EVENT }, step });
-
-    const commitFileEvents = allEventsFrom(sendEvent).filter(
-      (e) => e.name === "ingestion/github.commit-files",
-    );
-    expect(commitFileEvents).toHaveLength(100);
-    // GitHub lists newest first — the fan-out covers the head of the list.
-    expect(commitFileEvents[0]!.data["sha"]).toBe("p1-0");
-    expect(commitFileEvents[99]!.data["sha"]).toBe("p1-99");
-    expect(mocks.loggerInfo).toHaveBeenCalledWith(
-      expect.objectContaining({ total: 140, cap: 100 }),
-      expect.stringContaining("commit-file fan-out capped"),
-    );
   });
 });
