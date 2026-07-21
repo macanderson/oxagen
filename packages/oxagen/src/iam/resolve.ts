@@ -734,23 +734,59 @@ const MCP_EFFECT_RANK: Record<McpEffect, number> = {
 };
 
 /**
- * Set intersection. `undefined` = unrestricted on that side. When
- * `emptyIsUnrestricted` is true (graph labels/relationshipTypes per spec:
- * "undefined/empty = all"), an empty array is also unrestricted; otherwise an
- * empty array is the empty set (nothing allowed).
+ * Marker attached (non-enumerably) to every EffectiveScope object returned by
+ * intersectEffectiveScope. Distinguishes an ALREADY-COMPUTED effective scope
+ * from a freshly-authored raw ResourceScope literal.
+ *
+ * This matters for the "undefined/empty = all" convention: it applies to a
+ * raw, admin-authored resourceScope (an omitted or explicitly-`[]` labels
+ * field means unrestricted), but NOT to an empty array that intersection
+ * itself already computed (e.g. two disjoint label sets narrowing to `[]`
+ * really means "nothing survives" — re-feeding that result into a further
+ * intersection must not resurrect it as "unrestricted").
+ */
+const EFFECTIVE_SCOPE_MARKER = Symbol("oxagen.iam.effectiveScope");
+
+function markEffective<T extends object>(obj: T): T {
+  Object.defineProperty(obj, EFFECTIVE_SCOPE_MARKER, {
+    value: true,
+    enumerable: false,
+    configurable: true,
+  });
+  return obj;
+}
+
+function isEffectiveScope(x: unknown): boolean {
+  return (
+    typeof x === "object" &&
+    x !== null &&
+    (x as Record<PropertyKey, unknown>)[EFFECTIVE_SCOPE_MARKER] === true
+  );
+}
+
+/**
+ * Set intersection. `undefined` = unrestricted on that side. When a side's
+ * `emptyIsUnrestricted` flag is true (raw graph labels/relationshipTypes per
+ * spec: "undefined/empty = all"), an empty array on THAT side is also
+ * unrestricted; otherwise (already-computed effective scope) an empty array
+ * is the genuine empty set (nothing allowed). Results are deduplicated —
+ * intersection is a mathematical set operation, not a multiset one.
  */
 function intersectStringSets(
   a: readonly string[] | undefined,
   b: readonly string[] | undefined,
-  emptyIsUnrestricted = false,
+  aEmptyIsUnrestricted = false,
+  bEmptyIsUnrestricted = false,
 ): string[] | undefined {
-  const unrestricted = (s: readonly string[] | undefined): boolean =>
-    s === undefined || (emptyIsUnrestricted && s.length === 0);
-  if (unrestricted(a) && unrestricted(b)) return undefined;
-  if (unrestricted(a)) return [...(b as readonly string[])];
-  if (unrestricted(b)) return [...(a as readonly string[])];
+  const unrestrictedA = a === undefined || (aEmptyIsUnrestricted && a.length === 0);
+  const unrestrictedB = b === undefined || (bEmptyIsUnrestricted && b.length === 0);
+  if (unrestrictedA && unrestrictedB) return undefined;
+  if (unrestrictedA) return Array.from(new Set(b as readonly string[]));
+  if (unrestrictedB) return Array.from(new Set(a as readonly string[]));
   const bSet = new Set(b);
-  return (a as readonly string[]).filter((v) => bSet.has(v));
+  return Array.from(
+    new Set((a as readonly string[]).filter((v) => bSet.has(v))),
+  );
 }
 
 /** Element-wise min with undefined = no ceiling on that side. */
@@ -791,14 +827,26 @@ function intersectBudgets(
 function intersectGraph(
   a: GraphScope | undefined,
   b: GraphScope | undefined,
+  aIsEffective: boolean,
+  bIsEffective: boolean,
 ): GraphScope | undefined {
   if (a === undefined && b === undefined) return undefined;
   const merged: GraphScope = {};
-  const labels = intersectStringSets(a?.labels, b?.labels, true);
+  // "undefined/empty = all" applies to RAW authored scopes only. An
+  // already-computed effective scope's empty array is a genuine empty set
+  // (e.g. two disjoint label sets narrowed to nothing) and must not be
+  // reinterpreted as unrestricted on a further intersection.
+  const labels = intersectStringSets(
+    a?.labels,
+    b?.labels,
+    !aIsEffective,
+    !bIsEffective,
+  );
   const relationshipTypes = intersectStringSets(
     a?.relationshipTypes,
     b?.relationshipTypes,
-    true,
+    !aIsEffective,
+    !bIsEffective,
   );
   const mode = minMode(a?.mode, b?.mode);
   const budget = intersectBudgets(a?.budget, b?.budget);
@@ -833,10 +881,14 @@ export function intersectEffectiveScope(
   b: ScopeLike,
 ): EffectiveScope {
   const merged: EffectiveScope = {};
+  const aIsEffective = isEffectiveScope(a);
+  const bIsEffective = isEffectiveScope(b);
 
   const graph = intersectGraph(
     (a as ResourceScope).graph,
     (b as ResourceScope).graph,
+    aIsEffective,
+    bIsEffective,
   );
   if (graph !== undefined) merged.graph = graph;
 
@@ -857,7 +909,7 @@ export function intersectEffectiveScope(
     merged.agents = refs === undefined ? {} : { refs };
   }
 
-  return merged;
+  return markEffective(merged);
 }
 
 /**
