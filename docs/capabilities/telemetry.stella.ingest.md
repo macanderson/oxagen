@@ -13,7 +13,7 @@ Accept content-free Stella execution rollups for an explicitly enrolled Oxagen E
 - Content type: `application/json`
 - Maximum request body: 256 KiB
 
-The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment; they never authorize the request and are discarded before storage.
+The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and cannot change the storage tenant or idempotency key.
 
 ## Access and governance
 
@@ -67,6 +67,8 @@ The schema cannot represent prompts, messages, reasoning, filesystem paths, tool
 Events are appended to ClickHouse with server-owned `received_at` and tenant identifiers stamped from ambient authenticated scope. Storage is append-only. Event identity is the authenticated `(org_id, workspace_id, event_id)` tuple.
 
 Retries use eventual `ReplacingMergeTree` collapse. Because storage is partitioned by the month of `received_at`, exact deduplicated reads must use `FINAL` with cross-partition merging enabled (`do_not_merge_across_partitions_select_final = 0`). Non-`FINAL` reads may temporarily observe duplicate physical rows and must not be used to claim unique insertion.
+
+Phase 1 trusts an explicitly enrolled Stella client to keep the entire operational event immutable when retrying an `event_id`; intake does not read before append or reject a conflicting payload. Reusing an `event_id` with altered stored dimensions is invalid client behavior. Under `FINAL`, `ReplacingMergeTree` selects the row with the greatest millisecond-resolution `received_at`; if conflicting versions have the same timestamp, the selected row is not defined. Identical retries are unaffected by such a tie. Conflict detection is required before these rollups can be treated as compliance-grade evidence.
 
 ## Example
 
