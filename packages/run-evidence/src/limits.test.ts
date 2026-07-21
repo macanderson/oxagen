@@ -61,4 +61,20 @@ describe("run-evidence limits", () => {
     expect(core.normalizeContextFrameV1).toBeTypeOf("function");
     expect(core.digestJcs).toBeTypeOf("function");
   });
+
+  it("does not expose raw Context Graph Zod schemas from the runtime barrel", async () => {
+    const core = await import("./index.js");
+    const rawSchemaNames = [
+      "contextFrameKindV1Schema",
+      "contextProvenanceV1Schema",
+      "contextFrameEmbeddingV1Schema",
+      "contextRelationV1Schema",
+      "contextFrameV1Schema",
+      "contextQueryV1Schema",
+    ];
+
+    for (const name of rawSchemaNames) {
+      expect(core).not.toHaveProperty(name);
+    }
+  });
 });

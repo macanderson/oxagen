@@ -457,6 +457,154 @@ describe("normalizeContextQueryV1", () => {
 });
 
 describe("JSON-wire normalization boundary", () => {
+  it("rejects an empty inherited array iterator before Zod can skip frame fields", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    );
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, Symbol.iterator, {
+      configurable: true,
+      value: () => ({
+        next: () => ({ done: true, value: undefined }),
+      }),
+    });
+
+    try {
+      normalized = normalizeContextFrameV1(minimalFrame());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, Symbol.iterator, previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects inherited map pollution before Zod can erase an invalid vector", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "map");
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, "map", {
+      configurable: true,
+      value: () => [],
+    });
+
+    try {
+      normalized = normalizeContextQueryV1(
+        minimalQuery({ embedding: [3.4028236e38] }),
+      );
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, "map", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects unrelated Array.prototype changes through the full integrity guard", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "filter");
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, "filter", {
+      configurable: true,
+      value: () => [],
+    });
+
+    try {
+      normalized = normalizeContextQueryV1(minimalQuery());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, "filter", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects added Array.prototype properties through the full integrity guard", () => {
+    const key = "__runEvidencePollutionTest__";
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, key, {
+      configurable: true,
+      value: true,
+    });
+
+    try {
+      normalized = normalizeContextFrameV1(minimalFrame());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      Reflect.deleteProperty(Array.prototype, key);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects changed Array.prototype descriptor flags", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      "forEach",
+    );
+    if (previous === undefined) {
+      throw new Error("Array.prototype.forEach descriptor is unavailable");
+    }
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, "forEach", {
+      ...previous,
+      enumerable: !previous.enumerable,
+    });
+
+    try {
+      normalized = normalizeContextQueryV1(minimalQuery());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, "forEach", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it("rejects data-to-accessor Array.prototype changes without invoking getters", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "slice");
+    if (previous === undefined || !("value" in previous)) {
+      throw new Error("Array.prototype.slice data descriptor is unavailable");
+    }
+    let getterCalls = 0;
+    let normalized: unknown;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, "slice", {
+      configurable: previous.configurable,
+      enumerable: previous.enumerable,
+      get: () => {
+        getterCalls += 1;
+        return previous.value;
+      },
+    });
+
+    try {
+      normalized = normalizeContextQueryV1(minimalQuery());
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, "slice", previous);
+    }
+
+    expect(normalized).toBeUndefined();
+    expect(error).toBeInstanceOf(TypeError);
+    expect(getterCalls).toBe(0);
+  });
+
   it("does not accept an inherited citation label", () => {
     const previous = Object.getOwnPropertyDescriptor(
       Object.prototype,

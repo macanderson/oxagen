@@ -5,6 +5,7 @@ import { type JsonWireValue, snapshotJsonWire } from "./json-wire.js";
 export type Sha256Digest = `sha256:${string}`;
 
 const SHA256_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const intrinsicArraySort = Array.prototype.sort;
 
 function canonicalizePrimitive(
   value: null | boolean | number | string,
@@ -16,23 +17,15 @@ function canonicalizePrimitive(
   return result;
 }
 
-function sortUtf16(keys: string[]): void {
-  for (let index = 1; index < keys.length; index += 1) {
-    const key = keys[index];
-    if (key === undefined) {
-      throw new TypeError("invalid JCS object key");
-    }
-    let insertionIndex = index;
-    while (insertionIndex > 0) {
-      const previous = keys[insertionIndex - 1];
-      if (previous === undefined || previous <= key) {
-        break;
-      }
-      keys[insertionIndex] = previous;
-      insertionIndex -= 1;
-    }
-    keys[insertionIndex] = key;
+function compareUtf16(left: string, right: string): number {
+  if (left < right) {
+    return -1;
   }
+  return left > right ? 1 : 0;
+}
+
+function sortUtf16(keys: string[]): void {
+  Reflect.apply(intrinsicArraySort, keys, [compareUtf16]);
 }
 
 function serializeSnapshot(value: JsonWireValue): string {
@@ -98,6 +91,8 @@ function serializeSnapshot(value: JsonWireValue): string {
 }
 
 export function jcsBytes(value: unknown): Uint8Array {
+  // This generic primitive intentionally has no envelope policy. Task 2B owns
+  // the 1 MiB envelope guard; O(k log k) ordering prevents key-sort amplification.
   return new TextEncoder().encode(serializeSnapshot(snapshotJsonWire(value)));
 }
 

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
 import { assertDigest, digestJcs, jcsBytes, sha256Digest } from "./digest.js";
 
@@ -174,6 +175,43 @@ describe("jcsBytes", () => {
     } finally {
       restoreOwnProperty(Array.prototype, "reduce", previous);
     }
+  });
+
+  it("does not consult a polluted Array.prototype.sort", () => {
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, "sort");
+    let result: Uint8Array | undefined;
+    let error: unknown;
+    Object.defineProperty(Array.prototype, "sort", {
+      configurable: true,
+      value: () => {
+        throw new Error("polluted array sort was invoked");
+      },
+    });
+
+    try {
+      result = jcsBytes({ z: 2, a: 1 });
+    } catch (caught) {
+      error = caught;
+    } finally {
+      restoreOwnProperty(Array.prototype, "sort", previous);
+    }
+
+    expect(error).toBeUndefined();
+    expect(new TextDecoder().decode(result)).toBe('{"a":1,"z":2}');
+  });
+
+  it("canonicalizes 20,000 descending keys without quadratic amplification", () => {
+    const value: Record<string, number> = {};
+    for (let index = 19_999; index >= 0; index -= 1) {
+      value[`k${index.toString().padStart(5, "0")}`] = 0;
+    }
+
+    const startedAt = performance.now();
+    const bytes = jcsBytes(value);
+    const elapsedMilliseconds = performance.now() - startedAt;
+
+    expect(bytes.byteLength).toBeGreaterThan(200_000);
+    expect(elapsedMilliseconds).toBeLessThan(2_000);
   });
 
   it("rejects arrays with custom prototypes", () => {

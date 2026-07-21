@@ -11,7 +11,80 @@ const f32NumberSchema = finiteNumberSchema.refine(
   { message: "embedding value must be representable as a finite f32" },
 );
 
-export const contextFrameKindV1Schema = z.enum([
+const arrayPrototypeKeys = Reflect.ownKeys(Array.prototype);
+const arrayPrototypeDescriptors: PropertyDescriptor[] = [];
+arrayPrototypeDescriptors.length = arrayPrototypeKeys.length;
+for (let index = 0; index < arrayPrototypeKeys.length; index += 1) {
+  const key = arrayPrototypeKeys[index] as PropertyKey;
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype,
+    key,
+  ) as PropertyDescriptor;
+  Object.defineProperty(arrayPrototypeDescriptors, String(index), {
+    configurable: false,
+    enumerable: true,
+    value: descriptor,
+    writable: false,
+  });
+}
+Object.setPrototypeOf(arrayPrototypeKeys, null);
+Object.setPrototypeOf(arrayPrototypeDescriptors, null);
+Object.freeze(arrayPrototypeKeys);
+Object.freeze(arrayPrototypeDescriptors);
+
+function descriptorsMatch(
+  expected: PropertyDescriptor,
+  actual: PropertyDescriptor,
+): boolean {
+  if (
+    expected.configurable !== actual.configurable ||
+    expected.enumerable !== actual.enumerable
+  ) {
+    return false;
+  }
+
+  const expectedIsData = "value" in expected;
+  const actualIsData = "value" in actual;
+  if (expectedIsData !== actualIsData) {
+    return false;
+  }
+  if (expectedIsData && actualIsData) {
+    return (
+      expected.writable === actual.writable &&
+      Object.is(expected.value, actual.value)
+    );
+  }
+  return (
+    Object.is(expected.get, actual.get) && Object.is(expected.set, actual.set)
+  );
+}
+
+function assertArrayPrototypeIntegrity(): void {
+  const currentKeys = Reflect.ownKeys(Array.prototype);
+  if (currentKeys.length !== arrayPrototypeKeys.length) {
+    throw new TypeError("Array.prototype was modified after initialization");
+  }
+
+  for (let index = 0; index < currentKeys.length; index += 1) {
+    const currentKey = currentKeys[index] as PropertyKey;
+    const expectedKey = arrayPrototypeKeys[index] as PropertyKey;
+    const expectedDescriptor = arrayPrototypeDescriptors[
+      index
+    ] as PropertyDescriptor;
+    if (currentKey !== expectedKey) {
+      throw new TypeError("Array.prototype was modified after initialization");
+    }
+    const currentDescriptor = Object.getOwnPropertyDescriptor(
+      Array.prototype,
+      currentKey,
+    ) as PropertyDescriptor;
+    if (!descriptorsMatch(expectedDescriptor, currentDescriptor)) {
+      throw new TypeError("Array.prototype was modified after initialization");
+    }
+  }
+}
+
+const contextFrameKindV1Schema = z.enum([
   "snippet",
   "symbol",
   "fact",
@@ -21,7 +94,7 @@ export const contextFrameKindV1Schema = z.enum([
   "graph",
 ]);
 
-export const contextProvenanceV1Schema = z
+const contextProvenanceV1Schema = z
   .object({
     type: z.string(),
     uri: z.string().optional(),
@@ -32,14 +105,14 @@ export const contextProvenanceV1Schema = z
   })
   .strict();
 
-export const contextFrameEmbeddingV1Schema = z
+const contextFrameEmbeddingV1Schema = z
   .object({
     fingerprint: z.string(),
     vector: z.array(f32NumberSchema).optional(),
   })
   .strict();
 
-export const contextRelationV1Schema = z
+const contextRelationV1Schema = z
   .object({
     rel: z.string(),
     target_uri: z.string(),
@@ -47,7 +120,7 @@ export const contextRelationV1Schema = z
   })
   .strict();
 
-export const contextFrameV1Schema = z
+const contextFrameV1Schema = z
   .object({
     id: z.string(),
     kind: contextFrameKindV1Schema,
@@ -68,7 +141,7 @@ export const contextFrameV1Schema = z
   })
   .strict();
 
-export const contextQueryV1Schema = z
+const contextQueryV1Schema = z
   .object({
     goal: z.string(),
     query_text: z.string().optional(),
@@ -91,9 +164,11 @@ export type ContextFrameV1 = z.infer<typeof contextFrameV1Schema>;
 export type ContextQueryV1 = z.infer<typeof contextQueryV1Schema>;
 
 export function normalizeContextFrameV1(input: unknown): ContextFrameV1 {
+  assertArrayPrototypeIntegrity();
   return contextFrameV1Schema.parse(snapshotJsonWire(input));
 }
 
 export function normalizeContextQueryV1(input: unknown): ContextQueryV1 {
+  assertArrayPrototypeIntegrity();
   return contextQueryV1Schema.parse(snapshotJsonWire(input));
 }
