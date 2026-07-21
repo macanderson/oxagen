@@ -2902,6 +2902,14 @@ export function buildProgram(): Command {
       "Suppress progress chrome (stderr); data still emits",
       false,
     )
+    .addHelpText(
+      "after",
+      "\nInside the interactive REPL, `/dispatch` mode routes plain prompts through\n" +
+        "this same detached-worker mechanism (trailing ` &` forces background, a\n" +
+        "leading `=` forces inline), with completions folded back into the REPL\n" +
+        "transcript and a live Background panel roster — see\n" +
+        "docs/specs/repl-async-dispatch.md.",
+    )
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetRoot } = await import("./commands/fleet.js");
       await handleFleetRoot(command.optsWithGlobals());
