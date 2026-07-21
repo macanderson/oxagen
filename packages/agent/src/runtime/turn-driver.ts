@@ -161,6 +161,32 @@ export interface ClaimedRun {
   checkpoint: unknown | null;
   /** Seq of the last event durably appended as of the restored checkpoint. 0 for a fresh run. */
   checkpointSeq: number;
+  /**
+   * The run's persistent AGENT principal (iam.principals kind='agent',
+   * agents.principalId) — present when this run was dispatched as a deployed
+   * agent run rather than a bare conversational turn. When set together with
+   * `humanPrincipal`, the driver threads `principalKind: "agent"` plus both
+   * principals into the `CapabilityContext` it builds for this turn
+   * (docs/specs/agent-rbac/spec.md §3.1/§3.4) — never minted here, always
+   * supplied by whoever enqueued the run.
+   */
+  agentPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
+  /**
+   * The invoking HUMAN principal this agent run acts on behalf of — the
+   * delegation ceiling for effective-permission resolution. Present
+   * whenever `agentPrincipal` is.
+   */
+  humanPrincipal?: {
+    id: string;
+    kind: "human" | "agent" | "service";
+    orgId: string;
+    workspaceId: string | null;
+  } | null;
 }
 
 /** One event in a run's append-only event log, seq assigned by the worker (never the store). */
@@ -277,6 +303,19 @@ export function createPlatformTurnDriver(): TurnDriver {
           requestId: run.runId,
           surface: "runner",
           messageId: null,
+          // Thread the agent-run principal pair when this run was dispatched
+          // as a deployed agent run (docs/specs/agent-rbac/spec.md §3.1/§3.4)
+          // — both principals are always already-resolved by whoever
+          // enqueued the run; this driver never mints one. A bare
+          // conversational turn (no agentPrincipal/humanPrincipal on the
+          // claimed row) leaves principalKind unset, unchanged from before.
+          ...(run.agentPrincipal && run.humanPrincipal
+            ? {
+                principalKind: "agent" as const,
+                agentPrincipal: run.agentPrincipal,
+                humanPrincipal: run.humanPrincipal,
+              }
+            : {}),
         };
 
         const { tools: extraTools, mutatingToolNames } = await materializeTools(
