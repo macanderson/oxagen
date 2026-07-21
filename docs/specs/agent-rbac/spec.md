@@ -238,6 +238,9 @@ external identity metadata for human principals.
 
 An agent receives exactly one principal for its stable agent identity, not one
 per version or run. A service account receives one stable service principal.
+Principal uniqueness is unconditional across active, suspended, and soft-deleted
+rows. Recreating or restoring a subject reactivates the same principal row; it
+never creates a second identity and splits assignment or audit lineage.
 API keys are rotatable credentials whose records carry an explicit
 `principal_id`; rotation or multiple active keys do not create additional
 principals. Credentials authenticate a human or service principal but are not
@@ -363,6 +366,27 @@ Composite-string aliases are prohibited.
 The runtime delegation chain is persisted on the run and audit events; it is not
 inferred from agent ownership.
 
+Phase 1 runtime admission authorizes exactly one server-resolved authenticated
+principal. Surface context builders may supply session identity, an API-key
+credential reference, or another host-attested subject reference, but callers
+cannot submit the authenticated/acting principal identity or its authority
+chain as capability input. IAM management inputs may name a target principal by
+public id, but that target reference never becomes caller authority. The pure
+resolver and simulator accept ordered chains in Phase 1 to freeze intersection
+semantics; production multi-principal runtime chains begin only with the
+persisted delegation and `RunSpecV2` trust boundary in Phase 2.
+For Phase 1 evidence, that authenticated principal is both initiator and actor
+and the ordered chain is the singleton `[principal]`; the fields remain explicit
+rather than null or caller-authored.
+
+Organization creation is the one tenant-bootstrap exception: no tenant scope
+exists before the organization row. A narrowly named, authenticated system
+transaction atomically creates the organization, membership, human principal,
+policy-version row, protected Owner assignment, and immutable audit obligation.
+It cannot be called as a general tenant bypass. Credential-to-principal lookup
+may likewise use a named pre-scope system read constrained by the credential
+hash/id; ordinary IAM handlers remain tenant scoped.
+
 ## 5. Role and resource-grant model
 
 ### 5.1 Role behavior
@@ -388,6 +412,16 @@ but receives explicit system grants rather than a synthetic allow for every
 resource. Data-plane graph and tool access remains reviewable. Owner authority
 cannot be assigned to or inherited by agents; emergency data access uses the
 audited break-glass path.
+
+The pre-launch role migration is explicit: organization `Owner` remains
+human-only; `Admin`, `Compliance`, and `Billing` accept human or service
+principals; workspace `Viewer`, `Member`, and `Owner` metadata map to the
+`Observer`, `Contributor`, and `Operator` templates respectively, whose
+published versions accept human, agent, or service principals. Agents cannot
+receive organization roles. A service account may be organization- or
+workspace-scoped and must receive at least one active, eligible role in that
+exact scope before activation. Every legacy `defaultRoles` key must map through
+this table or fail the seed; none is silently discarded or broadened.
 
 ### 5.2 Versioned policy state
 
@@ -539,6 +573,12 @@ enforcement point, hooks are observe-only; any attempted mutation invalidates
 the decision and restarts normalization, approval, and authorization. No engine
 or adapter may alter an authorized command, query plan, tool input, dispatch
 target, or context request on the way to execution.
+
+The authorization-binding hash is computed over the complete canonical final
+input or graph plan, including sensitive fields; only the digest is persisted.
+Redaction is a separate audit-display operation: the stored audit payload/diff
+is redacted first and may have its own payload hash. A redacted representation
+is never the preimage for an approval or execution-binding hash.
 
 If one graph plan touches any approval-required label or relationship, the whole
 normalized plan pauses. Approval binds to the complete plan hash; the broker
@@ -1097,6 +1137,12 @@ deny and explicit Owner/Admin grants. Compliance receives read, simulation, and
 export access but not mutation access. IAM mutation contracts are not exposed on
 the agent surface. Every contract follows API/MCP parity and app-layer mapping.
 
+During Phase 1, new management contracts declare API/MCP/docs/unit layers but
+do not claim the `app` layer before the Phase 4 Permissions routes exist. The
+existing `list_iam_roles` binding remains real and is adapted to the new read
+model. Phase 4 adds each app-layer declaration and binding together with its
+actual page/action and proof; placeholder UI mappings are prohibited.
+
 App Server Actions live in the owning route segment's `actions.ts`, validate
 inputs, assert the authenticated management envelope, and call the capability.
 `apps/app/instrumentation.ts` is the Node-runtime bootstrap entrypoint and must
@@ -1175,6 +1221,12 @@ Every draft publication, role archive/restore, assignment, revocation, principal
 status change, approval, and break-glass action writes an immutable event in the
 same transaction as the state change. A durable outbox projects those events to
 ClickHouse without making ClickHouse mutable policy state.
+
+Runtime admission uses the same organization policy-version row as mutation.
+One transaction locks the version, loads effective authority, resolves the
+decision, and writes its immutable event plus obligation/request before commit;
+policy-changing transactions contend on that row. A revoke that commits first
+therefore cannot be followed by a decision recorded against the older version.
 
 Wall-clock expiry becomes ineffective at `validUntil` without waiting for a
 write. An idempotent sweeper records the explicit expired state and emits one
