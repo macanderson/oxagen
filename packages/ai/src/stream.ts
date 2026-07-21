@@ -1,5 +1,11 @@
 import pino from "pino";
-import { streamText, type ModelMessage, type LanguageModel, type ToolSet, type StreamTextResult } from "ai";
+import {
+  streamText,
+  type ModelMessage,
+  type LanguageModel,
+  type ToolSet,
+  type StreamTextResult,
+} from "ai";
 import type { JSONObject } from "@ai-sdk/provider";
 import {
   hashPrompt,
@@ -13,7 +19,10 @@ import { trace, context, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.stream" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.stream" },
+});
 
 // ── Reasoning token budget per effort level (tokens allocated to thinking) ──
 const REASONING_BUDGET: Record<EffortLevel, number> = {
@@ -216,14 +225,20 @@ export interface StreamAgentReplyArgs {
   };
   onFinish?: (event: {
     text: string;
-    usage: { promptTokens: number; completionTokens: number; totalTokens: number };
+    usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
     finishReason: string;
   }) => Promise<void> | void;
 }
 
 // RUNTIME_CONTEXT (v7 middle generic) is the SDK's `Context` alias for
 // `Record<string, unknown>` — spelled inline because `ai` does not re-export it.
-export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, Record<string, unknown>, never> {
+export function streamAgentReply(
+  args: StreamAgentReplyArgs,
+): StreamTextResult<ToolSet, Record<string, unknown>, never> {
   const model = args.model ?? defaultModel();
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
@@ -287,7 +302,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
         {
           role: "system",
           content: args.system,
-          providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+          providerOptions: {
+            anthropic: { cacheControl: { type: "ephemeral" } },
+          },
         },
       ]
     : [];
@@ -315,7 +332,9 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       ? { maxOutputTokens: args.maxOutputTokens }
       : {}),
     ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
-    ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
+    ...(args.abortSignal !== undefined
+      ? { abortSignal: args.abortSignal }
+      : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was
@@ -328,11 +347,27 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // Forward it so the rate card prices those tokens at the cheaper cached
       // rate — otherwise the customer is over-charged on the cached portion.
       // Zero when caching didn't engage (small prefix / non-Anthropic / cold).
-      const cachedTokens = event.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0;
+      const cachedTokens =
+        event.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0;
+      // Prompt-cache WRITES (cache creation): the AI SDK v7 gateway exposes these
+      // as `inputTokenDetails.cacheWriteTokens` (NOT `cacheCreationTokens` — that
+      // is the raw Anthropic field name, renamed by the SDK). Also a subset of
+      // `inputTokens`. Providers bill writes at a premium (Anthropic 1.25x base
+      // input); forwarding the count lets the rate card price them correctly
+      // instead of billing them as fresh 1x input (#1076). Zero on non-Anthropic
+      // or when no prefix was cached this turn.
+      const cacheWriteTokens =
+        event.totalUsage.inputTokenDetails?.cacheWriteTokens ?? 0;
       // The cost meter (provider rate card) turns tokens-in/out-by-model into
       // the USD a provider invoices us. This is the input to both the telemetry
       // cost column and the credit charge below.
-      const usage = { model: modelId, inputTokens, outputTokens, cachedTokens };
+      const usage = {
+        model: modelId,
+        inputTokens,
+        outputTokens,
+        cachedTokens,
+        cacheWriteTokens,
+      };
       const costUsdMicros = providerCostUsdMicros(usage);
 
       // ── OTEL: stamp token metrics on span and close it ─────────────────────
@@ -343,6 +378,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
           "ai.input_tokens": inputTokens,
           "ai.output_tokens": outputTokens,
           "ai.cached_tokens": cachedTokens,
+          "ai.cache_write_tokens": cacheWriteTokens,
           "ai.cost_usd_micros": costUsdMicros,
           "ai.duration_ms": durationMs,
         });
@@ -364,6 +400,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
             input_tokens: inputTokens,
             output_tokens: outputTokens,
             cached_tokens: cachedTokens,
+            cache_write_tokens: cacheWriteTokens,
             cost_usd_micros: costUsdMicros,
             duration_ms: durationMs,
             surface: args.telemetry.surface,

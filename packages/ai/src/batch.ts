@@ -9,7 +9,10 @@ import {
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.batch" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.batch" },
+});
 
 // ---------------------------------------------------------------------------
 // Anthropic Message Batches — background inference at half price.
@@ -57,7 +60,10 @@ export interface SubmitBatchArgs {
    * Injectable Anthropic client — defaults to a client reading ANTHROPIC_API_KEY
    * from the environment. Injected in tests to avoid network + env.
    */
-  client?: Pick<Anthropic["messages"]["batches"], "create" | "retrieve" | "results">;
+  client?: Pick<
+    Anthropic["messages"]["batches"],
+    "create" | "retrieve" | "results"
+  >;
 }
 
 export interface SubmitBatchResult {
@@ -75,9 +81,16 @@ export interface BatchResultItem {
   /** Present only when `type === "succeeded"`. */
   text?: string;
   usage?: {
+    /**
+     * INCLUSIVE input total (fresh + cache reads + cache writes) — normalized
+     * from the raw Anthropic batch usage (which is additive: `input_tokens`
+     * excludes cache tokens) to match the platform's rate-card convention, where
+     * fresh = inputTokens - cachedTokens - cacheWriteTokens.
+     */
     inputTokens: number;
     outputTokens: number;
     cachedTokens: number;
+    cacheWriteTokens: number;
   };
   /** Present when `type === "errored"`. */
   error?: string;
@@ -116,7 +129,9 @@ function anthropicClient(): Anthropic {
  * Submit a batch of deterministic inference requests. Returns the provider
  * batch id to poll. Does not wait — callers poll via {@link pollBatch}.
  */
-export async function submitBatch(args: SubmitBatchArgs): Promise<SubmitBatchResult> {
+export async function submitBatch(
+  args: SubmitBatchArgs,
+): Promise<SubmitBatchResult> {
   if (args.requests.length === 0) {
     throw new Error("submitBatch: requests must be non-empty");
   }
@@ -155,7 +170,10 @@ export interface PollBatchArgs {
   batchId: string;
   model: string;
   telemetry: BatchTelemetry;
-  client?: Pick<Anthropic["messages"]["batches"], "create" | "retrieve" | "results">;
+  client?: Pick<
+    Anthropic["messages"]["batches"],
+    "create" | "retrieve" | "results"
+  >;
   /**
    * When true (default), emit token_usage rows and charge credits for every
    * succeeded result once the batch has ended. Set false if an outer system
@@ -183,7 +201,13 @@ export async function pollBatch(args: PollBatchArgs): Promise<PollBatchResult> {
   const ended = batch.processing_status === "ended";
 
   if (!ended) {
-    return { batchId: args.batchId, status: batch.processing_status, ended: false, counts, results: [] };
+    return {
+      batchId: args.batchId,
+      status: batch.processing_status,
+      ended: false,
+      counts,
+      results: [],
+    };
   }
 
   const results: BatchResultItem[] = [];
@@ -197,10 +221,21 @@ export async function pollBatch(args: PollBatchArgs): Promise<PollBatchResult> {
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("");
+      // Raw Anthropic batch usage is ADDITIVE — `input_tokens` is the uncached
+      // remainder; cache reads/writes are separate counts. Normalize to the
+      // platform's INCLUSIVE convention (see the interface) so the rate card's
+      // `fresh = inputTokens - reads - writes` recovers the true fresh count and
+      // prices cache writes at the provider premium (#1076).
+      const cacheReadTokens = message.usage?.cache_read_input_tokens ?? 0;
+      const cacheWriteTokens = message.usage?.cache_creation_input_tokens ?? 0;
       const usage = {
-        inputTokens: message.usage?.input_tokens ?? 0,
+        inputTokens:
+          (message.usage?.input_tokens ?? 0) +
+          cacheReadTokens +
+          cacheWriteTokens,
         outputTokens: message.usage?.output_tokens ?? 0,
-        cachedTokens: message.usage?.cache_read_input_tokens ?? 0,
+        cachedTokens: cacheReadTokens,
+        cacheWriteTokens,
       };
       results.push({ customId, type: "succeeded", text, usage });
     } else if (result.type === "errored") {
@@ -215,14 +250,25 @@ export async function pollBatch(args: PollBatchArgs): Promise<PollBatchResult> {
   }
 
   if (args.meter !== false) {
-    await meterBatchResults(args.model, args.telemetry, results).catch((err: unknown) => {
-      // Metering is best-effort — a failure must not fail the poll.
-      logger.error({ err, batchId: args.batchId }, "pollBatch metering failed");
-    });
+    await meterBatchResults(args.model, args.telemetry, results).catch(
+      (err: unknown) => {
+        // Metering is best-effort — a failure must not fail the poll.
+        logger.error(
+          { err, batchId: args.batchId },
+          "pollBatch metering failed",
+        );
+      },
+    );
   }
 
   logger.info({ batchId: args.batchId, counts }, "pollBatch: batch ended");
-  return { batchId: args.batchId, status: batch.processing_status, ended: true, counts, results };
+  return {
+    batchId: args.batchId,
+    status: batch.processing_status,
+    ended: true,
+    counts,
+    results,
+  };
 }
 
 /**
@@ -245,7 +291,14 @@ async function meterBatchResults(
       const inputTokens = r.usage?.inputTokens ?? 0;
       const outputTokens = r.usage?.outputTokens ?? 0;
       const cachedTokens = r.usage?.cachedTokens ?? 0;
-      const costUsdMicros = providerCostUsdMicros({ model, inputTokens, outputTokens, cachedTokens });
+      const cacheWriteTokens = r.usage?.cacheWriteTokens ?? 0;
+      const costUsdMicros = providerCostUsdMicros({
+        model,
+        inputTokens,
+        outputTokens,
+        cachedTokens,
+        cacheWriteTokens,
+      });
       const promptHash = await hashPrompt(r.customId);
       return {
         row: {
@@ -257,13 +310,20 @@ async function meterBatchResults(
           input_tokens: inputTokens,
           output_tokens: outputTokens,
           cached_tokens: cachedTokens,
+          cache_write_tokens: cacheWriteTokens,
           cost_usd_micros: costUsdMicros,
           duration_ms: 0,
           surface: telemetry.surface,
           prompt_hash: promptHash,
           created_at: now,
         },
-        usage: { model, inputTokens, outputTokens, cachedTokens },
+        usage: {
+          model,
+          inputTokens,
+          outputTokens,
+          cachedTokens,
+          cacheWriteTokens,
+        },
       };
     }),
   );
@@ -276,8 +336,10 @@ async function meterBatchResults(
 
   // Charge credits for the aggregate batch spend. Rebuild the tenant scope from
   // the trusted telemetry context when none is active (background workers).
-  const capturedScope: TenantScope =
-    getScope() ?? { orgId: telemetry.orgId, workspaceId: telemetry.workspaceId };
+  const capturedScope: TenantScope = getScope() ?? {
+    orgId: telemetry.orgId,
+    workspaceId: telemetry.workspaceId,
+  };
   try {
     await runInTenantScope(capturedScope, async () => {
       for (const r of rows) {
