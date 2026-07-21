@@ -4453,6 +4453,19 @@
       }
     },
     {
+      "name": "ingest_stella_operational_telemetry",
+      "file": "telemetry.stella.ingest.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_user_preferences",
       "file": "user.preferences.read.ts",
       "domain": "user",
