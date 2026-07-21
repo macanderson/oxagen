@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   type Dirent,
@@ -68,6 +68,21 @@ const vendoredFixtureDirectory = resolve(
   "packages/run-evidence/fixtures/contextgraph",
 );
 
+function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const key of Object.keys(environment)) {
+    if (key.startsWith("GIT_")) {
+      delete environment[key];
+    }
+  }
+  environment.GIT_CONFIG_NOSYSTEM = "1";
+  environment.GIT_CONFIG_GLOBAL =
+    process.platform === "win32" ? "NUL" : "/dev/null";
+  return environment;
+}
+
+const localGitEnvironment = sanitizedGitEnvironment();
+
 function isJsonObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -89,8 +104,15 @@ function observedValue(value: unknown): string {
   return Array.isArray(value) ? "array" : typeof value;
 }
 
+function singleLine(value: string): string {
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/[\t ]+/g, " ")
+    .trim();
+}
+
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return singleLine(error instanceof Error ? error.message : String(error));
 }
 
 function exactKeyErrors(
@@ -366,6 +388,7 @@ function runLocalGit(
     return stripCommandNewline(
       execFileSync("git", ["-C", checkoutDirectory, ...arguments_], {
         encoding: "utf8",
+        env: localGitEnvironment,
         stdio: ["ignore", "pipe", "pipe"],
       }),
     );
@@ -373,6 +396,78 @@ function runLocalGit(
     errors.push(`${failureLabel}: ${errorMessage(error)}`);
     return undefined;
   }
+}
+
+function normalizeRepositoryUrl(value: string): string {
+  return value.endsWith(".git") ? value.slice(0, -4) : value;
+}
+
+function rawLocalOriginErrors(checkoutDirectory: string): string[] {
+  const result = spawnSync(
+    "git",
+    [
+      "-C",
+      checkoutDirectory,
+      "config",
+      "--local",
+      "--no-includes",
+      "--null",
+      "--get-all",
+      "remote.origin.url",
+    ],
+    {
+      encoding: "utf8",
+      env: localGitEnvironment,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+
+  if (result.error !== undefined) {
+    return [
+      `upstream checkout raw local origin: unable to read remote.origin.url (${errorMessage(result.error)})`,
+    ];
+  }
+  if (result.status === 1 && result.stdout.length === 0) {
+    return [
+      "upstream checkout raw local origin: expected exactly one remote.origin.url value, observed none",
+    ];
+  }
+  if (result.status !== 0) {
+    const detail = singleLine(result.stderr);
+    return [
+      `upstream checkout raw local origin: git config exited ${result.status ?? "without a status"}${detail.length > 0 ? ` (${detail})` : ""}`,
+    ];
+  }
+
+  const values = result.stdout.split("\0");
+  if (values.at(-1) === "") {
+    values.pop();
+  }
+  if (values.length === 0) {
+    return [
+      "upstream checkout raw local origin: expected exactly one remote.origin.url value, observed none",
+    ];
+  }
+  if (values.length !== 1) {
+    return [
+      `upstream checkout raw local origin: expected exactly one remote.origin.url value, observed ${values.length}`,
+    ];
+  }
+
+  const rawOrigin = values[0];
+  if (rawOrigin === undefined) {
+    return [
+      "upstream checkout raw local origin: expected exactly one remote.origin.url value, observed none",
+    ];
+  }
+  const normalizedOrigin = normalizeRepositoryUrl(rawOrigin);
+  if (normalizedOrigin !== EXPECTED_UPSTREAM_REPOSITORY) {
+    return [
+      `upstream checkout raw local origin: expected ${EXPECTED_UPSTREAM_REPOSITORY}, observed ${singleLine(normalizedOrigin)}`,
+    ];
+  }
+
+  return [];
 }
 
 function validateUpstreamManifest(
@@ -481,15 +576,14 @@ function verifyUpstreamCheckout(
     errors,
   );
   if (origin !== undefined) {
-    const normalizedOrigin = origin.endsWith(".git")
-      ? origin.slice(0, -4)
-      : origin;
+    const normalizedOrigin = normalizeRepositoryUrl(origin);
     if (normalizedOrigin !== EXPECTED_UPSTREAM_REPOSITORY) {
       errors.push(
         `upstream checkout origin: expected ${EXPECTED_UPSTREAM_REPOSITORY}, observed ${normalizedOrigin}`,
       );
     }
   }
+  errors.push(...rawLocalOriginErrors(realCheckout));
 
   const upstreamFixtureDirectory = resolve(
     realCheckout,
@@ -592,7 +686,7 @@ function main(): void {
   if (errors.length > 0) {
     console.error("Context Graph fixture drift check failed:");
     for (const error of errors) {
-      console.error(`- ${error}`);
+      console.error(`- ${singleLine(error)}`);
     }
     process.exitCode = 1;
     return;

@@ -1,5 +1,16 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { type SpawnSyncReturns, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it } from "vitest";
 import { sha256Digest } from "./digest.js";
 
 interface FixtureManifest {
@@ -18,6 +29,14 @@ const rootScriptUrl = new URL(
   "../../../tools/scripts/check-contextgraph-fixtures.ts",
   import.meta.url,
 );
+const oxagenRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const tsxPath = fileURLToPath(
+  new URL("../../../node_modules/.bin/tsx", import.meta.url),
+);
+const EXPECTED_UPSTREAM_REPOSITORY =
+  "https://github.com/macanderson/context-graph-protocol";
+const OXAGEN_REPOSITORY = "https://github.com/oxageninc/oxagen-platform";
+const temporaryDirectories: string[] = [];
 
 const EXPECTED_FILE_DIGESTS = {
   "context-frame.missing-citation.invalid.json":
@@ -47,6 +66,55 @@ function readManifest(): FixtureManifest {
     readFileSync(new URL("manifest.json", fixtureDirectory), "utf8"),
   ) as FixtureManifest;
 }
+
+function makeTemporaryDirectory(): string {
+  const directory = mkdtempSync(resolve(tmpdir(), "oxagen-contextgraph-"));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+function baseGitEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const key of Object.keys(environment)) {
+    if (key.startsWith("GIT_")) {
+      delete environment[key];
+    }
+  }
+  environment.GIT_CONFIG_NOSYSTEM = "1";
+  environment.GIT_CONFIG_GLOBAL =
+    process.platform === "win32" ? "NUL" : "/dev/null";
+  return environment;
+}
+
+function runFixtureCheck(
+  checkoutDirectory: string,
+  gitEnvironment: NodeJS.ProcessEnv = {},
+): SpawnSyncReturns<string> {
+  return spawnSync(tsxPath, [fileURLToPath(rootScriptUrl)], {
+    cwd: oxagenRoot,
+    encoding: "utf8",
+    env: {
+      ...baseGitEnvironment(),
+      CONTEXT_GRAPH_PROTOCOL_DIR: checkoutDirectory,
+      ...gitEnvironment,
+    },
+  });
+}
+
+function runTestGit(arguments_: readonly string[]): string {
+  const result = spawnSync("git", arguments_, {
+    encoding: "utf8",
+    env: baseGitEnvironment(),
+  });
+  expect(result.status, result.stderr).toBe(0);
+  return result.stdout.replace(/(?:\r?\n)+$/, "");
+}
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
 
 describe("Context Graph fixture drift lock", () => {
   it("wires the standalone root check", () => {
@@ -104,5 +172,123 @@ describe("Context Graph fixture drift lock", () => {
       const bytes = readFileSync(new URL(name, fixtureDirectory));
       expect(sha256Digest(bytes), name).toBe(expectedDigest);
     }
+  });
+
+  it("ignores ambient Git repository selection for a non-repository path", () => {
+    const fakeCheckout = makeTemporaryDirectory();
+    const result = runFixtureCheck(fakeCheckout, {
+      GIT_DIR: resolve(oxagenRoot, ".git"),
+      GIT_WORK_TREE: fakeCheckout,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      `- upstream checkout: ${realpathSync(fakeCheckout)} is not a local Git checkout root:`,
+    );
+  });
+
+  it("ignores ambient Git URL rewrites when checking the selected origin", () => {
+    const checkout = makeTemporaryDirectory();
+    runTestGit(["init", "--quiet", checkout]);
+    runTestGit([
+      "-C",
+      checkout,
+      "config",
+      "remote.origin.url",
+      `${OXAGEN_REPOSITORY}.git`,
+    ]);
+
+    const result = runFixtureCheck(checkout, {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: `url.${EXPECTED_UPSTREAM_REPOSITORY}.insteadOf`,
+      GIT_CONFIG_VALUE_0: OXAGEN_REPOSITORY,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      `- upstream checkout origin: expected ${EXPECTED_UPSTREAM_REPOSITORY}, observed ${OXAGEN_REPOSITORY}`,
+    );
+  });
+
+  it("checks the raw local origin behind a repository-local URL rewrite", () => {
+    const checkout = makeTemporaryDirectory();
+    runTestGit(["init", "--quiet", checkout]);
+    runTestGit([
+      "-C",
+      checkout,
+      "config",
+      "remote.origin.url",
+      `${OXAGEN_REPOSITORY}.git`,
+    ]);
+    runTestGit([
+      "-C",
+      checkout,
+      "config",
+      `url.${EXPECTED_UPSTREAM_REPOSITORY}.insteadOf`,
+      OXAGEN_REPOSITORY,
+    ]);
+    expect(runTestGit(["-C", checkout, "remote", "get-url", "origin"])).toBe(
+      `${EXPECTED_UPSTREAM_REPOSITORY}.git`,
+    );
+
+    const result = runFixtureCheck(checkout);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      `- upstream checkout raw local origin: expected ${EXPECTED_UPSTREAM_REPOSITORY}, observed ${OXAGEN_REPOSITORY}`,
+    );
+  });
+
+  it("rejects a missing raw local origin", () => {
+    const checkout = makeTemporaryDirectory();
+    runTestGit(["init", "--quiet", checkout]);
+
+    const result = runFixtureCheck(checkout);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "- upstream checkout raw local origin: expected exactly one remote.origin.url value, observed none",
+    );
+  });
+
+  it("rejects multiple raw local origins", () => {
+    const checkout = makeTemporaryDirectory();
+    runTestGit(["init", "--quiet", checkout]);
+    runTestGit([
+      "-C",
+      checkout,
+      "config",
+      "--add",
+      "remote.origin.url",
+      `${EXPECTED_UPSTREAM_REPOSITORY}.git`,
+    ]);
+    runTestGit([
+      "-C",
+      checkout,
+      "config",
+      "--add",
+      "remote.origin.url",
+      `${EXPECTED_UPSTREAM_REPOSITORY}.git`,
+    ]);
+
+    const result = runFixtureCheck(checkout);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "- upstream checkout raw local origin: expected exactly one remote.origin.url value, observed 2",
+    );
+  });
+
+  it("reports every child-process failure as one bullet line", () => {
+    const result = runFixtureCheck(makeTemporaryDirectory());
+    const nonemptyLines = result.stderr
+      .split(/\r?\n/)
+      .filter((line) => line.length > 0);
+
+    expect(result.status).toBe(1);
+    expect(nonemptyLines[0]).toBe("Context Graph fixture drift check failed:");
+    expect(nonemptyLines.slice(1).every((line) => line.startsWith("- "))).toBe(
+      true,
+    );
   });
 });
