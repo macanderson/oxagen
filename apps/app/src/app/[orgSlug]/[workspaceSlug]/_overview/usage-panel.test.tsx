@@ -64,6 +64,7 @@ function breakdown(
       cachedTokens: 0,
       costMicros: 0,
       executions: 0,
+      messages: 0,
     },
     series: [],
     byModel: [],
@@ -71,6 +72,7 @@ function breakdown(
     byWorkspace: [],
     byCapability: [],
     byPrincipal: [],
+    byUser: [],
     ...overrides,
   };
 }
@@ -91,6 +93,7 @@ describe("UsagePanel", () => {
           cachedTokens: 0,
           costMicros: 1_250_000,
           executions: 4,
+          messages: 4,
         },
         series: [
           {
@@ -100,6 +103,7 @@ describe("UsagePanel", () => {
             cachedTokens: 0,
             costMicros: 500_000,
             executions: 1,
+            messages: 1,
           },
         ],
         byModel: [
@@ -111,6 +115,7 @@ describe("UsagePanel", () => {
             cachedTokens: 0,
             costMicros: 1_250_000,
             executions: 4,
+            messages: 4,
           },
         ],
       }),
