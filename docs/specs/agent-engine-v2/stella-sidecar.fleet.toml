@@ -1,0 +1,155 @@
+# Stella sidecar integration — stella fleet plan (oxagen-platform side)
+# Source: docs/specs/agent-engine-v2/stella-sidecar-service.md (2026-07-20),
+# parent ADR-033 + docs/specs/agent-engine-v2/spec.md.
+#
+# Wires the Stella Rust engine into the platform as an external sidecar service
+# (ADR-033 Option B) at the executeTurn seam, plus the infra to host it.
+#
+# Run from the oxagen-platform repo root, on a FEATURE BRANCH:
+#   git checkout feat/stella-engine-seam
+#   stella fleet --plan docs/specs/agent-engine-v2/stella-sidecar.fleet.toml --max-concurrency 4 --budget <N>
+# Per-child budget = --budget / --max-concurrency. No resume — re-running re-dispatches
+# every task; prompts tell workers to reconcile with already-landed work.
+#
+# BINDING RULES every worker must honor (from CLAUDE.md + .agents/skills):
+#  - Everything committed is functionally complete — fully wired end-to-end, tests
+#    passing, NO dead code / no half-wired scaffolding.
+#  - New code requires new tests; keep each package at/above its coverage ratchet.
+#  - NEVER run all tests. Run ONLY the narrow file/package implicated:
+#    `pnpm --filter <pkg> test:unit -- <file>`. The full `pnpm gate` is CI's job.
+#  - All LLM calls go through @oxagen/ai (never import from "ai" directly).
+#  - Every tool call the engine makes MUST re-enter kernel.invoke() — sovereignty rule.
+#  - Tenancy: withTenantDb/withSystemDb/scopedSession; raw db() is banned.
+#  - Env vars: add to packages/config/src/registry.ts ONLY, then `pnpm env:check --write`
+#    to regenerate .env.example — never hand-edit .env.example.
+#  - This adds NO new user-facing capability/contract — it is plumbing behind
+#    executeTurn. Do NOT add a contract/API route/MCP tool; check:manifest is unaffected.
+#
+# Phase order: 0 (config) -> 1 (client+ports) -> 2 (seam+infra, parallel) -> 3 verify.
+# Tasks sharing a claimed file are dependency-ordered (claims are exact-string locks;
+# a conflict at dispatch is a PERMANENT failure and dependents are skipped).
+
+# ───────────────────────── Phase 0 — configuration knobs ─────────────────────────
+
+[[tasks]]
+id = "p0-env-registry"
+title = "ENGINE + STELLA_ENGINE_* env vars in the config registry"
+claims = ["packages/config/src/registry.ts", "packages/config/src/env.ts", ".env.example"]
+prompt = '''
+You are one worker in a fleet wiring the Stella Rust engine into the platform as an external sidecar (ADR-033 Option B). Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"Configuration" first. Reconcile with already-landed work: read the files before editing.
+
+Add four env vars to packages/config/src/registry.ts (ENV_REGISTRY), in a NEW `# ── Agent engine ──` group placed next to the Sandbox group. Copy the exact shape of the SANDBOX_* / MODAL_RUNNER_* entries (group, description, secret, clientExposed, services, requiredIn, valueOrigin):
+  - ENGINE: services [api,app,mcp], valueOrigin "static", staticValue { "*": "ts" }, description "Turn engine at the executeTurn seam: ts | stella."
+  - STELLA_ENGINE_ENABLED: valueOrigin "static", staticValue { "*": "false" }, description "Hard off-switch for the Stella engine sidecar."
+  - STELLA_ENGINE_URL: valueOrigin "manual", secret false, description "Base URL of the stella-serve sidecar (ENGINE=stella)."
+  - STELLA_ENGINE_TOKEN: valueOrigin "manual", secret TRUE, description "Bearer token for the stella-serve sidecar (ENGINE=stella)."
+Then add the runtime validators to packages/config/src/env.ts baseEnvSchema (ENGINE as an enum ["ts","stella"] default "ts"; the STELLA_* as optional strings; STELLA_ENGINE_ENABLED as a boolean-ish string). Every schema key MUST have a registry entry (registry.test.ts asserts this).
+
+Regenerate .env.example: run `pnpm env:check --write` (or the documented generator) so .env.example is in sync — do NOT hand-edit it.
+
+Verify: `pnpm --filter @oxagen/config test:unit` (registry + env tests pass) and `pnpm env:check` reports in-sync. COMMIT via repo_commit (scope: config). Uncommitted work is lost.
+'''
+
+# ───────────────────────── Phase 1 — the client + ports adapter ─────────────────────────
+
+[[tasks]]
+id = "p1-engine-client"
+title = "@oxagen/stella-engine-client — sidecar HTTP/SSE client + availability guard"
+depends_on = ["p0-env-registry"]
+claims = ["packages/stella-engine-client/package.json", "packages/stella-engine-client/src/index.ts", "packages/stella-engine-client/src/client.ts", "packages/stella-engine-client/src/config.ts", "pnpm-workspace.yaml"]
+prompt = '''
+You are one worker in a fleet wiring the Stella engine sidecar into the platform. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"New package" and study packages/sandbox/src/modal.ts + packages/sandbox/src/index.ts — the createModalSandbox client and the isSandboxAvailable() guard are your templates. Reconcile with landed work (config vars exist).
+
+Create a new workspace package `@oxagen/stella-engine-client` (packages/stella-engine-client; register in the workspace if pnpm-workspace.yaml enumerates packages — most globs cover packages/*, verify). Contents:
+1. config.ts — read ENGINE, STELLA_ENGINE_ENABLED, STELLA_ENGINE_URL, STELLA_ENGINE_TOKEN via @oxagen/config (NOT process.env directly if the config package exposes a typed accessor). Export `isStellaEngineAvailable()` — true only when ENGINE=stella AND STELLA_ENGINE_ENABLED=true AND url+token resolve (mirror isSandboxAvailable at packages/sandbox/src/index.ts:57).
+2. client.ts — `createStellaEngineClient({ baseUrl, token, fetchImpl? })` with the HTTP methods against the stella-serve wire API (see the Stella-side design macanderson/stella:docs/design/serve-surface.md "Architecture"): createSession, driveTurn, openEventStream (SSE, resumable via ?after=<seq>), postToolResult(callId, output), postApproval(id, decision), steer, pause, cancel, deleteSession. snake_case on the wire like the Modal driver. Bearer auth header. Typed errors with a stable `code` field per the error-handling skill; log-then-rethrow on network failures.
+3. index.ts — barrel export.
+
+Do NOT wire the ports adapter here (that is p1-ports-adapter, which depends on this) — but export the seams (an interface for the tool executor / provider / approval callbacks the client will service). Unit-test the client against a mock fetch (createSession, SSE parse incl. resume, tool-result POST, availability guard true/false). Add vitest config with a coverage threshold consistent with sibling new packages.
+
+Verify: `pnpm --filter @oxagen/stella-engine-client test:unit`. COMMIT via repo_commit (scope: stella-engine-client). Uncommitted work is lost.
+'''
+
+[[tasks]]
+id = "p1-ports-adapter"
+title = "Ports adapter — remote tool/model/approval callbacks re-enter kernel.invoke()"
+depends_on = ["p1-engine-client"]
+claims = ["packages/stella-engine-client/src/ports.ts", "packages/stella-engine-client/src/run-turn.ts"]
+prompt = '''
+You are one worker in a fleet wiring the Stella engine sidecar. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"New package" + §"Sovereignty & containment", ADR-033 §4.1 (port mapping), and study packages/agent/src/runtime/materialize-tools.ts + packages/agent/src/adapters/ (createPlatformAgentAi) + packages/handlers approvals (createApprovalRequest/waitForApproval). The client package now exists — build on it; reconcile with landed work.
+
+Implement the ports adapter that services the sidecar's reverse RPC so the ENGINE stays the brain and the KERNEL stays the law:
+1. ports.ts — given a tenant context + a materialized tool set, produce the callbacks the client invokes when the sidecar emits reverse-RPC requests:
+   - tool executor: for a tool_start {call_id, name, input}, run the SAME materialized executor (approval wait, kernel.invoke(), metering, OTEL, consent — untouched), then postToolResult(call_id, output). EVERY tool call re-enters kernel.invoke(). Map capability read_only metadata onto the schemas advertised at session-create so Stella's partitioned concurrency works.
+   - provider: for a model request, call @oxagen/ai streamAgentReply (metering/billing/gateway/BYOK intact); stream text/reasoning deltas back so the browser gets token-level streaming; classify errors into Stella's taxonomy (Transport/RateLimited/Auth/Malformed/Terminal) at this adapter.
+   - approval gate: for a scope_review, createApprovalRequest + waitForApproval, then postApproval(id, decision). Headless with no bypass = the sidecar's ScopeReviewRequiredHeadless surfaces as a real approval row, never a silent auto-approve.
+   - command runner: back onto the tenant sandbox exec (ModalSandboxWorkspace.exec et al.) and emit the sandbox-runtime cost ClickHouse event (the metering gap spec.md §7 names) so compute cost is priced alongside the token_usage rows streamAgentReply writes.
+2. run-turn.ts — `runStellaTurn(spec)`: create session (send materialized tool schemas incl. readOnly), open the events SSE, service the reverse RPC via the ports above, append each AgentEvent to the caller's event sink (the agent_events log / SSE projection), and resolve with the final result. Tenancy: everything runs in runInTenantScope; no raw db().
+
+Unit-test with a mock client emitting a scripted AgentEvent stream (a tool_start → assert kernel.invoke path is called and result POSTed; a scope_review → assert approval created; a model request → assert streamAgentReply called). COMMIT via repo_commit (scope: stella-engine-client). Uncommitted work is lost.
+'''
+
+# ───────────────────────── Phase 2 — the seam + infra (parallel from Phase 1) ─────────────────────────
+
+[[tasks]]
+id = "p2-executeturn-seam"
+title = "Route executeTurn to the Stella client behind ENGINE=stella"
+depends_on = ["p1-ports-adapter"]
+claims = ["packages/agent-runner/src/execute-turn.ts", "packages/agent-runner/src/execute-turn.test.ts", "packages/agent-runner/package.json"]
+prompt = '''
+You are one worker in a fleet wiring the Stella engine sidecar. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"What plugs in where" and packages/agent-runner/src/execute-turn.ts (the ONE entrypoint — its module doc says Phase 3 swaps the engine behind an ENGINE flag HERE). The client + ports adapter now exist; reconcile with landed work.
+
+Modify executeTurn / executePipelineTurn so that when isStellaEngineAvailable() is true they route to runStellaTurn(spec) from @oxagen/stella-engine-client (add it as a dependency in packages/agent-runner/package.json), and OTHERWISE fall through to the existing runCodingAgent/runTurn byte-for-byte. Requirements:
+- Default path (ENGINE unset/ts) is completely unchanged — this is the correctness bar. No behavior drift for existing callers.
+- Graceful degradation: if the client is unavailable or the sidecar call fails at session-create, fall back to the TS engine and log (do not 500). A mid-turn sidecar failure surfaces as a normal turn error.
+- Keep the two-function shape (bare loop vs judged pipeline); pass `surface` through so it is stamped on the run row.
+- Do NOT change any call site of executeTurn — the whole point of the seam is that surfaces don't change.
+
+Test: extend execute-turn.test.ts — with the guard mocked false, assert it delegates to runCodingAgent unchanged; with it true, assert it calls runStellaTurn with the spec; with the client throwing at create, assert TS fallback. `pnpm --filter @oxagen/agent-runner test:unit -- execute-turn`. COMMIT via repo_commit (scope: agent-runner). Uncommitted work is lost.
+'''
+
+[[tasks]]
+id = "p2-compose-service"
+title = "docker-compose stella-engine service (profile-gated) + dev launcher wiring"
+depends_on = ["p0-env-registry"]
+claims = ["docker-compose.dev.yml", "tools/scripts/dev.ts"]
+prompt = '''
+You are one worker in a fleet provisioning infra to host the Stella engine sidecar for local dev. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"Infra provisioned → Local dev". Reconcile with landed work (env vars exist).
+
+1. Add a `stella-engine` service to docker-compose.dev.yml alongside postgres/neo4j/clickhouse, behind a compose profile `["stella"]` so it does NOT start on a default `pnpm dev` (the image builds from the Stella repo; not every dev needs it). Use image `ghcr.io/macanderson/stella-serve:${STELLA_ENGINE_TAG:-latest}`, container_name oxagen-v2-stella-engine, env STELLA_SERVE_BIND=0.0.0.0:8080 / STELLA_SERVE_TOKEN=${STELLA_ENGINE_TOKEN:-dev-stella-token} / STELLA_SERVE_TOOLS=remote, ports 8080:8080, a /healthz healthcheck, restart unless-stopped. Match the exact YAML style of the existing services (see the spec for the block).
+2. In tools/scripts/dev.ts, wire it so that ONLY when the stella profile is active (e.g. an OXAGEN_STELLA=1 env or a --stella flag the launcher already supports patterns for) the launcher: brings up the profile, sets ENGINE=stella + STELLA_ENGINE_ENABLED=true + STELLA_ENGINE_URL=http://localhost:8080 for the app processes, and waits on the healthcheck. The DEFAULT dev stack must be byte-identical to today — do not start the sidecar or flip ENGINE by default.
+
+Verify: `docker compose -f docker-compose.dev.yml config` parses; the default `pnpm dev` path is unchanged (read the launcher carefully; add a unit test if dev.ts has a testable seam). COMMIT via repo_commit (scope: infra). Uncommitted work is lost.
+'''
+
+[[tasks]]
+id = "p2-deploy-runbook"
+title = "ops/stella-engine deploy runbook + Modal/container config"
+depends_on = ["p0-env-registry"]
+claims = ["ops/stella-engine/README.md", "ops/stella-engine/deploy.md"]
+prompt = '''
+You are one worker in a fleet provisioning production infra for the Stella engine sidecar. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"Infra provisioned → Production" and mirror the house style of ops/modal-sandbox/README.md exactly (it is the operational precedent).
+
+Create ops/stella-engine/:
+1. README.md — deployment runbook mirroring ops/modal-sandbox/README.md: why a sidecar/container (not Vercel — the engine is stateful and its turn future is !Send), first-time deploy (mint token `openssl rand -hex 32`; build/push the image ghcr.io/macanderson/stella-serve from the Stella repo's packaging/docker/Dockerfile.serve; wire STELLA_ENGINE_URL/STELLA_ENGINE_TOKEN/STELLA_ENGINE_ENABLED/ENGINE on Vercel + .env.local), health check (`curl $STELLA_ENGINE_URL/healthz`), redeploy-on-change, drift diagnosis (compare /v1/meta version vs the deployed image tag), and cost guardrails. The engine runs INSIDE the tenant sandbox boundary and registers no local tools (STELLA_SERVE_TOOLS=remote) — every tool/model/approval crosses back to kernel.invoke().
+2. deploy.md — the two supported targets: (a) Modal web app behind a bearer token (near-term, matches ops/modal-sandbox), (b) a small always-on self-hosted container pool (ECS/Fly/Cloud Run) as the long-lived worker pool ADR-033 calls for. Note: no new AWS resources — AWS is tfstate+KMS only; BYOK provider keys are decrypted by the existing KMS (infra/modules/kms) and passed per-session over the wire, never held at rest by the engine.
+
+These are docs — no tests needed; verify by re-reading against ops/modal-sandbox/README.md for parity of structure. COMMIT via repo_commit (scope: ops). Uncommitted work is lost.
+'''
+
+# ───────────────────────── Phase 3 — end-to-end verification ─────────────────────────
+
+[[tasks]]
+id = "p3-e2e-shadow"
+title = "End-to-end shadow test against a live stella-serve + parity harness"
+depends_on = ["p2-executeturn-seam", "p2-compose-service"]
+claims = ["packages/stella-engine-client/test/e2e.test.ts", "docs/specs/agent-engine-v2/stella-sidecar-service.md"]
+prompt = '''
+You are the verification worker in a fleet that wired the Stella engine sidecar into the platform. Read docs/specs/agent-engine-v2/stella-sidecar-service.md §"Rollout". Reconcile with all landed work (config, client, ports, seam, compose, runbook). The Stella-side image (ghcr.io/macanderson/stella-serve) must exist — if it does not yet, write the test to SKIP with a clear message when STELLA_ENGINE_URL is unset, and document how to run it once the image is published.
+
+1. packages/stella-engine-client/test/e2e.test.ts — an integration test that, when STELLA_ENGINE_URL+STELLA_ENGINE_TOKEN are set (e.g. via `docker compose --profile stella up`), drives one full turn through runStellaTurn against a REAL stella-serve: assert the AgentEvent stream reaches a single terminal Complete, that a tool_start round-trips through kernel.invoke() and the result is POSTed, that a scope_review creates an approval row, and that token_usage + sandbox-cost events are emitted. Skips cleanly (test.skip) when the engine is not configured so CI stays green without the sidecar.
+2. Add a small parity harness note: how to run the same prompt through ENGINE=ts and ENGINE=stella and diff the AgentEvent streams / verdicts (the shadow-mode gate from spec.md §7). Wire nothing to production — this stays behind the flag.
+3. Update docs/specs/agent-engine-v2/stella-sidecar-service.md "Build decomposition" to mark what shipped and note deviations.
+
+Verify: `pnpm --filter @oxagen/stella-engine-client test:unit` green (e2e skips without the sidecar; passes with `docker compose --profile stella up`). Save the run output under verifications/<session-id>/. COMMIT via repo_commit (scope: stella-engine-client). Uncommitted work is lost.
+'''
