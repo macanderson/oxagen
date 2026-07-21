@@ -10,8 +10,12 @@
  * still consume. Idempotent.
  */
 
-import { setBillingAdmissionGate } from "@oxagen/oxagen/kernel";
+import {
+  setBillingAdmissionGate,
+  setBudgetAdmissionGate,
+} from "@oxagen/oxagen/kernel";
 import { assertCanStartTurn } from "./metering";
+import { assertWithinSpendBudget } from "./spend-budget-gate";
 import { logger } from "./logger";
 
 let booted = false;
@@ -20,5 +24,12 @@ export function bootstrapBillingRuntime(): void {
   if (booted) return;
   booted = true;
   setBillingAdmissionGate((orgId) => assertCanStartTurn(orgId));
-  logger.info({}, "billing: admission gate wired into kernel.invoke()");
+  // Hard period-to-date spend ceiling (OXA-1079). Fires right after the billing
+  // admission gate inside the kernel's tenant scope; denies with
+  // BudgetExceededError when an org/workspace ceiling is reached.
+  setBudgetAdmissionGate((args) => assertWithinSpendBudget(args));
+  logger.info(
+    {},
+    "billing: admission + spend-budget gates wired into kernel.invoke()",
+  );
 }

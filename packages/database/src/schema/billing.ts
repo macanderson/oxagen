@@ -501,3 +501,74 @@ export const stripeEventProcessing = billingSchema.table(
     ),
   }),
 );
+
+// Hard PERIOD-TO-DATE spend ceiling (OXA-1079). Distinct axis from the per-TURN
+// dollar budget in workspace.workspace_budget_policy / budget.policy.* (which
+// caps a single agent turn's cost inside the runCodingAgent loop): THIS ceiling
+// caps cumulative period spend for a whole org or workspace and is enforced in
+// the kernel's invoke() admission path (the budget gate, next to IAM/billing) so
+// a runaway fleet is DENIED before the provider call, not discovered on the
+// invoice.
+//
+// ONE table holds both scopes (mirrors workspace.routing_policy): a row with
+// workspace_id = NULL is the ORG-LEVEL ceiling for all workspace spend; a
+// non-NULL workspace_id scopes the ceiling to that one workspace. Both apply —
+// the gate denies when EITHER is exceeded. RLS class `workspace_nullable` so a
+// withTenantDb read sees the org-default row AND the workspace's own row.
+export const spendBudgets = billingSchema.table(
+  "spend_budgets",
+  {
+    ...idMixin("bdg"),
+    ...auditMixin(),
+    orgId: uuid("org_id").notNull(),
+    // NULL ⇒ ORG-LEVEL ceiling covering every workspace; non-NULL ⇒ that one
+    // workspace's ceiling.
+    workspaceId: uuid("workspace_id"),
+    // Whether this ceiling is enforced. A disabled row is a documented no-op.
+    enabled: boolean("enabled").notNull().default(true),
+    // Window the ceiling is measured over: "monthly" = calendar month to date
+    // (UTC); "rolling" = the trailing `window_days`-day window ending now.
+    period: text("period").notNull().default("monthly"),
+    // Trailing window length in days for period = 'rolling'. NULL for 'monthly'.
+    windowDays: integer("window_days"),
+    // The hard ceiling in micro-USD (1 USD = 1_000_000), consistent with
+    // token_usage.cost_usd_micros — integer math, no float rounding on a dollar
+    // ceiling. bigint: a large enterprise monthly ceiling can exceed 2^31 micros
+    // ($2.1k) easily.
+    limitMicros: bigint("limit_micros", { mode: "bigint" }).notNull(),
+    // Highest soft threshold (50/80/95/100) already notified for the CURRENT
+    // period, so a crossing notifies at most once. Reset to 0 when
+    // notified_period_start no longer equals the active period's start.
+    notifiedThreshold: integer("notified_threshold").notNull().default(0),
+    // The period-start the notified_threshold watermark belongs to; a mismatch
+    // with the active period's start means the period rolled over → reset.
+    notifiedPeriodStart: timestamp("notified_period_start", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // At most one org-level ceiling per org (workspace_id IS NULL)…
+    orgDefaultIdx: uniqueIndex("spend_budgets_org_default_idx")
+      .on(t.orgId)
+      .where(sql`workspace_id IS NULL`),
+    // …and at most one ceiling per workspace.
+    workspaceIdx: uniqueIndex("spend_budgets_workspace_idx")
+      .on(t.workspaceId)
+      .where(sql`workspace_id IS NOT NULL`),
+    orgWorkspaceIdx: index("spend_budgets_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    periodCheck: check(
+      "spend_budgets_period_check",
+      sql`${t.period} IN ('monthly','rolling')`,
+    ),
+    // A rolling budget must carry a positive window; a monthly one must not.
+    windowCheck: check(
+      "spend_budgets_window_check",
+      sql`(${t.period} = 'rolling' AND ${t.windowDays} IS NOT NULL AND ${t.windowDays} > 0) OR (${t.period} = 'monthly' AND ${t.windowDays} IS NULL)`,
+    ),
+    limitCheck: check("spend_budgets_limit_check", sql`${t.limitMicros} > 0`),
+  }),
+);

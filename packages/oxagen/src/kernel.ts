@@ -49,6 +49,51 @@ export function clearBillingAdmissionGate(): void {
   _billingGate = null;
 }
 
+// ── Budget admission gate (injected at bootstrap) ────────────────────────────
+//
+// A hard PERIOD-TO-DATE spend ceiling (OXA-1079). Mirrors the billing admission
+// gate: the kernel carries no dependency on @oxagen/billing — the gate is
+// injected once at service bootstrap (bootstrapBillingRuntime) via
+// `setBudgetAdmissionGate`, and throws @oxagen/billing's own BudgetExceededError
+// (a plain Error with `code === "budget_exceeded"`, duck-typed at the surfaces)
+// to refuse a turn.
+//
+// It fires AFTER the billing admission gate (a suspended/zero-balance org is
+// refused first) and BEFORE the entitlement gate + handler, INSIDE the tenant
+// scope (its withTenantDb budget read needs the active scope). It is skipped on
+// exactly the same conditions as the billing gate — unscoped capabilities and
+// `noBillingGate: true` contracts (reading your own spend/budget must never be
+// blocked by being over budget) — plus it needs a workspaceId (a workspace
+// ceiling can't be evaluated without one). Unlike the billing gate it takes the
+// full scope + capability so it can evaluate BOTH the org-level and
+// workspace-level ceiling and name the denied capability.
+//
+// When no gate is registered (tests, CLI) the call proceeds unconditionally —
+// matches the billing/IAM/entitlement default-open injection pattern.
+
+export type BudgetAdmissionGateFn = (args: {
+  orgId: string;
+  workspaceId: string;
+  capability: string;
+}) => Promise<void>;
+
+let _budgetGate: BudgetAdmissionGateFn | null = null;
+
+/**
+ * Register the budget admission gate. Call once at service bootstrap.
+ * The gate must throw `BudgetExceededError` (from @oxagen/billing) to refuse a
+ * turn — its stable `code: "budget_exceeded"` is duck-typed by the kernel catch
+ * (classified as a DENY, not an error) and by the Hono/MCP error handlers (402).
+ */
+export function setBudgetAdmissionGate(gate: BudgetAdmissionGateFn): void {
+  _budgetGate = gate;
+}
+
+/** Remove the budget gate. Used in tests. */
+export function clearBudgetAdmissionGate(): void {
+  _budgetGate = null;
+}
+
 // ── Capability entitlement gate (injected at bootstrap) ──────────────────────
 //
 // Mirrors the billing admission gate pattern. The gate is registered once at
@@ -315,9 +360,10 @@ export interface KernelSecurityEvent {
   requestId: string;
   /**
    * The CapabilityErrorCode that caused a deny/error, if any. Includes
-   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515).
+   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515) and
+   * "budget_exceeded" for the hard spend-ceiling denial (OXA-1079).
    */
-  errorCode: CapabilityErrorCode | "no_tenant_scope" | null;
+  errorCode: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded" | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -393,7 +439,7 @@ export interface KernelTraceEvent {
   /** The validated output — present only when status === "ok". */
   output?: unknown;
   /** Failure code when status === "error". */
-  errorCode?: CapabilityErrorCode | "no_tenant_scope";
+  errorCode?: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded";
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -867,6 +913,29 @@ async function _invokeCore(
       }
       // ── End billing admission gate ───────────────────────────────────────────
 
+      // ── Budget admission gate (OXA-1079) ─────────────────────────────────────
+      // The hard period-to-date spend ceiling. Fires after the billing gate on
+      // exactly the same skip conditions (unscoped / noBillingGate skip it — a
+      // read of your own spend/budget must not be blocked by being over budget),
+      // and additionally requires a workspaceId (a workspace ceiling can't be
+      // evaluated without one). Throws BudgetExceededError (code
+      // "budget_exceeded") when a scope's period-to-date spend has reached its
+      // ceiling — DENIED before this invocation's own provider cost is incurred.
+      if (
+        _budgetGate !== null &&
+        ctx.orgId &&
+        ctx.workspaceId &&
+        !skipBilling &&
+        isScoped
+      ) {
+        await _budgetGate({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          capability: canonical,
+        });
+      }
+      // ── End budget admission gate ────────────────────────────────────────────
+
       // ── Capability entitlement gate ──────────────────────────────────────────
       // Runs after the billing gate. Only fires when:
       //   1. The contract is claimed by a registered plugin (builtin contracts
@@ -920,20 +989,30 @@ async function _invokeCore(
     // orgId:"" fail-open path) carries a stable `code` we surface to the
     // audit chain so the denial reason is explainable (SOC 2 forensics).
     const isCapErr = err instanceof CapabilityError;
-    const scopeCode =
+    // Duck-typed stable codes from errors the kernel deliberately does NOT
+    // import (keeps it free of @oxagen/tenancy / @oxagen/billing deps): a
+    // TenantScopeError ("no_tenant_scope") and a BudgetExceededError
+    // ("budget_exceeded", OXA-1079). Both are DENIALS, not server errors — a
+    // spend-ceiling refusal is a policy decision that belongs in the audit
+    // chain as a deny (SOC2), exactly like an IAM deny.
+    const duckCode =
       err instanceof Error && "code" in err && err.code === "no_tenant_scope"
-        ? "no_tenant_scope"
-        : null;
+        ? ("no_tenant_scope" as const)
+        : err instanceof Error &&
+            "code" in err &&
+            err.code === "budget_exceeded"
+          ? ("budget_exceeded" as const)
+          : null;
     emitSecurityEvent({
       capability: canonical,
       outcome:
-        (isCapErr && err.code === "no_handler") || scopeCode ? "deny" : "error",
+        (isCapErr && err.code === "no_handler") || duckCode ? "deny" : "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: isCapErr ? err.code : scopeCode,
+      errorCode: isCapErr ? err.code : duckCode,
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
@@ -946,7 +1025,7 @@ async function _invokeCore(
       requestId: ctx.requestId,
       messageId: ctx.messageId,
       input: inputResult.data,
-      errorCode: isCapErr ? err.code : (scopeCode ?? undefined),
+      errorCode: isCapErr ? err.code : (duckCode ?? undefined),
       durationMs: Date.now() - startMs,
     });
     throw err;

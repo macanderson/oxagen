@@ -168,6 +168,51 @@ export async function sumTokenUsage(args: {
   ];
 }
 
+/**
+ * Sum `token_usage.cost_usd_micros` (period-to-date spend, micro-USD) for a
+ * scope between two timestamps. Powers the kernel spend-budget gate (OXA-1079):
+ * an org-level ceiling omits `workspaceId` (all workspaces roll up); a
+ * workspace-level ceiling passes it to scope the sum to that workspace.
+ *
+ * Aggregating in ClickHouse keeps the payload a single scalar regardless of
+ * usage volume, and the breaker fails fast on a degraded store — the gate then
+ * fails OPEN (a down telemetry store must never block every invocation).
+ * Returns micro-USD as a bigint (no float rounding on a dollar ceiling).
+ */
+export async function sumSpendMicros(args: {
+  orgId: string;
+  /** Omit for an org-wide roll-up; pass to scope the sum to one workspace. */
+  workspaceId?: string | null;
+  periodStart: Date;
+  periodEnd: Date;
+}): Promise<bigint> {
+  const ch = clickhouse();
+  const scoped = args.workspaceId != null && args.workspaceId.length > 0;
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT sum(cost_usd_micros) AS cost_micros
+      FROM token_usage
+      WHERE org_id = {orgId:UUID}
+        ${scoped ? "AND workspace_id = {workspaceId:UUID}" : ""}
+        AND created_at >= {periodStart:DateTime64(3)}
+        AND created_at <  {periodEnd:DateTime64(3)}
+    `,
+      query_params: {
+        orgId: args.orgId,
+        ...(scoped ? { workspaceId: args.workspaceId } : {}),
+        periodStart: args.periodStart.toISOString().replace("Z", ""),
+        periodEnd: args.periodEnd.toISOString().replace("Z", ""),
+      },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = { cost_micros: string | null };
+  const rows = (await result.json()) as Row[];
+  // sum() of an empty set is NULL in ClickHouse JSONEachRow → coalesce to 0.
+  return BigInt(rows[0]?.cost_micros ?? "0");
+}
+
 // Typed inserts. ClickHouse client accepts an array of plain objects per
 // table; named exports here document the row shape inline so callers don't
 // have to reference schema.sql.

@@ -870,6 +870,41 @@ describe("billing admission gate", () => {
     clearRegistryForTests();
     clearHandlersForTests();
     clearBillingAdmissionGate();
+    clearKernelIAMRuntime();
+  });
+
+  it("skips billing for noBillingGate while still running IAM and the handler", async () => {
+    registerCapability({
+      name: "test.billing_bypass",
+      domain: "test",
+      description: "billing bypass witness",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      scoped: true,
+      noBillingGate: true,
+      sensitivity: "high" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ value: z.string() }),
+      output: z.object({ value: z.string() }),
+    });
+    const iamCheck = vi.fn<KernelIAMCheckFn>(async () => ({
+      outcome: "allow",
+      principal: null,
+    }));
+    const handler = vi.fn(async (input: unknown) => input);
+    const billingGate = vi.fn(async () => {});
+    setKernelIAMRuntime(iamCheck, true);
+    registerHandler("test.billing_bypass", async () => handler);
+    setBillingAdmissionGate(billingGate);
+
+    const out = await invoke("test.billing_bypass", { value: "accepted" }, ctx);
+
+    expect(out).toEqual({ value: "accepted" });
+    expect(iamCheck).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(billingGate).not.toHaveBeenCalled();
   });
 
   it("invokes the registered gate for a scoped capability carrying an orgId", async () => {
