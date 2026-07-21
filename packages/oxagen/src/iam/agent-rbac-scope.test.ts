@@ -287,6 +287,50 @@ describe("resolveAgentEffectivePermissions — delegation ceiling (resolve.ts)",
     expect(result.resourceScope.skills?.slugs).toEqual(["parent-only"]);
   });
 
+  it("subagent narrowing never widens: a broader child grant is still capped by the parent ceiling", () => {
+    // The agent's OWN grant scopes labels to {A, B, C} — broader than the
+    // parent run's already-narrowed {B}. The child must NOT escape the
+    // parent's ceiling just because its own grant is more permissive.
+    const result = resolve.resolveAgentEffectivePermissions({
+      agentPrincipal,
+      humanPrincipal,
+      capability: "x",
+      scope,
+      grants: [
+        {
+          principalId: "agent1",
+          capabilityId: "x",
+          scopeKind: "org" as const,
+          scopeId: "org1",
+          effect: "allow" as const,
+          conditionsJsonb: {
+            resourceScope: { graph: { labels: ["A", "B", "C"] } },
+          },
+        },
+        {
+          principalId: "human1",
+          capabilityId: "x",
+          scopeKind: "org" as const,
+          scopeId: "org1",
+          effect: "allow" as const,
+          conditionsJsonb: {
+            resourceScope: { graph: { labels: ["A", "B", "C"] } },
+          },
+        },
+      ],
+      roles: [],
+      roleGrants: [],
+      policies: [],
+      defaultEffect: "deny" as const,
+      // Parent run narrowed to just {B} — the child's own {A,B,C} grant must
+      // not widen the effective scope back out.
+      parentEffectiveScope: { graph: { labels: ["B"] } },
+    });
+
+    expect(result.outcome).toBe("allow");
+    expect(result.resourceScope.graph?.labels).toEqual(["B"]);
+  });
+
   it("intersects resourceScope ceilings from the agent's and human's grants", () => {
     const result = resolve.resolveAgentEffectivePermissions({
       agentPrincipal,
