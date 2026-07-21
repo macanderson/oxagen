@@ -7,7 +7,7 @@ import type { SkillLoadRow } from "@oxagen/telemetry";
 const mocks = vi.hoisted(() => ({
   dbCallResults: [] as unknown[],
   recordSkillLoad: vi.fn<(row: unknown) => Promise<void>>(async () => {}),
-  emitAudit: vi.fn(async () => {}),
+  emitAudit: vi.fn(async (_args: unknown) => {}),
 }));
 
 vi.mock("@oxagen/iam", () => ({

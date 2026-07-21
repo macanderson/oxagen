@@ -3,7 +3,7 @@ import { getTableName } from "drizzle-orm";
 
 // Agent RBAC: the scope-denial audit path pulls emitAudit via _effective-scope;
 // mock @oxagen/iam so no real DB/telemetry deps load.
-const emitAuditSpy = vi.hoisted(() => vi.fn(async () => {}));
+const emitAuditSpy = vi.hoisted(() => vi.fn(async (_args: unknown) => {}));
 vi.mock("@oxagen/iam", () => ({
   emitAudit: emitAuditSpy,
 }));
@@ -335,9 +335,10 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
     return {
       ...CTX,
       agentRun: {
+        principalKind: "agent" as const,
         agentPrincipal: {
           id: "prn_agent",
-          kind: "agent",
+          kind: "agent" as const,
           orgId: CTX.orgId,
           workspaceId: CTX.workspaceId,
         },
@@ -349,7 +350,7 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
           snapshot: { grants: [], roles: [], roleGrants: [], policies: [] },
         },
       },
-    } as typeof CTX;
+    } as unknown as typeof CTX;
   }
 
   it("rejects a task outside the agents.refs allow-list before creating any rows", async () => {
@@ -357,6 +358,7 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
       agentSubagentDispatchHandler(
         {
           parentMessageId: "msg_1",
+          maxParallel: 5,
           tasks: [
             { capabilityName: "list_agent_tools", input: {} },
             { capabilityName: "recall_memory", input: {} },
@@ -378,6 +380,7 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
       agentSubagentDispatchHandler(
         {
           parentMessageId: "msg_1",
+          maxParallel: 5,
           tasks: [{ capabilityName: "execute_code", input: {} }],
         },
         agentCtx({ execute_code: "deny" }),
@@ -390,6 +393,7 @@ describe("agent.subagent.dispatch — role scope narrowing", () => {
     const result = await agentSubagentDispatchHandler(
       {
         parentMessageId: "msg_1",
+        maxParallel: 5,
         tasks: [{ capabilityName: "list_agent_tools", input: {} }],
       },
       agentCtx({ list_agent_tools: "allow" }, ["list_agent_tools"]),

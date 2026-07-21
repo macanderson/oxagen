@@ -24,7 +24,7 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 const orderByMock = vi.fn(async () => state.selectRows);
 // where() is awaited directly in checkConsent, but is chained with orderBy in
 // listConsents. Return a thenable that ALSO exposes orderBy.
-const whereMock = vi.fn(() => {
+const whereMock = vi.fn((_condition?: unknown) => {
   const p = Promise.resolve(state.selectRows) as Promise<unknown[]> & {
     orderBy: typeof orderByMock;
   };

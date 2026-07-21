@@ -128,7 +128,7 @@ export async function agentSubagentDispatchHandler(
     if (agentRun?.resolution) {
       const perms = resolveAgentRunCapability(agentRun, agentRun.resolution, {
         capability: task.capabilityName,
-        scope: { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        scope: { kind: "workspace", orgId: ctx.orgId, workspaceId: ctx.workspaceId },
         defaultEffect: cap.defaultEffect ?? "deny",
       });
       if (perms.outcome === "deny") scopeDenied.push(task.capabilityName);

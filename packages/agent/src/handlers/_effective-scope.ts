@@ -64,6 +64,9 @@ export function auditScopeDenial(args: {
   };
   const result: ResolveResult = {
     outcome: "deny",
+    // The nearest structured reason: the role's grants confer no access to
+    // this resource-dimension value (skill slug / dispatch ref).
+    reason: "no_grant",
     trace: { steps: [step], decidedBy: step },
   };
 
