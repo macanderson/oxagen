@@ -131,12 +131,18 @@ const AGENT_ROLE_RESOURCE_SCOPE: Record<AgentRoleName, ResourceScope> = {
 
 /**
  * Contributor's mutation effect for a capability outside the read
- * categories: low/medium riskLevel allow, high riskLevel (or undeclared —
- * fail-closed) require_approval.
+ * categories: a contract that explicitly declares `requiresApproval: true`
+ * always requires approval regardless of riskLevel — riskLevel alone is not
+ * a substitute for a capability's own approval declaration (e.g. a
+ * low-risk billing mutation that the contract still marks
+ * `requiresApproval: true`). Otherwise: low/medium riskLevel allow, high
+ * riskLevel (or undeclared — fail-closed) require_approval.
  */
 function contributorMutationEffect(
   riskLevel: "low" | "medium" | "high" | undefined,
+  requiresApproval: boolean | undefined,
 ): Effect {
+  if (requiresApproval === true) return "require_approval";
   if (riskLevel === "low" || riskLevel === "medium") return "allow";
   return "require_approval"; // riskLevel "high" or undeclared
 }
@@ -146,6 +152,7 @@ function agentRoleEffect(
   roleName: AgentRoleName,
   category: string | undefined,
   riskLevel: "low" | "medium" | "high" | undefined,
+  requiresApproval: boolean | undefined,
 ): Effect {
   const isRead = category !== undefined && READ_CATEGORIES.has(category);
 
@@ -156,16 +163,20 @@ function agentRoleEffect(
   if (isRead) return "allow";
 
   if (roleName === "Agent Contributor") {
-    return contributorMutationEffect(riskLevel);
+    return contributorMutationEffect(riskLevel, requiresApproval);
   }
 
   // Agent Operator: Contributor posture, plus riskLevel=high allow — except
-  // vcs/billing/secret categories, which stay at Contributor's posture.
+  // vcs/billing/secret categories, which stay at Contributor's posture. A
+  // capability's own `requiresApproval: true` declaration is honored even
+  // for Operator's uncapped riskLevel=high allow, since risk alone would
+  // incorrectly grant access the contract itself gates on approval.
   const isOperatorRestricted =
     category !== undefined && OPERATOR_RESTRICTED_CATEGORIES.has(category);
   if (isOperatorRestricted) {
-    return contributorMutationEffect(riskLevel);
+    return contributorMutationEffect(riskLevel, requiresApproval);
   }
+  if (requiresApproval === true) return "require_approval";
   return riskLevel === "low" || riskLevel === "medium" || riskLevel === "high"
     ? "allow"
     : "require_approval"; // undeclared riskLevel — fail closed
@@ -397,7 +408,13 @@ async function main(): Promise<void> {
         for (const cap of agentCapabilities) {
           const category = cap.agent?.category;
           const riskLevel = cap.agent?.riskLevel;
-          const effect = agentRoleEffect(roleName, category, riskLevel);
+          const requiresApproval = cap.agent?.requiresApproval;
+          const effect = agentRoleEffect(
+            roleName,
+            category,
+            riskLevel,
+            requiresApproval,
+          );
           const publicId = makeRoleGrantPublicId(roleId, cap.name);
 
           await sql`
