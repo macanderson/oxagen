@@ -194,6 +194,14 @@ describe("POST /v1/telemetry/stella/operational", () => {
   );
 
   it("rate-limits globally by the authenticated workspace before invoke", async () => {
+    // Use a dedicated workspace so the limiter's intentional local deny cache
+    // cannot affect later tests that exercise the default fixture workspace.
+    mocks.resolveApiKey.mockResolvedValue({
+      ok: true,
+      apiKeyId: "key_stella_rate_limit",
+      orgId: KEY_ORG_ID,
+      workspaceId: "44444444-4444-4444-8444-444444444444",
+    });
     let workspaceCount = 0;
     mocks.withSystemDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -348,6 +356,102 @@ describe("POST /v1/telemetry/stella/operational", () => {
     expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(mocks.resolveApiKey).not.toHaveBeenCalled();
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(["GET", "PUT"])(
+    "blocks an exhausted credential on %s before API-key resolution",
+    async (method) => {
+      vi.stubEnv("VERCEL", "1");
+      mocks.withSystemDb.mockImplementation(
+        async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            execute: vi.fn().mockImplementation(async (query: unknown) => {
+              const key = (
+                query as { queryChunks?: unknown[] }
+              ).queryChunks?.at(1);
+              return [
+                {
+                  count:
+                    typeof key === "string" &&
+                    key.startsWith("stella-preauth-credential:")
+                      ? 61
+                      : 1,
+                },
+              ];
+            }),
+          }),
+      );
+
+      const response = await app.fetch(
+        new Request(`http://localhost${PATH}`, {
+          method,
+          headers: {
+            authorization: `Bearer exhausted_${method.toLowerCase()}_key`,
+            "x-forwarded-for": "192.0.2.55",
+            "x-vercel-forwarded-for": "203.0.113.55",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(429);
+      expect(mocks.resolveApiKey).not.toHaveBeenCalled();
+      expect(mocks.invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it("fails closed before authentication when the pre-auth counter store degrades", async () => {
+    mocks.withSystemDb.mockRejectedValue(
+      new Error("counter store unavailable"),
+    );
+
+    const response = await post(VALID_BATCH, {
+      authorization: "Bearer counter_store_failure_key",
+      "x-vercel-forwarded-for": "203.0.113.60",
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "rate_limit_unavailable" });
+    expect(mocks.resolveApiKey).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("runs both distributed pre-auth counters before auth middleware", async () => {
+    const order: string[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            if (typeof key === "string" && key.startsWith("stella-preauth-")) {
+              order.push(key);
+            }
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+    mocks.resolveApiKey.mockImplementation(async () => {
+      order.push("auth");
+      return {
+        ok: true,
+        apiKeyId: "key_stella",
+        orgId: KEY_ORG_ID,
+        workspaceId: KEY_WORKSPACE_ID,
+      };
+    });
+
+    const response = await post(VALID_BATCH, {
+      authorization: "Bearer middleware_order_key",
+      "x-vercel-forwarded-for": "203.0.113.70",
+    });
+
+    expect(response.status).toBe(200);
+    expect(order.slice(0, 3)).toEqual([
+      "stella-preauth-ip:ip:unverified",
+      expect.stringMatching(/^stella-preauth-credential:credential:/),
+      "auth",
+    ]);
   });
 
   it("mounts the exact POST route and rejects other methods", async () => {

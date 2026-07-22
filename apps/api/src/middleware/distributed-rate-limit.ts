@@ -33,10 +33,14 @@ import type { AppEnv } from "../app";
  *   4. Set X-RateLimit-Limit/Remaining/Reset on every counted response; on
  *      breach, 429 { error: "rate_limited" } + Retry-After.
  *
- * FAIL OPEN: any store error allows the request (rate limiting is a SECONDARY
- * defense — auth + strict schemas are primary). We never take chat/agents down
- * because the counter store hiccuped; a store error is warned at most once per
- * window so an outage cannot spam the logs.
+ * STORE FAILURE POLICY: fail-open remains the default because rate limiting is
+ * secondary for authenticated product surfaces. Pre-authentication security
+ * boundaries may opt into fail-closed behavior. A store error is warned at
+ * most once per window so an outage cannot spam the logs.
+ *
+ * Once the shared store reports an exhausted bucket, this warm instance caches
+ * the denial until the fixed window resets. Repeated abusive requests then
+ * receive 429 without continuing to write to Postgres.
  */
 export interface DistributedRateLimitOptions {
   /** Route-group prefix so different surfaces don't share buckets, e.g. "chat". */
@@ -50,12 +54,18 @@ export interface DistributedRateLimitOptions {
   /** Fixed window size, milliseconds. Defaults to 60_000 (one minute). */
   windowMs?: number;
   /**
-   * HTTP methods that count against the limit; every other method passes
-   * through unlimited. Defaults to POST — all the expensive chat/agent
-   * operations are POST, and this lets a wildcard mount (e.g. /agent/sandbox/*)
-   * cover the POST writes without throttling the co-located GET reads.
+   * HTTP methods that count against the limit, or `"all"` to count every
+   * method. Every other method passes through unlimited. Defaults to POST — all
+   * the expensive chat/agent operations are POST, and this lets a wildcard
+   * mount cover writes without throttling co-located GET reads.
    */
-  methods?: readonly string[];
+  methods?: readonly string[] | "all";
+  /**
+   * Deny when the shared counter store is unavailable. Defaults to false so
+   * authenticated product surfaces preserve their historical fail-open policy.
+   * Pre-authentication security boundaries should enable this explicitly.
+   */
+  failClosedOnStoreError?: boolean;
   /**
    * Optional unprefixed bucket suffix for pre-authentication or other custom
    * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
@@ -68,6 +78,8 @@ const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_METHODS = ["POST"] as const;
 /** Fraction of counted requests that trigger an opportunistic stale-window sweep. */
 const CLEANUP_SAMPLE_RATE = 0.01;
+/** Bound exhausted-bucket memory per limiter instance. */
+const LOCAL_DENY_CACHE_MAX = 10_000;
 
 /** Best-effort client IP — the same proxy header chain as the in-memory limiter. */
 function clientIp(c: Context<AppEnv>): string {
@@ -120,7 +132,12 @@ export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
 // Throttle fail-open warnings to at most one per window per route group, so a
 // store outage logs a signal without drowning the logs in one line per request.
 const lastWarnAtByPrefix = new Map<string, number>();
-function warnFailOpen(keyPrefix: string, windowMs: number, err: unknown): void {
+function warnStoreError(
+  keyPrefix: string,
+  windowMs: number,
+  err: unknown,
+  failClosed: boolean,
+): void {
   const now = Date.now();
   if (now - (lastWarnAtByPrefix.get(keyPrefix) ?? 0) < windowMs) return;
   lastWarnAtByPrefix.set(keyPrefix, now);
@@ -128,8 +145,11 @@ function warnFailOpen(keyPrefix: string, windowMs: number, err: unknown): void {
     {
       keyPrefix,
       err: err instanceof Error ? err.message : String(err),
+      failClosed,
     },
-    "distributed rate limiter store error — failing open (allowing request)",
+    failClosed
+      ? "distributed rate limiter store error — failing closed"
+      : "distributed rate limiter store error — failing open (allowing request)",
   );
 }
 
@@ -154,17 +174,46 @@ export function distributedRateLimiter(
 ): MiddlewareHandler<AppEnv> {
   const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
   const methods = opts.methods ?? DEFAULT_METHODS;
+  const localDenyUntilByKey = new Map<string, number>();
+
+  function cacheLocalDeny(key: string, denyUntil: number, now: number): void {
+    if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
+      for (const [cachedKey, cachedUntil] of localDenyUntilByKey) {
+        if (cachedUntil <= now) localDenyUntilByKey.delete(cachedKey);
+      }
+      if (localDenyUntilByKey.size >= LOCAL_DENY_CACHE_MAX) {
+        const oldestKey = localDenyUntilByKey.keys().next().value;
+        if (oldestKey) localDenyUntilByKey.delete(oldestKey);
+      }
+    }
+    localDenyUntilByKey.set(key, denyUntil);
+  }
 
   return async (c, next) => {
-    if (!methods.includes(c.req.method)) return next();
+    if (methods !== "all" && !methods.includes(c.req.method)) return next();
 
     const key = opts.bucketKey
       ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
       : deriveBucketKey(c, opts.keyPrefix);
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
+    const resetAtMs = windowStartMs + windowMs;
     const windowStart = new Date(windowStartMs);
-    const resetSeconds = Math.ceil((windowStartMs + windowMs) / 1000);
+    const resetSeconds = Math.ceil(resetAtMs / 1000);
+    const max = typeof opts.max === "function" ? opts.max() : opts.max;
+
+    const locallyDeniedUntil = localDenyUntilByKey.get(key);
+    if (locallyDeniedUntil && locallyDeniedUntil > now) {
+      c.header("X-RateLimit-Limit", String(max));
+      c.header("X-RateLimit-Remaining", "0");
+      c.header("X-RateLimit-Reset", String(resetSeconds));
+      c.header(
+        "Retry-After",
+        String(Math.max(1, Math.ceil((locallyDeniedUntil - now) / 1000))),
+      );
+      return c.json({ error: "rate_limited" }, 429);
+    }
+    if (locallyDeniedUntil) localDenyUntilByKey.delete(key);
 
     let count: number;
     try {
@@ -179,7 +228,12 @@ export function distributedRateLimiter(
         return rows[0]?.count ?? 0;
       });
     } catch (err) {
-      warnFailOpen(opts.keyPrefix, windowMs, err);
+      const failClosed = opts.failClosedOnStoreError === true;
+      warnStoreError(opts.keyPrefix, windowMs, err, failClosed);
+      if (failClosed) {
+        c.header("Retry-After", "1");
+        return c.json({ error: "rate_limit_unavailable" }, 503);
+      }
       return next();
     }
 
@@ -188,12 +242,12 @@ export function distributedRateLimiter(
       sweepStaleWindows(new Date(windowStartMs - windowMs * 2));
     }
 
-    const max = typeof opts.max === "function" ? opts.max() : opts.max;
     c.header("X-RateLimit-Limit", String(max));
     c.header("X-RateLimit-Remaining", String(Math.max(0, max - count)));
     c.header("X-RateLimit-Reset", String(resetSeconds));
 
     if (count > max) {
+      cacheLocalDeny(key, resetAtMs, now);
       const retryAfter = Math.max(1, resetSeconds - Math.ceil(now / 1000));
       c.header("Retry-After", String(retryAfter));
       return c.json({ error: "rate_limited" }, 429);

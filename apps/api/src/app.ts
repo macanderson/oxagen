@@ -360,6 +360,8 @@ app.use(
     keyPrefix: "stella-preauth-ip",
     max: 3_000,
     bucketKey: trustedVercelIpBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
   }),
 );
 app.use(
@@ -368,6 +370,8 @@ app.use(
     keyPrefix: "stella-preauth-credential",
     max: 60,
     bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
   }),
 );
 

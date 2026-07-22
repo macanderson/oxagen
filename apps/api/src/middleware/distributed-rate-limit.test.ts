@@ -153,6 +153,54 @@ describe("deriveBucketKey", () => {
 });
 
 describe("distributedRateLimiter", () => {
+  it("counts every HTTP method when explicitly configured for all methods", async () => {
+    scriptCount(1);
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 60,
+      methods: "all",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(fakeContext({ method: "GET" }), next);
+
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed without calling next when the counter store is unavailable", async () => {
+    mocks.withSystemDb.mockRejectedValue(new Error("db unavailable"));
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 60,
+      failClosedOnStoreError: true,
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    const result = (await mw(fakeContext(), next)) as
+      | { body: unknown; status: number }
+      | undefined;
+
+    expect(result?.status).toBe(503);
+    expect(result?.body).toEqual({ error: "rate_limit_unavailable" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("serves an exhausted bucket from a local deny cache without another store write", async () => {
+    scriptCount(61);
+    const mw = distributedRateLimiter({ keyPrefix: "preauth", max: 60 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    const c = fakeContext({ headers: { "x-forwarded-for": "203.0.113.9" } });
+
+    const first = (await mw(c, next)) as { status: number } | undefined;
+    const second = (await mw(c, next)) as { status: number } | undefined;
+
+    expect(first?.status).toBe(429);
+    expect(second?.status).toBe(429);
+    expect(mocks.withSystemDb).toHaveBeenCalledTimes(1);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("uses a custom bucket-key resolver without trusting the default client IP", async () => {
     let observedKey: unknown;
     mocks.withSystemDb.mockImplementation(
