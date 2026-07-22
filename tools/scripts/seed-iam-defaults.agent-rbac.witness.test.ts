@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseResourceScope } from "@oxagen/oxagen/iam";
 import {
   AGENT_ROLE_DESCRIPTIONS,
   AGENT_ROLE_NAMES,
@@ -46,9 +47,13 @@ describe("makeRolePublicId", () => {
 
   it("differs across org, scopeKind, or name", () => {
     const base = makeRolePublicId("org_1", "workspace", "Agent Observer");
-    expect(makeRolePublicId("org_2", "workspace", "Agent Observer")).not.toBe(base);
+    expect(makeRolePublicId("org_2", "workspace", "Agent Observer")).not.toBe(
+      base,
+    );
     expect(makeRolePublicId("org_1", "org", "Agent Observer")).not.toBe(base);
-    expect(makeRolePublicId("org_1", "workspace", "Agent Contributor")).not.toBe(base);
+    expect(
+      makeRolePublicId("org_1", "workspace", "Agent Contributor"),
+    ).not.toBe(base);
   });
 
   it("matches the iam-provision.ts scheme exactly (same digest for same input)", () => {
@@ -72,9 +77,15 @@ describe("makeRoleGrantPublicId", () => {
   it("does not collide for capabilities sharing a name prefix", () => {
     // Regression: a previous version truncated the capability id to 14 chars,
     // colliding e.g. agent.background_task.{start,read,cancel}.
-    const start = makeRoleGrantPublicId("role_1", "agent.background_task.start");
+    const start = makeRoleGrantPublicId(
+      "role_1",
+      "agent.background_task.start",
+    );
     const read = makeRoleGrantPublicId("role_1", "agent.background_task.read");
-    const cancel = makeRoleGrantPublicId("role_1", "agent.background_task.cancel");
+    const cancel = makeRoleGrantPublicId(
+      "role_1",
+      "agent.background_task.cancel",
+    );
     expect(new Set([start, read, cancel]).size).toBe(3);
   });
 
@@ -103,30 +114,42 @@ describe("contributorMutationEffect", () => {
 
   it("high or undeclared riskLevel requires approval (fail-closed)", () => {
     expect(contributorMutationEffect("high", false)).toBe("require_approval");
-    expect(contributorMutationEffect(undefined, false)).toBe("require_approval");
-    expect(contributorMutationEffect(undefined, undefined)).toBe("require_approval");
+    expect(contributorMutationEffect(undefined, false)).toBe(
+      "require_approval",
+    );
+    expect(contributorMutationEffect(undefined, undefined)).toBe(
+      "require_approval",
+    );
   });
 });
 
 describe("agentRoleEffect — Agent Observer", () => {
   for (const category of READ_CATEGORIES) {
     it(`allows read category "${category}" regardless of riskLevel`, () => {
-      expect(agentRoleEffect("Agent Observer", category, "high", true)).toBe("allow");
-      expect(agentRoleEffect("Agent Observer", category, undefined, undefined)).toBe(
+      expect(agentRoleEffect("Agent Observer", category, "high", true)).toBe(
         "allow",
       );
+      expect(
+        agentRoleEffect("Agent Observer", category, undefined, undefined),
+      ).toBe("allow");
     });
   }
 
   it("denies every mutation category, regardless of riskLevel/requiresApproval", () => {
     for (const category of ["mutation", "vcs", "billing", "secret", "write"]) {
-      expect(agentRoleEffect("Agent Observer", category, "low", false)).toBe("deny");
-      expect(agentRoleEffect("Agent Observer", category, "high", true)).toBe("deny");
+      expect(agentRoleEffect("Agent Observer", category, "low", false)).toBe(
+        "deny",
+      );
+      expect(agentRoleEffect("Agent Observer", category, "high", true)).toBe(
+        "deny",
+      );
     }
   });
 
   it("denies when category is undeclared (fail-closed, not read)", () => {
-    expect(agentRoleEffect("Agent Observer", undefined, "low", false)).toBe("deny");
+    expect(agentRoleEffect("Agent Observer", undefined, "low", false)).toBe(
+      "deny",
+    );
   });
 });
 
@@ -143,15 +166,15 @@ describe("agentRoleEffect — Agent Contributor", () => {
     expect(agentRoleEffect("Agent Contributor", "mutation", "low", false)).toBe(
       "allow",
     );
-    expect(agentRoleEffect("Agent Contributor", "mutation", "medium", false)).toBe(
-      "allow",
-    );
+    expect(
+      agentRoleEffect("Agent Contributor", "mutation", "medium", false),
+    ).toBe("allow");
   });
 
   it("requires approval for high riskLevel mutations", () => {
-    expect(agentRoleEffect("Agent Contributor", "mutation", "high", false)).toBe(
-      "require_approval",
-    );
+    expect(
+      agentRoleEffect("Agent Contributor", "mutation", "high", false),
+    ).toBe("require_approval");
   });
 
   it("requires approval when requiresApproval:true, even at low riskLevel", () => {
@@ -162,9 +185,9 @@ describe("agentRoleEffect — Agent Contributor", () => {
   });
 
   it("requires approval for undeclared riskLevel mutations (fail-closed)", () => {
-    expect(agentRoleEffect("Agent Contributor", "mutation", undefined, false)).toBe(
-      "require_approval",
-    );
+    expect(
+      agentRoleEffect("Agent Contributor", "mutation", undefined, false),
+    ).toBe("require_approval");
   });
 
   it("applies the same rule to vcs/billing/secret as any other mutation category (no extra Operator-only restriction)", () => {
@@ -172,9 +195,9 @@ describe("agentRoleEffect — Agent Contributor", () => {
       expect(agentRoleEffect("Agent Contributor", category, "low", false)).toBe(
         "allow",
       );
-      expect(agentRoleEffect("Agent Contributor", category, "high", false)).toBe(
-        "require_approval",
-      );
+      expect(
+        agentRoleEffect("Agent Contributor", category, "high", false),
+      ).toBe("require_approval");
     }
   });
 });
@@ -182,26 +205,34 @@ describe("agentRoleEffect — Agent Contributor", () => {
 describe("agentRoleEffect — Agent Operator", () => {
   for (const category of READ_CATEGORIES) {
     it(`allows read category "${category}"`, () => {
-      expect(agentRoleEffect("Agent Operator", category, "high", true)).toBe("allow");
+      expect(agentRoleEffect("Agent Operator", category, "high", true)).toBe(
+        "allow",
+      );
     });
   }
 
   it("allows high riskLevel mutations for non-restricted categories (uncapped vs Contributor)", () => {
-    expect(agentRoleEffect("Agent Operator", "mutation", "high", false)).toBe("allow");
-    expect(agentRoleEffect("Agent Operator", "workflow", "high", false)).toBe("allow");
+    expect(agentRoleEffect("Agent Operator", "mutation", "high", false)).toBe(
+      "allow",
+    );
+    expect(agentRoleEffect("Agent Operator", "workflow", "high", false)).toBe(
+      "allow",
+    );
   });
 
   it("allows low/medium riskLevel mutations for non-restricted categories", () => {
-    expect(agentRoleEffect("Agent Operator", "mutation", "low", false)).toBe("allow");
+    expect(agentRoleEffect("Agent Operator", "mutation", "low", false)).toBe(
+      "allow",
+    );
     expect(agentRoleEffect("Agent Operator", "mutation", "medium", false)).toBe(
       "allow",
     );
   });
 
   it("requires approval for undeclared riskLevel on non-restricted categories (fail-closed)", () => {
-    expect(agentRoleEffect("Agent Operator", "mutation", undefined, false)).toBe(
-      "require_approval",
-    );
+    expect(
+      agentRoleEffect("Agent Operator", "mutation", undefined, false),
+    ).toBe("require_approval");
   });
 
   it("honors requiresApproval:true on non-restricted categories even at high riskLevel", () => {
@@ -218,7 +249,9 @@ describe("agentRoleEffect — Agent Operator", () => {
       expect(agentRoleEffect("Agent Operator", category, "high", false)).toBe(
         "require_approval",
       );
-      expect(agentRoleEffect("Agent Operator", category, "low", false)).toBe("allow");
+      expect(agentRoleEffect("Agent Operator", category, "low", false)).toBe(
+        "allow",
+      );
       expect(agentRoleEffect("Agent Operator", category, "low", true)).toBe(
         "require_approval",
       );
@@ -230,7 +263,12 @@ describe("agentRoleEffect — Agent Operator", () => {
       for (const riskLevel of ["low", "medium", "high", undefined] as const) {
         for (const requiresApproval of [true, false, undefined]) {
           expect(
-            agentRoleEffect("Agent Operator", category, riskLevel, requiresApproval),
+            agentRoleEffect(
+              "Agent Operator",
+              category,
+              riskLevel,
+              requiresApproval,
+            ),
           ).toBe(
             agentRoleEffect(
               "Agent Contributor",
@@ -279,6 +317,15 @@ describe("AGENT_ROLE_RESOURCE_SCOPE", () => {
       expect(rules?.[0]?.pattern).toBe("*");
     }
   });
+
+  it("every role's resourceScope is schema-valid per conditions.ts's own zod validator — the exact payload the seed writes to conditions_jsonb.resourceScope must round-trip through parseResourceScope, since a shape drift here (e.g. a stray key) would only fail at the resolver, not at seed time", () => {
+    for (const name of AGENT_ROLE_NAMES) {
+      const scope = AGENT_ROLE_RESOURCE_SCOPE[name as AgentRoleName];
+      const parsed = parseResourceScope(scope);
+      expect(parsed).not.toBeNull();
+      expect(parsed).toEqual(scope);
+    }
+  });
 });
 
 // ── Legacy-role guard ──────────────────────────────────────────────────────────
@@ -314,8 +361,18 @@ describe("idempotency of pure derivation", () => {
       for (const category of ["read", "mutation", "billing", undefined]) {
         for (const riskLevel of ["low", "medium", "high", undefined] as const) {
           for (const requiresApproval of [true, false, undefined]) {
-            const a = agentRoleEffect(roleName, category, riskLevel, requiresApproval);
-            const b = agentRoleEffect(roleName, category, riskLevel, requiresApproval);
+            const a = agentRoleEffect(
+              roleName,
+              category,
+              riskLevel,
+              requiresApproval,
+            );
+            const b = agentRoleEffect(
+              roleName,
+              category,
+              riskLevel,
+              requiresApproval,
+            );
             expect(a).toBe(b);
           }
         }
