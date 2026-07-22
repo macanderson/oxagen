@@ -285,10 +285,25 @@ agentRunRoute.get("/:publicId", async (c) => {
 // and it is carried as a STRING end to end, because `run_seq` is a Postgres
 // bigint and routing it through a JS number would silently corrupt any cursor
 // past 2^53 and resume a subscriber at the wrong event.
+//
+// The upper bound is checked against the real signed-bigint maximum, not a
+// digit count: `run_seq > $1::bigint` raises on overflow, so a 20-digit — or a
+// 19-digit out-of-range — cursor would come back as a 500 rather than the 400
+// it is.
+const MAX_BIGINT = 9_223_372_036_854_775_807n;
+const DECIMAL_CURSOR_RE = /^\d+$/;
+
 const AfterQuerySchema = z
   .string()
-  .regex(/^\d+$/, "after must be a non-negative decimal integer")
-  .max(19, "after exceeds the bigint range");
+  .regex(DECIMAL_CURSOR_RE, "after must be a non-negative decimal integer")
+  .refine(
+    // The shape is re-tested here, not assumed: Zod still runs a refinement
+    // after a failed string CHECK (only an invalid base TYPE aborts), so a
+    // bare `BigInt(value)` would throw a SyntaxError on "abc" and turn a
+    // clean 400 into a 500.
+    (value) => !DECIMAL_CURSOR_RE.test(value) || BigInt(value) <= MAX_BIGINT,
+    "after exceeds the maximum run sequence",
+  );
 
 agentRunRoute.get("/:publicId/events", async (c) => {
   const publicId = c.req.param("publicId");

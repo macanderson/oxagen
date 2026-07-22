@@ -585,12 +585,36 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
     },
   );
 
-  it("400s on an `after` cursor wider than a bigint", async () => {
-    mocks.getRunByPublicId.mockResolvedValue(summary());
-    const res = await app.fetch(
-      get("/runs/arun_abc123/events?after=99999999999999999999"),
+  it.each([
+    ["20 digits", "99999999999999999999"],
+    // 19 digits but still past the signed-bigint max — a digit-count bound
+    // would let this through to `::bigint` and turn a bad request into a 500.
+    ["19 digits past the bigint max", "9999999999999999999"],
+  ])(
+    "400s on an `after` cursor out of bigint range (%s)",
+    async (_l, after) => {
+      mocks.getRunByPublicId.mockResolvedValue(summary());
+      const res = await app.fetch(
+        get(`/runs/arun_abc123/events?after=${after}`),
+      );
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it("accepts the exact signed-bigint maximum", async () => {
+    mocks.getRunByPublicId.mockResolvedValue(
+      summary({ specVersion: 2, status: "completed" }),
     );
-    expect(res.status).toBe(400);
+    mocks.readAttemptEventsSince.mockResolvedValue([]);
+    const res = await app.fetch(
+      get("/runs/arun_abc123/events?after=9223372036854775807"),
+    );
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(mocks.readAttemptEventsSince).toHaveBeenCalledWith(
+      "run-uuid-1",
+      "9223372036854775807",
+    );
   });
 });
 
