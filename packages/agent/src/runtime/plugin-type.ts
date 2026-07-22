@@ -31,6 +31,15 @@ export interface ContributedRawTool {
   ) => Promise<unknown>;
   /** Source identifier for telemetry `external_server_id`. */
   externalServerId: string;
+  /**
+   * Human-facing server name (mcp_servers.name / settings server key) — the
+   * identity Agent-RBAC "server:tool" rule patterns address (spec §3.7).
+   * materializeTools falls back to externalServerId when absent; a blanket
+   * "*" deny still matches either way.
+   */
+  externalServerName?: string;
+  /** Bare tool name (no server prefix) for the "server:tool" rule key. */
+  externalToolName?: string;
 }
 
 export interface PluginContributeOptions {

@@ -24,7 +24,7 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 const orderByMock = vi.fn(async () => state.selectRows);
 // where() is awaited directly in checkConsent, but is chained with orderBy in
 // listConsents. Return a thenable that ALSO exposes orderBy.
-const whereMock = vi.fn(() => {
+const whereMock = vi.fn((_condition?: unknown) => {
   const p = Promise.resolve(state.selectRows) as Promise<unknown[]> & {
     orderBy: typeof orderByMock;
   };
@@ -41,12 +41,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     db: () => fakeDb,
-    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
+    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) =>
+      fn(fakeDb),
     schema: {
       mcpConsents: {
         orgId: "c.orgId",
         workspaceId: "c.workspaceId",
         userId: "c.userId",
+        subjectKind: "c.subjectKind",
         mcpServerId: "c.mcpServerId",
         toolName: "c.toolName",
         status: "c.status",
@@ -111,13 +113,17 @@ describe("consent runtime — checkConsent", () => {
   });
 
   it("honours a wildcard pre-grant when no exact row exists", async () => {
-    state.selectRows = [{ toolName: CONSENT_WILDCARD, status: "granted", expiresAt: null }];
+    state.selectRows = [
+      { toolName: CONSENT_WILDCARD, status: "granted", expiresAt: null },
+    ];
     const res = await checkConsent(CTX, "u_1", "srv_1", "any_tool");
     expect(res).toEqual({ status: "granted", active: true });
   });
 
   it("surfaces a denied grant so the caller short-circuits without re-prompting", async () => {
-    state.selectRows = [{ toolName: "list_prs", status: "denied", expiresAt: null }];
+    state.selectRows = [
+      { toolName: "list_prs", status: "denied", expiresAt: null },
+    ];
     const res = await checkConsent(CTX, "u_1", "srv_1", "list_prs");
     expect(res).toEqual({ status: "denied", active: true });
   });
@@ -152,7 +158,9 @@ describe("consent runtime — recordConsent", () => {
     expect(v.status).toBe("granted");
     expect(v.grantedAt).toBeInstanceOf(Date);
     expect(v.deniedAt).toBeNull();
-    expect(v.expiresAt!.getTime()).toBeGreaterThanOrEqual(before + DEFAULT_CONSENT_TTL_MS - 1000);
+    expect(v.expiresAt!.getTime()).toBeGreaterThanOrEqual(
+      before + DEFAULT_CONSENT_TTL_MS - 1000,
+    );
   });
 
   it("writes a non-expiring wildcard pre-grant when ttlMs is null", async () => {
@@ -165,7 +173,10 @@ describe("consent runtime — recordConsent", () => {
       status: "granted",
       ttlMs: null,
     });
-    const v = state.insertedValues[0] as { expiresAt: Date | null; toolName: string };
+    const v = state.insertedValues[0] as {
+      expiresAt: Date | null;
+      toolName: string;
+    };
     expect(v.expiresAt).toBeNull();
     expect(v.toolName).toBe("*");
   });
@@ -179,9 +190,100 @@ describe("consent runtime — recordConsent", () => {
       toolName: "list_prs",
       status: "denied",
     });
-    const v = state.insertedValues[0] as { grantedAt: Date | null; deniedAt: Date | null };
+    const v = state.insertedValues[0] as {
+      grantedAt: Date | null;
+      deniedAt: Date | null;
+    };
     expect(v.grantedAt).toBeNull();
     expect(v.deniedAt).toBeInstanceOf(Date);
+  });
+
+  // ── Agent RBAC Phase 4a: consent subject discrimination (spec §3.7) ────────
+  it("defaults subjectKind to 'user' — pre-Phase-4a call sites are byte-identical", async () => {
+    await recordConsent({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      userId: "u_1",
+      serverId: "srv_1",
+      toolName: "list_prs",
+      status: "granted",
+    });
+    const v = state.insertedValues[0] as { subjectKind: string };
+    expect(v.subjectKind).toBe("user");
+  });
+
+  it("records an agent-subject consent with subjectKind 'agent' and the agent principal id as subject", async () => {
+    await recordConsent({
+      orgId: "ten_1",
+      workspaceId: "ws_1",
+      userId: "prn_agent_1", // agent PRINCIPAL id rides the subject column
+      subjectKind: "agent",
+      serverId: "srv_1",
+      toolName: "list_prs",
+      status: "granted",
+    });
+    const v = state.insertedValues[0] as {
+      subjectKind: string;
+      userId: string;
+    };
+    expect(v.subjectKind).toBe("agent");
+    expect(v.userId).toBe("prn_agent_1");
+  });
+});
+
+describe("consent runtime — subjectKind filter in checkConsent", () => {
+  beforeEach(() => {
+    state.selectRows = [];
+    whereMock.mockClear();
+  });
+
+  /**
+   * Collect every leaf value out of a drizzle SQL expression tree. With the
+   * string-mocked schema columns above, drizzle inlines operands as
+   * StringChunk/Param leaves — flattening them exposes which subjectKind
+   * literal the query bound.
+   */
+  function boundValues(expr: unknown): unknown[] {
+    const out: unknown[] = [];
+    const walk = (node: unknown): void => {
+      // With string-mocked columns, operands land as RAW STRINGS directly in
+      // queryChunks (e.g. ["", "c.subjectKind", " = ", "user", ""]).
+      if (typeof node === "string") {
+        out.push(node);
+        return;
+      }
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        (node as unknown[]).forEach(walk);
+        return;
+      }
+      const rec = node as Record<string, unknown>;
+      if ("value" in rec) {
+        // StringChunk.value (string | string[]) or Param.value.
+        const v = rec.value;
+        if (Array.isArray(v)) out.push(...(v as unknown[]));
+        else out.push(v);
+      }
+      if (Array.isArray(rec.queryChunks)) rec.queryChunks.forEach(walk);
+    };
+    walk(expr);
+    return out;
+  }
+
+  it("binds subjectKind 'user' by default (pre-Phase-4a behavior preserved)", async () => {
+    await checkConsent(CTX, "u_1", "srv_1", "list_prs");
+    expect(whereMock).toHaveBeenCalledTimes(1);
+    const params = boundValues(whereMock.mock.calls[0]?.[0]);
+    expect(params).toContain("user");
+    expect(params).not.toContain("agent");
+  });
+
+  it("binds subjectKind 'agent' + the agent principal id for agent lookups", async () => {
+    await checkConsent(CTX, "prn_agent_1", "srv_1", "list_prs", "agent");
+    const params = boundValues(whereMock.mock.calls[0]?.[0]);
+    expect(params).toContain("agent");
+    expect(params).toContain("prn_agent_1");
+    expect(params).not.toContain("user");
   });
 });
 
@@ -215,7 +317,11 @@ describe("consent runtime — listConsents", () => {
 
 describe("ConsentRequiredError", () => {
   it("carries serverId, toolName, and prompt", () => {
-    const err = new ConsentRequiredError("srv_1", "list_prs", "Allow GitHub to list PRs?");
+    const err = new ConsentRequiredError(
+      "srv_1",
+      "list_prs",
+      "Allow GitHub to list PRs?",
+    );
     expect(err.name).toBe("ConsentRequiredError");
     expect(err.serverId).toBe("srv_1");
     expect(err.toolName).toBe("list_prs");

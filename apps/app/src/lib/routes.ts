@@ -189,6 +189,14 @@ export const workspace = {
       `${wsBase(ctx)}/automations/triggers`,
     workflows: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/automations/workflows`,
+    // Fleet lineage explorer (issue #1078) — the dispatch tree for one
+    // agent.subagent_fanouts row (query_lineage). Natural drill-through from a
+    // Workflows run's fan-out. `dispatchId` deep-links via `?dispatchId=`,
+    // mirroring how knowledge/graph/page.tsx deep-links `?focus=`.
+    lineage: (ctx: Required<ScopeContext>, dispatchId?: string): string =>
+      dispatchId
+        ? `${wsBase(ctx)}/automations/lineage?dispatchId=${encodeURIComponent(dispatchId)}`
+        : `${wsBase(ctx)}/automations/lineage`,
   },
 
   // Knowledge — Sources · Graph · Ontology · Memory. The graph explorer,

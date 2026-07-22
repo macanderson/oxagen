@@ -3,16 +3,20 @@
  *
  * The distinction under test is load-bearing: the ENFORCEMENT path
  * (getScopeBudgets) must see only enabled ceilings, while the PANEL path
- * (getAllScopeBudgets) must see disabled ones too. Filtering disabled rows out
+ * (listSpendBudgets) must see disabled ones too. Filtering disabled rows out
  * of the panel stranded them — the panel is the only surface that can turn a
  * ceiling back on, so an invisible row was unrecoverable.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-/** Captures the where() clause so a test can assert whether one was applied. */
+/**
+ * Captures the where() clause so a test can assert whether one was applied.
+ * The links return `unknown` so a test can substitute the awaited row array for
+ * whichever link it wants to terminate the chain at.
+ */
 const selectChain = {
-  from: vi.fn(() => selectChain),
-  where: vi.fn(() => selectChain),
+  from: vi.fn((): unknown => selectChain),
+  where: vi.fn((): unknown => selectChain),
 };
 
 const dbMocks = {
@@ -29,7 +33,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-const { getScopeBudgets, getAllScopeBudgets } = await import(
+const { getScopeBudgets, listSpendBudgets } = await import(
   "./spend-budget-store"
 );
 
@@ -67,11 +71,11 @@ describe("getScopeBudgets — the enforcement read", () => {
   });
 });
 
-describe("getAllScopeBudgets — the panel read", () => {
+describe("listSpendBudgets — the panel read", () => {
   it("applies no enabled filter, so a disabled ceiling is still returned", async () => {
     selectChain.from.mockReturnValueOnce([row({ enabled: false })]);
 
-    const budgets = await getAllScopeBudgets();
+    const budgets = await listSpendBudgets();
 
     // No .where() — a disabled ceiling must survive to reach the panel that
     // is the only surface capable of re-enabling it.
@@ -86,7 +90,7 @@ describe("getAllScopeBudgets — the panel read", () => {
       row({ id: "bdg-org", publicId: "sb_org", workspaceId: null }),
     ]);
 
-    const budgets = await getAllScopeBudgets();
+    const budgets = await listSpendBudgets();
 
     expect(budgets.map((b) => b.scope)).toEqual(["org", "workspace"]);
   });
@@ -96,7 +100,7 @@ describe("getAllScopeBudgets — the panel read", () => {
       row({ workspaceId: "ws-9", limitMicros: "125000000" }),
     ]);
 
-    const budgets = await getAllScopeBudgets();
+    const budgets = await listSpendBudgets();
 
     expect(budgets[0]).toMatchObject({
       scope: "workspace",

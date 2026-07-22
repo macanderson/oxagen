@@ -2,7 +2,11 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull, desc, sql } from "drizzle-orm";
 import { recordSkillLoad } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
-import type { AgentSkillLoadInput, AgentSkillLoadOutput } from "@oxagen/oxagen/contracts/agent.skill.load";
+import type {
+  AgentSkillLoadInput,
+  AgentSkillLoadOutput,
+} from "@oxagen/oxagen/contracts/agent.skill.load";
+import { effectiveResourceScope, auditScopeDenial } from "./_effective-scope";
 
 export type { AgentSkillLoadInput, AgentSkillLoadOutput };
 
@@ -16,7 +20,10 @@ type VersionRow = { id: string; versionNumber: number; body: string };
  *   - tilde prefix "~N"    → must equal N (exact-major, latest patch in range)
  *   - omitted/empty        → any (active version, else latest)
  */
-function matchesConstraint(versionNumber: number, constraint: string | undefined): boolean {
+function matchesConstraint(
+  versionNumber: number,
+  constraint: string | undefined,
+): boolean {
   if (!constraint) return true;
   if (constraint.startsWith("^")) {
     const min = parseInt(constraint.slice(1), 10);
@@ -57,7 +64,10 @@ async function resolveSkillVersion(
 ): Promise<{ skillId: string; row: VersionRow } | null> {
   const skill = await withTenantDb((tx) =>
     tx
-      .select({ id: schema.skills.id, activeVersionId: schema.skills.activeVersionId })
+      .select({
+        id: schema.skills.id,
+        activeVersionId: schema.skills.activeVersionId,
+      })
       .from(schema.skills)
       .where(
         and(
@@ -96,7 +106,9 @@ async function resolveSkillVersion(
     if (active) return { skillId, row: active };
   }
 
-  const matched = versions.find((v) => matchesConstraint(v.versionNumber, version));
+  const matched = versions.find((v) =>
+    matchesConstraint(v.versionNumber, version),
+  );
   if (!matched) return null;
   return { skillId, row: matched };
 }
@@ -128,20 +140,75 @@ export async function agentSkillLoadHandler(
   const startedAt = Date.now();
   const dependencyErrors: AgentSkillLoadOutput["dependencyErrors"] = [];
 
-  // Validate declared extra dependencies first (non-blocking; collect errors)
-  const extra = input.dependencies ?? [];
+  // Agent RBAC Phase 4 (spec §3.3): the run's effective skills.slugs allow-list
+  // is the LOAD-TIME gate (the skill index shown to the model is the UX layer;
+  // this check is what a prompt-injected direct load hits). undefined = all
+  // enabled workspace skills; humans/API-key callers carry no scope → no-op.
+  // Denial follows this handler's soft-failure convention (loaded:false + a
+  // reason the model can act on) and emits a meterable IAM audit row.
+  const allowedSlugs = effectiveResourceScope(ctx)?.skills?.slugs;
+  if (allowedSlugs !== undefined && !allowedSlugs.includes(input.skillSlug)) {
+    auditScopeDenial({
+      ctx,
+      capability: "load_agent_skill",
+      rule: "agent_skill_scope",
+      description: `Skill '${input.skillSlug}' is outside the agent's skills.slugs allow-list`,
+      rawInputJson: JSON.stringify(input),
+      target: { kind: "skill", id: input.skillSlug },
+    });
+    return {
+      skillSlug: input.skillSlug,
+      loaded: false,
+      versionLoaded: 0,
+      body: "",
+      capabilities: [],
+      dependencyErrors: [
+        {
+          slug: input.skillSlug,
+          reason: `Skill '${input.skillSlug}' is not permitted by this agent's role scope`,
+        },
+      ],
+    };
+  }
+
+  // Validate declared extra dependencies first (non-blocking; collect errors).
+  // The same scope allow-list applies to each declared dependency.
+  const extra = (input.dependencies ?? []).filter((depSlug) => {
+    if (allowedSlugs === undefined || allowedSlugs.includes(depSlug))
+      return true;
+    dependencyErrors.push({
+      slug: depSlug,
+      reason: `Skill '${depSlug}' is not permitted by this agent's role scope`,
+    });
+    return false;
+  });
   for (const depSlug of extra) {
-    const resolved = await resolveSkillVersion(depSlug, undefined, ctx.orgId, ctx.workspaceId);
+    const resolved = await resolveSkillVersion(
+      depSlug,
+      undefined,
+      ctx.orgId,
+      ctx.workspaceId,
+    );
     if (!resolved) {
-      dependencyErrors.push({ slug: depSlug, reason: `Skill '${depSlug}' not found or disabled in this workspace` });
+      dependencyErrors.push({
+        slug: depSlug,
+        reason: `Skill '${depSlug}' not found or disabled in this workspace`,
+      });
     }
   }
 
   // Resolve the primary skill
-  const resolved = await resolveSkillVersion(input.skillSlug, input.version, ctx.orgId, ctx.workspaceId);
+  const resolved = await resolveSkillVersion(
+    input.skillSlug,
+    input.version,
+    ctx.orgId,
+    ctx.workspaceId,
+  );
 
   if (!resolved) {
-    const versionHint = input.version ? ` (version constraint: ${input.version})` : "";
+    const versionHint = input.version
+      ? ` (version constraint: ${input.version})`
+      : "";
     return {
       skillSlug: input.skillSlug,
       loaded: false,

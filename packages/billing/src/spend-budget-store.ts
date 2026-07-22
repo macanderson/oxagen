@@ -66,19 +66,6 @@ export async function getScopeBudgets(): Promise<SpendBudgetRow[]> {
   return orgFirst(rows);
 }
 
-/**
- * Every ceiling in scope INCLUDING disabled ones — what the Budgets panel reads.
- * A disabled ceiling is a configured-but-unenforced row: filtering it out (as the
- * enforcement path rightly does) would erase it from the only surface that can
- * turn it back on. Enforcement must keep using {@link getScopeBudgets}.
- */
-export async function getAllScopeBudgets(): Promise<SpendBudgetRow[]> {
-  const rows = await withTenantDb((tx) =>
-    tx.select().from(schema.spendBudgets),
-  );
-  return orgFirst(rows);
-}
-
 /** RLS already narrows to (org-default OR this workspace); order org-first. */
 function orgFirst(rows: Row[]): SpendBudgetRow[] {
   return rows
@@ -109,15 +96,18 @@ export async function getSpendBudget(args: {
   return row ? rowToBudgetRow(row) : null;
 }
 
-/** Both scopes for the current tenant: the org ceiling and (if any) the
- *  workspace ceiling — powers the app panel's two-scope view. */
+/**
+ * Both scopes for the current tenant: the org ceiling and (if any) the workspace
+ * ceiling — powers the app panel's two-scope view. Unlike {@link getScopeBudgets}
+ * this includes DISABLED ceilings: a disabled ceiling is configured-but-unenforced,
+ * and the panel is the only surface that can turn one back on, so filtering it out
+ * would strand the row. Enforcement must keep using {@link getScopeBudgets}.
+ */
 export async function listSpendBudgets(): Promise<SpendBudgetRow[]> {
   const rows = await withTenantDb((tx) =>
     tx.select().from(schema.spendBudgets),
   );
-  return rows
-    .map(rowToBudgetRow)
-    .sort((a, b) => (a.scope === "org" ? 0 : 1) - (b.scope === "org" ? 0 : 1));
+  return orgFirst(rows);
 }
 
 export interface SetSpendBudgetInput {

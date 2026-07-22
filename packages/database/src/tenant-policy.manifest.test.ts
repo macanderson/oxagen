@@ -201,7 +201,67 @@ describe("tenant policy manifest", () => {
     // 94 = 92 + agent.agent_runs + agent.agent_run_events (durable-run schema,
     //      agent-engine v2 Phase 2a: orgScopeMixin + forced tenant_isolation
     //      RLS, 20260804100000_agent_runs_durable_schema.sql).
-    expect(POLICY_MANIFEST.length).toBe(94);
+    // 95 = 94 + billing.spend_budgets. The table + its inline
+    //      workspace_nullable RLS DDL shipped in
+    //      20260806120000_spend_budgets.sql, but the manifest entry was missed
+    //      — the same defect class as the reseller tables above, where a future
+    //      re-baseline would silently drop the policy. Added here.
+    // 109 = 95 + the 14 run/attempt/authorization foundation tables
+    //      (docs/specs/run-evidence-ingress, run_attempt_foundation_expand +
+    //      agent_run_authorization_foundation migrations):
+    //        agent.agent_run_attempts, agent.agent_run_attempt_leases,
+    //        agent.agent_run_checkpoints, agent.agent_run_attempt_seals,
+    //        agent.agent_run_finalization_grants,
+    //        agent.agent_run_finalization_obligations            → standard
+    //        ingestion.repository_bindings,
+    //        ingestion.repository_binding_heads,
+    //        ingestion.governed_repository_selections            → standard
+    //        evidence.retention_policy_versions                  → standard
+    //        iam.authorization_snapshots                         → standard
+    //        iam.authorization_deny_generations, iam.emergency_denies,
+    //        iam.authorization_decisions                → workspace_nullable
+    expect(POLICY_MANIFEST.length).toBe(109);
+  });
+
+  it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {
+    const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
+    // Attempt foundation: append-only at the GRANT level, but still row-scoped
+    // — append-only privileges stop mutation, not cross-tenant reads.
+    for (const t of [
+      "agent.agent_run_attempts",
+      "agent.agent_run_attempt_leases",
+      "agent.agent_run_checkpoints",
+      "agent.agent_run_attempt_seals",
+      "agent.agent_run_finalization_grants",
+      "agent.agent_run_finalization_obligations",
+      "ingestion.repository_bindings",
+      "ingestion.repository_binding_heads",
+      "ingestion.governed_repository_selections",
+      "evidence.retention_policy_versions",
+      // A run always executes in exactly one workspace, so its pinned ceiling
+      // is workspace-scoped rather than org-wide.
+      "iam.authorization_snapshots",
+    ]) {
+      expect(find(t)?.policyClass, t).toBe("standard");
+    }
+    // Deny state and decisions are legitimately org-wide OR workspace-scoped.
+    for (const t of [
+      "iam.authorization_deny_generations",
+      "iam.emergency_denies",
+      "iam.authorization_decisions",
+    ]) {
+      expect(find(t)?.policyClass, t).toBe("workspace_nullable");
+    }
+  });
+
+  it("covers billing.spend_budgets as workspace_nullable (org-level ceiling row)", () => {
+    // A NULL workspace_id row is the org-wide ceiling visible to every
+    // workspace; a non-NULL row is that workspace's own. Must match the
+    // predicate 20260806120000_spend_budgets.sql already installed.
+    expect(
+      POLICY_MANIFEST.find((e) => e.table === "billing.spend_budgets")
+        ?.policyClass,
+    ).toBe("workspace_nullable");
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

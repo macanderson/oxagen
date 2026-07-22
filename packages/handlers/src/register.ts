@@ -1488,4 +1488,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./model.capability.list"))
         .modelCapabilityListHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "query_lineage",
+    async () =>
+      (await import("./lineage.query"))
+        .lineageQueryHandler as CapabilityHandlerFn,
+  );
 });

@@ -20,6 +20,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/agent": "workspace:*",
+    "@oxagen/agent-runner": "workspace:*",
     "@oxagen/functions": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/ai": "workspace:*",

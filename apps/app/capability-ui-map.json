@@ -1179,6 +1179,15 @@
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
       "verifiedAt": null,
       "verifiedBy": "session_evals-redesign"
+    },
+    "query_lineage": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/lineage",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/lineage/page.tsx",
+      "entry": "Automations → Lineage tab page load → LineageSection → queryLineageAction(dispatchId) → query_lineage; dispatch picker (list_subagent_fanouts) when no ?dispatchId= is set yet",
+      "testid": "lineage-row-",
+      "proof": "apps/app/e2e/fleet-lineage.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session_01BvcuRRNHvpFSYLVhow4HGb"
     }
   }
 }
