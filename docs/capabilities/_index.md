@@ -426,19 +426,19 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Skill (14)
 
-- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
-- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
+- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated skill.toml and installs it into the workspace
+- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied skill.toml content (idempotent on slug)
 - [skill.draft](skill.draft.md) — Draft a skill configuration from a natural-language description for human review — the AI-assisted first step of skill setup; persists nothing
-- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the .skill.md body and saves a new activated version (slug immutable)
+- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the skill.toml artifact and saves a new activated version (slug immutable)
 - [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
 - [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
-- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including body and parsed frontmatter
-- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from raw .skill.md content
+- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including canonical skill.toml content and the parsed artifact
+- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from canonical skill.toml content
 - [skill.version.activate](skill.version.activate.md) — Set a specific skill version as the workspace's active version
 - [skill.edit](skill.edit.md) — Save an edited skill body as a new immutable version
-- [skill.export](skill.export.md) — Export a skill version as a downloadable .skill.md string
+- [skill.export](skill.export.md) — Export a skill version as a downloadable skill.toml string
 - [skill.metrics.read](skill.metrics.read.md) — Read aggregated skill usage and cost metrics for the workspace
 
 ## Svg (1)

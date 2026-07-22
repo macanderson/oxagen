@@ -8,14 +8,14 @@
 
 ## Intent
 
-Upload a new immutable skill version from raw `.skill.md` content. Creates a new `skill_versions` row with `version_number = max + 1`, marks it as `is_latest`, and sets it as the skill's `active_version_id` by default (unless `activate=false` is passed). Prior version rows are never modified beyond clearing their `is_latest` flag. The body is validated via `parseSkill` before any DB writes.
+Upload a new immutable skill version from canonical `skill.toml` content. Creates a new `skill_versions` row with `version_number = max + 1`, marks it as `is_latest`, and sets it as the skill's `active_version_id` by default (unless `activate=false` is passed). Prior version rows are never modified beyond clearing their `is_latest` flag. The content is validated via `canonicalizeSkillArtifact` before any DB writes.
 
 ## Input
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | skill_id | string | Public ID of the skill to add a version to (`skl_…`) |
-| body | string (min 1) | Raw `.skill.md` content including YAML frontmatter |
+| content | string (min 1) | Canonical `skill.toml` content |
 | activate | boolean (default: true) | Set this version as active immediately |
 | workspace_id | string (optional) | Workspace ID (defaults to current workspace) |
 
@@ -41,6 +41,6 @@ Uses the same `createNewSkillVersion` helper as `skill.edit`. Both are thin wrap
 ## Errors
 
 - `skill.version.upload requires an authenticated user` — no authenticated user in context.
-- `missing YAML frontmatter` — `body` does not include valid YAML frontmatter block.
+- `invalid_skill_artifact` — `content` is not valid TOML, is not `kind = "skill"`, or fails schema validation.
 - `skill not found: skl_…` — the given `skill_id` does not exist within the caller's workspace, has been soft-deleted, or belongs to another org/workspace (tenant isolation enforced).
 - DB errors propagated as-is.

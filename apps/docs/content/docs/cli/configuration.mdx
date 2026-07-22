@@ -112,31 +112,44 @@ On-device is always an allowed coordinator — the CLI never silently swaps it f
 
 ## Custom agents, commands & rules
 
-Three things live in `.oxagen/` as Markdown files with YAML frontmatter, committed alongside your code:
+Three things live in `.oxagen/`, committed alongside your code:
 
-- **Agents** (`.oxagen/agents/*.md`) — reusable personas with their own prompt, model, and tools.
-- **Slash commands** (`.oxagen/commands/*.md`) — `/name` prompt templates with `$ARGUMENTS` substitution.
+- **Agents** (`.oxagen/agents/*.toml`) — reusable personas with their own instructions, model, and capabilities.
+- **Slash commands** (`.oxagen/commands/*.toml`) — `/name` prompt templates with `$ARGUMENTS` substitution.
 - **Rules** (`.oxagen/rules/*.md`) — guardrails the agent is told about **and hard-blocked from violating**.
 
+Agents and commands are **canonical TOML**; a `.md` file in those directories is ignored. Rules remain Markdown. Skills are directory bundles at `.oxagen/skills/<name>/skill.toml`.
+
 ```bash
-oxagen agent new reviewer        # scaffolds .oxagen/agents/reviewer.md
-oxagen command new triage        # scaffolds .oxagen/commands/triage.md
+oxagen agent new reviewer        # scaffolds .oxagen/agents/reviewer.toml
+oxagen command new triage        # scaffolds .oxagen/commands/triage.toml
 oxagen rules new no-force-push   # scaffolds .oxagen/rules/no-force-push.md
 ```
 
-The file format, frontmatter keys, and argument templating are documented in **[Custom commands, agents & rules](/docs/cli/custom-commands)**.
+The file format, TOML keys, and argument templating are documented in **[Custom commands, agents & rules](/docs/cli/custom-commands)**. To convert existing Claude Code, Codex, or Cursor artifacts, see **[Importing agent artifacts](/docs/cli/import-artifacts)**.
 
 ### Where definitions are discovered
 
-Agents, slash commands, and rules are each loaded from three locations and merged — project definitions override user ones, and the `.claude/` paths are read for drop-in compatibility with Claude Code:
+Project definitions override user ones. Discovery differs by kind, because agents and commands were cut over to TOML and rules were not.
+
+**Agents and commands** — TOML only, two locations:
 
 | Order | Location | Scope |
 |---|---|---|
-| 1 | `~/.config/oxagen/<kind>/*.md` | User (all projects) |
-| 2 | `<project>/.claude/<kind>/*.md` | Project (Claude Code interop) |
-| 3 | `<project>/.oxagen/<kind>/*.md` | Project (Oxagen) |
+| 1 | `~/.config/oxagen/<kind>/*.toml` | User (all projects) |
+| 2 | `<project>/.oxagen/<kind>/*.toml` | Project (Oxagen) |
 
-…where `<kind>` is `agents`, `commands`, or `rules`. Commit `.oxagen/` so your team shares the same agents, commands, and rules.
+Skills load from `<root>/skills/<name>/skill.toml` in those same two locations.
+
+**Rules** — Markdown, three locations:
+
+| Order | Location | Scope |
+|---|---|---|
+| 1 | `~/.config/oxagen/rules/*.md` | User (all projects) |
+| 2 | `<project>/.claude/rules/*.md` | Project (Claude Code interop) |
+| 3 | `<project>/.oxagen/rules/*.md` | Project (Oxagen) |
+
+`.claude/`, `.codex/`, and `.cursor/` are **not** scanned for agents, skills, or commands — those directories are read only by [`oxagen import artifacts`](/docs/cli/import-artifacts), on demand. Commit `.oxagen/` so your team shares the same agents, commands, and rules.
 
 ## Environment variables
 
