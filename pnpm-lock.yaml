@@ -1425,6 +1425,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
+      '@oxagen/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai

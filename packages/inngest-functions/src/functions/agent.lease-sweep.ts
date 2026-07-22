@@ -2,6 +2,11 @@ import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { insertEvents, type EventRow } from "@oxagen/telemetry";
+import {
+  createPostgresRunStore,
+  MAX_RUN_ATTEMPTS,
+  type ReclaimedAttempt,
+} from "@oxagen/agent-runner";
 import { MAX_ATTEMPTS, decideSweepAction } from "../lease";
 import { deriveFanoutStatus } from "./agent.execute-subagent";
 import { logger } from "../logger";
@@ -15,16 +20,19 @@ import { logger } from "../logger";
  *      executor's claim loop picks them up); rows at the cap are failed with
  *      an explicit lease-expiry reason, which is what guarantees every child
  *      eventually becomes terminal.
- *   1c. Same requeue-below-cap / fail-at-cap idiom for `agent.agent_runs`
- *      (agent-engine v2 Phase 2, docs/specs/agent-engine-v2/plan.md) — the
- *      durable-run worker pool's claim table (`packages/agent-runner/src/run-
- *      store.ts`). Unlike subagent_runs/execution_steps, there is no separate
- *      dispatch event to re-emit: the worker pool claims `pending` rows by
- *      polling (`claimNextRun`), so a plain status flip is enough. One extra
- *      rule this table has and the others don't: a row that is both
- *      lease-expired AND `cancel_requested` resolves to 'cancelled', never
- *      'pending' — the caller already gave up on it, and requeuing would let
- *      a cancelled run resurrect and keep executing unattended.
+ *   1c. Same requeue-below-cap / fail-at-cap idiom for LEGACY V1
+ *      `agent.agent_runs` rows (agent-engine v2 Phase 2,
+ *      docs/specs/agent-engine-v2/plan.md) — the durable-run worker pool's
+ *      claim table (`packages/agent-runner/src/run-store.ts`). Unlike
+ *      subagent_runs/execution_steps, there is no separate dispatch event to
+ *      re-emit: the worker pool claims `pending` rows by polling
+ *      (`claimNextRun`), so a plain status flip is enough. One extra rule this
+ *      table has and the others don't: a row that is both lease-expired AND
+ *      `cancel_requested` resolves to 'cancelled', never 'pending' — the
+ *      caller already gave up on it, and requeuing would let a cancelled run
+ *      resurrect and keep executing unattended.
+ *   1d. V2 rows (`spec_version = 2`) are reclaimed by `reclaimExpiredAttempts`
+ *      instead, NEVER by 1c's status flip — see below.
  *   2. Runs the same last-child-finalize count the executors use, as a
  *      backstop — so a fanout/execution whose worker died AFTER the last
  *      child finished still terminates.
@@ -40,12 +48,29 @@ import { logger } from "../logger";
 const SWEEP_BATCH_LIMIT = 500;
 
 /**
- * Attempt cap for `agent.agent_runs` — mirrors MAX_RUN_ATTEMPTS
- * (`packages/agent-runner/src/run-store.ts`). Hardcoded rather than imported:
- * this package takes no workspace dependency on @oxagen/agent-runner for one
- * constant. Keep the two values in sync by hand if either changes.
+ * Attempt cap for legacy V1 `agent.agent_runs`. Imported from the run store
+ * rather than hand-mirrored — this package already depends on
+ * @oxagen/agent-runner for `reclaimExpiredAttempts`, so the duplicate constant
+ * that used to live here (and could silently drift from the store's own cap)
+ * has no reason to exist.
+ *
+ * V2 rows do NOT use this: their cap is `agent_runs.max_attempts`, pinned per
+ * run at admission and enforced inside `reclaimExpiredAttempts`.
  */
-const MAX_AGENT_RUN_ATTEMPTS = 3;
+const MAX_AGENT_RUN_ATTEMPTS = MAX_RUN_ATTEMPTS;
+
+/**
+ * Per-sweep budget for V2 attempt reclaims. Deliberately far below
+ * SWEEP_BATCH_LIMIT: each reclaim is its own transaction that seals an attempt
+ * and mints a finalization grant plus obligation, which is real write work —
+ * not the single bulk UPDATE the V1 buckets get. Anything beyond the budget is
+ * picked up on the next tick (5 min), by which point its lease is only more
+ * expired.
+ */
+const ATTEMPT_RECLAIM_LIMIT = 100;
+
+/** Identity recorded as the sealer of every attempt this sweep reclaims. */
+const RECLAIMER_WORKER_ID = "inngest:agent.lease-sweep";
 
 /** Backstop-finalize budget per sweep. */
 const FINALIZE_BATCH_LIMIT = 100;
@@ -230,11 +255,20 @@ export const [agentLeaseSweep] = createFunction(
       }),
     );
 
-    // ── 1c. Expired agent_runs (agent-engine v2 Phase 2 durable-run worker
-    //       pool; docs/specs/agent-engine-v2/plan.md). Same requeue-below-cap
-    //       / fail-at-cap idiom as 1a/1b. No dispatch event to re-emit here —
-    //       the worker pool claims 'pending' rows by polling (claimNextRun in
-    //       run-store.ts), unlike subagent_runs' event-driven fanout.
+    // ── 1c. Expired LEGACY V1 agent_runs (agent-engine v2 Phase 2 durable-run
+    //       worker pool; docs/specs/agent-engine-v2/plan.md). Same
+    //       requeue-below-cap / fail-at-cap idiom as 1a/1b. No dispatch event
+    //       to re-emit here — the worker pool claims 'pending' rows by polling
+    //       (claimNextRun in run-store.ts), unlike subagent_runs' event-driven
+    //       fanout.
+    //
+    //       `spec_version = 1` on the SELECT *and* on every UPDATE guard is
+    //       load-bearing, not defensive tidiness. A V2 row flipped straight to
+    //       'pending' here would leave its expired attempt UNSEALED: no seal
+    //       means no finalization grant and no obligation, so the successor
+    //       claim would bury an attempt whose evidence nothing is obliged to
+    //       submit. V2 rows belong to 1d's `reclaimExpiredAttempts` and to
+    //       nothing else.
     //
     //       Nuance unique to this table: a row can be both lease-expired AND
     //       cancel_requested (the caller cancelled while the worker that held
@@ -252,7 +286,7 @@ export const [agentLeaseSweep] = createFunction(
         const expired = (await tx.execute<ExpiredAgentRunRow>(sql`
           SELECT id, org_id, workspace_id, attempts, claimed_by, cancel_requested
           FROM agent.agent_runs
-          WHERE status = 'running' AND lease_expires_at < now()
+          WHERE spec_version = 1 AND status = 'running' AND lease_expires_at < now()
           ORDER BY lease_expires_at
           LIMIT ${SWEEP_BATCH_LIMIT}
           FOR UPDATE SKIP LOCKED
@@ -287,7 +321,7 @@ export const [agentLeaseSweep] = createFunction(
             UPDATE agent.agent_runs
             SET status = 'pending', claimed_by = NULL, lease_expires_at = NULL, updated_at = now()
             WHERE id = ANY(${sql.param(requeueIds)}::uuid[])
-              AND status = 'running' AND lease_expires_at < now() AND cancel_requested = false
+              AND spec_version = 1 AND status = 'running' AND lease_expires_at < now() AND cancel_requested = false
           `);
         }
         if (failIds.length > 0) {
@@ -297,7 +331,7 @@ export const [agentLeaseSweep] = createFunction(
                 error = 'lease expired after ' || attempts || ' attempts',
                 completed_at = now(), lease_expires_at = NULL, updated_at = now()
             WHERE id = ANY(${sql.param(failIds)}::uuid[])
-              AND status = 'running' AND lease_expires_at < now() AND cancel_requested = false
+              AND spec_version = 1 AND status = 'running' AND lease_expires_at < now() AND cancel_requested = false
           `);
         }
         if (cancelIds.length > 0) {
@@ -308,7 +342,7 @@ export const [agentLeaseSweep] = createFunction(
             SET status = 'cancelled', error = NULL,
                 completed_at = now(), lease_expires_at = NULL, updated_at = now()
             WHERE id = ANY(${sql.param(cancelIds)}::uuid[])
-              AND status = 'running' AND lease_expires_at < now() AND cancel_requested = true
+              AND spec_version = 1 AND status = 'running' AND lease_expires_at < now() AND cancel_requested = true
           `);
         }
         return {
@@ -319,6 +353,82 @@ export const [agentLeaseSweep] = createFunction(
         };
       }),
     );
+
+    // ── 1d. Expired V2 attempts (docs/specs/run-evidence-ingress/spec.md) ───
+    //
+    //       This step replaces 1c's raw SQL for `spec_version = 2` rows
+    //       entirely. A V2 lease cannot be reclaimed by flipping a status
+    //       column, because the run row is not the thing that expired — an
+    //       immutable ATTEMPT is, and every attempt must be sealed before its
+    //       successor exists. `reclaimExpiredAttempts` does all of that in one
+    //       transaction per attempt:
+    //
+    //         - seals the expired attempt as `abandoned`. When `event_count`
+    //           is 0 it records a NULL final-event digest and the canonical
+    //           empty stream digest and synthesizes NO terminal event —
+    //           inventing one would put an observation in the ledger that no
+    //           producer ever made;
+    //         - mints the one-shot, non-expiring finalization grant and its
+    //           durable obligation in that same transaction, so the seal and
+    //           the promise to submit its evidence commit together;
+    //         - requeues the run to 'pending' only while
+    //           `attempt_count < max_attempts` (the value pinned at
+    //           admission), so a successor can never claim before the
+    //           predecessor's seal and obligation are durable, and a run never
+    //           retries without a bound. At the cap it marks the run failed
+    //           after sealing the final attempt — still evidence-finalizable.
+    //
+    //       The successor attempt itself is created by the NEXT claim, never
+    //       here: an attempt row pins a resolved engine name/version/build
+    //       digest that only a claiming worker knows, and attempt ids are
+    //       never reused.
+    //
+    //       A duplicate sweep is safe by construction: the second sweeper
+    //       finds the lease already sealed and gets the SAME handle back —
+    //       same `submissionId`, no second grant, and no re-mutation of the
+    //       run the first sweep already requeued or failed. Those come back
+    //       flagged `alreadySealed` so a duplicate is visible in the summary
+    //       instead of being double-counted as new finalization work.
+    const attemptSweep = await step.run(
+      "reclaim-expired-attempts",
+      async () => {
+        const reclaimed: ReclaimedAttempt[] =
+          await createPostgresRunStore().reclaimExpiredAttempts({
+            reclaimerWorkerId: RECLAIMER_WORKER_ID,
+            limit: ATTEMPT_RECLAIM_LIMIT,
+            reasonCode: "lease_expired",
+          });
+        return reclaimed.map((entry) => ({
+          runId: entry.runId,
+          attemptNumber: Number(entry.attemptNumber),
+          maxAttempts: Number(entry.maxAttempts),
+          successorPermitted: entry.successorPermitted,
+          attemptPublicId: entry.handle.attemptPublicId,
+          terminalStatus: entry.handle.terminalStatus,
+          eventCount: Number(entry.handle.eventCount),
+          // The grant public id, reused verbatim as the obligation's stable
+          // submission id — every retry of that obligation carries this value.
+          submissionId: entry.handle.submissionId,
+          alreadySealed: entry.handle.alreadySealed,
+        }));
+      },
+    );
+
+    const newlySealedAttempts = attemptSweep.filter((a) => !a.alreadySealed);
+    if (attemptSweep.length > 0) {
+      // Finalization is drained from the obligation table by an independent,
+      // retryable consumer — this sweep only records that the obligations now
+      // exist. Logging the submission ids is what makes a stranded one
+      // findable without querying the ledger.
+      logger.info(
+        {
+          reclaimed: attemptSweep.length,
+          newlySealed: newlySealedAttempts.length,
+          submissionIds: newlySealedAttempts.map((a) => a.submissionId),
+        },
+        "agent.lease-sweep: sealed expired attempts and minted finalization obligations",
+      );
+    }
 
     // ── 2a. Re-dispatch fanouts with requeued children ──────────────────────
     const fanoutEvents = new Map<
@@ -533,6 +643,18 @@ export const [agentLeaseSweep] = createFunction(
       agentRunsRequeued: agentRunSweep.requeued.length,
       agentRunsFailedAtCap: agentRunSweep.failed.length,
       agentRunsCancelled: agentRunSweep.cancelled.length,
+      attemptsReclaimed: attemptSweep.length,
+      attemptsRequeuedForSuccessor: newlySealedAttempts.filter(
+        (a) => a.successorPermitted,
+      ).length,
+      attemptsFailedAtCap: newlySealedAttempts.filter(
+        (a) => !a.successorPermitted,
+      ).length,
+      // A concurrent sweeper had already sealed these; their handles were
+      // returned unchanged and no second grant was minted.
+      attemptsAlreadySealed: attemptSweep.length - newlySealedAttempts.length,
+      // One per newly sealed attempt, created inside its seal transaction.
+      finalizationObligations: newlySealedAttempts.length,
       fanoutsFinalized: finalizedFanouts.length,
       executionsFinalized: finalizedExecutions.length,
       maxAttempts: MAX_ATTEMPTS,
