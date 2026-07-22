@@ -710,7 +710,7 @@ describe("runA2ATask — agent RBAC delegation (Q2)", () => {
     });
 
     expect(h.resolveAgentRunAuthzContext).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: "agt_1", invokingUserId: null }),
+      expect.objectContaining({ agentId: "agt_1", initiatingUserId: null }),
     );
     const matCtx = vi.mocked(materializeTools).mock.calls[0]?.[0] as {
       agentRun?: { agentId: string; resolution?: unknown };
