@@ -386,6 +386,109 @@ function currentPrincipalStamp(): {
   };
 }
 
+/**
+ * One execution step's aggregated token_usage: spend + tokens + LLM-call
+ * count, plus `any(model|provider|principal_id|principal_kind)` — the columns
+ * are constant per execution step in practice (one step = one run = one
+ * principal), so `any()` is a cheap "pick one" rather than a real aggregate.
+ */
+export interface TokenUsageByStepRow {
+  executionStepId: string;
+  /** Micro-USD, coerced from ClickHouse's UInt64-as-decimal-string. */
+  costMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Number of token_usage rows (LLM calls) attributed to this step. */
+  llmCalls: number;
+  model: string;
+  provider: string;
+  /** iam.principals.id, or NIL_UUID when attribution was never stamped. */
+  principalId: string;
+  principalKind: string;
+}
+
+/**
+ * Batch-sum `token_usage` grouped by `execution_step_id` — the fan-out/lineage
+ * read path (query_lineage): one query resolves spend + model + principal for
+ * every node in a dispatch tree instead of N per-node reads. Org-scoped only
+ * (no workspace filter) because a dispatch tree's runs all share one org by
+ * construction and the caller already tenant-scopes the execution_step_id set
+ * via Postgres.
+ *
+ * Every UInt64 sum is coerced with `Number()` per the ClickHouse
+ * JSONEachRow-returns-decimal-strings gotcha (see sumTokenUsage above); at
+ * per-run scale these values are always far below
+ * Number.MAX_SAFE_INTEGER, unlike an org-wide cumulative sum.
+ *
+ * Returns a Map so callers can do O(1) per-node lookups; ids absent from the
+ * result had zero token_usage rows. NIL_UUID is filtered out of the request
+ * (never a real execution step) and an empty input short-circuits without a
+ * network call. Does NOT catch its own errors — callers on a read path that
+ * must never fail on a degraded ClickHouse (e.g. query_lineage) are expected
+ * to wrap this in try/catch and degrade to zero-spend nodes, mirroring
+ * `getSpendBudgetStatuses` in packages/billing/src/spend-budget-gate.ts.
+ */
+export async function sumTokenUsageByExecutionStep(args: {
+  orgId: string;
+  executionStepIds: readonly string[];
+}): Promise<Map<string, TokenUsageByStepRow>> {
+  const result = new Map<string, TokenUsageByStepRow>();
+  const ids = Array.from(new Set(args.executionStepIds)).filter(
+    (id) => id !== NIL_UUID,
+  );
+  if (ids.length === 0) return result;
+
+  const ch = clickhouse();
+  const queryResult = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT
+        execution_step_id,
+        sum(cost_usd_micros) AS cost_micros,
+        sum(input_tokens)    AS input_tokens,
+        sum(output_tokens)   AS output_tokens,
+        count()              AS llm_calls,
+        any(model)           AS model,
+        any(provider)        AS provider,
+        any(principal_id)    AS principal_id,
+        any(principal_kind)  AS principal_kind
+      FROM token_usage
+      WHERE org_id = {orgId:UUID}
+        AND execution_step_id IN {ids:Array(UUID)}
+      GROUP BY execution_step_id
+    `,
+      query_params: { orgId: args.orgId, ids },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = {
+    execution_step_id: string;
+    cost_micros: string;
+    input_tokens: string;
+    output_tokens: string;
+    llm_calls: string;
+    model: string;
+    provider: string;
+    principal_id: string;
+    principal_kind: string;
+  };
+  const rows = (await queryResult.json()) as Row[];
+  for (const row of rows) {
+    result.set(row.execution_step_id, {
+      executionStepId: row.execution_step_id,
+      costMicros: Number(row.cost_micros),
+      inputTokens: Number(row.input_tokens),
+      outputTokens: Number(row.output_tokens),
+      llmCalls: Number(row.llm_calls),
+      model: row.model,
+      provider: row.provider,
+      principalId: row.principal_id,
+      principalKind: row.principal_kind,
+    });
+  }
+  return result;
+}
+
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
 
