@@ -96,6 +96,7 @@ import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
+import { modelCapabilityListRoute } from "./routes/v1/model.capability.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
@@ -546,6 +547,10 @@ orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
 // single-execution failure frame above.
 orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
+// Provider capability posture matrix — what a BYOK-configured vendor actually
+// supports (cache opt-in vs implicit, reasoning control, structured output,
+// attachments) before work is routed to it.
+orgScoped.route("/model/capabilities", modelCapabilityListRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.

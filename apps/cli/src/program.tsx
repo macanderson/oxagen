@@ -697,6 +697,28 @@ export function buildProgram(): Command {
       const { handleModelsUse } = await import("./commands/models.js");
       await handleModelsUse(id);
     });
+  models
+    .command("capabilities")
+    .description(
+      "Provider capability posture matrix: cache, reasoning, structured output, attachments — full or filtered to one vendor/model",
+    )
+    .option(
+      "--vendor <vendor>",
+      "Filter to one vendor's gateway creator prefix (e.g. anthropic)",
+    )
+    .option(
+      "--model <id>",
+      "Resolve the posture for a specific gateway model id (e.g. anthropic/claude-sonnet-5)",
+    )
+    .option("--json", "Output JSON", false)
+    .action(
+      async (opts: { vendor?: string; model?: string; json?: boolean }) => {
+        const { handleModelsCapabilities } = await import(
+          "./commands/models.js"
+        );
+        await handleModelsCapabilities(opts);
+      },
+    );
 
   // ── graph: knowledge-graph search + pull + status ───────────────────────────
 

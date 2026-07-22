@@ -285,6 +285,10 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [mermaid.generate](mermaid.generate.md) — Produce a Mermaid diagram rendered inline in chat as a client-side SVG artifact
 
+## Model (1)
+
+- [list_model_capabilities](model.capability.list.md) — List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts
+
 ## Notifications (2)
 
 - [notifications.list](notifications.list.md) — List in-app notifications for the calling user with unread filtering and pagination

@@ -1,5 +1,8 @@
 import type { z } from "zod";
 import type { LifecycleEvent } from "@oxagen/agent-artifacts";
+// Type-only, so the ./iam/agent-run ↔ ./types cycle is erased at compile time
+// (agent-run imports CapabilityEffect/ResolvedPrincipal back from here).
+import type { AgentRunIAMContext } from "./iam/agent-run";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
