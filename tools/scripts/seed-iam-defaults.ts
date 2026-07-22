@@ -34,6 +34,11 @@
  *     FROM (VALUES ...) ... ON CONFLICT (public_id) DO UPDATE, mirroring the
  *     legacy phase's chunking, so a capability's effect/resourceScope
  *     changing on re-run is reflected, not silently skipped.
+ *   - Agent phase ATOMICITY: each org's role upserts + grant upserts run
+ *     inside one sql.begin() transaction, so a mid-run failure (e.g. one
+ *     grant chunk erroring) can never leave an org with roles but
+ *     no/partial grants — it's all-or-nothing per org, and a re-run after a
+ *     partial failure is still a correct idempotent no-op either way.
  *
  * Run via:
  *   pnpm db:seed-iam
@@ -279,93 +284,108 @@ async function main(): Promise<void> {
     let agentGrantsUpserted = 0;
 
     for (const orgId of orgIds) {
-      // roleId per (org, agent role name).
-      const agentRoleIdByName = new Map<AgentRoleName, string>();
+      // Wrap this org's role upserts + grant upserts in one transaction so a
+      // failure partway through (e.g. a chunk failing on grant N of M) can
+      // never leave the org with roles but no/partial grants — the whole
+      // org's agent-RBAC state moves from "old" to "new" atomically, or not
+      // at all. A later re-run remains a correct, idempotent no-op either way
+      // (ON CONFLICT DO UPDATE), but atomicity means "no or all", not "some".
+      const orgResult = await sql.begin(async (tx) => {
+        // roleId per (org, agent role name).
+        const agentRoleIdByName = new Map<AgentRoleName, string>();
+        let rolesUpserted = 0;
 
-      for (const roleName of AGENT_ROLE_NAMES) {
-        const publicId = makeRolePublicId(orgId, "workspace", roleName);
-        const [row] = await sql<{ id: string }[]>`
-          INSERT INTO iam.roles (public_id, org_id, scope_kind, name, description, is_system_default)
-          VALUES (${publicId}, ${orgId}, 'workspace', ${roleName}, ${AGENT_ROLE_DESCRIPTIONS[roleName]}, true)
-          ON CONFLICT (public_id) DO UPDATE
-            SET description = EXCLUDED.description,
-                is_system_default = true,
-                scope_kind = EXCLUDED.scope_kind,
-                updated_at = now()
-          RETURNING id
-        `;
-        if (!row) {
-          throw new Error(
-            `[seed-iam] failed to upsert agent role "${roleName}" for org ${orgId}`,
-          );
+        for (const roleName of AGENT_ROLE_NAMES) {
+          const publicId = makeRolePublicId(orgId, "workspace", roleName);
+          const [row] = await tx<{ id: string }[]>`
+            INSERT INTO iam.roles (public_id, org_id, scope_kind, name, description, is_system_default)
+            VALUES (${publicId}, ${orgId}, 'workspace', ${roleName}, ${AGENT_ROLE_DESCRIPTIONS[roleName]}, true)
+            ON CONFLICT (public_id) DO UPDATE
+              SET description = EXCLUDED.description,
+                  is_system_default = true,
+                  scope_kind = EXCLUDED.scope_kind,
+                  updated_at = now()
+            RETURNING id
+          `;
+          if (!row) {
+            throw new Error(
+              `[seed-iam] failed to upsert agent role "${roleName}" for org ${orgId}`,
+            );
+          }
+          agentRoleIdByName.set(roleName, row.id);
+          rolesUpserted += 1;
         }
-        agentRoleIdByName.set(roleName, row.id);
-        agentRolesUpserted += 1;
-      }
 
-      // role_grants: one row per (agent role, agent-surfaced capability),
-      // carrying the role's resourceScope ceiling as a conditions_jsonb
-      // condition (packages/oxagen/src/iam/conditions.ts). Seed data only —
-      // the resolver's role-grant resourceScope read path is a separate
-      // change.
-      //
-      // Materialize every row client-side, then bulk-upsert in chunks —
-      // the same fix already applied to the legacy phase above. The
-      // previous version issued one INSERT per (role, capability) pair
-      // (~3 roles × ~337 agent-surfaced capabilities = ~1,011 sequential
-      // round-trips per org), which is minutes against a WAN-latency
-      // Postgres for a multi-org seed. Chunked multi-row upserts cut that
-      // to a handful of round-trips per org while preserving the exact
-      // same ON CONFLICT (public_id) DO UPDATE semantics per row.
-      interface AgentGrantRow {
-        public_id: string;
-        org_id: string;
-        role_id: string;
-        capability_id: string;
-        effect: Effect;
-        conditions_jsonb: string;
-      }
-
-      const agentGrantRows: AgentGrantRow[] = [];
-      for (const roleName of AGENT_ROLE_NAMES) {
-        const roleId = agentRoleIdByName.get(roleName);
-        if (!roleId) continue;
-        const resourceScope = AGENT_ROLE_RESOURCE_SCOPE[roleName];
-        const conditionsJsonb = JSON.stringify({ resourceScope });
-
-        for (const cap of agentCapabilities) {
-          const effect = agentRoleEffect(
-            roleName,
-            cap.agent?.category,
-            cap.agent?.riskLevel,
-            cap.agent?.requiresApproval,
-          );
-          agentGrantRows.push({
-            public_id: makeRoleGrantPublicId(roleId, cap.name),
-            org_id: orgId,
-            role_id: roleId,
-            capability_id: cap.name,
-            effect,
-            conditions_jsonb: conditionsJsonb,
-          });
+        // role_grants: one row per (agent role, agent-surfaced capability),
+        // carrying the role's resourceScope ceiling as a conditions_jsonb
+        // condition (packages/oxagen/src/iam/conditions.ts). Seed data only —
+        // the resolver's role-grant resourceScope read path is a separate
+        // change.
+        //
+        // Materialize every row client-side, then bulk-upsert in chunks —
+        // the same fix already applied to the legacy phase above. The
+        // previous version issued one INSERT per (role, capability) pair
+        // (~3 roles × ~337 agent-surfaced capabilities = ~1,011 sequential
+        // round-trips per org), which is minutes against a WAN-latency
+        // Postgres for a multi-org seed. Chunked multi-row upserts cut that
+        // to a handful of round-trips per org while preserving the exact
+        // same ON CONFLICT (public_id) DO UPDATE semantics per row.
+        interface AgentGrantRow {
+          public_id: string;
+          org_id: string;
+          role_id: string;
+          capability_id: string;
+          effect: Effect;
+          conditions_jsonb: string;
         }
-      }
 
-      const AGENT_GRANT_CHUNK = 500;
-      for (let i = 0; i < agentGrantRows.length; i += AGENT_GRANT_CHUNK) {
-        const chunk = agentGrantRows.slice(i, i + AGENT_GRANT_CHUNK);
-        await sql`
-          INSERT INTO iam.role_grants
-            (public_id, org_id, role_id, capability_id, effect, conditions_jsonb)
-          SELECT public_id, org_id, role_id, capability_id, effect, conditions_jsonb::jsonb
-          FROM ${sql(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb")}
-          ON CONFLICT (public_id) DO UPDATE
-            SET effect = EXCLUDED.effect,
-                conditions_jsonb = EXCLUDED.conditions_jsonb,
-                updated_at = now()
-        `;
-        agentGrantsUpserted += chunk.length;
-      }
+        const agentGrantRows: AgentGrantRow[] = [];
+        for (const roleName of AGENT_ROLE_NAMES) {
+          const roleId = agentRoleIdByName.get(roleName);
+          if (!roleId) continue;
+          const resourceScope = AGENT_ROLE_RESOURCE_SCOPE[roleName];
+          const conditionsJsonb = JSON.stringify({ resourceScope });
+
+          for (const cap of agentCapabilities) {
+            const effect = agentRoleEffect(
+              roleName,
+              cap.agent?.category,
+              cap.agent?.riskLevel,
+              cap.agent?.requiresApproval,
+            );
+            agentGrantRows.push({
+              public_id: makeRoleGrantPublicId(roleId, cap.name),
+              org_id: orgId,
+              role_id: roleId,
+              capability_id: cap.name,
+              effect,
+              conditions_jsonb: conditionsJsonb,
+            });
+          }
+        }
+
+        const AGENT_GRANT_CHUNK = 500;
+        let grantsUpserted = 0;
+        for (let i = 0; i < agentGrantRows.length; i += AGENT_GRANT_CHUNK) {
+          const chunk = agentGrantRows.slice(i, i + AGENT_GRANT_CHUNK);
+          await tx`
+            INSERT INTO iam.role_grants
+              (public_id, org_id, role_id, capability_id, effect, conditions_jsonb)
+            SELECT public_id, org_id, role_id, capability_id, effect, conditions_jsonb::jsonb
+            FROM ${tx(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb")}
+            ON CONFLICT (public_id) DO UPDATE
+              SET effect = EXCLUDED.effect,
+                  conditions_jsonb = EXCLUDED.conditions_jsonb,
+                  updated_at = now()
+          `;
+          grantsUpserted += chunk.length;
+        }
+
+        return { rolesUpserted, grantsUpserted };
+      });
+
+      agentRolesUpserted += orgResult.rolesUpserted;
+      agentGrantsUpserted += orgResult.grantsUpserted;
     }
 
     console.log(

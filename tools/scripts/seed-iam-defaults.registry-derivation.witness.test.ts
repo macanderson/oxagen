@@ -315,11 +315,11 @@ describe("seed-iam-defaults.ts SQL upsert shape", () => {
     );
   });
 
-  it("bulk-chunks the agent-phase role_grants upsert (materializes rows client-side, then batches via sql(chunk, ...)) rather than issuing one INSERT per (role, capability) pair", () => {
+  it("bulk-chunks the agent-phase role_grants upsert (materializes rows client-side, then batches via tx(chunk, ...)) rather than issuing one INSERT per (role, capability) pair", () => {
     // Regression guard for the ~1,011-sequential-round-trips-per-org
     // (3 roles × ~337 agent-surfaced capabilities) shape: the agent phase
     // must build an array of rows and hand batches to postgres.js's bulk
-    // `sql(chunk, ...)` helper — the same pattern the legacy phase already
+    // `tx(chunk, ...)` helper — the same pattern the legacy phase already
     // used — rather than looping `await sql\`INSERT ...\`` once per
     // capability inside the role loop.
     expect(seedSource).toMatch(/AGENT_GRANT_CHUNK/);
@@ -327,8 +327,20 @@ describe("seed-iam-defaults.ts SQL upsert shape", () => {
       /agentGrantRows\.slice\(i, i \+ AGENT_GRANT_CHUNK\)/,
     );
     expect(seedSource).toMatch(
-      /sql\(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb"\)/,
+      /tx\(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb"\)/,
     );
+  });
+
+  it("wraps each org's agent-phase role upserts + grant upserts in one sql.begin() transaction — atomicity guard so a mid-run failure can't leave an org with roles but no/partial grants", () => {
+    expect(seedSource).toMatch(/sql\.begin\(async \(tx\) => \{/);
+    // Both the role upsert and the grant upsert must run against `tx`
+    // (the transaction handle), not the outer `sql` connection, or the
+    // transaction wrapper would be cosmetic.
+    const beginIdx = seedSource.indexOf("sql.begin(async (tx) => {");
+    expect(beginIdx).toBeGreaterThan(-1);
+    const bodyAfterBegin = seedSource.slice(beginIdx);
+    expect(bodyAfterBegin).toMatch(/await tx<\{ id: string \}\[\]>`/);
+    expect(bodyAfterBegin).toMatch(/FROM \$\{tx\(chunk, "public_id"/);
   });
 
   it("derives role_grant public_ids from makeRoleGrantPublicId, not an ad-hoc scheme", () => {
@@ -340,7 +352,7 @@ describe("seed-iam-defaults.ts SQL upsert shape", () => {
       "name ILIKE ${LEGACY_ROLE_NAME_ILIKE_PATTERN}",
     );
     const canonicalUpsertIdx = seedSource.indexOf(
-      "for (const roleName of AGENT_ROLE_NAMES) {\n        const publicId",
+      "for (const roleName of AGENT_ROLE_NAMES) {\n          const publicId",
     );
     expect(legacyDeleteIdx).toBeGreaterThan(-1);
     expect(canonicalUpsertIdx).toBeGreaterThan(-1);
