@@ -11,7 +11,7 @@
 // 7.5) so an Owner can always assign any role.
 
 import { schema, type Tx } from "@oxagen/database";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { ORG_OWNER_ROLE_NAME } from "@oxagen/oxagen/iam";
 
 export type GrantEffectRank = 0 | 1 | 2; // allow < require_approval < deny
@@ -74,6 +74,15 @@ export async function resolveAssignerEffectiveGrants(
         eq(schema.principalRoleAssignments.principalId, principalRow.id),
         eq(schema.principalRoleAssignments.orgId, orgId),
         isNull(schema.principalRoleAssignments.deletedAt),
+        // Exclude expired JIT assignments (expires_at in the past). A NULL
+        // expires_at means a permanent (non-JIT) assignment. Mirrors the
+        // resolver's PRA query (fetch-authz.ts) so the delegation ceiling
+        // stays consistent with runtime enforcement — an expired elevated
+        // role must not inflate the assigner's effective grants.
+        or(
+          isNull(schema.principalRoleAssignments.expiresAt),
+          gt(schema.principalRoleAssignments.expiresAt, sql`now()`),
+        ),
       ),
     );
 
