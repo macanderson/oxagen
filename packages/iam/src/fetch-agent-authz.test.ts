@@ -1,12 +1,14 @@
-// fetch-agent-authz.test.ts — unit tests for fetchAgentRunAuthz()
-// (Agent RBAC Phase 2).
+// fetch-agent-authz.test.ts — unit tests for the LIVE authority read
+// (Agent RBAC Phase 2; run-evidence Task 5).
 //
 // Tests:
-//   - happy path: roles + memberships for BOTH ceiling principals, role
-//     grants across all capabilities (with conditionsJsonb passthrough),
-//     grants/policies empty (tables dropped in migration 0027)
+//   - fetchAgentRunLiveAuthority preserves assignment ids, expiries, grant
+//     conditions, principal status, and the deny-generation vector — the
+//     columns a pinned ceiling is built from
+//   - fetchAgentRunAuthz flattens that into pure-resolver inputs, dropping
+//     expired assignments
 //   - null humanPrincipalId (no delegator) still resolves
-//   - no roles in org → no role_grants query, empty snapshot
+//   - no roles in the org → no role_grants query, empty inputs
 //   - 42P01 (IAM tables missing) THROWS after a loud error log — the kernel
 //     fails closed on a check-fn throw (OXA-2056 posture)
 
@@ -30,11 +32,25 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+vi.mock("@oxagen/database/tenant", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database/tenant")>();
+  return {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mocks.dbFn()),
+    withRepeatableReadTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mocks.dbFn()),
+  };
+});
+
 vi.mock("./logger", () => ({
-  logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
+  logger: { error: mocks.loggerError, warn: mocks.loggerWarn, info: vi.fn() },
 }));
 
-import { fetchAgentRunAuthz } from "./fetch-agent-authz";
+import {
+  fetchAgentRunAuthz,
+  fetchAgentRunLiveAuthority,
+} from "./fetch-agent-authz";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -43,46 +59,96 @@ const WS = "ws_agent_authz";
 const AGENT_PRN = "prn_agent";
 const HUMAN_PRN = "prn_human";
 
+const NOW = new Date("2026-07-21T12:00:00.000Z");
+const PAST = new Date("2026-07-21T11:00:00.000Z");
+const FUTURE = new Date("2026-07-21T13:00:00.000Z");
+
 const ROLE_ROWS = [
   {
     id: "role_a",
-    publicId: "rol_a",
     name: "Agent Observer",
     scopeKind: "workspace",
-    orgId: ORG,
     isSystemDefault: true,
   },
   {
     id: "role_h",
-    publicId: "rol_h",
     name: "Member",
     scopeKind: "workspace",
-    orgId: ORG,
     isSystemDefault: true,
   },
 ];
 
+const GRANT_ROWS = [
+  {
+    id: "rlg_1",
+    roleId: "role_a",
+    capabilityId: "cap.one",
+    effect: "deny",
+    conditionsJsonb: null,
+  },
+  {
+    id: "rlg_2",
+    roleId: "role_h",
+    capabilityId: "cap.two",
+    effect: "allow",
+    conditionsJsonb: { resourceScope: { skills: { slugs: ["s1"] } } },
+  },
+];
+
+const ASSIGNMENT_ROWS = [
+  {
+    id: "pra_a",
+    principalId: AGENT_PRN,
+    roleId: "role_a",
+    workspaceId: WS,
+    assignedAt: PAST,
+    expiresAt: FUTURE,
+  },
+  {
+    id: "pra_h",
+    principalId: HUMAN_PRN,
+    roleId: "role_h",
+    workspaceId: WS,
+    assignedAt: PAST,
+    expiresAt: null,
+  },
+];
+
+const PRINCIPAL_ROWS = [
+  { id: AGENT_PRN, status: "active" },
+  { id: HUMAN_PRN, status: "active" },
+];
+
+const GENERATION_ROWS = [
+  { workspaceId: null, generation: 2 },
+  { workspaceId: WS, generation: 11 },
+];
+
 /**
- * Fake tx: sequences results by select() call order. _fetchAgentRunAuthz
- * query order:
- *   1: roles (no limit)
- *   2: roleGrants (no limit — only when roleIds.length > 0)
- *   3: pra (no limit)
- * When there are no roles, query 2 never fires and the pra query becomes
- * select call 2 — the builder takes an explicit sequence instead of a switch.
+ * Fake tx: sequences results by select() call order. `readLiveAuthority`'s
+ * query order is roles → role_grants → assignments → principals →
+ * deny_generations. When the org has no roles, query 2 never fires and every
+ * later query shifts up one — hence an explicit sequence rather than a switch.
  */
 function buildDbMock(results: unknown[][]) {
-  let selectCallIdx = 0;
-  const makeChainNoLimit = (rows: unknown[]) => ({
-    from: () => ({ where: () => Promise.resolve(rows) }),
-  });
+  let idx = 0;
   return {
     select: () => {
-      const rows = results[selectCallIdx] ?? [];
-      selectCallIdx++;
-      return makeChainNoLimit(rows);
+      const rows = results[idx] ?? [];
+      idx += 1;
+      return { from: () => ({ where: () => Promise.resolve(rows) }) };
     },
   };
+}
+
+function fullSequence(): unknown[][] {
+  return [
+    ROLE_ROWS,
+    GRANT_ROWS,
+    ASSIGNMENT_ROWS,
+    PRINCIPAL_ROWS,
+    GENERATION_ROWS,
+  ];
 }
 
 const ARGS = {
@@ -90,86 +156,156 @@ const ARGS = {
   workspaceId: WS,
   agentPrincipalId: AGENT_PRN,
   humanPrincipalId: HUMAN_PRN as string | null,
+  now: NOW,
 };
+
+describe("fetchAgentRunLiveAuthority()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("preserves assignment ids, expiries, grant conditions, and the generation vector", async () => {
+    mocks.dbFn.mockReturnValue(buildDbMock(fullSequence()));
+
+    const authority = await fetchAgentRunLiveAuthority(ARGS);
+
+    expect(authority.assignments).toEqual([
+      {
+        assignmentId: "pra_a",
+        principalId: AGENT_PRN,
+        roleId: "role_a",
+        workspaceId: WS,
+        assignedAt: PAST,
+        expiresAt: FUTURE,
+      },
+      {
+        assignmentId: "pra_h",
+        principalId: HUMAN_PRN,
+        roleId: "role_h",
+        workspaceId: WS,
+        assignedAt: PAST,
+        expiresAt: null,
+      },
+    ]);
+    expect(authority.roleGrants[1]).toMatchObject({
+      grantId: "rlg_2",
+      conditions: { resourceScope: { skills: { slugs: ["s1"] } } },
+    });
+    expect(authority.principals).toEqual([
+      { principalId: AGENT_PRN, status: "active" },
+      { principalId: HUMAN_PRN, status: "active" },
+    ]);
+    expect(authority.denyGeneration).toEqual({ org: 2, workspace: 11 });
+  });
+
+  it("reports a missing generation row as 0 rather than inventing one", async () => {
+    mocks.dbFn.mockReturnValue(
+      buildDbMock([ROLE_ROWS, GRANT_ROWS, ASSIGNMENT_ROWS, PRINCIPAL_ROWS, []]),
+    );
+    const authority = await fetchAgentRunLiveAuthority(ARGS);
+    expect(authority.denyGeneration).toEqual({ org: 0, workspace: 0 });
+  });
+});
 
 describe("fetchAgentRunAuthz()", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns roles with per-principal memberships and all role grants (conditionsJsonb passthrough)", async () => {
+  it("flattens live rows into resolver inputs with per-principal memberships", async () => {
     mocks.dbFn.mockReturnValue(
       buildDbMock([
         ROLE_ROWS,
+        GRANT_ROWS,
         [
-          { roleId: "role_a", capabilityId: "cap.one", effect: "deny" },
+          ...ASSIGNMENT_ROWS,
+          // Shared role membership: the agent also holds the human's role.
           {
+            id: "pra_shared",
+            principalId: AGENT_PRN,
             roleId: "role_h",
-            capabilityId: "cap.two",
-            effect: "allow",
-            conditionsJsonb: { resourceScope: { skills: { slugs: ["s1"] } } },
+            workspaceId: WS,
+            assignedAt: PAST,
+            expiresAt: null,
           },
         ],
-        [
-          { roleId: "role_a", principalId: AGENT_PRN },
-          { roleId: "role_h", principalId: HUMAN_PRN },
-          // Shared role membership: both principals hold role_h.
-          { roleId: "role_h", principalId: AGENT_PRN },
-        ],
+        PRINCIPAL_ROWS,
+        GENERATION_ROWS,
       ]),
     );
 
-    const snapshot = await fetchAgentRunAuthz(ARGS);
+    const inputs = await fetchAgentRunAuthz(ARGS);
 
-    expect(snapshot.grants).toEqual([]);
-    expect(snapshot.policies).toEqual([]);
+    expect(inputs.grants).toEqual([]);
+    expect(inputs.policies).toEqual([]);
 
-    const roleA = snapshot.roles.find((r) => r.id === "role_a");
-    const roleH = snapshot.roles.find((r) => r.id === "role_h");
+    const roleA = inputs.roles.find((r) => r.id === "role_a");
+    const roleH = inputs.roles.find((r) => r.id === "role_h");
     expect(roleA?.principalIds).toEqual([AGENT_PRN]);
     expect(roleH?.principalIds).toEqual(
       expect.arrayContaining([HUMAN_PRN, AGENT_PRN]),
     );
     expect(roleA?.isSystemDefault).toBe(true);
 
-    expect(snapshot.roleGrants).toHaveLength(2);
-    expect(snapshot.roleGrants[0]).toMatchObject({
+    expect(inputs.roleGrants).toHaveLength(2);
+    expect(inputs.roleGrants[0]).toMatchObject({
       roleId: "role_a",
       capabilityId: "cap.one",
       effect: "deny",
     });
-    expect(snapshot.roleGrants[1]?.conditionsJsonb).toEqual({
+    expect(inputs.roleGrants[1]?.conditionsJsonb).toEqual({
       resourceScope: { skills: { slugs: ["s1"] } },
     });
+  });
+
+  it("drops an assignment that has already expired", async () => {
+    mocks.dbFn.mockReturnValue(
+      buildDbMock([
+        ROLE_ROWS,
+        GRANT_ROWS,
+        [{ ...ASSIGNMENT_ROWS[0], expiresAt: PAST }, ASSIGNMENT_ROWS[1]],
+        PRINCIPAL_ROWS,
+        GENERATION_ROWS,
+      ]),
+    );
+
+    const inputs = await fetchAgentRunAuthz(ARGS);
+    expect(inputs.roles.find((r) => r.id === "role_a")?.principalIds).toEqual(
+      [],
+    );
   });
 
   it("resolves with a null humanPrincipalId (no delegator)", async () => {
     mocks.dbFn.mockReturnValue(
       buildDbMock([
         ROLE_ROWS,
-        [{ roleId: "role_a", capabilityId: "cap.one", effect: "allow" }],
-        [{ roleId: "role_a", principalId: AGENT_PRN }],
+        GRANT_ROWS,
+        [ASSIGNMENT_ROWS[0]],
+        [PRINCIPAL_ROWS[0]],
+        GENERATION_ROWS,
       ]),
     );
 
-    const snapshot = await fetchAgentRunAuthz({
+    const inputs = await fetchAgentRunAuthz({
       ...ARGS,
       humanPrincipalId: null,
     });
 
-    expect(snapshot.roles.find((r) => r.id === "role_a")?.principalIds).toEqual(
-      [AGENT_PRN],
-    );
+    expect(inputs.roles.find((r) => r.id === "role_a")?.principalIds).toEqual([
+      AGENT_PRN,
+    ]);
   });
 
   it("skips the role_grants query when the org has no roles", async () => {
-    // Only two selects fire: roles (empty) then pra.
-    mocks.dbFn.mockReturnValue(buildDbMock([[], []]));
+    // Four selects fire: roles (empty), assignments, principals, generations.
+    mocks.dbFn.mockReturnValue(
+      buildDbMock([[], ASSIGNMENT_ROWS, PRINCIPAL_ROWS, GENERATION_ROWS]),
+    );
 
-    const snapshot = await fetchAgentRunAuthz(ARGS);
+    const inputs = await fetchAgentRunAuthz(ARGS);
 
-    expect(snapshot.roles).toEqual([]);
-    expect(snapshot.roleGrants).toEqual([]);
+    expect(inputs.roles).toEqual([]);
+    expect(inputs.roleGrants).toEqual([]);
   });
 
   it("42P01 (IAM tables missing) THROWS after a loud SECURITY ALERT — the kernel fails closed", async () => {

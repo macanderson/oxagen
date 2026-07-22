@@ -24,8 +24,9 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type {
-  AgentAuthzSnapshot,
+  AgentRunAuthorizationBinding,
   AgentRunIAMContext,
+  AuthorizationGrantCeiling,
 } from "@oxagen/oxagen/iam";
 import type { AuthzData } from "./fetch-authz";
 import type { EmitAuditArgs } from "./emit-audit";
@@ -33,17 +34,29 @@ import type { EmitAuditArgs } from "./emit-audit";
 // ── Hoisted mocks (I/O seams only — resolver + kernel are real) ──────────────
 
 const mocks = vi.hoisted(() => ({
-  fetchAgentRunAuthz: vi.fn<(args: unknown) => Promise<unknown>>(),
   fetchAuthz: vi.fn<(args: unknown) => Promise<AuthzData>>(),
   emitAudit: vi.fn<(args: unknown) => Promise<void>>(),
   createAccessRequest: vi.fn<(args: unknown) => Promise<string | null>>(),
   resolveOrgTier: vi.fn(),
   canAccessACL: vi.fn(),
   captureError: vi.fn(),
+  select: vi.fn(),
+  insert: vi.fn(),
+  decisionRows: [] as Record<string, unknown>[],
+  txCalls: 0,
 }));
 
-vi.mock("./fetch-agent-authz", () => ({
-  fetchAgentRunAuthz: mocks.fetchAgentRunAuthz,
+// Only the DATABASE is mocked for the agent path: the live authority read, the
+// pinned ∩ live evaluation, the decision insert, the resolver, and the kernel
+// are all REAL. That is what makes this an acceptance suite rather than a
+// mock-assertion suite.
+vi.mock("@oxagen/database/tenant", () => ({
+  withRepeatableReadTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+    mocks.txCalls += 1;
+    return fn({ select: mocks.select, insert: mocks.insert });
+  },
+  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({ select: mocks.select, insert: mocks.insert }),
 }));
 vi.mock("./fetch-authz", () => ({ fetchAuthz: mocks.fetchAuthz }));
 vi.mock("./emit-audit", () => ({ emitAudit: mocks.emitAudit }));
@@ -96,6 +109,107 @@ const baseCtx: CapabilityContext = {
   messageId: null,
 };
 
+/**
+ * The pinned ceiling: the agent holds an Observer-style role (read allow,
+ * mutation DENY, deploy require_approval) and the invoking human holds a role
+ * that allows everything — so any blocked outcome is attributable to the AGENT
+ * side of the intersection.
+ */
+const CEILING: AuthorizationGrantCeiling = {
+  version: 1,
+  initiatingPrincipalId: HUMAN_PRN,
+  agentPrincipalId: AGENT_PRN,
+  roles: [
+    {
+      roleId: "role_agent_observer",
+      name: "Agent Observer",
+      scopeKind: "workspace",
+      isSystemDefault: true,
+    },
+    {
+      roleId: "role_human_member",
+      name: "Member",
+      scopeKind: "workspace",
+      isSystemDefault: true,
+    },
+  ],
+  assignments: [
+    {
+      assignmentId: "pra_agent",
+      principalId: AGENT_PRN,
+      roleId: "role_agent_observer",
+      workspaceId: WS,
+      assignedAt: "2026-07-01T00:00:00.000Z",
+      expiresAt: null,
+    },
+    {
+      assignmentId: "pra_human",
+      principalId: HUMAN_PRN,
+      roleId: "role_human_member",
+      workspaceId: WS,
+      assignedAt: "2026-07-01T00:00:00.000Z",
+      expiresAt: null,
+    },
+  ],
+  roleGrants: [
+    {
+      grantId: "rlg_a_read",
+      roleId: "role_agent_observer",
+      capabilityId: "test.agent.read",
+      effect: "allow",
+      conditions: null,
+    },
+    {
+      grantId: "rlg_h_read",
+      roleId: "role_human_member",
+      capabilityId: "test.agent.read",
+      effect: "allow",
+      conditions: null,
+    },
+    {
+      grantId: "rlg_a_mutate",
+      roleId: "role_agent_observer",
+      capabilityId: "test.agent.mutate",
+      effect: "deny",
+      conditions: null,
+    },
+    {
+      grantId: "rlg_h_mutate",
+      roleId: "role_human_member",
+      capabilityId: "test.agent.mutate",
+      effect: "allow",
+      conditions: null,
+    },
+    {
+      grantId: "rlg_a_deploy",
+      roleId: "role_agent_observer",
+      capabilityId: "test.agent.deploy",
+      effect: "require_approval",
+      conditions: null,
+    },
+    {
+      grantId: "rlg_h_deploy",
+      roleId: "role_human_member",
+      capabilityId: "test.agent.deploy",
+      effect: "allow",
+      conditions: null,
+    },
+  ],
+  parentSnapshotId: null,
+  narrowing: null,
+};
+
+const BINDING: AgentRunAuthorizationBinding = {
+  snapshotId: "00000000-0000-0000-0000-00000000c0d1",
+  snapshotPublicId: "ras_rbac_test",
+  snapshotDigest: `sha256:${"1".repeat(64)}`,
+  grantCeilingDigest: `sha256:${"2".repeat(64)}`,
+  ceiling: CEILING,
+  denyGenerationAtAdmission: { org: 3, workspace: 5 },
+  nextValidityBoundaryAt: null,
+  resolvedAt: "2026-07-01T00:00:00.000Z",
+};
+
 function makeAgentRun(): AgentRunIAMContext {
   return {
     principalKind: "agent",
@@ -114,72 +228,112 @@ function makeAgentRun(): AgentRunIAMContext {
     agentId: "agt_rbac_test",
     runId: "run_rbac_test",
     parentRunId: "run_rbac_parent",
+    attemptId: "00000000-0000-0000-0000-00000000c0d2",
+    authorization: BINDING,
   };
+}
+
+/**
+ * Prime the DB mock for `readLiveAgentRunAuthority`, whose query order is:
+ * roles → role_grants → assignments → principals → deny_generations →
+ * emergency_denies → agents. Then `persistAuthorizationDecision` inserts.
+ *
+ * By default the live rows MIRROR the pinned ceiling, so the intersection is a
+ * no-op and any narrowing in a test is attributable to what that test changed.
+ */
+function primeLiveAuthority(
+  overrides: {
+    grants?: unknown[];
+    assignments?: unknown[];
+    principals?: unknown[];
+    generations?: unknown[];
+    emergencyDenies?: unknown[];
+    agent?: unknown[];
+    failReads?: Error;
+  } = {},
+): void {
+  const roles = CEILING.roles.map((r) => ({
+    id: r.roleId,
+    name: r.name,
+    scopeKind: r.scopeKind,
+    isSystemDefault: r.isSystemDefault,
+  }));
+  const grants =
+    overrides.grants ??
+    CEILING.roleGrants.map((g) => ({
+      id: g.grantId,
+      roleId: g.roleId,
+      capabilityId: g.capabilityId,
+      effect: g.effect,
+      conditionsJsonb: null,
+    }));
+  const assignments =
+    overrides.assignments ??
+    CEILING.assignments.map((a) => ({
+      id: a.assignmentId,
+      principalId: a.principalId,
+      roleId: a.roleId,
+      workspaceId: a.workspaceId,
+      assignedAt: new Date(a.assignedAt),
+      expiresAt: null,
+    }));
+  const principals = overrides.principals ?? [
+    { id: AGENT_PRN, status: "active" },
+    { id: HUMAN_PRN, status: "active" },
+  ];
+  const generations = overrides.generations ?? [
+    { workspaceId: null, generation: 3 },
+    { workspaceId: WS, generation: 5 },
+  ];
+
+  const sequence: unknown[][] = [
+    roles,
+    grants,
+    assignments,
+    principals,
+    generations,
+    overrides.emergencyDenies ?? [],
+    overrides.agent ?? [{ deletedAt: null }],
+  ];
+
+  let idx = 0;
+  mocks.select.mockImplementation(() => {
+    if (overrides.failReads) {
+      const err = overrides.failReads;
+      return {
+        from: () => ({
+          where: () =>
+            Object.assign(Promise.reject(err), {
+              limit: () => Promise.reject(err),
+            }),
+        }),
+      };
+    }
+    const rows = sequence[idx % sequence.length] ?? [];
+    idx += 1;
+    const terminal = Promise.resolve(rows);
+    return {
+      from: () => ({
+        where: () =>
+          Object.assign(terminal, { limit: () => Promise.resolve(rows) }),
+      }),
+    };
+  });
+
+  mocks.insert.mockImplementation(() => ({
+    values: (v: Record<string, unknown>) => {
+      mocks.decisionRows.push(v);
+      return {
+        returning: () =>
+          Promise.resolve([{ publicId: `azd_${mocks.decisionRows.length}` }]),
+      };
+    },
+  }));
 }
 
 function agentCtx(agentRun: AgentRunIAMContext): CapabilityContext {
   return { ...baseCtx, userId: null, surface: "runner", agentRun };
 }
-
-/**
- * The agent holds an Observer-style role: reads allow, mutation DENY, deploy
- * require_approval. The invoking human's role allows everything — so any
- * blocked outcome is attributable to the AGENT side of the ceiling.
- */
-const SNAPSHOT: AgentAuthzSnapshot = {
-  grants: [],
-  policies: [],
-  roles: [
-    {
-      id: "role_agent_observer",
-      name: "Agent Observer",
-      scopeKind: "workspace",
-      orgId: ORG,
-      principalIds: [AGENT_PRN],
-      isSystemDefault: true,
-    },
-    {
-      id: "role_human_member",
-      name: "Member",
-      scopeKind: "workspace",
-      orgId: ORG,
-      principalIds: [HUMAN_PRN],
-      isSystemDefault: true,
-    },
-  ],
-  roleGrants: [
-    {
-      roleId: "role_agent_observer",
-      capabilityId: "test.agent.read",
-      effect: "allow",
-    },
-    {
-      roleId: "role_human_member",
-      capabilityId: "test.agent.read",
-      effect: "allow",
-    },
-    {
-      roleId: "role_agent_observer",
-      capabilityId: "test.agent.mutate",
-      effect: "deny",
-    },
-    {
-      roleId: "role_human_member",
-      capabilityId: "test.agent.mutate",
-      effect: "allow",
-    },
-    {
-      roleId: "role_agent_observer",
-      capabilityId: "test.agent.deploy",
-      effect: "require_approval",
-    },
-    {
-      roleId: "role_human_member",
-      capabilityId: "test.agent.deploy",
-      effect: "allow",
-    },
-  ],
-};
 
 const handlerSpies = {
   read: vi.fn(),
@@ -243,8 +397,10 @@ function registerTestCapabilities(): void {
 describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.decisionRows = [];
+    mocks.txCalls = 0;
     mocks.emitAudit.mockResolvedValue(undefined);
-    mocks.fetchAgentRunAuthz.mockResolvedValue(SNAPSHOT);
+    primeLiveAuthority();
     // NON-enterprise tier throughout: humans ride the fast-path, agents must
     // not (spec §3.4 — enforcement runs at every tier).
     mocks.canAccessACL.mockReturnValue(false);
@@ -282,6 +438,18 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     // ...and the single-principal human fetch path was never used.
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
 
+    // The denial is on the immutable ledger, not only in the audit stream.
+    expect(mocks.decisionRows).toHaveLength(1);
+    expect(mocks.decisionRows[0]).toMatchObject({
+      outcome: "deny",
+      capabilityId: "test.agent.mutate",
+      actorPrincipalId: AGENT_PRN,
+      onBehalfOfPrincipalId: HUMAN_PRN,
+      authorizationSnapshotId: BINDING.snapshotId,
+      orgDenyGeneration: 3,
+      workspaceDenyGeneration: 5,
+    });
+
     // Denial audit row: principal_kind='agent', run lineage, meterable
     // decision reason, deny outcome.
     expect(mocks.emitAudit).toHaveBeenCalledTimes(1);
@@ -289,7 +457,7 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     expect(audit.capability).toBe("test.agent.mutate");
     expect(audit.principal).toMatchObject({ id: AGENT_PRN, kind: "agent" });
     expect(audit.result.outcome).toBe("deny");
-    expect(audit.result.trace.decidedBy.rule).toBe("agent_delegation:deny");
+    expect(audit.result.trace.decidedBy.rule).toBe("agent_ceiling:deny");
     expect(audit.humanPrincipalId).toBe(HUMAN_PRN);
     expect(audit.runLineage).toEqual({
       agentId: "agt_rbac_test",
@@ -310,12 +478,14 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     // Fast-path proof: tier consulted, resolver fetches never ran.
     expect(mocks.canAccessACL).toHaveBeenCalledWith("build");
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
-    expect(mocks.fetchAgentRunAuthz).not.toHaveBeenCalled();
+    // No governed-run decision row for human traffic — the human path records
+    // its decision in the ClickHouse audit stream, not the run ledger.
+    expect(mocks.decisionRows).toHaveLength(0);
     const audit = mocks.emitAudit.mock.calls[0]?.[0] as EmitAuditArgs;
     expect(audit.result.trace.decidedBy.rule).toBe("tier_gate");
   });
 
-  it("computes the run resolution ONCE and reuses it across two invoke() calls, cached on the run context object", async () => {
+  it("re-reads live authority on EVERY invoke, and serves the repeat from the generation-keyed live cache", async () => {
     const agentRun = makeAgentRun();
     const ctx = agentCtx(agentRun);
 
@@ -324,25 +494,148 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     });
     expect(first).toEqual({ value: "a" });
 
-    // The cache lives ON the run context object — exposed for tool
-    // materialization to read the SAME resolution.
-    expect(agentRun.resolution).toBeDefined();
-    const cachedResolution = agentRun.resolution;
-    const cachedPerms = cachedResolution?.byCapability.get("test.agent.read");
-    expect(cachedPerms).toBeDefined();
-
+    const txAfterFirst = mocks.txCalls;
     const second = await invoke("test.agent.read", { value: "b" }, ctx, {
       surface: "agent",
     });
     expect(second).toEqual({ value: "b" });
 
-    // One snapshot fetch for the whole run; the same resolution object (and
-    // the same memoized per-capability entry) served both invocations.
-    expect(mocks.fetchAgentRunAuthz).toHaveBeenCalledTimes(1);
-    expect(agentRun.resolution).toBe(cachedResolution);
-    expect(agentRun.resolution?.byCapability.get("test.agent.read")).toBe(
-      cachedPerms,
-    );
+    // The live read ran AGAIN — the once-per-run unrefreshed snapshot is gone.
+    expect(mocks.txCalls).toBeGreaterThan(txAfterFirst);
+    // The cache lives ON the run context object so tool materialization reads
+    // the same decisions the kernel did.
+    expect(agentRun.liveCache?.size).toBe(1);
+    // One decision row, because the second check hit the cache at the same
+    // generation — duplicating rows for an unchanged decision would bury the
+    // real transitions.
+    expect(mocks.decisionRows).toHaveLength(1);
+  });
+
+  it("a deny-generation bump invalidates the cached allow before the next operation", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    await invoke("test.agent.read", { value: "a" }, ctx, { surface: "agent" });
+    expect(mocks.decisionRows).toHaveLength(1);
+    expect(mocks.decisionRows[0]).toMatchObject({ outcome: "allow" });
+
+    // The revocation lands: the agent's read grant flips to deny AND the
+    // trigger bumps the workspace generation in the same transaction.
+    primeLiveAuthority({
+      grants: CEILING.roleGrants.map((g) =>
+        g.grantId === "rlg_a_read"
+          ? { ...g, id: g.grantId, effect: "deny", conditionsJsonb: null }
+          : { ...g, id: g.grantId, conditionsJsonb: null },
+      ),
+      generations: [
+        { workspaceId: null, generation: 3 },
+        { workspaceId: WS, generation: 6 },
+      ],
+    });
+
+    await expect(
+      invoke("test.agent.read", { value: "b" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+
+    expect(mocks.decisionRows).toHaveLength(2);
+    expect(mocks.decisionRows[1]).toMatchObject({
+      outcome: "deny",
+      workspaceDenyGeneration: 6,
+    });
+  });
+
+  it("a SUSPENDED agent principal denies the very next operation", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    await invoke("test.agent.read", { value: "a" }, ctx, { surface: "agent" });
+
+    primeLiveAuthority({
+      principals: [
+        { id: AGENT_PRN, status: "suspended" },
+        { id: HUMAN_PRN, status: "active" },
+      ],
+      generations: [
+        { workspaceId: null, generation: 3 },
+        { workspaceId: WS, generation: 7 },
+      ],
+    });
+
+    await expect(
+      invoke("test.agent.read", { value: "b" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.decisionRows[1]).toMatchObject({
+      outcome: "deny",
+      reasonCode: "principal_suspended",
+    });
+  });
+
+  it("an active emergency deny narrows the run before its next operation", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    primeLiveAuthority({
+      emergencyDenies: [
+        {
+          publicId: "emd_incident",
+          denyKind: "capability",
+          capabilityId: "test.agent.read",
+          resourceScopeDigest: null,
+          principalId: null,
+          reason: "incident 42",
+        },
+      ],
+    });
+
+    await expect(
+      invoke("test.agent.read", { value: "x" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.decisionRows[0]).toMatchObject({
+      outcome: "deny",
+      reasonCode: "emergency_deny",
+    });
+  });
+
+  it("a grant issued AFTER admission cannot widen the run", async () => {
+    const agentRun = makeAgentRun();
+    const ctx = agentCtx(agentRun);
+
+    // Live authority now allows test.agent.mutate for BOTH principals — but
+    // the pinned ceiling still carries the agent's deny.
+    primeLiveAuthority({
+      grants: [
+        ...CEILING.roleGrants.map((g) => ({
+          id: g.grantId,
+          roleId: g.roleId,
+          capabilityId: g.capabilityId,
+          effect: g.grantId === "rlg_a_mutate" ? "allow" : g.effect,
+          conditionsJsonb: null,
+        })),
+      ],
+    });
+
+    await expect(
+      invoke("test.agent.mutate", { value: "late" }, ctx, { surface: "agent" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerSpies.mutate).not.toHaveBeenCalled();
+    expect(mocks.decisionRows[0]).toMatchObject({
+      outcome: "deny",
+      reasonCode: "ceiling_denies",
+    });
+  });
+
+  it("fails closed when the authoritative decision row cannot be inserted", async () => {
+    primeLiveAuthority();
+    mocks.insert.mockImplementation(() => ({
+      values: () => ({ returning: () => Promise.resolve([]) }),
+    }));
+
+    await expect(
+      invoke("test.agent.read", { value: "x" }, agentCtx(makeAgentRun()), {
+        surface: "agent",
+      }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerSpies.read).not.toHaveBeenCalled();
   });
 
   it("require_approval routes through the existing approval flow: JIT access request + pollable pending_approval error", async () => {
@@ -381,8 +674,11 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
     const audit = mocks.emitAudit.mock.calls[0]?.[0] as EmitAuditArgs;
     expect(audit.result.outcome).toBe("pending_approval");
     expect(audit.result.trace.decidedBy.rule).toBe(
-      "agent_delegation:pending_approval",
+      "agent_ceiling:pending_approval",
     );
+    expect(mocks.decisionRows[0]).toMatchObject({
+      outcome: "approval_pending",
+    });
   });
 
   it("fails closed when principalKind='agent' but the run context is missing", async () => {
@@ -396,17 +692,17 @@ describe("Agent RBAC Phase 2 — kernel enforcement via checkIAM", () => {
 
     expect(result.outcome).toBe("deny");
     expect(principal).toBeNull();
-    expect(result.trace.decidedBy.rule).toBe(
-      "agent_delegation:missing_context",
-    );
-    expect(mocks.fetchAgentRunAuthz).not.toHaveBeenCalled();
+    expect(result.trace.decidedBy.rule).toBe("agent_ceiling:missing_context");
+    expect(mocks.decisionRows).toHaveLength(0);
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
   });
 
-  it("fails closed (kernel authz_denied) when the snapshot fetch throws", async () => {
-    mocks.fetchAgentRunAuthz.mockRejectedValue(
-      Object.assign(new Error("relation does not exist"), { code: "42P01" }),
-    );
+  it("fails closed (kernel authz_denied) when the live authority read throws", async () => {
+    primeLiveAuthority({
+      failReads: Object.assign(new Error("relation does not exist"), {
+        code: "42P01",
+      }),
+    });
     const agentRun = makeAgentRun();
 
     await expect(

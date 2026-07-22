@@ -1351,6 +1351,9 @@ importers:
 
   packages/iam:
     dependencies:
+      '@oxagen/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
