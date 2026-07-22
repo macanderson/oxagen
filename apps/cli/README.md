@@ -66,7 +66,7 @@ oxagen "summarize what this repository does"       # coding loop only — no acc
 oxagen login                                        # opens a browser, OAuth + org/workspace picker
 oxagen login --token oxk_live_… --org acme --workspace main   # CI / headless
 oxagen logout                                        # clear the saved session
-oxagen graph status                                  # confirm credentials work
+oxagen graph search -q "workspace context" --limit 1 # confirm credentials work
 ```
 
 Create an account at https://app.oxagen.sh, mint an API key under
@@ -99,7 +99,7 @@ oxagen models                # inspect/select the coordinator model (on-device o
 **Knowledge graph & memory** (requires platform auth)
 
 ```bash
-oxagen graph search|pull|push|lineage|status
+oxagen graph search|pull|status
 oxagen memory list|show|promote|candidates|import|rm
 oxagen remember "<lesson>" --class RULE --enforcement 90
 ```
@@ -194,7 +194,7 @@ pnpm cli:install
 Other workflows:
 
 ```bash
-pnpm -C apps/cli dev -- graph status   # run a single command from source with tsx
+pnpm -C apps/cli dev -- graph search -q "workspace context" --limit 1
 pnpm -C apps/cli build                  # compile to dist/ once
 pnpm -C apps/cli bundle                 # standalone single-file bundle
 pnpm -C apps/cli test:unit              # run unit tests

@@ -1,0 +1,9 @@
+schema_version = 1
+kind = "agent"
+name = "refactorer"
+description = "Performs mechanical refactors."
+model = "fast"
+developer_instructions = "Refactor without changing behavior."
+tools = [ "read_file", "edit_file", "bash" ]
+skills = []
+unresolved_tools = [ "run_notebook" ]

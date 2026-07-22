@@ -1,0 +1,107 @@
+# Fleet plan — remaining work for docs/specs/repl-async-dispatch.md (REPL Dispatch mode)
+#
+# Tree state verified 2026-07-20: the CORE OF THE SPEC HAS ALREADY LANDED —
+#   dispatch-mode.ts (+ test), background-tracker.ts (+ test), background-panel.tsx,
+#   dispatch-settings.ts, dispatchMode/dispatchMaxConcurrent in settings/schema.ts,
+#   /dispatch on|off|cap|status in interactive.tsx (~line 2333), decideDispatch routing
+#   in handleSubmit (~line 2278), tracker mount (~line 4122), BackgroundPanel rendered.
+# This plan covers ONLY the gaps: help/doc parity (spec §3 step 7), the two skipped
+# FIFO queue tests (spec §1.1), and a final Definition-of-Done audit (spec §6).
+#
+# Operational notes (read before running):
+#   - Run from a FEATURE BRANCH — shared-tree worker commits land on the current branch.
+#   - Suggested: stella fleet --plan repl-async-dispatch.fleet.toml --max-concurrency 3
+#     (3 independent tasks in wave 1, then the audit). Per-child budget = --budget / --max-concurrency.
+#   - Opt workers into bash if you want queue-tests/dod-audit to actually execute their
+#     single named test file; otherwise run those narrow commands yourself afterwards.
+#   - No resume: re-running this plan re-dispatches everything. Prompts already tell
+#     workers to reconcile with landed work, so a re-run is safe but wasteful.
+
+[[tasks]]
+id = "repl-help"
+title = "Document /dispatch, ` &`, and `=` in the REPL HELP text"
+isolation = "shared_tree"
+claims = ["apps/cli/src/repl/components.tsx"]
+prompt = """
+Repo: oxagen-platform. Spec: docs/specs/repl-async-dispatch.md — read §2.1 (the routing matrix) first.
+
+Reconcile with already-landed work: Dispatch mode is FULLY IMPLEMENTED (dispatch-mode.ts, /dispatch command in interactive.tsx, settings keys). You are documenting, not implementing. If any HELP text for it already exists, improve it in place — do not duplicate.
+
+Task: in apps/cli/src/repl/components.tsx, the exported HELP constant (~line 140, the REPL /help output) has no mention of Dispatch mode. Add concise lines, matching the existing HELP formatting and indentation exactly, that document:
+  - /dispatch [on|off] — toggle async Dispatch mode: plain prompts run as detached background workers and the composer frees immediately; completions fold back into the transcript
+  - /dispatch cap <n> — max concurrent background dispatches; /dispatch status
+  - trailing ` &` on a prompt — force background dispatch in either mode
+  - leading `=` (or `> `) — force a prompt inline while the mode is ON
+
+Commit your change with repo_commit, message: "docs(cli): document /dispatch, & and = routing in REPL help".
+
+HARD RULE: NEVER run all tests or any package-wide suite (no pnpm test, no turbo run test, no pnpm gate). This is a text-only change; do not run any tests.
+"""
+
+[[tasks]]
+id = "fleet-help"
+title = "Cross-reference Dispatch mode from `oxagen fleet` help"
+isolation = "shared_tree"
+claims = ["apps/cli/src/commands/fleet.ts"]
+prompt = """
+Repo: oxagen-platform. Spec: docs/specs/repl-async-dispatch.md §3 step 7.
+
+Reconcile with already-landed work: the REPL's /dispatch mode is fully implemented and routes plain prompts through the same dispatchDetachedSession mechanism as `oxagen fleet dispatch`. You are documenting, not implementing.
+
+Task: in apps/cli/src/commands/fleet.ts, the module-level usage doc (top-of-file comment, ~lines 1–40) and the command help output describe `fleet dispatch` / `fleet watch` but never mention the REPL's Dispatch mode. Add a few lines, matching existing style, noting that the interactive REPL offers `/dispatch` mode — plain prompts become detached workers identical to `fleet dispatch`, with completions folded back into the REPL transcript and a Background panel roster — and cross-reference docs/specs/repl-async-dispatch.md.
+
+Commit with repo_commit, message: "docs(cli): cross-reference REPL /dispatch mode from fleet help".
+
+HARD RULE: NEVER run all tests or any package-wide suite (no pnpm test, no turbo run test, no pnpm gate). Text-only change; do not run any tests.
+"""
+
+[[tasks]]
+id = "queue-tests"
+title = "Unskip (or justify) the two skipped FIFO queue tests"
+isolation = "shared_tree"
+claims = ["apps/cli/src/repl/__tests__/interactive.queue.test.tsx"]
+prompt = """
+Repo: oxagen-platform. Spec: docs/specs/repl-async-dispatch.md §1.1 pins the prompt-queue behavior and notes that two of the three tests in apps/cli/src/repl/__tests__/interactive.queue.test.tsx are currently it.skip:
+  - "queues prompts submitted mid-turn and runs them FIFO" (~line 166)
+  - "runs a prompt immediately when idle (no queue wait)" (~line 234)
+
+Task: investigate why they are skipped (read the test harness and any comments; use git history if available). If they can run deterministically, unskip and fix them — the pinned behaviors matter more now that Dispatch mode routes around the FIFO. If they are inherently flaky under the Ink test harness, leave them skipped but add a comment above each stating exactly why and what would make them runnable. Do NOT weaken assertions to force a pass. Reconcile with already-landed work — Dispatch mode is fully implemented; if the FIFO path changed since the tests were written, update the tests to pin the CURRENT intended behavior per spec §1.1.
+
+Commit with repo_commit, message: "test(cli): revive (or document) skipped REPL queue FIFO tests".
+
+HARD RULE: NEVER run all tests or any package-wide suite (no pnpm test, no turbo run test, no pnpm gate). If shell access is available, run ONLY this one file:
+  pnpm --filter @oxagen/cli test:unit -- src/repl/__tests__/interactive.queue.test.tsx
+"""
+
+[[tasks]]
+id = "dod-audit"
+title = "Audit spec §6 Definition of Done; fix residual gaps; record evidence"
+isolation = "shared_tree"
+depends_on = ["repl-help", "fleet-help", "queue-tests"]
+claims = [
+  "docs/specs/repl-async-dispatch.md",
+  "apps/cli/src/repl/interactive.tsx",
+  "apps/cli/src/repl/dispatch-mode.ts",
+  "apps/cli/src/repl/background-tracker.ts",
+  "apps/cli/src/repl/background-panel.tsx",
+  "apps/cli/src/repl/dispatch-settings.ts",
+]
+prompt = """
+Repo: oxagen-platform. Spec: docs/specs/repl-async-dispatch.md. The other fleet tasks (REPL help, fleet help, queue tests) have landed before you — reconcile with all already-landed work; the feature itself is implemented, you are auditing and closing gaps.
+
+Task: audit every §6 Definition of Done bullet against the current tree. For each, cite concrete file:line evidence that it holds:
+  1. Mode ON + plain prompt → background: decideDispatch's background branch in handleSubmit returns before the inline turn (dispatch path is <50 ms per sessions/dispatch.ts), and the Background panel shows the dispatch.
+  2. A `=`-prefixed prompt in Dispatch mode still runs inline (dispatch-mode.ts precedence + its test).
+  3. Terminal session events fold an attributed one-liner (sid + title) into the transcript via the tracker's onNotify, without stealing focus.
+  4. Cap enforcement: past dispatchMaxConcurrent the prompt queues locally (no unbounded worker spawn) and a completing dispatch re-pumps.
+  5. dispatch-mode.test.ts covers the full §2.1 routing truth table and background-tracker.test.ts covers fold-back + the cap.
+  6. dispatchMode + dispatchMaxConcurrent round-trip through settings/schema.ts and dispatch-settings.ts (persisted by /dispatch on|off and /dispatch cap).
+
+Any bullet you cannot evidence is a residual gap: fix it now, in place, completely. Then append a short "## v1 DoD verification (2026-07-20)" section to the END of docs/specs/repl-async-dispatch.md — one line per bullet with its file:line evidence (or the fix you made).
+
+Commit with repo_commit, message: "docs(cli): verify repl-async-dispatch v1 DoD; close residual gaps".
+
+HARD RULE: NEVER run all tests or any package-wide suite (no pnpm test, no turbo run test, no pnpm gate). If shell access is available you may run ONLY these two files, one at a time:
+  pnpm --filter @oxagen/cli test:unit -- src/repl/__tests__/dispatch-mode.test.ts
+  pnpm --filter @oxagen/cli test:unit -- src/repl/__tests__/background-tracker.test.ts
+"""

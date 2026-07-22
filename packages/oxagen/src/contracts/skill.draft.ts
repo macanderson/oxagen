@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { skillArtifactSchema } from "@oxagen/agent-artifacts";
 import { registerCapability } from "../registry";
 
 export const skillDraft = registerCapability({
   name: "draft_skill",
   domain: "skill",
   description:
-    "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the markdown body — and returns it for human review. Feed the confirmed draft to skill.create (or skill.workspace.install with a custom body) to save it. This is the AI-assisted first step of the skill setup flow.",
+    "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the instruction body — and returns it for human review, along with the assembled canonical skill.toml content. Feed the confirmed draft to skill.create (or skill.workspace.install with custom.content) to save it. This is the AI-assisted first step of the skill setup flow.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -35,7 +36,9 @@ export const skillDraft = registerCapability({
     category: z
       .string()
       .optional()
-      .describe("Optional category label (e.g. 'engineering', 'writing', 'meta')."),
+      .describe(
+        "Optional category label (e.g. 'engineering', 'writing', 'meta').",
+      ),
   }),
   output: z.object({
     draft: z
@@ -46,21 +49,29 @@ export const skillDraft = registerCapability({
         slug: z.string().describe("Kebab-case slug derived by the model"),
         description: z
           .string()
-          .describe("One-sentence matcher description used to decide when to load the skill"),
+          .describe(
+            "One-sentence matcher description used to decide when to load the skill",
+          ),
         weight: z
           .enum(["low", "high", "critical"])
           .describe("Influence weight for the skill's guidance"),
-        category: z.string().optional().describe("Category label, when the model assigned one"),
+        category: z
+          .string()
+          .optional()
+          .describe("Category label, when the model assigned one"),
         body: z
           .string()
-          .describe("The markdown body that teaches the skill (no frontmatter)"),
+          .describe(
+            "The instruction text embedded in the canonical TOML artifact",
+          ),
       })
-      .describe("The synthesised skill configuration, ready to prefill a review form"),
-    skillMd: z
-      .string()
       .describe(
-        "The assembled and validated .skill.md document (YAML frontmatter + body) — suitable for skill.workspace.install's custom.body",
+        "The synthesised skill configuration, ready to prefill a review form",
       ),
+    content: z
+      .string()
+      .describe("Canonical skill.toml content ready for create_skill"),
+    artifact: skillArtifactSchema,
   }),
 });
 

@@ -24,6 +24,8 @@ describe("NodeLabels (@oxagen/ontology)", () => {
       "SkillVersion",
       "BackgroundTask",
       "Plan",
+      "SubagentFanout",
+      "SubagentRun",
     ] as const;
 
     for (const label of required) {
@@ -61,8 +63,8 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
       "LOADED_SKILL",
       "BRANCHED_TO_SUBAGENT",
       "APPROVED_BY",
-      "TOUCHED_FILE",
-      "HOLDS_LOCK",
+      "DISPATCHED",
+      "SPAWNED_FANOUT",
     ] as const;
 
     for (const edge of required) {
@@ -77,4 +79,3 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
     expect(unique.size).toBe(values.length);
   });
 });
-

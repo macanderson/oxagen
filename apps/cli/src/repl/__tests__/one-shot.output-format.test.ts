@@ -20,7 +20,6 @@ vi.mock("../../agent/adapters/index.js", () => ({
   createGatedWorkspace: vi.fn((ws: unknown) => ws),
   createCombinedMemory: vi.fn(() => ({})),
   createCodeGraphProvider: vi.fn(() => ({})),
-  createGraphSyncProvider: vi.fn(() => ({})),
   createPlatformAgentAi: vi.fn(() => ({})),
   createGatewayAgentAi: vi.fn(() => ({})),
 }));
@@ -30,12 +29,20 @@ vi.mock("../../agent/metered-ai.js", () => ({
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: vi.fn(async () => ({ close: vi.fn() })),
 }));
-vi.mock("../../agent/fleet/memory.js", () => ({ openFleetMemory: vi.fn(() => ({})) }));
-vi.mock("../../agent/trace-store.js", () => ({ openTraceStore: vi.fn(() => null) }));
-vi.mock("../../agent/project-context.js", () => ({ loadProjectContext: vi.fn(() => undefined) }));
+vi.mock("../../agent/fleet/memory.js", () => ({
+  openFleetMemory: vi.fn(() => ({})),
+}));
+vi.mock("../../agent/trace-store.js", () => ({
+  openTraceStore: vi.fn(() => null),
+}));
+vi.mock("../../agent/project-context.js", () => ({
+  loadProjectContext: vi.fn(() => undefined),
+}));
 vi.mock("../../agents/loader.js", () => ({ getAgent: vi.fn() }));
 vi.mock("../../agent/verbose-log.js", () => ({ appendVerboseLog: vi.fn() }));
-vi.mock("../../agent/trace-format.js", () => ({ formatVerboseSection: vi.fn(() => []) }));
+vi.mock("../../agent/trace-format.js", () => ({
+  formatVerboseSection: vi.fn(() => []),
+}));
 vi.mock("../../lib/config.js", () => ({ readConfig: vi.fn(() => ({})) }));
 vi.mock("../../settings/resolve.js", () => ({
   loadSettings: vi.fn(() => ({ settings: { permissions: undefined } })),
@@ -94,11 +101,13 @@ afterEach(() => {
 
 describe("runOneShot --output-format json", () => {
   it("emits exactly one result envelope on stdout and keeps text off stdout", async () => {
-    runTurnMock.mockImplementation(async (args: { onText?: (d: string) => void }) => {
-      args.onText?.("the ");
-      args.onText?.("answer");
-      return cannedResult;
-    });
+    runTurnMock.mockImplementation(
+      async (args: { onText?: (d: string) => void }) => {
+        args.onText?.("the ");
+        args.onText?.("answer");
+        return cannedResult;
+      },
+    );
 
     await runOneShot("fix it", { session, outputFormat: "json" });
 
@@ -124,7 +133,11 @@ describe("runOneShot --output-format json", () => {
     await runOneShot("fix it", { session, outputFormat: "json" });
 
     const envelope = JSON.parse(stdoutLines.trim()) as Record<string, unknown>;
-    expect(envelope).toMatchObject({ type: "result", ok: false, error: "gateway exploded" });
+    expect(envelope).toMatchObject({
+      type: "result",
+      ok: false,
+      error: "gateway exploded",
+    });
     expect(process.exitCode).toBe(1);
     expect(stderrLines).toContain("gateway exploded");
   });
@@ -137,7 +150,11 @@ describe("runOneShot --output-format stream-json", () => {
         onStage?: (s: { label: string; detail?: string }) => void;
         onText?: (d: string) => void;
         onToolCall?: (name: string, input: unknown) => void;
-        onToolEvent?: (e: { name: string; ok: boolean; durationMs: number }) => void;
+        onToolEvent?: (e: {
+          name: string;
+          ok: boolean;
+          durationMs: number;
+        }) => void;
       }) => {
         args.onStage?.({ label: "executing" });
         args.onToolCall?.("bash", { command: "pytest" });
@@ -153,20 +170,42 @@ describe("runOneShot --output-format stream-json", () => {
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l) as Record<string, unknown>);
-    expect(events.map((e) => e["type"])).toEqual(["stage", "tool", "tool", "text", "result"]);
-    expect(events[1]).toMatchObject({ type: "tool", phase: "start", name: "bash" });
-    expect(events[2]).toMatchObject({ type: "tool", phase: "end", name: "bash", ok: true, durationMs: 42 });
+    expect(events.map((e) => e["type"])).toEqual([
+      "stage",
+      "tool",
+      "tool",
+      "text",
+      "result",
+    ]);
+    expect(events[1]).toMatchObject({
+      type: "tool",
+      phase: "start",
+      name: "bash",
+    });
+    expect(events[2]).toMatchObject({
+      type: "tool",
+      phase: "end",
+      name: "bash",
+      ok: true,
+      durationMs: 42,
+    });
     expect(events[3]).toMatchObject({ type: "text", delta: "done" });
-    expect(events[4]).toMatchObject({ type: "result", ok: true, text: "the answer" });
+    expect(events[4]).toMatchObject({
+      type: "result",
+      ok: true,
+      text: "the answer",
+    });
   });
 });
 
 describe("runOneShot --output-format text (default)", () => {
   it("streams the answer to stdout with no JSON envelope", async () => {
-    runTurnMock.mockImplementation(async (args: { onText?: (d: string) => void }) => {
-      args.onText?.("plain answer");
-      return cannedResult;
-    });
+    runTurnMock.mockImplementation(
+      async (args: { onText?: (d: string) => void }) => {
+        args.onText?.("plain answer");
+        return cannedResult;
+      },
+    );
 
     await runOneShot("fix it", { session });
 

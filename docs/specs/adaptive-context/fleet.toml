@@ -1,0 +1,690 @@
+# ============================================================================
+# Fleet plan: adaptive-context — Oxagen Context Exchange Provider
+#
+# Source spec: docs/specs/adaptive-context/spec.md (platform-side; §1 gives
+# the authority order over the canonical bundle in this directory — the CGEP
+# build prompt is normative for wire semantics, the lifecycle spec for record
+# meaning; directive-schema.md and context-frame-spec.md are superseded
+# drafts). This plan builds ONLY oxagen-platform; the Stella and
+# context-graph-protocol repos have their own plans.
+#
+# How to run
+#   git switch -c feat/adaptive-context-provider origin/main
+#   stella --budget 250 fleet --plan docs/specs/adaptive-context/fleet.toml \
+#     --max-concurrency 4
+#   (stella >= 0.4.43: --budget is a top-level whole-run hard cap)
+#
+# Operational notes
+#   - No resume: re-running re-dispatches every task; every prompt tells its
+#     worker to reconcile with already-landed work instead of duplicating.
+#   - `claims` are exact-string file locks; two tasks sharing a claim are
+#     dependency-ordered here — a same-wave conflict fails dispatch
+#     permanently. Claims also guard against other fleets in this workspace.
+#   - ONE task (x02) owns ALL Atlas DDL: atlas.sum is a single checksum file
+#     and concurrent migration authoring cannot merge.
+#
+# Binding repo rules restated for workers (AGENTS.md / CLAUDE.md /
+# CONTRIBUTING.md / oxagen-engineering-policy):
+#   - NEVER run all tests or any whole-repo/whole-package suite. Run ONLY the
+#     single test file you touched: pnpm --filter @oxagen/<pkg> test:unit --
+#     <file>.test.ts. Otherwise just write the tests; CI is the gate.
+#   - Everything committed must be functionally complete — wired end-to-end,
+#     tests written, no dead code, no placeholder stubs.
+#   - Env vars ONLY via packages/config/src/registry.ts, then regenerate
+#     .env.example. Never hand-edit .env.example.
+#   - Tenant tables require the standard RLS block; raw db() is banned — use
+#     packages/tenancy scope helpers.
+#   - LLM calls only via @oxagen/ai (this plan should need none).
+#   - ESLint zero warnings; Biome is the only formatter.
+#   - Commit with repo_commit using a conventional-commit subject
+#     (feat(context-exchange): ...) — the style PRs #1070/#1071 fleet workers
+#     use. (CONTRIBUTING.md prefers bare imperative subjects; the fleet
+#     precedent in this repo is conventional — keep consistency with it.)
+#     Uncommitted work is lost.
+# ============================================================================
+
+[[tasks]]
+id = "x00-scaffold-hashing"
+title = "Scaffold packages/context-exchange + JCS hashing + golden vectors"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: docs/specs/adaptive-context/spec.md (all of it — it is short and
+this plan's authority map), then the "Canonical record envelope" and append
+command_hash sections of docs/specs/adaptive-context/
+context-graph-protocol-build-prompt.md. Also read the repo rules in this
+plan's header — they are binding.
+
+Deliver:
+
+1. A new package `packages/context-exchange` (@oxagen/context-exchange)
+   scaffolded by copying a small sibling's shape (e.g. packages/compliance):
+   package.json, tsconfig, vitest config, src/index.ts barrel. No runtime
+   deps beyond what you justify.
+2. RFC 8785 (JCS) canonicalization + hashing in src/hash.ts: spec.md §11.1
+   leaves the choice to you — the `canonicalize` npm package (reference
+   implementation, zero transitive deps; justify the new dependency in your
+   commit body per repo policy) or a hand-rolled subset (sorted keys,
+   canonical escapes, documented integers-preferred number policy). Expose:
+   recordHash(record) — sha256:<64 lowercase hex> over JCS bytes with the
+   record_hash property omitted, after alias normalization
+   (recorded_at->observed_at, valid_to->valid_until), absent-option
+   omission, null-as-absence, and UTC timestamp normalization (trailing
+   fractional zeros removed); commandHash(item) — JCS over the append item's
+   semantic command body (computed record_hash + requested_retention + any
+   behavior-changing option) with idempotency_key and command_hash omitted.
+3. Golden vectors: docs/specs/adaptive-context/fixtures/hash-vectors.json —
+   at least six vectors (observation, knowledge fact, directive, promotion
+   event, an aliased-input record proving normalization, an append
+   command_hash case) with REAL 64-hex digests (the spec bans sha256:...
+   placeholders in fixtures). These vectors are the cross-repo contract —
+   the Stella and protocol repos will copy them; note that in a fixtures
+   README line.
+4. Unit tests in src/hash.test.ts covering the vectors and the
+   normalization rules. Run ONLY: pnpm --filter @oxagen/context-exchange
+   test:unit -- hash.test.ts.
+
+Commit via repo_commit: "feat(context-exchange): package scaffold, JCS
+canonicalization, hash golden vectors". If a prior fleet run already landed
+parts of this, reconcile and complete rather than duplicate.
+'''
+depends_on = []
+claims = [
+  "packages/context-exchange/package.json",
+  "packages/context-exchange/src/hash.ts",
+  "docs/specs/adaptive-context/fixtures",
+]
+
+[[tasks]]
+id = "x01-record-validation"
+title = "Record envelope validation: requiredness, provenance matrix, scope/sharing"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: docs/specs/adaptive-context/spec.md §6-§7 and §10; the
+"Canonical record envelope", "Scope and sharing", "Temporal semantics", and
+provenance sections of context-graph-protocol-build-prompt.md; lifecycle
+spec §7.6-§7.7. The header rules of this plan are binding.
+
+Deliver, in packages/context-exchange/src/validate.ts (+ types.ts):
+
+1. TypeScript types (zod schemas, matching how packages/oxagen contracts
+   validate IO) for the ContextRecord envelope and the twelve record kinds
+   as a flat record_kind-discriminated union — type-specific fields at top
+   level, unknown namespaced extensions preserved losslessly, unknown
+   top-level properties rejected explicitly (never silently dropped).
+2. Envelope validation: schema_version, record_id, record_kind, observed_at,
+   nonempty scope, sharing_scope required on every record; lineage_id and
+   record_status required on revision-bearing kinds; valid_from required on
+   knowledge/directive/artifact_contract; confidence integer 0..=100;
+   half-open interval rule valid_until > valid_from; sensitivity required
+   before acceptance (spec.md §5 — missing legacy value is rejected at the
+   provider boundary, not defaulted).
+3. Provenance: all five scalar fields required on exchanged records;
+   source_refs may be empty only for authored originals; enforce the
+   origin×derivation matrix exactly (user→authored|transformed,
+   system→authored|transformed, observed→observed|extracted|transformed,
+   inferred→inferred|summarized|transformed, imported→imported|transformed).
+4. Sharing/scope identity matching: user⇒scope.user_id, repository⇒
+   repository binding, workspace⇒scope.workspace_id, organization⇒
+   scope.organization_id — each sharing value requires its matching id;
+   constraint effect allow is structurally impossible; directive kinds are
+   exactly preference|rule|constraint|procedure (memory/fact are NOT
+   directive kinds — directive-schema.md is superseded on this point).
+5. Legacy input aliases (recorded_at, valid_to) accepted on ingestion and
+   normalized; canonical output never emits them.
+6. Tests in validate.test.ts: one accept + at least one reject per rule
+   family; run ONLY that file via pnpm --filter @oxagen/context-exchange
+   test:unit -- validate.test.ts.
+
+Commit via repo_commit: "feat(context-exchange): canonical record
+validation". Reconcile with already-landed work.
+'''
+depends_on = ["x00-scaffold-hashing"]
+claims = [
+  "packages/context-exchange/src/validate.ts",
+  "packages/context-exchange/src/types.ts",
+]
+
+[[tasks]]
+id = "x02-db-schema"
+title = "context_exchange Postgres schema + single Atlas migration (all DDL)"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: docs/specs/adaptive-context/spec.md §5 (the table list is
+normative); the repo migration law: Drizzle schema in packages/database/src/
+schema/, SQL migrations in packages/database/atlas/migrations/ ONLY, file
+name YYYYMMDDHHMMSS_snake_name.sql with a timestamp prefix sorting AFTER
+every existing file (check `ls packages/database/atlas/migrations | tail`),
+then regenerate the checksum from packages/database with `atlas migrate hash
+--dir "file://atlas/migrations"` — NEVER hand-edit atlas.sum. Local DB is
+localhost:5433; `unset DATABASE_URL` before targeting local. Model the RLS
+block on packages/database/atlas/migrations/20260731130700_routing_policy.sql
+(workspace_nullable class; tools/scripts/gen-rls-migration.ts generates it).
+
+Deliver:
+
+1. A new `context_exchange` pgSchema registered in
+   packages/database/src/schema/_schemas.ts, with Drizzle tables in a new
+   packages/database/src/schema/context-exchange.ts, barrel-registered in
+   index.ts: context_records (canonical_json authority + indexed scope
+   projections + record_hash + lineage/supersession + kind/status/sharing/
+   sensitivity/temporal columns), context_record_links,
+   context_evidence_links, context_ingestions, context_idempotency_receipts
+   (UNIQUE(authority_id, client_id, operation, idempotency_key)),
+   context_retention_commitments, context_publication_approvals,
+   context_provider_keys (public material + key_id windows only — no
+   private key columns). uuid_generate_v7() PK defaults and timestamptz
+   audit columns per the example migration.
+2. ONE SQL migration containing ALL of the above with RLS
+   ENABLE/FORCE + tenant_isolation policies on every tenant-scoped table
+   (org_id/workspace_id columns; workspace nullable where the audience is
+   org- or user-level). This is the only migration this whole fleet may
+   create — later tasks must not add DDL.
+3. Indexes per spec.md §5 usage: kind+status+sharing, lineage, observed_at,
+   valid_from/valid_until, the scope projections, receipt lookup, and
+   approval-queue status.
+4. Run pnpm db:lint-migrations and pnpm db:atlas-validate; apply locally
+   with pnpm db:migrate and verify with a psql SELECT against
+   localhost:5433. Do not run any test suite beyond a schema smoke test
+   file if the database package has that convention.
+
+Commit via repo_commit: "feat(database): context_exchange schema with RLS
+for the CGEP provider". Reconcile with already-landed work.
+'''
+depends_on = []
+claims = [
+  "packages/database/src/schema/context-exchange.ts",
+  "packages/database/src/schema/_schemas.ts",
+  "packages/database/src/schema/index.ts",
+  "packages/database/atlas/migrations",
+  "packages/database/atlas.sum",
+]
+
+[[tasks]]
+id = "x03-repositories"
+title = "Tenancy-scoped repositories: immutable records, ledgers, revisions"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: docs/specs/adaptive-context/spec.md §5 and §7; the tenancy law:
+raw db() is banned — every query goes through packages/tenancy scope
+helpers (runInTenantScope / withTenantDb; system paths via withSystemDb
+with a stated reason). Validation and hashing landed in
+packages/context-exchange (x00/x01); the schema landed in
+packages/database (x02).
+
+Deliver, in packages/context-exchange/src/repo.ts (split files if large):
+
+1. Insert path: validate (x01) -> compute/verify record_hash (x00) ->
+   insert canonical row + link projections + ingestion row in ONE
+   transaction. Canonical rows are immutable — expose NO update of
+   canonical_json; revisions insert a new record_id with
+   supersedes_record_id in the same lineage. Enforce sharing/scope identity
+   matching against the AUTHENTICATED principal at this layer too (defense
+   in depth ahead of the capability IAM check).
+2. Read paths: get by exact record_id (hash verified on read, scope/sharing
+   authorized); list by kind/status/sharing/scope filters; temporal
+   filters per the lifecycle spec — known_at uses provider ingestion
+   received_at (reject known_at with a typed error if ingestion history is
+   missing), valid_at / observed / valid_overlaps with half-open
+   semantics; maximal-applicable-revision-per-lineage selection.
+3. Idempotency ledger ops: getOrInsert receipt keyed by (authority_id,
+   client_id, operation, idempotency_key); exact receipt_json replay;
+   command_hash comparison outcomes (duplicate | idempotency_conflict |
+   idempotency_expired past replay_until); record_identity_conflict when an
+   existing record_id arrives with a different hash.
+4. Retention commitment writes tied to accepted appends; publication
+   approval queue CRUD (status transitions only — approval AUTHORITY comes
+   later via IAM in x09).
+5. Tests (single-file runs only): repo.test.ts with a test-containers or
+   the repo's established db-test harness — copy the pattern the database
+   or compliance package tests use; cover immutability, revision chains,
+   ledger outcomes, temporal truth table boundaries, and an RLS negative
+   (wrong-tenant read returns nothing).
+
+Commit via repo_commit: "feat(context-exchange): tenancy-scoped record and
+ledger repositories". Reconcile with already-landed work.
+'''
+depends_on = ["x01-record-validation", "x02-db-schema"]
+claims = ["packages/context-exchange/src/repo.ts"]
+
+[[tasks]]
+id = "x04-append-get"
+title = "Append pipeline with receipts, retention negotiation, typed errors"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: the `context/records/append` and `context/records/get` sections
+of docs/specs/adaptive-context/context-graph-protocol-build-prompt.md —
+every semantic there is normative — plus spec.md §6. Repos landed in x03.
+
+Deliver, in packages/context-exchange/src/append.ts, get.ts, errors.ts:
+
+1. errors.ts: the full typed error vocabulary (all 24 codes from
+   unsupported_capability through partial_failure) as a discriminated
+   union with machine-readable code, safe diagnostic detail, and NO private
+   record content in messages.
+2. Batched append exactly per the protocol prompt: per-item idempotency_key
+   (command metadata, never in record_hash); provider computes record_hash
+   before identity/idempotency comparison and verifies caller-supplied
+   hashes (record_hash_mismatch); command_hash computed over the semantic
+   command body and verified when supplied; retention negotiation —
+   requested_retention with retention_class/retention_until/on_expiry, the
+   two core on_expiry values, unknown values rejected, and
+   retention_rejected BEFORE persistence when the platform policy cannot
+   honor the request (never silently shorten or lengthen); best-effort
+   batching with per-item accepted|duplicate|rejected receipts carrying
+   record identity, accepted_at, accepted_retention, and
+   idempotency_replay_until; duplicate/conflict semantics exactly as x03's
+   ledger implements; batch_too_large / payload_too_large limits from
+   config; `accepted` means durable and immediately readable by exact get
+   for the same principal.
+3. get: exact record_id batch retrieval with limits mirroring append (spec
+   §11.4), missing-record receipts, scope/sharing/consent enforcement,
+   unknown-extension round-trip.
+4. Receipt attestation hook: leave a typed seam (attestations attached in a
+   later task) — do not stub fake signatures.
+5. Tests: append.test.ts + get.test.ts (single-file runs) covering every
+   receipt status, both idempotency conflicts, expiry
+   (idempotency_expired), retention rejection, hash mismatch, identity
+   conflict, and the immediate-get-after-accept guarantee.
+
+Commit via repo_commit: "feat(context-exchange): append/get pipeline with
+receipts and retention negotiation". Reconcile with already-landed work.
+'''
+depends_on = ["x03-repositories"]
+claims = [
+  "packages/context-exchange/src/append.ts",
+  "packages/context-exchange/src/get.ts",
+  "packages/context-exchange/src/errors.ts",
+]
+
+[[tasks]]
+id = "x05-resolve-query"
+title = "resolve (hash-verified) + v1 query + capability document"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: the `context/resolve`, "ContextFrame representations", and
+"Capability negotiation" sections of context-graph-protocol-build-prompt.md;
+spec.md §6 and §9 (v1 query is filtered + temporal listing; deep semantic
+retrieval through engram is a documented follow-up — do NOT wire engram
+now).
+
+Deliver, in packages/context-exchange/src/resolve.ts, query.ts,
+capability-doc.ts:
+
+1. resolve: given an opaque content_ref, desired representation, expected
+   canonical content hash, and caller scope/consent context — verify the
+   canonical hash BEFORE returning content; typed failures
+   reference_not_found, reference_expired, scope_denied, sharing_denied,
+   consent_required, content_hash_mismatch, unsupported_representation.
+   v1 references resolve against canonical_json content of stored records.
+2. query: filtered listing over canonical records (kind, status, sharing,
+   scope dimensions) with the temporal selectors from x03 (known_at
+   provider-relative via ingestion history — advertise the earliest
+   reconstructable time; valid_at; observed; valid_overlaps), stable
+   ordering, and bounded page sizes. This is NOT semantic search; say so in
+   the module doc with the engram follow-up reference.
+3. capability-doc.ts: build the provider capability document advertising
+   exactly what is implemented: supported representations (full;
+   reference-with-resolve), lifecycle record kinds, accepted operations,
+   max payload and batch sizes, batch atomicity (none — best-effort),
+   retention classes with min/max bounded duration and supported on_expiry
+   behaviors, minimum idempotency receipt-retention, whether provider
+   known_at reconstruction is supported and from when, required consent
+   class, and unknown-field round-trip behavior. Namespace: use the
+   protocol's current published namespace and document cgep/lifecycle/
+   1.0-draft as the target identifier — never emit both as interchangeable
+   aliases (spec.md §6).
+4. Tests: resolve.test.ts + query.test.ts (single-file runs) incl. hash
+   mismatch, every resolve failure, temporal truth-table spot checks, and
+   a capability-doc snapshot.
+
+Commit via repo_commit: "feat(context-exchange): resolve, v1 query,
+capability document". Reconcile with already-landed work.
+'''
+depends_on = ["x04-append-get"]
+claims = [
+  "packages/context-exchange/src/resolve.ts",
+  "packages/context-exchange/src/query.ts",
+  "packages/context-exchange/src/capability-doc.ts",
+]
+
+[[tasks]]
+id = "x08-attestation"
+title = "ed25519 receipt/publication attestations + key management"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: lifecycle spec §7.7 (detached attestation shape is normative)
+and spec.md §8 + §11.2. node:crypto supports ed25519 natively — no new
+dependency.
+
+Deliver, in packages/context-exchange/src/attestation.ts (+ keys.ts):
+
+1. Key management over the context_provider_keys table: key_id convention
+   `key:<provider_id>:<yyyy-mm>`, active-window rotation, public keys in
+   Postgres, private keys via the platform config/secret conventions
+   (packages/config registry entry; document the KMS follow-up from
+   spec.md §11.2 in the module doc — do not build KMS now).
+2. Attestation issuance: { signed_record_hash, algorithm: "ed25519",
+   key_id, attester_id, signature (base64), issued_at } — detached,
+   attached to append receipts (fill the x04 seam) and available to the
+   publication flow; NEVER part of record_hash; stored on the ingestion
+   row's attestation_json where the provider itself ingests.
+3. Verification helper for tests and future cross-provider ingestion.
+4. Config: register the key env vars in packages/config/src/registry.ts and
+   regenerate .env.example (never hand-edit it).
+5. Tests: attestation.test.ts (single-file run) — sign/verify round trip,
+   rotation window selection, receipts carry attestations when keys are
+   configured and omit them cleanly when not.
+
+Commit via repo_commit: "feat(context-exchange): ed25519 attestations with
+key rotation". Reconcile with already-landed work.
+'''
+depends_on = ["x05-resolve-query"]
+claims = [
+  "packages/context-exchange/src/attestation.ts",
+  "packages/context-exchange/src/keys.ts",
+]
+
+[[tasks]]
+id = "x06-capabilities"
+title = "Kernel capabilities: contracts + handlers for the CGEP operations"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: spec.md §7 (the capability list and the IAM/audit requirements
+are normative); study 2-3 existing contracts in packages/oxagen/src/
+contracts/ (e.g. the agent.memory.* family) and how packages/handlers/src/
+register.ts wires handlers. Everything must flow through kernel.invoke() —
+that is what buys IAM, tenancy, billing, entitlement, and ClickHouse audit.
+
+Deliver:
+
+1. Contracts for: context_exchange.records.append, .records.get,
+   .records.query, .records.resolve, and .capabilities.describe — each with
+   zod input/output schemas reusing @oxagen/context-exchange types,
+   defaultRoles/defaultEffect chosen to match comparable data-plane
+   capabilities, and audit { targetKind, targetIdField } populated (record
+   batches audit against the batch/first record id — follow the closest
+   existing convention).
+2. Handlers in the established handler package location delegating to
+   @oxagen/context-exchange (append/get/query/resolve/capability-doc),
+   with authenticated_authority_id taken from the invoking principal —
+   request-supplied labels never substitute (spec.md §7).
+3. Registration + manifest: run pnpm check:contracts and pnpm
+   check:manifest and satisfy both.
+4. Sharing/consent enforcement at the handler boundary per spec.md §7's
+   matrix, returning the typed errors from x04 mapped into the kernel's
+   error envelope convention.
+5. Tests: one handler test file per operation is overkill — a single
+   capabilities.test.ts exercising invoke() paths for append+get with an
+   authorized and an unauthorized principal (single-file run).
+
+Commit via repo_commit: "feat(oxagen): context_exchange capabilities wired
+through the kernel". Reconcile with already-landed work.
+'''
+depends_on = ["x08-attestation"]
+claims = [
+  "packages/oxagen/src/contracts",
+  "packages/handlers/src/register.ts",
+]
+
+[[tasks]]
+id = "x07-http-wire"
+title = "HTTP wire surface: /cgep routes + well-known discovery + flag"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: spec.md §4 and §6; the A2A bridge (apps/api/src/routes/a2a/ —
+protocol.ts, rpc.ts, well-known.ts) as the structural model for an
+external-protocol surface; the capability contracts from x06.
+
+Deliver, in apps/api/src/routes/cgep/:
+
+1. POST endpoints for context/query, context/records/append,
+   context/records/get, context/resolve plus GET capability-document and a
+   well-known discovery route (mirror the a2a well-known pattern). Thin
+   adapters only: authenticate via the existing API auth middleware,
+   resolve the IAM principal as authenticated_authority_id, then
+   kernel.invoke() the x06 capabilities — no business logic in routes.
+2. Wire protocol errors: map the typed error union onto stable HTTP
+   status + machine-readable body per the protocol prompt (errors are
+   stable, safe-diagnostic, never leak record content); partial_failure
+   returns per-item receipts with 200.
+3. Feature flag CONTEXT_EXCHANGE_ENABLED (default off) via
+   packages/config/src/registry.ts (+ regenerate .env.example): flag off =
+   routes not mounted, zero surface change.
+4. Mount in apps/api/src/app.ts following existing route mounting.
+5. Tests: a routes test file following the api app's existing route-test
+   idiom (single-file run): flag off = 404; append happy path returns
+   receipts; unauthenticated = 401; an idempotent replay returns the
+   duplicate receipt byte-identically.
+
+Commit via repo_commit: "feat(api): CGEP wire surface behind
+CONTEXT_EXCHANGE_ENABLED". Reconcile with already-landed work.
+'''
+depends_on = ["x06-capabilities"]
+claims = [
+  "apps/api/src/routes/cgep",
+  "apps/api/src/app.ts",
+  "packages/config/src/registry.ts",
+]
+
+[[tasks]]
+id = "x09-publication"
+title = "Workspace publication: RBAC approval, promotion events, revocation"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: lifecycle spec §13.4 (the flow is normative) and spec.md §8;
+the IAM resolver (packages/oxagen/src/iam/resolve.ts precedence) and how
+approval-like flows are modeled elsewhere (iam accessRequests table)
+before inventing anything.
+
+Deliver:
+
+1. packages/context-exchange/src/publication.ts: propose (a
+   repository/user-applicable proposal or confirmed record targeted at
+   requested_sharing_scope=workspace enters the approval queue), approve
+   (approver must hold the publication permission via IAM — never mere
+   membership; proposer≠approver enforced when the workspace policy says
+   so), which creates the immutable workspace-scoped published revision +
+   a promotion_event record (action=published, source and result record
+   ids, actor, reason, policy_version) + attestation (x08) + the receipt;
+   revoke creates a retracted superseding revision + reverted event and
+   flags consumer caches via the record's lineage head. Blocking effect:
+   store the declared enforcement but document (module doc) that blocking
+   requires authenticated policy + consumer local opt-in + a real enforcer
+   — the provider stores and attests, hosts enforce.
+2. Capabilities context_exchange.publication.propose|approve|revoke|list
+   (contracts + handlers per the x06 pattern; audit fields aimed at the
+   approval row; check:contracts + check:manifest green).
+3. Tests: publication.test.ts (single-file run) — full propose→approve→
+   published-revision→event chain; unauthorized approver rejected;
+   revocation supersedes; audit/attestation attached.
+
+Commit via repo_commit: "feat(context-exchange): workspace publication with
+RBAC approval and promotion events". Reconcile with already-landed work.
+'''
+depends_on = ["x06-capabilities"]
+claims = [
+  "packages/context-exchange/src/publication.ts",
+  "packages/oxagen/src/contracts",
+  "packages/handlers/src/register.ts",
+]
+
+[[tasks]]
+id = "x10-export-manifest"
+title = "ContextExportManifest acceptance"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: lifecycle spec §5.3 (export compiler + egress table) and the
+implementation plan's §2.8/context_exports description in
+adaptive-context-implementation-plan.md (the manifest fields), plus
+spec.md §7. Stella clients send an inspectable ContextExportManifest with
+each outbound batch; the provider accepts, verifies, and receipts it.
+
+Deliver:
+
+1. packages/context-exchange/src/exports.ts: accept a manifest {provider,
+   destination kind + matching identity, purpose, policy_version, actor or
+   consent reference (at least one required), explicit identity mappings,
+   exact record ids + hashes, redactions/omissions, requested retention,
+   timestamp, batch hash} alongside its append items; verify the batch
+   hash and per-item hashes against the manifest; verify destination
+   identity matches the authenticated principal's workspace/org; route
+   items through the x04 append pipeline; produce a manifest-level receipt
+   referencing every per-item receipt; reject the whole batch with a typed
+   error when the manifest and items disagree (manifest is the audit
+   contract — no silent partial acceptance of unmanifested items).
+2. Capability context_exchange.exports.accept (contract + handler per the
+   x06 pattern; audit against the manifest hash; check:contracts +
+   check:manifest green). Expose through the x07 wire as a POST (guard: if
+   the routes file is frozen by another task re-run, add the route in a
+   separate file under apps/api/src/routes/cgep/ following its structure).
+3. Tests: exports.test.ts (single-file run) — happy path; manifest/item
+   hash mismatch rejected; missing actor+consent rejected; destination
+   identity mismatch rejected; per-item receipts referenced.
+
+Commit via repo_commit: "feat(context-exchange): export manifest
+acceptance". Reconcile with already-landed work.
+'''
+depends_on = ["x09-publication"]
+claims = [
+  "packages/context-exchange/src/exports.ts",
+  "packages/oxagen/src/contracts",
+  "packages/handlers/src/register.ts",
+]
+
+[[tasks]]
+id = "x11-retention-jobs"
+title = "Retention + receipt-expiry enforcement (Inngest)"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: the retention semantics in the append section of
+context-graph-protocol-build-prompt.md and spec.md §5's
+context_retention_commitments; study an existing scheduled function in
+packages/inngest-functions/src/functions/ for the idiom.
+
+Deliver:
+
+1. A scheduled Inngest function enforcing accepted retention commitments:
+   on_expiry=delete_content_keep_minimal_receipt nulls canonical content
+   while preserving the minimal receipt row (record identity, hashes,
+   ledger metadata); on_expiry=archive_provider_copy transitions the
+   record to an archived revision. Commitments are never silently altered;
+   enforcement actions are audited (route the mutation through a
+   system-scope capability or withSystemDb with a stated reason, matching
+   how other Inngest functions touch tenant data).
+2. Idempotency-receipt expiry: past replay_until, mark receipts expired so
+   the ledger returns idempotency_expired (x03 reads the flag) —
+   enforcement job only flips state, semantics live in the ledger.
+3. Bounded batches per run; safe to re-run (idempotent); metrics via the
+   existing telemetry conventions if a one-line counter fits.
+4. Tests: retention.test.ts in the inngest-functions package (single-file
+   run) — both expiry behaviors, receipt expiry, idempotent re-run.
+
+Commit via repo_commit: "feat(inngest-functions): context-exchange
+retention and receipt expiry enforcement". Reconcile with landed work.
+'''
+depends_on = ["x04-append-get"]
+claims = ["packages/inngest-functions/src/functions"]
+
+[[tasks]]
+id = "x12-conformance"
+title = "Wire-level conformance suite"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Read first: the Verification section of context-graph-protocol-build-
+prompt.md and spec.md §3. Everything is landed; you prove the wire.
+
+Deliver a conformance test suite (place it as
+packages/context-exchange/src/conformance.test.ts or the api app's route
+test dir — follow whichever existing integration-test idiom fits; single
+file, run only it):
+
+1. Every one of the 24 typed error codes is producible and correctly
+   shaped over the wire.
+2. Receipt semantics: same key + same command_hash replays the receipt
+   byte-identically as duplicate; same key + different command_hash =>
+   idempotency_conflict; expired => idempotency_expired; existing
+   record_id + different hash => record_identity_conflict; accepted =>
+   immediately gettable by the same principal.
+3. Retention negotiation: unsupported class/duration/behavior =>
+   retention_rejected before persistence; accepted_retention echoed
+   exactly.
+4. Sharing/consent negatives at every scope value; RLS negative (wrong
+   tenant sees nothing); provenance matrix rejection; alias input
+   normalization (recorded_at in => observed_at out).
+5. Provider known_at: an imported record cannot appear before its
+   ingestion received_at.
+6. Golden vectors from docs/specs/adaptive-context/fixtures/ pass against
+   the live hash implementation.
+7. A skipped/documented placeholder marking the DEFERRED external gate:
+   running the Rust contextgraph-conformance suite against the HTTP
+   endpoint once the protocol repo ships the lifecycle capability (name
+   the follow-up in the test file header; do not attempt it).
+
+Commit via repo_commit: "test(context-exchange): wire conformance suite".
+Reconcile with already-landed work.
+'''
+depends_on = ["x07-http-wire", "x10-export-manifest", "x11-retention-jobs"]
+claims = []
+
+[[tasks]]
+id = "x13-docs"
+title = "Platform docs + capability catalog"
+prompt = '''
+You are one task in a fleet building the Oxagen Context Exchange Provider.
+Everything is landed; document what EXISTS (read the actual modules —
+where code and the spec bundle differ, code wins and spec.md §11's open
+decisions record why).
+
+Deliver:
+
+1. Docs-site page(s) in the apps/docs Fumadocs tree (follow its meta.json
+   conventions): the Context Exchange Provider — what it is (lifecycle
+   spec §5.3 position), the wire operations and capability document, the
+   sharing/consent model, workspace publication flow, retention
+   commitments, attestation verification, and the feature flag. Include
+   the "not sync" disclaimer (spec.md §2) verbatim in spirit.
+2. Capability catalog/reference entries for the new context_exchange.*
+   capabilities wherever existing capabilities are cataloged.
+3. A short README.md in packages/context-exchange (module map + the
+   cross-repo golden-vector note).
+4. Update docs/specs/adaptive-context/spec.md §11 open decisions with
+   what implementers actually chose (JCS dep or hand-rolled; key storage;
+   consent policy source; get batch limits) — one line each, referencing
+   the deciding commit.
+
+Commit via repo_commit: "docs(context-exchange): provider documentation
+and capability catalog". Reconcile with already-landed work.
+'''
+depends_on = ["x07-http-wire", "x09-publication", "x10-export-manifest", "x11-retention-jobs"]
+claims = ["packages/context-exchange/README.md", "docs/specs/adaptive-context/spec.md"]
+
+[[tasks]]
+id = "x14-verify"
+title = "Targeted verification + proof artifact"
+prompt = '''
+You are the final task of a fleet that built the Oxagen Context Exchange
+Provider. Leave the branch PR-ready under the repo's law: NEVER run the
+whole-repo suite — verify with targeted commands only.
+
+1. Run, and record output of: the single test files this fleet created
+   (each via pnpm --filter <pkg> test:unit -- <file>); pnpm
+   check:contracts; pnpm check:manifest; pnpm db:lint-migrations; pnpm
+   db:atlas-validate; env:check; and lint+typecheck ONLY for changed
+   packages via the turbo filter (pnpm turbo lint typecheck
+   --filter=...[origin/main]). Fix fallout with minimal diffs (zero
+   eslint warnings; Biome formatting).
+2. Verify the flag-off invariant: CONTEXT_EXCHANGE_ENABLED unset => no
+   mounted routes, no behavior change (name the test proving it).
+3. Write verifications/<your-session-id>/adaptive-context-provider.md per
+   the repo convention: commands run with outcomes; the conformance
+   checklist (which protocol semantics are proven); feature flags and
+   defaults; the deferred external gates (Rust conformance run; engram
+   semantic query; KMS keys); anything a human must review before merge.
+4. Commit via repo_commit: "chore(context-exchange): verification artifact
+   and gate fixes".
+
+Your final summary must state plainly which checks ran, their results,
+and any genuine blockers.
+'''
+depends_on = ["x12-conformance", "x13-docs"]
+claims = []

@@ -15,7 +15,7 @@
 import type { StoreKind } from "./types";
 
 /**
- * The 21 Postgres schema domains (packages/database/src/schema/_schemas.ts).
+ * The Postgres schema domains (packages/database/src/schema/_schemas.ts).
  * Used as the target vocabulary for the name-prefix heuristic so cross-store
  * tables land in the SAME domain as their Postgres siblings where the names
  * line up (e.g. ClickHouse `eval_runs` → the `eval` domain).
@@ -30,6 +30,8 @@ export const PG_DOMAINS: readonly string[] = [
   "content",
   "environments",
   "eval",
+  // Immutable governed-run evidence (docs/specs/run-evidence-ingress).
+  "evidence",
   "iam",
   "ingestion",
   "mcp",
@@ -87,7 +89,6 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   Execution: "agent",
   Fanout: "agent",
   Document: "content",
-  GeneratedFile: "content",
   Conversation: "chat",
   Message: "chat",
   Citation: "agent",
@@ -95,11 +96,6 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   Evidence: "agent",
   SourceConnection: "ingestion",
   EntityNode: "ingestion",
-  EngramMemory: "agent",
-  SourceFile: "ingestion",
-  SourceSymbol: "ingestion",
-  SourceChunk: "ingestion",
-  Feature: "ingestion",
   GraphNode: "graph", // the universal anchor label — no single business domain
 };
 

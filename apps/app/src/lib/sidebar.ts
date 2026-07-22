@@ -633,11 +633,6 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Inference",
-      href: workspace.knowledge.inference(wsCtx),
-      parent: "knowledge",
-    });
-    targets.push({
       label: "Knowledge · Ontology",
       href: workspace.knowledge.ontology(wsCtx),
       parent: "knowledge",

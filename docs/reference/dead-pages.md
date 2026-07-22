@@ -1,5 +1,11 @@
 # Dead Pages & UI Coverage Gaps
 
+> **Superseded for launch (2026-07-21).** This generated 2026-06-25 audit is
+> retained as historical evidence. Its capability inventory predates the launch
+> pruning; generic graph mutation, raw Cypher, and automatic execution/file lineage
+> are no longer supported product surfaces. Do not use the rows below as a current
+> implementation backlog.
+
 > Generated: 2026-06-25. Audit of `apps/app` pages that show preview/mock data
 > without live backend wiring, plus backend capabilities that lack app UI.
 

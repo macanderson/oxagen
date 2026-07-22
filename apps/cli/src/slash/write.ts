@@ -1,30 +1,30 @@
-/**
- * write.ts — Scaffold a new slash command for `oxagen command new`.
- */
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { scaffoldMarkdownFile } from "../lib/markdown-registry.js";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 
-const TEMPLATE = (name: string) => `---
-description: Describe what /${name} does.
-argument-hint: <arg>
----
-
-You are running the /${name} command with arguments: $ARGUMENTS
-
-Replace this body with the prompt this command should send. Use $ARGUMENTS for
-all arguments, or $1, $2, … for positional ones.
-`;
-
-/** Write a starter slash command to `.oxagen/commands/<name>.md`. */
-export function scaffoldCommand(opts: {
+export function scaffoldCommand(options: {
   name: string;
   cwd?: string;
   dir?: string;
-}): {
-  path: string;
-  created: boolean;
-} {
-  const dir =
-    opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "commands");
-  return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
+}): { path: string; created: boolean } {
+  const directory =
+    options.dir ?? join(options.cwd ?? process.cwd(), ".oxagen", "commands");
+  const path = join(directory, `${options.name}.toml`);
+  const content = serializeArtifactToml({
+    schema_version: 1,
+    kind: "command",
+    name: options.name,
+    description: `Describe what /${options.name} does.`,
+    argument_hint: "<arg>",
+    prompt: `You are running /${options.name} with arguments: $ARGUMENTS`,
+  });
+  mkdirSync(directory, { recursive: true });
+  try {
+    writeFileSync(path, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return { path, created: true };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST")
+      return { path, created: false };
+    throw error;
+  }
 }

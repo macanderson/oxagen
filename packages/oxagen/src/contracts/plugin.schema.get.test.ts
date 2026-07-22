@@ -56,7 +56,9 @@ describe("plugin.schema.get capability", () => {
         category: "version-control",
       },
     });
-    expect(parsed.metadata.description).toBe("GitHub connector for repo ingestion");
+    expect(parsed.metadata.description).toBe(
+      "GitHub connector for repo ingestion",
+    );
     expect(parsed.metadata.icon).toBe("https://cdn.example.com/github.svg");
     expect(parsed.metadata.category).toBe("version-control");
   });
@@ -228,55 +230,15 @@ describe("plugin.schema.get capability", () => {
     ).toThrow();
   });
 
-  // ── output: optional inference section ───────────────────────────────────
-
-  it("parses output with an inference section", () => {
+  it("does not expose legacy connector inference configuration", () => {
     const parsed = pluginSchemaGet.output.parse({
       ...minimalValidOutput,
       inference: {
         enabled: true,
-        defaultEnabled: false,
-        confidenceThreshold: {
-          defaultValue: 0.7,
-          min: 0.0,
-          max: 1.0,
-        },
       },
     });
-    expect(parsed.inference?.enabled).toBe(true);
-    expect(parsed.inference?.confidenceThreshold?.defaultValue).toBe(0.7);
-  });
 
-  it("rejects confidenceThreshold.defaultValue above 1", () => {
-    expect(() =>
-      pluginSchemaGet.output.parse({
-        ...minimalValidOutput,
-        inference: {
-          enabled: true,
-          confidenceThreshold: {
-            defaultValue: 1.1,
-            min: 0.0,
-            max: 1.0,
-          },
-        },
-      }),
-    ).toThrow();
-  });
-
-  it("rejects confidenceThreshold.defaultValue below 0", () => {
-    expect(() =>
-      pluginSchemaGet.output.parse({
-        ...minimalValidOutput,
-        inference: {
-          enabled: true,
-          confidenceThreshold: {
-            defaultValue: -0.1,
-            min: 0.0,
-            max: 1.0,
-          },
-        },
-      }),
-    ).toThrow();
+    expect(parsed).not.toHaveProperty("inference");
   });
 
   // ── output: optional sync section ────────────────────────────────────────

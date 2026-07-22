@@ -31,20 +31,14 @@ const TenantFields = {
 // them here too so a single request can never ask for an unbounded page.
 //
 // Every branch the client (`api-client.ts`) and service (`explore-service.ts`
-// `dispatchExplore`) support MUST appear here — a missing branch makes the
-// discriminated union reject the body with a 400, which silently breaks that
-// op for the whole explorer (this is exactly how `vocab` + the node/edge CRUD
-// ops regressed: the schema lagged the client/service by six ops). Keep this
-// union in lockstep with the `ExploreRequest` union in `./types.ts`.
+// `dispatchExplore`) support MUST appear here. Keep this union in lockstep with
+// the `ExploreRequest` union in `./types.ts`.
 const BodySchema = z.discriminatedUnion("op", [
   z.object({
     ...TenantFields,
     op: z.literal("graph"),
     labels: z.array(z.string().min(1)).max(50).optional(),
     limit: z.number().int().min(1).max(250).optional(),
-    // Opt-in to runtime lineage (is_system) nodes. Absent/false = the default
-    // explore view: only the customer's source-system ontology is seeded.
-    includeSystem: z.boolean().optional(),
   }),
   z.object({
     ...TenantFields,
@@ -58,7 +52,6 @@ const BodySchema = z.discriminatedUnion("op", [
     query: z.string().max(500).optional(),
     limit: z.number().int().min(1).max(250).optional(),
     offset: z.number().int().min(0).optional(),
-    includeSystem: z.boolean().optional(),
   }),
   z.object({
     ...TenantFields,
@@ -70,51 +63,6 @@ const BodySchema = z.discriminatedUnion("op", [
     ...TenantFields,
     op: z.literal("node"),
     nodeId: z.string().min(1).max(512),
-  }),
-  // Vocabulary — distinct labels + relationship types, fetched on mount to
-  // populate the create/edit dialogs. No payload beyond tenant scope.
-  z.object({
-    ...TenantFields,
-    op: z.literal("vocab"),
-  }),
-  // Similarity search — embedding/fuzzy node lookup for edge endpoint pickers.
-  z.object({
-    ...TenantFields,
-    op: z.literal("similaritySearch"),
-    query: z.string().min(1).max(500),
-    limit: z.number().int().min(1).max(250).optional(),
-  }),
-  // Mutation ops — node/edge CRUD. The service routes these through the
-  // metered `graph.*` capabilities; workspace membership is asserted below
-  // before any op runs, so these are gated identically to the read ops.
-  z.object({
-    ...TenantFields,
-    op: z.literal("upsertNode"),
-    label: z.string().min(1).max(200),
-    displayName: z.string().min(1).max(500),
-    description: z.string().max(2000).optional(),
-    properties: z.record(z.unknown()).optional(),
-    externalId: z.string().min(1).max(512).optional(),
-  }),
-  z.object({
-    ...TenantFields,
-    op: z.literal("deleteNode"),
-    nodeId: z.string().min(1).max(512),
-  }),
-  z.object({
-    ...TenantFields,
-    op: z.literal("upsertEdge"),
-    fromNodeId: z.string().min(1).max(512),
-    toNodeId: z.string().min(1).max(512),
-    relationshipType: z.string().min(1).max(200),
-    properties: z.record(z.string()).optional(),
-  }),
-  z.object({
-    ...TenantFields,
-    op: z.literal("deleteEdge"),
-    fromNodeId: z.string().min(1).max(512),
-    toNodeId: z.string().min(1).max(512),
-    edgeType: z.string().min(1).max(200),
   }),
 ]);
 

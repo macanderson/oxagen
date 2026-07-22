@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { CapabilityContext } from "./types";
+import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { clearRegistryForTests, registerCapability } from "./registry";
 import {
   CapabilityError,
@@ -12,7 +13,9 @@ import {
   clearKernelAccessRequestCreator,
   clearKernelIAMRuntime,
   clearSecurityEventEmitter,
+  createDeployedAgentInvocationContext,
   hasHandler,
+  isKernelIssuedDeployedAgentInvocation,
   invoke,
   registerHandler,
   registerHandlersOnce,
@@ -336,7 +339,12 @@ describe("authorizeExternalCapability", () => {
       "deny",
     );
 
-    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
+    expect(res).toEqual({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+      decision: null,
+    });
     expect(events).toHaveLength(0);
   });
 
@@ -351,7 +359,12 @@ describe("authorizeExternalCapability", () => {
       "deny",
     );
 
-    expect(res).toEqual({ allowed: true, outcome: "allow", reason: null });
+    expect(res).toEqual({
+      allowed: true,
+      outcome: "allow",
+      reason: null,
+      decision: null,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       outcome: "allow",
@@ -375,6 +388,7 @@ describe("authorizeExternalCapability", () => {
       allowed: false,
       outcome: "deny",
       reason: "policy_block",
+      decision: null,
     });
     expect(events[0]).toMatchObject({
       outcome: "deny",
@@ -414,6 +428,7 @@ describe("authorizeExternalCapability", () => {
       allowed: false,
       outcome: "deny",
       reason: "iam_check_error",
+      decision: null,
     });
     expect(events[0]).toMatchObject({
       outcome: "deny",
@@ -442,6 +457,7 @@ describe("authorizeExternalCapability", () => {
       allowed: false,
       outcome: "deny",
       reason: "iam_check_error",
+      decision: null,
     });
     expect(events[0]).toMatchObject({
       outcome: "deny",
@@ -870,6 +886,41 @@ describe("billing admission gate", () => {
     clearRegistryForTests();
     clearHandlersForTests();
     clearBillingAdmissionGate();
+    clearKernelIAMRuntime();
+  });
+
+  it("skips billing for noBillingGate while still running IAM and the handler", async () => {
+    registerCapability({
+      name: "test.billing_bypass",
+      domain: "test",
+      description: "billing bypass witness",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      scoped: true,
+      noBillingGate: true,
+      sensitivity: "high" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ value: z.string() }),
+      output: z.object({ value: z.string() }),
+    });
+    const iamCheck = vi.fn<KernelIAMCheckFn>(async () => ({
+      outcome: "allow",
+      principal: null,
+    }));
+    const handler = vi.fn(async (input: unknown) => input);
+    const billingGate = vi.fn(async () => {});
+    setKernelIAMRuntime(iamCheck, true);
+    registerHandler("test.billing_bypass", async () => handler);
+    setBillingAdmissionGate(billingGate);
+
+    const out = await invoke("test.billing_bypass", { value: "accepted" }, ctx);
+
+    expect(out).toEqual({ value: "accepted" });
+    expect(iamCheck).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(billingGate).not.toHaveBeenCalled();
   });
 
   it("invokes the registered gate for a scoped capability carrying an orgId", async () => {
@@ -946,14 +997,29 @@ describe("invoke() agent-run enforcement", () => {
     },
   });
 
+  /**
+   * A governed agent run persists one immutable authorization_decisions row per
+   * operation; the kernel fails closed when the IAM runtime returns none. These
+   * stubs therefore carry a decision reference, exactly as the real
+   * @oxagen/iam adapter does.
+   */
+  const decision: AuthorizationDecisionRef = {
+    publicId: "azd_kernel_test",
+    outcome: "deny",
+    decisionDigest: `sha256:${"3".repeat(64)}`,
+    denyGeneration: { org: 1, workspace: 2 },
+    decidedAt: "2026-07-21T12:00:00.000Z",
+  };
   const denyFn: KernelIAMCheckFn = async () => ({
     outcome: "deny",
     reason: "no_grant",
     principal: null,
+    decision,
   });
   const pendingFn: KernelIAMCheckFn = async () => ({
     outcome: "pending_approval",
     principal: null,
+    decision: { ...decision, outcome: "approval_pending" },
   });
 
   afterEach(() => {
@@ -1004,15 +1070,140 @@ describe("invoke() agent-run enforcement", () => {
     expect(creator).toHaveBeenCalledTimes(1);
   });
 
-  it("still allows an allowed agent-run invocation", async () => {
+  it("still allows an allowed agent-run invocation, and hands the handler its decision reference", async () => {
+    const allowDecision: AuthorizationDecisionRef = {
+      ...decision,
+      outcome: "allow",
+    };
     setKernelIAMRuntime(
-      async () => ({ outcome: "allow", principal: null }),
+      async () => ({
+        outcome: "allow",
+        principal: null,
+        decision: allowDecision,
+      }),
+      false,
+    );
+    echoCap();
+    let seen: AuthorizationDecisionRef | undefined;
+    registerHandler("test.echo", async () => async (input, checkedCtx) => {
+      seen = checkedCtx.authorizationDecision;
+      return input;
+    });
+
+    const out = await invoke("test.echo", { value: "ok" }, agentRunCtx());
+    expect(out).toEqual({ value: "ok" });
+    expect(seen).toEqual(allowDecision);
+  });
+
+  it("attaches the decision reference to the thrown CapabilityError on a deny", async () => {
+    setKernelIAMRuntime(denyFn, /* enforced */ false);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    let thrown: unknown;
+    try {
+      await invoke("test.echo", { value: "x" }, agentRunCtx());
+    } catch (err) {
+      thrown = err;
+    }
+    expect((thrown as CapabilityError).decision).toEqual(decision);
+  });
+
+  it("FAILS CLOSED when the IAM runtime persisted no decision row", async () => {
+    // An allow with no decision reference: the operation would be unrecorded,
+    // and an unrecorded decision is not an allowed one.
+    setKernelIAMRuntime(
+      async () => ({ outcome: "allow", principal: null, decision: null }),
+      false,
+    );
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    await expect(
+      invoke("test.echo", { value: "x" }, agentRunCtx()),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+  });
+
+  it("REJECTS a caller-supplied authorizationDecision — the binding is platform-created", async () => {
+    setKernelIAMRuntime(
+      async () => ({ outcome: "allow", principal: null, decision }),
+      false,
+    );
+    echoCap();
+    let handlerRan = false;
+    registerHandler("test.echo", async () => async (input) => {
+      handlerRan = true;
+      return input;
+    });
+
+    const forged = {
+      ...agentRunCtx(),
+      authorizationDecision: decision,
+    } as CapabilityContext;
+
+    await expect(
+      invoke("test.echo", { value: "forged" }, forged),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handlerRan).toBe(false);
+  });
+
+  it("REJECTS a hand-rolled deployedAgentInvocation, and accepts a kernel-minted one", async () => {
+    setKernelIAMRuntime(
+      async () => ({ outcome: "allow", principal: null, decision }),
       false,
     );
     echoCap();
     registerHandler("test.echo", async () => async (input) => input);
 
-    const out = await invoke("test.echo", { value: "ok" }, agentRunCtx());
+    const principal = {
+      id: "00000000-0000-0000-0000-0000000000a2",
+      kind: "human" as const,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    };
+    const agentPrincipal = {
+      id: "00000000-0000-0000-0000-0000000000a1",
+      kind: "agent" as const,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    };
+
+    // A structurally identical object that the kernel did not mint.
+    const forged = {
+      ...ctx,
+      deployedAgentInvocation: {
+        principalKind: "deployed_agent_invocation",
+        initiatingPrincipal: principal,
+        agentPrincipal,
+        agentId: "agt_forged",
+        agentVersionId: "00000000-0000-0000-0000-0000000000a3",
+        agentVersionChecksum: `sha256:${"4".repeat(64)}`,
+      },
+    } as unknown as CapabilityContext;
+
+    await expect(
+      invoke("test.echo", { value: "forged" }, forged),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+
+    const minted = createDeployedAgentInvocationContext({
+      initiatingPrincipal: principal,
+      agentPrincipal,
+      agentId: "agt_real",
+      agentVersionId: "00000000-0000-0000-0000-0000000000a3",
+      agentVersionChecksum: `sha256:${"4".repeat(64)}`,
+    });
+    expect(isKernelIssuedDeployedAgentInvocation(minted)).toBe(true);
+
+    const out = await invoke(
+      "test.echo",
+      { value: "ok" },
+      { ...ctx, deployedAgentInvocation: minted },
+    );
     expect(out).toEqual({ value: "ok" });
   });
 

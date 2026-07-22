@@ -1,7 +1,15 @@
 # /goal — Oxagen v2 Multi-Source Knowledge Graph Platform
 
 **Date:** 2026-06-10  
-**Status:** Architecture & design complete. Ready for implementation.
+**Status:** Superseded for launch; retained as historical design evidence.
+
+> **Superseded for launch (2026-07-21).** This design is retained as historical
+> context, not as the current launch contract. Generic graph mutation/raw Cypher,
+> central source-file/symbol/chunk ingestion, and confidence-based auto-accept are
+> retired. Exact code graphs stay local; Oxagen keeps governed source facts and
+> stable provider metadata. Canonical protected/default-ref topology and a typed
+> evidence ledger are follow-ups. The legacy semantic-edge infer/review family is
+> retired; a future candidate model requires a new governed specification.
 
 ---
 
@@ -125,19 +133,11 @@ Bridge between the plugin registry and dynamic form rendering.
 
 ---
 
-### Domain: `semantic.edge.*` (Cross-Source Inference)
+### Retired domain: Cross-source semantic-edge inference
 
-LLM-driven semantic relationship extraction across any workspace nodes.
+This historical design proposed LLM-driven relationship extraction across workspace nodes. The entire infer/review capability family is retired for launch and must not be reimplemented from this document.
 
-| Contract | Mode | Purpose |
-|---|---|---|
-| `semantic.edge.infer` | async | Run LLM inference to link nodes across sources with confidence scores |
-| `semantic.edge.list` | sync | Browse inferred edges, filter by type/source/confidence |
-| `semantic.edge.suggest` | sync | Non-writing candidates for UI review (approval flow) |
-
-**Surfaces:** API, MCP, Agent  
-**Scope:** Workspace-scoped  
-**Key:** Reads custom prompts from connector config; no hard-coded edge types
+**Launch disposition:** no API, MCP, agent, CLI, or app surface. A replacement must define attributable candidate records, explicit approval authority, audit events, invalidation, and revocation before relationships are materialized.
 
 ---
 
@@ -364,13 +364,9 @@ Each customer defines their own ontology via these prompts. **The platform is ag
 - Extend `ingestion.github-parse-file.ts` to read `ontologyPrompt` from connection config and pass to LLM
 - Extend `ingestion.github-infer-features.ts` (and add cross-source inference worker) to read `semanticEdgePrompt` and infer edges per-source
 
-### Phase 5: Semantic Edge Inference (Weeks 9–10)
+### Phase 5: Semantic Edge Inference (retired)
 
-**Deliverables:**
-- Implement `semantic.edge.infer` contract handler (async job queue + Inngest)
-- Implement `semantic.edge.list`, `semantic.edge.suggest` contract handlers
-- LLM inference: read node embeddings, compute cosine similarity, call LLM for relationship typing, write edges to Neo4j
-- Approval UI: Show suggested edges below threshold; user approves or dismisses
+**Launch disposition:** do not implement these deliverables. Relationship inference and its review UI require a replacement governed-candidate specification.
 
 ### Phase 6: Partner Plugin Support (Weeks 11–12)
 
@@ -478,7 +474,7 @@ A SaaS company has:
        - LLM searches existing workspace graph for Feature matching "OAuth login" inferred from code
        - **Inference flags this as a candidate cross-source edge:** `GoogleDoc -[specifies]-> Feature`
        - Score: 0.92 confidence (high match on feature name + PR number)
-       - **Since confidence > 0.80 threshold:** Auto-accept edge, write to Neo4j
+       - **Rejected historical behavior:** the draft would have written the edge when confidence exceeded 0.80. Launch does not materialize model-generated relationships.
 
 ### Cross-Source Inference (Bonus Round)
 
@@ -511,7 +507,7 @@ Admin manually triggers: `semantic.edge.infer` with parameters:
    - GoogleDoc node properties (title, content excerpt, author)
    - Shared context (who authored the PR, who wrote the doc, any overlapping terms)
 4. LLM outputs: `{ edgeType: "specified_by", confidence: 0.89 }`
-5. If confidence > threshold (0.82), edge is auto-committed; if below, edge is marked for user review
+5. **Rejected historical behavior:** the draft used confidence to choose auto-commit versus review. Launch exposes neither path.
 
 ### Graph Outcome
 
@@ -523,7 +519,7 @@ Admin manually triggers: `semantic.edge.infer` with parameters:
 
 **Edges:**
 - Feature -[IMPLEMENTED_BY]-> PullRequest (inferred by GitHub inference)
-- Feature -[SPECIFIED_BY]-> GoogleDoc (inferred by cross-source semantic inference, auto-accepted at 0.92 confidence)
+- Feature -[SPECIFIED_BY]-> GoogleDoc (historical proposed relationship; not a launch materialization path)
 - Service -[DEPENDS_ON]-> Service { name: "database" } (inferred from code)
 - PullRequest -[AUTHORED_BY]-> GithubUser (extracted)
 
@@ -644,13 +640,13 @@ Agent now has rich context: code implementation + design intent + architecture, 
 
 ---
 
-## Next Steps (After Design Approval)
+## Historical next steps (retired)
 
 1. **Kick off Phase 1** (Week 1): Contract definitions + API routes
 2. **Parallel Phase 2** (Week 3): YAML schema system + migration scripts
 3. **Parallel Phase 3** (Week 5): Dynamic form renderer + test coverage
 4. **Phase 4** (Week 7): Pipeline filter enforcement + prompt injection
-5. **Phase 5** (Week 9): Semantic edge inference + approval UI
+5. **Phase 5** (retired): relationship inference and approval UI require a replacement governed-candidate specification
 6. **Phase 6** (Week 11): Partner plugin docs + example
 7. **Ship** (Week 13): Roll out with feature flags, monitor adoption
 

@@ -33,12 +33,17 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
-import { parseFrontmatter, parseToolList } from "../agents/loader.js";
+import { parseArtifactToml } from "@oxagen/agent-artifacts";
 import { WORKSPACE_SKILL_DIRS, USER_SKILL_DIRS } from "../skills/loader.js";
 import { resolveWorkspaceConfig } from "./resolve.js";
 import { loadSettings, type SettingsScope } from "../settings/resolve.js";
 import { checkServer } from "../mcp/client.js";
-import type { ConfigScope, ConsolidatedConfig, SourceCategories, WorkspaceConfig } from "./schema.js";
+import type {
+  ConfigScope,
+  ConsolidatedConfig,
+  SourceCategories,
+  WorkspaceConfig,
+} from "./schema.js";
 
 export interface BuildIndexOptions {
   /** Override ~/.oxagen/managed.json (testing) — threaded to resolveWorkspaceConfig. */
@@ -64,18 +69,18 @@ const DEFAULT_WORKSPACE_SOURCES: Required<SourceCategories> = {
   conventions: ["CLAUDE.md", "AGENTS.md", ".cursorrules", ".cursor/rules/**"],
   // Single source of truth for the skill scan set — shared with skills/loader.ts.
   skills: [...WORKSPACE_SKILL_DIRS],
-  agents: [".claude/agents", ".oxagen/agents", ".cursor/agents"],
+  agents: [".oxagen/agents"],
   mcp: [".mcp.json", ".cursor/mcp.json", ".oxagen/settings.json"],
-  commands: [".claude/commands", ".oxagen/commands"],
+  commands: [".oxagen/commands"],
   tools: [".oxagen/tools"],
 };
 
 const DEFAULT_USER_SOURCES: Required<SourceCategories> = {
   conventions: ["~/.claude/CLAUDE.md"],
   skills: [...USER_SKILL_DIRS],
-  agents: ["~/.claude/agents", "~/.oxagen/agents"],
+  agents: ["~/.config/oxagen/agents"],
   mcp: ["~/.claude.json", "~/.cursor/mcp.json"],
-  commands: ["~/.claude/commands"],
+  commands: ["~/.config/oxagen/commands"],
   tools: ["~/.oxagen/tools"],
 };
 
@@ -87,7 +92,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /** Resolve one `sources` entry to an absolute path: "~/…" via homeDir, else relative to baseDir. */
-function resolveSourcePath(baseDir: string, entry: string, homeDir: string): string {
+function resolveSourcePath(
+  baseDir: string,
+  entry: string,
+  homeDir: string,
+): string {
   if (entry === "~") return homeDir;
   if (entry.startsWith("~/")) return join(homeDir, entry.slice(2));
   if (entry.startsWith("/")) return entry;
@@ -142,15 +151,25 @@ function walkFiles(dir: string): string[] {
 }
 
 /** Resolve `sources.*.conventions` entries (files, dirs, or trailing "/**") to concrete files. */
-function scanConventionFiles(baseDir: string, homeDir: string, entries: string[]): string[] {
+function scanConventionFiles(
+  baseDir: string,
+  homeDir: string,
+  entries: string[],
+): string[] {
   const files = new Set<string>();
   for (const raw of entries) {
     const recursive = raw.endsWith("/**");
-    const target = resolveSourcePath(baseDir, recursive ? raw.slice(0, -3) : raw, homeDir);
+    const target = resolveSourcePath(
+      baseDir,
+      recursive ? raw.slice(0, -3) : raw,
+      homeDir,
+    );
     const st = safeStat(target);
     if (!st) continue;
     if (st.isFile()) files.add(target);
-    else if (st.isDirectory()) for (const f of recursive ? walkFiles(target) : listFiles(target)) files.add(f);
+    else if (st.isDirectory())
+      for (const f of recursive ? walkFiles(target) : listFiles(target))
+        files.add(f);
   }
   return [...files].sort();
 }
@@ -176,7 +195,7 @@ function scanConventions(
   }
 }
 
-/** A skill = a directory containing SKILL.md with `name`/`description` frontmatter. */
+/** A skill = a directory containing one canonical skill.toml manifest. */
 function scanSkills(
   baseDir: string,
   homeDir: string,
@@ -188,7 +207,7 @@ function scanSkills(
   for (const entry of entries) {
     const dir = resolveSourcePath(baseDir, entry, homeDir);
     for (const skillDir of listDirs(dir)) {
-      const manifest = join(skillDir, "SKILL.md");
+      const manifest = join(skillDir, "skill.toml");
       if (!existsSync(manifest)) continue;
       let raw: string;
       try {
@@ -196,12 +215,18 @@ function scanSkills(
       } catch {
         continue;
       }
-      const { data } = parseFrontmatter(raw);
+      let artifact;
+      try {
+        artifact = parseArtifactToml(raw);
+      } catch {
+        continue;
+      }
+      if (artifact.kind !== "skill") continue;
       out.push({
-        name: data["name"] || basename(skillDir),
+        name: artifact.name,
         scope,
         path: skillDir,
-        description: data["description"] || undefined,
+        description: artifact.description,
       });
       sourceFiles.push({ path: manifest, scope, kind: "skills" });
     }
@@ -209,7 +234,7 @@ function scanSkills(
   return out;
 }
 
-/** Named agents = `.md` files with frontmatter, same shape `../agents/loader.js` reads. */
+/** Named agents = canonical `.toml` files. */
 function scanAgents(
   baseDir: string,
   homeDir: string,
@@ -221,24 +246,34 @@ function scanAgents(
   for (const entry of entries) {
     const dir = resolveSourcePath(baseDir, entry, homeDir);
     for (const file of listFiles(dir)) {
-      if (!file.endsWith(".md")) continue;
+      if (!file.endsWith(".toml")) continue;
       let raw: string;
       try {
         raw = readFileSync(file, "utf8");
       } catch {
         continue;
       }
-      const { data, body } = parseFrontmatter(raw);
-      const name = data["name"] || basename(file).replace(/\.md$/, "");
-      if (!name || !body.trim()) continue; // matches loader.ts's usable-agent check
-      out.push({ name, scope, path: file, tools: parseToolList(data["tools"]) });
+      let artifact;
+      try {
+        artifact = parseArtifactToml(raw);
+      } catch {
+        continue;
+      }
+      if (artifact.kind !== "agent" || artifact.unresolved_tools.length > 0)
+        continue;
+      out.push({
+        name: artifact.name,
+        scope,
+        path: file,
+        tools: artifact.tools,
+      });
       sourceFiles.push({ path: file, scope, kind: "agents" });
     }
   }
   return out;
 }
 
-/** Slash commands = `.md` files with frontmatter, same shape `../slash/loader.js` reads. */
+/** Slash commands = canonical `.toml` files. */
 function scanCommands(
   baseDir: string,
   homeDir: string,
@@ -250,17 +285,21 @@ function scanCommands(
   for (const entry of entries) {
     const dir = resolveSourcePath(baseDir, entry, homeDir);
     for (const file of listFiles(dir)) {
-      if (!file.endsWith(".md")) continue;
+      if (!file.endsWith(".toml")) continue;
       let raw: string;
       try {
         raw = readFileSync(file, "utf8");
       } catch {
         continue;
       }
-      const { data, body } = parseFrontmatter(raw);
-      const name = data["name"] || basename(file).replace(/\.md$/, "");
-      if (!name || !body.trim()) continue;
-      out.push({ name, scope, path: file });
+      let artifact;
+      try {
+        artifact = parseArtifactToml(raw);
+      } catch {
+        continue;
+      }
+      if (artifact.kind !== "command") continue;
+      out.push({ name: artifact.name, scope, path: file });
       sourceFiles.push({ path: file, scope, kind: "commands" });
     }
   }
@@ -286,7 +325,11 @@ function scanCustomTools(
       } catch {
         continue;
       }
-      const name = (isRecord(parsed) && typeof parsed["name"] === "string" && parsed["name"]) || basename(file).replace(/\.json$/, "");
+      const name =
+        (isRecord(parsed) &&
+          typeof parsed["name"] === "string" &&
+          parsed["name"]) ||
+        basename(file).replace(/\.json$/, "");
       out.push({ name, scope, schema: parsed });
       sourceFiles.push({ path: file, scope, kind: "tools" });
     }
@@ -327,7 +370,12 @@ async function scanMcpServers(
     sourceFiles.push({ path: file, scope, kind: "mcp" });
     for (const [name, raw] of Object.entries(parsed["mcpServers"])) {
       if (!isRecord(raw)) continue;
-      const transport = typeof raw["command"] === "string" ? "stdio" : typeof raw["url"] === "string" ? "streamable-http" : undefined;
+      const transport =
+        typeof raw["command"] === "string"
+          ? "stdio"
+          : typeof raw["url"] === "string"
+            ? "streamable-http"
+            : undefined;
       out.push({ name, scope, transport });
     }
   }
@@ -335,13 +383,30 @@ async function scanMcpServers(
   // Oxagen's own settings.json dialect — fully typed, reuses the existing
   // multi-scope resolver (user < project < local) instead of re-parsing.
   if (workspaceEntries.some((e) => e.endsWith(".oxagen/settings.json"))) {
-    const { settings, scopes } = loadSettings({ cwd, userSettingsPath: opts.userSettingsPath, noCache: true });
-    const toConfigScope: Record<SettingsScope, ConfigScope> = { user: "user", project: "workspace", local: "workspace" };
+    const { settings, scopes } = loadSettings({
+      cwd,
+      userSettingsPath: opts.userSettingsPath,
+      noCache: true,
+    });
+    const toConfigScope: Record<SettingsScope, ConfigScope> = {
+      user: "user",
+      project: "workspace",
+      local: "workspace",
+    };
     const definedIn = new Map<string, SettingsScope>();
     for (const sf of scopes) {
-      if (!sf.settings?.mcpServers || Object.keys(sf.settings.mcpServers).length === 0) continue;
-      sourceFiles.push({ path: sf.path, scope: toConfigScope[sf.scope], kind: "mcp" });
-      for (const name of Object.keys(sf.settings.mcpServers)) definedIn.set(name, sf.scope);
+      if (
+        !sf.settings?.mcpServers ||
+        Object.keys(sf.settings.mcpServers).length === 0
+      )
+        continue;
+      sourceFiles.push({
+        path: sf.path,
+        scope: toConfigScope[sf.scope],
+        kind: "mcp",
+      });
+      for (const name of Object.keys(sf.settings.mcpServers))
+        definedIn.set(name, sf.scope);
     }
     for (const [name, config] of Object.entries(settings.mcpServers ?? {})) {
       const scope = toConfigScope[definedIn.get(name) ?? "project"];
@@ -363,22 +428,34 @@ async function scanMcpServers(
 }
 
 /** `conventionsByLanguage` is derived from the already-resolved `languages[*].items` (kind: "convention"). */
-function buildConventionsByLanguage(resolved: WorkspaceConfig): Record<string, string[]> {
+function buildConventionsByLanguage(
+  resolved: WorkspaceConfig,
+): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [lang, entry] of Object.entries(resolved.languages ?? {})) {
-    const ids = (entry.items ?? []).filter((i) => i.kind === "convention").map((i) => i.id);
+    const ids = (entry.items ?? [])
+      .filter((i) => i.kind === "convention")
+      .map((i) => i.id);
     if (ids.length > 0) out[lang] = ids;
   }
   return out;
 }
 
 /** Precedence-aware dedupe by `name`: workspace beats user (repo > workspace > user > org if ever present). */
-function dedupeByName<T extends { name: string; scope: ConfigScope }>(items: T[]): T[] {
-  const rank: Record<ConfigScope, number> = { org: 0, user: 1, workspace: 2, repo: 3 };
+function dedupeByName<T extends { name: string; scope: ConfigScope }>(
+  items: T[],
+): T[] {
+  const rank: Record<ConfigScope, number> = {
+    org: 0,
+    user: 1,
+    workspace: 2,
+    repo: 3,
+  };
   const byName = new Map<string, T>();
   for (const item of items) {
     const existing = byName.get(item.name);
-    if (!existing || rank[item.scope] >= rank[existing.scope]) byName.set(item.name, item);
+    if (!existing || rank[item.scope] >= rank[existing.scope])
+      byName.set(item.name, item);
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -390,7 +467,10 @@ function dedupeByName<T extends { name: string; scope: ConfigScope }>(items: T[]
  * scope-attributed capability index (design.md §5). Pure — does not write
  * anything; pair with `config/write.ts`'s `writeConsolidated` to persist.
  */
-export async function buildConsolidatedIndex(cwd: string, opts: BuildIndexOptions = {}): Promise<ConsolidatedConfig> {
+export async function buildConsolidatedIndex(
+  cwd: string,
+  opts: BuildIndexOptions = {},
+): Promise<ConsolidatedConfig> {
   const resolved = resolveWorkspaceConfig(cwd, {
     managedConfigPath: opts.managedConfigPath,
     userConfigPath: opts.userConfigPath,
@@ -401,8 +481,14 @@ export async function buildConsolidatedIndex(cwd: string, opts: BuildIndexOption
   const scanWorkspace = scanScopes.includes("workspace");
   const scanUser = scanScopes.includes("user");
 
-  const workspaceSources: SourceCategories = { ...DEFAULT_WORKSPACE_SOURCES, ...sources?.workspace };
-  const userSources: SourceCategories = { ...DEFAULT_USER_SOURCES, ...sources?.user };
+  const workspaceSources: SourceCategories = {
+    ...DEFAULT_WORKSPACE_SOURCES,
+    ...sources?.workspace,
+  };
+  const userSources: SourceCategories = {
+    ...DEFAULT_USER_SOURCES,
+    ...sources?.user,
+  };
   const homeDir = opts.userHomeDir ?? homedir();
 
   const sourceFiles: SourceFiles = [];
@@ -412,18 +498,94 @@ export async function buildConsolidatedIndex(cwd: string, opts: BuildIndexOption
   const customTools: CustomTools = [];
 
   if (scanWorkspace) {
-    scanConventions(cwd, homeDir, workspaceSources.conventions ?? [], "workspace", sourceFiles);
-    skills.push(...scanSkills(cwd, homeDir, workspaceSources.skills ?? [], "workspace", sourceFiles));
-    agents.push(...scanAgents(cwd, homeDir, workspaceSources.agents ?? [], "workspace", sourceFiles));
-    commands.push(...scanCommands(cwd, homeDir, workspaceSources.commands ?? [], "workspace", sourceFiles));
-    customTools.push(...scanCustomTools(cwd, homeDir, workspaceSources.tools ?? [], "workspace", sourceFiles));
+    scanConventions(
+      cwd,
+      homeDir,
+      workspaceSources.conventions ?? [],
+      "workspace",
+      sourceFiles,
+    );
+    skills.push(
+      ...scanSkills(
+        cwd,
+        homeDir,
+        workspaceSources.skills ?? [],
+        "workspace",
+        sourceFiles,
+      ),
+    );
+    agents.push(
+      ...scanAgents(
+        cwd,
+        homeDir,
+        workspaceSources.agents ?? [],
+        "workspace",
+        sourceFiles,
+      ),
+    );
+    commands.push(
+      ...scanCommands(
+        cwd,
+        homeDir,
+        workspaceSources.commands ?? [],
+        "workspace",
+        sourceFiles,
+      ),
+    );
+    customTools.push(
+      ...scanCustomTools(
+        cwd,
+        homeDir,
+        workspaceSources.tools ?? [],
+        "workspace",
+        sourceFiles,
+      ),
+    );
   }
   if (scanUser) {
-    scanConventions(homeDir, homeDir, userSources.conventions ?? [], "user", sourceFiles);
-    skills.push(...scanSkills(homeDir, homeDir, userSources.skills ?? [], "user", sourceFiles));
-    agents.push(...scanAgents(homeDir, homeDir, userSources.agents ?? [], "user", sourceFiles));
-    commands.push(...scanCommands(homeDir, homeDir, userSources.commands ?? [], "user", sourceFiles));
-    customTools.push(...scanCustomTools(homeDir, homeDir, userSources.tools ?? [], "user", sourceFiles));
+    scanConventions(
+      homeDir,
+      homeDir,
+      userSources.conventions ?? [],
+      "user",
+      sourceFiles,
+    );
+    skills.push(
+      ...scanSkills(
+        homeDir,
+        homeDir,
+        userSources.skills ?? [],
+        "user",
+        sourceFiles,
+      ),
+    );
+    agents.push(
+      ...scanAgents(
+        homeDir,
+        homeDir,
+        userSources.agents ?? [],
+        "user",
+        sourceFiles,
+      ),
+    );
+    commands.push(
+      ...scanCommands(
+        homeDir,
+        homeDir,
+        userSources.commands ?? [],
+        "user",
+        sourceFiles,
+      ),
+    );
+    customTools.push(
+      ...scanCustomTools(
+        homeDir,
+        homeDir,
+        userSources.tools ?? [],
+        "user",
+        sourceFiles,
+      ),
+    );
   }
 
   const mcpServers = await scanMcpServers(
@@ -431,7 +593,10 @@ export async function buildConsolidatedIndex(cwd: string, opts: BuildIndexOption
     homeDir,
     scanWorkspace ? (workspaceSources.mcp ?? []) : [],
     scanUser ? (userSources.mcp ?? []) : [],
-    { liveMcpTools: opts.liveMcpTools ?? false, userSettingsPath: opts.userSettingsPath },
+    {
+      liveMcpTools: opts.liveMcpTools ?? false,
+      userSettingsPath: opts.userSettingsPath,
+    },
     sourceFiles,
   );
 
@@ -443,6 +608,8 @@ export async function buildConsolidatedIndex(cwd: string, opts: BuildIndexOption
     commands: dedupeByName(commands),
     customTools: dedupeByName(customTools),
     conventionsByLanguage: buildConventionsByLanguage(resolved.config),
-    sourceFiles: sourceFiles.sort((a, b) => a.path.localeCompare(b.path) || a.scope.localeCompare(b.scope)),
+    sourceFiles: sourceFiles.sort(
+      (a, b) => a.path.localeCompare(b.path) || a.scope.localeCompare(b.scope),
+    ),
   };
 }

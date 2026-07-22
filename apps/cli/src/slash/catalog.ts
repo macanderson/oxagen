@@ -6,7 +6,7 @@
  *      REPL. Productized.
  *   2. CLI commands             (every `oxagen --help` command, via
  *      describeCliCommands) — discoverable from the REPL. Productized.
- *   3. Custom commands          (.oxagen/commands/*.md and friends, via the
+ *   3. Custom commands          (.oxagen/commands/*.toml, via the
  *      loader) — user-authored. NOT productized.
  *
  * "Productized" (pre-installed / first-party) entries are flagged so the menu can
@@ -122,6 +122,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[doctor]",
   },
   {
+    name: "import",
+    description: "Scan Claude Code, Codex, Cursor, and legacy Oxagen artifacts",
+    argumentHint: "[--from <platform>] [--dry-run]",
+  },
+  {
     name: "verbose",
     description: "Toggle per-phase timing, token/cost, and tool telemetry",
     argumentHint: "[on|off]",
@@ -193,15 +198,17 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   },
   {
     name: "create-command",
-    description: "Scaffold a custom slash command (.oxagen/commands/<name>.md)",
+    description:
+      "Scaffold a custom slash command (.oxagen/commands/<name>.toml)",
   },
   {
     name: "create-agent",
-    description: "Scaffold a named agent definition (.oxagen/agents/<name>.md)",
+    description:
+      "Scaffold a named agent definition (.oxagen/agents/<name>.toml)",
   },
   {
     name: "create-skill",
-    description: "Scaffold a skill (.oxagen/skills/<name>/SKILL.md)",
+    description: "Scaffold a skill (.oxagen/skills/<name>/skill.toml)",
   },
   {
     name: "create-prompt",

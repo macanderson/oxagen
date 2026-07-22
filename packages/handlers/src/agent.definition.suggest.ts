@@ -9,7 +9,7 @@
  * ontology, de-conflicts a colliding slug) before returning it for review.
  *
  * The HOW of turning a description into a valid config lives in the
- * `create-agent` builtin skill (packages/skills/skills/create-agent.skill.md),
+ * `create-agent` builtin skill (packages/skills/skills/create-agent/skill.toml),
  * loaded as the system prompt, and the candidate assembly + synthesis schema +
  * deterministic repair are shared with `agent.definition.revise` in
  * ./agent-suggest-core.ts — this handler owns only the description prompt and

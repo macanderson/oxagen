@@ -20,8 +20,16 @@ const migrationsRule: Rule = {
 /** A tool set mirroring the engine's names, with trivial executes. */
 function fakeTools(): ToolSet {
   return {
-    read_file: { description: "read", inputSchema: {}, execute: async () => "contents" },
-    edit_file: { description: "edit", inputSchema: {}, execute: async () => "edited" },
+    read_file: {
+      description: "read",
+      inputSchema: {},
+      execute: async () => "contents",
+    },
+    edit_file: {
+      description: "edit",
+      inputSchema: {},
+      execute: async () => "edited",
+    },
   } as unknown as ToolSet;
 }
 
@@ -72,12 +80,21 @@ describe("buildTurnExtras", () => {
     });
     const wrapped = extras.wrapTools(fakeTools());
     // edit_file is present (not filtered) but its execute is now gated.
-    const editExec = (wrapped["edit_file"] as { execute: (i: unknown, o: unknown) => Promise<unknown> })
-      .execute;
-    const denied = await editExec({ path: "migrations/0001_init.sql", old_string: "a", new_string: "b" }, {});
+    const editExec = (
+      wrapped["edit_file"] as {
+        execute: (i: unknown, o: unknown) => Promise<unknown>;
+      }
+    ).execute;
+    const denied = await editExec(
+      { path: "migrations/0001_init.sql", old_string: "a", new_string: "b" },
+      {},
+    );
     expect(String(denied)).toMatch(/den|not allowed|blocked|migrations/i);
     // A non-migrations edit is allowed through to the real execute.
-    const ok = await editExec({ path: "src/app.ts", old_string: "a", new_string: "b" }, {});
+    const ok = await editExec(
+      { path: "src/app.ts", old_string: "a", new_string: "b" },
+      {},
+    );
     expect(ok).toBe("edited");
   });
 
@@ -86,10 +103,21 @@ describe("buildTurnExtras", () => {
       mcpServers: {},
       permissions: { deny: ["Bash(*)"] },
     } as unknown as OxagenSettings;
-    const extras = await buildTurnExtras({ cwd: "/tmp/x", settings, rules: [], gatePermissions: false });
-    const tools = { bash: { description: "b", inputSchema: {}, execute: async () => "ran" } } as unknown as ToolSet;
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings,
+      rules: [],
+      gatePermissions: false,
+    });
+    const tools = {
+      bash: { description: "b", inputSchema: {}, execute: async () => "ran" },
+    } as unknown as ToolSet;
     const wrapped = extras.wrapTools(tools);
-    const bashExec = (wrapped["bash"] as { execute: (i: unknown, o: unknown) => Promise<unknown> }).execute;
+    const bashExec = (
+      wrapped["bash"] as {
+        execute: (i: unknown, o: unknown) => Promise<unknown>;
+      }
+    ).execute;
     // Broker (not this gate) owns settings.permissions, so bash is NOT blocked here.
     expect(await bashExec({ command: "ls" }, {})).toBe("ran");
   });
@@ -99,10 +127,21 @@ describe("buildTurnExtras", () => {
       mcpServers: {},
       permissions: { deny: ["Bash(*)"] },
     } as unknown as OxagenSettings;
-    const extras = await buildTurnExtras({ cwd: "/tmp/x", settings, rules: [], gatePermissions: true });
-    const tools = { bash: { description: "b", inputSchema: {}, execute: async () => "ran" } } as unknown as ToolSet;
+    const extras = await buildTurnExtras({
+      cwd: "/tmp/x",
+      settings,
+      rules: [],
+      gatePermissions: true,
+    });
+    const tools = {
+      bash: { description: "b", inputSchema: {}, execute: async () => "ran" },
+    } as unknown as ToolSet;
     const wrapped = extras.wrapTools(tools);
-    const bashExec = (wrapped["bash"] as { execute: (i: unknown, o: unknown) => Promise<unknown> }).execute;
+    const bashExec = (
+      wrapped["bash"] as {
+        execute: (i: unknown, o: unknown) => Promise<unknown>;
+      }
+    ).execute;
     const out = await bashExec({ command: "ls" }, {});
     expect(String(out)).toMatch(/den|not allowed|blocked/i);
   });
@@ -114,14 +153,14 @@ describe("buildTurnExtras — skills injection", () => {
       name: "deploy",
       description: "Deploy the app safely",
       body: "## Steps\nRun deploy.sh with the staging flag first.",
-      path: "/x/deploy/SKILL.md",
+      path: "/x/deploy/skill.toml",
       source: "test",
     },
     {
       name: "review",
       description: "Review code for defects",
       body: "The full review protocol lives here.",
-      path: "/x/review/SKILL.md",
+      path: "/x/review/skill.toml",
       source: "test",
     },
   ];
@@ -149,7 +188,9 @@ describe("buildTurnExtras — skills injection", () => {
       skills,
       agentSkills: ["deploy"],
     });
-    expect(extras.systemAppend).toContain("Run deploy.sh with the staging flag");
+    expect(extras.systemAppend).toContain(
+      "Run deploy.sh with the staging flag",
+    );
     expect(extras.systemAppend).not.toContain("full review protocol");
   });
 });

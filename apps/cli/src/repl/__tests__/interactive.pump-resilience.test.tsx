@@ -141,7 +141,7 @@ vi.mock("../plan-turn.js", async (importOriginal) => {
 const { ReplApp } = await import("../interactive.js");
 
 // Minimal authenticated session — the REPL requires one (ADR-019 §4) to build
-// the platform AI / graph-sync ports.
+// the platform AI and memory ports.
 const TEST_SESSION = {
   token: "test-token",
   orgSlug: "test-org",

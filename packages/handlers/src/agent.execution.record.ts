@@ -1,7 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentExecutionRecord } from "@oxagen/oxagen/contracts/agent.execution.record";
 import { schema, withTenantDb } from "@oxagen/database";
-import { emitExecutionSyncEvent } from "./agent.execution.sync-event";
 import { logger } from "./logger";
 
 /**
@@ -9,10 +8,9 @@ import { logger } from "./logger";
  * Writes to agent_executions, agent_execution_steps, and agent_tool_calls tables.
  * All three tables use workspace_id in their RLS policies for cross-workspace isolation.
  */
-export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutionRecord> = async (
-  input,
-  ctx,
-) => {
+export const agentExecutionRecordHandler: CapabilityHandler<
+  typeof agentExecutionRecord
+> = async (input, ctx) => {
   const result = await withTenantDb(async (tx) => {
     // 1. Insert root execution record
     const [execution] = await tx
@@ -33,12 +31,17 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         latencyMs: input.latencyMs ?? null,
         inputTokens: input.inputTokens ?? null,
         outputTokens: input.outputTokens ?? null,
-        estimatedCostUsd: input.estimatedCostUsd != null ? String(input.estimatedCostUsd) : null,
-        syncedToGraphAt: null, // Synced asynchronously by Inngest worker
+        estimatedCostUsd:
+          input.estimatedCostUsd != null
+            ? String(input.estimatedCostUsd)
+            : null,
         createdByUserId: ctx.userId ?? null,
         updatedByUserId: ctx.userId ?? null,
       })
-      .returning({ id: schema.agentExecutions.id, createdAt: schema.agentExecutions.createdAt });
+      .returning({
+        id: schema.agentExecutions.id,
+        createdAt: schema.agentExecutions.createdAt,
+      });
 
     if (!execution) throw new Error("execution insert returned no row");
     const executionId = execution.id;
@@ -72,7 +75,9 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
         .returning({ id: schema.agentExecutionSteps.id });
 
       if (stepRows.length !== input.steps.length) {
-        throw new Error("execution step bulk insert returned unexpected row count");
+        throw new Error(
+          "execution step bulk insert returned unexpected row count",
+        );
       }
 
       const toolCallRows = input.steps.flatMap((step, i) =>
@@ -115,26 +120,6 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
       status: input.status,
       createdAt: execution.createdAt,
     };
-  });
-
-  // Mirror the finished run into the knowledge graph as lineage (best-effort,
-  // terminal-only — see emitExecutionSyncEvent). The Postgres row above is the
-  // source of truth; this only enqueues the async Neo4j projection.
-  await emitExecutionSyncEvent({
-    executionId: result.executionId,
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-    status: input.status,
-    originType: input.originType,
-    originId: input.originId,
-    agentId: input.agentId,
-    startedAt: input.startedAt ?? null,
-    completedAt: input.completedAt ?? null,
-    latencyMs: input.latencyMs ?? null,
-    inputTokens: input.inputTokens ?? null,
-    outputTokens: input.outputTokens ?? null,
-    estimatedCostUsd: input.estimatedCostUsd ?? null,
-    steps: input.steps,
   });
 
   return result;

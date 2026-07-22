@@ -3,7 +3,7 @@
  *
  * Verifies:
  * - Reads source connection by public ID and throws if not found
- * - Merges deliveryConfig fields (sync method, filters, inference)
+ * - Merges deliveryConfig fields (sync method and filters)
  * - Preserves existing connector-specific config fields (owner, repo, etc.)
  * - Returns updated values in expected shape
  */
@@ -43,7 +43,11 @@ const BASE_ROW = {
     recordTypeFilters: [] as string[],
     pathFilters: [] as string[],
     labelFilters: [] as string[],
-    semanticInference: { enabled: true, perRecordType: {}, confidenceThreshold: 0.75 },
+    semanticInference: {
+      enabled: true,
+      perRecordType: {},
+      confidenceThreshold: 0.75,
+    },
   } as DeliveryConfig & Record<string, unknown>,
   updatedAt: new Date("2024-01-01"),
 };
@@ -60,34 +64,36 @@ type SetPatch = { deliveryConfig?: DeliveryConfig & Record<string, unknown> };
 function makeDbMock(row: typeof BASE_ROW | null, updateResult?: unknown) {
   const captured: { set: SetPatch | null } = { set: null };
   let callCount = 0;
-  mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) => {
-    callCount++;
-    if (callCount === 1) {
-      // First call: SELECT
-      const tx: TxLike = {
-        select: vi.fn().mockReturnValue({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(row ? [row] : []),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: TxLike) => Promise<unknown>) => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: SELECT
+        const tx: TxLike = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(row ? [row] : []),
+              }),
             }),
           }),
+          update: vi.fn(),
+        };
+        return fn(tx);
+      }
+      // Second call: UPDATE
+      const tx: TxLike = {
+        select: vi.fn(),
+        update: vi.fn().mockReturnValue({
+          set: vi.fn().mockImplementation((patch: SetPatch) => {
+            captured.set = patch;
+            return { where: vi.fn().mockResolvedValue(updateResult ?? []) };
+          }),
         }),
-        update: vi.fn(),
       };
       return fn(tx);
-    }
-    // Second call: UPDATE
-    const tx: TxLike = {
-      select: vi.fn(),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockImplementation((patch: SetPatch) => {
-          captured.set = patch;
-          return { where: vi.fn().mockResolvedValue(updateResult ?? []) };
-        }),
-      }),
-    };
-    return fn(tx);
-  });
+    },
+  );
   return captured;
 }
 
@@ -103,17 +109,21 @@ describe("integrationConfigureHandler", () => {
     makeDbMock(null);
     await expect(
       integrationConfigureHandler({ integrationId: "intg_missing" }, CTX),
-    ).rejects.toThrow("integration.configure: integration not found: intg_missing");
+    ).rejects.toThrow(
+      "integration.configure: integration not found: intg_missing",
+    );
   });
 
   it("returns updated shape with defaults when no config changes", async () => {
     makeDbMock(BASE_ROW);
-    const result = await integrationConfigureHandler({ integrationId: "intg_abc" }, CTX);
+    const result = await integrationConfigureHandler(
+      { integrationId: "intg_abc" },
+      CTX,
+    );
 
     expect(result.integrationId).toBe("intg_abc");
     expect(result.displayName).toBe("My GitHub Connection");
     expect(result.syncCadence).toBe("manual");
-    expect(result.inferenceEnabled).toBe(true);
     expect(typeof result.updatedAt).toBe("string");
   });
 
@@ -135,15 +145,6 @@ describe("integrationConfigureHandler", () => {
     expect(result.syncCadence).toBe("polling");
   });
 
-  it("applies inferenceEnabled from input", async () => {
-    makeDbMock(BASE_ROW);
-    const result = await integrationConfigureHandler(
-      { integrationId: "intg_abc", inferenceEnabled: false },
-      CTX,
-    );
-    expect(result.inferenceEnabled).toBe(false);
-  });
-
   it("writes DB once (SELECT) when integration not found", async () => {
     makeDbMock(null);
     await expect(
@@ -157,21 +158,6 @@ describe("integrationConfigureHandler", () => {
     makeDbMock(BASE_ROW);
     await integrationConfigureHandler({ integrationId: "intg_abc" }, CTX);
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
-  });
-
-  it("persists ontologyPrompt + semanticEdgePrompt under semanticInference (no silent drop)", async () => {
-    const captured = makeDbMock(BASE_ROW);
-    await integrationConfigureHandler(
-      {
-        integrationId: "intg_abc",
-        ontologyPrompt: "Extract Feature and Service entities only.",
-        semanticEdgePrompt: "Prefer DEPENDS_ON edges between Services.",
-      },
-      CTX,
-    );
-    const persisted = captured.set?.deliveryConfig?.semanticInference;
-    expect(persisted?.ontologyPrompt).toBe("Extract Feature and Service entities only.");
-    expect(persisted?.semanticEdgePrompt).toBe("Prefer DEPENDS_ON edges between Services.");
   });
 
   it("preserves existing prompts when the inputs are omitted", async () => {
@@ -189,19 +175,14 @@ describe("integrationConfigureHandler", () => {
       } as DeliveryConfig & Record<string, unknown>,
     };
     const captured = makeDbMock(rowWithPrompts);
-    await integrationConfigureHandler({ integrationId: "intg_abc", syncCadence: "polling" }, CTX);
-    const persisted = captured.set?.deliveryConfig?.semanticInference;
-    expect(persisted?.ontologyPrompt).toBe("keep me");
-    expect(persisted?.semanticEdgePrompt).toBe("keep me too");
-  });
-
-  it("clears a prompt when an empty string is passed", async () => {
-    const captured = makeDbMock(BASE_ROW);
     await integrationConfigureHandler(
-      { integrationId: "intg_abc", ontologyPrompt: "" },
+      { integrationId: "intg_abc", syncCadence: "polling" },
       CTX,
     );
-    const persisted = captured.set?.deliveryConfig?.semanticInference;
-    expect(persisted?.ontologyPrompt).toBe("");
+    const persisted = captured.set?.deliveryConfig?.semanticInference as
+      | (Record<string, unknown> & { enabled: boolean })
+      | undefined;
+    expect(persisted?.["ontologyPrompt"]).toBe("keep me");
+    expect(persisted?.["semanticEdgePrompt"]).toBe("keep me too");
   });
 });

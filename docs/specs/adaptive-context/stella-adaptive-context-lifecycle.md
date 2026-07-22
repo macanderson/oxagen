@@ -2,7 +2,7 @@
 
 **Status:** Draft architecture specification  
 **Target product:** Stella  
-**Related protocol:** Context Graph Protocol  
+**Related protocol:** Context Graph Exchange Protocol (CGEP; proposed public name, current repository `context-graph-protocol`)  
 **Serialized naming:** lowercase snake_case  
 **Canonical record time fields:** observed_at, valid_from, valid_until
 
@@ -50,9 +50,9 @@ This separation prevents several common failures:
 
 Stella owns learning policy, local storage, trace mining, governance, context
 compilation, prompt rendering, artifact validation, and user experience.
-Context Graph Protocol owns only portable wire semantics, provider capability
-negotiation, temporal and provenance semantics, lifecycle exchange, compact
-frame representations, rehydration, errors, and conformance.
+Context Graph Exchange Protocol owns only portable wire semantics, provider
+capability negotiation, temporal and provenance semantics, lifecycle exchange,
+compact frame representations, rehydration, errors, and conformance.
 
 The architectural rule is:
 
@@ -66,7 +66,7 @@ The complete local-first learning loop is implemented in Stella. A new protocol
 release is not required for Stella to begin extracting observations, compiling
 frames, validating contracts, or governing local directives.
 
-### 2.2 Context Graph Protocol remains general
+### 2.2 Context Graph Exchange Protocol remains general
 
 The protocol may exchange typed records and frame representations, but it does
 not decide:
@@ -82,7 +82,7 @@ not decide:
 
 ### 2.3 The protocol ContextFrame remains canonical
 
-Context Graph Protocol already defines ContextFrame as an atomic provider-returned
+Context Graph Exchange Protocol already defines ContextFrame as an atomic provider-returned
 retrieval item. It remains the canonical protocol frame.
 
 Stella defines a separate CompiledContextFrame: the complete bounded package
@@ -116,19 +116,23 @@ regulated workflows are not the same sequence. Proposals, automatic activations,
 confirmations, publications, rejections, and reversions are immutable
 PromotionEvent records.
 
-### 2.7 Sharing uses user, repository, and organization
+### 2.7 Repository and workspace are distinct sharing boundaries
 
 The canonical SharingScope values are:
 
 - user;
 - repository;
+- workspace;
 - organization.
 
 The UI may label user scope as Personal.
 
-Workspace is an applicability and execution boundary, not a durable sharing
-boundary. Project is not a portable core scope because no universal project
-identity exists.
+Repository is the Git-native collaboration boundary and works without an
+account or service. Workspace is a durable provider-managed collaboration
+boundary with membership and RBAC; Stella uses it only when a provider such as
+Oxagen supplies that capability. Organization is the inherited administrative
+policy boundary. Project is not a portable core scope because no universal
+project identity exists.
 
 ## 3. Goals
 
@@ -160,7 +164,7 @@ identity exists.
 - Uploading traces, preferences, source code, or evidence.
 - Replacing Stella's rule engine, code graph, execution store, or verifier.
 - Making every raw observation retrievable by the model.
-- Defining Stella governance inside Context Graph Protocol.
+- Defining Stella governance inside Context Graph Exchange Protocol.
 - Requiring GitHub, cloud sync, or organization infrastructure.
 - Making cached context snapshots authoritative.
 - Solving authorization through learned directives.
@@ -176,8 +180,8 @@ itself authority.
 | Component | Existing responsibility | Added responsibility |
 | --- | --- | --- |
 | stella-core | Pure agent decisions, mining, rules, budgets | Record semantics, governance decisions, conflict and compaction policy |
-| stella-context | Context SQLite store, temporal graph, memories, retrieval, context-use telemetry | Typed lifecycle records, frame compiler, rehydration, efficacy |
-| stella-store | Executions, events, tools, telemetry, reflections | Read-only evidence source and extraction cursors |
+| stella-context | Context SQLite store, temporal graph, memories, retrieval, context-use telemetry | Typed lifecycle records, extraction cursors, frame compiler, rehydration, efficacy |
+| stella-store | Executions, events, tools, telemetry, reflections | Read-only evidence source |
 | stella-store::journal | Append-only session journal and replay | Idempotent observation extraction source |
 | stella-graph | Source-code graph | Code and Git anchors for observations and frames |
 | stella-pipeline | Triage, plan, witness, execute, verify, judge | Contract matching, deterministic validation, outcome assessment |
@@ -209,6 +213,171 @@ Rules:
 5. Personal records never appear in repository files automatically.
 6. Context snapshots are derived, content-addressed, and disposable.
 7. The same logical record must not have two editable sources of truth.
+
+### 5.3 Stella, the open protocol, and Oxagen
+
+The deployment model is an open local product plus a neutral protocol and an
+optional commercial provider/control plane:
+
+```text
+Stella local/BYOK host and context data plane
+  complete individual learning without an account
+        ^
+        | policy-bound CGEP exchange
+        v
+provider implementations
+        +-- local or third-party provider
+        `-- Oxagen hosted provider and enterprise control plane
+            RBAC, managed workspaces, organization policy, audit, and shared tools
+```
+
+Stella is not an Oxagen thin client. Local context compilation, observations,
+memories, knowledge, user directives, contracts, and repository rules continue
+to work with user-supplied model credentials and no Oxagen identity. The open
+protocol must have a conformance suite and permit non-Oxagen providers.
+
+Oxagen may implement the protocol as a paid provider and add product services
+outside the portable core:
+
+- durable cloud workspace identity and membership;
+- RBAC and organization-policy inheritance;
+- encrypted multi-device and multi-user synchronization through an Oxagen
+  service or a future portable sync capability;
+- shared registries and cross-repository retrieval;
+- audit, retention, residency, key management, and administrative controls;
+- enterprise integrations and managed observability.
+
+Those features do not change the meaning of a ContextRecord. Provider ACLs and
+organization policy narrow what a principal may see or do; they do not grant a
+record greater semantic or tool authority.
+
+Stella uses an explicit export compiler instead of copying local database
+files. Default provider egress is:
+
+| Local source | Local extraction or projection | Default provider egress | Eligible export |
+| --- | --- | --- | --- |
+| context.db | Canonical observations, knowledge, memories, directives, proposals, evidence metadata, contracts, validations, outcomes, promotions, and use events | None until an export profile is enabled | Selected immutable record revisions, typed links, hashes, and bounded safe evidence under sharing and consent policy |
+| store.db and journal | Observations plus evidence locators and hashes | Never raw by default | Locally derived records; raw enterprise telemetry requires a separate visible policy and capability |
+| reflections.jsonl | Candidate memories, knowledge, directives, and record proposals | Never raw by default | Reviewed or policy-eligible derived records, not reflection text by default |
+| Git diffs and codegraph.db | Observations, code anchors, relationships, and content hashes | No source content by default | Selected structural frames or source excerpts only through a separate source-content policy and capability |
+| rules/*.md | Active repository directive revisions | Git remains canonical | Published safe directive content or hashes mirrored from an authorized repository |
+| contracts and validator results | Artifact contracts, contract validations, and outcome assessments | None until selected | Versioned contracts and bounded validation results |
+| context-use telemetry | ContextUse and ContextUseFeedback records; efficacy aggregates remain derived | None until selected | Bounded use records or privacy-preserving aggregates under an explicit evaluation policy |
+| settings.json | No semantic extraction of secrets | Secrets never | Selected non-secret workspace, governance, retention, and export policy |
+| context-snapshots | Disposable compiled projections | Never authoritative | No portable export by default |
+| BYOK credentials and local secrets | None | Never | No protocol export path |
+
+Database files, arbitrary rows, and indexes are never pushed. Stella first
+normalizes local material into typed semantic records, then the export compiler
+selects exact immutable revisions. Extraction and export are separate decisions:
+
+~~~text
+local sources
+  -> local extractors and deterministic projections
+  -> canonical records in context.db
+  -> export policy gates
+       sharing_scope + destination identity
+       sensitivity + consent + retention
+       provider capability + organization policy
+  -> ContextExportManifest
+  -> protocol append
+~~~
+
+Enabling an Oxagen workspace does not retroactively upload the local context
+plane. A user-scoped record may be exported to a user-private provider space
+only with explicit personal-sync consent; it does not become visible to
+workspace members. Sharing a learned record with a workspace or organization
+creates a new governed revision with the corresponding sharing_scope and scope
+identity. Imported organization policy remains provider-authored policy and is
+never reclassified as locally inferred steering.
+
+Every outbound batch has a Stella-owned ContextExportManifest containing:
+
+- export_id and provider_id;
+- destination kind user, workspace, or organization plus the matching identity;
+- purpose and active export-policy version;
+- actor or consent reference;
+- explicit local-to-destination identity mappings and their authority;
+- exact record IDs and hashes;
+- redactions and omitted-field reasons;
+- requested retention and deletion behavior;
+- created_at and batch hash.
+
+Logical shape:
+
+~~~json
+{
+  "schema_version": "1.0-draft",
+  "export_id": "exp_01",
+  "provider_id": "provider_oxagen",
+  "destination": {
+    "kind": "workspace",
+    "id": "wrk_acme_engineering"
+  },
+  "purpose": "shared_workspace_context",
+  "export_policy_version": "policy_7",
+  "actor_ref": "usr_local_01",
+  "consent_ref": "consent_workspace_export_02",
+  "identity_mappings": [
+    {
+      "identity_kind": "user",
+      "source_id": "usr_local_01",
+      "destination_id": "usr_provider_91",
+      "authority_ref": "provider_oxagen"
+    }
+  ],
+  "items": [
+    {
+      "source_record_id": "dir_api_integration_coverage_v2",
+      "source_record_hash": "sha256:source...",
+      "export_record_id": "dir_api_integration_coverage_v3",
+      "export_record_hash": "sha256:export...",
+      "sharing_scope": "workspace",
+      "sensitivity": "internal",
+      "redactions": [],
+      "idempotency_key": "idem_export_01_001",
+      "requested_retention": {
+        "retention_class": "bounded",
+        "retention_until": "2027-07-20T00:00:00Z",
+        "on_expiry": "delete_content_keep_minimal_receipt"
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "record_id": "ev_private_trace_01",
+      "reason": "sensitivity_not_allowed"
+    }
+  ],
+  "batch_hash": "sha256:batch...",
+  "created_at": "2026-07-20T18:00:00Z",
+  "manifest_hash": "sha256:manifest..."
+}
+~~~
+
+batch_hash covers the ordered item source/export IDs and hashes,
+idempotency keys, and requested retention objects. manifest_hash covers RFC
+8785 JCS of the complete manifest with manifest_hash omitted. At least one of
+actor_ref or consent_ref is required; a widening export requires a current
+consent_ref. Any redaction of canonical record content creates a new derived
+export_record_id and export_record_hash with provenance back to the source. If
+no transformation occurs, source and export identities may be identical. The
+exporter never changes bytes while retaining the source hash.
+
+The manifest is inspectable before first export and auditable afterward. Enabling
+an export profile authorizes only future exports that satisfy that saved policy; widening
+scope, audience, content class, retention, or provider requires a new decision.
+Inbound records retain canonical origin provenance and original hashes.
+Signatures and authenticated-channel facts are stored as detached attestations
+or ingestion-ledger metadata. Unknown or untrusted record kinds remain
+non-instructional.
+
+The draft lifecycle operations provide export and provider retrieval, not a
+complete replication protocol. Oxagen may implement product-specific encrypted
+sync outside the portable core. CGEP must not claim portable synchronization
+until an optional sync capability specifies stable cursors, ordered change
+feeds, acknowledgements, tombstones, conflict handling, deletion propagation,
+and offline replay.
 
 ## 6. Canonical vocabulary
 
@@ -278,7 +447,7 @@ Example: The upstream API remains backward compatible.
 A Decision records a choice, its rationale, considered alternatives, and
 whether it remains current.
 
-Example: Use PostgreSQL rather than DynamoDB for analytics.
+Example: PostgreSQL is the selected analytics database rather than DynamoDB.
 
 Definitions, conventions about reality, and current architecture can normally
 be modeled as facts or decisions. Do not create a new kind for every noun.
@@ -419,7 +588,7 @@ Promotion is not assumed to be a single linear state machine.
 ### 6.11 Context frame terms
 
 - **ContextFrame:** canonical atomic retrieval item defined by Context Graph
-  Protocol.
+  Exchange Protocol.
 - **CompiledContextFrame:** Stella's complete bounded task-specific package.
 - **PromptContext:** the final token-optimized rendering supplied to a model.
 - **FrameManifest:** immutable explanation of inputs, selections, exclusions,
@@ -429,14 +598,44 @@ Promotion is not assumed to be a single linear state machine.
 
 ### 7.1 Primitive rules
 
-- IDs are opaque stable strings.
+- Record IDs are opaque globally unique strings; UUIDv7 is recommended.
+- Durable portable scope IDs are globally unique and authority-qualified.
+  Session, task, and environment IDs are at least globally unique within a
+  declared provider authority. A display name, login, local path, folder name,
+  or remote URL alias is not a portable identity.
 - Timestamps are RFC 3339 UTC strings.
 - Serialized property names are lowercase snake_case.
 - Confidence is an integer from 0 through 100.
 - Half-open intervals use [from, until).
 - Empty strings do not substitute for absent values.
+- Canonical writers omit absent optional properties. Readers may accept JSON
+  null as an input alias for absence and normalize it before hashing.
 - Extension properties are namespaced.
 - Record bodies and evidence are content-addressed when practical.
+- SHA-256 hash strings use the grammar `sha256:<64 lowercase hexadecimal
+  characters>`.
+
+Ellipsized `sha256:...` strings in this document are non-conformant explanatory
+placeholders. Machine-readable schemas, migrations, golden vectors, and
+conformance fixtures must use actual 64-character lowercase hexadecimal
+digests.
+
+Portable Origin values are user, system, observed, inferred, and imported.
+Origin and other source taxonomies are extensible strings; unknown values do
+not increase authority.
+
+Sensitivity is data classification, not audience. Portable values are public,
+internal, confidential, and restricted. SharingScope controls eligible
+audience, while sensitivity may impose stricter storage, transport, and
+redaction requirements. Sensitivity is required before exchange. A legacy or
+local record without it is treated as restricted and cannot be exported until
+a classified immutable revision is created.
+
+Portable Evidence trust values are user_statement, workspace_artifact,
+deterministic_result, authenticated_policy, external_source, and
+model_inference. Portable retention values are ephemeral, bounded, durable, and
+audit_hold. Unknown values receive the least-trusted, shortest-retention safe
+behavior until policy recognizes them.
 
 ### 7.2 Scope
 
@@ -445,14 +644,22 @@ Scope answers: Where does this record apply?
 ~~~json
 {
   "user_id": "usr_01",
-  "organization_id": "org_oxagen",
+  "organization_id": "org_acme",
   "repository_id": "repo_stella",
-  "workspace_id": "wrk_feature_checkout",
+  "workspace_id": "wrk_acme_engineering",
   "environment_id": "env_local",
   "session_id": "ses_01",
   "task_id": "task_01"
 }
 ~~~
+
+The shortened IDs in explanatory examples are placeholders. Conformant records
+use globally unique authority-qualified values, such as provider-issued UUID
+URNs. A receiver preserves source scope IDs and never infers principal equality
+from matching labels. Any binding to a destination user, repository, workspace,
+or organization is an explicit authorized identity mapping recorded in the
+ContextExportManifest or provider receipt. Mapping does not mutate the source
+record or hash.
 
 Definitions:
 
@@ -460,8 +667,10 @@ Definitions:
 - organization_id identifies a durable administrative organization;
 - repository_id identifies a canonical VCS repository independent of branch,
   path, checkout, or worktree;
-- workspace_id identifies the current local or mounted working set and may
-  contain one or more repositories;
+- workspace_id identifies a host-defined working set and may contain one or
+  more repositories. When sharing_scope is workspace, it must resolve to a
+  durable access-controlled provider workspace. An ephemeral checkout may be
+  an applicability boundary but cannot define a shared audience;
 - environment_id identifies runtime context such as local, staging, or
   production;
 - session_id identifies one agent session;
@@ -469,7 +678,7 @@ Definitions:
 
 Project is not a portable core field. If a host has a canonical cross-repository
 project registry, it may use a namespaced extension such as
-extensions.oxagen.project_id. A directory name, IDE project, or GitHub Project
+extensions.example.project_id. A directory name, IDE project, or GitHub Project
 must never be silently treated as the same identity.
 
 An unscoped inferred record is invalid. Scope never widens automatically.
@@ -482,19 +691,35 @@ Allowed values:
 
 - user: private to the identified user;
 - repository: shareable through explicit repository publication;
+- workspace: shareable with members of an identified durable workspace under
+  provider RBAC;
 - organization: inherited from or published through approved organization
   policy.
 
-Workspace is not a SharingScope. A workspace is an execution boundary and can
-be ephemeral.
+Repository and workspace are not synonyms. A repository is a VCS identity and
+offline Git publication channel. A workspace is a provider-managed working set
+and security principal that may contain several repositories or external
+resources. Ephemeral local working directories do not qualify as shareable
+workspaces.
+
+SharingScope values are not a universal linear hierarchy. Every audience change
+is explicit. A user-shared record requires scope.user_id, repository requires
+scope.repository_id, workspace requires scope.workspace_id, and organization
+requires scope.organization_id. Provider ACLs may narrow access further but
+never broaden the declared sharing boundary.
 
 ### 7.4 Temporal fields
 
 Claim-bearing records use:
 
-- observed_at: when Stella first recorded this version of the claim;
+- observed_at: when this revision entered its origin observer's knowledge;
 - valid_from: when the claim became applicable in the represented world;
 - valid_until: exclusive end of applicability, or absent when unknown.
+
+Stella preserves canonical observed_at when it imports a record. The local
+ingestion ledger records received_at separately so a historical Stella query
+can reconstruct when that imported record became available to Stella without
+rewriting the source record or its hash.
 
 Event records require observed_at and use valid_from or valid_until only when
 the event describes a real applicability interval.
@@ -516,8 +741,8 @@ Point-in-time reconstruction:
 }
 ~~~
 
-This means: return records Stella knew by July 20 that were applicable on July
-15.
+This means: return records available to the answering Stella store by July 20
+that were applicable on July 15.
 
 Range filtering:
 
@@ -538,11 +763,36 @@ Range filtering:
 
 Semantics:
 
-- known_at selects records with observed_at less than or equal to the cutoff;
+- known_at selects records whose provider-local knowledge time is less than or
+  equal to the cutoff;
 - valid_at selects records whose validity contains the instant;
-- observed selects records whose observed_at lies in [from, until);
+- observed selects records whose canonical origin observed_at lies in
+  [from, until);
 - valid_overlaps selects records whose validity interval overlaps the query
   interval.
+
+For Stella, provider-local knowledge time is observed_at for a locally
+originated record and the earliest context_record_ingestions.received_at for an
+imported record. A provider must reject known_at when it cannot reconstruct
+durable local ingestion history; silently falling back to origin observed_at
+would produce false historical results.
+
+Historical reconstruction is prefix-safe:
+
+1. Restrict records and lifecycle events to provider-local knowledge time less
+   than or equal to known_at.
+2. Derive revision and governance state using only that historical prefix.
+3. For each lineage, apply valid_at or valid_overlaps to revision validity.
+4. Select the maximal applicable revision in the prefix according to
+   supersedes_record_id. A later revision learned after known_at cannot alter
+   an earlier reconstruction; a later-valid revision does not erase a prior
+   revision outside its validity interval.
+5. Compute EffectiveStatus from that prefix without mutating canonical rows.
+
+Knowledge, directives, and artifact contracts require valid_from. Event-only
+records without validity are excluded when valid_at or valid_overlaps is
+present unless the query explicitly sets include_records_without_validity to
+true. Event discovery should normally use observed or occurred-time filters.
 
 Do not use valid_after or valid_before without naming which endpoint is tested.
 Those names are ambiguous.
@@ -556,13 +806,16 @@ Those names are ambiguous.
   "lineage_id": "lin_01",
   "record_kind": "knowledge",
   "record_status": "active",
+  "knowledge_kind": "fact",
+  "statement": "The Stella repository uses Markdown rule files.",
+  "origin": "observed",
   "scope": {
     "repository_id": "repo_stella"
   },
   "sharing_scope": "repository",
+  "sensitivity": "internal",
   "observed_at": "2026-07-20T18:00:00Z",
   "valid_from": "2026-07-20T18:00:00Z",
-  "valid_until": null,
   "evidence_links": [
     {
       "evidence_id": "ev_01",
@@ -570,9 +823,15 @@ Those names are ambiguous.
     }
   ],
   "record_links": [],
-  "supersedes_record_id": null,
   "record_hash": "sha256:...",
-  "provenance": {},
+  "provenance": {
+    "origin_provider_id": "provider_stella_local",
+    "origin_authority_id": "authority_device_01",
+    "producer_kind": "agent",
+    "producer_ref": "agent:stella",
+    "derivation_kind": "observed",
+    "source_refs": []
+  },
   "extensions": {}
 }
 ~~~
@@ -591,6 +850,7 @@ Requiredness:
 | observed_at | Required on every record |
 | scope | Required and nonempty on every persisted record |
 | sharing_scope | Required on every persisted record |
+| sensitivity | Required before export; missing legacy or local values are treated as restricted |
 | record_hash | Required on canonical stored or exchanged records |
 | lineage_id | Required on revision-bearing knowledge, memory, directives, proposals, and contracts |
 | record_status | Required on revision-bearing claim or steering records |
@@ -600,18 +860,35 @@ Requiredness:
 | evidence_links | Optional typed relationships to Evidence records |
 | record_links | Optional typed relationships to arbitrary records |
 | supersedes_record_id | Optional immediate predecessor within the same lineage |
-| provenance | Optional only when type-specific actor and source fields fully identify provenance |
+| provenance | Required on exchanged records; local event records may use an equivalent complete type-specific actor/source shape |
 | extensions | Optional namespaced extension object |
 
-`record_hash` is the SHA-256 digest of the canonical record serialization with
-the `record_hash` property itself omitted. All semantic fields, provenance,
-links, and extensions participate. Transport metadata such as an append
-idempotency key does not. An append input may omit the hash and let the provider
-compute it; if supplied, the provider verifies it. Canonical reads emit it.
+`record_hash` uses `sha256:<64 lowercase hex>` and contains the SHA-256 digest
+of RFC 8785 JSON Canonicalization Scheme bytes with the `record_hash` property
+itself omitted.
+Before canonicalization, readers resolve input aliases, omit absent optionals,
+and normalize timestamps to UTC `Z` form with trailing fractional-second zeros
+removed. All semantic fields, provenance, links, and extensions participate.
+Transport metadata such as an append idempotency key does not. An append input
+may omit the hash and let the provider compute it; if supplied, the provider
+verifies it. Canonical reads emit it.
 
-RecordStatus values are active, superseded, retracted, and archived. Expiration
-is derived from valid_until. Staleness is a host retrieval-health assessment,
-not canonical record status.
+`content_hash` is the SHA-256 digest of the exact inline UTF-8 content bytes.
+`canonical_content_hash` is the SHA-256 digest of the exact complete source
+content bytes. Neither uses record canonicalization unless the content itself
+is explicitly defined as canonical JSON.
+
+Stored RecordStatus values are active, retracted, and archived. Every state
+change creates a new immutable revision and leaves earlier bytes and hashes
+unchanged. A later revision identifies its predecessor through
+supersedes_record_id. Therefore superseded is a derived EffectiveStatus for the
+predecessor, not a value written back into it. Expiration is derived from
+valid_until. Staleness is a host retrieval-health assessment, not canonical
+record status.
+
+EffectiveStatus query projections may return active, superseded, retracted,
+archived, or expired. They are computed from revision links, terminal revision
+status, and the query's valid_at. EffectiveStatus is excluded from record_hash.
 
 Fields that have no meaning for a record kind are omitted rather than emitted
 as empty placeholders.
@@ -629,6 +906,78 @@ and source. Additional relations are namespaced extensions. `record_links` is
 reserved for relationships between arbitrary records; do not use a flat list
 of evidence IDs when the evidentiary relationship matters.
 
+EvidenceLink and RecordLink may include provider_id and expected_record_hash.
+When provider_id is omitted, the reference is relative to the enclosing
+record's provenance.origin_provider_id. Consumers verify an expected hash when
+present.
+Globally unique record IDs prevent accidental collision; provider identity and
+hash prevent a reference from silently resolving to substituted content.
+
+### 7.7 Provenance and detached attestation
+
+Portable provenance is stable record content and participates in record_hash:
+
+~~~json
+{
+  "origin_provider_id": "provider_stella_local",
+  "origin_authority_id": "authority_device_01",
+  "producer_kind": "agent",
+  "producer_ref": "agent:stella",
+  "derivation_kind": "observed",
+  "source_refs": [
+    {
+      "source_kind": "journal_entry",
+      "source_id": "journal:ses_01:event_42",
+      "expected_hash": "sha256:source..."
+    }
+  ]
+}
+~~~
+
+Core producer_kind values are user, agent, system, provider, and organization.
+Core derivation_kind values are authored, observed, inferred, imported,
+extracted, summarized, and transformed. Unknown values remain non-instructional.
+An exchanged record requires all five scalar fields above; source_refs may be
+empty only for an original authored record.
+
+Top-level origin is the semantic source class for knowledge, memory, directives,
+and contracts; derivation_kind is the concrete production method. Reject
+contradictory combinations:
+
+| origin | Allowed derivation_kind |
+| --- | --- |
+| user | authored, transformed |
+| system | authored, transformed |
+| observed | observed, extracted, transformed |
+| inferred | inferred, summarized, transformed |
+| imported | imported, transformed |
+
+Ordinary receipt of an already canonical external record preserves its existing
+origin and provenance and adds only ingestion metadata; it is not a new
+imported record. origin imported is reserved for a new local record that wraps
+legacy or external material without a preservable canonical semantic origin.
+
+Signatures and receiver authentication are detached because a signature over
+record_hash cannot be inside that hash. An append envelope or provider receipt
+may carry record_attestations with:
+
+~~~json
+{
+  "signed_record_hash": "sha256:record...",
+  "algorithm": "ed25519",
+  "key_id": "key:provider_stella_local:2026-01",
+  "attester_id": "provider_stella_local",
+  "signature": "base64:...",
+  "issued_at": "2026-07-20T18:00:01Z"
+}
+~~~
+
+record_attestations, authenticated_channel_ref, accepted_at, and receipt data
+are transport or ingestion-ledger metadata and are excluded from record_hash.
+They prove integrity or channel identity only; host policy still decides trust,
+authority, sharing, and enforcement. A receiver stores them without rewriting
+the canonical record.
+
 ## 8. Record schemas
 
 ### 8.1 Observation
@@ -640,20 +989,22 @@ of evidence IDs when the evidentiary relationship matters.
   "record_kind": "observation",
   "observation_kind": "artifact_contract_failure",
   "actor_ref": "agent_default",
-  "subject_ref": "contract_brand_kit_v3",
+  "subject_refs": [
+    "contract_brand_kit_v3"
+  ],
   "predicate": "missing_required_artifact",
   "object": {
     "path": "logos/wordmark.svg",
     "requirement_id": "brand_wordmark_svg"
   },
   "source_kind": "artifact_validator",
-  "source_ref": "validation_01",
+  "source_ref": "validation_brand_01",
   "scope": {
     "user_id": "usr_01",
     "repository_id": "repo_brand"
   },
   "sharing_scope": "user",
-  "sensitivity": "private",
+  "sensitivity": "confidential",
   "confidence": 100,
   "evidence_links": [
     {
@@ -682,11 +1033,12 @@ Core observation kinds include:
 - artifact_contract_pass;
 - artifact_contract_failure;
 - git_followup_change;
-- directive_conflict;
-- context_helpful;
-- context_not_helpful.
+- directive_conflict.
 
 Observation kinds are extensible strings. Unknown kinds remain evidence-only.
+Raw user feedback may first be captured as an observation and evidence, but
+only a ContextUseFeedback record linked to an exact use contributes to efficacy
+aggregates.
 
 ### 8.2 Knowledge: fact
 
@@ -720,8 +1072,6 @@ Observation kinds are extensible strings. Unknown kinds remain evidence-only.
   ],
   "observed_at": "2026-07-20T18:00:00Z",
   "valid_from": "2026-07-01T00:00:00Z",
-  "valid_until": null,
-  "supersedes_record_id": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -737,13 +1087,12 @@ Observation kinds are extensible strings. Unknown kinds remain evidence-only.
   "record_status": "active",
   "knowledge_kind": "assumption",
   "statement": "The upstream API remains backward compatible for this change.",
-  "value": {
-    "validation_method": "run_contract_tests",
-    "invalidated_by": "breaking_schema_diff"
-  },
+  "validation_method": "test:contract_tests",
+  "invalidation_condition": "breaking_schema_diff",
   "origin": "inferred",
   "confidence": 60,
   "scope": {
+    "user_id": "usr_01",
     "repository_id": "repo_stella",
     "task_id": "task_01"
   },
@@ -768,15 +1117,13 @@ Assumptions must be visibly labeled in every rendered representation.
   "record_kind": "knowledge",
   "record_status": "active",
   "knowledge_kind": "decision",
-  "statement": "Use PostgreSQL for the analytics service.",
-  "value": {
-    "rationale": "Transactional queries and existing operational expertise.",
-    "alternatives": [
-      "DynamoDB",
-      "ClickHouse"
-    ],
-    "decision_state": "current"
-  },
+  "statement": "PostgreSQL is the selected database for the analytics service.",
+  "rationale": "Transactional queries and existing operational expertise.",
+  "alternatives": [
+    "DynamoDB",
+    "ClickHouse"
+  ],
+  "decision_state": "current",
   "origin": "user",
   "confidence": 100,
   "scope": {
@@ -791,7 +1138,6 @@ Assumptions must be visibly labeled in every rendered representation.
   ],
   "observed_at": "2026-07-20T18:00:00Z",
   "valid_from": "2026-07-20T18:00:00Z",
-  "valid_until": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -819,6 +1165,7 @@ Assumptions must be visibly labeled in every rendered representation.
   "salience": 88,
   "origin": "observed",
   "scope": {
+    "user_id": "usr_01",
     "repository_id": "repo_analytics"
   },
   "sharing_scope": "user",
@@ -836,8 +1183,10 @@ Assumptions must be visibly labeled in every rendered representation.
 ~~~
 
 Memory occurrence fields describe the episode interval. They do not assert that
-every statement in the episode remains currently true. A summary memory lists
-source_memory_ids and identifies its summarizer and content hashes.
+every statement in the episode remains currently true. A summary memory
+requires source_memory_ids, summarizer_ref, summarizer_version, source_set_hash,
+and summary_hash. source_set_hash covers the ordered source record IDs and
+record hashes; summary_hash covers the exact summary UTF-8 bytes.
 
 ### 8.6 Directive
 
@@ -850,19 +1199,18 @@ source_memory_ids and identifies its summarizer and content hashes.
   "record_status": "active",
   "directive_kind": "rule",
   "statement": "API endpoint changes should include integration coverage.",
-  "value": {
-    "applies_when": {
-      "changed_paths": [
-        "src/api/**"
-      ]
-    },
-    "expected_action": "add_or_update_integration_test"
+  "applies_when": {
+    "changed_paths": [
+      "src/api/**"
+    ]
   },
+  "expected_action": "add_or_update_integration_test",
   "origin": "inferred",
   "priority": "high",
   "confidence": 91,
   "enforcement": "advisory",
   "scope": {
+    "user_id": "usr_01",
     "repository_id": "repo_stella"
   },
   "sharing_scope": "user",
@@ -882,9 +1230,7 @@ source_memory_ids and identifies its summarizer and content hashes.
   ],
   "observed_at": "2026-07-20T18:30:00Z",
   "valid_from": "2026-07-20T18:30:00Z",
-  "valid_until": null,
   "review_after": "2027-01-16T18:30:00Z",
-  "supersedes_record_id": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -895,7 +1241,7 @@ Allowed values:
 - origin: user, system, inferred, imported;
 - priority: low, normal, high, critical;
 - enforcement: advisory, blocking;
-- record_status: active, superseded, retracted, archived.
+- record_status: active, retracted, archived.
 
 Invariants:
 
@@ -903,8 +1249,9 @@ Invariants:
 2. Inferred directives never become blocking without explicit confirmation.
 3. User-shared directives never publish automatically.
 4. A repository-shared directive never promotes to organization automatically.
-5. A blocking constraint has an enforceable boundary or explicitly declares
-   that enforcement remains prompt-only.
+5. A blocking directive names enforcement_boundary and enforcer_ref. Portable
+   boundaries are tool, completion, and ci. Prompt-only steering is advisory,
+   not blocking.
 6. Procedures preserve ordered steps.
 7. Preferences never override constraints.
 8. Authorization cannot be granted by a directive.
@@ -920,17 +1267,17 @@ Invariants:
   "record_status": "active",
   "directive_kind": "constraint",
   "statement": "Do not include personally identifiable information in logs.",
-  "value": {
-    "effect": "forbid",
-    "target": "log_output",
-    "condition": "content contains pii"
-  },
+  "constraint_effect": "forbid",
+  "target": "log_output",
+  "condition": "content contains pii",
+  "enforcement_boundary": "tool",
+  "enforcer_ref": "stella_log_guard_v1",
   "origin": "system",
   "priority": "critical",
   "confidence": 100,
   "enforcement": "blocking",
   "scope": {
-    "organization_id": "org_oxagen"
+    "organization_id": "org_acme"
   },
   "sharing_scope": "organization",
   "evidence_links": [
@@ -941,7 +1288,6 @@ Invariants:
   ],
   "observed_at": "2026-07-20T18:00:00Z",
   "valid_from": "2026-07-01T00:00:00Z",
-  "valid_until": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -957,26 +1303,24 @@ Invariants:
   "record_status": "active",
   "directive_kind": "procedure",
   "statement": "Test, inspect failures, obtain approval, then deploy.",
-  "value": {
-    "steps": [
-      {
-        "order": 1,
-        "action": "run_tests"
-      },
-      {
-        "order": 2,
-        "action": "inspect_failures"
-      },
-      {
-        "order": 3,
-        "action": "obtain_approval"
-      },
-      {
-        "order": 4,
-        "action": "deploy"
-      }
-    ]
-  },
+  "steps": [
+    {
+      "order": 1,
+      "action": "run_tests"
+    },
+    {
+      "order": 2,
+      "action": "inspect_failures"
+    },
+    {
+      "order": 3,
+      "action": "obtain_approval"
+    },
+    {
+      "order": 4,
+      "action": "deploy"
+    }
+  ],
   "origin": "user",
   "priority": "high",
   "confidence": 100,
@@ -988,7 +1332,6 @@ Invariants:
   "evidence_links": [],
   "observed_at": "2026-07-20T18:00:00Z",
   "valid_from": "2026-07-20T18:00:00Z",
-  "valid_until": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -1003,16 +1346,17 @@ Invariants:
   "record_kind": "record_proposal",
   "record_status": "active",
   "proposal_kind": "directive",
-  "proposed_record": {
+  "proposed_record_body": {
     "record_kind": "directive",
     "directive_kind": "rule",
     "statement": "API endpoint changes should include integration coverage.",
-    "enforcement": "advisory",
-    "scope": {
-      "repository_id": "repo_stella"
-    },
-    "sharing_scope": "user"
+    "enforcement": "advisory"
   },
+  "proposed_scope": {
+    "user_id": "usr_01",
+    "repository_id": "repo_stella"
+  },
+  "requested_sharing_scope": "user",
   "supporting_observation_ids": [
     "obs_101",
     "obs_118",
@@ -1021,14 +1365,27 @@ Invariants:
   "contradicting_observation_ids": [],
   "distinct_task_count": 3,
   "confidence": 91,
+  "extensions": {
+    "stella": {
+      "scoring_policy_id": "adaptive_context_default",
+      "scoring_policy_version": "1",
+      "score_components": {
+        "independent_support": 92,
+        "contradiction_penalty": 0,
+        "recency": 88,
+        "scope_confidence": 95,
+        "repair_cost": 74
+      }
+    }
+  },
   "proposal_status": "eligible",
   "scope": {
+    "user_id": "usr_01",
     "repository_id": "repo_stella"
   },
   "sharing_scope": "user",
   "observed_at": "2026-07-20T18:30:00Z",
   "proposal_expires_at": "2026-08-19T18:30:00Z",
-  "supersedes_record_id": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -1040,6 +1397,9 @@ Proposal statuses are:
 - dismissed;
 - expired.
 
+Each proposal-status change creates a new immutable RecordProposal revision in
+the same lineage. The previous proposal bytes are never updated.
+
 Activation and rejection are PromotionEvent outcomes, not proposal states.
 This avoids storing the same lifecycle fact in two places. A proposal is
 dismissed only when it should no longer be considered; its immutable promotion
@@ -1049,9 +1409,12 @@ Repeated events from one task do not count as independent support. The default
 promotion threshold counts distinct tasks or episodes unless deterministic
 evidence or explicit user feedback marks one event as sufficiently salient.
 
-The proposal's sharing_scope describes who may see the proposal. The proposed
-record's sharing_scope describes the requested publication boundary. Publishing
-still requires governance.
+The proposal's sharing_scope describes who may see the proposal.
+proposed_record_body is a typed DraftRecordBody and deliberately omits record
+identity, lifecycle time, and hash. proposed_scope describes intended
+applicability. requested_sharing_scope describes the requested audience. An
+accepted host creates the complete immutable ContextRecord; publication still
+requires governance.
 
 ### 8.10 PromotionEvent
 
@@ -1061,7 +1424,8 @@ still requires governance.
   "record_id": "prom_api_tests_01",
   "record_kind": "promotion_event",
   "proposal_id": "prop_api_integration_coverage",
-  "result_record_id": "dir_api_integration_coverage_v1",
+  "source_record_id": "dir_api_integration_coverage_v1",
+  "result_record_id": "dir_api_integration_coverage_v2",
   "action": "confirmed",
   "actor_ref": "usr_01",
   "from_sharing_scope": "user",
@@ -1074,6 +1438,7 @@ still requires governance.
     }
   ],
   "scope": {
+    "user_id": "usr_01",
     "repository_id": "repo_stella"
   },
   "sharing_scope": "user",
@@ -1089,8 +1454,11 @@ promotion_stage field.
 Promotion actions are proposed, auto_activated, confirmed, published,
 rejected, retired, and reverted. `auto_activated` is permitted only for an
 advisory directive under the active governance policy. `confirmed` records an
-explicit user decision. `published` changes a sharing boundary; it does not
-change semantic content.
+explicit user decision. `published` accompanies a new immutable record revision
+whose sharing_scope is the approved destination category; it never mutates the
+source record. The event
+identifies both source_record_id and result_record_id. Changing enforcement,
+scope, sharing, or semantic content likewise requires a new revision and hash.
 
 ### 8.11 Evidence
 
@@ -1110,7 +1478,7 @@ change semantic content.
   "content_hash": "sha256:...",
   "excerpt": "Adds an integration test for the changed route.",
   "trust": "workspace_artifact",
-  "sensitivity": "repository",
+  "sensitivity": "internal",
   "retention": "durable",
   "scope": {
     "repository_id": "repo_stella"
@@ -1149,6 +1517,7 @@ embedding.
   "name": "brand_kit",
   "version": 3,
   "description": "Complete reusable brand-kit deliverable.",
+  "origin": "user",
   "scope": {
     "user_id": "usr_01"
   },
@@ -1219,11 +1588,57 @@ embedding.
         "File inventory"
       ],
       "required": true
+    },
+    {
+      "requirement_id": "brand_manifest",
+      "requirement_kind": "file_exists",
+      "path": "manifest.json",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_preview_sheet",
+      "requirement_kind": "file_exists",
+      "path": "previews/brand-preview.svg",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_social_og",
+      "requirement_kind": "file_exists",
+      "path": "social/og-image.png",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_logos_directory",
+      "requirement_kind": "directory_exists",
+      "path": "logos",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_favicons_directory",
+      "requirement_kind": "directory_exists",
+      "path": "favicons",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_social_directory",
+      "requirement_kind": "directory_exists",
+      "path": "social",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_tokens_directory",
+      "requirement_kind": "directory_exists",
+      "path": "tokens",
+      "required": true
+    },
+    {
+      "requirement_id": "brand_templates_directory",
+      "requirement_kind": "directory_exists",
+      "path": "templates",
+      "required": true
     }
   ],
   "presentation": {
-    "include_manifest": true,
-    "include_preview_sheet": true,
     "directory_order": [
       "logos",
       "favicons",
@@ -1235,7 +1650,6 @@ embedding.
   "record_status": "active",
   "observed_at": "2026-07-20T17:00:00Z",
   "valid_from": "2026-07-20T17:00:00Z",
-  "valid_until": null,
   "record_hash": "sha256:record..."
 }
 ~~~
@@ -1253,9 +1667,41 @@ Core requirement kinds include:
 - command;
 - semantic_judge.
 
+Every requirement has requirement_id, requirement_kind, and required. Core
+kind-specific fields are:
+
+| requirement_kind | Required fields | Optional constraints |
+| --- | --- | --- |
+| file_exists | path | content_hash |
+| directory_exists | path |  |
+| glob_min_count | glob, minimum | maximum |
+| mime_type | path, allowed_mime_types |  |
+| image_dimensions | path | min_width, max_width, min_height, max_height; at least one |
+| file_size | path | min_bytes, max_bytes; at least one |
+| json_schema | path, schema_ref | expected_schema_hash |
+| markdown_sections | path, sections | match_mode: exact or case_insensitive |
+| command | argv, working_directory, timeout_ms, expected_exit_codes | environment_allowlist, output_limit_bytes |
+| semantic_judge | criterion, rubric_ref, judge_policy_ref | minimum_score |
+
+Paths and working_directory are normalized relative paths contained by
+output_root. Command argv is a nonempty string array and never an implicit shell
+string. Unknown requirement kinds are non-executable and fail closed when
+required.
+
 Requirement kinds are extensible. Deterministic validators run before semantic
 judges. A semantic result records model identity, prompt version, input hash,
 cost, and confidence.
+
+An ArtifactContract is data, never execution authorization. A contract with a
+command requirement must carry execution_approval_ref. Stella resolves that ref
+to either an explicit confirmation by the current authorized user or an
+authenticated organization policy that is applicable to the current scope.
+Unknown, inferred, unattested imported, or unresolved approvals remain
+non-executable. The reference still does not grant permission: Stella's
+ordinary tool policy separately authorizes the exact argv, executable, working
+directory, environment, sandbox, timeout, output limit, filesystem/network
+access, and user consent. Receiving, selecting, or exporting a contract cannot
+grant any of those permissions.
 
 ### 8.13 ContractValidation
 
@@ -1264,12 +1710,21 @@ cost, and confidence.
   "schema_version": "1.0-draft",
   "record_id": "validation_brand_01",
   "record_kind": "contract_validation",
-  "contract_id": "contract_brand_kit_v3",
+  "contract_record_id": "contract_brand_kit_v3",
   "contract_version": 3,
+  "contract_hash": "sha256:contract...",
   "task_id": "task_brand_21",
   "artifact_root": "brand/",
+  "artifact_manifest_hash": "sha256:manifest...",
+  "validator_id": "stella_artifact_validator",
+  "validator_version": "1",
   "validation_status": "failed",
   "results": [
+    {
+      "requirement_id": "brand_readme",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
     {
       "requirement_id": "brand_logo_svg",
       "requirement_status": "passed",
@@ -1280,6 +1735,72 @@ cost, and confidence.
       "requirement_status": "failed",
       "method": "deterministic",
       "message": "logos/wordmark.svg was not found"
+    },
+    {
+      "requirement_id": "brand_mark_svg",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_png_variants",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_favicons",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_tokens",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_guidelines",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_manifest",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_preview_sheet",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_social_og",
+      "requirement_status": "failed",
+      "method": "deterministic",
+      "message": "social/og-image.png was not found"
+    },
+    {
+      "requirement_id": "brand_logos_directory",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_favicons_directory",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_social_directory",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_tokens_directory",
+      "requirement_status": "passed",
+      "method": "deterministic"
+    },
+    {
+      "requirement_id": "brand_templates_directory",
+      "requirement_status": "passed",
+      "method": "deterministic"
     }
   ],
   "evidence_links": [
@@ -1299,7 +1820,10 @@ cost, and confidence.
 }
 ~~~
 
-Validation statuses are passed, failed, error, and skipped.
+Validation statuses are passed, failed, error, and skipped. A validation has
+exactly one result for every requirement in the referenced contract version,
+with no duplicate or unknown requirement IDs. Missing, duplicate, or unknown
+result IDs make validation_status error, and completion cannot pass.
 
 ### 8.14 OutcomeAssessment
 
@@ -1323,8 +1847,6 @@ Validation statuses are passed, failed, error, and skipped.
       "record_ref": "validation_brand_01"
     }
   ],
-  "user_feedback_ref": null,
-  "final_artifact_ref": null,
   "evidence_links": [
     {
       "evidence_id": "ev_manifest_01",
@@ -1359,7 +1881,8 @@ conclusion.
   "schema_version": "1.0-draft",
   "record_id": "use_01",
   "record_kind": "context_use",
-  "frame_id": "frame_01",
+  "use_trace_id": "utrace_cframe_01_dir_api",
+  "compiled_frame_id": "cframe_01",
   "context_record_id": "dir_api_integration_coverage_v1",
   "task_id": "task_200",
   "invocation_id": "inv_04",
@@ -1385,6 +1908,7 @@ without being explicitly cited by the response.
   "schema_version": "1.0-draft",
   "record_id": "use_feedback_01",
   "record_kind": "context_use_feedback",
+  "use_trace_id": "utrace_cframe_01_dir_api",
   "context_use_id": "use_01",
   "evaluation": "helpful",
   "evaluation_method": "contract_and_user_acceptance",
@@ -1401,6 +1925,10 @@ without being explicitly cited by the response.
   "record_hash": "sha256:record..."
 }
 ~~~
+
+All selected, rendered, and cited events for one record in one compiled frame
+share use_trace_id. Feedback names the trace and the exact stage event it
+evaluates, preventing aggregate double-counting.
 
 Evaluation values are helpful, not_helpful, and neutral. An unsuccessful task
 does not make every cited item unhelpful. Negative attribution requires a
@@ -1435,7 +1963,10 @@ ContextFrames. It is not the durable record store.
 ~~~json
 {
   "schema_version": "1.0-draft",
-  "frame_id": "frame_brand_22",
+  "compiled_frame_id": "cframe_brand_22",
+  "invocation_id": "inv_brand_22_03",
+  "frame_hash": "sha256:frame...",
+  "tokenizer_ref": "openai:o200k_base",
   "task": {
     "task_id": "task_brand_22",
     "goal": "Create a complete brand kit.",
@@ -1466,8 +1997,23 @@ ContextFrames. It is not the durable record store.
     {
       "record_id": "kn_brand_svg_fact",
       "knowledge_kind": "decision",
-      "content": "Editable SVG masters are required.",
+      "content": "Editable SVG is the selected master asset format.",
       "representation": "compact",
+      "content_fidelity": "summarized",
+      "content_hash": "sha256:kn-compact...",
+      "canonical_content_hash": "sha256:kn-canonical...",
+      "content_ref": {
+        "provider_id": "stella_local",
+        "uri": "context://local/knowledge/kn_brand_svg_fact"
+      },
+      "canonical_token_cost": 34,
+      "minimum_content_fidelity": "summarized",
+      "inline_content_requirement": "required",
+      "transform": {
+        "method": "extractive_summary",
+        "implementation": "stella_compactor",
+        "version": "1"
+      },
       "citation_label": "Brand decision: editable SVG masters",
       "selection_reason": "task intent and user scope matched",
       "token_cost": 12
@@ -1479,6 +2025,21 @@ ContextFrames. It is not the durable record store.
       "memory_kind": "episode",
       "content": "The previous generic logo direction was rejected in favor of a terminal-native direction.",
       "representation": "compact",
+      "content_fidelity": "summarized",
+      "content_hash": "sha256:mem-compact...",
+      "canonical_content_hash": "sha256:mem-canonical...",
+      "content_ref": {
+        "provider_id": "stella_local",
+        "uri": "context://local/memory/mem_rejected_logo_direction"
+      },
+      "canonical_token_cost": 79,
+      "minimum_content_fidelity": "summarized",
+      "inline_content_requirement": "required",
+      "transform": {
+        "method": "extractive_summary",
+        "implementation": "stella_compactor",
+        "version": "1"
+      },
       "citation_label": "Brand episode: rejected logo direction",
       "selection_reason": "brand task and user scope matched",
       "token_cost": 22
@@ -1490,6 +2051,11 @@ ContextFrames. It is not the durable record store.
       "directive_kind": "constraint",
       "content": "Do not declare completion until the brand-kit contract passes.",
       "representation": "full",
+      "content_fidelity": "exact",
+      "content_hash": "sha256:dir-canonical...",
+      "canonical_content_hash": "sha256:dir-canonical...",
+      "minimum_content_fidelity": "exact",
+      "inline_content_requirement": "required",
       "required": true,
       "citation_label": "Brand completion constraint",
       "selection_reason": "contract is required for this intent",
@@ -1504,9 +2070,14 @@ ContextFrames. It is not the durable record store.
       "representation": "reference",
       "content_fidelity": "omitted",
       "content_ref": {
+        "provider_id": "stella_local",
         "uri": "context://local/artifact_contract/contract_brand_kit_v3"
       },
       "canonical_content_hash": "sha256:...",
+      "canonical_token_cost": 412,
+      "token_cost": 11,
+      "minimum_content_fidelity": "exact",
+      "inline_content_requirement": "resolvable_reference_allowed",
       "required": true,
       "selection_reason": "task intent matched create_brand_kit"
     }
@@ -1542,22 +2113,30 @@ ContextFrames. It is not the durable record store.
       }
     ],
     "conflicts": [],
-    "provider_query_refs": [],
-    "snapshot_ref": null
+    "provider_query_refs": []
   },
   "compiled_at": "2026-07-20T20:00:00Z"
 }
 ~~~
 
+`frame_hash` covers the RFC 8785 canonical semantic frame body with
+compiled_frame_id, frame_hash, and compiled_at omitted. Those three envelope
+fields do not affect context equivalence. The complete stored frame_json retains
+them for lineage and audit.
+
 ### 9.3 Frame invariants
 
-- Identical inputs, cutoffs, compiler version, and budget produce byte-stable
-  ordering and content.
+- Identical inputs, cutoffs, compiler version, tokenizer, and budget produce a
+  byte-stable semantic body, ordering, and frame_hash. Envelope identity and
+  compiled_at may differ across recompilation.
 - Every included item has a stable record ID and selection reason.
 - Every transformed item identifies its representation and canonical source.
 - Required items cannot be evicted.
 - Assumptions are visibly labeled.
 - Observations have no instruction authority.
+- Compaction and rendering never synthesize normative language from knowledge,
+  memories, observations, or evidence. Normative meaning requires a selected
+  Directive or ArtifactContract.
 - Conflicts and exclusions are recorded rather than silently discarded.
 - Late feedback appends ContextUseFeedback or OutcomeAssessment records and never
   mutates the historical frame.
@@ -1584,20 +2163,37 @@ Allowed representation values:
 - compact: shorter inline content linked to the canonical source;
 - reference: stable reference and hash without inline content.
 
-Compact and reference representations carry:
-
-- content_fidelity;
-- content_hash;
-- canonical_content_hash;
-- content_ref;
-- canonical_token_cost;
-- token_cost;
-- minimum_fidelity;
-- transform metadata.
-
 ContentFidelity values are exact, normalized, summarized, and omitted.
 Representation and fidelity are separate: a compact frame may retain the exact
 text of a constraint while omitting heavyweight metadata.
+
+Representation requirements:
+
+| Property | full | compact | reference |
+| --- | --- | --- | --- |
+| content_fidelity | exact | exact, normalized, or summarized | omitted |
+| content | required | required | omitted |
+| content_hash | required | required | omitted |
+| canonical_content_hash | required | required | required |
+| content_ref | optional | required | required |
+| transform | omitted | required | omitted |
+| token_cost | optional on protocol wire; required after Stella compilation | optional on protocol wire; required after Stella compilation | optional on protocol wire; required after Stella compilation |
+| canonical_token_cost | optional | optional | optional |
+| tokenizer_ref | required with token counts, either on item or enclosing compiled frame | required with token counts, either on item or enclosing compiled frame | required with token counts, either on item or enclosing compiled frame |
+
+Compact support therefore implies resolve support. A provider that cannot
+rehydrate a compact item returns full or reports unsupported_representation.
+Protocol providers may omit token costs because tokenization is consumer/model
+specific. Whenever a token count is present, its tokenizer_ref is required.
+Stella computes token_cost for every compiled item under the
+CompiledContextFrame tokenizer_ref before budgeting.
+
+Legacy wire normalization is deterministic: missing representation means full;
+missing content_fidelity means exact; content_hash and canonical_content_hash
+are computed from the same exact inline content when absent; transform remains
+absent; and missing token costs remain absent until a consumer computes them
+with an identified tokenizer. Compatibility readers accept the legacy shape,
+while canonical new writers emit the complete applicable representation fields.
 
 Example:
 
@@ -1606,15 +2202,18 @@ Example:
   "record_id": "mem_rejected_logo_direction",
   "representation": "compact",
   "content_fidelity": "summarized",
-  "content": "Previous generic logo rejected; prefer terminal-native direction.",
+  "content": "A previous generic logo direction was rejected; the accepted direction was terminal-native.",
   "content_hash": "sha256:compact...",
   "canonical_content_hash": "sha256:canonical...",
   "canonical_token_cost": 91,
   "token_cost": 12,
+  "tokenizer_ref": "openai:o200k_base",
   "content_ref": {
+    "provider_id": "stella_local",
     "uri": "context://local/memory/mem_rejected_logo_direction"
   },
-  "minimum_fidelity": "semantic",
+  "minimum_content_fidelity": "summarized",
+  "inline_content_requirement": "required",
   "transform": {
     "method": "extractive_summary",
     "implementation": "stella-compactor",
@@ -1627,35 +2226,41 @@ For a full representation, inline content is required and canonical. For a
 compact representation, inline content, transformation identity, content_ref,
 and canonical_content_hash are required. For a reference representation,
 inline content is omitted and content_ref plus canonical_content_hash are
-required. `content_ref.uri` is opaque outside the resolver. Never encode a
-reference as an empty content string.
+required. `content_ref.provider_id` routes resolution to the provider that
+returned the reference; `content_ref.uri` is opaque outside that resolver and
+may be paired with an optional expires_at. ContextFrame.uri continues to
+identify the source resource and is not the same field. Never encode a reference
+as an empty content string.
 
 Do not use single-letter properties or positional arrays. The significant
 savings come from content reduction and references, not opaque field names.
 
 ### 10.3 Content requirements
 
-Each selected item declares a minimum_fidelity:
+Each selected item declares two independent requirements:
 
-- exact: text and ordered structure cannot be paraphrased;
-- semantic: normalization or faithful summary is allowed;
-- reference: the canonical record may be omitted if deterministic
-  rehydration is available.
+- minimum_content_fidelity: exact, normalized, or summarized;
+- inline_content_requirement: required or resolvable_reference_allowed.
+
+Exact means text and ordered structure cannot be paraphrased. Normalized permits
+lossless canonical formatting. Summarized permits a faithful shorter
+representation. A resolvable reference is an availability choice, not a
+fidelity level.
 
 Default policy:
 
 | Record | Default content requirement |
 | --- | --- |
-| Blocking constraint | exact |
-| Guarded rule | exact |
-| Procedure whose order matters | exact |
-| Assumption | semantic with explicit assumption label |
-| Fact or decision | semantic |
-| Memory episode | semantic |
-| Observation summary | semantic |
-| Artifact contract used by validator | reference if validator retains full contract |
-| Evidence | reference |
-| Code map | reference except active excerpts |
+| Blocking constraint | exact, required |
+| Guarded rule | exact, required |
+| Procedure whose order matters | exact, required |
+| Assumption | summarized, required, with explicit assumption label |
+| Fact or decision | summarized, required |
+| Memory episode | summarized, required |
+| Observation summary | summarized, required |
+| Artifact contract used by validator | exact, resolvable_reference_allowed if validator holds the full hash-matched contract |
+| Evidence | summarized, resolvable_reference_allowed |
+| Code map | normalized, resolvable_reference_allowed except active excerpts |
 
 ### 10.4 Stable base and invocation delta
 
@@ -1694,13 +2299,13 @@ CONSTRAINTS
 [d1] Do not declare completion until the artifact contract passes.
 
 DECISIONS
-[k1] Editable SVG masters are required.
+[k1] Editable SVG is the selected master asset format.
 
 MEMORY
-[m1] Previous generic logo direction was rejected; use a terminal-native direction.
+[m1] A previous generic logo direction was rejected; the accepted direction was terminal-native.
 
 CONTRACT
-[a1] brand_kit@3: 14 required outputs; 12 satisfied; 2 missing.
+[a1] brand_kit@3: 16 required checks; 14 passed; 2 failed.
 
 STATE
 phase=execute; missing=logos/wordmark.svg, social/og-image.png
@@ -1734,17 +2339,22 @@ Highest first:
 
 1. authorization boundaries and non-overridable system policy;
 2. confirmed organization constraints;
-3. confirmed blocking repository constraints and guarded rules;
+3. confirmed blocking collaborative constraints and guarded rules from an
+   authenticated workspace or repository authority;
 4. explicit instructions in the current user task;
 5. required artifact contracts;
-6. confirmed repository directives;
+6. confirmed collaborative directives from a workspace or repository;
 7. confirmed user directives;
 8. active knowledge;
 9. advisory inferred directives;
 10. memories;
 11. observation summaries and untrusted evidence.
 
-Specific applicability scope wins over broad scope at equal authority.
+SharingScope is not an authority rank. Stella derives authority from origin,
+authenticated publication, promotion/approval history, provider attestation,
+and an actual enforcement boundary. At equal authority, more specific
+applicability wins; repository and workspace records otherwise require an
+explicit conflict decision rather than a fixed audience-based winner.
 Recency alone never overrides a confirmed record unless supersession or validity
 establishes that the earlier record no longer applies.
 
@@ -1863,6 +2473,12 @@ Use .stella/settings.json:
 ~~~json
 {
   "context": {
+    "lifecycle": {
+      "enabled": false
+    },
+    "learning": {
+      "mode": "off"
+    },
     "governance": {
       "mode": "solo"
     },
@@ -1880,23 +2496,38 @@ Use .stella/settings.json:
     "retention": {
       "raw_observation_days": 30,
       "proposal_days": 30,
-      "stale_inferred_directive_days": 180
+      "inferred_directive_review_days": 180
     }
   }
 }
 ~~~
 
-Modes are solo, team, and regulated.
+Configuration precedence is explicit:
+
+- lifecycle.enabled false preserves existing Stella behavior and ignores the
+  new learning, promotion, and lifecycle-selection settings;
+- lifecycle.enabled true with learning.mode off permits explicit/canonical
+  context features but performs no observation mining, proposal induction, or
+  efficacy learning;
+- record_only captures evidence, observations, use, outcomes, and proposals but
+  never selects, activates, confirms, or publishes a newly inferred record;
+- advisory permits governed use and automatic activation of eligible advisory
+  records, but never inferred blocking enforcement.
+
+Learning modes are off, record_only, and advisory. Governance modes are solo,
+team, and regulated. These are independent dimensions. A review age marks a
+record review_due; age alone never proves that it is stale.
 
 ### 13.2 Solo mode
 
 ~~~text
 observation
   -> record proposal
-  -> user-scoped inferred advisory directive
-  -> Keep, Edit, or Ignore
-  -> confirmed directive
-  -> optional explicit repository publication
+  -> auto-activated user-scoped inferred advisory directive
+       +-> Keep -> confirmed directive
+       +-> Edit -> superseding user-authored confirmed directive
+       `-> Ignore -> retracted revision + reverted event + proposal cooldown
+  -> optional explicit repository publication from a confirmed directive
 ~~~
 
 Suggested notice:
@@ -1905,8 +2536,14 @@ Suggested notice:
 > this route changes. I will treat it as an advisory rule for you. [Keep]
 > [Edit] [Ignore]
 
-Keep records confirmation. Edit creates a superseding user-authored record.
-Ignore rejects the proposal and suppresses immediate re-proposal.
+Keep appends confirmation. Edit creates a superseding user-authored active
+revision and confirms that revision. Because the notice follows automatic
+activation, Ignore must make the steering inactive: it creates a retracted
+superseding directive revision, appends a reverted PromotionEvent, creates a
+dismissed proposal revision, records negative induction evidence, and starts a
+configurable re-proposal cooldown. It never leaves the auto-activated directive
+eligible for selection. If a deployment asks before activation instead, Ignore
+appends rejected and no directive is created.
 
 ### 13.3 Team mode
 
@@ -1922,13 +2559,36 @@ A Context PR is any reviewable promotion of context into durable steering. In
 team mode, an ordinary Git change supplies authorship, discussion, ownership,
 and audit history.
 
-### 13.4 Regulated mode
+### 13.4 Workspace publication
+
+Workspace publication is separate from repository Git publication:
+
+~~~text
+user or repository-applicable record proposal
+  -> proposed workspace record with requested_sharing_scope=workspace
+  -> provider workspace owner or RBAC approval
+  -> immutable published revision scoped to workspace_id
+  -> provider receipt, attestation, and audit event
+  -> read-only local cache
+~~~
+
+The provider-hosted record is authoritative for workspace publication; it is
+not materialized into .stella/rules/*.md unless a separate repository
+publication is approved. Publication requires a durable workspace identity,
+authorized approver, reason, policy version, and PromotionEvent linking source
+and result revisions. Revocation creates a retracted superseding workspace
+revision and invalidates local selection caches. A workspace record becomes
+blocking only when authenticated workspace policy, local configuration, and a
+real enforcer all authorize that effect. Workspace membership alone grants no
+instruction or tool authority.
+
+### 13.5 Regulated mode
 
 Regulated mode requires explicit approval, actor identity, reason, immutable
 promotion history, policy version, retained evidence, optional separation of
 proposer and approver, and no automatic archival of published policy.
 
-### 13.5 Solo-to-team transition
+### 13.6 Solo-to-team transition
 
 When multiple active repository identities are detected:
 
@@ -1949,17 +2609,25 @@ Repository steering remains .stella/rules/*.md:
 ---
 name: api-integration-coverage
 description: Require integration coverage for API endpoint changes
+schema_version: 1.0-draft
+record_id: dir_api_integration_coverage_v3
+lineage_id: lin_api_integration_coverage
 record_kind: directive
+record_status: active
 directive_kind: rule
+origin: inferred
+scope:
+  repository_id: repo_stella
 sharing_scope: repository
 enforcement: advisory
 confidence: 91
 observed_at: 2026-07-20T18:30:00Z
 valid_from: 2026-07-20T18:30:00Z
-evidence_refs:
+supporting_evidence_ids:
   - ev_task_101
   - ev_task_118
   - ev_task_144
+record_hash: sha256:record...
 ---
 
 API endpoint changes should include integration coverage.
@@ -1969,23 +2637,40 @@ New metadata uses lowercase snake_case. Existing hyphenated guard keys remain
 readable. Stella should accept both during migration and emit canonical
 guard_tool, guard_deny_path, and guard_deny_command for new generated files.
 
-Full private evidence remains in context.db. Git files contain reviewable
-statements and stable evidence IDs.
+`supporting_evidence_ids` is a safe Markdown projection of canonical
+`evidence_links` whose relation is `supports`; contradicting or otherwise
+qualified links remain typed in context.db. Full private evidence remains in
+context.db. Git files contain reviewable statements and safe stable evidence
+IDs.
+
+The frontmatter `record_hash` is the semantic ContextRecord hash, not a hash of
+the Markdown file. The loader reconstructs the canonical directive from the
+normatively mapped frontmatter fields plus the Markdown body as `statement`,
+omits `record_hash` from the preimage, and recomputes the hash. Presentational
+`name` and `description` are excluded from the canonical ContextRecord and
+record_hash and must never affect behavior; they remain rule-file display
+metadata. A manual
+semantic edit with a mismatched stored hash creates a new immutable revision and
+hash after validation; Stella never silently overwrites the prior record. A
+separate source-file hash may be stored in context.db for drift detection, but
+it is not portable directive identity.
 
 ## 15. Lifecycle, efficacy, and pruning
 
 ### 15.1 Status
 
-Canonical RecordStatus values are:
+Stored RecordStatus values are:
 
 - active;
-- superseded;
 - retracted;
 - archived.
 
-Expiration is derived from valid_until. Staleness is represented by a derived
-selection_health value and retrieval policy. Rejected applies to proposals and
-promotion events, not to an activated directive.
+EffectiveStatus values returned by lifecycle queries are active, superseded,
+retracted, archived, and expired. Supersession is derived from a later
+revision's supersedes_record_id; expiry is derived from valid_until. Neither
+changes the old record or its hash. Staleness is represented by a separate
+derived selection_health value and retrieval policy. Rejected applies to
+proposals and promotion events, not to an activated directive.
 
 ### 15.2 Efficacy
 
@@ -2037,7 +2722,8 @@ action:
 
 Use a confidence interval or Bayesian estimate after sufficient evaluation
 data. Never auto-archive system directives, critical directives, blocking
-directives, organization policy, pinned records, or audit-held records.
+directives, user-confirmed directives, published repository/workspace/
+organization policy, pinned records, or audit-held records.
 
 Archival is reversible. Physical deletion follows a separate privacy and
 retention policy.
@@ -2083,7 +2769,7 @@ With an approved contract, Stella:
 
 Memory reminds; a contract verifies.
 
-## 17. Context Graph Protocol boundary
+## 17. Context Graph Exchange Protocol boundary
 
 ### 17.1 Existing query surface
 
@@ -2100,6 +2786,14 @@ Providers may advertise:
 - rehydration support;
 - maximum payload and batch sizes.
 
+Every new ContextFrame carries or reuses typed semantic metadata: semantic_role,
+optional hash-verifiable record_ref, origin, scope, sharing_scope, sensitivity,
+and provenance. Declared enforcement is only a provider claim. Stella derives
+effective instruction authority after verifying record identity, governance,
+attestation, scope, consent, and local policy. A legacy or unknown frame without
+the metadata compiles as non-instructional evidence, never as a directive or
+executable contract.
+
 A query may provide ordered representation_preferences such as compact then
 full. Missing preferences mean full. Responses identify the representation
 actually returned. If no advertised representation intersects the request, the
@@ -2111,11 +2805,15 @@ consent_required, and content_hash_mismatch.
 
 ### 17.3 Optional lifecycle extension
 
-Tentative capability identifier:
+Target capability identifier after the separate CGEP naming migration:
 
 ~~~text
-contextgraph/lifecycle/1.0-draft
+cgep/lifecycle/1.0-draft
 ~~~
+
+Until that migration lands, an implementation preserves the protocol's current
+published namespace. Current and target identifiers must not be emitted as
+interchangeable aliases.
 
 Portable lifecycle operations are intentionally generic:
 
@@ -2135,8 +2833,49 @@ governance verbs:
 - feedback appends context_use_feedback.
 
 Each append item carries an idempotency key outside the canonical record.
-Same key plus the same record hash returns the prior receipt. Same key plus a
-different record hash returns idempotency_conflict.
+It also has a command_hash over the computed record_hash, requested_retention,
+and every semantic append option, with idempotency_key and command_hash omitted
+from the RFC 8785 JCS preimage. Same key plus the same command_hash returns the
+prior receipt. Same key plus a different command_hash returns
+idempotency_conflict. This prevents retention from changing silently on retry.
+The ledger key is namespaced by authenticated_authority_id, client_id,
+operation, and idempotency_key. A successful receipt states
+idempotency_replay_until; reuse after that instant returns idempotency_expired,
+not a fresh append.
+
+An append item may also carry transport-level requested_retention:
+
+~~~json
+{
+  "requested_retention": {
+    "retention_class": "bounded",
+    "retention_until": "2027-07-20T00:00:00Z",
+    "on_expiry": "delete_content_keep_minimal_receipt"
+  }
+}
+~~~
+
+The per-item receipt returns command_hash, accepted_at, the computed
+record_hash, and the accepted_retention commitment. A provider rejects the item before persistence
+with retention_rejected if it cannot honor the requested duration and expiry
+behavior; it never silently shortens or lengthens the commitment. Evidence
+`retention` is a semantic data-classification field. Requested and accepted
+retention are destination storage commitments. `valid_until` is world
+applicability and is never a deletion TTL.
+
+Core on_expiry values are delete_content_keep_minimal_receipt and
+archive_provider_copy. Providers reject unknown values because expiry behavior
+cannot safely degrade or round-trip without execution semantics.
+
+The canonical record retains the origin observer's observed_at, record_id, and
+hash. accepted_at is receiver-local append-ledger metadata and is excluded from
+the record hash. A receiving provider does not rewrite observed_at during
+ordinary import. If it deliberately derives a new claim, that claim receives a
+new record_id, observed_at, hash, and provenance link to the source. Temporal
+known_at is evaluated from the answering provider's knowledge vantage: for an
+imported record it uses accepted_at, received_at, or equivalent durable
+ingestion time. The observed range filter continues to use canonical origin
+observed_at.
 
 Each mutation defines capability, consent, idempotency, batch behavior,
 per-item accepted, duplicate, or rejected receipts, partial failure, payload
@@ -2171,7 +2910,8 @@ are preference, rule, constraint, and procedure. Memory is not a directive kind.
 - Missing representation defaults to full.
 - recorded_at is accepted as an input alias for observed_at.
 - valid_to is accepted as an input alias for valid_until.
-- canonical serialization emits only observed_at and valid_until.
+- canonical serialization emits only observed_at, valid_from, and valid_until
+  for the corresponding temporal concepts.
 - unknown extensions round-trip when supported.
 - missing lifecycle capability makes lifecycle operations unavailable, not
   fatal to query.
@@ -2184,20 +2924,29 @@ accept lifecycle records is not permission to receive user-private data.
 Typed errors include:
 
 - unsupported_capability;
+- unsupported_record_kind;
 - unsupported_representation;
 - consent_required;
 - scope_denied;
 - sharing_denied;
 - invalid_record;
 - invalid_temporal_interval;
+- invalid_temporal_filter;
 - invalid_confidence;
+- invalid_scope;
+- invalid_retention;
 - idempotency_conflict;
+- idempotency_expired;
+- record_identity_conflict;
+- record_hash_mismatch;
 - payload_too_large;
+- batch_too_large;
 - partial_failure;
+- retention_rejected;
+- provider_timeout;
 - reference_not_found;
 - reference_expired;
-- content_hash_mismatch;
-- validation_failed.
+- content_hash_mismatch.
 
 ## 18. Security, privacy, and ownership
 
@@ -2212,7 +2961,8 @@ Typed errors include:
 - Deletion distinguishes source deletion, derived-record invalidation, audit
   retention, and Git history.
 - Organization policy cannot silently read user observations.
-- Context frames carry trust and instruction-authority boundaries.
+- Context frames carry the typed metadata needed for Stella to enforce trust and
+  instruction-authority boundaries; provider declarations do not grant them.
 - Content hashes support integrity checks without exposing full evidence.
 - Learned context cannot grant authorization.
 
@@ -2312,7 +3062,7 @@ The architecture is implemented when:
 - Decisions preserve rationale and alternatives.
 - Directives contain only preference, rule, constraint, or procedure semantics.
 - Promotion history is event-based.
-- Sharing uses user, repository, and organization.
+- Sharing distinguishes user, repository, workspace, and organization.
 - Repository and workspace identities have distinct semantics.
 - CompiledContextFrame is deterministic and inspectable.
 - Full, compact, and reference representations are rehydratable.
@@ -2366,41 +3116,58 @@ selection and attribution, a growing contract/validator library, and trusted
 local governance. Optimize the implementation and product instrumentation for
 that compound asset rather than for raw memory count.
 
-## 23. Name assessment: context-graph-protocol
+## 23. Name decision: Context Graph Exchange Protocol
 
-Context Graph Protocol is a good name and should remain the project name.
+Context graph is the correct architectural term because typed relationships,
+provenance, lineage, temporal reconstruction, and traversal are first-class. It
+describes the information model, not a requirement to use a graph database.
 
-Reasons:
+Do not retain **Context Graph Protocol** as the long-term public name. The exact
+name is already used publicly for an overlapping provenance-oriented protocol
+by [AgentSpeak](https://www.agentspeak.io/solutions/context-graph).
+The recommended name is **Context Graph Exchange Protocol**, abbreviated
+**CGEP**. Exchange describes the neutral boundary among Stella, Oxagen, and
+third-party providers without claiming that the protocol owns learning policy,
+storage, or continuous synchronization.
 
-- context accurately describes the exchanged resource;
-- graph reflects first-class relations, provenance, and traversal;
-- protocol correctly communicates interoperability rather than a product or
-  database;
-- the name distinguishes the project from a generic memory library;
-- the existing crate and repository naming already align with contextgraph.
+Recommended positioning:
 
-The name remains accurate only if relationships and provenance stay first-class.
-If the project becomes merely a generic prompt-memory API, graph would overstate
-its design.
+> Context Graph Exchange Protocol is a vendor-neutral protocol for querying,
+> exchanging, and resolving provenance-rich context records and frames. It
+> defines graph semantics, not a graph-database requirement or host learning
+> policy.
 
-Alternatives are weaker:
-
-- Agent Context Protocol overlaps other agent and context standards;
-- Context Exchange Protocol is clear but generic and understates graph
-  semantics;
-- Context Lifecycle Protocol emphasizes the new extension but understates
-  retrieval and relations;
-- Context Graph Interface sounds like a library rather than an interoperable
-  protocol.
-
-Recommended public styling:
+Recommended target identifiers:
 
 ~~~text
-Context Graph Protocol
-repository: context-graph-protocol
-wire identifier: contextgraph/1.0-draft
-optional lifecycle capability: contextgraph/lifecycle/1.0-draft
+public name: Context Graph Exchange Protocol
+abbreviation: CGEP
+current repository: context-graph-protocol
+target repository after approved migration: context-graph-exchange-protocol
+target base wire identifier: cgep/1.0-draft
+target lifecycle capability: cgep/lifecycle/1.0-draft
 ~~~
+
+The rename is a separate compatibility-aware change and should land before new
+lifecycle identifiers stabilize. Until it lands, existing published repository,
+package, and wire identifiers remain authoritative. Target `cgep/*` identifiers
+are not aliases that implementations may emit interchangeably with the current
+namespace. If adoption is already material, publish redirects, package aliases,
+a deprecation window, and explicit version negotiation.
+
+Nearby names are less suitable:
+
+- **Context Exchange Protocol** is already an established
+  [WCF term](https://learn.microsoft.com/en-us/dotnet/framework/wcf/feature-details/context-exchange-protocol)
+  and loses the graph semantics;
+- **Agent Context Distribution Protocol** is already used by an
+  [adjacent standard](https://www.agentcontextdistributionprotocol.io/) and
+  emphasizes distribution artifacts rather than provider-backed graph queries
+  and lifecycle records;
+- **Context Lifecycle Protocol** overemphasizes the optional writeback extension
+  and understates retrieval and relationships;
+- **Context Graph Interface** sounds like a library API rather than an
+  interoperable protocol.
 
 ## 24. Open decisions
 
@@ -2415,9 +3182,12 @@ Before schema stabilization:
 6. Calibrate outcome attribution.
 7. Define contradiction UX for oscillating preferences and reversed decisions.
 8. Define semantic-validator cost, privacy, and version policy.
-9. Decide whether a second external provider justifies standardizing lifecycle
-   writeback immediately.
-10. Define signed organization-policy distribution without violating
+9. Define the optional portable sync profile—cursor, change feed, tombstone,
+   acknowledgement, conflict, and deletion semantics—before describing CGEP
+   append/get as synchronization.
+10. Complete name, package, repository, wire-namespace, and trademark clearance
+    for CGEP in a separate naming change.
+11. Define signed organization-policy distribution without violating
     no-phone-home defaults.
 
 ## 25. Final recommendation
@@ -2438,4 +3208,4 @@ outcome assessment = what can responsibly be concluded
 Keep canonical records complete. Compact them only as inspectable,
 content-addressed projections. Keep repository steering in existing Markdown
 rules. Add only the minimal portable representation and lifecycle mechanisms to
-Context Graph Protocol.
+Context Graph Exchange Protocol.

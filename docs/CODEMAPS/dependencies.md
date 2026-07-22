@@ -7,7 +7,7 @@
 | Service | Purpose | Config Keys | Package |
 |---------|---------|-------------|---------|
 | **PostgreSQL** (Neon) | Primary data store | `DATABASE_URL` | `@oxagen/database` (Drizzle) |
-| **Neo4j** | Knowledge graph, lineage, memory | `NEO4J_URI/USERNAME/PASSWORD/DATABASE` | `@oxagen/engram`, `@oxagen/agent` |
+| **Neo4j** | Knowledge graph, lineage, governed AgentMemory | `NEO4J_URI/USERNAME/PASSWORD/DATABASE` | `@oxagen/agent` |
 | **Inngest** | Background job orchestration | `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` | `@oxagen/inngest-functions` |
 | **Stripe** | Billing, subscriptions, credits | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | `@oxagen/billing` |
 | **Vercel Blob** | File/asset storage | `BLOB_READ_WRITE_TOKEN` | `@oxagen/storage` |
@@ -78,7 +78,7 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/auth` | api, app, mcp | Better Auth, session/API-key resolution |
 | `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
 | `@oxagen/agent-engine` | agent, api | Pipeline, planner, fleet, evaluator |
-| `@oxagen/engram` | api, app, agent | Memory: embed/store/retrieve/sync |
+| `@oxagen/engram` | cli, agent | Local DuckDB memory, context compilation, replay |
 | `@oxagen/ai` | api, app, cli, mcp | AI SDK wrappers, prompt registry |
 | `@oxagen/billing` | api, app | Stripe, credits, usage |
 | `@oxagen/iam` | api, handlers | AuthZ, audit emission |

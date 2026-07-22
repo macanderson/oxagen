@@ -2,9 +2,12 @@ import type {
   CapabilityContext,
   CapabilitySurface,
   CapabilityEffect,
+  DeployedAgentInvocationContext,
+  LifecycleExecutionContext,
   CheckedContext,
   ResolvedPrincipal,
 } from "./types";
+import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
@@ -47,6 +50,51 @@ export function setBillingAdmissionGate(gate: BillingAdmissionGateFn): void {
 /** Remove the billing gate. Used in tests. */
 export function clearBillingAdmissionGate(): void {
   _billingGate = null;
+}
+
+// ── Budget admission gate (injected at bootstrap) ────────────────────────────
+//
+// A hard PERIOD-TO-DATE spend ceiling (OXA-1079). Mirrors the billing admission
+// gate: the kernel carries no dependency on @oxagen/billing — the gate is
+// injected once at service bootstrap (bootstrapBillingRuntime) via
+// `setBudgetAdmissionGate`, and throws @oxagen/billing's own BudgetExceededError
+// (a plain Error with `code === "budget_exceeded"`, duck-typed at the surfaces)
+// to refuse a turn.
+//
+// It fires AFTER the billing admission gate (a suspended/zero-balance org is
+// refused first) and BEFORE the entitlement gate + handler, INSIDE the tenant
+// scope (its withTenantDb budget read needs the active scope). It is skipped on
+// exactly the same conditions as the billing gate — unscoped capabilities and
+// `noBillingGate: true` contracts (reading your own spend/budget must never be
+// blocked by being over budget) — plus it needs a workspaceId (a workspace
+// ceiling can't be evaluated without one). Unlike the billing gate it takes the
+// full scope + capability so it can evaluate BOTH the org-level and
+// workspace-level ceiling and name the denied capability.
+//
+// When no gate is registered (tests, CLI) the call proceeds unconditionally —
+// matches the billing/IAM/entitlement default-open injection pattern.
+
+export type BudgetAdmissionGateFn = (args: {
+  orgId: string;
+  workspaceId: string;
+  capability: string;
+}) => Promise<void>;
+
+let _budgetGate: BudgetAdmissionGateFn | null = null;
+
+/**
+ * Register the budget admission gate. Call once at service bootstrap.
+ * The gate must throw `BudgetExceededError` (from @oxagen/billing) to refuse a
+ * turn — its stable `code: "budget_exceeded"` is duck-typed by the kernel catch
+ * (classified as a DENY, not an error) and by the Hono/MCP error handlers (402).
+ */
+export function setBudgetAdmissionGate(gate: BudgetAdmissionGateFn): void {
+  _budgetGate = gate;
+}
+
+/** Remove the budget gate. Used in tests. */
+export function clearBudgetAdmissionGate(): void {
+  _budgetGate = null;
 }
 
 // ── Capability entitlement gate (injected at bootstrap) ──────────────────────
@@ -123,6 +171,19 @@ export interface KernelIAMCheckResult {
   outcome: "allow" | "deny" | "pending_approval";
   reason?: string;
   principal: ResolvedPrincipal | null;
+  /**
+   * The platform-created reference to the immutable `iam.authorization_decisions`
+   * row this check persisted (`azd_…`). The IAM runtime sets it for EVERY
+   * outcome — allow, deny, approval-pending, and evaluation error — because a
+   * governed operation with no decision row is unauditable.
+   *
+   * Null when the check ran on a path that persists no decision (the
+   * non-enterprise human fast-path, or a surface with no IAM runtime). For an
+   * AGENT-RUN invocation a null here is fatal: the kernel fails closed rather
+   * than execute an operation whose authoritative decision could not be
+   * written.
+   */
+  decision?: AuthorizationDecisionRef | null;
 }
 
 export type KernelIAMCheckFn = (args: {
@@ -223,6 +284,77 @@ export function clearKernelAccessRequestCreator(): void {
   _accessRequestCreator = null;
 }
 
+// ── Deployed-agent invocation context (kernel-created) ───────────────────────
+//
+// `edit_repo_file` and governed run admission are agent-only: they must run as
+// a deployed agent acting for an authenticated human, BEFORE any run (and so
+// any pinned ceiling) exists. That needs a context an ordinary human / API /
+// MCP caller cannot fabricate.
+//
+// The compile-time half is the unique-symbol brand on
+// `DeployedAgentInvocationContext` in types.ts — the key is unnameable outside
+// that module. The runtime half is this registry, because a `as` cast defeats
+// any purely structural brand: only objects this factory created are members,
+// so a hand-rolled or replayed object fails the guard and is treated as absent.
+//
+// A WeakSet, not a Set: entries are collected with the context object, so a
+// long-lived process cannot accumulate them.
+
+const kernelIssuedDeployedAgentInvocations = new WeakSet<object>();
+
+export interface CreateDeployedAgentInvocationArgs {
+  /** The AUTHENTICATED human authorizing this invocation. */
+  initiatingPrincipal: ResolvedPrincipal;
+  /** The deployed agent's own delegated IAM principal (server-resolved). */
+  agentPrincipal: ResolvedPrincipal;
+  /** Agent public id (agt_…). */
+  agentId: string;
+  /** Internal UUID of the ACTIVE agent version (server-resolved). */
+  agentVersionId: string;
+  /** `sha256:<64 hex>` checksum of that exact version. */
+  agentVersionChecksum: string;
+}
+
+/**
+ * Mint a `DeployedAgentInvocationContext`. The ONLY way to obtain one.
+ *
+ * Every field is server-resolved by the trusted caller (the admission path
+ * resolves the active deployed-agent version and the authenticated session's
+ * principal); nothing here is threaded from a request body. There is
+ * deliberately no run id parameter — a caller that could name a run could
+ * borrow that run's pinned ceiling.
+ */
+export function createDeployedAgentInvocationContext(
+  args: CreateDeployedAgentInvocationArgs,
+): DeployedAgentInvocationContext {
+  const ctx = {
+    principalKind: "deployed_agent_invocation",
+    initiatingPrincipal: args.initiatingPrincipal,
+    agentPrincipal: args.agentPrincipal,
+    agentId: args.agentId,
+    agentVersionId: args.agentVersionId,
+    agentVersionChecksum: args.agentVersionChecksum,
+  } as unknown as DeployedAgentInvocationContext;
+  kernelIssuedDeployedAgentInvocations.add(ctx);
+  return ctx;
+}
+
+/**
+ * True only for a context this kernel actually minted. Surfaces gating an
+ * agent-only capability MUST use this rather than a truthiness check on
+ * `ctx.deployedAgentInvocation` — the field is structurally forgeable, the
+ * registry membership is not.
+ */
+export function isKernelIssuedDeployedAgentInvocation(
+  value: DeployedAgentInvocationContext | undefined | null,
+): value is DeployedAgentInvocationContext {
+  return (
+    value !== undefined &&
+    value !== null &&
+    kernelIssuedDeployedAgentInvocations.has(value)
+  );
+}
+
 // The capability kernel: the single dispatch path every surface (api, mcp,
 // cli, in-app agent) calls. It binds a registered *contract* to its
 // registered *handler*, validates input and output against the contract's
@@ -263,7 +395,11 @@ export type CapabilityErrorCode =
   | "pending_approval"
   | "invalid_input"
   | "invalid_output"
-  | "capability_not_installed";
+  | "capability_not_installed"
+  | "lifecycle_not_allowed"
+  | "lifecycle_event_denied"
+  | "lifecycle_context_invalid"
+  | "lifecycle_recursion_denied";
 
 export class CapabilityError extends Error {
   constructor(
@@ -276,6 +412,15 @@ export class CapabilityError extends Error {
      * poll for approval status. Additive: never set on any other code.
      */
     readonly accessRequestId?: string,
+    /**
+     * The platform-created `azd_…` reference to the immutable authorization
+     * decision that produced this denial / approval-pending / evaluation
+     * error. The handler never ran, so there is no CheckedContext to carry it —
+     * the worker reads it off the error and persists it in the run's denial or
+     * terminal event, which is what makes a denied attempt as auditable as an
+     * allowed one.
+     */
+    readonly decision?: AuthorizationDecisionRef,
   ) {
     super(message);
     this.name = "CapabilityError";
@@ -315,9 +460,10 @@ export interface KernelSecurityEvent {
   requestId: string;
   /**
    * The CapabilityErrorCode that caused a deny/error, if any. Includes
-   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515).
+   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515) and
+   * "budget_exceeded" for the hard spend-ceiling denial (OXA-1079).
    */
-  errorCode: CapabilityErrorCode | "no_tenant_scope" | null;
+  errorCode: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded" | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -393,7 +539,7 @@ export interface KernelTraceEvent {
   /** The validated output — present only when status === "ok". */
   output?: unknown;
   /** Failure code when status === "error". */
-  errorCode?: CapabilityErrorCode | "no_tenant_scope";
+  errorCode?: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded";
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
 }
@@ -490,6 +636,8 @@ export interface InvokeOptions {
    * invoked over `mcp` is rejected before the handler runs.
    */
   surface?: CapabilitySurface;
+  /** Internal deterministic lifecycle execution; orthogonal to public surfaces. */
+  execution?: LifecycleExecutionContext;
 }
 
 /**
@@ -573,6 +721,91 @@ async function _invokeCore(
       "unknown_capability",
       `Unknown capability "${name}"`,
     );
+  }
+
+  // ── Forged platform bindings (SECURITY, run-evidence spec Task 5) ─────────
+  //
+  // Two fields on the context are PLATFORM-CREATED and must never arrive from
+  // a caller:
+  //
+  //   authorizationDecision   written only by the kernel, only onto a
+  //                           CheckedContext, only from a decision row the IAM
+  //                           runtime actually inserted;
+  //   deployedAgentInvocation minted only by createDeployedAgentInvocationContext
+  //                           and tracked in the kernel's own registry.
+  //
+  // Reject the invocation rather than silently stripping the field. Stripping
+  // would let the probe succeed and leave no trace; a hard deny plus a security
+  // event is what makes a forgery attempt visible.
+  const forgedBinding =
+    (ctx as { authorizationDecision?: unknown }).authorizationDecision !==
+    undefined
+      ? "authorizationDecision"
+      : ctx.deployedAgentInvocation !== undefined &&
+          !isKernelIssuedDeployedAgentInvocation(ctx.deployedAgentInvocation)
+        ? "deployedAgentInvocation"
+        : null;
+  if (forgedBinding !== null) {
+    emitSecurityEvent({
+      capability: canonical,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "authz_denied",
+      durationMs: Date.now() - startMs,
+    });
+    throw new CapabilityError(
+      name,
+      "authz_denied",
+      `Caller-supplied "${forgedBinding}" on the capability context for "${name}" — ` +
+        "that binding is platform-created and can never be an input; failing closed.",
+    );
+  }
+
+  const lifecycleExecution = opts.execution;
+  if (lifecycleExecution) {
+    if (ctx.surface !== "runner" || opts.surface !== undefined) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_context_invalid",
+        `Lifecycle capability "${name}" must originate from the runner without a public surface`,
+      );
+    }
+    if (lifecycleExecution.depth !== 0) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_recursion_denied",
+        `Lifecycle capability "${name}" cannot recursively dispatch lifecycle events`,
+      );
+    }
+    const lifecycle = cap.lifecycle;
+    if (!lifecycle) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_not_allowed",
+        `Capability "${name}" has not opted into lifecycle execution`,
+      );
+    }
+    if (!lifecycle.allowedEvents.includes(lifecycleExecution.event)) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_event_denied",
+        `Capability "${name}" does not allow lifecycle event "${lifecycleExecution.event}"`,
+      );
+    }
+    if (
+      !lifecycleExecution.idempotencyKey ||
+      !lifecycleExecution.invocationId
+    ) {
+      throw new CapabilityError(
+        name,
+        "lifecycle_context_invalid",
+        `Lifecycle capability "${name}" requires invocation and idempotency identifiers`,
+      );
+    }
   }
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
@@ -693,6 +926,9 @@ async function _invokeCore(
   // attribution. Null when no IAM runtime is registered or the resolver did
   // not resolve one (non-enterprise tier fast-path).
   let resolvedPrincipal: ResolvedPrincipal | null = null;
+  // The platform-created decision reference for THIS invocation. Only ever
+  // written from the IAM check's own result — see the strip below.
+  let authorizationDecision: AuthorizationDecisionRef | null = null;
   try {
     output = await withScope(async () => {
       // ── IAM check (OXA-1498) ───────────────────────────────────────────────
@@ -758,6 +994,7 @@ async function _invokeCore(
         }
 
         resolvedPrincipal = iamResult?.principal ?? null;
+        authorizationDecision = iamResult?.decision ?? null;
 
         // Agent-run invocations are ALWAYS enforced, independent of the
         // IAM_ENFORCEMENT_ENABLED rollout flag (Agent RBAC Phase 2, spec
@@ -767,6 +1004,33 @@ async function _invokeCore(
         // hole the spec closes. Human/API-key traffic (no ctx.agentRun)
         // keeps the existing flag semantics untouched.
         const isAgentRunInvocation = ctx.agentRun?.principalKind === "agent";
+
+        // ── Agent-run execution fails closed without a decision row ─────────
+        // Every governed operation persists one immutable
+        // iam.authorization_decisions row. If the IAM runtime could not insert
+        // it, the operation is UNRECORDED — and an unrecorded decision is not
+        // an allowed one. Deny before the handler runs rather than execute
+        // work no audit can ever account for. Human/API traffic is unaffected:
+        // it carries no agentRun and persists no decision row.
+        if (isAgentRunInvocation && authorizationDecision === null) {
+          emitSecurityEvent({
+            capability: canonical,
+            outcome: "deny",
+            surface: ctx.surface,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            actorUserId: ctx.userId,
+            requestId: ctx.requestId,
+            errorCode: "authz_denied",
+            durationMs: Date.now() - startMs,
+          });
+          throw new CapabilityError(
+            name,
+            "authz_denied",
+            `No authoritative authorization decision could be persisted for "${name}" — ` +
+              "agent-run execution fails closed on an unrecorded decision.",
+          );
+        }
 
         if (iamResult !== null && iamResult.outcome !== "allow") {
           if (_iamEnforced || isAgentRunInvocation) {
@@ -815,6 +1079,7 @@ async function _invokeCore(
                     : "") +
                   ".",
                 accessRequestId ?? undefined,
+                authorizationDecision ?? undefined,
               );
             }
             emitSecurityEvent({
@@ -832,6 +1097,8 @@ async function _invokeCore(
               name,
               "authz_denied",
               `IAM denied "${name}" for principal: ${iamResult.reason ?? iamResult.outcome}`,
+              undefined,
+              authorizationDecision ?? undefined,
             );
           } else {
             // Enforcement off: log would-deny and continue.
@@ -866,6 +1133,29 @@ async function _invokeCore(
         await _billingGate(ctx.orgId);
       }
       // ── End billing admission gate ───────────────────────────────────────────
+
+      // ── Budget admission gate (OXA-1079) ─────────────────────────────────────
+      // The hard period-to-date spend ceiling. Fires after the billing gate on
+      // exactly the same skip conditions (unscoped / noBillingGate skip it — a
+      // read of your own spend/budget must not be blocked by being over budget),
+      // and additionally requires a workspaceId (a workspace ceiling can't be
+      // evaluated without one). Throws BudgetExceededError (code
+      // "budget_exceeded") when a scope's period-to-date spend has reached its
+      // ceiling — DENIED before this invocation's own provider cost is incurred.
+      if (
+        _budgetGate !== null &&
+        ctx.orgId &&
+        ctx.workspaceId &&
+        !skipBilling &&
+        isScoped
+      ) {
+        await _budgetGate({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          capability: canonical,
+        });
+      }
+      // ── End budget admission gate ────────────────────────────────────────────
 
       // ── Capability entitlement gate ──────────────────────────────────────────
       // Runs after the billing gate. Only fires when:
@@ -902,6 +1192,17 @@ async function _invokeCore(
       const checkedCtx: CheckedContext = {
         ...ctx,
         principal: resolvedPrincipal,
+        // Attached ONLY here, only from the IAM runtime's own insert, and only
+        // on the allow path — the handler is the one thing downstream of a
+        // successful check, so it is the only consumer that can honestly claim
+        // "this operation was decided".
+        ...(authorizationDecision !== null ? { authorizationDecision } : {}),
+        ...(lifecycleExecution
+          ? {
+              idempotencyKey: lifecycleExecution.idempotencyKey,
+              execution: lifecycleExecution,
+            }
+          : {}),
       };
       const attribution =
         resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)
@@ -920,20 +1221,30 @@ async function _invokeCore(
     // orgId:"" fail-open path) carries a stable `code` we surface to the
     // audit chain so the denial reason is explainable (SOC 2 forensics).
     const isCapErr = err instanceof CapabilityError;
-    const scopeCode =
+    // Duck-typed stable codes from errors the kernel deliberately does NOT
+    // import (keeps it free of @oxagen/tenancy / @oxagen/billing deps): a
+    // TenantScopeError ("no_tenant_scope") and a BudgetExceededError
+    // ("budget_exceeded", OXA-1079). Both are DENIALS, not server errors — a
+    // spend-ceiling refusal is a policy decision that belongs in the audit
+    // chain as a deny (SOC2), exactly like an IAM deny.
+    const duckCode =
       err instanceof Error && "code" in err && err.code === "no_tenant_scope"
-        ? "no_tenant_scope"
-        : null;
+        ? ("no_tenant_scope" as const)
+        : err instanceof Error &&
+            "code" in err &&
+            err.code === "budget_exceeded"
+          ? ("budget_exceeded" as const)
+          : null;
     emitSecurityEvent({
       capability: canonical,
       outcome:
-        (isCapErr && err.code === "no_handler") || scopeCode ? "deny" : "error",
+        (isCapErr && err.code === "no_handler") || duckCode ? "deny" : "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       actorUserId: ctx.userId,
       requestId: ctx.requestId,
-      errorCode: isCapErr ? err.code : scopeCode,
+      errorCode: isCapErr ? err.code : duckCode,
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
@@ -946,7 +1257,7 @@ async function _invokeCore(
       requestId: ctx.requestId,
       messageId: ctx.messageId,
       input: inputResult.data,
-      errorCode: isCapErr ? err.code : (scopeCode ?? undefined),
+      errorCode: isCapErr ? err.code : (duckCode ?? undefined),
       durationMs: Date.now() - startMs,
     });
     throw err;
@@ -1044,6 +1355,12 @@ export interface AuthorizeExternalCapabilityResult {
   outcome: string;
   /** Human-readable denial reason, or null when allowed. */
   reason: string | null;
+  /**
+   * The platform-created `azd_…` decision reference for this external-tool
+   * check. Null when no decision row was persisted — which, for an agent-run
+   * caller, is itself a denial (see the fail-closed branch below).
+   */
+  decision: AuthorizationDecisionRef | null;
 }
 
 /**
@@ -1082,7 +1399,7 @@ export async function authorizeExternalCapability(
 
   if (checkFn === null) {
     // No IAM runtime registered — unconditionally allow (mirrors kernel.invoke()).
-    return { allowed: true, outcome: "allow", reason: null };
+    return { allowed: true, outcome: "allow", reason: null, decision: null };
   }
 
   let iamCheckThrew = false;
@@ -1117,7 +1434,37 @@ export async function authorizeExternalCapability(
       errorCode: "authz_denied",
       durationMs: Date.now() - startMs,
     });
-    return { allowed: false, outcome: "deny", reason: "iam_check_error" };
+    return {
+      allowed: false,
+      outcome: "deny",
+      reason: "iam_check_error",
+      decision: null,
+    };
+  }
+
+  const decision = iamResult?.decision ?? null;
+
+  // An agent run's tool boundary is a GOVERNED operation: it persists its own
+  // immutable decision row exactly like a kernel invoke(). No row means the
+  // operation is unrecorded, and an unrecorded decision is not an allowed one.
+  if (ctx.agentRun?.principalKind === "agent" && decision === null) {
+    emitSecurityEvent({
+      capability: canonical,
+      outcome: "deny",
+      surface: ctx.surface,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      actorUserId: ctx.userId,
+      requestId: ctx.requestId,
+      errorCode: "authz_denied",
+      durationMs: Date.now() - startMs,
+    });
+    return {
+      allowed: false,
+      outcome: "deny",
+      reason: "decision_not_persisted",
+      decision: null,
+    };
   }
 
   const outcome = iamResult?.outcome ?? "deny";
@@ -1143,17 +1490,17 @@ export async function authorizeExternalCapability(
     // 2, spec §3.4/§3.5): an unattended automation must never proceed on a
     // would-deny.
     if (_iamEnforced || ctx.agentRun?.principalKind === "agent") {
-      return { allowed: false, outcome, reason: reason ?? outcome };
+      return { allowed: false, outcome, reason: reason ?? outcome, decision };
     }
     // Enforcement off — log would-deny and allow.
     console.warn(
       `[kernel:external] IAM would-deny "${name}" (outcome=${outcome}, ` +
         `reason=${reason ?? "none"}) — IAM_ENFORCEMENT_ENABLED=false, allowing.`,
     );
-    return { allowed: true, outcome, reason: reason ?? outcome };
+    return { allowed: true, outcome, reason: reason ?? outcome, decision };
   }
 
-  return { allowed: true, outcome: "allow", reason: null };
+  return { allowed: true, outcome: "allow", reason: null, decision };
 }
 
 /**

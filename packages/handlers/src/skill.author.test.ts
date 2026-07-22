@@ -4,7 +4,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   invoke: vi.fn(),
-  parseSkill: vi.fn(),
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -15,10 +14,6 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: mocks.invoke,
 }));
 
-vi.mock("@oxagen/skills", () => ({
-  parseSkill: mocks.parseSkill,
-}));
-
 import { skillAuthorHandler } from "./skill.author";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
@@ -26,7 +21,8 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 const SYNTHESIS_RESULT = {
   name: "pr-review",
-  description: "How to review pull requests for correctness, readability, and coverage.",
+  description:
+    "How to review pull requests for correctness, readability, and coverage.",
   weight: "high" as const,
   category: "engineering",
   body: "# PR Review\n\nLoad this skill when the user asks you to review a pull request.\n\n## Rules\n\n1. Check for correctness bugs first.\n2. Check for readability.\n3. Verify test coverage.",
@@ -49,16 +45,6 @@ const BASE_INPUT = {
 
 function setupHappyPath(overrides: Partial<typeof BASE_INPUT> = {}) {
   mocks.generateObjectFor.mockResolvedValue({ object: SYNTHESIS_RESULT });
-  mocks.parseSkill.mockReturnValue({
-    slug: "pr-review",
-    name: "pr-review",
-    description: SYNTHESIS_RESULT.description,
-    metadata: { weight: "high", category: "engineering" },
-    body: SYNTHESIS_RESULT.body,
-    references: [],
-    source: "tenant",
-    version: "1.0.0",
-  });
   mocks.invoke.mockResolvedValue(INSTALL_RESULT);
   return { ...BASE_INPUT, ...overrides };
 }
@@ -70,7 +56,7 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
 
   // ── happy path ────────────────────────────────────────────────────────────
 
-  it("returns publicId, slug, body, activeVersion, and installed on success", async () => {
+  it("returns publicId, slug, content, activeVersion, and installed on success", async () => {
     const input = setupHappyPath();
     const result = await skillAuthorHandler(input, TEST_CTX);
 
@@ -78,22 +64,19 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     expect(result.slug).toBe("pr-review");
     expect(result.activeVersion).toBe(1);
     expect(result.installed).toBe(true);
-    expect(result.body).toContain("---");
-    expect(result.body).toContain("name: pr-review");
-    expect(result.body).toContain("weight: high");
+    expect(result.content).toContain("schema_version = 1");
+    expect(result.content).toContain('name = "pr-review"');
+    expect(result.content).toContain('weight = "high"');
   });
 
-  it("assembles valid .skill.md frontmatter in the body", async () => {
+  it("assembles canonical skill TOML", async () => {
     const input = setupHappyPath();
     const result = await skillAuthorHandler(input, TEST_CTX);
 
-    expect(result.body).toMatch(/^---\n/);
-    expect(result.body).toContain("name: pr-review");
-    expect(result.body).toContain("description:");
-    expect(result.body).toContain("metadata:");
-    expect(result.body).toContain("weight: high");
-    expect(result.body).toContain("category: engineering");
-    expect(result.body).toContain("---\n");
+    expect(result.content).toMatch(/^schema_version = 1\n/);
+    expect(result.content).toContain('kind = "skill"');
+    expect(result.content).toContain("[metadata]");
+    expect(result.content).toContain('category = "engineering"');
   });
 
   it("calls generateObjectFor with the prompt embedded", async () => {
@@ -101,7 +84,9 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     await skillAuthorHandler(input, TEST_CTX);
 
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { prompt: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      prompt: string;
+    };
     expect(call.prompt).toContain(input.prompt);
   });
 
@@ -116,27 +101,17 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     expect(call.telemetry.workspaceId).toBe(TEST_CTX.workspaceId);
   });
 
-  it("calls parseSkill to validate the assembled body before writing", async () => {
-    const input = setupHappyPath();
-    await skillAuthorHandler(input, TEST_CTX);
-
-    expect(mocks.parseSkill).toHaveBeenCalledTimes(1);
-    const [rawBody] = mocks.parseSkill.mock.calls[0] as [string];
-    expect(rawBody).toContain("name: pr-review");
-  });
-
-  it("calls invoke('install_skill') with the assembled body", async () => {
+  it("calls invoke('install_skill') with canonical content", async () => {
     const input = setupHappyPath();
     await skillAuthorHandler(input, TEST_CTX);
 
     expect(mocks.invoke).toHaveBeenCalledTimes(1);
     const [capName, invokeInput] = mocks.invoke.mock.calls[0] as [
       string,
-      { custom: { name: string; body: string } },
+      { custom: { content: string } },
     ];
     expect(capName).toBe("install_skill");
-    expect(invokeInput.custom.name).toBe("pr-review");
-    expect(invokeInput.custom.body).toContain("name: pr-review");
+    expect(invokeInput.custom.content).toContain('name = "pr-review"');
   });
 
   it("returns installed=false when the skill already existed (idempotent)", async () => {
@@ -152,11 +127,14 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     const input = setupHappyPath({ workspace_id: "ws_EXPLICIT" });
     await skillAuthorHandler(input, TEST_CTX);
 
-    const [, invokeInput] = mocks.invoke.mock.calls[0] as [string, { workspace_id?: string }];
+    const [, invokeInput] = mocks.invoke.mock.calls[0] as [
+      string,
+      { workspace_id?: string },
+    ];
     expect(invokeInput.workspace_id).toBe("ws_EXPLICIT");
   });
 
-  it("omits category from frontmatter when not provided by the model", async () => {
+  it("omits category metadata when not provided by the model", async () => {
     setupHappyPath();
     mocks.generateObjectFor.mockResolvedValue({
       object: { ...SYNTHESIS_RESULT, category: undefined },
@@ -164,7 +142,7 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     const input = { ...BASE_INPUT, category: undefined };
     const result = await skillAuthorHandler(input, TEST_CTX);
 
-    expect(result.body).not.toContain("category:");
+    expect(result.content).not.toContain("category =");
   });
 
   // ── error paths ───────────────────────────────────────────────────────────
@@ -187,18 +165,15 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     );
   });
 
-  it("throws when parseSkill rejects the assembled body (invalid slug from model)", async () => {
+  it("throws when artifact validation rejects an invalid model slug", async () => {
     const input = setupHappyPath();
-    // Model returns an uppercase name that would fail parseSkill
+    // Model returns an uppercase name that fails the canonical artifact schema.
     mocks.generateObjectFor.mockResolvedValue({
       object: { ...SYNTHESIS_RESULT, name: "Bad_Slug" },
     });
-    mocks.parseSkill.mockImplementation(() => {
-      throw new Error("kebab-case-slug only");
-    });
-
-    await expect(skillAuthorHandler(input, TEST_CTX)).rejects.toThrow(/kebab-case/i);
-    // invoke must NOT be called when parseSkill fails
+    await expect(skillAuthorHandler(input, TEST_CTX)).rejects.toThrow(
+      /kebab-case/i,
+    );
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
@@ -206,7 +181,9 @@ describe("skillAuthorHandler (@oxagen/handlers)", () => {
     const input = setupHappyPath();
     mocks.invoke.mockRejectedValue(new Error("install failed"));
 
-    await expect(skillAuthorHandler(input, TEST_CTX)).rejects.toThrow("install failed");
+    await expect(skillAuthorHandler(input, TEST_CTX)).rejects.toThrow(
+      "install failed",
+    );
   });
 
   // ── telemetry ─────────────────────────────────────────────────────────────

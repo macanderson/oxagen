@@ -4,9 +4,8 @@
  * `@oxagen/agent`'s `file-lock/lease.ts` (ADR-021 §5).
  *
  * This SUPERSEDES the Neo4j-backed `./file-lock.ts` adapter: locks are
- * mutual-exclusion state and must live in Postgres (the graph sync path is
- * async, so a graph lock is invisible to a concurrent agent during sync lag).
- * Neo4j now only carries an async lineage projection of these leases.
+ * mutual-exclusion state and must live in Postgres. A graph-backed lock is
+ * eventually consistent and therefore invisible during projection lag.
  *
  * Injected wherever `runCodingAgent`/`runTurn` gets a real workspace (today:
  * `agent.repo.edit`'s handler) so `write_file`/`edit_file` in
@@ -25,9 +24,12 @@ import {
   releaseFileLease,
   releaseFileLeasesByExecution,
 } from "../file-lock/lease";
-import { toNaturalKey } from "./graph-sync";
+import { toFileResourceKey } from "../file-lock/resource-key";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.file-lock-lease" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.file-lock-lease" },
+});
 
 const DENIED_ON_ERROR: FileLockGrant = {
   granted: false,
@@ -40,18 +42,25 @@ const DENIED_ON_ERROR: FileLockGrant = {
 export interface FileLeaseLockAdapterArgs {
   orgId: string;
   workspaceId: string;
-  /** GitHub owner (org or user) — same coordinates `createGraphSyncAdapter` takes, so the lock and the lineage projection key off the identical naturalKey. */
+  /** GitHub owner (org or user), used to make the resource key repository-scoped. */
   owner?: string;
   /** GitHub repo name. */
   repo?: string;
 }
 
-export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): FileLockProvider {
+export function createFileLeaseLockAdapter(
+  args: FileLeaseLockAdapterArgs,
+): FileLockProvider {
   const { orgId, workspaceId, owner, repo } = args;
 
   return {
-    async acquire({ path, agentId, executionId, action }): Promise<FileLockGrant> {
-      const resourceKey = toNaturalKey(path, owner, repo);
+    async acquire({
+      path,
+      agentId,
+      executionId,
+      action,
+    }): Promise<FileLockGrant> {
+      const resourceKey = toFileResourceKey(path, owner, repo);
       try {
         const result = await acquireFileLease({
           orgId,
@@ -64,7 +73,13 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         });
         const lease = result.acquired[0];
         if (lease) {
-          return { granted: true, lockId: lease.lockId, heldBy: null, blockedUntil: null, fencingToken: lease.fencingToken };
+          return {
+            granted: true,
+            lockId: lease.lockId,
+            heldBy: null,
+            blockedUntil: null,
+            fencingToken: lease.fencingToken,
+          };
         }
         const conflict = result.conflicts[0];
         return {
@@ -78,7 +93,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         // Fail SOFT toward denial — a DB outage must never let a write proceed
         // unguarded. tools.ts retries a denial a bounded number of times, then
         // surfaces a clear "Blocked" tool result rather than crashing the turn.
-        logger.warn({ err, resourceKey, agentId, executionId }, "file-lock lease: acquire failed — denying (fail-soft)");
+        logger.warn(
+          { err, resourceKey, agentId, executionId },
+          "file-lock lease: acquire failed — denying (fail-soft)",
+        );
         return DENIED_ON_ERROR;
       }
     },
@@ -89,7 +107,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
         await releaseFileLease({ orgId, workspaceId, lockId, holder: agentId });
       } catch (err) {
         // Best-effort — the lease TTL and the turn-end releaseAll both still apply.
-        logger.warn({ err, lockId, agentId }, "file-lock lease: release failed — relying on TTL/backstop");
+        logger.warn(
+          { err, lockId, agentId },
+          "file-lock lease: release failed — relying on TTL/backstop",
+        );
       }
     },
 
@@ -97,7 +118,10 @@ export function createFileLeaseLockAdapter(args: FileLeaseLockAdapterArgs): File
       try {
         await releaseFileLeasesByExecution({ orgId, workspaceId, executionId });
       } catch (err) {
-        logger.warn({ err, executionId }, "file-lock lease: releaseAll failed — relying on TTL sweep");
+        logger.warn(
+          { err, executionId },
+          "file-lock lease: releaseAll failed — relying on TTL sweep",
+        );
       }
     },
   };

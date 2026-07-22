@@ -317,8 +317,8 @@ Enforcement: `no-restricted-imports` in `eslint.next.mjs`. Exceptions: the re-ex
 - **Use the shared citation components**, don't hand-roll a `<span>{id}</span>`:
   - `NodeRef` (`apps/app/src/components/knowledge/graph/node-ref.tsx`) — a colour-coded node chip with a hover/click property popover. Derive its input from an edge with `sourceNodeRef(edge)` / `targetNodeRef(edge)`.
   - The graph-explorer detail/hover panels (`PropertyList`, `ConfidenceMeter`, `CopyableId`, `colorForLabel`) are the canonical primitives — reuse them; there is exactly one implementation of "show a node/edge nicely".
-- **Resolve the label server-side.** A capability that returns an edge/relationship must resolve each endpoint to the `knowledgeNodeRef` shape (`{ id, label, displayName, properties }`) in its handler — `semantic.edge.suggest`/`semantic.edge.list` OPTIONAL MATCH the node by `publicId` and coalesce `displayName→name→publicId`. Don't ship a bare id to the client and hope the UI has a label for it.
-- A node that isn't materialised yet (e.g. a pending inferred edge's target) carries `id: null` and is shown as a described candidate, never a UUID.
+- **Resolve the label server-side.** A capability that returns an edge/relationship must resolve each endpoint to the `knowledgeNodeRef` shape (`{ id, label, displayName, properties }`) in its handler by matching the node in workspace scope and coalescing `displayName→name→publicId`. Don't ship a bare id to the client and hope the UI has a label for it.
+- Only materialized, authorized graph records are rendered at launch. A future candidate system must define a separate attributable reference shape rather than overloading a node UUID.
 
 ## Infrastructure boundaries
 

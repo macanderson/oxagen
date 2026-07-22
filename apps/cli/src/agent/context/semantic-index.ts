@@ -8,8 +8,8 @@
  * then pulled in structurally by the traversal layer.
  *
  * Embedding is lazy and cached: on first use a file node is embedded with the
- * shared `renderFileText` (identical text to the server ingestion pipeline) and
- * the vector is persisted on the node (DuckDB). Subsequent queries reuse it, and
+ * shared `renderFileText` and the vector is persisted on the local DuckDB node.
+ * Subsequent queries reuse it, and
  * only files whose vector is missing or was produced by a different model are
  * re-embedded — so the cost is paid once, incrementally.
  *
@@ -18,7 +18,11 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { cosineSimilarity, renderFileText, renderMarkdownFileText } from "@oxagen/code-graph";
+import {
+  cosineSimilarity,
+  renderFileText,
+  renderMarkdownFileText,
+} from "@oxagen/code-graph";
 import type { CodeGraph, CodeNode } from "../../daemon/code-graph/types.js";
 import type { CodeGraphStore } from "../../daemon/code-graph/store.js";
 import type { EmbeddingClient } from "./embedding.js";

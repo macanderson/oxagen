@@ -9,7 +9,7 @@
 
 ## Intent
 
-Fetch a specific version of a workspace skill, returning the raw body (frontmatter + content), parsed frontmatter, graph/file references, and version metadata. Use to inspect or diff a historical version, or to retrieve the body before calling `skill.version.activate` to roll back.
+Fetch a specific version of a workspace skill, returning the canonical `skill.toml` content, the parsed `artifact` projection, graph/file references, and version metadata. Use to inspect or diff a historical version, or to retrieve the content before calling `skill.version.activate` to roll back.
 
 ## Input
 
@@ -27,9 +27,9 @@ Fetch a specific version of a workspace skill, returning the raw body (frontmatt
 | versionNumber | integer | Version number within this skill |
 | isLatest | boolean | True if this is the highest-numbered version |
 | isActive | boolean | True when this version matches `skills.active_version_id` |
-| body | string | Raw skill body including YAML frontmatter block and content |
-| frontmatter | object | Parsed YAML frontmatter extracted from the body |
-| referencesPayload | array | Graph node and file references declared in frontmatter |
+| content | string | Canonical `skill.toml` content |
+| artifact | object | Parsed and validated `SkillArtifact` projection of `content` |
+| referencesPayload | array | Graph node and file references projected from the artifact |
 | createdAt | string (ISO 8601) | When the version was created |
 | createdBy | string \| null | User ID of the author, null if unknown |
 

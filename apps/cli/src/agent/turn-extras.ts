@@ -49,7 +49,7 @@ export interface TurnExtrasOptions {
   agentTools?: string[];
   /**
    * Named-agent skill selection (AgentDefinition.skills): these skills'
-   * FULL SKILL.md bodies are injected into the system prompt; every other
+   * Full selected skill instructions are injected into the system prompt; every other
    * discovered skill still appears in the compact name+description list.
    * Undefined ⇒ list-only awareness (no full bodies).
    */
@@ -119,7 +119,7 @@ export async function buildTurnExtras(
 
   // Loadable skills (.oxagen/skills, .claude/skills, …): every turn sees the
   // compact name+description inventory; an agent's declared `skills` selection
-  // additionally injects those SKILL.md bodies in full (progressive
+  // additionally injects those skill instructions in full (progressive
   // disclosure — see skills/loader.ts's skillsPromptBlock).
   const skillsBlock = skillsPromptBlock(
     opts.skills ?? [...loadSkills({ cwd: opts.cwd }).values()],

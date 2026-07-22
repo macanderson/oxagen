@@ -37,7 +37,10 @@ describe("@oxagen/functions type contracts", () => {
 
   describe("StepContext", () => {
     it("run() accepts name and async function, returns typed result", () => {
-      expectTypeOf<StepContext["run"]>().toBeCallableWith("step-name", async () => 42);
+      expectTypeOf<StepContext["run"]>().toBeCallableWith(
+        "step-name",
+        async () => 42,
+      );
     });
 
     it("sendEvent() accepts label and single event", () => {
@@ -95,8 +98,12 @@ describe("@oxagen/functions type contracts", () => {
       const minimal: DurableFunctionConfig = { id: "my-function" };
       expectTypeOf(minimal.id).toBeString();
       expectTypeOf(minimal.retries).toEqualTypeOf<number | undefined>();
-      expectTypeOf(minimal.concurrency).toEqualTypeOf<ConcurrencyConfig | undefined>();
-      expectTypeOf(minimal.cancelOn).toEqualTypeOf<CancelOnConfig[] | undefined>();
+      expectTypeOf(minimal.concurrency).toEqualTypeOf<
+        ConcurrencyConfig | undefined
+      >();
+      expectTypeOf(minimal.cancelOn).toEqualTypeOf<
+        CancelOnConfig[] | undefined
+      >();
     });
 
     it("full config matches existing inngest usage patterns", () => {
@@ -119,7 +126,7 @@ describe("@oxagen/functions type contracts", () => {
 
     it("supports optional batchEvents config", () => {
       const config: DurableFunctionConfig = {
-        id: "ingestion.github-infer-features-batch",
+        id: "ingestion.provider-metadata-batch",
         batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
       };
       expectTypeOf(config.batchEvents).toEqualTypeOf<
@@ -135,7 +142,9 @@ describe("@oxagen/functions type contracts", () => {
         id: "agent.video-render",
         timeouts: { finish: "16m" },
       };
-      expectTypeOf(config.timeouts).toEqualTypeOf<{ finish?: string } | undefined>();
+      expectTypeOf(config.timeouts).toEqualTypeOf<
+        { finish?: string } | undefined
+      >();
       expect(config.timeouts?.finish).toBe("16m");
     });
 
@@ -146,7 +155,9 @@ describe("@oxagen/functions type contracts", () => {
           await step.run("handle-failure", async () => event.data);
         },
       };
-      expectTypeOf(config.onFailure).toEqualTypeOf<DurableFunctionHandler | undefined>();
+      expectTypeOf(config.onFailure).toEqualTypeOf<
+        DurableFunctionHandler | undefined
+      >();
       expect(config.onFailure).toBeTypeOf("function");
     });
   });
@@ -167,7 +178,9 @@ describe("@oxagen/functions type contracts", () => {
 
   describe("DurableFunctionTrigger", () => {
     it("can be event-based", () => {
-      const trigger: DurableFunctionTrigger = { event: "agent/workflow.supervisor.start" };
+      const trigger: DurableFunctionTrigger = {
+        event: "agent/workflow.supervisor.start",
+      };
       expectTypeOf(trigger).toMatchTypeOf<{ event: string }>();
     });
 
@@ -181,7 +194,10 @@ describe("@oxagen/functions type contracts", () => {
     it("is an async function accepting context and returning unknown", () => {
       const handler: DurableFunctionHandler = async ({ event, step }) => {
         const result = await step.run("load", async () => ({ id: "123" }));
-        await step.sendEvent("notify", { name: "done", data: { id: result.id } });
+        await step.sendEvent("notify", {
+          name: "done",
+          data: { id: result.id },
+        });
         return result;
       };
       expectTypeOf(handler).toBeFunction();
@@ -200,7 +216,9 @@ describe("@oxagen/functions type contracts", () => {
       expectTypeOf<DurableFunctionHandlerContext["event"]>().toEqualTypeOf<
         EventPayload<Record<string, unknown>>
       >();
-      expectTypeOf<DurableFunctionHandlerContext["step"]>().toEqualTypeOf<StepContext>();
+      expectTypeOf<
+        DurableFunctionHandlerContext["step"]
+      >().toEqualTypeOf<StepContext>();
     });
   });
 
@@ -217,7 +235,10 @@ describe("@oxagen/functions type contracts", () => {
   describe("EventClient", () => {
     it("send() accepts single event", () => {
       const client = {} as EventClient;
-      expectTypeOf(client.send).toBeCallableWith({ name: "test/event", data: { key: "val" } });
+      expectTypeOf(client.send).toBeCallableWith({
+        name: "test/event",
+        data: { key: "val" },
+      });
     });
 
     it("send() accepts array of events", () => {
@@ -229,7 +250,9 @@ describe("@oxagen/functions type contracts", () => {
     });
 
     it("send() returns Promise<void>", () => {
-      expectTypeOf<EventClient["send"]>().returns.toEqualTypeOf<Promise<void>>();
+      expectTypeOf<EventClient["send"]>().returns.toEqualTypeOf<
+        Promise<void>
+      >();
     });
   });
 

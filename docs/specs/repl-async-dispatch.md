@@ -19,7 +19,7 @@ The REPL already lets you type and submit while a turn streams; submissions do *
 - Enqueue path: `handleUserSubmit` (`interactive.tsx:3291-3328`) → `enqueue` (`interactive.tsx:3276-3283`) → `void pump()`.
 - `isStreaming` is set `true` for the **whole** turn: set at `interactive.tsx:2415-2416`, cleared at `interactive.tsx:3217-3218` (turn end) and `interactive.tsx:1091-1092` (cancel). The composer (`PromptInput`) stays live throughout — `busy={isStreaming}` (`interactive.tsx:3576`, `3796`) is a **visual** hint only; input and submit keep working. But because `pump` is awaiting the in-flight `handleSubmit`, a queued prompt cannot start until the current turn finishes.
 
-**Pinned behavior** (`apps/cli/src/repl/__tests__/interactive.queue.test.tsx`): mid-turn submissions are visibly queued and not started early; they run FIFO as each prior turn completes; an idle submit runs immediately; the Esc-twice reset confirmation is answered **synchronously** and never enters the FIFO. Note: the two FIFO tests are currently `it.skip` (`lines 159`, `223`); only the reset-confirm test (`line 198`) runs.
+**Pinned behavior** (`apps/cli/src/repl/__tests__/interactive.queue.test.tsx`): mid-turn submissions are visibly queued and not started early; they run FIFO as each prior turn completes; an idle submit runs immediately; the Esc-twice reset confirmation is answered **synchronously** and never enters the FIFO. Note: the two FIFO tests were `it.skip` from #271 until 2026-07-20 — the "flake" was a missing `project/init.js` mock (the first turn parked on the project-init approval prompt), not timing; all three tests now run.
 
 > Net: today's queue is a **serial pipeline**. The composer accepts input during a turn, but throughput is one turn at a time. This is the exact bottleneck the user is describing.
 
@@ -191,3 +191,18 @@ Track only **our** sids (§3 step 2) so `watchSessions` never surfaces a strange
 - The concurrency cap holds: submitting more than `dispatchMaxConcurrent` tasks queues locally rather than spawning unbounded workers.
 - `dispatch-mode.test.ts` and `background-tracker.test.ts` pass (narrow, co-located runs only — never the full suite).
 - Config round-trips the mode + cap across REPL restarts.
+
+---
+
+## 7. v1 DoD verification (2026-07-20)
+
+Audited on branch `repl-dispatch-dod`; every §6 bullet holds with evidence:
+
+1. **Mode ON + plain prompt frees the composer** — `decideDispatch` runs at the top of `handleSubmit` (`interactive.tsx:2278-2286`): a `background` decision calls `dispatchToBackground` and `return`s before any inline-turn work; the detached spawn is "typically well under 50 ms" (`sessions/dispatch.ts:75`). The Background panel renders from the tracker roster (`interactive.tsx:4122-4134`).
+2. **`=`-prefixed prompt stays inline** — precedence in `decideDispatch` (`dispatch-mode.ts:67-84`): trailing ` &` → background; mode OFF → inline; slash/shell → inline; forced `=`/`> ` → inline with the marker stripped (`dispatch-mode.ts:81`); only then background. Pinned by the 14-case truth table in `dispatch-mode.test.ts`.
+3. **Completions fold back attributed, no focus steal** — the tracker's `onNotify` is wired to `pushAssistant` (`interactive.tsx:4126`), appending sid-attributed one-liners as ordinary transcript lines (`background-tracker.ts` module contract, items 1-2).
+4. **The cap holds** — `dispatchToBackground` checks the resource-scaled effective cap and `tracker.reserve()` before spawning; past the cap the prompt joins `dispatchQueueRef` with a visible `⧗ dispatch queued` line (`interactive.tsx:2216-2233`); a freed slot re-drains via `onSlotFree` (`interactive.tsx:4128`, drain loop `interactive.tsx:2252`).
+5. **Co-located tests pass** — `dispatch-mode.test.ts` (14) + `background-tracker.test.ts` (10): 24/24 green as narrow single-file runs. The two §1.1 FIFO queue tests were revived (see the §1.1 note): 5/5 consecutive green.
+6. **Config round-trips** — `dispatchMode`/`dispatchMaxConcurrent` in `settings/schema.ts:209,215`; seeded at mount via `loadDispatchSettings` (`interactive.tsx:729-736`); `/dispatch on|off` → `persistDispatchMode` (`interactive.tsx:2341`) and `/dispatch cap <n>` → `persistDispatchCap` (`interactive.tsx:2385`), both through `writeSettingsValue` (`dispatch-settings.ts:39-56`).
+
+Help parity (§3 step 7) landed with this audit: the REPL HELP documents the ` &`/`=` markers and the cap (`repl/components.tsx`), and `oxagen fleet --help` cross-references the mode (fleet help footer in `program.tsx`; module doc in `commands/fleet.ts`).

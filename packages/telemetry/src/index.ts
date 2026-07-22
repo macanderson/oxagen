@@ -24,6 +24,7 @@ export * from "./execution-diagnostics";
 export * from "./sandbox-logs";
 export * from "./error-clusters";
 export * from "./usage-events";
+export * from "./stella-operational-events";
 export { chInsert, chSelect } from "./tenant";
 export * from "./eval-item-results";
 export * from "./router-outcomes";

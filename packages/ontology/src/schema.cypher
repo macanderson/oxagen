@@ -4,6 +4,14 @@
 // All statements are idempotent (IF NOT EXISTS). Migrate.ts runs each
 // statement in its own transaction.
 
+// Retire the legacy semantic-inference review schema without deleting its data.
+// Operational cleanup can remove drained :InferredEdge nodes separately.
+DROP INDEX inferred_edge_workspace_status IF EXISTS;
+DROP INDEX inferred_edge_confidence IF EXISTS;
+DROP INDEX inferred_edge_connection IF EXISTS;
+DROP INDEX inferred_edge_approved IF EXISTS;
+DROP CONSTRAINT inferred_edge_id IF EXISTS;
+
 // --- Uniqueness constraints on publicId (spec §4.3) ---
 CREATE CONSTRAINT tenant_public_id IF NOT EXISTS FOR (n:Tenant) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT workspace_public_id IF NOT EXISTS FOR (n:Workspace) REQUIRE n.publicId IS UNIQUE;
@@ -17,8 +25,10 @@ CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersio
 CREATE CONSTRAINT execution_public_id IF NOT EXISTS FOR (n:Execution) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT fanout_public_id IF NOT EXISTS FOR (n:Fanout) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT document_public_id IF NOT EXISTS FOR (n:Document) REQUIRE n.publicId IS UNIQUE;
-CREATE CONSTRAINT generated_file_public_id IF NOT EXISTS FOR (n:GeneratedFile) REQUIRE n.publicId IS UNIQUE;
-CREATE INDEX generated_file_org IF NOT EXISTS FOR (n:GeneratedFile) ON (n.orgId);
+// Retire the automatic generated-file graph projection without deleting data.
+// Operational cleanup may remove drained :GeneratedFile nodes separately.
+DROP INDEX generated_file_org IF EXISTS;
+DROP CONSTRAINT generated_file_public_id IF EXISTS;
 CREATE CONSTRAINT agent_memory_public_id IF NOT EXISTS FOR (n:AgentMemory) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT conversation_public_id IF NOT EXISTS FOR (n:Conversation) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT message_public_id IF NOT EXISTS FOR (n:Message) REQUIRE n.publicId IS UNIQUE;
@@ -28,6 +38,14 @@ CREATE CONSTRAINT skill_public_id IF NOT EXISTS FOR (n:Skill) REQUIRE n.publicId
 CREATE CONSTRAINT skill_version_public_id IF NOT EXISTS FOR (n:SkillVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT background_task_public_id IF NOT EXISTS FOR (n:BackgroundTask) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId IS UNIQUE;
+
+// --- Fleet lineage graph projection (issue #1078) ---
+// Idempotent MERGE projection of agent.subagent_fanouts / agent.subagent_runs
+// (Postgres chain-of-custody authority) into graph nodes/edges — see
+// packages/agent/src/dispatch/lineage-projection.ts. Distinct from the retired
+// :Fanout/BRANCHED_TO_SUBAGENT pair above (superseded automatic projection).
+CREATE CONSTRAINT subagent_fanout_public_id IF NOT EXISTS FOR (n:SubagentFanout) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT subagent_run_public_id IF NOT EXISTS FOR (n:SubagentRun) REQUIRE n.publicId IS UNIQUE;
 
 // --- Two-axis memory model (docs/specs/two-axis-memory) ---
 // Citation/Promotion/Evidence back the confidence ladder (OBSERVATION→RULE→FACT),
@@ -45,6 +63,8 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 //   APPROVED_BY          :Execution -> :User (approval audit)
 //   PROMOTED             :Promotion -> :Memory (auditable class promotion)
 //   DEMOTED              :Demotion -> :Memory (auditable class demotion)
+//   DISPATCHED           :SubagentFanout -> :SubagentRun (direct child, issue #1078)
+//   SPAWNED_FANOUT       :SubagentRun -> :SubagentFanout (nested dispatch, issue #1078)
 
 // --- Org-scope range indexes for fast filtering ---
 // Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts
@@ -57,6 +77,8 @@ CREATE INDEX document_org IF NOT EXISTS FOR (n:Document) ON (n.orgId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
 CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
 CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgId);
+CREATE INDEX subagent_fanout_org IF NOT EXISTS FOR (n:SubagentFanout) ON (n.orgId);
+CREATE INDEX subagent_run_org IF NOT EXISTS FOR (n:SubagentRun) ON (n.orgId);
 
 // --- Two-axis memory model — filter/sort indexes ---
 // Reads filter on status='ACTIVE' and the two axes; the promotion-candidate UI
@@ -90,27 +112,17 @@ CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
 FOR (n:AgentMemory) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
-// Engram (packages/engram) memory dual-write projection — mirrors episodic
-// store records as :EngramMemory nodes (packages/inngest-functions
-// engram.sync-memory-to-graph / engram.embed-memory). Backs
-// VectorRetrievalEngine's ANN recall (OXA-2061) — the embed-memory worker
-// writes `m.embedding` expecting this index to exist for ANN queries.
-CREATE INDEX engram_memory_org IF NOT EXISTS FOR (n:EngramMemory) ON (n.orgId);
-CREATE VECTOR INDEX engram_memory_embedding_index IF NOT EXISTS
-FOR (n:EngramMemory) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+// Retire the automatic EngramMemory projection without deleting legacy nodes.
+DROP INDEX engram_memory_org IF EXISTS;
+DROP INDEX engram_memory_embedding_index IF EXISTS;
 
 CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
-// Semantic peer recall (Phase 2 §3 Tier B): cross-fanout recall of :Execution
-// result summaries. Anchored on the :Execution label so recallPeerResults can
-// vector-search sibling/prior run summaries directly, without the broader
-// graph_node_embedding_index label-filter round-trip.
-CREATE VECTOR INDEX execution_embedding_index IF NOT EXISTS
-FOR (n:Execution) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+// Retire semantic execution-summary projection/recall without deleting
+// :Execution nodes used by the explicit memory-citation model.
+DROP INDEX execution_embedding_index IF EXISTS;
 
 // Universal vector index for all ingested entity nodes.
 // All customer ontology nodes carry the :EntityNode label regardless of entityType.
@@ -120,48 +132,38 @@ CREATE VECTOR INDEX entity_node_embedding_index IF NOT EXISTS
 FOR (n:EntityNode) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
-// --- Source code ingestion — SourceFile, SourceSymbol, Feature ---
-CREATE CONSTRAINT source_file_public_id IF NOT EXISTS FOR (n:SourceFile) REQUIRE n.publicId IS UNIQUE;
-// Composite uniqueness on (naturalKey, orgId) — required for the agent
-// file-locking acquire (docs/specs/agent-file-locking/plan.md §4) to be
-// genuinely atomic: Neo4j only takes a serializing lock during MERGE when a
-// uniqueness constraint backs the merged properties, so two concurrent
-// acquireFileLock() calls for the SAME file would otherwise both pass the
-// MERGE + conflict-check read before either commits (a duplicate-node write
-// race), letting both be granted. Neo4j Community edition (5.x) supports
-// composite (multi-property) uniqueness constraints, verified against the
-// local dev instance.
-CREATE CONSTRAINT source_file_natural_key_org_unique IF NOT EXISTS
-FOR (n:SourceFile) REQUIRE (n.naturalKey, n.orgId) IS UNIQUE;
-CREATE INDEX source_file_natural_key IF NOT EXISTS FOR (n:SourceFile) ON (n.naturalKey);
-CREATE INDEX source_file_org IF NOT EXISTS FOR (n:SourceFile) ON (n.orgId);
-CREATE INDEX source_file_connection IF NOT EXISTS FOR (n:SourceFile) ON (n.connectionId);
+// Retired launch surface: detailed source-code graphs stay checkout-local.
+// Drop legacy server indexes/constraints; derived nodes can be removed by the
+// operational cleanup after in-flight ingestion jobs have drained.
+DROP INDEX source_file_natural_key IF EXISTS;
+DROP INDEX source_file_org IF EXISTS;
+DROP INDEX source_file_connection IF EXISTS;
+DROP INDEX source_symbol_natural_key IF EXISTS;
+DROP INDEX source_symbol_org IF EXISTS;
+DROP INDEX source_symbol_file IF EXISTS;
+DROP INDEX source_chunk_natural_key IF EXISTS;
+DROP INDEX source_chunk_org IF EXISTS;
+DROP INDEX source_chunk_file IF EXISTS;
+DROP INDEX source_file_embedding_index IF EXISTS;
+DROP INDEX source_symbol_embedding_index IF EXISTS;
+DROP INDEX source_chunk_embedding_index IF EXISTS;
+DROP CONSTRAINT source_file_public_id IF EXISTS;
+DROP CONSTRAINT source_file_natural_key_org_unique IF EXISTS;
+DROP CONSTRAINT source_symbol_public_id IF EXISTS;
+DROP CONSTRAINT source_chunk_public_id IF EXISTS;
 
-CREATE CONSTRAINT source_symbol_public_id IF NOT EXISTS FOR (n:SourceSymbol) REQUIRE n.publicId IS UNIQUE;
-CREATE INDEX source_symbol_natural_key IF NOT EXISTS FOR (n:SourceSymbol) ON (n.naturalKey);
-CREATE INDEX source_symbol_org IF NOT EXISTS FOR (n:SourceSymbol) ON (n.orgId);
-CREATE INDEX source_symbol_file IF NOT EXISTS FOR (n:SourceSymbol) ON (n.fileNaturalKey);
-
-CREATE CONSTRAINT feature_public_id IF NOT EXISTS FOR (n:Feature) REQUIRE n.publicId IS UNIQUE;
-CREATE INDEX feature_natural_key IF NOT EXISTS FOR (n:Feature) ON (n.naturalKey);
-CREATE INDEX feature_org IF NOT EXISTS FOR (n:Feature) ON (n.orgId, n.workspaceId);
-
-CREATE VECTOR INDEX source_file_embedding_index IF NOT EXISTS
-FOR (n:SourceFile) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
-
-CREATE VECTOR INDEX source_symbol_embedding_index IF NOT EXISTS
-FOR (n:SourceSymbol) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
-
-CREATE VECTOR INDEX feature_embedding_index IF NOT EXISTS
-FOR (n:Feature) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+// Retire the legacy inferred-feature projection. Customer ontologies may still
+// use "Feature" as an ordinary EntityNode label; it no longer receives a
+// privileged system schema or embedding index.
+DROP INDEX feature_natural_key IF EXISTS;
+DROP INDEX feature_org IF EXISTS;
+DROP INDEX feature_embedding_index IF EXISTS;
+DROP CONSTRAINT feature_public_id IF EXISTS;
 
 // --- Universal graph node anchor (:GraphNode) ----------------------------------
-// Every tenant graph node — customer ontology AND product-owned (executions, code,
+// Every tenant graph node — customer ontology AND product-owned (executions,
 // memories, messages, documents) — carries the neutral :GraphNode anchor label IN
-// ADDITION to its real domain label (:Submarine, :Execution, :SourceFile, ...).
+// ADDITION to its real domain label (:Submarine, :Execution, ...).
 // The anchor exists ONLY to back per-label indexes/constraints: Neo4j cannot
 // parameterize labels (MATCH (n:$label) is illegal) nor index across arbitrary
 // runtime-defined customer labels, so id-lookup, scope filtering and the universal
@@ -175,31 +177,11 @@ CREATE INDEX graph_node_label IF NOT EXISTS FOR (n:GraphNode) ON (n.label);
 
 // One universal vector index over ALL embedded graph nodes — a single
 // db.index.vector.queryNodes('graph_node_embedding_index', ...) call performs
-// natural-language semantic search across customer data, source code, agent
+// natural-language semantic search across customer data, agent
 // memories, executions, messages and documents at once, post-filtered by
 // orgId/workspaceId + optional is_system/label. 1536 dims = text-embedding-3-small.
 CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
 FOR (n:GraphNode) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
-
-// --- Source code chunks (full-content embedding for similarity search) ----------
-// A SourceFile body is split into overlapping :SourceChunk nodes, each embedded, so
-// large files are fully searchable by content (not just by symbol name). Chunks
-// carry the :GraphNode anchor + is_system=true and link via
-// (:SourceFile)-[:HAS_CHUNK]->(:SourceChunk).
-CREATE CONSTRAINT source_chunk_public_id IF NOT EXISTS FOR (n:SourceChunk) REQUIRE n.publicId IS UNIQUE;
-CREATE INDEX source_chunk_natural_key IF NOT EXISTS FOR (n:SourceChunk) ON (n.naturalKey);
-CREATE INDEX source_chunk_org IF NOT EXISTS FOR (n:SourceChunk) ON (n.orgId);
-CREATE INDEX source_chunk_file IF NOT EXISTS FOR (n:SourceChunk) ON (n.fileNaturalKey);
-CREATE VECTOR INDEX source_chunk_embedding_index IF NOT EXISTS
-FOR (n:SourceChunk) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
-
-// --- Execution searchability ----------------------------------------------------
-// Agent/workflow executions are first-class searchable graph nodes: this vector
-// index powers NL recall over run summaries (prompt, tools used, outcome).
-CREATE VECTOR INDEX execution_embedding_index IF NOT EXISTS
-FOR (n:Execution) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
 // --- One-time relabel: :KnowledgeNode -> :GraphNode + is_system backfill ---------
@@ -208,9 +190,6 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 // are migrated first (is_system=true) so the trailing :KnowledgeNode catch-all only
 // captures genuine customer ontology nodes (is_system=false). publicId is backfilled
 // where missing so executions/memories/messages/documents are id-addressable.
-MATCH (n:SourceFile)   WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
-MATCH (n:SourceSymbol) WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
-MATCH (n:Feature)      WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
 MATCH (n:Execution)    WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
 MATCH (n:AgentMemory)  WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
 

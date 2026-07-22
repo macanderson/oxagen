@@ -20,7 +20,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
 import { Button } from "@/components/ui/button";
 import { workspace } from "@/lib/routes";
@@ -56,13 +56,20 @@ export function GraphResultRow({
   const canOpen = node.id != null;
 
   return (
-    <div className={cn("rounded-md border border-border/60", className)} data-testid="graph-result-row">
+    <div
+      className={cn("rounded-md border border-border/60", className)}
+      data-testid="graph-result-row"
+    >
       <div className="flex items-center gap-1.5 px-2 py-1.5">
         {expand ? (
           <button
             type="button"
             onClick={expand.onToggle}
-            aria-label={expand.expanded ? `Collapse ${node.displayName} neighbors` : `Expand ${node.displayName} neighbors`}
+            aria-label={
+              expand.expanded
+                ? `Collapse ${node.displayName} neighbors`
+                : `Expand ${node.displayName} neighbors`
+            }
             className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             {expand.loading ? (
@@ -80,7 +87,14 @@ export function GraphResultRow({
           <Button
             size="icon-sm"
             variant="ghost"
-            render={<Link href={workspace.knowledge.node({ orgSlug, workspaceSlug }, node.id as string)} />}
+            render={
+              <Link
+                href={workspace.knowledge.node(
+                  { orgSlug, workspaceSlug },
+                  node.id as string,
+                )}
+              />
+            }
             aria-label={`Open ${node.displayName} detail`}
           >
             <ArrowUpRight className="size-3.5" aria-hidden="true" />
@@ -88,7 +102,9 @@ export function GraphResultRow({
         ) : null}
       </div>
       {expand?.expanded ? (
-        <div className="border-t border-border/50 py-1.5 pl-8 pr-2">{children}</div>
+        <div className="border-t border-border/50 py-1.5 pl-8 pr-2">
+          {children}
+        </div>
       ) : null}
     </div>
   );

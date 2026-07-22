@@ -8,7 +8,7 @@ Agent skill definitions for the [Oxagen](https://docs.oxagen.sh) CLI.
 npx @oxagen/skills install
 ```
 
-Copies the bundled `*.skill.md` definitions into `~/.oxagen/skills`, where the
+Copies the bundled `skill.toml` bundles into `~/.config/oxagen/skills`, where the
 `oxagen` CLI discovers them automatically on its next run. Existing files are
 left untouched unless you pass `--force`.
 
@@ -30,8 +30,8 @@ what to run next.
 
 ## What's inside
 
-Each `skills/*.skill.md` file is a self-contained skill definition (frontmatter
-plus instructions) the Oxagen agent loads at startup — entity resolution,
+Each `skills/<slug>/skill.toml` file is a self-contained canonical skill
+manifest (metadata plus instructions) the Oxagen agent loads at startup — entity resolution,
 relationship extraction, summarization, coding, skill authoring, and more.
 
 The library source in this package (loader, registry, seeding) is used by the

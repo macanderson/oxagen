@@ -30,8 +30,6 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-// yaml is a real module; no mock needed — the handler uses it at runtime.
-
 import { skillExportHandler } from "./skill.export";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -47,7 +45,13 @@ const SKILL_ROW = {
 
 const VERSION_ROW = {
   versionNumber: 2,
-  body: "## Instructions\n\nDo things well.",
+  body: `schema_version = 1
+kind = "skill"
+name = "my-skill"
+description = "A helpful skill"
+instructions = "Do things well."
+references = []
+`,
 };
 
 /** Queue the two withTenantDb results (skill lookup, version lookup). */
@@ -68,81 +72,82 @@ describe("skillExportHandler (@oxagen/handlers)", () => {
   it("returns filename, content, and versionNumber for the active version", async () => {
     const result = await skillExportHandler({ skillId: "skl_abc" }, CTX);
 
-    expect(result.filename).toBe("my-skill.skill.md");
+    expect(result.filename).toBe("my-skill.toml");
     expect(result.versionNumber).toBe(2);
-    expect(result.content).toContain("---");
-    // buildSkillMd emits single-quoted YAML scalars (no yaml dep on the export path).
-    expect(result.content).toContain("name: 'my-skill'");
-    expect(result.content).toContain("description: 'A helpful skill'");
+    expect(result.content).toContain("schema_version = 1");
+    expect(result.content).toContain('name = "my-skill"');
+    expect(result.content).toContain('description = "A helpful skill"');
     expect(result.content).toContain("Do things well.");
   });
 
-  it("content round-trips through parseSkill (structural check)", async () => {
+  it("content round-trips through the TOML artifact parser", async () => {
     const result = await skillExportHandler({ skillId: "skl_abc" }, CTX);
-    // Verify the .skill.md structure: opens with ---\n, has a closing ---\n, then body.
-    const lines = result.content.split("\n");
-    expect(lines[0]).toBe("---");
-    const closingIdx = lines.indexOf("---", 1);
-    expect(closingIdx).toBeGreaterThan(1);
-    const bodySection = lines.slice(closingIdx + 1).join("\n").trim();
-    expect(bodySection).toContain("Do things well.");
-    // Frontmatter block must contain the slug and description.
-    const frontmatter = lines.slice(1, closingIdx).join("\n");
-    expect(frontmatter).toContain("my-skill");
-    expect(frontmatter).toContain("A helpful skill");
+    const { parseArtifactToml } = await import("@oxagen/agent-artifacts");
+    expect(parseArtifactToml(result.content)).toMatchObject({
+      kind: "skill",
+      name: "my-skill",
+      instructions: "Do things well.",
+    });
   });
 
   it("exports a specific version when versionNumber is supplied", async () => {
-    enqueue([SKILL_ROW], [{ versionNumber: 1, body: "Old body." }]);
-    const result = await skillExportHandler({ skillId: "skl_abc", versionNumber: 1 }, CTX);
+    enqueue(
+      [SKILL_ROW],
+      [
+        {
+          versionNumber: 1,
+          body: VERSION_ROW.body.replace("Do things well.", "Old body."),
+        },
+      ],
+    );
+    const result = await skillExportHandler(
+      { skillId: "skl_abc", versionNumber: 1 },
+      CTX,
+    );
     expect(result.versionNumber).toBe(1);
     expect(result.content).toContain("Old body.");
   });
 
   it("throws when skill is not found", async () => {
     enqueue([], [VERSION_ROW]);
-    await expect(skillExportHandler({ skillId: "skl_missing" }, CTX)).rejects.toThrow(
-      "Skill not found: skl_missing",
-    );
+    await expect(
+      skillExportHandler({ skillId: "skl_missing" }, CTX),
+    ).rejects.toThrow("Skill not found: skl_missing");
   });
 
   it("throws when the requested version is not found", async () => {
     enqueue([SKILL_ROW], []);
-    await expect(skillExportHandler({ skillId: "skl_abc", versionNumber: 99 }, CTX)).rejects.toThrow(
-      "Version 99 not found for skill skl_abc",
-    );
+    await expect(
+      skillExportHandler({ skillId: "skl_abc", versionNumber: 99 }, CTX),
+    ).rejects.toThrow("Version 99 not found for skill skl_abc");
   });
 
   it("throws when no version exists for the skill", async () => {
     // No activeVersionId + no is_latest row.
     enqueue([{ ...SKILL_ROW, activeVersionId: null }], []);
-    await expect(skillExportHandler({ skillId: "skl_abc" }, CTX)).rejects.toThrow(
-      "No version found for skill skl_abc",
-    );
+    await expect(
+      skillExportHandler({ skillId: "skl_abc" }, CTX),
+    ).rejects.toThrow("No version found for skill skl_abc");
   });
 
   it("uses slug as the filename stem", async () => {
     enqueue([{ ...SKILL_ROW, slug: "my-special-skill" }], [VERSION_ROW]);
     const result = await skillExportHandler({ skillId: "skl_abc" }, CTX);
-    expect(result.filename).toBe("my-special-skill.skill.md");
+    expect(result.filename).toBe("my-special-skill.toml");
   });
 
-  it("coerces null description to empty string in frontmatter", async () => {
+  it("exports the immutable content independently of mutable skill metadata", async () => {
     enqueue([{ ...SKILL_ROW, description: null }], [VERSION_ROW]);
     const result = await skillExportHandler({ skillId: "skl_abc" }, CTX);
-    expect(result.content).toContain("description:");
-    // null coerced to "" so parseSkill should not throw
-    const { parseSkill } = await import("@oxagen/skills");
-    expect(parseSkill).toBeTypeOf("function");
-    // parseSkill requires description to be non-empty; handler coerces to "" so it may throw.
-    // Here we just verify handler itself does not throw.
-    expect(result.content).toBeDefined();
+    expect(result.content).toContain('description = "A helpful skill"');
   });
 
   it("propagates DB error from skill lookup", async () => {
     mocks.dbCallResults.length = 0;
     mocks.dbCallResults.push(() => Promise.reject(new Error("DB failure")));
-    await expect(skillExportHandler({ skillId: "skl_abc" }, CTX)).rejects.toThrow("DB failure");
+    await expect(
+      skillExportHandler({ skillId: "skl_abc" }, CTX),
+    ).rejects.toThrow("DB failure");
   });
 
   it("propagates DB error from version lookup", async () => {
@@ -151,8 +156,8 @@ describe("skillExportHandler (@oxagen/handlers)", () => {
       () => Promise.resolve([SKILL_ROW]),
       () => Promise.reject(new Error("version DB failure")),
     );
-    await expect(skillExportHandler({ skillId: "skl_abc" }, CTX)).rejects.toThrow(
-      "version DB failure",
-    );
+    await expect(
+      skillExportHandler({ skillId: "skl_abc" }, CTX),
+    ).rejects.toThrow("version DB failure");
   });
 });

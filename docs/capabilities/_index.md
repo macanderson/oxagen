@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (75, count drifts)
+## Agent (74, count drifts)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -83,7 +83,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
-- [get_execution_lineage](get_execution_lineage.md) — Get one agent execution's file-level lineage as a graph: the execution node plus every source file it touched via TOUCHED_FILE edges, resolved to citable KnowledgeNodeRefs
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
@@ -136,7 +135,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
 
-## Billing (18)
+## Billing (20)
 
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
@@ -157,6 +156,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [billing.reseller_rebill.list_runs](billing.reseller_rebill.list_runs.md) — List past re-bill runs (period, subtotal, billed total, Stripe invoice, status, line items), most recent first
 - [billing.reseller_stripe.configure](billing.reseller_stripe.configure.md) — Store the reseller's own Stripe secret key (envelope-encrypted at rest via @oxagen/crypto) so re-bill pushes invoice from their account, not the platform's. Returns only a last-4 fingerprint, never the key. Highest sensitivity
 - [billing.reseller_stripe.status](billing.reseller_stripe.status.md) — Report whether a reseller Stripe key is connected for the org, with its label and last-4 fingerprint. Drives the connect-your-account empty state. Never returns the key
+- [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
+- [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
 
 ## Browser (7)
 
@@ -178,11 +179,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
 - [chat.message.send](chat.message.send.md) — Append a user message to a conversation and stream the assistant's response
 
-## Code (4)
+## Code (3)
 
 - [code.diff](code.diff.md) — Produce a unified diff between two file blobs with added/removed line counts (computed in-process)
 - [code.format](code.format.md) — Run a language-aware formatter (json, python) on source inside the sandbox and return the formatted text
-- [code.map](code.map.md) — Return a structured code-map bundle for a natural-language concept query: semantically matched files, symbols, call edges, and recent commits
 - [code.patch](code.patch.md) — Apply a unified diff to a path-confined workspace and return only the changed files
 
 ## Command (2)
@@ -253,26 +253,16 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (16)
+## Graph (8)
 
 | Capability                  | Notes                                                                                                                                                     |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                                                     |
-| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                                              |
 | `graph.node.get`            | Retrieve a graph node by externalId.                                                                                                                      |
-| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                                                |
 | `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                                               |
-| `graph.node.label.add`      | Add one or more labels to a node (multi-label, idempotent, never removes existing labels).                                                                |
-| `graph.node.label.remove`   | Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).                                                              |
-| `graph.node.labels.get`     | Read a node's full label set (read-only companion to the label add/remove primitives).                                                                    |
-| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
-| `graph.edge.upsert`         | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, Cypher-safe via the RELATIONSHIP_TYPE_PATTERN guard).      |
-| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                                                         |
-| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                                                |
-| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
+| `graph.node.labels.get`     | Read a node's customer-context label set.                                                                                                                  |
+| `graph.search`              | Unified semantic search across customer-context nodes visible to the workspace.                                                                            |
 | `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
-| `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
-| `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
 | `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
 | `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
@@ -285,7 +275,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Integration (7)
 
-- [integration.configure](integration.configure.md) — Update plugin instance config, cadence, and inference settings
+- [integration.configure](integration.configure.md) — Update plugin instance configuration, filters, and sync cadence
 - [integration.delete](integration.delete.md) — Remove a plugin instance and optionally purge graph data (async)
 - [integration.get](integration.get.md) — Get full details of a single plugin instance including schema
 - [integration.install](integration.install.md) — Install a plugin instance from catalog or custom URL (async)
@@ -293,9 +283,17 @@ contract-first design, IAM enforcement, and instrumentation.
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
 
+## Lineage (1)
+
+- [lineage.query](lineage.query.md) — Return the dispatch tree for one fan-out/run id — every subagent run reachable from a root dispatch, each carrying its principal (and Agent-RBAC delegation ceiling), observed ClickHouse spend, model/provider, and a derived outcome
+
 ## Mermaid (1)
 
 - [mermaid.generate](mermaid.generate.md) — Produce a Mermaid diagram rendered inline in chat as a client-side SVG artifact
+
+## Model (1)
+
+- [list_model_capabilities](model.capability.list.md) — List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts
 
 ## Notifications (2)
 
@@ -434,28 +432,21 @@ contract-first design, IAM enforcement, and instrumentation.
 - [secret.reveal](secret.reveal.md) — Reveal a single secret's plaintext value for an environment; Owner/Admin only, every reveal is audited (api, mcp)
 - [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
 
-## Semantic (4)
-
-- [semantic.edge.approve](semantic.edge.approve.md) — Approve or reject an inferred semantic edge candidate; approved edges become permanent Neo4j relationships
-- [semantic.edge.infer](semantic.edge.infer.md) — Run LLM inference to discover cross-source semantic edges (async)
-- [semantic.edge.list](semantic.edge.list.md) — Paginated browse of inferred semantic edges with filtering
-- [semantic.edge.suggest](semantic.edge.suggest.md) — Return unapproved semantic edge candidates for human review
-
 ## Skill (14)
 
-- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
-- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
+- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated skill.toml and installs it into the workspace
+- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied skill.toml content (idempotent on slug)
 - [skill.draft](skill.draft.md) — Draft a skill configuration from a natural-language description for human review — the AI-assisted first step of skill setup; persists nothing
-- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the .skill.md body and saves a new activated version (slug immutable)
+- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the skill.toml artifact and saves a new activated version (slug immutable)
 - [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
 - [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
-- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including body and parsed frontmatter
-- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from raw .skill.md content
+- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including canonical skill.toml content and the parsed artifact
+- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from canonical skill.toml content
 - [skill.version.activate](skill.version.activate.md) — Set a specific skill version as the workspace's active version
 - [skill.edit](skill.edit.md) — Save an edited skill body as a new immutable version
-- [skill.export](skill.export.md) — Export a skill version as a downloadable .skill.md string
+- [skill.export](skill.export.md) — Export a skill version as a downloadable skill.toml string
 - [skill.metrics.read](skill.metrics.read.md) — Read aggregated skill usage and cost metrics for the workspace
 
 ## Svg (1)
@@ -466,9 +457,10 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Telemetry (1)
+## Telemetry (2)
 
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
+- [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
 ## User (4)
 

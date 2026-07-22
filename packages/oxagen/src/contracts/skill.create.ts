@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { skillArtifactSchema } from "@oxagen/agent-artifacts";
 import { registerCapability } from "../registry";
 
 export const skillCreate = registerCapability({
@@ -18,41 +19,37 @@ export const skillCreate = registerCapability({
     workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
   },
   input: z.object({
-    name: z
-      .string()
-      .min(1)
-      .max(100)
-      .describe("Human-readable name for the skill"),
-    slug: z
-      .string()
-      .min(1)
-      .max(64)
-      .regex(/^[a-z0-9-]+$/, "Must be kebab-case (a-z, 0-9, hyphens)")
-      .describe("Unique kebab-case identifier for the skill within this workspace"),
-    description: z
-      .string()
-      .max(500)
-      .optional()
-      .describe("Short description of what the skill teaches the agent"),
-    body: z
+    content: z
       .string()
       .min(1)
       .max(32_000)
-      .describe("Full .skill.md content (YAML frontmatter + markdown body)"),
+      .describe("Canonical skill.toml content"),
     activate: z
       .boolean()
       .optional()
       .default(true)
-      .describe("Set the initial version as active immediately (default: true)"),
-    workspace_id: z.string().optional().describe("Workspace ID (defaults to current workspace)"),
+      .describe(
+        "Set the initial version as active immediately (default: true)",
+      ),
+    workspace_id: z
+      .string()
+      .optional()
+      .describe("Workspace ID (defaults to current workspace)"),
   }),
   output: z.object({
     publicId: z.string().describe("Public ID of the skill (skl_...)"),
     slug: z.string().describe("Kebab-case slug"),
-    activeVersion: z.number().int().positive().describe("Active version number (1 for new)"),
+    activeVersion: z
+      .number()
+      .int()
+      .positive()
+      .describe("Active version number (1 for new)"),
     created: z
       .boolean()
-      .describe("true if newly created, false if slug already existed (idempotent)"),
+      .describe(
+        "true if newly created, false if slug already existed (idempotent)",
+      ),
+    artifact: skillArtifactSchema,
   }),
 });
 

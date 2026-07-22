@@ -29,17 +29,6 @@ export interface NeighborLike {
   description?: string | null;
   edgeType: string;
   direction: "in" | "out";
-  /** True when the neighbor is runtime lineage (is_system), not customer knowledge. */
-  isSystem?: boolean;
-}
-
-/** Minimal shape of a `semantic.edge.list` edge. */
-export interface SemanticEdgeLike {
-  id: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  type: string;
-  confidence: number;
 }
 
 /**
@@ -74,10 +63,6 @@ export function nodeFromNeighbor(raw: NeighborLike): ExplorerNode {
     label: raw.label,
     displayName: raw.displayName,
     description: raw.description ?? null,
-    // Carried so the client can keep lineage stubs hidden while the
-    // "agent activity" visibility toggle is off — seeds are filtered
-    // server-side, but expansion can still pull a system neighbor in.
-    ...(raw.isSystem !== undefined ? { isSystem: raw.isSystem } : {}),
     degree: 0,
     hydrated: false,
   };
@@ -104,18 +89,6 @@ export function edgesFromNeighbors(
       inferred: false,
     };
   });
-}
-
-/** Map a semantic (inferred) edge to an ExplorerEdge. */
-export function edgeFromSemantic(raw: SemanticEdgeLike): ExplorerEdge {
-  return {
-    id: edgeId(raw.sourceNodeId, raw.targetNodeId, raw.type),
-    source: raw.sourceNodeId,
-    target: raw.targetNodeId,
-    type: raw.type,
-    inferred: true,
-    confidence: raw.confidence,
-  };
 }
 
 /**

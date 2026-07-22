@@ -1,6 +1,6 @@
 /**
  * Unit tests for graph, ontology, and audit route handlers:
- *   graph.search, graph.export, ontology.query, ontology.neighbors,
+ *   graph.search, ontology.query, ontology.neighbors,
  *   audit.log.query
  *
  * Pattern: mock at the adapter seam, assert the handler forwards invoke result
@@ -61,7 +61,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -92,10 +94,23 @@ describe("graph.search route", () => {
   const PATH = "/graph/search";
 
   it("happy path POST: returns 200 with search results", async () => {
-    const invokeResult = { results: [{ nodeId: "n1", label: "Person", score: 0.95, displayName: "Alice", kind: "entity", snippet: "...", isSystem: false }] };
+    const invokeResult = {
+      results: [
+        {
+          nodeId: "n1",
+          label: "Person",
+          score: 0.95,
+          displayName: "Alice",
+          kind: "entity",
+          snippet: "...",
+        },
+      ],
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { query: "Alice from engineering" }));
+    const res = await app.fetch(
+      post(PATH, { query: "Alice from engineering" }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -108,13 +123,21 @@ describe("graph.search route", () => {
   });
 
   it("passes query and optional filters to invoke", async () => {
-    await app.fetch(post(PATH, { query: "Bob", limit: 5, kinds: ["entity"], labels: ["Person"], isSystem: false }));
+    await app.fetch(
+      post(PATH, {
+        query: "Bob",
+        limit: 5,
+        kinds: ["entity"],
+        labels: ["Person"],
+        isSystem: true,
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.query).toBe("Bob");
     expect(body.limit).toBe(5);
-    expect(body.kinds).toEqual(["entity"]);
     expect(body.labels).toEqual(["Person"]);
-    expect(body.isSystem).toBe(false);
+    expect(body.kinds).toBeUndefined();
+    expect(body.isSystem).toBeUndefined();
   });
 
   it("empty query → 400, invoke not called", async () => {
@@ -127,42 +150,6 @@ describe("graph.search route", () => {
     const res = await app.fetch(post(PATH, { limit: 10 }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── graph.export ──────────────────────────────────────────────────────────────
-
-describe("graph.export route", () => {
-  const PATH = "/graph/export";
-
-  it("happy path POST with empty body: returns 200", async () => {
-    const invokeResult = { nodes: [], edges: [], exportedAt: "2026-06-28T00:00:00.000Z" };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await app.fetch(post(PATH, {}));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with 'export_graph' and surface 'api'", async () => {
-    await app.fetch(post(PATH, {}));
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("export_graph");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("passes optional labels and includeEdges to invoke", async () => {
-    await app.fetch(post(PATH, { labels: ["Person", "Company"], includeEdges: false }));
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.labels).toEqual(["Person", "Company"]);
-    expect(body.includeEdges).toBe(false);
-  });
-
-  it("passes isSystem and updatedAfter to invoke", async () => {
-    await app.fetch(post(PATH, { isSystem: false, updatedAfter: "2026-01-01T00:00:00.000Z" }));
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.isSystem).toBe(false);
-    expect(body.updatedAfter).toBe("2026-01-01T00:00:00.000Z");
   });
 });
 
@@ -189,12 +176,14 @@ describe("ontology.query route", () => {
   });
 
   it("passes startNodeId and optional params to invoke", async () => {
-    await app.fetch(post(PATH, {
-      startNodeId: "node-abc",
-      edgeTypes: ["RELATED_TO", "PART_OF"],
-      direction: "out",
-      maxDepth: 3,
-    }));
+    await app.fetch(
+      post(PATH, {
+        startNodeId: "node-abc",
+        edgeTypes: ["RELATED_TO", "PART_OF"],
+        direction: "out",
+        maxDepth: 3,
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.startNodeId).toBe("node-abc");
     expect(body.edgeTypes).toEqual(["RELATED_TO", "PART_OF"]);
@@ -209,7 +198,9 @@ describe("ontology.query route", () => {
   });
 
   it("invalid edgeType (lowercase) → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { startNodeId: "n1", edgeTypes: ["invalid_edge"] }));
+    const res = await app.fetch(
+      post(PATH, { startNodeId: "n1", edgeTypes: ["invalid_edge"] }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -238,7 +229,9 @@ describe("ontology.neighbors route", () => {
   });
 
   it("passes nodeId and optional direction/limit to invoke", async () => {
-    await app.fetch(post(PATH, { nodeId: "node-abc", direction: "in", limit: 20 }));
+    await app.fetch(
+      post(PATH, { nodeId: "node-abc", direction: "in", limit: 20 }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.nodeId).toBe("node-abc");
     expect(body.direction).toBe("in");
@@ -258,7 +251,13 @@ describe("audit.log.query route", () => {
   const PATH = "/audit/log/query";
 
   it("happy path POST with empty body: returns 200", async () => {
-    const invokeResult = { events: [], total: 0, hasMore: false, limit: 50, offset: 0 };
+    const invokeResult = {
+      events: [],
+      total: 0,
+      hasMore: false,
+      limit: 50,
+      offset: 0,
+    };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await app.fetch(post(PATH, {}));

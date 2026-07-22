@@ -26,12 +26,16 @@ describe("github connector – previewRecordTypes", () => {
       expect(typeof s.fieldSchema).toBe("object");
       expect(s.fieldSchema).not.toBeNull();
       // Must NOT have old wrong-shape keys
-      expect((s as unknown as Record<string, unknown>)["recordType"]).toBeUndefined();
-      expect((s as unknown as Record<string, unknown>)["sample"]).toBeUndefined();
+      expect(
+        (s as unknown as Record<string, unknown>)["recordType"],
+      ).toBeUndefined();
+      expect(
+        (s as unknown as Record<string, unknown>)["sample"],
+      ).toBeUndefined();
     }
   });
 
-  it("includes pull_request, issue, commit, repository, release, source record types", async () => {
+  it("includes provider metadata record types and excludes source content", async () => {
     const samples = await github.previewRecordTypes(
       { scheme: "oauth2", _marker: "oauth2" },
       { organizations: ["oxagen"], syncDepthDays: 90 },
@@ -42,7 +46,7 @@ describe("github connector – previewRecordTypes", () => {
     expect(types).toContain("commit");
     expect(types).toContain("repository");
     expect(types).toContain("release");
-    expect(types).toContain("source");
+    expect(types).not.toContain("source");
   });
 
   it("pull_request has correct fieldSchema keys", async () => {
@@ -124,7 +128,11 @@ describe("github connector – normalizeRecord", () => {
         html_url: "https://github.com/org/repo/commit/abc123",
         commit: {
           message: "fix: resolve null crash\n\nExtended description",
-          author: { name: "Bob", email: "bob@example.com", date: "2024-01-10T09:00:00Z" },
+          author: {
+            name: "Bob",
+            email: "bob@example.com",
+            date: "2024-01-10T09:00:00Z",
+          },
         },
       };
       const result = github.normalizeRecord("commit", raw);
@@ -142,7 +150,11 @@ describe("github connector – normalizeRecord", () => {
         git_branch: "main",
         commit: {
           message: "feat: add telemetry",
-          author: { name: "Alice", email: "alice@example.com", date: "2024-02-01T10:00:00Z" },
+          author: {
+            name: "Alice",
+            email: "alice@example.com",
+            date: "2024-02-01T10:00:00Z",
+          },
         },
       };
       const result = github.normalizeRecord("commit", raw);
@@ -155,7 +167,11 @@ describe("github connector – normalizeRecord", () => {
         html_url: "https://github.com/org/repo/commit/def456",
         commit: {
           message: "feat: add telemetry",
-          author: { name: "Alice", email: "alice@example.com", date: "2024-02-01T10:00:00Z" },
+          author: {
+            name: "Alice",
+            email: "alice@example.com",
+            date: "2024-02-01T10:00:00Z",
+          },
         },
       };
       const result = github.normalizeRecord("commit", raw);
@@ -182,7 +198,11 @@ describe("github connector – normalizeRecord", () => {
         git_branch: 42, // non-string — should be ignored
         commit: {
           message: "chore: misc",
-          author: { name: "Dev", email: "dev@example.com", date: "2024-03-01T00:00:00Z" },
+          author: {
+            name: "Dev",
+            email: "dev@example.com",
+            date: "2024-03-01T00:00:00Z",
+          },
         },
       };
       const result = github.normalizeRecord("commit", raw);
@@ -261,14 +281,19 @@ describe("github connector – verifyWebhook", () => {
   const secret = "my-webhook-secret";
 
   it("accepts a valid HMAC-SHA256 signature", () => {
-    const sig = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    const sig =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
     const headers = { "x-hub-signature-256": sig };
     expect(github.verifyWebhook!(payload, headers, secret)).toBe(true);
   });
 
   it("rejects a wrong secret", () => {
-    const sig = "sha256=" + createHmac("sha256", "wrong-secret").update(payload).digest("hex");
-    expect(github.verifyWebhook!(payload, { "x-hub-signature-256": sig }, secret)).toBe(false);
+    const sig =
+      "sha256=" +
+      createHmac("sha256", "wrong-secret").update(payload).digest("hex");
+    expect(
+      github.verifyWebhook!(payload, { "x-hub-signature-256": sig }, secret),
+    ).toBe(false);
   });
 
   it("rejects missing signature header", () => {
@@ -276,8 +301,11 @@ describe("github connector – verifyWebhook", () => {
   });
 
   it("rejects null secret", () => {
-    const sig = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
-    expect(github.verifyWebhook!(payload, { "x-hub-signature-256": sig }, null)).toBe(false);
+    const sig =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    expect(
+      github.verifyWebhook!(payload, { "x-hub-signature-256": sig }, null),
+    ).toBe(false);
   });
 });
 
@@ -285,7 +313,11 @@ describe("github connector – parseWebhookEvent", () => {
   it("maps pull_request → pull_request and unwraps the payload", () => {
     const out = github.parseWebhookEvent!("pull_request", {
       action: "opened",
-      pull_request: { number: 7, title: "Add feature", html_url: "https://gh/pr/7" },
+      pull_request: {
+        number: 7,
+        title: "Add feature",
+        html_url: "https://gh/pr/7",
+      },
     });
     expect(out).toHaveLength(1);
     expect(out[0]?.sourceRecordType).toBe("pull_request");
@@ -306,8 +338,9 @@ describe("github connector – parseWebhookEvent", () => {
 
   it("maps issue_comment and pull_request_review_comment → comment", () => {
     expect(
-      github.parseWebhookEvent!("issue_comment", { comment: { id: 1, body: "hi" } })[0]
-        ?.sourceRecordType,
+      github.parseWebhookEvent!("issue_comment", {
+        comment: { id: 1, body: "hi" },
+      })[0]?.sourceRecordType,
     ).toBe("comment");
     expect(
       github.parseWebhookEvent!("pull_request_review_comment", {
@@ -322,7 +355,9 @@ describe("github connector – parseWebhookEvent", () => {
     });
     expect(out).toHaveLength(1);
     expect(out[0]?.sourceRecordType).toBe("code_review");
-    expect(github.normalizeRecord("code_review", out[0]!.record).externalId).toBe("99");
+    expect(
+      github.normalizeRecord("code_review", out[0]!.record).externalId,
+    ).toBe("99");
   });
 
   it("expands a push into one commit record per commit, reshaped for normalizeRecord", () => {
@@ -366,22 +401,30 @@ describe("github connector – parseWebhookEvent", () => {
 
   it("maps release and repository events", () => {
     expect(
-      github.parseWebhookEvent!("release", { release: { id: 5, tag_name: "v1" } })[0]
-        ?.sourceRecordType,
+      github.parseWebhookEvent!("release", {
+        release: { id: 5, tag_name: "v1" },
+      })[0]?.sourceRecordType,
     ).toBe("release");
     expect(
-      github.parseWebhookEvent!("repository", { repository: { id: 8, name: "repo" } })[0]
-        ?.sourceRecordType,
+      github.parseWebhookEvent!("repository", {
+        repository: { id: 8, name: "repo" },
+      })[0]?.sourceRecordType,
     ).toBe("repository");
   });
 
   it("returns [] for events with no ingestable record (ping/installation/etc.)", () => {
     expect(github.parseWebhookEvent!("ping", { zen: "..." })).toEqual([]);
-    expect(github.parseWebhookEvent!("installation", { action: "created" })).toEqual([]);
-    expect(github.parseWebhookEvent!("star", { action: "created" })).toEqual([]);
+    expect(
+      github.parseWebhookEvent!("installation", { action: "created" }),
+    ).toEqual([]);
+    expect(github.parseWebhookEvent!("star", { action: "created" })).toEqual(
+      [],
+    );
   });
 
   it("returns [] when the expected sub-object is missing", () => {
-    expect(github.parseWebhookEvent!("pull_request", { action: "opened" })).toEqual([]);
+    expect(
+      github.parseWebhookEvent!("pull_request", { action: "opened" }),
+    ).toEqual([]);
   });
 });

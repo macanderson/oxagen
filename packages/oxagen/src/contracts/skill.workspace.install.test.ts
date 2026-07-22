@@ -13,30 +13,19 @@ describe("skill.workspace.install capability", () => {
 
   it("accepts a custom-only input", () => {
     const parsed = skillWorkspaceInstall.input.parse({
-      custom: { name: "my-skill", body: "## My skill body" },
+      custom: { content: 'schema_version = 1\nkind = "skill"' },
     });
-    expect(parsed.custom?.name).toBe("my-skill");
+    expect(parsed.custom?.content).toContain("schema_version");
     expect(parsed.slug).toBeUndefined();
-  });
-
-  it("accepts a custom input with references", () => {
-    const parsed = skillWorkspaceInstall.input.parse({
-      custom: {
-        name: "my-skill",
-        body: "## Body",
-        references: ["./context.md"],
-      },
-    });
-    expect(parsed.custom?.references).toEqual(["./context.md"]);
   });
 
   it("accepts both slug and custom (caller intent — handler enforces xor)", () => {
     const parsed = skillWorkspaceInstall.input.parse({
       slug: "summarization",
-      custom: { name: "my-skill", body: "## Body" },
+      custom: { content: 'schema_version = 1\nkind = "skill"' },
     });
     expect(parsed.slug).toBe("summarization");
-    expect(parsed.custom?.name).toBe("my-skill");
+    expect(parsed.custom?.content).toContain("schema_version");
   });
 
   it("accepts an optional workspace_id", () => {
@@ -59,15 +48,9 @@ describe("skill.workspace.install capability", () => {
     expect(() => skillWorkspaceInstall.input.parse({ slug: "" })).toThrow();
   });
 
-  it("rejects custom without body", () => {
+  it("rejects custom without content", () => {
     expect(() =>
-      skillWorkspaceInstall.input.parse({ custom: { name: "my-skill", body: "" } }),
-    ).toThrow();
-  });
-
-  it("rejects custom without name", () => {
-    expect(() =>
-      skillWorkspaceInstall.input.parse({ custom: { name: "", body: "## Body" } }),
+      skillWorkspaceInstall.input.parse({ custom: { content: "" } }),
     ).toThrow();
   });
 

@@ -2,7 +2,11 @@ import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
 import { getPrincipalAttribution } from "@oxagen/tenancy";
 import { currentTraceIds } from "./tracer";
-import { getBreaker, type BreakerTransition, type CircuitBreaker } from "./circuit-breaker";
+import {
+  getBreaker,
+  type BreakerTransition,
+  type CircuitBreaker,
+} from "./circuit-breaker";
 import { breakerEnvConfig } from "./breaker-config";
 
 /**
@@ -68,7 +72,12 @@ export async function closeClickhouse(): Promise<void> {
 }
 
 export interface TokenUsageRollup {
-  metric: "tokens_input" | "tokens_output" | "tokens_cached" | "executions";
+  metric:
+    | "tokens_input"
+    | "tokens_output"
+    | "tokens_cached"
+    | "tokens_cache_write"
+    | "executions";
   quantity: number;
   costMicros: bigint;
 }
@@ -89,11 +98,12 @@ export async function sumTokenUsage(args: {
   // store fails fast rather than stalling the billing rollup.
   const result = await clickhouseBreaker().exec(() =>
     ch.query({
-    query: `
+      query: `
       SELECT
         sum(input_tokens)  AS input_tokens,
         sum(output_tokens) AS output_tokens,
         sum(cached_tokens) AS cached_tokens,
+        sum(cache_write_tokens) AS cache_write_tokens,
         sum(cost_usd_micros) AS cost_micros,
         count()            AS row_count
       FROM token_usage
@@ -101,18 +111,19 @@ export async function sumTokenUsage(args: {
         AND created_at >= {periodStart:DateTime64(3)}
         AND created_at <  {periodEnd:DateTime64(3)}
     `,
-    query_params: {
-      orgId: args.orgId,
-      periodStart: args.periodStart.toISOString().replace("Z", ""),
-      periodEnd: args.periodEnd.toISOString().replace("Z", ""),
-    },
-    format: "JSONEachRow",
+      query_params: {
+        orgId: args.orgId,
+        periodStart: args.periodStart.toISOString().replace("Z", ""),
+        periodEnd: args.periodEnd.toISOString().replace("Z", ""),
+      },
+      format: "JSONEachRow",
     }),
   );
   type Row = {
     input_tokens: string;
     output_tokens: string;
     cached_tokens: string;
+    cache_write_tokens: string;
     cost_micros: string;
     row_count: string;
   };
@@ -121,6 +132,7 @@ export async function sumTokenUsage(args: {
     input_tokens: "0",
     output_tokens: "0",
     cached_tokens: "0",
+    cache_write_tokens: "0",
     cost_micros: "0",
     row_count: "0",
   };
@@ -141,6 +153,11 @@ export async function sumTokenUsage(args: {
       quantity: Number(row.cached_tokens),
       costMicros: 0n,
     },
+    {
+      metric: "tokens_cache_write",
+      quantity: Number(row.cache_write_tokens),
+      costMicros: 0n,
+    },
     // Total cost attributed to executions metric; per-metric cost requires
     // model-aware pricing that lands with the agent epic.
     {
@@ -149,6 +166,51 @@ export async function sumTokenUsage(args: {
       costMicros: totalCost,
     },
   ];
+}
+
+/**
+ * Sum `token_usage.cost_usd_micros` (period-to-date spend, micro-USD) for a
+ * scope between two timestamps. Powers the kernel spend-budget gate (OXA-1079):
+ * an org-level ceiling omits `workspaceId` (all workspaces roll up); a
+ * workspace-level ceiling passes it to scope the sum to that workspace.
+ *
+ * Aggregating in ClickHouse keeps the payload a single scalar regardless of
+ * usage volume, and the breaker fails fast on a degraded store — the gate then
+ * fails OPEN (a down telemetry store must never block every invocation).
+ * Returns micro-USD as a bigint (no float rounding on a dollar ceiling).
+ */
+export async function sumSpendMicros(args: {
+  orgId: string;
+  /** Omit for an org-wide roll-up; pass to scope the sum to one workspace. */
+  workspaceId?: string | null;
+  periodStart: Date;
+  periodEnd: Date;
+}): Promise<bigint> {
+  const ch = clickhouse();
+  const scoped = args.workspaceId != null && args.workspaceId.length > 0;
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT sum(cost_usd_micros) AS cost_micros
+      FROM token_usage
+      WHERE org_id = {orgId:UUID}
+        ${scoped ? "AND workspace_id = {workspaceId:UUID}" : ""}
+        AND created_at >= {periodStart:DateTime64(3)}
+        AND created_at <  {periodEnd:DateTime64(3)}
+    `,
+      query_params: {
+        orgId: args.orgId,
+        ...(scoped ? { workspaceId: args.workspaceId } : {}),
+        periodStart: args.periodStart.toISOString().replace("Z", ""),
+        periodEnd: args.periodEnd.toISOString().replace("Z", ""),
+      },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = { cost_micros: string | null };
+  const rows = (await result.json()) as Row[];
+  // sum() of an empty set is NULL in ClickHouse JSONEachRow → coalesce to 0.
+  return BigInt(rows[0]?.cost_micros ?? "0");
 }
 
 // Typed inserts. ClickHouse client accepts an array of plain objects per
@@ -225,7 +287,21 @@ export interface TokenUsageRow {
   provider: Provider;
   input_tokens: number;
   output_tokens: number;
+  /**
+   * Prompt-cache READ tokens (cache hits). A SUBSET of `input_tokens`, not
+   * additive — the @oxagen/ai gateway normalizes `input_tokens` to the inclusive
+   * total, so fresh input = `input_tokens - cached_tokens - cache_write_tokens`.
+   */
   cached_tokens: number;
+  /**
+   * Prompt-cache WRITE tokens (cache creation), billed by the provider at a
+   * premium (~1.25x base input on Anthropic, 5-min TTL). Also a subset of
+   * `input_tokens`. Optional at the type boundary — non-text callers (embeddings,
+   * image/video generation) never write cache, so they omit it and it coalesces
+   * to 0 in `insertTokenUsage`, matching the ClickHouse column DEFAULT (migration
+   * 0026). Text callers routed through `@oxagen/ai` forward the real count.
+   */
+  cache_write_tokens?: number;
   cost_usd_micros: number;
   /** Wall-clock for the LLM call (first request byte → final token). */
   duration_ms: number;
@@ -310,6 +386,109 @@ function currentPrincipalStamp(): {
   };
 }
 
+/**
+ * One execution step's aggregated token_usage: spend + tokens + LLM-call
+ * count, plus `any(model|provider|principal_id|principal_kind)` — the columns
+ * are constant per execution step in practice (one step = one run = one
+ * principal), so `any()` is a cheap "pick one" rather than a real aggregate.
+ */
+export interface TokenUsageByStepRow {
+  executionStepId: string;
+  /** Micro-USD, coerced from ClickHouse's UInt64-as-decimal-string. */
+  costMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Number of token_usage rows (LLM calls) attributed to this step. */
+  llmCalls: number;
+  model: string;
+  provider: string;
+  /** iam.principals.id, or NIL_UUID when attribution was never stamped. */
+  principalId: string;
+  principalKind: string;
+}
+
+/**
+ * Batch-sum `token_usage` grouped by `execution_step_id` — the fan-out/lineage
+ * read path (query_lineage): one query resolves spend + model + principal for
+ * every node in a dispatch tree instead of N per-node reads. Org-scoped only
+ * (no workspace filter) because a dispatch tree's runs all share one org by
+ * construction and the caller already tenant-scopes the execution_step_id set
+ * via Postgres.
+ *
+ * Every UInt64 sum is coerced with `Number()` per the ClickHouse
+ * JSONEachRow-returns-decimal-strings gotcha (see sumTokenUsage above); at
+ * per-run scale these values are always far below
+ * Number.MAX_SAFE_INTEGER, unlike an org-wide cumulative sum.
+ *
+ * Returns a Map so callers can do O(1) per-node lookups; ids absent from the
+ * result had zero token_usage rows. NIL_UUID is filtered out of the request
+ * (never a real execution step) and an empty input short-circuits without a
+ * network call. Does NOT catch its own errors — callers on a read path that
+ * must never fail on a degraded ClickHouse (e.g. query_lineage) are expected
+ * to wrap this in try/catch and degrade to zero-spend nodes, mirroring
+ * `getSpendBudgetStatuses` in packages/billing/src/spend-budget-gate.ts.
+ */
+export async function sumTokenUsageByExecutionStep(args: {
+  orgId: string;
+  executionStepIds: readonly string[];
+}): Promise<Map<string, TokenUsageByStepRow>> {
+  const result = new Map<string, TokenUsageByStepRow>();
+  const ids = Array.from(new Set(args.executionStepIds)).filter(
+    (id) => id !== NIL_UUID,
+  );
+  if (ids.length === 0) return result;
+
+  const ch = clickhouse();
+  const queryResult = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT
+        execution_step_id,
+        sum(cost_usd_micros) AS cost_micros,
+        sum(input_tokens)    AS input_tokens,
+        sum(output_tokens)   AS output_tokens,
+        count()              AS llm_calls,
+        any(model)           AS model,
+        any(provider)        AS provider,
+        any(principal_id)    AS principal_id,
+        any(principal_kind)  AS principal_kind
+      FROM token_usage
+      WHERE org_id = {orgId:UUID}
+        AND execution_step_id IN {ids:Array(UUID)}
+      GROUP BY execution_step_id
+    `,
+      query_params: { orgId: args.orgId, ids },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = {
+    execution_step_id: string;
+    cost_micros: string;
+    input_tokens: string;
+    output_tokens: string;
+    llm_calls: string;
+    model: string;
+    provider: string;
+    principal_id: string;
+    principal_kind: string;
+  };
+  const rows = (await queryResult.json()) as Row[];
+  for (const row of rows) {
+    result.set(row.execution_step_id, {
+      executionStepId: row.execution_step_id,
+      costMicros: Number(row.cost_micros),
+      inputTokens: Number(row.input_tokens),
+      outputTokens: Number(row.output_tokens),
+      llmCalls: Number(row.llm_calls),
+      model: row.model,
+      provider: row.provider,
+      principalId: row.principal_id,
+      principalKind: row.principal_kind,
+    });
+  }
+  return result;
+}
+
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
 
@@ -390,7 +569,13 @@ export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
     // join, and principal attribution from the ambient tenant scope
     // (migration 0023) — explicit caller values win over ambient ones.
     rows.map((r) => ({
-      ...(r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r),
+      ...(r.execution_step_id == null
+        ? { ...r, execution_step_id: NIL_UUID }
+        : r),
+      // Coalesce the optional cache-write count to 0 so non-text callers
+      // (embeddings, image/video) never have to spell it out — matches the
+      // ClickHouse column DEFAULT 0 (migration 0026).
+      cache_write_tokens: r.cache_write_tokens ?? 0,
       trace_id: r.trace_id ?? trace_id,
       span_id: r.span_id ?? span_id,
       principal_id: r.principal_id ?? attribution.principal_id,
@@ -757,7 +942,9 @@ export const insertEvalRun = (row: EvalRunRow): Promise<void> =>
   insertRows("eval_runs", [{ metrics: {}, labels: {}, ...row }]);
 
 /** Batch-insert per-task results. No-ops on an empty array. */
-export const insertEvalResults = (rows: readonly EvalResultRow[]): Promise<void> =>
+export const insertEvalResults = (
+  rows: readonly EvalResultRow[],
+): Promise<void> =>
   insertRows(
     "eval_results",
     rows.map((r) => ({ metrics: {}, labels: {}, ...r })),

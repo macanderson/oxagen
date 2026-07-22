@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   createFunction: vi.fn(),
   withSystemDb: vi.fn(),
   insertEvents: vi.fn(),
-  sweepExpiredFileLocks: vi.fn().mockResolvedValue({ sweptCount: 0 }),
+  reclaimExpiredAttempts: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   // Per-test canned SELECT results, keyed by a marker in the SQL text.
   expiredRuns: [] as unknown[],
@@ -20,12 +20,20 @@ vi.mock("../create-function", () => ({
   createFunction: mocks.createFunction,
 }));
 
-vi.mock("@oxagen/database", () => ({
-  withSystemDb: mocks.withSystemDb,
+// The V2 attempt reclaimer. Mocked rather than exercised: it opens its own
+// per-attempt transactions against Postgres, and the semantics it owns (seal,
+// zero-event sentinel, grant + obligation, retry cap) belong to the run store's
+// own suite. What this file proves is that the sweeper CALLS it and reports
+// what it returns instead of flipping a V2 status column.
+vi.mock("@oxagen/agent-runner", () => ({
+  MAX_RUN_ATTEMPTS: 3,
+  createPostgresRunStore: () => ({
+    reclaimExpiredAttempts: mocks.reclaimExpiredAttempts,
+  }),
 }));
 
-vi.mock("@oxagen/ontology", () => ({
-  sweepExpiredFileLocks: mocks.sweepExpiredFileLocks,
+vi.mock("@oxagen/database", () => ({
+  withSystemDb: mocks.withSystemDb,
 }));
 
 vi.mock("drizzle-orm", () => {
@@ -164,6 +172,49 @@ function expiredAgentRun(
   };
 }
 
+/** The canonical `digestOfCanonicalJson([])` sentinel a zero-event seal uses. */
+const EMPTY_STREAM_DIGEST = `sha256:${"0".repeat(64)}`;
+
+/** One entry as `reclaimExpiredAttempts` returns it. */
+function reclaimedAttempt(overrides: {
+  runId?: string;
+  attemptNumber?: number;
+  maxAttempts?: number;
+  successorPermitted?: boolean;
+  eventCount?: number;
+  finalEventDigest?: string | null;
+  eventStreamDigest?: string;
+  alreadySealed?: boolean;
+}) {
+  const grantPublicId = "afg_00000000000000000000ff";
+  return {
+    runId: overrides.runId ?? "run-v2-1",
+    attemptNumber: overrides.attemptNumber ?? 1,
+    maxAttempts: overrides.maxAttempts ?? 3,
+    successorPermitted: overrides.successorPermitted ?? true,
+    handle: {
+      runId: overrides.runId ?? "run-v2-1",
+      attemptId: "attempt-1",
+      attemptPublicId: "arat_0000000000000000000001",
+      sealId: "seal-1",
+      terminalStatus: "abandoned",
+      grantId: "grant-1",
+      grantPublicId,
+      // The grant public id IS the obligation's stable submission id.
+      submissionId: grantPublicId,
+      obligationId: "obligation-1",
+      eventCount: overrides.eventCount ?? 4,
+      finalEventDigest:
+        overrides.finalEventDigest === undefined
+          ? `sha256:${"e".repeat(64)}`
+          : overrides.finalEventDigest,
+      eventStreamDigest:
+        overrides.eventStreamDigest ?? `sha256:${"f".repeat(64)}`,
+      alreadySealed: overrides.alreadySealed ?? false,
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("agentLeaseSweep handler", () => {
@@ -176,7 +227,7 @@ describe("agentLeaseSweep handler", () => {
     mocks.stuckExecutions = [];
     mocks.executedSql.length = 0;
     mocks.insertEvents.mockResolvedValue(undefined);
-    mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 0 });
+    mocks.reclaimExpiredAttempts.mockResolvedValue([]);
     mocks.withSystemDb.mockImplementation(
       async (fn: (tx: unknown) => unknown) => fn(makeFakeTx()),
     );
@@ -199,39 +250,9 @@ describe("agentLeaseSweep handler", () => {
       agentRunsCancelled: 0,
       fanoutsFinalized: 0,
       executionsFinalized: 0,
-      fileLocksSwept: 0,
     });
     expect(step.sendEvent).not.toHaveBeenCalled();
     expect(mocks.insertEvents).not.toHaveBeenCalled();
-  });
-
-  // OXA-2070 (docs/specs/agent-file-locking/plan.md §6): the sweep also reaps
-  // expired HOLDS_LOCK Neo4j edges as a reclaim-only backstop.
-  it("sweeps expired agent file locks and reports the count", async () => {
-    mocks.sweepExpiredFileLocks.mockResolvedValue({ sweptCount: 3 });
-
-    const result = (await sweepHandler!({
-      step: makeStep(),
-      event: { data: {} },
-    })) as Record<string, number>;
-
-    expect(mocks.sweepExpiredFileLocks).toHaveBeenCalledOnce();
-    expect(result.fileLocksSwept).toBe(3);
-  });
-
-  it("swallows a sweepExpiredFileLocks failure without failing the rest of the sweep", async () => {
-    mocks.sweepExpiredFileLocks.mockRejectedValue(new Error("neo4j down"));
-
-    const result = (await sweepHandler!({
-      step: makeStep(),
-      event: { data: {} },
-    })) as Record<string, number>;
-
-    expect(result.fileLocksSwept).toBe(0);
-    expect(mocks.logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
-      expect.stringContaining("sweepExpiredFileLocks failed"),
-    );
   });
 
   it("requeues expired runs below the cap and fails runs at the cap", async () => {
@@ -499,5 +520,169 @@ describe("agentLeaseSweep handler", () => {
     expect(result.agentRunsRequeued).toBe(0);
     expect(result.agentRunsFailedAtCap).toBe(0);
     expect(result.agentRunsCancelled).toBe(0);
+  });
+
+  // The V1 SQL sweep must never touch a V2 row. Flipping one to 'pending'
+  // would leave its expired attempt unsealed — no seal means no finalization
+  // grant and no obligation — and then let a successor claim on top of
+  // evidence nothing is obliged to submit.
+  it("scopes every V1 agent_runs read and write to spec_version = 1", async () => {
+    mocks.expiredAgentRuns = [
+      expiredAgentRun("ar-1", 1),
+      expiredAgentRun("ar-2", 3),
+      expiredAgentRun("ar-3", 1, true),
+    ];
+
+    await sweepHandler!({ step: makeStep(), event: { data: {} } });
+
+    const selectSql = mocks.executedSql.find(
+      (s) => s.includes("FROM agent.agent_runs") && s.includes("SELECT"),
+    )!;
+    const requeueSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'pending'") && s.includes("agent.agent_runs"),
+    )!;
+    const failSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("lease expired after") && s.includes("agent.agent_runs"),
+    )!;
+    const cancelSql = mocks.executedSql.find(
+      (s) =>
+        s.includes("SET status = 'cancelled'") &&
+        s.includes("agent.agent_runs"),
+    )!;
+
+    for (const scoped of [selectSql, requeueSql, failSql, cancelSql]) {
+      expect(scoped).toContain("spec_version = 1");
+    }
+  });
+
+  // ── V2 attempt reclaim (docs/specs/run-evidence-ingress/spec.md) ───────────
+
+  it("reclaims expired V2 attempts through reclaimExpiredAttempts, not raw SQL", async () => {
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(mocks.reclaimExpiredAttempts).toHaveBeenCalledWith({
+      reclaimerWorkerId: "inngest:agent.lease-sweep",
+      limit: 100,
+      reasonCode: "lease_expired",
+    });
+    expect(result.attemptsReclaimed).toBe(0);
+    expect(result.finalizationObligations).toBe(0);
+    expect(result.attemptsAlreadySealed).toBe(0);
+    // No agent_runs row was status-flipped by this sweep at all — and the one
+    // path that ever could is scoped to `spec_version = 1`.
+    expect(
+      mocks.executedSql.filter((s) => s.includes("UPDATE agent.agent_runs")),
+    ).toHaveLength(0);
+  });
+
+  // A truly zero-event abandoned attempt seals with event_count = 0, a NULL
+  // final-event digest, and the canonical empty stream digest — and no
+  // synthesized terminal event. The sweeper reports exactly that, unmassaged.
+  it("passes a zero-event abandoned attempt through without inventing a terminal event", async () => {
+    mocks.reclaimExpiredAttempts.mockResolvedValue([
+      reclaimedAttempt({
+        eventCount: 0,
+        finalEventDigest: null,
+        eventStreamDigest: EMPTY_STREAM_DIGEST,
+      }),
+    ]);
+
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.attemptsReclaimed).toBe(1);
+    expect(result.finalizationObligations).toBe(1);
+    expect(result.attemptsRequeuedForSuccessor).toBe(1);
+    expect(result.attemptsFailedAtCap).toBe(0);
+    // The obligation's stable submission id is logged so a stranded one is
+    // findable without querying the ledger.
+    expect(mocks.logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reclaimed: 1,
+        newlySealed: 1,
+        submissionIds: ["afg_00000000000000000000ff"],
+      }),
+      expect.stringContaining("finalization obligations"),
+    );
+  });
+
+  it("counts a retry-cap-exhausted attempt as failed-at-cap, not requeued", async () => {
+    mocks.reclaimExpiredAttempts.mockResolvedValue([
+      reclaimedAttempt({
+        attemptNumber: 3,
+        maxAttempts: 3,
+        successorPermitted: false,
+      }),
+    ]);
+
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.attemptsReclaimed).toBe(1);
+    expect(result.attemptsFailedAtCap).toBe(1);
+    expect(result.attemptsRequeuedForSuccessor).toBe(0);
+    // The attempt still sealed, so its evidence is still finalizable.
+    expect(result.finalizationObligations).toBe(1);
+  });
+
+  it("splits a mixed batch into requeued-for-successor and failed-at-cap", async () => {
+    mocks.reclaimExpiredAttempts.mockResolvedValue([
+      reclaimedAttempt({ runId: "run-a", successorPermitted: true }),
+      reclaimedAttempt({
+        runId: "run-b",
+        attemptNumber: 3,
+        successorPermitted: false,
+      }),
+      reclaimedAttempt({ runId: "run-c", successorPermitted: true }),
+    ]);
+
+    const result = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(result.attemptsReclaimed).toBe(3);
+    expect(result.attemptsRequeuedForSuccessor).toBe(2);
+    expect(result.attemptsFailedAtCap).toBe(1);
+    expect(result.finalizationObligations).toBe(3);
+  });
+
+  // A second sweeper that raced the first gets the SAME handle back — same
+  // submission id, no second grant — flagged `alreadySealed`. It must be
+  // visible as a duplicate, never counted as new finalization work.
+  it("does not double-count a duplicate sweep of an already-sealed attempt", async () => {
+    const first = reclaimedAttempt({});
+    mocks.reclaimExpiredAttempts.mockResolvedValue([first]);
+    const firstResult = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    mocks.reclaimExpiredAttempts.mockResolvedValue([
+      reclaimedAttempt({ alreadySealed: true }),
+    ]);
+    const secondResult = (await sweepHandler!({
+      step: makeStep(),
+      event: { data: {} },
+    })) as Record<string, number>;
+
+    expect(firstResult.finalizationObligations).toBe(1);
+    expect(firstResult.attemptsAlreadySealed).toBe(0);
+
+    expect(secondResult.attemptsReclaimed).toBe(1);
+    expect(secondResult.attemptsAlreadySealed).toBe(1);
+    // No second obligation: the first sweep's grant is the only one.
+    expect(secondResult.finalizationObligations).toBe(0);
+    expect(secondResult.attemptsRequeuedForSuccessor).toBe(0);
+    expect(secondResult.attemptsFailedAtCap).toBe(0);
   });
 });

@@ -63,29 +63,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    custom: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer business entities and relationships from custom SQL query results.
-
-    Look for:
-    - Records with name/title fields that map to known product features, customers, or projects
-    - Foreign-key-style columns (e.g. account_id, user_id, project_id) that imply relationships
-    - Status fields indicating lifecycle state (open, closed, active, cancelled)
-    - Date fields that establish temporal ordering and causality
-
-    Create edges:
-    - Entity -[related_to]-> Entity (when a foreign-key column references another record type)
-    - Entity -[owned_by]-> Account (when an owner_id or account_id column is present)
-
 sync:
   delivery: polling
   pollingSupported: true

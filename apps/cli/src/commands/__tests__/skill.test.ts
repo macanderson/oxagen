@@ -8,9 +8,16 @@
  * an unknown skill exits 1. A fake CommandWriter captures stdout/stderr.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { serializeArtifactToml } from "@oxagen/agent-artifacts";
 import { skillList, skillShow, skillNew, type SkillCmdCtx } from "../skill.js";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
@@ -19,16 +26,30 @@ let home: string;
 let ctx: SkillCmdCtx;
 
 function writeSkill(name: string, body: string): void {
-  const p = join(dir, ".oxagen", "skills", name, "SKILL.md");
+  const p = join(dir, ".oxagen", "skills", name, "skill.toml");
   mkdirSync(join(p, ".."), { recursive: true });
-  writeFileSync(p, body, "utf8");
+  writeFileSync(
+    p,
+    serializeArtifactToml({
+      schema_version: 1,
+      kind: "skill",
+      name,
+      description: "Reviews diffs",
+      instructions: body,
+      references: [],
+    }),
+    "utf8",
+  );
 }
 
 function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -55,7 +76,7 @@ describe("skill handlers — pretty mode", () => {
   });
 
   it("lists skills with description and path", () => {
-    writeSkill("reviewer", "---\nname: reviewer\ndescription: Reviews diffs\n---\nHow to review.");
+    writeSkill("reviewer", "How to review.");
     const { writer, out } = makeWriter();
     skillList(ctx, writer);
     const text = out.join("\n");
@@ -64,7 +85,7 @@ describe("skill handlers — pretty mode", () => {
   });
 
   it("shows a skill's instructions", () => {
-    writeSkill("reviewer", "---\nname: reviewer\ndescription: Reviews diffs\n---\nHow to review a diff carefully.");
+    writeSkill("reviewer", "How to review a diff carefully.");
     const { writer, out } = makeWriter();
     skillShow("reviewer", ctx, writer);
     const text = out.join("\n");
@@ -87,7 +108,9 @@ describe("skill handlers — pretty mode", () => {
     const first = makeWriter();
     skillNew("deploy", ctx, first.writer);
     expect(first.out.join("\n")).toContain("Created skill");
-    expect(existsSync(join(dir, ".oxagen", "skills", "deploy", "SKILL.md"))).toBe(true);
+    expect(
+      existsSync(join(dir, ".oxagen", "skills", "deploy", "skill.toml")),
+    ).toBe(true);
     const second = makeWriter();
     skillNew("deploy", ctx, second.writer);
     expect(second.out.join("\n")).toContain("already exists");
@@ -112,7 +135,7 @@ describe("skill handlers — pretty mode", () => {
 
 describe("skill handlers — --json mode", () => {
   it("list emits one single-line JSON array preserving the summary shape", () => {
-    writeSkill("reviewer", "---\nname: reviewer\ndescription: Reviews diffs\n---\nHow to review.");
+    writeSkill("reviewer", "How to review.");
     const { writer, out, err } = makeWriter();
     skillList({ ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);
@@ -135,7 +158,7 @@ describe("skill handlers — --json mode", () => {
   });
 
   it("show emits one single-line JSON object round-tripping the body", () => {
-    writeSkill("reviewer", "---\nname: reviewer\ndescription: Reviews diffs\n---\nHow to review a diff carefully.");
+    writeSkill("reviewer", "How to review a diff carefully.");
     const { writer, out } = makeWriter();
     skillShow("reviewer", { ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);

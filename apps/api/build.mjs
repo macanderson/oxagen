@@ -1,6 +1,5 @@
 import { build } from "esbuild";
 import { mkdir, writeFile, copyFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { connectorSchemaAssets } from "./build-assets.mjs";
 
@@ -59,31 +58,12 @@ await build({
   logOverride: { "empty-import-meta": "silent" },
 });
 
-// tree-sitter WASM blobs: @oxagen/code-graph/src/loader.ts loads these lazily
-// at runtime (repo ingestion via the bundled Inngest functions). They are binary
-// assets esbuild can't inline — copy them next to the bundle, where
-// loader.ts's resolveWasm() looks first (module __dirname inside the function).
-// Resolve from packages/code-graph (which owns the tree-sitter deps); the wasm
-// files are not in the packages' exports maps, so resolve each package.json and join.
-const require = createRequire(
-  new URL("../../packages/code-graph/package.json", import.meta.url),
-);
-const WASM_ASSETS = [
-  ["web-tree-sitter", "tree-sitter.wasm"],
-  ["tree-sitter-typescript", "tree-sitter-typescript.wasm"],
-  ["tree-sitter-python", "tree-sitter-python.wasm"],
-];
-for (const [pkg, file] of WASM_ASSETS) {
-  const pkgDir = dirname(require.resolve(`${pkg}/package.json`));
-  await copyFile(`${pkgDir}/${file}`, `${FUNC}/${file}`);
-}
-
 // Built-in connector schema YAMLs: packages/ingestion's loadBuiltInSchema reads
 // these at runtime via readFileSync to drive connector install / "Configure"
 // forms (plugin.schema.get). They are data assets esbuild can't inline — copy
 // each connectors/<id>/schema.yaml next to the bundle, preserving the
 // connectors/<id>/ layout so the loader's moduleDir()-relative resolution finds
-// them inside the function (mirrors the .wasm copy above).
+// them inside the function.
 for (const { src, dest } of connectorSchemaAssets()) {
   const destPath = `${FUNC}/${dest}`;
   await mkdir(dirname(destPath), { recursive: true });

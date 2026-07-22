@@ -8,19 +8,20 @@ export * from "./runtime/stream-events";
 export {
   createPlatformTurnDriver,
   parseRunSpec,
+  assertClaimIsLegacyV1,
+  hydrateAgentRunContext,
+  runRowIdentityFromClaim,
   type ClaimedRun,
   type RunEventRecord,
   type TurnDriver,
   type RunSpecV1,
+  type HydratedAgentRun,
 } from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
-// Surface-bootstrap wiring for the Engram async backends (Inngest graph-sync +
-// embed client, ClickHouse compile-telemetry sink). Call once at each server
-// surface's boot so emitGraphSync/emitEmbedEvent/emitCompileTelemetry stop
-// silently no-oping.
-export { bootstrapEngramRuntime } from "./runtime/engram-bootstrap";
 export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
+export * from "./dispatch/lineage-outcome";
+export * from "./dispatch/lineage-projection";
 export * from "./memory/neo4j";
 export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";

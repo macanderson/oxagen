@@ -10,7 +10,7 @@
  *      fully editable. Slug auto-derives from the name (kebab-case) until
  *      edited directly; an AI-drafted slug counts as edited.
  *   3. Save — read-only summary of the final configuration; saving calls
- *      `createSkillAction` (skill.create), which composes the frontmatter
+ *      `createSkillAction` (skill.create), which serializes canonical TOML
  *      server-side from these fields.
  */
 import * as React from "react";
@@ -86,7 +86,11 @@ const MAX_BODY_LENGTH = 32_000;
 const MIN_PROMPT_LENGTH = 10;
 const MAX_PROMPT_LENGTH = 4000;
 
-const WEIGHT_OPTIONS: Array<{ value: "low" | "high" | "critical"; label: string; hint: string }> = [
+const WEIGHT_OPTIONS: Array<{
+  value: "low" | "high" | "critical";
+  label: string;
+  hint: string;
+}> = [
   { value: "low", label: "Low", hint: "Rarely needed background context" },
   { value: "high", label: "High", hint: "Load whenever the topic is relevant" },
   { value: "critical", label: "Critical", hint: "Always keep in context" },
@@ -120,22 +124,29 @@ function StepIndicator({ current }: { current: WizardStep }) {
   return (
     <ol className="flex items-center gap-2" aria-label="Setup progress">
       {STEPS.map((s, idx) => {
-        const state = idx < currentIdx ? "done" : idx === currentIdx ? "active" : "todo";
+        const state =
+          idx < currentIdx ? "done" : idx === currentIdx ? "active" : "todo";
         return (
           <li key={s.key} className="flex items-center gap-2">
-            {idx > 0 && <span className="h-px w-6 bg-border" aria-hidden="true" />}
+            {idx > 0 && (
+              <span className="h-px w-6 bg-border" aria-hidden="true" />
+            )}
             <span
               className={cn(
                 "flex items-center gap-1.5 text-xs font-medium",
-                state === "active" ? "text-foreground" : "text-muted-foreground",
+                state === "active"
+                  ? "text-foreground"
+                  : "text-muted-foreground",
               )}
               aria-current={state === "active" ? "step" : undefined}
             >
               <span
                 className={cn(
                   "flex size-5 items-center justify-center rounded-full border text-[11px]",
-                  state === "active" && "border-primary bg-primary text-primary-foreground",
-                  state === "done" && "border-primary/50 bg-primary/10 text-primary",
+                  state === "active" &&
+                    "border-primary bg-primary text-primary-foreground",
+                  state === "done" &&
+                    "border-primary/50 bg-primary/10 text-primary",
                   state === "todo" && "border-border",
                 )}
               >
@@ -171,7 +182,9 @@ export function NewSkillDialog({
   const [slug, setSlug] = React.useState("");
   const [slugEdited, setSlugEdited] = React.useState(false);
   const [description, setDescription] = React.useState("");
-  const [weight, setWeight] = React.useState<"low" | "high" | "critical">("low");
+  const [weight, setWeight] = React.useState<"low" | "high" | "critical">(
+    "low",
+  );
   const [body, setBody] = React.useState("");
   const [activate, setActivate] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
@@ -213,7 +226,11 @@ export function NewSkillDialog({
     setDrafting(true);
     setError(null);
     try {
-      const result = await draftAction({ orgSlug, workspaceSlug, prompt: prompt.trim() });
+      const result = await draftAction({
+        orgSlug,
+        workspaceSlug,
+        prompt: prompt.trim(),
+      });
       if (result.ok) {
         setName(result.draft.displayName);
         setSlug(result.draft.slug);
@@ -266,7 +283,10 @@ export function NewSkillDialog({
       });
 
       if (result.ok) {
-        toast.add({ title: "Skill created", description: `${name.trim()} (${result.slug})` });
+        toast.add({
+          title: "Skill created",
+          description: `${name.trim()} (${result.slug})`,
+        });
         const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
         onOpenChange(false);
         reset();
@@ -274,7 +294,11 @@ export function NewSkillDialog({
         router.refresh();
       } else {
         setError(result.error);
-        toast.add({ title: "Create failed", description: result.error, type: "error" });
+        toast.add({
+          title: "Create failed",
+          description: result.error,
+          type: "error",
+        });
       }
     } finally {
       setSubmitting(false);
@@ -303,7 +327,9 @@ export function NewSkillDialog({
           <>
             <DialogPanel className="mt-4 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="skill-wizard-prompt">What should this skill teach the agent?</Label>
+                <Label htmlFor="skill-wizard-prompt">
+                  What should this skill teach the agent?
+                </Label>
                 <Textarea
                   id="skill-wizard-prompt"
                   placeholder="e.g. How to triage production incidents: check dashboards first, page the on-call owner, keep a running timeline, and write a blameless postmortem within 48 hours."
@@ -315,13 +341,17 @@ export function NewSkillDialog({
                   data-testid="skill-wizard-describe-input"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Plain language is fine — the AI derives the name, slug, weight, and full skill
-                  content. You review everything before it&apos;s saved.
+                  Plain language is fine — the AI derives the name, slug,
+                  weight, and full skill content. You review everything before
+                  it&apos;s saved.
                 </p>
               </div>
 
               {error && (
-                <p className="text-sm text-destructive" data-testid="new-skill-error">
+                <p
+                  className="text-sm text-destructive"
+                  data-testid="new-skill-error"
+                >
                   {error}
                 </p>
               )}
@@ -337,7 +367,11 @@ export function NewSkillDialog({
               >
                 Configure manually
               </Button>
-              <DialogClose render={<Button type="button" variant="outline" disabled={drafting} />}>
+              <DialogClose
+                render={
+                  <Button type="button" variant="outline" disabled={drafting} />
+                }
+              >
                 Cancel
               </DialogClose>
               <Button
@@ -347,7 +381,10 @@ export function NewSkillDialog({
                 data-testid="skill-wizard-generate-btn"
               >
                 {drafting ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <Sparkles className="mr-2 size-4" aria-hidden="true" />
                 )}
@@ -417,7 +454,8 @@ export function NewSkillDialog({
                 <RadioGroup
                   value={weight}
                   onValueChange={(v) => {
-                    if (typeof v === "string") setWeight(v as "low" | "high" | "critical");
+                    if (typeof v === "string")
+                      setWeight(v as "low" | "high" | "critical");
                   }}
                   className="gap-2"
                 >
@@ -433,8 +471,12 @@ export function NewSkillDialog({
                     >
                       <Radio value={opt.value} className="mt-0.5 shrink-0" />
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-sm font-medium text-foreground">{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {opt.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {opt.hint}
+                        </span>
                       </div>
                     </label>
                   ))}
@@ -456,7 +498,8 @@ export function NewSkillDialog({
                   data-testid="new-skill-body-textarea"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {body.length.toLocaleString()} / {MAX_BODY_LENGTH.toLocaleString()} characters
+                  {body.length.toLocaleString()} /{" "}
+                  {MAX_BODY_LENGTH.toLocaleString()} characters
                 </p>
               </div>
 
@@ -468,13 +511,19 @@ export function NewSkillDialog({
                   onCheckedChange={(checked) => setActivate(checked === true)}
                   data-testid="new-skill-activate-checkbox"
                 />
-                <Label htmlFor="new-skill-activate" className="cursor-pointer font-normal">
+                <Label
+                  htmlFor="new-skill-activate"
+                  className="cursor-pointer font-normal"
+                >
                   Activate immediately (make this the active version)
                 </Label>
               </div>
 
               {error && (
-                <p className="text-sm text-destructive" data-testid="new-skill-error">
+                <p
+                  className="text-sm text-destructive"
+                  data-testid="new-skill-error"
+                >
                   {error}
                 </p>
               )}
@@ -492,8 +541,14 @@ export function NewSkillDialog({
               >
                 Back
               </Button>
-              <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-              <Button type="submit" disabled={!formComplete} data-testid="skill-wizard-continue-btn">
+              <DialogClose render={<Button type="button" variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={!formComplete}
+                data-testid="skill-wizard-continue-btn"
+              >
                 Continue
               </Button>
             </DialogFooter>
@@ -506,11 +561,17 @@ export function NewSkillDialog({
             <DialogPanel className="mt-4 gap-4 max-h-[60vh] overflow-y-auto">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
                 <dt className="text-muted-foreground">Name</dt>
-                <dd className="font-medium" data-testid="skill-wizard-summary-name">
+                <dd
+                  className="font-medium"
+                  data-testid="skill-wizard-summary-name"
+                >
                   {name.trim()}
                 </dd>
                 <dt className="text-muted-foreground">Slug</dt>
-                <dd className="font-mono text-xs self-center" data-testid="skill-wizard-summary-slug">
+                <dd
+                  className="font-mono text-xs self-center"
+                  data-testid="skill-wizard-summary-slug"
+                >
                   {slug}
                 </dd>
                 <dt className="text-muted-foreground">Weight</dt>
@@ -522,7 +583,9 @@ export function NewSkillDialog({
                 <dt className="text-muted-foreground">Description</dt>
                 <dd>{description.trim()}</dd>
                 <dt className="text-muted-foreground">Activation</dt>
-                <dd>{activate ? "Active immediately" : "Saved as draft version"}</dd>
+                <dd>
+                  {activate ? "Active immediately" : "Saved as draft version"}
+                </dd>
               </dl>
 
               <div className="space-y-1.5">
@@ -536,7 +599,10 @@ export function NewSkillDialog({
               </div>
 
               {error && (
-                <p className="text-sm text-destructive" data-testid="new-skill-error">
+                <p
+                  className="text-sm text-destructive"
+                  data-testid="new-skill-error"
+                >
                   {error}
                 </p>
               )}
@@ -555,7 +621,15 @@ export function NewSkillDialog({
               >
                 Back
               </Button>
-              <DialogClose render={<Button type="button" variant="outline" disabled={submitting} />}>
+              <DialogClose
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitting}
+                  />
+                }
+              >
                 Cancel
               </DialogClose>
               <Button
@@ -564,7 +638,12 @@ export function NewSkillDialog({
                 onClick={handleSave}
                 data-testid="new-skill-submit-btn"
               >
-                {submitting && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
+                {submitting && (
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
                 Save skill
               </Button>
             </DialogFooter>

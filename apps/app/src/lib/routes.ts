@@ -189,10 +189,18 @@ export const workspace = {
       `${wsBase(ctx)}/automations/triggers`,
     workflows: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/automations/workflows`,
+    // Fleet lineage explorer (issue #1078) — the dispatch tree for one
+    // agent.subagent_fanouts row (query_lineage). Natural drill-through from a
+    // Workflows run's fan-out. `dispatchId` deep-links via `?dispatchId=`,
+    // mirroring how knowledge/graph/page.tsx deep-links `?focus=`.
+    lineage: (ctx: Required<ScopeContext>, dispatchId?: string): string =>
+      dispatchId
+        ? `${wsBase(ctx)}/automations/lineage?dispatchId=${encodeURIComponent(dispatchId)}`
+        : `${wsBase(ctx)}/automations/lineage`,
   },
 
-  // Knowledge — web-app-2.0 Phase 2 IA: Sources · Graph · Inference ·
-  // Ontology · Memory. The graph explorer, node browser, and query console
+  // Knowledge — Sources · Graph · Ontology · Memory. The graph explorer,
+  // node browser, and query console
   // all live under the single /knowledge/graph surface; node detail is a
   // child of Graph.
   knowledge: {
@@ -203,8 +211,6 @@ export const workspace = {
       `${wsBase(ctx)}/knowledge/sources/connect`,
     graph: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/graph`,
-    inference: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/inference`,
     ontology: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/ontology`,
     memory: (ctx: Required<ScopeContext>): string =>
@@ -245,6 +251,12 @@ export const workspace = {
     // concern; the servers themselves are managed in Workbench → Agent Tools.
     mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/mcp-server-registries`,
+    // Hard period-to-date spend ceilings (org + workspace scope) — powers
+    // get_spend_budget / set_spend_budget (OXA-1079). Workspace-scoped
+    // (real workspaceId) so the RLS-narrowed read returns BOTH scopes; see
+    // ./settings/spend-budgets/actions.ts for the placement rationale.
+    spendBudgets: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/spend-budgets`,
     // Deprecated sub-tab aliases — the four agent-behaviour tabs merged into
     // Agent Defaults, and the ontology moved to Knowledge. Retained so existing
     // callers keep compiling and revalidate the correct destination; proxy.ts

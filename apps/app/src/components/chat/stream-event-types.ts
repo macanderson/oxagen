@@ -6,7 +6,7 @@
 // Reuse the background-task status union defined by the tray so the inline
 // streaming card and the tray never drift (queued|running|completed|failed|cancelled).
 import type { BackgroundTaskStatus } from "./background-task-types";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 export type { BackgroundTaskStatus };
 export type { KnowledgeNodeRef };
 
@@ -261,7 +261,11 @@ export type StreamEvent =
       type: "subagent-dispatched";
       fanoutId: string;
       parentMessageId: string;
-      children: Array<{ childMessageId: string; capability: string; label?: string }>;
+      children: Array<{
+        childMessageId: string;
+        capability: string;
+        label?: string;
+      }>;
     }
   | {
       type: "subagent-completed";

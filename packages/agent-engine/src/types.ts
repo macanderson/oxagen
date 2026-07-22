@@ -17,8 +17,6 @@ import type {
  *   recalled context.
  * - `memory-remember` — persisting the turn's episodic memory failed.
  * - `trace-record` — writing the turn trace failed.
- * - `graph-sync` — a fire-and-forget knowledge-graph sync (file upsert / lineage
- *   edge) failed (pipeline finalization).
  * - `file-lock-release` — the turn-end batch lock release failed (the lock TTL is
  *   the ultimate backstop).
  * - `budget-wait-slow` — NOT an error but an observability breadcrumb: an
@@ -29,7 +27,6 @@ export type EngineNonFatalPhase =
   | "memory-recall"
   | "memory-remember"
   | "trace-record"
-  | "graph-sync"
   | "file-lock-release"
   | "budget-wait-slow";
 
@@ -342,9 +339,9 @@ export interface RunCodingAgentOptions {
   memory?: MemoryProvider;
   trace?: TraceStore;
   /**
-   * Graph-backed file lock (docs/specs/agent-file-locking/plan.md). Omitted
-   * (undefined) ⇒ `write_file`/`edit_file` proceed unlocked — the CLI's
-   * single-process, no-shared-Neo4j default. When supplied, `lockContext`
+   * Transactional file-lock lease (ADR-021). Omitted (undefined) ⇒
+   * `write_file`/`edit_file` proceed unlocked — the CLI's single-process,
+   * no-shared-lease-store default. When supplied, `lockContext`
    * MUST also be supplied so the tool executor has an identity to acquire
    * under.
    */

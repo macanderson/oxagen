@@ -25,8 +25,8 @@
  * to a local cache directory; every use after that is fully offline.
  *
  * Its vectors (384-d) live in a different vector space than the platform
- * gateway's 1536-d index — see embedding.ts / embedding-ollama.ts for how
- * `graph.push.ts` keeps a mismatched vector from ever reaching the server.
+ * gateway's 1536-d index. They remain in the checkout-local graph and the
+ * provider id prevents incompatible vector spaces from being compared.
  */
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";

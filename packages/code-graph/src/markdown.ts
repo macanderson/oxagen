@@ -2,7 +2,7 @@
  * Markdown / MDX documentation parser.
  *
  * Splits a document into heading-delimited sections so each section becomes an
- * embeddable :SourceSymbol (kind "heading"). A section runs from its ATX heading
+ * embeddable local symbol (kind "heading"). A section runs from its ATX heading
  * line up to (but not including) the next heading of the SAME OR HIGHER level, so
  * nested subsections fall inside their parent's range as well as standing on their
  * own. The first H1 (or first heading) is returned as the document title.
@@ -12,8 +12,7 @@
  * tracked so a `#` inside ``` ``` ``` is not mistaken for a heading.
  *
  * Module: @oxagen/code-graph/markdown
- * Moved from packages/ingestion/src/parsers/markdown.ts — canonical location is
- * now here; ingestion re-exports for backward compat.
+ * This parser is part of the checkout-local graph implementation.
  */
 
 import type { ParsedSymbol } from "./types";

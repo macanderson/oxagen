@@ -1,7 +1,10 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, ilike, inArray } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
-import type { AgentSkillListInput, AgentSkillListOutput } from "@oxagen/oxagen/contracts/agent.skill.list";
+import type {
+  AgentSkillListInput,
+  AgentSkillListOutput,
+} from "@oxagen/oxagen/contracts/agent.skill.list";
 import { effectiveResourceScope } from "./_effective-scope";
 
 export type { AgentSkillListInput, AgentSkillListOutput };
@@ -17,7 +20,8 @@ export async function agentSkillListHandler(
     eq(schema.skills.orgId, ctx.orgId),
     eq(schema.skills.workspaceId, ctx.workspaceId),
   ];
-  if (input.filter) conditions.push(ilike(schema.skills.name, `%${input.filter}%`));
+  if (input.filter)
+    conditions.push(ilike(schema.skills.name, `%${input.filter}%`));
 
   // Agent RBAC Phase 4 (spec §3.3): the skill INDEX an agent run sees is
   // filtered to its effective skills.slugs allow-list — an unauthorized skill
@@ -55,7 +59,9 @@ export async function agentSkillListHandler(
       slug: r.slug,
       name: r.name,
       description: r.description ?? "",
-      source: (r.source === "tenant" ? "tenant" : "builtin") as "builtin" | "tenant",
+      source: (r.source === "tenant" ? "tenant" : "builtin") as
+        | "builtin"
+        | "tenant",
       version: r.version != null ? String(r.version) : "1",
     })),
   };

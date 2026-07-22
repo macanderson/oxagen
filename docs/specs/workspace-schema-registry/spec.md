@@ -1,5 +1,11 @@
 # Workspace Schema Registry — Design Specification
 
+> **Launch-boundary addendum (2026-07-21):** the registry and governed connector
+> validation remain. References below to generic graph node/relationship mutation,
+> `graph.ingest`, alias shims, or automatic semantic materialization are historical
+> implementation detail and must not be restored. Connector ingestion and explicit
+> semantic-candidate approval are the shared graph write paths.
+
 ## 1. Scope
 
 The Workspace Schema Registry is an AI-assisted schema builder that lets a

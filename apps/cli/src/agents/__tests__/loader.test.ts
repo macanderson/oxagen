@@ -1,150 +1,74 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadAgents, getAgent, parseFrontmatter } from "../loader.js";
-import { clearSettingsCache } from "../../settings/resolve.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getAgent, loadAgents } from "../loader.js";
 
-let dir: string;
-let userDir: string;
-let userSettings: string;
+let root: string;
+let userDirectory: string;
 
-function writeAgent(rel: string, body: string): void {
-  const path = join(dir, rel);
+function write(path: string, content: string): void {
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, body, "utf8");
+  writeFileSync(path, content, "utf8");
 }
 
-function load() {
-  return loadAgents({
-    cwd: dir,
-    userAgentsDir: userDir,
-    settingsOptions: { userSettingsPath: userSettings },
-  });
+function agent(
+  name: string,
+  prompt: string,
+  tools = "[]",
+  unresolved = "[]",
+): string {
+  return `schema_version = 1\nkind = "agent"\nname = "${name}"\ndescription = "${name}"\ndeveloper_instructions = "${prompt}"\ntools = ${tools}\nskills = []\nunresolved_tools = ${unresolved}\n`;
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "oxagen-agents-"));
-  userDir = join(dir, "user-agents");
-  userSettings = join(dir, "user-settings.json");
-  clearSettingsCache();
-});
-afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
-  clearSettingsCache();
+  root = mkdtempSync(join(tmpdir(), "oxagen-agents-"));
+  userDirectory = join(root, "user-agents");
 });
 
-describe("parseFrontmatter", () => {
-  it("splits frontmatter and body", () => {
-    const { data, body } = parseFrontmatter("---\nname: x\ndescription: hi\n---\nThe prompt.");
-    expect(data["name"]).toBe("x");
-    expect(data["description"]).toBe("hi");
-    expect(body).toBe("The prompt.");
-  });
-
-  it("treats content without frontmatter as all body", () => {
-    expect(parseFrontmatter("just a prompt").body).toBe("just a prompt");
-  });
-
-  it("strips quotes from values", () => {
-    expect(parseFrontmatter('---\nmodel: "a/b"\n---\nx').data["model"]).toBe("a/b");
-  });
-});
+afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("loadAgents", () => {
-  it("loads an agent from .oxagen/agents and parses frontmatter + tools", () => {
-    writeAgent(".oxagen/agents/reviewer.md", "---\nname: reviewer\ndescription: Reviews code\ntools: Read, Grep\nmodel: a/b\n---\nYou review code.");
-    const agent = load().get("reviewer");
-    expect(agent?.description).toBe("Reviews code");
-    expect(agent?.tools).toEqual(["Read", "Grep"]);
-    expect(agent?.model).toBe("a/b");
-    expect(agent?.systemPrompt).toBe("You review code.");
-  });
-
-  it("parses a bracketed tools list", () => {
-    writeAgent(".oxagen/agents/a.md", "---\ntools: [Read, Bash]\n---\nbody");
-    expect(load().get("a")?.tools).toEqual(["Read", "Bash"]);
-  });
-
-  it("defaults the name to the filename and tools to undefined", () => {
-    writeAgent(".oxagen/agents/helper.md", "---\ndescription: d\n---\nbody");
-    const a = load().get("helper");
-    expect(a?.name).toBe("helper");
-    expect(a?.tools).toBeUndefined();
-  });
-
-  it(".oxagen overrides .claude overrides user, and settings.agents overrides files", () => {
-    mkdirSync(userDir, { recursive: true });
-    writeFileSync(join(userDir, "r.md"), "---\nname: r\n---\nuser version");
-    writeAgent(".claude/agents/r.md", "---\nname: r\n---\nclaude version");
-    expect(load().get("r")?.systemPrompt).toBe("claude version");
-
-    writeAgent(".oxagen/agents/r.md", "---\nname: r\n---\noxagen version");
-    expect(load().get("r")?.systemPrompt).toBe("oxagen version");
-
-    writeFileSync(userSettings, JSON.stringify({ agents: { r: { prompt: "inline version" } } }));
-    clearSettingsCache();
-    const a = load().get("r");
-    expect(a?.systemPrompt).toBe("inline version");
-    expect(a?.source).toBe("settings.json");
-  });
-
-  it("ignores files with no name or no body", () => {
-    writeAgent(".oxagen/agents/empty.md", "---\nname: empty\n---\n");
-    expect(load().has("empty")).toBe(false);
-  });
-
-  it("getAgent returns one agent or null", () => {
-    writeAgent(".oxagen/agents/solo.md", "---\nname: solo\n---\nbody");
-    expect(getAgent("solo", { cwd: dir, userAgentsDir: userDir, settingsOptions: { userSettingsPath: userSettings } })?.name).toBe("solo");
-    expect(getAgent("nope", { cwd: dir, userAgentsDir: userDir, settingsOptions: { userSettingsPath: userSettings } })).toBeNull();
-  });
-
-  it("parses skills and mcpServers from frontmatter (comma and bracket lists)", () => {
-    writeAgent(
-      ".oxagen/agents/wired.md",
-      "---\nname: wired\nskills: reviewer, deploy\nmcpServers: [github, linear]\n---\nbody",
+  it("loads TOML with workspace precedence and ignores Markdown", () => {
+    write(join(userDirectory, "reviewer.toml"), agent("reviewer", "user"));
+    write(
+      join(root, ".oxagen", "agents", "reviewer.toml"),
+      agent("reviewer", "workspace", '["read_file"]'),
     );
-    const a = load().get("wired");
-    expect(a?.skills).toEqual(["reviewer", "deploy"]);
-    expect(a?.mcpServers).toEqual(["github", "linear"]);
+    write(
+      join(root, ".claude", "agents", "foreign.md"),
+      "---\nname: foreign\n---\nforeign",
+    );
+    const loaded = loadAgents({ cwd: root, userAgentsDir: userDirectory });
+    expect([...loaded.keys()]).toEqual(["reviewer"]);
+    expect(loaded.get("reviewer")?.systemPrompt).toBe("workspace");
+    expect(loaded.get("reviewer")?.tools).toEqual(["read_file"]);
   });
 
-  it("leaves skills and mcpServers undefined when absent from frontmatter", () => {
-    writeAgent(".oxagen/agents/bare.md", "---\nname: bare\n---\nbody");
-    const a = load().get("bare");
-    expect(a?.skills).toBeUndefined();
-    expect(a?.mcpServers).toBeUndefined();
-  });
-
-  it("parses skills and mcpServers from an inline settings.json agent", () => {
-    writeFileSync(
-      userSettings,
-      JSON.stringify({
-        agents: {
-          inline: {
-            prompt: "inline prompt",
-            skills: ["reviewer"],
-            mcpServers: ["github"],
-          },
-        },
+  it("keeps unresolved and invalid artifacts non-executable with diagnostics", () => {
+    const codes: string[] = [];
+    write(
+      join(root, ".oxagen", "agents", "blocked.toml"),
+      agent("blocked", "blocked", "[]", '["Task"]'),
+    );
+    write(join(root, ".oxagen", "agents", "bad.toml"), "not toml");
+    expect(
+      loadAgents({
+        cwd: root,
+        userAgentsDir: userDirectory,
+        onDiagnostic: (entry) => codes.push(entry.code),
       }),
-    );
-    clearSettingsCache();
-    const a = load().get("inline");
-    expect(a?.skills).toEqual(["reviewer"]);
-    expect(a?.mcpServers).toEqual(["github"]);
-    expect(a?.source).toBe("settings.json");
+    ).toHaveLength(0);
+    expect(codes.sort()).toEqual(["artifact_needs_review", "invalid_artifact"]);
   });
 
-  it("leaves inline skills and mcpServers undefined when empty or absent", () => {
-    writeFileSync(
-      userSettings,
-      JSON.stringify({ agents: { inline: { prompt: "p", skills: [] } } }),
-    );
-    clearSettingsCache();
-    const a = load().get("inline");
-    expect(a?.skills).toBeUndefined();
-    expect(a?.mcpServers).toBeUndefined();
+  it("returns an agent or null", () => {
+    write(join(root, ".oxagen", "agents", "solo.toml"), agent("solo", "body"));
+    expect(
+      getAgent("solo", { cwd: root, userAgentsDir: userDirectory })?.name,
+    ).toBe("solo");
+    expect(
+      getAgent("missing", { cwd: root, userAgentsDir: userDirectory }),
+    ).toBeNull();
   });
 });

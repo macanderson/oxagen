@@ -23,6 +23,7 @@ import {
   type GatewayModel,
   type Vendor,
 } from "@oxagen/ai/catalog";
+import { posturesFor } from "@oxagen/ai/posture";
 import {
   Select,
   SelectTrigger,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ProviderIcon } from "./provider-icon";
+import { PostureBadgeGroup } from "./posture-badges";
 
 // ── Public contract ──────────────────────────────────────────────────────────
 
@@ -209,6 +211,17 @@ export function ProviderModelPicker({
             ))}
           </SelectPopup>
         </Select>
+        {/* Capability posture — resolved once per vendor (not per model:
+            every model from a vendor shares the same cache/reasoning/
+            structured-output/attachment posture), so it lives here rather
+            than inside each model <SelectItem>, which has no room for it. */}
+        {activeVendor && (
+          <PostureBadgeGroup
+            posture={posturesFor(activeVendor)}
+            vendorLabel={vendorLabels[activeVendor]}
+            className="mt-0.5"
+          />
+        )}
       </div>
 
       {/* ── Model ── */}

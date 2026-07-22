@@ -4,7 +4,7 @@ kind: ConnectorPlugin
 metadata:
   id: github
   displayName: GitHub
-  description: Sync pull requests, issues, commits, releases, and source files from GitHub repositories.
+  description: Sync repository, pull request, issue, commit, and release metadata from GitHub.
   icon: github
   category: developer-tools
   version: "1.0.0"
@@ -80,11 +80,6 @@ recordTypes:
       description: Tagged releases with changelogs and semantic version metadata.
       defaultEnabled: true
 
-    - id: source
-      displayName: Source Files
-      description: Repository file tree snapshots for code-level ontology inference.
-      defaultEnabled: false
-
     - id: commit
       displayName: Commits
       description: Individual commit metadata (SHA, message, author, timestamp).
@@ -106,57 +101,11 @@ recordTypes:
       defaultEnabled: false
 
 filters:
-  pathFilters:
-    enabled: true
-    defaultIgnore:
-      - "node_modules/**"
-      - "dist/**"
-      - ".git/**"
-      - "*.lock"
-      - "*.min.js"
-      - "coverage/**"
-      - ".turbo/**"
-    appliesTo:
-      - source
   labelFilters:
     enabled: true
     appliesTo:
       - issue
       - pull_request
-
-inference:
-  enabled: true
-  defaultEnabled: true
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    pull_request: true
-    issue: true
-    release: true
-    source: true
-    commit: false
-    repository: false
-    code_review: false
-    comment: false
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer product features from GitHub entities.
-    Features are identified from:
-    - Issue titles containing "Feature:" prefix or labels like "feature", "enhancement"
-    - PR titles that implement or close an issue
-    - Code comments mentioning feature or service names
-
-    Create edges:
-    - Feature -[implemented_by]-> PullRequest (when PR is merged and title references a feature)
-    - Feature -[tracked_by]-> Issue (when issue describes a feature request)
-    - Feature -[released_in]-> Release (when feature appears in release notes)
-    - Service -[depends_on]-> Service (when a PR imports or calls another service)
-
-    Extract architectural domains from file paths and import graphs:
-    api, web, mobile, infra, billing, auth, data.
-    Tag inferred Feature and Service nodes with their domain.
 
 sync:
   delivery: webhook

@@ -6,7 +6,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { DuckDBEpisodicStore } from "../store/duckdb-adapter";
 import { createRecord } from "../record";
 import { TemporalRetrievalEngine } from "../retrieval/temporal";
-import { LexicalRetrievalEngine, type LexicalSearchFn } from "../retrieval/lexical";
+import {
+  LexicalRetrievalEngine,
+  type LexicalSearchFn,
+} from "../retrieval/lexical";
 import { fuseAndRank, DEFAULT_WEIGHTS } from "../retrieval/fusion";
 import { pack } from "./packer";
 import { buildLayout } from "./layout";
@@ -594,7 +597,11 @@ describe("compile()", () => {
         modelId: "gpt-4",
       },
       budget,
-      { engines: [new TemporalRetrievalEngine(store)], store: brokenStore, onError },
+      {
+        engines: [new TemporalRetrievalEngine(store)],
+        store: brokenStore,
+        onError,
+      },
     );
     expect(window.metadata.retrievalFailures).toBe(1);
     expect(onError).toHaveBeenCalledWith(
@@ -629,14 +636,15 @@ describe("compile()", () => {
 // never surface it (it's filtered out below TemporalRetrievalEngine's own
 // minSalience: 0.2 floor before recency scoring even runs), while lexical
 // exact-match recall (real DuckDB `searchLexical`, not mocked) finds it
-// regardless of age or salience. This is the failure mode
-// packages/agent/src/runtime/context-compiler.ts's `compileAgentContext` used
-// to have in production: every turn got temporal-only recall.
+// regardless of age or salience. This guards against the historical
+// temporal-only production wiring that caused every turn to miss exact-match
+// lexical evidence.
 // ---------------------------------------------------------------------------
 
 describe("compile() — multi-engine recall (OXA-2061)", () => {
   let store: DuckDBEpisodicStore;
-  const STALE_ERROR_MESSAGE = "NullPointerException thrown at auth.ts:42 during token refresh";
+  const STALE_ERROR_MESSAGE =
+    "NullPointerException thrown at auth.ts:42 during token refresh";
 
   beforeEach(async () => {
     store = new DuckDBEpisodicStore({ path: ":memory:" });
@@ -652,7 +660,10 @@ describe("compile() — multi-engine recall (OXA-2061)", () => {
         0.05,
         now - 45 * 24 * 60 * 60 * 1000,
       ),
-      body: { event: "error_observed", payload: { message: STALE_ERROR_MESSAGE } },
+      body: {
+        event: "error_observed",
+        payload: { message: STALE_ERROR_MESSAGE },
+      },
     });
 
     // A fresh, salient, unrelated record so temporal-only recall isn't
@@ -668,10 +679,13 @@ describe("compile() — multi-engine recall (OXA-2061)", () => {
   });
 
   // Wires LexicalRetrievalEngine to the real DuckDB searchLexical() adapter
-  // method (not a stub), mirroring the production wiring added to
-  // compileAgentContext in context-compiler.ts.
+  // method rather than a stub.
   const realLexicalSearch: LexicalSearchFn = (query, opts) =>
-    store.searchLexical({ org: opts.orgId, workspace: opts.workspaceId }, query, opts.limit);
+    store.searchLexical(
+      { org: opts.orgId, workspace: opts.workspaceId },
+      query,
+      opts.limit,
+    );
 
   it("temporal-only recall misses a stale, low-salience exact-match memory", async () => {
     const budget = computeBudget("gpt-4");

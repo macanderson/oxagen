@@ -16,7 +16,9 @@ import * as React from "react";
 // LazyExoticComponent is generic over component props. We widen to a common
 // props shape for the registry map — consumers spread `block.props` which is
 // typed as `Record<string, unknown>` in the content block.
-type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.ReactElement | null>;
+type AnyLazy = LazyExoticComponent<
+  (props: Record<string, unknown>) => React.ReactElement | null
+>;
 
 /**
  * Registry keyed by componentId string. All entries are React.lazy so the
@@ -63,7 +65,10 @@ export function UnknownComponentCard({
   componentId: string;
 }): React.ReactElement {
   return (
-    <div className="rounded-xl border bg-card px-4 py-3" data-testid="unknown-component-card">
+    <div
+      className="rounded-xl border bg-card px-4 py-3"
+      data-testid="unknown-component-card"
+    >
       <p className="text-sm text-muted-foreground">
         This interactive component isn&apos;t available in this view.{" "}
         <span className="font-mono text-xs">({componentId})</span>
@@ -84,9 +89,7 @@ export const CHAT_COMPONENTS = {
   ),
   // Renders a Mermaid diagram inline as a client-side SVG artifact. Backs the
   // mermaid.generate capability's render directive.
-  "mermaid-diagram": lazy(
-    () => import("@/components/chat/mermaid-diagram"),
-  ),
+  "mermaid-diagram": lazy(() => import("@/components/chat/mermaid-diagram")),
   "image-preview": lazy(
     () => import("@/components/chat/registry-components/image-preview"),
   ),
@@ -99,11 +102,14 @@ export const CHAT_COMPONENTS = {
   "video-result": lazy(
     () => import("@/components/chat/registry-components/video-result"),
   ),
-  "api-key-display": lazy(
-    () => import("@/components/api-key-display").then(m => ({ default: m.ApiKeyDisplay })),
+  "api-key-display": lazy(() =>
+    import("@/components/api-key-display").then((m) => ({
+      default: m.ApiKeyDisplay,
+    })),
   ),
   "create-workspace-inline": lazy(
-    () => import("@/components/chat/registry-components/create-workspace-inline"),
+    () =>
+      import("@/components/chat/registry-components/create-workspace-inline"),
   ),
   "create-org-inline": lazy(
     () => import("@/components/chat/registry-components/create-org-inline"),
@@ -115,13 +121,18 @@ export const CHAT_COMPONENTS = {
     () => import("@/components/chat/registry-components/model-settings-inline"),
   ),
   "billing-upgrade-inline": lazy(
-    () => import("@/components/chat/registry-components/billing-upgrade-inline"),
+    () =>
+      import("@/components/chat/registry-components/billing-upgrade-inline"),
   ),
   "credits-purchase-inline": lazy(
-    () => import("@/components/chat/registry-components/credits-purchase-inline"),
+    () =>
+      import("@/components/chat/registry-components/credits-purchase-inline"),
   ),
   "confirm-destructive-inline": lazy(
-    () => import("@/components/chat/registry-components/confirm-destructive-inline"),
+    () =>
+      import(
+        "@/components/chat/registry-components/confirm-destructive-inline"
+      ),
   ),
   "workflow-progress": lazy(
     () => import("@/components/chat/registry-components/workflow-progress"),
@@ -133,10 +144,12 @@ export const CHAT_COMPONENTS = {
     () => import("@/components/chat/registry-components/artifact-iframe"),
   ),
   "automation-create-inline": lazy(
-    () => import("@/components/chat/registry-components/automation-create-inline"),
+    () =>
+      import("@/components/chat/registry-components/automation-create-inline"),
   ),
   "connection-create-inline": lazy(
-    () => import("@/components/chat/registry-components/connection-create-inline"),
+    () =>
+      import("@/components/chat/registry-components/connection-create-inline"),
   ),
   "graph-stats": lazy(
     () => import("@/components/chat/registry-components/graph-stats"),
@@ -155,21 +168,22 @@ export const CHAT_COMPONENTS = {
   "graph-node-list-card": lazy(
     () => import("@/components/chat/registry-components/graph-node-list-card"),
   ),
-  "graph-edge-card": lazy(
-    () => import("@/components/chat/registry-components/graph-edge-card"),
-  ),
   "research-swarm-card": lazy(
     () => import("@/components/chat/registry-components/research-swarm-card"),
   ),
   "conversation-list-card": lazy(
-    () => import("@/components/chat/registry-components/conversation-list-card"),
+    () =>
+      import("@/components/chat/registry-components/conversation-list-card"),
   ),
   // Compact, borderless roster of workspace agents (agent.definition.list) —
   // name + muted slug, latest version, and a live/deployed status dot per row,
   // each deep-linked to the Workbench agent page. Replaces the generic key/value
   // dump for this capability.
   "agent-definition-list-card": lazy(
-    () => import("@/components/chat/registry-components/agent-definition-list-card"),
+    () =>
+      import(
+        "@/components/chat/registry-components/agent-definition-list-card"
+      ),
   ),
   "web-search-card": lazy(
     () => import("@/components/chat/registry-components/web-search-card"),
@@ -179,18 +193,19 @@ export const CHAT_COMPONENTS = {
   "capability-chain-card": lazy(
     () => import("@/components/chat/registry-components/capability-chain-card"),
   ),
-  // Renders graph.ingest output — entities + relationships extracted from text
-  // and committed to the knowledge graph, with confidence labels + node links.
-  "graph-ingest-card": lazy(
-    () => import("@/components/chat/registry-components/graph-ingest-card"),
-  ),
   // Schema registry mutation — shows a schema add/update/remove action card in chat.
   "schema-mutation-card": lazy(
-    () => import("@/components/knowledge/schema-builder/registry-components/schema-mutation-card"),
+    () =>
+      import(
+        "@/components/knowledge/schema-builder/registry-components/schema-mutation-card"
+      ),
   ),
   // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
   "schema-label-approval": lazy(
-    () => import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+    () =>
+      import(
+        "@/components/knowledge/schema-builder/registry-components/schema-label-approval"
+      ),
   ),
   // Unified-diff renderer backing agent.repo.edit / repo.file.put (via
   // capability-meta's structural render transform) and direct agent.ui.render
@@ -217,7 +232,8 @@ export const CHAT_COMPONENTS = {
   // Client-fetched active sandbox session file tree (agent.sandbox.files.list),
   // rendered via the shared FileTreeCard.
   "workspace-context-panel": lazy(
-    () => import("@/components/chat/registry-components/workspace-context-panel"),
+    () =>
+      import("@/components/chat/registry-components/workspace-context-panel"),
   ),
   // Pull-request summary + stats + comments (expandable) + CI status, backing
   // repo.pr.get (via capability-meta's structural render transform).

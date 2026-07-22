@@ -38,7 +38,10 @@ export const MAX_TOTAL_DESCENDANTS = 250;
  * every join; lvl guards bound the walk far beyond MAX_FANOUT_DEPTH so a
  * corrupt lineage cycle can never hang the dispatch.
  */
-async function countRootTreeDescendants(orgId: string, parentMessageId: string): Promise<number> {
+async function countRootTreeDescendants(
+  orgId: string,
+  parentMessageId: string,
+): Promise<number> {
   const rows = await withTenantDb((tx) =>
     tx.execute<{ descendant_count: number }>(sql`
       WITH RECURSIVE up AS (
@@ -121,14 +124,21 @@ export async function agentSubagentDispatchHandler(
     const risk = cap.agent?.riskLevel ?? "medium";
     ceiling = Math.min(ceiling, TIMEOUT_CEILING_BY_RISK[risk]);
 
-    if (dispatchRefs !== undefined && !dispatchRefs.includes(task.capabilityName)) {
+    if (
+      dispatchRefs !== undefined &&
+      !dispatchRefs.includes(task.capabilityName)
+    ) {
       scopeDenied.push(task.capabilityName);
       continue;
     }
     if (agentRun?.resolution) {
       const perms = resolveAgentRunCapability(agentRun, agentRun.resolution, {
         capability: task.capabilityName,
-        scope: { kind: "workspace", orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        scope: {
+          kind: "workspace",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
         defaultEffect: cap.defaultEffect ?? "deny",
       });
       if (perms.outcome === "deny") scopeDenied.push(task.capabilityName);
@@ -164,7 +174,10 @@ export async function agentSubagentDispatchHandler(
   // Total-descendant budget (Phase 2 §4): a nested dispatch that would push
   // its ROOT fanout tree past the cap is rejected before any row is created.
   // The worker should decompose less aggressively or summarize what it has.
-  const existingDescendants = await countRootTreeDescendants(ctx.orgId, parentMessageId);
+  const existingDescendants = await countRootTreeDescendants(
+    ctx.orgId,
+    parentMessageId,
+  );
   if (existingDescendants + tasks.length > MAX_TOTAL_DESCENDANTS) {
     throw new Error(
       `Dispatch rejected: root fanout tree already has ${existingDescendants} descendant task(s); ` +

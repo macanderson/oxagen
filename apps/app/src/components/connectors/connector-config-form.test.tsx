@@ -71,12 +71,6 @@ const FULL_SCHEMA: ConnectorPluginSchema = {
     pathFilters: { enabled: true, defaultIgnore: ["node_modules/**"] },
     labelFilters: { enabled: false },
   },
-  inference: {
-    enabled: true,
-    defaultEnabled: true,
-    toggleLabel: "Enable inference",
-    confidenceThreshold: { defaultValue: 0.75, min: 0.5, max: 0.99 },
-  },
   sync: {
     delivery: "webhook",
     pollingSupported: true,
@@ -183,11 +177,6 @@ describe("ConnectorConfigForm — sections", () => {
   it("renders Filters section", () => {
     renderForm(FULL_SCHEMA);
     expect(screen.getByText("Filters")).toBeInTheDocument();
-  });
-
-  it("renders AI inference section", () => {
-    renderForm(FULL_SCHEMA);
-    expect(screen.getByText("AI inference")).toBeInTheDocument();
   });
 
   it("renders Sync cadence section", () => {

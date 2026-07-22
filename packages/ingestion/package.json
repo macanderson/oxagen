@@ -16,7 +16,6 @@
     "./mutations": "./src/mutations/upsert-entity.ts",
     "./dedup": "./src/dedup/resolve.ts",
     "./sync": "./src/sync/index.ts",
-    "./parsers": "./src/parsers/index.ts",
     "./validate": "./src/validate/schema.ts"
   },
   "scripts": {
@@ -27,7 +26,6 @@
   },
   "dependencies": {
     "@oxagen/ai": "workspace:*",
-    "@oxagen/code-graph": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "yaml": "2.9.0",

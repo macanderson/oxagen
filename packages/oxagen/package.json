@@ -15,6 +15,7 @@
     "./avatar": "./src/avatar.ts",
     "./interactive-agent": "./src/interactive-agent.ts",
     "./capability-meta": "./src/capability-meta.ts",
+    "./lib/relationship-type-pattern": "./src/lib/relationship-type-pattern.ts",
     "./types": "./src/types.ts",
     "./iam": "./src/iam/index.ts",
     "./contracts": "./src/contracts/index.ts",
@@ -28,6 +29,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
+    "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/tenancy": "workspace:*",

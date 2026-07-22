@@ -11,7 +11,7 @@ export interface CreateSkillRegistryOptions {
   // Optional embedded builtins (bundle-safe module data). Prefer this over
   // `fsRoot` for platform runtimes — see builtin.ts. Forms the base layer.
   builtins?: Skill[];
-  // Optional filesystem directory of `*.skill.md` files. Used by the CLI, which
+  // Optional filesystem directory of `skill.toml` bundles. Used by the CLI, which
   // ships the markdown, and by dev where the files are on disk. Overrides
   // embedded builtins on slug collision so a local edit takes effect.
   fsRoot?: string;

@@ -6,7 +6,9 @@ describe("integration.configure capability", () => {
   // ── input: required field ─────────────────────────────────────────────────
 
   it("accepts a minimal input with only integrationId", () => {
-    const parsed = integrationConfigure.input.parse({ integrationId: "inst_abc" });
+    const parsed = integrationConfigure.input.parse({
+      integrationId: "inst_abc",
+    });
     expect(parsed.integrationId).toBe("inst_abc");
   });
 
@@ -15,7 +17,9 @@ describe("integration.configure capability", () => {
   });
 
   it("rejects integrationId of wrong type", () => {
-    expect(() => integrationConfigure.input.parse({ integrationId: 42 })).toThrow();
+    expect(() =>
+      integrationConfigure.input.parse({ integrationId: 42 }),
+    ).toThrow();
   });
 
   // ── input: optional string fields ─────────────────────────────────────────
@@ -29,24 +33,10 @@ describe("integration.configure capability", () => {
   });
 
   it("leaves displayName undefined when omitted", () => {
-    const parsed = integrationConfigure.input.parse({ integrationId: "inst_abc" });
+    const parsed = integrationConfigure.input.parse({
+      integrationId: "inst_abc",
+    });
     expect(parsed.displayName).toBeUndefined();
-  });
-
-  it("passes through ontologyPrompt when provided", () => {
-    const parsed = integrationConfigure.input.parse({
-      integrationId: "inst_abc",
-      ontologyPrompt: "Extract people and organizations.",
-    });
-    expect(parsed.ontologyPrompt).toBe("Extract people and organizations.");
-  });
-
-  it("passes through semanticEdgePrompt when provided", () => {
-    const parsed = integrationConfigure.input.parse({
-      integrationId: "inst_abc",
-      semanticEdgePrompt: "Infer relationships between repos.",
-    });
-    expect(parsed.semanticEdgePrompt).toBe("Infer relationships between repos.");
   });
 
   // ── input: config record ──────────────────────────────────────────────────
@@ -94,33 +84,6 @@ describe("integration.configure capability", () => {
     ).toThrow();
   });
 
-  // ── input: inferenceEnabled boolean ──────────────────────────────────────
-
-  it("accepts inferenceEnabled=true", () => {
-    const parsed = integrationConfigure.input.parse({
-      integrationId: "inst_abc",
-      inferenceEnabled: true,
-    });
-    expect(parsed.inferenceEnabled).toBe(true);
-  });
-
-  it("accepts inferenceEnabled=false", () => {
-    const parsed = integrationConfigure.input.parse({
-      integrationId: "inst_abc",
-      inferenceEnabled: false,
-    });
-    expect(parsed.inferenceEnabled).toBe(false);
-  });
-
-  it("rejects inferenceEnabled of wrong type", () => {
-    expect(() =>
-      integrationConfigure.input.parse({
-        integrationId: "inst_abc",
-        inferenceEnabled: "yes",
-      }),
-    ).toThrow();
-  });
-
   // ── output: valid full parse ──────────────────────────────────────────────
 
   it("parses a valid full output", () => {
@@ -128,13 +91,11 @@ describe("integration.configure capability", () => {
       integrationId: "inst_abc",
       displayName: "My GitHub",
       syncCadence: "polling",
-      inferenceEnabled: true,
       updatedAt: "2024-06-01T12:00:00.000Z",
     });
     expect(parsed.integrationId).toBe("inst_abc");
     expect(parsed.displayName).toBe("My GitHub");
     expect(parsed.syncCadence).toBe("polling");
-    expect(parsed.inferenceEnabled).toBe(true);
     expect(parsed.updatedAt).toBe("2024-06-01T12:00:00.000Z");
   });
 
@@ -143,7 +104,6 @@ describe("integration.configure capability", () => {
       integrationConfigure.output.parse({
         displayName: "My GitHub",
         syncCadence: "polling",
-        inferenceEnabled: true,
         updatedAt: "2024-06-01T12:00:00.000Z",
       }),
     ).toThrow();
@@ -155,7 +115,6 @@ describe("integration.configure capability", () => {
         integrationId: "inst_abc",
         displayName: "My GitHub",
         syncCadence: "realtime",
-        inferenceEnabled: false,
         updatedAt: "2024-06-01T12:00:00.000Z",
       }),
     ).toThrow();

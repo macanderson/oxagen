@@ -18,7 +18,6 @@ import {
   createCombinedMemory,
   createServerMemory,
   createCodeGraphProvider,
-  createGraphSyncProvider,
   createPlatformAgentAi,
   createGatewayAgentAi,
 } from "../agent/adapters/index.js";
@@ -45,7 +44,10 @@ import {
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
 import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";
-import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatter.js";
+import {
+  formatToolCall,
+  formatToolCallWithSpacing,
+} from "../agent/tool-formatter.js";
 import { formatActivityLine } from "../tui/activity.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
@@ -234,7 +236,12 @@ export async function runOneShot(
     },
   );
 
-  void debugLog("turn", "turn.start", { mode: "one-shot", readOnly, model: options.model, prompt });
+  void debugLog("turn", "turn.start", {
+    mode: "one-shot",
+    readOnly,
+    model: options.model,
+    prompt,
+  });
 
   // Output routing. `text` streams the answer to stdout; the JSON modes keep
   // stdout machine-pure: `json` emits ONE result envelope at the end, and
@@ -251,7 +258,8 @@ export async function runOneShot(
   const promptProfile: "interactive" | "headless" | undefined =
     process.env["OXAGEN_PROMPT_PROFILE"] === "interactive"
       ? "interactive"
-      : process.env["OXAGEN_PROMPT_PROFILE"] === "headless" || !process.stdout.isTTY
+      : process.env["OXAGEN_PROMPT_PROFILE"] === "headless" ||
+          !process.stdout.isTTY
         ? "headless"
         : undefined;
 
@@ -272,13 +280,20 @@ export async function runOneShot(
       process.stderr.write(`  ⛔ ${name}: ${reason}\n`);
     },
     onMcpServer: (s) =>
-      void debugLog("turn", "mcp.server", s as unknown as Record<string, unknown>),
+      void debugLog(
+        "turn",
+        "mcp.server",
+        s as unknown as Record<string, unknown>,
+      ),
   });
   // Fold the rules + session-start context into what the model sees as project rules.
   const enrichedContext = extras.systemAppend
     ? {
         text: (projectContext?.text ?? "") + extras.systemAppend,
-        sources: [...(projectContext?.sources ?? []), "workspace rules + hooks"],
+        sources: [
+          ...(projectContext?.sources ?? []),
+          "workspace rules + hooks",
+        ],
       }
     : projectContext;
 
@@ -316,7 +331,10 @@ export async function runOneShot(
   // Per-turn dollar budget: priced against the model this run actually uses
   // (resolveModelId mirrors the fallback chain runTurn/the engine applies when
   // options.model is undefined, so the guard never prices against "undefined").
-  const budgetGuard = buildBudgetGuard(options.budget, resolveModelId(options.model));
+  const budgetGuard = buildBudgetGuard(
+    options.budget,
+    resolveModelId(options.model),
+  );
 
   try {
     let streamed = false;
@@ -342,19 +360,19 @@ export async function runOneShot(
         server: serverMemory,
         recallQuery: prompt,
       }),
-      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+      codeGraph: createCodeGraphProvider((op, q, l) =>
+        queryCodeGraph(cwd, op, q, l),
+      ),
       trace: traceStore,
-      // Graph sync posts to the platform API — meaningless (and unauthenticated)
-      // for the synthetic benchmark session, so skip it entirely there.
-      graphSync: options.session.synthetic
-        ? null
-        : createGraphSyncProvider({ ...options.session, cwd }),
       effort: resolveEffort(options.effort),
       signal: runner.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
         runner.noteProgress();
-        void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
+        void debugLog("turn", "turn.stage", {
+          label: stage.label,
+          detail: stage.detail,
+        });
         if (format === "stream-json") {
           emitJson({ type: "stage", label: stage.label, detail: stage.detail });
         } else {
@@ -422,7 +440,9 @@ export async function runOneShot(
     // clean answer).
     if (verbose) {
       appendVerboseLog(cwd, result.trace);
-      process.stderr.write(formatVerboseSection(result.trace).join("\n") + "\n");
+      process.stderr.write(
+        formatVerboseSection(result.trace).join("\n") + "\n",
+      );
     }
   } catch (err) {
     // A timeout/stall aborts turnController with a typed AgentTimeoutError whose
@@ -463,7 +483,9 @@ export async function runAgentOneShot(
   const cwd = process.cwd();
   const agent = getAgent(agentName, { cwd });
   if (!agent) {
-    process.stderr.write(`Error: unknown agent "${agentName}". Run \`oxagen agent list\`.\n`);
+    process.stderr.write(
+      `Error: unknown agent "${agentName}". Run \`oxagen agent list\`.\n`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -499,7 +521,9 @@ export async function runAgentOneShot(
         orgSlug: options.session.orgSlug,
         workspaceSlug: options.session.workspaceSlug,
       });
-  const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
+  const ai = createMeteredAi(baseAi, {
+    onLog: (line) => void debugLog("timeout", line),
+  });
   // Same progress guard as runOneShot: headless has no Esc, so this is the only
   // backstop against a hung turn. Defers while a tool executes; probes CI
   // before aborting a turn that was watching still-pending checks.
@@ -517,18 +541,22 @@ export async function runAgentOneShot(
     settings,
     readOnly: options.readOnly,
     agentTools: agent.tools,
-    // Per-agent skills (full SKILL.md bodies) + MCP-server selection —
+    // Per-agent skill instructions + MCP-server selection —
     // AgentDefinition.skills / .mcpServers, parsed by agents/loader.ts.
     agentSkills: agent.skills,
     agentMcpServers: agent.mcpServers,
     gatePermissions: true,
     signal: runner.signal,
-    onBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
+    onBlocked: (name, reason) =>
+      process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
   });
   const enrichedContext = extras.systemAppend
     ? {
         text: (projectContext?.text ?? "") + extras.systemAppend,
-        sources: [...(projectContext?.sources ?? []), "workspace rules + hooks"],
+        sources: [
+          ...(projectContext?.sources ?? []),
+          "workspace rules + hooks",
+        ],
       }
     : projectContext;
 
@@ -536,7 +564,10 @@ export async function runAgentOneShot(
   // buildBudgetGuard): "prompt" mode can't ask interactively here either.
   // resolveModelId covers the same fallback chain as `model` below so the
   // guard always prices against a concrete slug, never undefined.
-  const budgetGuard = buildBudgetGuard(options.budget, resolveModelId(options.model ?? agent.model));
+  const budgetGuard = buildBudgetGuard(
+    options.budget,
+    resolveModelId(options.model ?? agent.model),
+  );
 
   try {
     let streamed = false;
@@ -558,7 +589,9 @@ export async function runAgentOneShot(
         server: serverMemory,
         recallQuery: prompt,
       }),
-      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+      codeGraph: createCodeGraphProvider((op, q, l) =>
+        queryCodeGraph(cwd, op, q, l),
+      ),
       trace: openTraceStore(cwd),
       signal: runner.signal,
       onText: (delta) => {
@@ -584,7 +617,9 @@ export async function runAgentOneShot(
     });
     if (streamed) process.stdout.write("\n");
   } catch (err) {
-    process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     process.exitCode = 1;
   } finally {
     runner.stop();

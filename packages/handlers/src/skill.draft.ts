@@ -1,10 +1,10 @@
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { skillDraft } from "@oxagen/oxagen/contracts/skill.draft";
-import { parseSkill } from "@oxagen/skills";
 import { logger } from "./logger";
+import { canonicalizeSkillArtifact } from "./skill-artifact";
 import {
-  assembleSkillMd,
+  assembleSkillToml,
   buildSystemPrompt,
   synthesisSchema,
   type SkillSynthesis,
@@ -15,9 +15,14 @@ import {
 // wizard) presents the draft for review and saves via skill.create once the
 // user confirms.
 
-export const skillDraftHandler: CapabilityHandler<typeof skillDraft> = async (input, ctx) => {
+export const skillDraftHandler: CapabilityHandler<typeof skillDraft> = async (
+  input,
+  ctx,
+) => {
   if (!ctx.workspaceId) {
-    throw new Error("[skill.draft] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[skill.draft] workspaceId is required (scoped capability)",
+    );
   }
 
   const messageId = ctx.messageId ?? ctx.requestId;
@@ -48,12 +53,9 @@ export const skillDraftHandler: CapabilityHandler<typeof skillDraft> = async (in
     );
   }
 
-  const skillMd = assembleSkillMd(synthesis);
-
-  // parseSkill throws if frontmatter is missing or malformed — this guards
-  // against a model returning a slug that violates the kebab-case schema, so
-  // the reviewed draft is guaranteed to save cleanly.
-  parseSkill(skillMd, { source: "tenant" });
+  const { artifact, content } = canonicalizeSkillArtifact(
+    assembleSkillToml(synthesis),
+  );
 
   logger.info(
     {
@@ -74,6 +76,7 @@ export const skillDraftHandler: CapabilityHandler<typeof skillDraft> = async (in
       category: synthesis.category,
       body: synthesis.body.trim(),
     },
-    skillMd,
+    content,
+    artifact,
   };
 };

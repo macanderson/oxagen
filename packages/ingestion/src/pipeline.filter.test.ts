@@ -60,14 +60,15 @@ function makeEvent(overrides: Partial<RawIngestEvent> = {}): RawIngestEvent {
   };
 }
 
-function makeCtx(deliveryConfig: DeliveryConfig | null = null): PipelineContext {
+function makeCtx(
+  deliveryConfig: DeliveryConfig | null = null,
+): PipelineContext {
   return {
     orgId: "org-filter",
     getMapping: vi.fn().mockResolvedValue({
       oxagenEntityType: "code_change",
       propertyMappings: {},
     }),
-    scheduleInference: vi.fn().mockResolvedValue(undefined),
     getDeliveryConfig: vi.fn().mockResolvedValue(deliveryConfig),
   };
 }
@@ -137,38 +138,39 @@ describe("runPipeline — Stage 2: path filter", () => {
     vi.clearAllMocks();
   });
 
-  function makeSourceEvent(path: string): RawIngestEvent {
+  function makePathRecord(path: string): RawIngestEvent {
     return makeEvent({
-      sourceRecordType: "source",
+      connectorType: "custom-sql",
+      sourceRecordType: "row",
       payload: {
+        id: "row-1",
         path,
-        content: "export function foo() {}",
-        sha: "abc123",
+        content: "provider record content",
       },
     });
   }
 
-  it("filters a source file in node_modules", async () => {
-    const event = makeSourceEvent("node_modules/react/index.js");
+  it("filters a provider record whose path matches an excluded tree", async () => {
+    const event = makePathRecord("node_modules/react/index.js");
     const ctx = makeCtx({ pathFilters: ["node_modules/**"] });
     const result = await runPipeline(event, ctx);
     expect(result).toMatchObject({
       filtered: true,
       reason: "path_filtered",
-      sourceRecordType: "source",
+      sourceRecordType: "row",
     });
     expect(embedEntity).not.toHaveBeenCalled();
   });
 
   it("filters a file in dist/", async () => {
-    const event = makeSourceEvent("dist/bundle.min.js");
+    const event = makePathRecord("dist/bundle.min.js");
     const ctx = makeCtx({ pathFilters: ["dist/**"] });
     const result = await runPipeline(event, ctx);
     expect(result).toMatchObject({ filtered: true, reason: "path_filtered" });
   });
 
-  it("does not filter source files outside excluded paths", async () => {
-    const event = makeSourceEvent("src/components/Button.tsx");
+  it("does not filter provider records outside excluded paths", async () => {
+    const event = makePathRecord("records/current.json");
     const ctx = makeCtx({ pathFilters: ["node_modules/**", "dist/**"] });
     const result = await runPipeline(event, ctx);
     expect((result as { filtered?: boolean }).filtered).toBeUndefined();
@@ -241,24 +243,22 @@ describe("runPipeline — Stage 2: label filter", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Stage 5: Semantic inference gate
+// Stage 5: Legacy embedding opt-out
 // ---------------------------------------------------------------------------
 
-describe("runPipeline — Stage 5: inference gate", () => {
+describe("runPipeline — Stage 5: embedding opt-out", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("skips embed and scheduleInference when semanticInference.enabled is false", async () => {
+  it("skips embed when the legacy semanticInference.enabled flag is false", async () => {
     const event = makeEvent();
     const ctx = makeCtx({ semanticInference: { enabled: false } });
     const result = await runPipeline(event, ctx);
 
     expect(result).not.toBeNull();
     expect((result as { embedded?: boolean }).embedded).toBe(false);
-    expect((result as { inferenceQueued?: boolean }).inferenceQueued).toBe(false);
     expect(embedEntity).not.toHaveBeenCalled();
-    expect(ctx.scheduleInference).not.toHaveBeenCalled();
   });
 
   it("skips embed for a specific record type disabled in perRecordType", async () => {
@@ -272,19 +272,16 @@ describe("runPipeline — Stage 5: inference gate", () => {
     const result = await runPipeline(event, ctx);
 
     expect((result as { embedded?: boolean }).embedded).toBe(false);
-    expect((result as { inferenceQueued?: boolean }).inferenceQueued).toBe(false);
     expect(embedEntity).not.toHaveBeenCalled();
   });
 
-  it("runs embed and scheduleInference when inference is enabled globally", async () => {
+  it("runs embed when the legacy flag is enabled globally", async () => {
     const event = makeEvent();
     const ctx = makeCtx({ semanticInference: { enabled: true } });
     const result = await runPipeline(event, ctx);
 
     expect((result as { embedded?: boolean }).embedded).toBe(true);
-    expect((result as { inferenceQueued?: boolean }).inferenceQueued).toBe(true);
     expect(embedEntity).toHaveBeenCalledOnce();
-    expect(ctx.scheduleInference).toHaveBeenCalledOnce();
   });
 
   it("runs embed when no deliveryConfig provided (default enabled)", async () => {
@@ -293,7 +290,6 @@ describe("runPipeline — Stage 5: inference gate", () => {
     const result = await runPipeline(event, ctx);
 
     expect((result as { embedded?: boolean }).embedded).toBe(true);
-    expect((result as { inferenceQueued?: boolean }).inferenceQueued).toBe(true);
     expect(embedEntity).toHaveBeenCalledOnce();
   });
 
@@ -325,13 +321,16 @@ describe("runPipeline — combined filter scenarios", () => {
     const event = makeEvent({ sourceRecordType: "repository" });
     const ctx = makeCtx({
       recordTypeFilters: ["pull_request", "issue"],
-      pathFilters: ["**"],      // would filter everything if reached
-      labelFilters: ["*"],      // would filter everything if reached
+      pathFilters: ["**"], // would filter everything if reached
+      labelFilters: ["*"], // would filter everything if reached
       semanticInference: { enabled: false },
     });
     const result = await runPipeline(event, ctx);
 
-    expect(result).toMatchObject({ filtered: true, reason: "record_type_not_allowed" });
+    expect(result).toMatchObject({
+      filtered: true,
+      reason: "record_type_not_allowed",
+    });
     // No mapping lookup, no embed
     expect(ctx.getMapping).not.toHaveBeenCalled();
     expect(embedEntity).not.toHaveBeenCalled();
@@ -342,7 +341,6 @@ describe("runPipeline — combined filter scenarios", () => {
     const ctx: PipelineContext = {
       orgId: "org-filter",
       getMapping: vi.fn().mockResolvedValue(null),
-      scheduleInference: vi.fn(),
       getDeliveryConfig: vi.fn().mockResolvedValue(null),
     };
     const result = await runPipeline(event, ctx);

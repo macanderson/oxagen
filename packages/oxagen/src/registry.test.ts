@@ -37,7 +37,9 @@ describe("capability registry", () => {
     // Same name + same shape collapses to one registration and hands back the
     // original object, so both module instances share one declaration.
     expect(second).toBe(first);
-    expect(listCapabilities().filter((c) => c.name === "test.beta")).toHaveLength(1);
+    expect(
+      listCapabilities().filter((c) => c.name === "test.beta"),
+    ).toHaveLength(1);
   });
 
   it("keeps the first registration and warns (not throws) when a different descriptor re-registers a name", () => {
@@ -53,7 +55,9 @@ describe("capability registry", () => {
     });
     expect(second).toBe(first); // first registration wins
     expect(second.description).toBe("test capability"); // redefinition ignored
-    expect(listCapabilities().filter((c) => c.name === "test.gamma")).toHaveLength(1);
+    expect(
+      listCapabilities().filter((c) => c.name === "test.gamma"),
+    ).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
@@ -61,8 +65,24 @@ describe("capability registry", () => {
   it("lists all registered capabilities", () => {
     registerCapability(makeCap("test.one"));
     registerCapability(makeCap("test.two"));
-    const names = listCapabilities().map((c) => c.name).sort();
+    const names = listCapabilities()
+      .map((c) => c.name)
+      .sort();
     expect(names).toEqual(["test.one", "test.two"]);
+  });
+
+  it("rejects invalid lifecycle metadata at registration", () => {
+    expect(() =>
+      registerCapability({
+        ...makeCap("test.lifecycle"),
+        lifecycle: {
+          allowedEvents: [],
+          effect: "mutation",
+          idempotency: "none",
+          outputKinds: [],
+        },
+      }),
+    ).toThrow(/invalid_lifecycle_metadata/);
   });
 
   it("returns undefined for an unknown capability", () => {

@@ -110,29 +110,6 @@ filters:
   labelFilters:
     enabled: false
 
-inference:
-  enabled: true
-  defaultEnabled: false
-  toggleLabel: Enable AI relationship inference
-  perRecordType:
-    webhook_event: true
-  confidenceThreshold:
-    defaultValue: 0.75
-    min: 0.50
-    max: 0.99
-  ontologyPrompt: |
-    Infer entities and relationships from webhook event payloads.
-
-    Look for:
-    - Event type patterns that indicate lifecycle transitions (created, updated, deleted, completed)
-    - Object identifiers that cross-reference other data sources (user IDs, order IDs, feature names)
-    - Timestamp fields that establish temporal ordering
-    - Actor fields (user_id, actor, performed_by) that link events to known users
-
-    Create edges:
-    - WebhookEvent -[triggered_by]-> Actor (when actor or user_id field is present)
-    - WebhookEvent -[affects]-> Entity (when the payload references a known entity by ID or name)
-
 sync:
   delivery: webhook
   pollingSupported: false

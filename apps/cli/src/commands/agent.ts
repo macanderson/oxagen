@@ -3,7 +3,7 @@
  *
  *   oxagen agent list            List available agents (name, description, source)
  *   oxagen agent show <name>     Show an agent's full definition + system prompt
- *   oxagen agent new <name>      Scaffold .oxagen/agents/<name>.md
+ *   oxagen agent new <name>      Scaffold .oxagen/agents/<name>.toml
  *
  * Run a single turn as an agent with `oxagen --agent <name> "<prompt>"`.
  *
@@ -23,7 +23,9 @@ import {
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
-export type AgentCmdCtx = Pick<LoadAgentsOptions, "cwd" | "userAgentsDir" | "settingsOptions"> & {
+export type AgentCmdCtx = Pick<LoadAgentsOptions, "cwd" | "userAgentsDir"> & {
+  /** Legacy test seam; inline agent definitions are no longer loaded. */
+  settingsOptions?: unknown;
   /** `--json`: emit the result as one machine-readable JSON value on stdout (ADR-023 §4). */
   json?: boolean;
 };
@@ -47,9 +49,14 @@ function summarizeAgent(a: AgentDefinition): AgentSummary {
   };
 }
 
-export function agentList(ctx: AgentCmdCtx = {}, writer: CommandWriter = stdoutWriter): void {
+export function agentList(
+  ctx: AgentCmdCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const out = createOutput({ json: ctx.json }, writer);
-  const agents = [...loadAgents(ctx).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const agents = [...loadAgents(ctx).values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   out.data(agents.map(summarizeAgent), () => prettyAgentList(agents));
 }
 
@@ -61,7 +68,10 @@ export function agentShow(
   const out = createOutput({ json: ctx.json }, writer);
   const agent = loadAgents(ctx).get(name);
   if (!agent) {
-    out.error(`Unknown agent "${name}". Run \`oxagen agent list\`.`, "not_found");
+    out.error(
+      `Unknown agent "${name}". Run \`oxagen agent list\`.`,
+      "not_found",
+    );
     return;
   }
   out.data(agent, () => prettyAgent(agent));
@@ -76,7 +86,10 @@ export function agentNew(
   if (!/^[A-Za-z0-9][\w-]*$/.test(name)) {
     // Malformed input → usage error (exit 2). Set before out.error so it wins.
     process.exitCode = 2;
-    out.error(`Invalid agent name "${name}". Use letters, digits, dashes, underscores.`, "usage");
+    out.error(
+      `Invalid agent name "${name}". Use letters, digits, dashes, underscores.`,
+      "usage",
+    );
     return;
   }
   const { path, created } = scaffoldAgent({ name, cwd: ctx.cwd });

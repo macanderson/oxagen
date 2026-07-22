@@ -18,6 +18,11 @@
  *   fleet clean                prune terminal sessions (--older-than, --all)
  *   fleet worker <sid>         [hidden] the detached worker entry point
  *
+ * The interactive REPL's `/dispatch` mode (docs/specs/repl-async-dispatch.md)
+ * is a front-end for the same primitive: mode ON routes plain prompts through
+ * `dispatchDetachedSession` exactly like `fleet dispatch`, then tails the
+ * session store to fold completions back into the transcript.
+ *
  * Time travel (ADR-028) — read the session's sidecar record (`record/`):
  *
  *   fleet replay <sid>         inspect the recorded run (--turn N for full I/O, --verify)

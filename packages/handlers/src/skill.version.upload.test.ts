@@ -22,13 +22,12 @@ const mocks = vi.hoisted(() => ({
   insertedValues: [] as Record<string, unknown>[],
 }));
 
-// Minimal valid .skill.md fixture
-const VALID_BODY = `---
-name: my-skill
-description: A test skill
----
-
-This skill helps you do things.
+const VALID_CONTENT = `schema_version = 1
+kind = "skill"
+name = "my-skill"
+description = "A test skill"
+instructions = "This skill helps you do things."
+references = ["refs/example.md"]
 `;
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -87,7 +86,7 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 const BASE_INPUT = {
   skill_id: "skl_abc",
-  body: VALID_BODY,
+  content: VALID_CONTENT,
   change_summary: undefined as string | undefined,
   activate: true,
   workspace_id: undefined as string | undefined,
@@ -191,7 +190,7 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
     expect(mocks.skillUpdateWhere).toHaveBeenCalledTimes(1);
   });
 
-  it("stamps checksum, lineage, and carried-forward references on the new row", async () => {
+  it("stamps checksum, lineage, and artifact reference projections on the new row", async () => {
     const input = setupHappyPath({ change_summary: "tighten wording" });
     await skillVersionUploadHandler(input, CTX);
 
@@ -203,9 +202,9 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
     };
     expect(inserted.checksum).toMatch(/^[0-9a-f]{64}$/);
     expect(inserted.parentVersionId).toBe("ver-uuid-0");
-    expect(inserted.referencesPayload).toEqual(
-      PRIOR_LATEST_ROW.referencesPayload,
-    );
+    expect(inserted.referencesPayload).toEqual([
+      { path: "refs/example.md", body: "" },
+    ]);
     expect(inserted.changeSummary).toBe("tighten wording");
   });
 
@@ -225,7 +224,9 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
       changeSummary: string | null;
     };
     expect(inserted.parentVersionId).toBeNull();
-    expect(inserted.referencesPayload).toEqual([]);
+    expect(inserted.referencesPayload).toEqual([
+      { path: "refs/example.md", body: "" },
+    ]);
     expect(inserted.changeSummary).toBeNull();
     expect(mocks.versionUpdateWhere).not.toHaveBeenCalled();
   });
@@ -239,11 +240,11 @@ describe("skillVersionUploadHandler (@oxagen/handlers)", () => {
     );
   });
 
-  it("throws when body fails skill frontmatter validation", async () => {
-    const input = setupHappyPath({ body: "no frontmatter here" });
+  it("throws when content is not valid skill TOML", async () => {
+    const input = setupHappyPath({ content: "not toml" });
 
     await expect(skillVersionUploadHandler(input, CTX)).rejects.toThrow(
-      /missing YAML frontmatter/i,
+      /invalid_artifact/i,
     );
   });
 

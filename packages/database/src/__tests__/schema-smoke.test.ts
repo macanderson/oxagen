@@ -1047,3 +1047,418 @@ describe("ingestion.github_installations", () => {
     expect(cols).not.toContain("workspace_id");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Governed-run foundation (docs/specs/run-evidence-ingress)
+//
+// Same purpose as every block above: call getTableConfig on each new table so
+// its ExtraConfigBuilder body actually executes (coverage) and its index /
+// constraint names are asserted rather than assumed. The behavioural
+// invariants — the V1/V2 discriminant, the one-shot grant, deny narrowing —
+// live in schema-append-only.test.ts; live-database privilege and fence
+// behaviour live in integration/run-attempt-foundation.test.ts and
+// integration/authorization-foundation.test.ts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+import {
+  agentRunAttempts,
+  agentRunAttemptLeases,
+  agentRunCheckpoints,
+  agentRunAttemptSeals,
+  agentRunFinalizationGrants,
+  agentRunFinalizationObligations,
+} from "../schema/agent";
+import {
+  repositoryBindings,
+  repositoryBindingHeads,
+  governedRepositorySelections,
+} from "../schema/ingestion";
+import { retentionPolicyVersions } from "../schema/run-evidence-foundation";
+import {
+  authorizationSnapshots,
+  authorizationDenyGenerations,
+  emergencyDenies,
+  authorizationDecisions,
+} from "../schema/iam";
+
+describe("agent.agent_run_attempts", () => {
+  const cfg = smokeTable(agentRunAttempts, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "run_id",
+    "attempt_number",
+    "worker_id",
+    "engine_name",
+    "engine_version",
+    "engine_build_digest",
+  ]);
+
+  it("enforces one attempt number per run", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_attempts_run_attempt_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("pins the resolved engine identity, not just its name", () => {
+    // Evidence must name the exact binary that executed, so the build/image
+    // digest is NOT NULL alongside name and version.
+    const digest = cfg.columns.find((c) => c.name === "engine_build_digest");
+    expect(digest?.notNull).toBe(true);
+  });
+});
+
+describe("agent.agent_run_attempt_leases", () => {
+  const cfg = smokeTable(agentRunAttemptLeases, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "attempt_id",
+    "run_id",
+    "lease_token",
+    "lease_epoch",
+    "expires_at",
+    "fenced_at",
+  ]);
+
+  it("allows exactly one lease per attempt", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_attempt_leases_attempt_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("consumes each fencing epoch once per run", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_attempt_leases_run_epoch_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("scans only unfenced leases in the sweeper index", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_attempt_leases_sweep_idx",
+    );
+    expect(idx?.config.where).toBeDefined();
+  });
+});
+
+describe("agent.agent_run_checkpoints", () => {
+  const cfg = smokeTable(agentRunCheckpoints, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "run_id",
+    "attempt_id",
+    "event_id",
+    "attempt_seq",
+    "run_seq",
+    "checkpoint_digest",
+    "stream_digest",
+    "encrypted_state_ref",
+  ]);
+
+  it("binds each checkpoint to at most one event", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_checkpoints_event_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("stores engine state by encrypted reference, never inline", () => {
+    const cols = cfg.columns.map((c) => c.name);
+    expect(cols).toContain("encrypted_state_ref");
+    expect(cols).not.toContain("state");
+    expect(cols).not.toContain("checkpoint");
+  });
+});
+
+describe("agent.agent_run_attempt_seals", () => {
+  const cfg = smokeTable(agentRunAttemptSeals, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "run_id",
+    "attempt_id",
+    "terminal_status",
+    "event_count",
+    "event_stream_digest",
+    "sealer_kind",
+    "sealer_worker_id",
+  ]);
+
+  it("seals an attempt exactly once", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "agent_run_attempt_seals_attempt_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("admits the reclaimer as a distinct sealer kind", () => {
+    // The lease sweeper seals an abandoned attempt on the worker's behalf, so
+    // "who sealed this" must distinguish the two without inventing a worker id.
+    const sql = flattenCheckSql(
+      getChecks(agentRunAttemptSeals).find((c) =>
+        c.name.includes("sealer_kind_check"),
+      )!,
+    );
+    expect(sql).toContain("worker");
+    expect(sql).toContain("reclaimer");
+  });
+});
+
+describe("agent.agent_run_finalization_grants", () => {
+  const cfg = smokeTable(agentRunFinalizationGrants, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "run_id",
+    "attempt_id",
+    "seal_id",
+    "attempt_public_id",
+    "capability_id",
+    "event_stream_digest",
+  ]);
+
+  it("mints at most one grant per attempt and per seal", () => {
+    for (const name of [
+      "agent_run_finalization_grants_attempt_uq",
+      "agent_run_finalization_grants_seal_uq",
+    ]) {
+      expect(
+        cfg.indexes.find((i) => i.config.name === name)?.config.unique,
+        name,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("agent.agent_run_finalization_obligations", () => {
+  const cfg = smokeTable(agentRunFinalizationObligations, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "grant_id",
+    "submission_id",
+    "run_id",
+    "attempt_id",
+    "seal_id",
+  ]);
+
+  it("triggers getTableConfig (ExtraConfigBuilder callback)", () => {
+    expect(cfg.indexes.length).toBeGreaterThan(0);
+  });
+});
+
+describe("ingestion.repository_bindings", () => {
+  const cfg = smokeTable(repositoryBindings, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "connection_id",
+    "provider",
+    "provider_repository_id",
+    "configured_default_ref",
+    "observed_at",
+    "version",
+    "supersedes_binding_id",
+  ]);
+
+  it("versions bindings per (connection, provider repository)", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "repository_bindings_repository_version_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+
+  it("requires a non-empty configured default ref (no 'main' fallback)", () => {
+    const sql = flattenCheckSql(
+      getChecks(repositoryBindings).find((c) =>
+        c.name.includes("default_ref_check"),
+      )!,
+    );
+    expect(sql).toContain("configured_default_ref");
+  });
+});
+
+describe("ingestion.repository_binding_heads", () => {
+  const cfg = smokeTable(repositoryBindingHeads, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "connection_id",
+    "provider_repository_id",
+    "current_binding_id",
+  ]);
+
+  it("keeps one head per (connection, provider repository)", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "repository_binding_heads_repository_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+});
+
+describe("ingestion.governed_repository_selections", () => {
+  const cfg = smokeTable(governedRepositorySelections, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "connection_id",
+    "primary_binding_id",
+  ]);
+
+  it("allows exactly one primary binding per governed connection", () => {
+    // A connection with several repositories and no row has no primary, so
+    // admission fails closed rather than guessing.
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "governed_repository_selections_connection_uq",
+    );
+    expect(idx?.config.unique).toBe(true);
+  });
+});
+
+describe("evidence.retention_policy_versions", () => {
+  const cfg = smokeTable(retentionPolicyVersions, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "version",
+    "mode",
+    "retained_content_classes",
+    "ttl_days",
+    "policy_digest",
+  ]);
+
+  it("lives in the dedicated evidence schema", () => {
+    expect(cfg.schema).toBe("evidence");
+  });
+
+  it("versions per tenant and dedupes by canonical policy digest", () => {
+    for (const name of [
+      "retention_policy_versions_version_uniq",
+      "retention_policy_versions_digest_uniq",
+    ]) {
+      expect(
+        cfg.indexes.find((i) => i.config.name === name)?.config.unique,
+        name,
+      ).toBe(true);
+    }
+  });
+});
+
+describe("iam.authorization_snapshots", () => {
+  const cfg = smokeTable(authorizationSnapshots, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "initiating_principal_id",
+    "agent_principal_id",
+    "grant_ceiling",
+    "grant_ceiling_digest",
+    "snapshot_digest",
+    "org_deny_generation",
+    "workspace_deny_generation",
+    "next_validity_boundary_at",
+  ]);
+
+  it("keeps the ceiling structured rather than a flattened allowlist", () => {
+    // A flattened capability list could be silently refreshed from later
+    // grants and would lose per-binding expiry, which is precisely the
+    // widening the pinned ceiling exists to prevent.
+    const ceiling = cfg.columns.find((c) => c.name === "grant_ceiling");
+    expect(ceiling?.getSQLType()).toBe("jsonb");
+    expect(ceiling?.notNull).toBe(true);
+  });
+
+  it("binds a run to one executing workspace (workspace_id NOT NULL)", () => {
+    expect(cfg.columns.find((c) => c.name === "workspace_id")?.notNull).toBe(
+      true,
+    );
+  });
+});
+
+describe("iam.authorization_deny_generations", () => {
+  const cfg = smokeTable(authorizationDenyGenerations, [
+    "id",
+    "org_id",
+    "workspace_id",
+    "scope_kind",
+    "generation",
+  ]);
+
+  it("uses partial uniques so the org scope's NULL workspace still dedupes", () => {
+    // Standard UNIQUE treats NULLs as distinct, so two org-wide rows would be
+    // accepted and the counter would fork.
+    for (const name of [
+      "authorization_deny_generations_org_uq",
+      "authorization_deny_generations_workspace_uq",
+    ]) {
+      const idx = cfg.indexes.find((i) => i.config.name === name);
+      expect(idx?.config.unique, name).toBe(true);
+      expect(idx?.config.where, `${name} must be partial`).toBeDefined();
+    }
+  });
+});
+
+describe("iam.emergency_denies", () => {
+  const cfg = smokeTable(emergencyDenies, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "scope_kind",
+    "deny_kind",
+    "capability_id",
+    "resource_scope_digest",
+    "reason",
+    "active",
+  ]);
+
+  it("scans only active denies on the live-check index", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "emergency_denies_active_idx",
+    );
+    expect(idx?.config.where).toBeDefined();
+  });
+});
+
+describe("iam.authorization_decisions", () => {
+  const cfg = smokeTable(authorizationDecisions, [
+    "id",
+    "public_id",
+    "org_id",
+    "workspace_id",
+    "capability_id",
+    "request_id",
+    "actor_principal_id",
+    "outcome",
+    "input_digest",
+    "decision_digest",
+    "org_deny_generation",
+  ]);
+
+  it("records every outcome, including evaluation errors", () => {
+    const sql = flattenCheckSql(
+      getChecks(authorizationDecisions).find((c) =>
+        c.name.includes("outcome_check"),
+      )!,
+    );
+    for (const outcome of ["allow", "deny", "approval_pending", "error"]) {
+      expect(sql, `outcome CHECK missing "${outcome}"`).toContain(outcome);
+    }
+  });
+
+  it("indexes attempt-scoped audit reads without covering unbound decisions", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "authorization_decisions_attempt_idx",
+    );
+    expect(idx?.config.where).toBeDefined();
+  });
+});

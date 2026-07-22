@@ -1,25 +1,37 @@
 // _effective-scope.ts — read the run-constant effective resourceScope off an
 // agent run's cached IAM resolution (Agent RBAC Phase 4b, spec §3.3).
 //
-// The kernel resolves the invoked capability BEFORE the handler runs, so a
-// delegated run's `ctx.agentRun.resolution.byCapability` always holds at least
-// one entry by the time a handler executes. `resourceScope` is run-constant —
-// it is collected from the two principals' grants/roles plus the parent-run
-// ceiling, none of which vary per capability (see collectResourceScope in
-// packages/oxagen/src/iam/resolve.ts) — so ANY cached entry is an equivalent
+// `resourceScope` is run-constant — it is collected from the two principals'
+// grants/roles plus the parent-run ceiling, none of which vary per capability
+// (see collectResourceScope in packages/oxagen/src/iam/resolve.ts) — so ANY
+// cached entry on `ctx.agentRun.resolution.byCapability` is an equivalent
 // source. This mirrors packages/handlers' effective-graph-scope helper; the
 // skills/agents dimensions enforced from here are pure allow-lists and need no
 // per-handler intersection beyond what the resolver already did.
+//
+// ── Why the memo is not assumed to be populated ─────────────────────────────
+//
+// This helper used to rely on the kernel having resolved the invoked
+// capability before the handler ran, leaving at least one memo entry behind.
+// That stopped being true when the run-evidence work replaced the kernel's
+// agent seam with the pinned ∩ live evaluator (packages/iam's
+// live-agent-run-authorization.ts), which keys its own generation-scoped cache
+// and never writes `byCapability`. An empty memo would have made every
+// dimension gate here a silent pass-through — a WIDENING. So when the memo is
+// empty we resolve an inert sentinel capability against the run's snapshot
+// through the SAME pure resolver, exactly as mcp-rbac.ts does for the MCP
+// dimension: same snapshot, one policy, no second fetch, no DB.
 //
 // Human / API-key / service invocations carry no `agentRun` → `undefined` →
 // every consumer is a byte-identical pass-through.
 
 import pino from "pino";
 import { emitAudit } from "@oxagen/iam";
-import type {
-  EffectiveResourceScope,
-  ResolveResult,
-  TraceStep,
+import {
+  resolveAgentRunCapability,
+  type EffectiveResourceScope,
+  type ResolveResult,
+  type TraceStep,
 } from "@oxagen/oxagen/iam";
 import type { CapabilityContext } from "../types";
 
@@ -28,16 +40,37 @@ const logger = pino({
   base: { app: "agent.scope" },
 });
 
+/**
+ * Inert capability name used ONLY to pull the run-constant resourceScope out
+ * of the resolver when no real capability has been memoized yet this run. No
+ * contract carries this name, so the memo entry it leaves can never satisfy a
+ * kernel check. Mirrors `MCP_SCOPE_SENTINEL_CAPABILITY` in ../runtime/mcp-rbac.
+ */
+export const RESOURCE_SCOPE_SENTINEL_CAPABILITY = "__run_resource_scope__";
+
 /** The run's effective resourceScope, or undefined when not an agent run. */
 export function effectiveResourceScope(
   ctx: CapabilityContext,
 ): EffectiveResourceScope | undefined {
-  const resolution = ctx.agentRun?.resolution;
-  if (!resolution) return undefined;
+  const agentRun = ctx.agentRun;
+  const resolution = agentRun?.resolution;
+  if (!agentRun || !resolution) return undefined;
   for (const entry of resolution.byCapability.values()) {
     return entry.resourceScope;
   }
-  return undefined;
+  // Empty memo — resolve the sentinel rather than reporting "unrestricted".
+  return resolveAgentRunCapability(agentRun, resolution, {
+    capability: RESOURCE_SCOPE_SENTINEL_CAPABILITY,
+    scope: {
+      kind: ctx.workspaceId ? "workspace" : "org",
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    },
+    // The sentinel's own allow/deny outcome is never read — only the
+    // run-constant resourceScope. Deny is the conservative default.
+    defaultEffect: "deny",
+    clientIp: ctx.clientIp ?? null,
+  }).resourceScope;
 }
 
 /**

@@ -32,7 +32,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
   return {
     ...real,
-    withTenantDb: async (fn: (tx: { select: () => Chain }) => Promise<unknown>) => {
+    withTenantDb: async (
+      fn: (tx: { select: () => Chain }) => Promise<unknown>,
+    ) => {
       let i = 0;
       const chain: Chain = {
         from: () => chain,
@@ -50,33 +52,32 @@ import { TEST_CTX } from "./test-utils/fixtures";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const CURRENT_BODY = `---
-name: incident-response
-description: How to respond to a production incident.
-metadata:
-  weight: high
-  category: engineering
----
-# Incident Response
+const CURRENT_CONTENT = `schema_version = 1
+kind = "skill"
+name = "incident-response"
+description = "How to respond to a production incident."
+instructions = "Acknowledge the page, assess blast radius, mitigate, then write a postmortem."
+references = []
 
-Load this skill during a production incident.
-
-## Steps
-
-1. Acknowledge the page.
-2. Assess blast radius.
-3. Mitigate, then write a postmortem.
+[metadata]
+weight = "high"
+category = "engineering"
 `;
 
-const SKILL_ROW = { id: "uuid-skill-1", slug: "incident-response", activeVersionId: "uuid-ver-1" };
-const VERSION_ROW = { body: CURRENT_BODY };
+const SKILL_ROW = {
+  id: "uuid-skill-1",
+  slug: "incident-response",
+  activeVersionId: "uuid-ver-1",
+};
+const VERSION_ROW = { body: CURRENT_CONTENT };
 
 // The model renames the skill (name: renamed) on purpose — the handler must pin
 // the slug back to the current one.
 const SYNTHESIS_RESULT = {
   displayName: "Incident Response",
   name: "renamed-by-model",
-  description: "How to respond to and recover from a production incident, with rollback.",
+  description:
+    "How to respond to and recover from a production incident, with rollback.",
   weight: "critical" as const,
   category: "engineering",
   body: "# Incident Response\n\nLoad during an incident.\n\n## Steps\n\n1. Acknowledge.\n2. Assess.\n3. Mitigate.\n4. Roll back.\n5. Postmortem.",
@@ -118,8 +119,11 @@ describe("skillReviseHandler (@oxagen/handlers)", () => {
     expect(out.version_id).toBe("slv_002");
     expect(out.version_number).toBe(2);
     expect(out.activated).toBe(true);
-    expect(out.changeSummary).toEqual(["Tightened steps to five bullets", "Added a rollback step"]);
-    expect(out.body).toContain("Roll back");
+    expect(out.changeSummary).toEqual([
+      "Tightened steps to five bullets",
+      "Added a rollback step",
+    ]);
+    expect(out.content).toContain("Roll back");
   });
 
   it("pins the immutable slug — the model's rename is ignored in the saved body", async () => {
@@ -129,12 +133,12 @@ describe("skillReviseHandler (@oxagen/handlers)", () => {
 
     const call = mocks.createNewSkillVersion.mock.calls[0]![0] as {
       skillPublicId: string;
-      body: string;
+      content: string;
       activate: boolean;
     };
     expect(call.skillPublicId).toBe("skl_INC01");
-    expect(call.body).toMatch(/name: incident-response/);
-    expect(call.body).not.toMatch(/name: renamed-by-model/);
+    expect(call.content).toContain('name = "incident-response"');
+    expect(call.content).not.toContain('name = "renamed-by-model"');
     expect(call.activate).toBe(true);
   });
 
@@ -143,7 +147,9 @@ describe("skillReviseHandler (@oxagen/handlers)", () => {
 
     await skillReviseHandler({ ...INPUT, activate: false }, TEST_CTX);
 
-    const call = mocks.createNewSkillVersion.mock.calls[0]![0] as { activate: boolean };
+    const call = mocks.createNewSkillVersion.mock.calls[0]![0] as {
+      activate: boolean;
+    };
     expect(call.activate).toBe(false);
   });
 
@@ -151,7 +157,9 @@ describe("skillReviseHandler (@oxagen/handlers)", () => {
     mocks.dbRows = [[]]; // skill lookup returns nothing
     mocks.generateObjectFor.mockResolvedValue({ object: SYNTHESIS_RESULT });
 
-    await expect(skillReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(SkillReviseError);
+    await expect(skillReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
+      SkillReviseError,
+    );
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
     expect(mocks.createNewSkillVersion).not.toHaveBeenCalled();
   });
@@ -160,7 +168,9 @@ describe("skillReviseHandler (@oxagen/handlers)", () => {
     mocks.dbRows = [[SKILL_ROW], [VERSION_ROW]];
     mocks.generateObjectFor.mockRejectedValue(new Error("gateway down"));
 
-    await expect(skillReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(SkillReviseError);
+    await expect(skillReviseHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
+      SkillReviseError,
+    );
     expect(mocks.createNewSkillVersion).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,6 @@ import {
   applyPathFilter,
   applyLabelFilter,
   shouldRunInference,
-  inferenceConfidenceThreshold,
   type DeliveryConfig,
 } from "./filters";
 
@@ -23,7 +22,9 @@ describe("matchGlobPattern", () => {
   });
 
   it("matches ** glob — any depth path", () => {
-    expect(matchGlobPattern("node_modules/foo/bar.ts", ["node_modules/**"])).toBe(true);
+    expect(
+      matchGlobPattern("node_modules/foo/bar.ts", ["node_modules/**"]),
+    ).toBe(true);
     expect(matchGlobPattern("dist/index.js", ["dist/**"])).toBe(true);
   });
 
@@ -121,7 +122,9 @@ describe("applyPathFilter", () => {
   });
 
   it("passes records without a path property", () => {
-    const result = applyPathFilter({ title: "bug report" }, ["node_modules/**"]);
+    const result = applyPathFilter({ title: "bug report" }, [
+      "node_modules/**",
+    ]);
     expect(result.filtered).toBe(false);
   });
 
@@ -131,19 +134,18 @@ describe("applyPathFilter", () => {
   });
 
   it("filters a path that matches a pattern", () => {
-    const result = applyPathFilter(
-      { path: "node_modules/react/index.js" },
-      ["node_modules/**"],
-    );
+    const result = applyPathFilter({ path: "node_modules/react/index.js" }, [
+      "node_modules/**",
+    ]);
     expect(result.filtered).toBe(true);
     expect(result.reason).toBe("path_filtered");
   });
 
   it("does not filter a path that doesn't match any pattern", () => {
-    const result = applyPathFilter(
-      { path: "src/components/Button.tsx" },
-      ["node_modules/**", "dist/**"],
-    );
+    const result = applyPathFilter({ path: "src/components/Button.tsx" }, [
+      "node_modules/**",
+      "dist/**",
+    ]);
     expect(result.filtered).toBe(false);
   });
 
@@ -153,7 +155,9 @@ describe("applyPathFilter", () => {
   });
 
   it("filters .turbo paths", () => {
-    const result = applyPathFilter({ path: ".turbo/cache/abc123" }, [".turbo/**"]);
+    const result = applyPathFilter({ path: ".turbo/cache/abc123" }, [
+      ".turbo/**",
+    ]);
     expect(result.filtered).toBe(true);
   });
 });
@@ -177,7 +181,9 @@ describe("applyLabelFilter", () => {
   });
 
   it("filters when a label string matches a pattern", () => {
-    const result = applyLabelFilter({ labels: ["bug", "internal"] }, ["internal"]);
+    const result = applyLabelFilter({ labels: ["bug", "internal"] }, [
+      "internal",
+    ]);
     expect(result.filtered).toBe(true);
     expect(result.reason).toBe("label_filtered");
   });
@@ -192,10 +198,10 @@ describe("applyLabelFilter", () => {
   });
 
   it("does not filter when no labels match any pattern", () => {
-    const result = applyLabelFilter(
-      { labels: ["bug", "feature"] },
-      ["internal", "skip"],
-    );
+    const result = applyLabelFilter({ labels: ["bug", "feature"] }, [
+      "internal",
+      "skip",
+    ]);
     expect(result.filtered).toBe(false);
   });
 
@@ -271,29 +277,5 @@ describe("shouldRunInference", () => {
       perRecordType: { pull_request: true },
     };
     expect(shouldRunInference("pull_request", cfg)).toBe(false);
-  });
-});
-
-// ── inferenceConfidenceThreshold ──────────────────────────────────────────────
-
-describe("inferenceConfidenceThreshold", () => {
-  it("returns 0.75 when semanticInference is undefined", () => {
-    expect(inferenceConfidenceThreshold(undefined)).toBe(0.75);
-  });
-
-  it("returns 0.75 when confidenceThreshold is not set", () => {
-    expect(inferenceConfidenceThreshold({ enabled: true })).toBe(0.75);
-  });
-
-  it("returns the configured threshold", () => {
-    expect(
-      inferenceConfidenceThreshold({ enabled: true, confidenceThreshold: 0.90 }),
-    ).toBe(0.90);
-  });
-
-  it("accepts 0.50 minimum threshold", () => {
-    expect(
-      inferenceConfidenceThreshold({ enabled: true, confidenceThreshold: 0.50 }),
-    ).toBe(0.50);
   });
 });

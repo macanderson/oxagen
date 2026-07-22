@@ -10,8 +10,51 @@ export type { DenialResponse } from "./denial";
 export { fetchAuthz } from "./fetch-authz";
 export type { AuthzData, FetchAuthzArgs } from "./fetch-authz";
 
-export { fetchAgentRunAuthz } from "./fetch-agent-authz";
+export {
+  fetchAgentRunAuthz,
+  fetchAgentRunLiveAuthority,
+} from "./fetch-agent-authz";
 export type { FetchAgentRunAuthzArgs } from "./fetch-agent-authz";
+
+// Governed-run authorization foundation (docs/specs/run-evidence-ingress).
+// The PINNED grant ceiling …
+export {
+  createAgentRunAuthorizationSnapshot,
+  createChildRunAuthorizationSnapshot,
+  loadAuthorizationSnapshot,
+  parseStoredCeiling,
+  readDenyGenerationVector,
+  readLiveAuthority,
+  AuthorizationSnapshotError,
+} from "./authorization-snapshot";
+export type {
+  CreateAgentRunAuthorizationSnapshotArgs,
+  CreateChildRunAuthorizationSnapshotArgs,
+  LiveAuthorityState,
+  LivePrincipalStatus,
+  LiveRoleAssignment,
+  LiveRoleGrant,
+} from "./authorization-snapshot";
+
+// … and the LIVE deny check that can only narrow it.
+export {
+  evaluateAgentRunAuthorization,
+  liveResolverInputs,
+  matchEmergencyDeny,
+  persistAuthorizationDecision,
+  persistedOutcomeOf,
+  readActiveEmergencyDenies,
+  readLiveAgentRunAuthority,
+} from "./live-agent-run-authorization";
+export type {
+  ActiveEmergencyDeny,
+  AgentRunAuthorizationResult,
+  EvaluateAgentRunAuthorizationArgs,
+  LiveAgentRunAuthority,
+  LiveDenyReason,
+  PersistAuthorizationDecisionArgs,
+  PersistedDecisionOutcome,
+} from "./live-agent-run-authorization";
 
 export { emitAudit } from "./emit-audit";
 export type { EmitAuditArgs } from "./emit-audit";

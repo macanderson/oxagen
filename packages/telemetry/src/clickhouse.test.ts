@@ -73,7 +73,9 @@ describe("providerFromModelId", () => {
   });
 
   it("maps the prefixed form 'anthropic:claude-3' to 'anthropic'", () => {
-    expect(providerFromModelId("anthropic:claude-3-haiku-20240307")).toBe("anthropic");
+    expect(providerFromModelId("anthropic:claude-3-haiku-20240307")).toBe(
+      "anthropic",
+    );
     expect(providerFromModelId("anthropic:claude-sonnet-5")).toBe("anthropic");
   });
 
@@ -99,9 +101,13 @@ describe("providerFromModelId", () => {
 // ---------------------------------------------------------------------------
 
 const createClientMock = vi.hoisted(() =>
-  vi.fn((_config: { clickhouse_settings?: { date_time_input_format?: string } }) => ({
-    close: vi.fn(),
-  })),
+  vi.fn(
+    (_config: {
+      clickhouse_settings?: { date_time_input_format?: string };
+    }) => ({
+      close: vi.fn(),
+    }),
+  ),
 );
 
 vi.mock("@clickhouse/client", () => ({
@@ -210,7 +216,9 @@ describe("clickhouse client construction", () => {
 
     expect(createClientMock).toHaveBeenCalledTimes(1);
     const config = createClientMock.mock.calls[0]![0];
-    expect(config.clickhouse_settings?.date_time_input_format).toBe("best_effort");
+    expect(config.clickhouse_settings?.date_time_input_format).toBe(
+      "best_effort",
+    );
   });
 });
 
@@ -313,6 +321,9 @@ describe("insert helpers — insertRows delegation", () => {
       values: [
         {
           ...row,
+          // insertTokenUsage coalesces the optional fourth token class to 0
+          // (matches the ClickHouse column DEFAULT, migration 0026).
+          cache_write_tokens: 0,
           trace_id: "",
           span_id: "",
           principal_id: mod.NIL_UUID,
@@ -365,6 +376,32 @@ describe("insert helpers — insertRows delegation", () => {
     expect(call.values[0]!.input_tokens).toBe(7);
   });
 
+  // #1076: a text caller that actually wrote cache must forward the real
+  // cache_write_tokens count (the fourth token class) — not lose it to the
+  // coalescing default — so the billing rollup prices it at the write premium.
+  it("forwards a real cache_write_tokens count through to the row", async () => {
+    const row: TokenUsageRow = {
+      execution_step_id: "33333333-3333-3333-3333-333333333333",
+      org_id: "o1",
+      workspace_id: "w1",
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_tokens: 10_000,
+      output_tokens: 500,
+      cached_tokens: 2_000,
+      cache_write_tokens: 3_000,
+      cost_usd_micros: 9999,
+      duration_ms: 800,
+      surface: "api",
+      prompt_hash: "cafecafecafecafe",
+      created_at: new Date().toISOString(),
+    };
+    await mod.insertTokenUsage([row]);
+    const call = insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] };
+    expect(call.values[0]!.cache_write_tokens).toBe(3_000);
+    expect(call.values[0]!.cached_tokens).toBe(2_000);
+  });
+
   it("coalesces only the null rows in a mixed batch, leaving real UUIDs intact", async () => {
     const realUuid = "22222222-2222-2222-2222-222222222222";
     const base = {
@@ -385,7 +422,8 @@ describe("insert helpers — insertRows delegation", () => {
       { ...base, execution_step_id: null },
       { ...base, execution_step_id: realUuid },
     ]);
-    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] }).values;
+    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] })
+      .values;
     expect(values[0]!.execution_step_id).toBe(mod.NIL_UUID);
     expect(values[1]!.execution_step_id).toBe(realUuid);
   });
@@ -592,7 +630,10 @@ describe("insert helpers — insertRows delegation", () => {
     };
     await mod.insertEvalRun(row);
     const call = insertMock.mock.calls[0]![0] as { values: EvalRunRow[] };
-    expect(call.values[0]!.metrics).toEqual({ context_precision: 1, cost_usd: 0.27 });
+    expect(call.values[0]!.metrics).toEqual({
+      context_precision: 1,
+      cost_usd: 0.27,
+    });
     expect(call.values[0]!.labels).toEqual({ branch: "main" });
   });
 
@@ -677,6 +718,7 @@ describe("sumTokenUsage", () => {
           input_tokens: "1000",
           output_tokens: "500",
           cached_tokens: "200",
+          cache_write_tokens: "50",
           cost_micros: "150000",
           row_count: "10",
         },
@@ -689,11 +731,32 @@ describe("sumTokenUsage", () => {
       periodEnd: new Date("2026-02-01"),
     });
 
-    expect(result).toHaveLength(4);
-    expect(result[0]).toEqual({ metric: "tokens_input", quantity: 1000, costMicros: 0n });
-    expect(result[1]).toEqual({ metric: "tokens_output", quantity: 500, costMicros: 0n });
-    expect(result[2]).toEqual({ metric: "tokens_cached", quantity: 200, costMicros: 0n });
-    expect(result[3]).toEqual({ metric: "executions", quantity: 10, costMicros: 150000n });
+    expect(result).toHaveLength(5);
+    expect(result[0]).toEqual({
+      metric: "tokens_input",
+      quantity: 1000,
+      costMicros: 0n,
+    });
+    expect(result[1]).toEqual({
+      metric: "tokens_output",
+      quantity: 500,
+      costMicros: 0n,
+    });
+    expect(result[2]).toEqual({
+      metric: "tokens_cached",
+      quantity: 200,
+      costMicros: 0n,
+    });
+    expect(result[3]).toEqual({
+      metric: "tokens_cache_write",
+      quantity: 50,
+      costMicros: 0n,
+    });
+    expect(result[4]).toEqual({
+      metric: "executions",
+      quantity: 10,
+      costMicros: 150000n,
+    });
   });
 
   it("returns zero-filled rollup when ClickHouse returns no rows", async () => {
@@ -707,23 +770,54 @@ describe("sumTokenUsage", () => {
       periodEnd: new Date("2026-02-01"),
     });
 
-    expect(result[0]).toEqual({ metric: "tokens_input", quantity: 0, costMicros: 0n });
-    expect(result[1]).toEqual({ metric: "tokens_output", quantity: 0, costMicros: 0n });
-    expect(result[2]).toEqual({ metric: "tokens_cached", quantity: 0, costMicros: 0n });
-    expect(result[3]).toEqual({ metric: "executions", quantity: 0, costMicros: 0n });
+    expect(result[0]).toEqual({
+      metric: "tokens_input",
+      quantity: 0,
+      costMicros: 0n,
+    });
+    expect(result[1]).toEqual({
+      metric: "tokens_output",
+      quantity: 0,
+      costMicros: 0n,
+    });
+    expect(result[2]).toEqual({
+      metric: "tokens_cached",
+      quantity: 0,
+      costMicros: 0n,
+    });
+    expect(result[3]).toEqual({
+      metric: "tokens_cache_write",
+      quantity: 0,
+      costMicros: 0n,
+    });
+    expect(result[4]).toEqual({
+      metric: "executions",
+      quantity: 0,
+      costMicros: 0n,
+    });
   });
 
   it("strips the trailing Z from ISO date strings in query params", async () => {
     queryMock.mockResolvedValue({
       json: vi.fn().mockResolvedValue([
-        { input_tokens: "0", output_tokens: "0", cached_tokens: "0", cost_micros: "0", row_count: "0" },
+        {
+          input_tokens: "0",
+          output_tokens: "0",
+          cached_tokens: "0",
+          cost_micros: "0",
+          row_count: "0",
+        },
       ]),
     });
 
     const start = new Date("2026-01-01T00:00:00.000Z");
     const end = new Date("2026-02-01T00:00:00.000Z");
 
-    await mod.sumTokenUsage({ orgId: "o1", periodStart: start, periodEnd: end });
+    await mod.sumTokenUsage({
+      orgId: "o1",
+      periodStart: start,
+      periodEnd: end,
+    });
 
     const callArgs = queryMock.mock.calls[0]![0];
     // The query replaces trailing Z so ClickHouse DateTime64 can parse
@@ -735,7 +829,13 @@ describe("sumTokenUsage", () => {
   it("passes orgId and uses JSONEachRow format", async () => {
     queryMock.mockResolvedValue({
       json: vi.fn().mockResolvedValue([
-        { input_tokens: "0", output_tokens: "0", cached_tokens: "0", cost_micros: "0", row_count: "0" },
+        {
+          input_tokens: "0",
+          output_tokens: "0",
+          cached_tokens: "0",
+          cost_micros: "0",
+          row_count: "0",
+        },
       ]),
     });
 
@@ -749,6 +849,126 @@ describe("sumTokenUsage", () => {
     expect(callArgs.query_params.orgId).toBe("my-org-uuid");
     expect(callArgs.format).toBe("JSONEachRow");
     expect(callArgs.query).toContain("token_usage");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sumTokenUsageByExecutionStep
+// ---------------------------------------------------------------------------
+
+describe("sumTokenUsageByExecutionStep", () => {
+  let queryMock: ReturnType<typeof vi.fn>;
+  let mod: typeof import("./clickhouse");
+
+  beforeEach(async () => {
+    queryMock = vi.fn();
+    createClientMock.mockImplementation(() => ({
+      close: vi.fn().mockResolvedValue(undefined),
+      insert: vi.fn().mockResolvedValue(undefined),
+      query: queryMock,
+    }));
+    vi.resetModules();
+    mod = await import("./clickhouse");
+    mod.clickhouse();
+  });
+
+  afterEach(async () => {
+    await mod.closeClickhouse();
+    vi.resetModules();
+  });
+
+  it("returns an empty map without querying ClickHouse when executionStepIds is empty", async () => {
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: [],
+    });
+    expect(result.size).toBe(0);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty map without querying ClickHouse when every id is the NIL_UUID sentinel", async () => {
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: [mod.NIL_UUID, mod.NIL_UUID],
+    });
+    expect(result.size).toBe(0);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("coerces UInt64 decimal-string sums with Number() and keys the map by execution_step_id", async () => {
+    queryMock.mockResolvedValue({
+      json: vi.fn().mockResolvedValue([
+        {
+          execution_step_id: "step-1",
+          cost_micros: "150000",
+          input_tokens: "1000",
+          output_tokens: "500",
+          llm_calls: "3",
+          model: "claude-sonnet-5",
+          provider: "anthropic",
+          principal_id: "prn-1",
+          principal_kind: "agent",
+        },
+      ]),
+    });
+
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1"],
+    });
+
+    expect(result.size).toBe(1);
+    const row = result.get("step-1");
+    expect(row).toEqual({
+      executionStepId: "step-1",
+      costMicros: 150000,
+      inputTokens: 1000,
+      outputTokens: 500,
+      llmCalls: 3,
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      principalId: "prn-1",
+      principalKind: "agent",
+    });
+    expect(typeof row!.costMicros).toBe("number");
+  });
+
+  it("filters the NIL_UUID sentinel out of a mixed id list before querying", async () => {
+    queryMock.mockResolvedValue({ json: vi.fn().mockResolvedValue([]) });
+
+    await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1", mod.NIL_UUID, "step-1"],
+    });
+
+    const callArgs = queryMock.mock.calls[0]![0];
+    expect(callArgs.query_params.ids).toEqual(["step-1"]);
+    expect(callArgs.query_params.orgId).toBe("org-1");
+    expect(callArgs.format).toBe("JSONEachRow");
+    expect(callArgs.query).toContain("token_usage");
+  });
+
+  it("ids absent from the ClickHouse result are simply absent from the map (zero usage)", async () => {
+    queryMock.mockResolvedValue({ json: vi.fn().mockResolvedValue([]) });
+
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1", "step-2"],
+    });
+
+    expect(result.size).toBe(0);
+    expect(result.has("step-1")).toBe(false);
+  });
+
+  it("propagates a ClickHouse query failure — callers are responsible for degrading (mirrors getSpendBudgetStatuses)", async () => {
+    queryMock.mockRejectedValue(new Error("clickhouse unavailable"));
+
+    await expect(
+      mod.sumTokenUsageByExecutionStep({
+        orgId: "org-1",
+        executionStepIds: ["step-1"],
+      }),
+    ).rejects.toThrow("clickhouse unavailable");
   });
 });
 
@@ -782,7 +1002,10 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([{ chain_hash: "abc123def456" }]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
+    const hash = await mod.latestAuditChainHash({
+      orgId: "o1",
+      capability: "send_message",
+    });
     expect(hash).toBe("abc123def456");
   });
 
@@ -791,7 +1014,10 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([]),
     });
 
-    const hash = await mod.latestAuditChainHash({ orgId: "o1", capability: "send_message" });
+    const hash = await mod.latestAuditChainHash({
+      orgId: "o1",
+      capability: "send_message",
+    });
     expect(hash).toBe("");
   });
 
@@ -800,7 +1026,10 @@ describe("latestAuditChainHash", () => {
       json: vi.fn().mockResolvedValue([]),
     });
 
-    await mod.latestAuditChainHash({ orgId: "org-uuid", capability: "test.capability" });
+    await mod.latestAuditChainHash({
+      orgId: "org-uuid",
+      capability: "test.capability",
+    });
 
     const callArgs = queryMock.mock.calls[0]![0];
     expect(callArgs.query).toContain("audit_events FINAL");

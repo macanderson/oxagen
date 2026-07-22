@@ -3,15 +3,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
-  parseSkill: vi.fn(),
 }));
 
 vi.mock("@oxagen/ai", () => ({
   generateObjectFor: mocks.generateObjectFor,
-}));
-
-vi.mock("@oxagen/skills", () => ({
-  parseSkill: mocks.parseSkill,
 }));
 
 import { skillDraftHandler } from "./skill.draft";
@@ -22,7 +17,8 @@ import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 const SYNTHESIS_RESULT = {
   displayName: "PR Review",
   name: "pr-review",
-  description: "How to review pull requests for correctness, readability, and coverage.",
+  description:
+    "How to review pull requests for correctness, readability, and coverage.",
   weight: "high" as const,
   category: "engineering",
   body: "# PR Review\n\nLoad this skill when the user asks you to review a pull request.\n\n## Rules\n\n1. Check for correctness bugs first.\n2. Check for readability.\n3. Verify test coverage.",
@@ -36,16 +32,6 @@ const BASE_INPUT = {
 
 function setupHappyPath(overrides: Partial<typeof BASE_INPUT> = {}) {
   mocks.generateObjectFor.mockResolvedValue({ object: SYNTHESIS_RESULT });
-  mocks.parseSkill.mockReturnValue({
-    slug: "pr-review",
-    name: "pr-review",
-    description: SYNTHESIS_RESULT.description,
-    metadata: { weight: "high", category: "engineering" },
-    body: SYNTHESIS_RESULT.body,
-    references: [],
-    source: "tenant",
-    version: "1.0.0",
-  });
   return { ...BASE_INPUT, ...overrides };
 }
 
@@ -68,17 +54,15 @@ describe("skillDraftHandler (@oxagen/handlers)", () => {
     expect(result.draft.body).toBe(SYNTHESIS_RESULT.body);
   });
 
-  it("returns an assembled .skill.md document with valid frontmatter", async () => {
+  it("returns canonical TOML and its parsed artifact", async () => {
     const input = setupHappyPath();
     const result = await skillDraftHandler(input, TEST_CTX);
 
-    expect(result.skillMd).toMatch(/^---\n/);
-    expect(result.skillMd).toContain("name: pr-review");
-    expect(result.skillMd).toContain("description:");
-    expect(result.skillMd).toContain("metadata:");
-    expect(result.skillMd).toContain("weight: high");
-    expect(result.skillMd).toContain("category: engineering");
-    expect(result.skillMd).toContain(SYNTHESIS_RESULT.body);
+    expect(result.content).toMatch(/^schema_version = 1\n/);
+    expect(result.content).toContain('name = "pr-review"');
+    expect(result.content).toContain('weight = "high"');
+    expect(result.artifact.name).toBe("pr-review");
+    expect(result.artifact.instructions).toBe(SYNTHESIS_RESULT.body);
   });
 
   it("calls generateObjectFor with the prompt embedded", async () => {
@@ -86,15 +70,22 @@ describe("skillDraftHandler (@oxagen/handlers)", () => {
     await skillDraftHandler(input, TEST_CTX);
 
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { prompt: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      prompt: string;
+    };
     expect(call.prompt).toContain(input.prompt);
   });
 
   it("forwards nameHint and category into the system prompt", async () => {
-    const input = setupHappyPath({ nameHint: "pr-review", category: "engineering" });
+    const input = setupHappyPath({
+      nameHint: "pr-review",
+      category: "engineering",
+    });
     await skillDraftHandler(input, TEST_CTX);
 
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      system: string;
+    };
     expect(call.system).toContain("pr-review");
     expect(call.system).toContain("engineering");
   });
@@ -110,16 +101,7 @@ describe("skillDraftHandler (@oxagen/handlers)", () => {
     expect(call.telemetry.workspaceId).toBe(TEST_CTX.workspaceId);
   });
 
-  it("validates the assembled document with parseSkill before returning", async () => {
-    const input = setupHappyPath();
-    await skillDraftHandler(input, TEST_CTX);
-
-    expect(mocks.parseSkill).toHaveBeenCalledTimes(1);
-    const [rawBody] = mocks.parseSkill.mock.calls[0] as [string];
-    expect(rawBody).toContain("name: pr-review");
-  });
-
-  it("omits category from the draft and frontmatter when the model returns none", async () => {
+  it("omits category from the draft and metadata when the model returns none", async () => {
     setupHappyPath();
     mocks.generateObjectFor.mockResolvedValue({
       object: { ...SYNTHESIS_RESULT, category: undefined },
@@ -128,7 +110,7 @@ describe("skillDraftHandler (@oxagen/handlers)", () => {
     const result = await skillDraftHandler(input, TEST_CTX);
 
     expect(result.draft.category).toBeUndefined();
-    expect(result.skillMd).not.toContain("category:");
+    expect(result.content).not.toContain("category =");
   });
 
   it("trims the draft body", async () => {
@@ -156,19 +138,19 @@ describe("skillDraftHandler (@oxagen/handlers)", () => {
     const input = setupHappyPath();
     mocks.generateObjectFor.mockRejectedValue(new Error("model unavailable"));
 
-    await expect(skillDraftHandler(input, TEST_CTX)).rejects.toThrow(/model unavailable/);
+    await expect(skillDraftHandler(input, TEST_CTX)).rejects.toThrow(
+      /model unavailable/,
+    );
   });
 
-  it("throws (and persists nothing) when parseSkill rejects the assembled document", async () => {
+  it("throws when artifact validation rejects the assembled document", async () => {
     const input = setupHappyPath();
     mocks.generateObjectFor.mockResolvedValue({
       object: { ...SYNTHESIS_RESULT, name: "Bad_Slug" },
     });
-    mocks.parseSkill.mockImplementation(() => {
-      throw new Error("kebab-case-slug only");
-    });
-
-    await expect(skillDraftHandler(input, TEST_CTX)).rejects.toThrow(/kebab-case/i);
+    await expect(skillDraftHandler(input, TEST_CTX)).rejects.toThrow(
+      /kebab-case/i,
+    );
   });
 
   // ── telemetry ─────────────────────────────────────────────────────────────

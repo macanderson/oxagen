@@ -1,0 +1,5 @@
+schema_version = 1
+kind = "command"
+name = "explain"
+description = "Explain the selected code."
+prompt = "Explain $ARGUMENTS in plain language."

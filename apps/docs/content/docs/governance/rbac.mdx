@@ -53,7 +53,7 @@ When a principal invokes a capability, the IAM resolver evaluates the following 
 Two properties are non-negotiable:
 
 - **Workspaces can never expand what org has locked.** An org `enforced` policy is the locking primitive. A workspace admin cannot grant capabilities beyond what the org allows.
-- **Workspaces can tighten.** If the org defaults to allowing `knowledge.graph.export`, a workspace handling sensitive data can override that to `deny` or `require-approval`.
+- **Workspaces can tighten.** If the org allows a workspace graph-search capability, a workspace handling sensitive data can still override that capability to `deny` or `require-approval`.
 
 The resolver returns a structured trace alongside the decision. The trace is stored in the audit record and is viewable in **Organization → Security → Audit** for every `capability.invoke_denied` event.
 

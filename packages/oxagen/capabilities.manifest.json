@@ -310,20 +310,6 @@
       }
     },
     {
-      "name": "get_execution_lineage",
-      "file": "agent.execution.lineage.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
-      }
-    },
-    {
       "name": "list_executions",
       "file": "agent.execution.list.ts",
       "domain": "agent",
@@ -863,8 +849,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -877,8 +862,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -891,8 +875,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -905,8 +888,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -1477,6 +1459,36 @@
       }
     },
     {
+      "name": "get_spend_budget",
+      "file": "billing.budget.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_spend_budget",
+      "file": "billing.budget.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -1960,20 +1972,6 @@
       "domain": "code",
       "mode": "sync",
       "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_code_map",
-      "file": "code.map.ts",
-      "domain": "code",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
       "layers": {
         "schema": true,
         "api": true,
@@ -2604,91 +2602,6 @@
       }
     },
     {
-      "name": "run_cypher",
-      "file": "graph.cypher.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "delete_edge",
-      "file": "graph.edge.delete.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "upsert_edge",
-      "file": "graph.edge.upsert.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "export_graph",
-      "file": "graph.export.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "ingest_graph",
-      "file": "graph.ingest.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "delete_node",
-      "file": "graph.node.delete.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "get_node",
       "file": "graph.node.get.ts",
       "domain": "graph",
@@ -2732,46 +2645,8 @@
       }
     },
     {
-      "name": "upsert_node",
-      "file": "graph.node.upsert.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "add_node_label",
-      "file": "graph.node_label.add.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["agent"],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "get_node_labels",
       "file": "graph.node_label.get.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["agent"],
-      "layers": {
-        "schema": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "remove_node_label",
-      "file": "graph.node_label.remove.ts",
       "domain": "graph",
       "mode": "sync",
       "surfaces": ["agent"],
@@ -2808,20 +2683,6 @@
         "unit": true,
         "docs": true,
         "app": true
-      }
-    },
-    {
-      "name": "push_graph",
-      "file": "graph.sync.push.ts",
-      "domain": "graph",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
       }
     },
     {
@@ -2993,6 +2854,21 @@
       }
     },
     {
+      "name": "query_lineage",
+      "file": "lineage.query.ts",
+      "domain": "lineage",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "generate_markdown",
       "file": "markdown.generate.ts",
       "domain": "document",
@@ -3014,6 +2890,19 @@
       "surfaces": ["api", "mcp", "agent"],
       "layers": {
         "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_model_capabilities",
+      "file": "model.capability.list.ts",
+      "domain": "model",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
         "api": true,
         "mcp": true,
         "unit": true,
@@ -4382,62 +4271,6 @@
       }
     },
     {
-      "name": "approve_semantic_edge",
-      "file": "semantic.edge.approve.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "infer_semantic_edges",
-      "file": "semantic.edge.infer.ts",
-      "domain": "semantic",
-      "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_semantic_edges",
-      "file": "semantic.edge.list.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "suggest_semantic_edges",
-      "file": "semantic.edge.suggest.ts",
-      "domain": "semantic",
-      "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
       "name": "author_skill",
       "file": "skill.author.ts",
       "domain": "skill",
@@ -4461,7 +4294,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -4673,6 +4506,19 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "ingest_stella_operational_telemetry",
+      "file": "telemetry.stella.ingest.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }

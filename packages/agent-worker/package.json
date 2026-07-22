@@ -22,7 +22,6 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
-    "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/telemetry": "workspace:*",

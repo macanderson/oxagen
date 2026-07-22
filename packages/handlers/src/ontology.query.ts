@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyQuery } from "@oxagen/oxagen/contracts/ontology.query";
-import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/lib/relationship-type-pattern";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import {
   buildValidityFilter,
@@ -147,6 +147,7 @@ export const ontologyQueryHandler: CapabilityHandler<
     try {
       const startResult = await probe.run(
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
+         WHERE start.is_system = false
          RETURN start.publicId AS nodeId, start.label AS label,
                 start.displayName AS displayName, start.description AS description`,
         { startNodeId: input.startNodeId, orgId, workspaceId },
@@ -209,7 +210,9 @@ export const ontologyQueryHandler: CapabilityHandler<
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH path = ${matchPattern}
          WHERE reached.orgId = $orgId AND reached.workspaceId = $workspaceId
-           AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId)
+           AND reached.is_system = false
+           AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+             AND n.is_system = false)
            AND ALL(rel IN relationships(path) WHERE ${validity.clause})
            ${scopeLabelClause}
            ${scopeRelClause}

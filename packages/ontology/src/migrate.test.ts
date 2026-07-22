@@ -28,9 +28,6 @@ vi.mock("node:url", () => ({
 // in one place so the smart mock and assertions agree on what to match.
 const DUP_CHECK = "RETURN count(pid) AS groups, sum(c - 1) AS removable";
 const MERGE_CALL = "apoc.refactor.mergeNodes";
-// The legacy :SEMANTIC_EDGE relabel pre-check + the APOC call that performs it.
-const LEGACY_COUNT = "AS legacyEdges";
-const SETTYPE_CALL = "apoc.refactor.setType";
 // The PascalCase recase: `label` property probe, structural label probe, the
 // pure-Cypher property update, and the APOC label rename.
 const PROP_PROBE = "DISTINCT n.label";
@@ -43,10 +40,6 @@ const RENAME_CALL = "apoc.refactor.rename.label";
 let dupGroups = 0;
 // When set, the merge call rejects with this error (simulates a missing APOC plugin).
 let mergeError: Error | null = null;
-// How many legacy :SEMANTIC_EDGE relationships the mocked DB reports.
-let legacyEdges = 0;
-// When set, the setType relabel rejects with this error (missing APOC plugin).
-let relabelError: Error | null = null;
 // Distinct legacy `label` property values the mocked DB reports (recase pass 1).
 let legacyLabelProps: string[] = [];
 // Structural labels the mocked DB reports from db.labels() (recase pass 2).
@@ -66,21 +59,22 @@ function makeStrRecord(values: Record<string, string>) {
 // query-aware: the count pre-checks return count records; everything else is a no-op.
 const runFn = vi.fn(async (query: string) => {
   if (query.includes(DUP_CHECK)) {
-    return { records: dupGroups > 0 ? [makeRecord({ groups: dupGroups, removable: dupGroups })] : [] };
+    return {
+      records:
+        dupGroups > 0
+          ? [makeRecord({ groups: dupGroups, removable: dupGroups })]
+          : [],
+    };
   }
   if (query.includes(MERGE_CALL) && mergeError) {
     throw mergeError;
   }
-  if (query.includes(LEGACY_COUNT)) {
-    return { records: legacyEdges > 0 ? [makeRecord({ legacyEdges })] : [] };
-  }
-  if (query.includes(SETTYPE_CALL) && relabelError) {
-    throw relabelError;
-  }
   // PascalCase recase pass 1: distinct `label` property probe (must be checked
   // before the property UPDATE, which also mentions `n.label`).
   if (query.includes(PROP_PROBE)) {
-    return { records: legacyLabelProps.map((label) => makeStrRecord({ label })) };
+    return {
+      records: legacyLabelProps.map((label) => makeStrRecord({ label })),
+    };
   }
   // PascalCase recase pass 2: structural label probe.
   if (query.includes(LABELS_PROBE)) {
@@ -113,8 +107,6 @@ describe("migrate() (@oxagen/ontology)", () => {
     closeFn.mockClear();
     dupGroups = 0;
     mergeError = null;
-    legacyEdges = 0;
-    relabelError = null;
     legacyLabelProps = [];
     legacyLabels = [];
     renameError = null;
@@ -122,10 +114,8 @@ describe("migrate() (@oxagen/ontology)", () => {
 
   it("runs the dup-check then one session.run() per non-empty, non-comment statement", async () => {
     await migrate();
-    // 1 dedupe pre-check (no duplicates) + 2 real schema statements +
-    // 1 legacy :SEMANTIC_EDGE relabel pre-check (no legacy edges → short-circuits) +
-    // 2 PascalCase recase probes (label-property + db.labels(), both empty → no-op).
-    expect(runFn).toHaveBeenCalledTimes(6);
+    // 1 dedupe pre-check + 2 schema statements + 2 PascalCase recase probes.
+    expect(runFn).toHaveBeenCalledTimes(5);
   });
 
   it("passes each Cypher statement as an argument to session.run()", async () => {
@@ -158,8 +148,6 @@ describe("dedupeLegacyKnowledgeNodes (via migrate behaviour)", () => {
     closeFn.mockClear();
     dupGroups = 0;
     mergeError = null;
-    legacyEdges = 0;
-    relabelError = null;
     legacyLabelProps = [];
     legacyLabels = [];
     renameError = null;
@@ -178,62 +166,18 @@ describe("dedupeLegacyKnowledgeNodes (via migrate behaviour)", () => {
     expect(calls.some((c) => c.includes(MERGE_CALL))).toBe(true);
     // Merge runs before the schema relabel statements.
     const mergeIdx = calls.findIndex((c) => c.includes(MERGE_CALL));
-    const constraintIdx = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
+    const constraintIdx = calls.findIndex((c) =>
+      c.includes("CREATE CONSTRAINT a"),
+    );
     expect(mergeIdx).toBeGreaterThanOrEqual(0);
     expect(mergeIdx).toBeLessThan(constraintIdx);
   });
 
   it("throws an actionable error (mentioning APOC) if the merge fails", async () => {
     dupGroups = 2;
-    mergeError = new Error("There is no procedure with the name `apoc.refactor.mergeNodes`");
-    await expect(migrate()).rejects.toThrow(/APOC/);
-    // Session is still closed on this failure path.
-    expect(closeFn).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("relabelLegacySemanticEdges (via migrate behaviour)", () => {
-  beforeEach(() => {
-    runFn.mockClear();
-    closeFn.mockClear();
-    dupGroups = 0;
-    mergeError = null;
-    legacyEdges = 0;
-    relabelError = null;
-    legacyLabelProps = [];
-    legacyLabels = [];
-    renameError = null;
-  });
-
-  it("does NOT issue the apoc setType call when there are no legacy :SEMANTIC_EDGE edges", async () => {
-    legacyEdges = 0;
-    await migrate();
-    expect(schemaCalls().some((c) => c.includes(SETTYPE_CALL))).toBe(false);
-  });
-
-  it("issues the apoc setType relabel when legacy :SEMANTIC_EDGE edges exist", async () => {
-    legacyEdges = 5;
-    await migrate();
-    const calls = schemaCalls();
-    expect(calls.some((c) => c.includes(SETTYPE_CALL))).toBe(true);
-    // The relabel runs AFTER the schema statements (back-fill, not a prerequisite).
-    const relabelIdx = calls.findIndex((c) => c.includes(SETTYPE_CALL));
-    const constraintIdx = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
-    expect(relabelIdx).toBeGreaterThan(constraintIdx);
-  });
-
-  it("relabels to the descriptive type and stamps inferred/origin provenance", async () => {
-    legacyEdges = 3;
-    await migrate();
-    const relabel = schemaCalls().find((c) => c.includes(SETTYPE_CALL))!;
-    expect(relabel).toContain("rel.inferred = true");
-    expect(relabel).toContain("rel.origin");
-    expect(relabel).toContain("RELATED_TO"); // fallback path present in the Cypher
-  });
-
-  it("throws an actionable error (mentioning APOC) if the relabel fails", async () => {
-    legacyEdges = 2;
-    relabelError = new Error("There is no procedure with the name `apoc.refactor.setType`");
+    mergeError = new Error(
+      "There is no procedure with the name `apoc.refactor.mergeNodes`",
+    );
     await expect(migrate()).rejects.toThrow(/APOC/);
     // Session is still closed on this failure path.
     expect(closeFn).toHaveBeenCalledTimes(1);
@@ -246,8 +190,6 @@ describe("pascalCaseDomainLabels (via migrate behaviour)", () => {
     closeFn.mockClear();
     dupGroups = 0;
     mergeError = null;
-    legacyEdges = 0;
-    relabelError = null;
     legacyLabelProps = [];
     legacyLabels = [];
     renameError = null;
@@ -292,13 +234,17 @@ describe("pascalCaseDomainLabels (via migrate behaviour)", () => {
     await migrate();
     const calls = schemaCalls();
     const renameIdx = calls.findIndex((c) => c.includes(RENAME_CALL));
-    const constraintIdx = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
+    const constraintIdx = calls.findIndex((c) =>
+      c.includes("CREATE CONSTRAINT a"),
+    );
     expect(renameIdx).toBeGreaterThan(constraintIdx);
   });
 
   it("throws an actionable error (mentioning APOC) if the label rename fails", async () => {
     legacyLabels = ["pull_request"];
-    renameError = new Error("There is no procedure with the name `apoc.refactor.rename.label`");
+    renameError = new Error(
+      "There is no procedure with the name `apoc.refactor.rename.label`",
+    );
     await expect(migrate()).rejects.toThrow(/APOC/);
     expect(closeFn).toHaveBeenCalledTimes(1);
   });
@@ -309,8 +255,6 @@ describe("splitStatements (via migrate behaviour)", () => {
     runFn.mockClear();
     dupGroups = 0;
     mergeError = null;
-    legacyEdges = 0;
-    relabelError = null;
     legacyLabelProps = [];
     legacyLabels = [];
     renameError = null;

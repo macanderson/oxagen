@@ -17,27 +17,44 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, isNull } from "drizzle-orm";
 import { actorCanManageApiKeys, generateApiKey } from "./lib/api-key-authz";
+import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { logger } from "./logger";
 
-export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async (input, ctx) => {
+export const apiKeyRotateHandler: CapabilityHandler<
+  typeof apiKeyRotate
+> = async (input, ctx) => {
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    throw new CapabilityError("rotate_api_key", "authz_denied", "Unauthorized: no authenticated principal");
+    throw new CapabilityError(
+      "rotate_api_key",
+      "authz_denied",
+      "Unauthorized: no authenticated principal",
+    );
   }
   if (!ctx.orgId) {
-    throw new CapabilityError("rotate_api_key", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError(
+      "rotate_api_key",
+      "authz_denied",
+      "Forbidden: orgId is required",
+    );
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
 
   // ── Role gate ─────────────────────────────────────────────────────────────
   if (!(await actorCanManageApiKeys(ctx.orgId, actorId))) {
-    logger.warn({ orgId: ctx.orgId, actorId }, "api.key.rotate: rejected — insufficient org role");
-    throw new CapabilityError("rotate_api_key", "authz_denied", "Forbidden: only org Owners and Admins can rotate API keys");
+    logger.warn(
+      { orgId: ctx.orgId, actorId },
+      "api.key.rotate: rejected — insufficient org role",
+    );
+    throw new CapabilityError(
+      "rotate_api_key",
+      "authz_denied",
+      "Forbidden: only org Owners and Admins can rotate API keys",
+    );
   }
 
   const now = new Date();
-  const { rawKey, keyPrefix, keyHash } = generateApiKey();
 
   // ── Atomic rotate: load old → insert new → revoke old (one transaction) ────
   const result = await withTenantDb(async (tx) => {
@@ -66,6 +83,20 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
       );
     }
 
+    if (requestsReservedStellaTelemetryPurpose(oldKey.scope)) {
+      logger.warn(
+        { orgId: ctx.orgId, keyPublicId: oldKey.publicId },
+        "api.key.rotate: rejected — reserved Stella telemetry purpose",
+      );
+      throw new CapabilityError(
+        "rotate_api_key",
+        "authz_denied",
+        "Forbidden: enrolled Stella telemetry keys require operator rotation",
+      );
+    }
+
+    const { rawKey, keyPrefix, keyHash } = generateApiKey();
+
     const [inserted] = await tx
       .insert(schema.apiKeys)
       .values({
@@ -89,7 +120,9 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
       });
 
     if (!inserted) {
-      throw new Error("Internal error: failed to create replacement API key row");
+      throw new Error(
+        "Internal error: failed to create replacement API key row",
+      );
     }
 
     await tx
@@ -102,7 +135,7 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
       })
       .where(eq(schema.apiKeys.id, oldKey.id));
 
-    return { inserted, revokedPublicId: oldKey.publicId };
+    return { inserted, rawKey, revokedPublicId: oldKey.publicId };
   });
 
   // ── Emit audit events (fire-and-forget) ────────────────────────────────────
@@ -145,7 +178,7 @@ export const apiKeyRotateHandler: CapabilityHandler<typeof apiKeyRotate> = async
     publicId: result.inserted.publicId,
     name: result.inserted.name,
     keyPrefix: result.inserted.keyPrefix,
-    rawKey,
+    rawKey: result.rawKey,
     expiresAt: result.inserted.expiresAt?.toISOString() ?? null,
     createdAt: result.inserted.createdAt.toISOString(),
     revokedKeyPublicId: result.revokedPublicId,

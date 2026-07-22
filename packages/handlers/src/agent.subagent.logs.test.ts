@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const invoke = vi.fn();
-vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
+vi.mock("@oxagen/oxagen/kernel", () => ({
+  invoke: (...a: unknown[]) => invoke(...a),
+}));
 
 const persistGeneratedAsset = vi.fn();
 vi.mock("./generated-asset.persist", () => ({
@@ -9,7 +11,10 @@ vi.mock("./generated-asset.persist", () => ({
 }));
 
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { agentSubagentLogsHandler, buildLogMarkdown } from "./agent.subagent.logs";
+import {
+  agentSubagentLogsHandler,
+  buildLogMarkdown,
+} from "./agent.subagent.logs";
 
 const ctx: CapabilityContext = {
   orgId: "org-1",
@@ -29,7 +34,11 @@ const webChild = {
   input: { query: "USS Nautilus crew" },
   output: {
     results: [
-      { title: "Crew roster", url: "https://x/crew", content: "The first crew served under Wilkinson." },
+      {
+        title: "Crew roster",
+        url: "https://x/crew",
+        content: "The first crew served under Wilkinson.",
+      },
     ],
   },
   outputBytes: 94,
@@ -44,7 +53,14 @@ describe("buildLogMarkdown", () => {
       status: "completed",
       children: [webChild],
       timeline: [
-        { runId: "run_1", capabilityName: "search_web", status: "completed", startedAt: "2026-06-18T00:00:00Z", completedAt: "2026-06-18T00:00:02Z", errorReason: null },
+        {
+          runId: "run_1",
+          capabilityName: "search_web",
+          status: "completed",
+          startedAt: "2026-06-18T00:00:00Z",
+          completedAt: "2026-06-18T00:00:02Z",
+          errorReason: null,
+        },
       ],
     });
     expect(md).toContain("# Swarm log");
@@ -62,11 +78,20 @@ describe("buildLogMarkdown", () => {
       fanoutId: "f",
       status: "partial",
       children: [
-        { runId: "r2", capabilityName: "upsert_node", status: "failed", summary: "failed", input: { label: "X" }, output: null, outputBytes: 0, errorReason: "neo4j down" },
+        {
+          runId: "r2",
+          capabilityName: "query_ontology",
+          status: "failed",
+          summary: "failed",
+          input: { startNodeId: "X" },
+          output: null,
+          outputBytes: 0,
+          errorReason: "neo4j down",
+        },
       ],
       timeline: [],
     });
-    expect(md).toContain("upsert_node — failed");
+    expect(md).toContain("query_ontology — failed");
     expect(md).toContain("**Error:** neo4j down");
     expect(md).toContain("```json");
   });
@@ -100,7 +125,10 @@ describe("agentSubagentLogsHandler", () => {
       serveUrl: "/api/v1/assets/gen_1",
     });
 
-    const out = await agentSubagentLogsHandler({ fanoutId: "fan_1", title: "Nautilus swarm" }, ctx);
+    const out = await agentSubagentLogsHandler(
+      { fanoutId: "fan_1", title: "Nautilus swarm" },
+      ctx,
+    );
 
     expect(out.childCount).toBe(1);
     expect(out.render.componentId).toBe("file-attachment");
@@ -109,10 +137,16 @@ describe("agentSubagentLogsHandler", () => {
     expect(out.serveUrl).toBe("/api/v1/assets/gen_1");
 
     // The persisted bytes are the markdown log (contains the query).
-    const persistArg = persistGeneratedAsset.mock.calls[0]?.[0] as { mimeType: string; bytes: Uint8Array; kind: string };
+    const persistArg = persistGeneratedAsset.mock.calls[0]?.[0] as {
+      mimeType: string;
+      bytes: Uint8Array;
+      kind: string;
+    };
     expect(persistArg.mimeType).toBe("text/markdown");
     expect(persistArg.kind).toBe("document");
-    expect(new TextDecoder().decode(persistArg.bytes)).toContain("USS Nautilus crew");
+    expect(new TextDecoder().decode(persistArg.bytes)).toContain(
+      "USS Nautilus crew",
+    );
   });
 
   it("requires a user identity", async () => {

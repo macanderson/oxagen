@@ -334,6 +334,24 @@
       "verifiedAt": null,
       "verifiedBy": "web-app-2.0-phase-2"
     },
+    "get_spend_budget": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/page.tsx",
+      "entry": "Spend Budgets page load → getSpendBudgetsAction fetches both org + workspace ceiling status, rendered by SpendBudgetsPanel",
+      "testid": "spend-budgets-panel",
+      "proof": "apps/app/e2e/spend-budgets.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "OXA-1079"
+    },
+    "set_spend_budget": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/scope-budget-card.tsx",
+      "entry": "Spend Budgets → per-scope card \"Set a ceiling\" / \"Edit ceiling\" form \"Save ceiling\" submit → setSpendBudgetAction",
+      "testid": "spend-budget-workspace-save",
+      "proof": "apps/app/e2e/spend-budgets.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "OXA-1079"
+    },
     "get_workspace_user_preferences": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-form.tsx",
@@ -441,15 +459,6 @@
       "proof": "apps/app/e2e/knowledge-citations.spec.ts",
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_01LvTjUhzMz5nF1WWPn6K7N5"
-    },
-    "ingest_graph": {
-      "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/components/chat/message-footer.tsx",
-      "entry": "\"Save as Knowledge\" under assistant messages → saveAsKnowledgeAction",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
     },
     "get_agent_def": {
       "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
@@ -1206,6 +1215,15 @@
       "proof": "apps/app/e2e/evals-write-path.spec.ts",
       "verifiedAt": null,
       "verifiedBy": "session_evals-redesign"
+    },
+    "query_lineage": {
+      "route": "/[orgSlug]/[workspaceSlug]/automations/lineage",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/automations/lineage/page.tsx",
+      "entry": "Automations → Lineage tab page load → LineageSection → queryLineageAction(dispatchId) → query_lineage; dispatch picker (list_subagent_fanouts) when no ?dispatchId= is set yet",
+      "testid": "lineage-row-",
+      "proof": "apps/app/e2e/fleet-lineage.spec.ts",
+      "verifiedAt": "2026-07-21",
+      "verifiedBy": "session_01BvcuRRNHvpFSYLVhow4HGb"
     }
   }
 }

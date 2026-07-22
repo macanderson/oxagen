@@ -637,6 +637,84 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
+  // ── budget: hard spend ceilings (get_spend_budget / set_spend_budget) ───────
+
+  const budgetCmd = program
+    .command("budget")
+    .description(
+      "Hard period-to-date spend ceilings that gate agent runs — org + workspace",
+    );
+  budgetCmd
+    .command("show")
+    .description("Show configured spend ceilings with their live burn")
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { budgetShow } = await import("./commands/budget.js");
+      await budgetShow(opts);
+    });
+  budgetCmd
+    .command("set")
+    .description(
+      "Set (create or replace) a spend ceiling — Owner/Admin/Billing only",
+    )
+    .requiredOption("--scope <scope>", "org | workspace")
+    .requiredOption("--period <period>", "monthly | rolling")
+    .requiredOption("--limit <usd>", "Hard USD ceiling (> 0)")
+    .option(
+      "--window-days <n>",
+      "Trailing window in days — required for --period rolling, omit for monthly",
+    )
+    .option(
+      "--enabled <bool>",
+      "Whether the ceiling is enforced (true/false)",
+      "true",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        scope?: string;
+        period?: string;
+        limit?: string;
+        windowDays?: string;
+        enabled?: string;
+        json?: boolean;
+      }) => {
+        const { budgetSet } = await import("./commands/budget.js");
+        await budgetSet(opts);
+      },
+    );
+
+  // ── lineage: fleet-lineage explorer data spine (query_lineage, #1078) ───────
+
+  const lineage = program
+    .command("lineage")
+    .description(
+      "Inspect a subagent dispatch tree — principals, spend, and outcomes",
+    );
+  lineage
+    .command("show <dispatchId>")
+    .description(
+      "Show the dispatch tree rooted at one fan-out id as an indented tree",
+    )
+    .option(
+      "--max-depth <n>",
+      "Maximum nesting depth to walk (1-10, default 5)",
+    )
+    .option(
+      "--max-nodes <n>",
+      "Maximum number of run nodes to return (1-500, default 200)",
+    )
+    .option("--json", "Output the raw machine shape", false)
+    .action(
+      async (
+        dispatchId: string,
+        opts: { maxDepth?: string; maxNodes?: string; json?: boolean },
+      ) => {
+        const { lineageShow } = await import("./commands/lineage.query.js");
+        await lineageShow(dispatchId, opts);
+      },
+    );
+
   program
     .command("trace")
     .argument("<executionId>", "Public ID (aex_…) or UUID of the execution")
@@ -697,6 +775,28 @@ export function buildProgram(): Command {
       const { handleModelsUse } = await import("./commands/models.js");
       await handleModelsUse(id);
     });
+  models
+    .command("capabilities")
+    .description(
+      "Provider capability posture matrix: cache, reasoning, structured output, attachments — full or filtered to one vendor/model",
+    )
+    .option(
+      "--vendor <vendor>",
+      "Filter to one vendor's gateway creator prefix (e.g. anthropic)",
+    )
+    .option(
+      "--model <id>",
+      "Resolve the posture for a specific gateway model id (e.g. anthropic/claude-sonnet-5)",
+    )
+    .option("--json", "Output JSON", false)
+    .action(
+      async (opts: { vendor?: string; model?: string; json?: boolean }) => {
+        const { handleModelsCapabilities } = await import(
+          "./commands/models.js"
+        );
+        await handleModelsCapabilities(opts);
+      },
+    );
 
   // ── graph: knowledge-graph search + pull + status ───────────────────────────
 
@@ -705,24 +805,16 @@ export function buildProgram(): Command {
     .description("Query the knowledge graph");
   graph
     .command("search")
-    .description(
-      "Unified semantic (vector) search across the entire knowledge graph",
-    )
+    .description("Semantic (vector) search across the customer context graph")
     .requiredOption(
       "-q, --query <text>",
       "Natural-language query to search by vector similarity",
     )
     .option(
-      "-k, --kinds <kinds>",
-      "Comma-separated node kinds (entity,file,symbol,chunk,memory,execution,document,message)",
-    )
-    .option(
       "-l, --labels <labels>",
-      "Comma-separated domain labels (e.g. Person,SourceFile)",
+      "Comma-separated domain labels (e.g. Person,Company)",
     )
     .option("-n, --limit <n>", "Maximum number of results (1–50)", "10")
-    .option("--system", "Only return product-owned (system) nodes")
-    .option("--no-system", "Only return customer nodes (exclude system nodes)")
     .option(
       "--json",
       "One machine JSON line (also the default when stdout is piped)",
@@ -730,99 +822,13 @@ export function buildProgram(): Command {
     )
     .option("--quiet", "Suppress progress chrome (stderr)", false)
     .action(
-      async (opts: {
-        query: string;
-        kinds?: string;
-        labels?: string;
-        limit?: string;
-        system?: boolean;
-      }) => {
+      async (opts: { query: string; labels?: string; limit?: string }) => {
         const { handleGraphSearch } = await import(
           "./commands/graph.search.js"
         );
         await handleGraphSearch(opts);
       },
     );
-
-  graph
-    .command("pull")
-    .description(
-      "Download an incremental snapshot of the workspace graph into a local DuckDB replica",
-    )
-    .option(
-      "--full",
-      "Ignore the saved cursor and re-pull the entire graph",
-      false,
-    )
-    .option(
-      "-l, --labels <csv>",
-      "Comma-separated domain labels to filter (e.g. Person,SourceFile)",
-    )
-    .option("--no-system", "Exclude product-owned (system) nodes")
-    .option("--json", "Output summary as JSON")
-    .action(
-      async (opts: {
-        full?: boolean;
-        labels?: string;
-        system?: boolean;
-        json?: boolean;
-      }) => {
-        const { handleGraphPull } = await import("./commands/graph.pull.js");
-        await handleGraphPull({
-          full: opts.full,
-          labels: opts.labels,
-          noSystem: opts.system === false,
-          json: opts.json,
-        });
-      },
-    );
-
-  graph
-    .command("status")
-    .description("Show the state of the local workspace-graph replica")
-    .option("--json", "Output as JSON")
-    .action(async (opts: { json?: boolean }) => {
-      const { handleGraphStatus } = await import("./commands/graph.status.js");
-      await handleGraphStatus(opts);
-    });
-
-  graph
-    .command("push")
-    .description(
-      "Compute a git code delta and push it to the workspace knowledge graph (ADR-018 up-sync)",
-    )
-    .option(
-      "--full",
-      "Ignore the saved cursor and push all tracked source files",
-      false,
-    )
-    .option("--repo <id>", "Override the repo identifier")
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { full?: boolean; repo?: string; json?: boolean }) => {
-      const { handleGraphPush } = await import("./commands/graph.push.js");
-      await handleGraphPush({
-        full: opts.full,
-        repo: opts.repo,
-        json: opts.json,
-      });
-    });
-
-  graph
-    .command("lineage")
-    .description(
-      "Push CLI session execution lineage into the workspace knowledge graph (ADR-018 slice 3)",
-    )
-    .option(
-      "--repo <id>",
-      "Override the repo identifier used to link touched files to the code subgraph",
-    )
-    .option("--json", "Output summary as JSON")
-    .action(async (opts: { repo?: string; json?: boolean }) => {
-      const { handleGraphLineage } = await import(
-        "./commands/graph.lineage.js"
-      );
-      await handleGraphLineage({ repo: opts.repo, json: opts.json });
-    });
 
   // ── a2a: Agent2Agent protocol surface ───────────────────────────────────────
   const a2a = program
@@ -843,7 +849,7 @@ export function buildProgram(): Command {
   const fileLock = program
     .command("file-lock")
     .description(
-      "Inspect or manage the workspace's agent file locks (HOLDS_LOCK edges) — the same locks write_file/edit_file acquire automatically",
+      "Inspect or manage the workspace's transactional agent file-lock leases — the same locks write_file/edit_file acquire automatically",
     );
   fileLock
     .command("list")
@@ -1177,41 +1183,11 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── code: code-map retrieval + diff/patch/format utilities ──────────────────
+  // ── code: diff/patch/format utilities ───────────────────────────────────────
 
   const code = program
     .command("code")
-    .description(
-      "Code utilities: semantic code-map retrieval, diff, patch, format",
-    );
-
-  code
-    .command("map <query>")
-    .description(
-      "Return a structured code-map for a natural-language concept: relevant files, " +
-        "symbols, call edges, and recent commits. Faster than grep for conceptual queries.",
-    )
-    .option("-l, --limit <n>", "Max files to return (default 20)")
-    .option(
-      "--kinds <list>",
-      "Comma-separated result kinds: file,symbol,chunk,commit",
-    )
-    .option("--domain <domain>", "Filter by domain label (e.g. billing, auth)")
-    .option("--json", "Emit raw JSON output")
-    .action(
-      async (
-        query: string,
-        opts: {
-          limit?: string;
-          kinds?: string;
-          domain?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleCodeMap } = await import("./commands/code.js");
-        await handleCodeMap(query, opts);
-      },
-    );
+    .description("Code utilities: diff, patch, format");
 
   code
     .command("diff <before> <after>")
@@ -1831,14 +1807,13 @@ export function buildProgram(): Command {
     .command("logs")
     .description(
       "See and debug the CLI's log (~/.oxagen/logs/cli.output). Captures invocations, " +
-        "LLM telemetry, and the lineage + code-graph data synced to the workspace graph " +
-        "when OXAGEN_CLI_DEBUG=1.",
+        "LLM telemetry, and local code-graph activity when OXAGEN_CLI_DEBUG=1.",
     )
     .option("--path", "Print the log file path and exit", false)
     .option("-n, --lines <n>", "Number of recent entries to show (default 50)")
     .option(
       "--category <category>",
-      "Filter by category: invoke | turn | api | code-graph | graph-sync | llm | error",
+      "Filter by category: invoke | turn | api | code-graph | llm | error",
     )
     .option("-f, --follow", "Follow the log live (like tail -f)", false)
     .option("--clear", "Truncate the log to empty and exit", false)
@@ -1969,6 +1944,49 @@ export function buildProgram(): Command {
       settingsInit(opts.scope);
     });
 
+  // ── import artifacts: foreign platform conversion ──────────────────────────
+
+  const importCommand = program
+    .command("import")
+    .description("Import configuration from other agent platforms");
+  importCommand
+    .command("artifacts")
+    .description(
+      "Convert Claude Code, Codex, Cursor, or legacy Oxagen artifacts to TOML",
+    )
+    .option("--from <platform>", "Source platform (repeatable)", collect, [])
+    .option("--scope <scope>", "workspace | user", "workspace")
+    .option("--source <dir>", "Override source directory")
+    .option("--dry-run", "Scan and convert without activating files", false)
+    .option("--json", "Emit the import receipt as JSON", false)
+    .option(
+      "--conflict <decision>",
+      "skip | replace | rename (default: skip)",
+      "skip",
+    )
+    .option(
+      "--choice <name=decision>",
+      "Per-item conflict choice (repeatable)",
+      collect,
+      [],
+    )
+    .action(
+      async (opts: {
+        from?: string[];
+        scope?: string;
+        source?: string;
+        dryRun?: boolean;
+        json?: boolean;
+        conflict?: string;
+        choice?: string[];
+      }) => {
+        const { handleImportArtifacts } = await import(
+          "./commands/import-artifacts.js"
+        );
+        await handleImportArtifacts(opts);
+      },
+    );
+
   // ── agent: named agent definitions ──────────────────────────────────────────
 
   const agent = program
@@ -1993,7 +2011,7 @@ export function buildProgram(): Command {
     });
   agent
     .command("new")
-    .description("Scaffold a new agent at .oxagen/agents/<name>.md")
+    .description("Scaffold a new agent at .oxagen/agents/<name>.toml")
     .argument("<name>", "Agent name")
     .action(async (name: string) => {
       const { agentNew } = await import("./commands/agent.js");
@@ -2091,7 +2109,7 @@ export function buildProgram(): Command {
     });
   command
     .command("new")
-    .description("Scaffold a new slash command at .oxagen/commands/<name>.md")
+    .description("Scaffold a new slash command at .oxagen/commands/<name>.toml")
     .argument("<name>", "Command name")
     .action(async (name: string) => {
       const { commandNew } = await import("./commands/command.js");
@@ -2140,12 +2158,12 @@ export function buildProgram(): Command {
       promptNew(name);
     });
 
-  // ── skill: loadable skills (SKILL.md reference material) ─────────────────────
+  // ── skill: loadable TOML skill bundles ──────────────────────────────────────
 
   const skill = program
     .command("skill")
     .description(
-      "Manage loadable skills — SKILL.md reference material injected into the agent's system prompt",
+      "Manage loadable TOML skill bundles injected into the agent's system prompt",
     );
   skill
     .command("list")
@@ -2164,7 +2182,7 @@ export function buildProgram(): Command {
     });
   skill
     .command("new")
-    .description("Scaffold a new skill at .oxagen/skills/<name>/SKILL.md")
+    .description("Scaffold a new skill at .oxagen/skills/<name>/skill.toml")
     .argument("<name>", "Skill name")
     .action(async (name: string) => {
       const { skillNew } = await import("./commands/skill.js");
@@ -2901,6 +2919,14 @@ export function buildProgram(): Command {
       "--quiet",
       "Suppress progress chrome (stderr); data still emits",
       false,
+    )
+    .addHelpText(
+      "after",
+      "\nInside the interactive REPL, `/dispatch` mode routes plain prompts through\n" +
+        "this same detached-worker mechanism (trailing ` &` forces background, a\n" +
+        "leading `=` forces inline), with completions folded back into the REPL\n" +
+        "transcript and a live Background panel roster — see\n" +
+        "docs/specs/repl-async-dispatch.md.",
     )
     .action(async (_opts: unknown, command: Command) => {
       const { handleFleetRoot } = await import("./commands/fleet.js");

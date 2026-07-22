@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/table";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { NodeRef } from "@/components/knowledge/graph/node-ref";
-import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import {
   EmptyState,
   ErrorState,
@@ -120,12 +120,20 @@ export function MemoryCitationsPanel({
   listCitations,
 }: MemoryCitationsPanelProps) {
   const [executionId, setExecutionId] = React.useState("");
-  const [complianceFilter, setComplianceFilter] = React.useState<Compliance | "ALL">("ALL");
-  const [influenceFilter, setInfluenceFilter] = React.useState<Set<Influence>>(new Set());
-  const [citations, setCitations] = React.useState<MemoryCitation[] | null>(null);
+  const [complianceFilter, setComplianceFilter] = React.useState<
+    Compliance | "ALL"
+  >("ALL");
+  const [influenceFilter, setInfluenceFilter] = React.useState<Set<Influence>>(
+    new Set(),
+  );
+  const [citations, setCitations] = React.useState<MemoryCitation[] | null>(
+    null,
+  );
   // Pre-submit validation error (blank id) vs. a failed lookup are rendered
   // differently — validationError never coexists with a search result.
-  const [validationError, setValidationError] = React.useState<string | null>(null);
+  const [validationError, setValidationError] = React.useState<string | null>(
+    null,
+  );
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [hasSearched, setHasSearched] = React.useState(false);
@@ -143,7 +151,9 @@ export function MemoryCitationsPanel({
         workspaceSlug,
         executionId: trimmed,
         ...(complianceFilter !== "ALL" ? { compliance: complianceFilter } : {}),
-        ...(influenceFilter.size > 0 ? { influenceIn: Array.from(influenceFilter) } : {}),
+        ...(influenceFilter.size > 0
+          ? { influenceIn: Array.from(influenceFilter) }
+          : {}),
       });
       setHasSearched(true);
       if (result.ok) {
@@ -161,19 +171,26 @@ export function MemoryCitationsPanel({
     runSearch();
   }
 
-  const violationCount = citations?.filter((c) => c.compliance === "VIOLATION").length ?? 0;
+  const violationCount =
+    citations?.filter((c) => c.compliance === "VIOLATION").length ?? 0;
 
   return (
-    <section aria-labelledby="memory-citations-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="memory-citations-heading"
+      className="flex flex-col gap-4"
+    >
       <div className="flex items-center gap-2">
         <Quote className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h2 id="memory-citations-heading" className="text-sm font-semibold text-foreground">
+        <h2
+          id="memory-citations-heading"
+          className="text-sm font-semibold text-foreground"
+        >
           Memory Citations
         </h2>
       </div>
       <p className="text-xs text-muted-foreground">
-        Look up an execution to see which memories it cited, how much each one shaped the
-        outcome, and any rule violations recorded against them.
+        Look up an execution to see which memories it cited, how much each one
+        shaped the outcome, and any rule violations recorded against them.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
@@ -214,7 +231,11 @@ export function MemoryCitationsPanel({
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-foreground">Influence</span>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by influence">
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="group"
+            aria-label="Filter by influence"
+          >
             {(Object.keys(INFLUENCE_CONFIG) as Influence[]).map((influence) => {
               const active = influenceFilter.has(influence);
               return (
@@ -258,8 +279,8 @@ export function MemoryCitationsPanel({
       {violationCount > 0 && (
         <div className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-400">
           <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-          {violationCount} rule violation{violationCount === 1 ? "" : "s"} recorded in this
-          execution.
+          {violationCount} rule violation{violationCount === 1 ? "" : "s"}{" "}
+          recorded in this execution.
         </div>
       )}
 
@@ -280,7 +301,11 @@ export function MemoryCitationsPanel({
       )}
 
       {searchError && (
-        <ErrorState title="Failed to load citations" description={searchError} retry={runSearch} />
+        <ErrorState
+          title="Failed to load citations"
+          description={searchError}
+          retry={runSearch}
+        />
       )}
 
       {citations && citations.length > 0 && (
@@ -315,7 +340,11 @@ export function MemoryCitationsPanel({
                 </TableCell>
                 <TableCell className="max-w-[20rem]">
                   {citation.agentRationale ? (
-                    <TruncatedText text={citation.agentRationale} lines={1} markdown={false} />
+                    <TruncatedText
+                      text={citation.agentRationale}
+                      lines={1}
+                      markdown={false}
+                    />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}

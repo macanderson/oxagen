@@ -21,7 +21,9 @@ import type {
   ResolvedTierCatalog,
   Vendor,
 } from "@oxagen/ai/catalog";
+import { postureForModel } from "@oxagen/ai/posture";
 import { Button } from "@/components/ui/button";
+import { PostureBadgeGroup } from "@/components/ai/posture-badges";
 import {
   Menu,
   MenuTrigger,
@@ -48,7 +50,11 @@ import {
   type ModelStateSeed,
   type WorkspaceBudgetGovernance,
 } from "./model-state";
-export { defaultModelState, buildSeededModelState, applyWorkspaceBudgetGovernance };
+export {
+  defaultModelState,
+  buildSeededModelState,
+  applyWorkspaceBudgetGovernance,
+};
 export type { ComposerModelState, ModelStateSeed, WorkspaceBudgetGovernance };
 
 // ─── Vendor indicator tile ────────────────────────────────────────────────────
@@ -65,6 +71,33 @@ function VendorTile({ vendor }: { vendor: Vendor }) {
   );
 }
 
+// ─── Provider capability posture badges ───────────────────────────────────────
+//
+// Sourced from @oxagen/ai/posture via the shared <PostureBadgeGroup> (see
+// apps/app/src/components/ai/posture-badges.tsx for the full rationale and
+// badge styling contract). Rendered per model row, not per vendor group:
+// each row already carries the model's own vendor tile, release date, and
+// capability chips, so the posture strip reuses that same anchor rather than
+// introducing a second vendor-grouped section this flyout doesn't otherwise
+// have.
+
+/** The posture strip for a single gateway model row. */
+function ModelPostureBadges({
+  modelId,
+  vendorLabel,
+}: {
+  modelId: string;
+  vendorLabel: string;
+}) {
+  return (
+    <PostureBadgeGroup
+      posture={postureForModel(modelId)}
+      vendorLabel={vendorLabel}
+      className="mt-1"
+    />
+  );
+}
+
 // ─── "Other Models" flyout list ───────────────────────────────────────────────
 
 interface OtherModelsListProps {
@@ -73,7 +106,11 @@ interface OtherModelsListProps {
   onSelect: (id: string) => void;
 }
 
-function OtherModelsList({ generate, activeModelId, onSelect }: OtherModelsListProps) {
+function OtherModelsList({
+  generate,
+  activeModelId,
+  onSelect,
+}: OtherModelsListProps) {
   return (
     <div className="max-h-80 overflow-y-auto py-1">
       {gatewayModels.map((m) => {
@@ -126,6 +163,10 @@ function OtherModelsList({ generate, activeModelId, onSelect }: OtherModelsListP
                   </span>
                 ))}
               </span>
+              <ModelPostureBadges
+                modelId={m.id}
+                vendorLabel={vendorLabels[m.vendor]}
+              />
             </span>
           </button>
         );
@@ -142,7 +183,11 @@ export interface ModelPickerProps {
   modelConfig: ResolvedTierCatalog;
 }
 
-export function ModelPicker({ value, onChange, modelConfig }: ModelPickerProps) {
+export function ModelPicker({
+  value,
+  onChange,
+  modelConfig,
+}: ModelPickerProps) {
   // Compute the display label for the trigger button.
   const triggerLabel = React.useMemo<string>(() => {
     if (value.generate === null) {
@@ -163,11 +208,12 @@ export function ModelPicker({ value, onChange, modelConfig }: ModelPickerProps) 
   }, [value]);
 
   // Resolved tier config for the current generate mode.
-  const tierMap = value.generate === "image"
-    ? modelConfig.image
-    : value.generate === "video"
-      ? modelConfig.video
-      : modelConfig.text;
+  const tierMap =
+    value.generate === "image"
+      ? modelConfig.image
+      : value.generate === "video"
+        ? modelConfig.video
+        : modelConfig.text;
 
   const panelHeader =
     value.generate === "image"
@@ -215,11 +261,7 @@ export function ModelPicker({ value, onChange, modelConfig }: ModelPickerProps) 
         <ChevronDown className="h-3 w-3 text-muted-foreground" />
       </MenuTrigger>
 
-      <MenuPopup
-        sideOffset={8}
-        align="start"
-        className="w-72 p-0"
-      >
+      <MenuPopup sideOffset={8} align="start" className="w-72 p-0">
         {/* Header */}
         <MenuGroupLabel className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
           {panelHeader}
@@ -227,59 +269,67 @@ export function ModelPicker({ value, onChange, modelConfig }: ModelPickerProps) 
 
         <div className="p-1">
           {/* Primary tier list */}
-          {value.generate === null ? (
-            // Text tiers
-            TEXT_TIERS.map((t) => {
-              const resolvedId = modelConfig.text[t.id];
-              const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
-              const isActive = value.model === null && value.tier === t.id;
+          {value.generate === null
+            ? // Text tiers
+              TEXT_TIERS.map((t) => {
+                const resolvedId = modelConfig.text[t.id];
+                const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
+                const isActive = value.model === null && value.tier === t.id;
 
-              return (
-                <MenuItem
-                  key={t.id}
-                  onClick={() => selectTextTier(t.id)}
-                  className="flex-col items-start gap-0 px-3 py-2"
-                >
-                  <span className="flex w-full items-center gap-1.5">
-                    <span className="flex-1 text-sm font-medium">{t.name}</span>
-                    {isActive && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    )}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">{t.blurb}</span>
-                  <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
-                    {resolvedName}
-                  </span>
-                </MenuItem>
-              );
-            })
-          ) : (
-            // Media tiers (image or video)
-            MEDIA_TIERS.map((t) => {
-              const resolvedId = (tierMap as Record<string, string | undefined>)[t.id] ?? t.id;
-              const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
-              const isActive = value.mediaModel === null && value.mediaTier === t.id;
+                return (
+                  <MenuItem
+                    key={t.id}
+                    onClick={() => selectTextTier(t.id)}
+                    className="flex-col items-start gap-0 px-3 py-2"
+                  >
+                    <span className="flex w-full items-center gap-1.5">
+                      <span className="flex-1 text-sm font-medium">
+                        {t.name}
+                      </span>
+                      {isActive && (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t.blurb}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
+                      {resolvedName}
+                    </span>
+                  </MenuItem>
+                );
+              })
+            : // Media tiers (image or video)
+              MEDIA_TIERS.map((t) => {
+                const resolvedId =
+                  (tierMap as Record<string, string | undefined>)[t.id] ?? t.id;
+                const resolvedName = getModel(resolvedId)?.name ?? resolvedId;
+                const isActive =
+                  value.mediaModel === null && value.mediaTier === t.id;
 
-              return (
-                <MenuItem
-                  key={t.id}
-                  onClick={() => selectMediaTier(t.id)}
-                  className="flex-col items-start gap-0 px-3 py-2"
-                >
-                  <span className="flex w-full items-center gap-1.5">
-                    <span className="flex-1 text-sm font-medium">{t.name}</span>
-                    {isActive && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    )}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">{t.blurb}</span>
-                  <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
-                    {resolvedName}
-                  </span>
-                </MenuItem>
-              );
-            })
-          )}
+                return (
+                  <MenuItem
+                    key={t.id}
+                    onClick={() => selectMediaTier(t.id)}
+                    className="flex-col items-start gap-0 px-3 py-2"
+                  >
+                    <span className="flex w-full items-center gap-1.5">
+                      <span className="flex-1 text-sm font-medium">
+                        {t.name}
+                      </span>
+                      {isActive && (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t.blurb}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground/70">
+                      {resolvedName}
+                    </span>
+                  </MenuItem>
+                );
+              })}
 
           <MenuSeparator />
 

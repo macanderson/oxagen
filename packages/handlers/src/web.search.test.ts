@@ -12,19 +12,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted stubs ─────────────────────────────────────────────────────────────
 
-const { mockWebSearch, mockSend } = vi.hoisted(() => ({
+const { mockWebSearch } = vi.hoisted(() => ({
   mockWebSearch: vi.fn(),
-  mockSend: vi.fn(),
 }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock("@oxagen/web", () => ({
   webSearch: mockWebSearch,
-}));
-
-vi.mock("./event-client", () => ({
-  eventClient: { send: mockSend },
 }));
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
@@ -62,7 +57,6 @@ const sampleResults = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockSend.mockResolvedValue(undefined);
 });
 
 // ── Happy path ────────────────────────────────────────────────────────────────
@@ -141,78 +135,6 @@ describe("webSearchHandler — happy path", () => {
   });
 });
 
-// ── Knowledge-graph ingestion event ───────────────────────────────────────────
-
-describe("webSearchHandler — knowledge-graph ingestion", () => {
-  it("emits web/search.completed with the query and hits when results exist", async () => {
-    mockWebSearch.mockResolvedValueOnce({
-      results: sampleResults,
-      totalResults: 2,
-      searchId: "tvly-ingest",
-    });
-
-    await webSearchHandler(
-      { query: "ai memory startups", maxResults: 5, searchDepth: "basic" },
-      validCtx,
-    );
-
-    expect(mockSend).toHaveBeenCalledOnce();
-    const payload = mockSend.mock.calls[0]![0] as {
-      name: string;
-      data: {
-        orgId: string;
-        workspaceId: string;
-        userId: string | null;
-        query: string;
-        results: Array<{ title: string; url: string; content: string }>;
-      };
-    };
-    expect(payload.name).toBe("web/search.completed");
-    expect(payload.data.orgId).toBe("org-1");
-    expect(payload.data.workspaceId).toBe("ws-1");
-    expect(payload.data.userId).toBe("u-1");
-    expect(payload.data.query).toBe("ai memory startups");
-    expect(payload.data.results).toHaveLength(2);
-    expect(payload.data.results[0]).toEqual({
-      title: "Example Domain",
-      url: "https://example.com",
-      content: "This domain is for use in illustrative examples.",
-    });
-  });
-
-  it("does not emit the ingestion event when the search returns no hits", async () => {
-    mockWebSearch.mockResolvedValueOnce({
-      results: [],
-      totalResults: 0,
-      searchId: "tvly-empty",
-    });
-
-    await webSearchHandler(
-      { query: "obscure query", maxResults: 5, searchDepth: "basic" },
-      validCtx,
-    );
-
-    expect(mockSend).not.toHaveBeenCalled();
-  });
-
-  it("still returns results when enqueueing the ingestion event fails (best-effort)", async () => {
-    mockWebSearch.mockResolvedValueOnce({
-      results: sampleResults,
-      totalResults: 2,
-      searchId: "tvly-send-fail",
-    });
-    mockSend.mockRejectedValueOnce(new Error("inngest unavailable"));
-
-    const result = await webSearchHandler(
-      { query: "resilient search", maxResults: 5, searchDepth: "basic" },
-      validCtx,
-    );
-
-    expect(result.totalResults).toBe(2);
-    expect(result.results).toHaveLength(2);
-  });
-});
-
 // ── Default value forwarding ──────────────────────────────────────────────────
 
 describe("webSearchHandler — default forwarding", () => {
@@ -243,7 +165,9 @@ describe("webSearchHandler — default forwarding", () => {
 describe("webSearchHandler — error propagation", () => {
   it("propagates errors from webSearch (e.g. missing API key)", async () => {
     mockWebSearch.mockRejectedValueOnce(
-      new Error("web.search: TAVILY_API_KEY environment variable is required but not set"),
+      new Error(
+        "web.search: TAVILY_API_KEY environment variable is required but not set",
+      ),
     );
 
     await expect(

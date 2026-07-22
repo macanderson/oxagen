@@ -17,7 +17,7 @@ export const skillEditHandler: CapabilityHandler<typeof skillEdit> = async (
 
   const result = await createNewSkillVersion({
     skillPublicId: input.skill_id,
-    body: input.body,
+    content: input.content,
     changeSummary: input.change_summary,
     activate: input.activate,
     orgId: ctx.orgId,

@@ -10,11 +10,13 @@ import {
   uuid,
   numeric,
   bigint,
+  smallint,
 } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
 import {
+  appendOnlyAuditMixin,
   auditMixin,
   citext,
   idMixin,
@@ -224,6 +226,12 @@ export const skillVersions = agentSchema.table(
     changeSummary: text("change_summary"),
     // checksum: SHA-256 hex over body — immutability contract (see agent_versions).
     checksum: text("checksum"),
+    // Markdown → TOML backfill provenance. NULL means "never converted", which
+    // is what makes the backfill idempotent. See migration
+    // 20260807090000_skill_versions_legacy_body.sql.
+    legacyBody: text("legacy_body"),
+    legacyBodyChecksum: text("legacy_body_checksum"),
+    migratedAt: timestamp("migrated_at", { withTimezone: true }),
   },
   (t) => ({
     skillIdx: index("skill_versions_skill_idx").on(t.skillId),
@@ -419,10 +427,6 @@ export const agentExecutions = agentSchema.table(
     estimatedCostUsd: numeric("estimated_cost_usd", {
       precision: 10,
       scale: 6,
-    }),
-    syncedToGraphAt: timestamp("synced_to_graph_at", {
-      withTimezone: true,
-      mode: "date",
     }),
     // AgentInstance shape (agent-schema.ts §4): self-reference for subagent/A2A
     // lineage (app-enforced, no FK).
@@ -743,10 +747,8 @@ export const a2aTasks = agentSchema.table(
 // ── File locks — the transactional lock authority (ADR-021 §5) ──────────────
 //
 // File locks are mutual-exclusion state, so Postgres is the source of truth,
-// NOT Neo4j: the graph sync path is asynchronous (ADR-018), so a lock "written
-// to the graph" is invisible to a concurrent agent for the duration of sync
-// lag — fatal for mutual exclusion. Neo4j only carries an async LINEAGE
-// projection of these rows (packages/inngest-functions/agent.project-file-lock-to-graph).
+// NOT Neo4j: eventual graph projection cannot provide mutual exclusion. These
+// transactional rows are the sole file-lock authority.
 //
 // This extends the Inngest claim/lease mechanism (subagent_runs / execution
 // steps above) to file-path granularity rather than inventing a second lock
@@ -760,9 +762,8 @@ export const fileLocks = agentSchema.table(
     ...idMixin("flk"),
     ...auditMixin(),
     ...orgScopeMixin(),
-    // Normalized resource identity — a repo-relative path (local CLI) or the
-    // SourceFile naturalKey toNaturalKey(path, owner, repo) produces (platform),
-    // so a locked file and its lineage projection key off the identical node.
+    // Normalized resource identity — a repo-relative path (local CLI) or a
+    // repository-scoped github:{owner}/{repo}:{path} key (platform).
     resourceKey: text("resource_key").notNull(),
     // Identity of the lock holder — an agent/session/mission/fleet-task id. Two
     // concurrent holders MUST pass different values to see each other as
@@ -884,6 +885,65 @@ export const agentRuns = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+
+    // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
+    //
+    // The V1/V2 discriminant. Existing rows backfill to 1 via the column
+    // default; a governed V2 admission writes 2 and must then supply the
+    // COMPLETE typed set below (agent_runs_v2_identity_check). Every column
+    // here is nullable at the column level on purpose: `agent_runs` already
+    // holds V1 history that has no trusted principal, repository, or retention
+    // binding, and fabricating one for a historical row is exactly what the
+    // expand-only rule forbids. Completeness is a conditional CHECK, not a
+    // column-level NOT NULL.
+    //
+    // These are duplicated OUT of `spec` deliberately: security queries and the
+    // worker's row/spec identity comparison must not depend on untyped JSON
+    // extraction (spec.md §"Trusted run and attempt identity").
+    specVersion: integer("spec_version").notNull().default(1),
+    runKind: text("run_kind"),
+    // RFC 8785 canonical digest of the serialized RunSpecV2.
+    specDigest: text("spec_digest"),
+    // Actor binding: the authenticated human who delegated the run and the
+    // deployed-agent principal acting for them. NOT agents.parentUserId.
+    initiatingPrincipalId: uuid("initiating_principal_id"),
+    agentPrincipalId: uuid("agent_principal_id"),
+    agentId: uuid("agent_id"),
+    agentVersionId: uuid("agent_version_id"),
+    agentVersionChecksum: text("agent_version_checksum"),
+    // Digest-addressed pinned grant ceiling (iam.authorization_snapshots).
+    authorizationSnapshotId: uuid("authorization_snapshot_id"),
+    // Child runs narrow their parent's ceiling; a root run is null.
+    parentRunId: uuid("parent_run_id"),
+    // Immutable repository binding plus the copies admission resolved from it.
+    // The copies are not redundancy for its own sake: the binding row is
+    // versioned, and the run must prove which version it saw.
+    repositoryBindingId: uuid("repository_binding_id"),
+    repositoryProvider: text("repository_provider"),
+    providerRepositoryId: text("provider_repository_id"),
+    repositoryConnectionId: uuid("repository_connection_id"),
+    configuredDefaultRef: text("configured_default_ref"),
+    baseCommitSha: text("base_commit_sha"),
+    baseTreeSha: text("base_tree_sha"),
+    // Immutable retention-policy version pinned at admission — both the public
+    // identity and its canonical digest, so a swapped row is detectable.
+    retentionPolicyId: uuid("retention_policy_id"),
+    retentionPolicyDigest: text("retention_policy_digest"),
+    // Trusted engine policy. `attempts` above stays the V1 counter; V2 bounds
+    // retries against this pinned ceiling.
+    maxAttempts: integer("max_attempts"),
+
+    // ── Operational V2 pointers (mutable; see the immutability trigger) ──────
+    // The attempt currently holding a live lease, null between attempts.
+    activeAttemptId: uuid("active_attempt_id"),
+    // Newest committed checkpoint, for successor restore.
+    latestCheckpointId: uuid("latest_checkpoint_id"),
+    // Number of attempts ever created for this run, bounded by max_attempts.
+    attemptCount: integer("attempt_count").notNull().default(0),
+    // Next run-global event sequence to allocate. PostgreSQL-assigned inside
+    // the append transaction (not a SEQUENCE object — the allocation must roll
+    // back with the append). Monotonic ACROSS attempts, unlike attempt_seq.
+    nextRunSeq: bigint("next_run_seq", { mode: "number" }).notNull().default(1),
   },
   (t) => ({
     orgIdx: index("agent_runs_org_idx").on(t.orgId, t.workspaceId),
@@ -893,6 +953,19 @@ export const agentRuns = agentSchema.table(
     claimIdx: index("agent_runs_claim_idx")
       .on(t.status, t.createdAt)
       .where(sql`${t.status} IN ('pending', 'running')`),
+    // V2 claim dispatch: the V2 worker path claims only spec_version = 2 rows,
+    // and the V1 compatibility path only spec_version = 1, so neither scans
+    // the other's queue while both drain.
+    v2ClaimIdx: index("agent_runs_v2_claim_idx")
+      .on(t.status, t.createdAt)
+      .where(sql`spec_version = 2 AND status IN ('pending', 'running')`),
+    // Security lookups by trusted identity (who ran what, under which snapshot).
+    v2ActorIdx: index("agent_runs_v2_actor_idx")
+      .on(t.orgId, t.workspaceId, t.initiatingPrincipalId, t.agentPrincipalId)
+      .where(sql`spec_version = 2`),
+    parentRunIdx: index("agent_runs_parent_run_idx")
+      .on(t.parentRunId)
+      .where(sql`parent_run_id IS NOT NULL`),
     surfaceCheck: check(
       "agent_runs_surface_check",
       sql`${t.surface} IN ('chat', 'api-chat', 'a2a', 'repo-edit')`,
@@ -900,6 +973,86 @@ export const agentRuns = agentSchema.table(
     statusCheck: check(
       "agent_runs_status_check",
       sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
+    specVersionCheck: check(
+      "agent_runs_spec_version_check",
+      sql`${t.specVersion} IN (1, 2)`,
+    ),
+    // The V1/V2 discriminant. A preserved V1 row carries NONE of the typed V2
+    // identity; a V2 row carries ALL of it. There is no partially-bound run.
+    v2IdentityCheck: check(
+      "agent_runs_v2_identity_check",
+      sql`(
+        ${t.specVersion} = 1
+        AND ${t.runKind} IS NULL
+        AND ${t.specDigest} IS NULL
+        AND ${t.initiatingPrincipalId} IS NULL
+        AND ${t.agentPrincipalId} IS NULL
+        AND ${t.agentId} IS NULL
+        AND ${t.agentVersionId} IS NULL
+        AND ${t.agentVersionChecksum} IS NULL
+        AND ${t.authorizationSnapshotId} IS NULL
+        AND ${t.repositoryBindingId} IS NULL
+        AND ${t.repositoryProvider} IS NULL
+        AND ${t.providerRepositoryId} IS NULL
+        AND ${t.repositoryConnectionId} IS NULL
+        AND ${t.configuredDefaultRef} IS NULL
+        AND ${t.baseCommitSha} IS NULL
+        AND ${t.baseTreeSha} IS NULL
+        AND ${t.retentionPolicyId} IS NULL
+        AND ${t.retentionPolicyDigest} IS NULL
+        AND ${t.maxAttempts} IS NULL
+      ) OR (
+        ${t.specVersion} = 2
+        AND ${t.runKind} IS NOT NULL
+        AND ${t.specDigest} IS NOT NULL
+        AND ${t.initiatingPrincipalId} IS NOT NULL
+        AND ${t.agentPrincipalId} IS NOT NULL
+        AND ${t.agentId} IS NOT NULL
+        AND ${t.agentVersionId} IS NOT NULL
+        AND ${t.agentVersionChecksum} IS NOT NULL
+        AND ${t.authorizationSnapshotId} IS NOT NULL
+        AND ${t.repositoryBindingId} IS NOT NULL
+        AND ${t.repositoryProvider} IS NOT NULL
+        AND ${t.providerRepositoryId} IS NOT NULL
+        AND ${t.repositoryConnectionId} IS NOT NULL
+        AND ${t.configuredDefaultRef} IS NOT NULL
+        AND ${t.baseCommitSha} IS NOT NULL
+        AND ${t.baseTreeSha} IS NOT NULL
+        AND ${t.retentionPolicyId} IS NOT NULL
+        AND ${t.retentionPolicyDigest} IS NOT NULL
+        AND ${t.maxAttempts} IS NOT NULL
+      )`,
+    ),
+    runKindCheck: check(
+      "agent_runs_run_kind_check",
+      sql`${t.runKind} IS NULL OR ${t.runKind} IN ('general', 'repo_edit')`,
+    ),
+    specDigestCheck: check(
+      "agent_runs_spec_digest_check",
+      sql`${t.specDigest} IS NULL OR ${t.specDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    retentionDigestCheck: check(
+      "agent_runs_retention_digest_check",
+      sql`${t.retentionPolicyDigest} IS NULL OR ${t.retentionPolicyDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    maxAttemptsCheck: check(
+      "agent_runs_max_attempts_check",
+      sql`${t.maxAttempts} IS NULL OR ${t.maxAttempts} > 0`,
+    ),
+    attemptCountCheck: check(
+      "agent_runs_attempt_count_check",
+      sql`${t.attemptCount} >= 0 AND (${t.maxAttempts} IS NULL OR ${t.attemptCount} <= ${t.maxAttempts})`,
+    ),
+    nextRunSeqCheck: check(
+      "agent_runs_next_run_seq_check",
+      sql`${t.nextRunSeq} >= 1`,
+    ),
+    // A run may not be its own parent — the cheapest half of cycle prevention
+    // (deeper cycles are prevented by the snapshot-narrowing rule in IAM).
+    parentRunCheck: check(
+      "agent_runs_parent_run_check",
+      sql`${t.parentRunId} IS NULL OR ${t.parentRunId} <> ${t.id}`,
     ),
   }),
 );
@@ -914,6 +1067,15 @@ export const agentRuns = agentSchema.table(
 // the same transaction as the checkpoint write (`UNIQUE(run_id, seq)` below
 // turns a racing double-append into a constraint violation, not silent
 // duplication).
+// V2 (docs/specs/run-evidence-ingress) adds a second record shape to this same
+// table rather than a second log: `event_record_version` is the discriminant, 1
+// for every preserved legacy row and 2 for a fenced-attempt event. The legacy
+// `seq/type/payload` columns became nullable so a V2 row can leave them empty,
+// and the old full `UNIQUE(run_id, seq)` was replaced by three PARTIAL unique
+// indexes — V1 `(run_id, seq)`, V2 `(run_id, run_seq)`, V2 `(attempt_id,
+// attempt_seq)` — so a V2 row can never be read as legacy and vice versa. A
+// leftover full unique on `(run_id, seq)` would defeat the discriminant, which
+// is why the migration drops it explicitly.
 export const agentRunEvents = agentSchema.table(
   "agent_run_events",
   {
@@ -922,15 +1084,502 @@ export const agentRunEvents = agentSchema.table(
     // No cross-schema FK to agent_runs — app-enforced per CLAUDE.md storage
     // rules (same convention as fileLocks.executionId etc. above).
     runId: uuid("run_id").notNull(),
-    seq: integer("seq").notNull(),
-    type: text("type").notNull(),
-    payload: jsonb("payload").notNull(),
+    // 1 = legacy run-global record, 2 = fenced attempt record. Existing rows
+    // backfill to 1 through the column default.
+    eventRecordVersion: smallint("event_record_version").notNull().default(1),
+    // ── V1 legacy columns (required for V1, NULL for V2) ─────────────────────
+    seq: integer("seq"),
+    type: text("type"),
+    payload: jsonb("payload"),
+    // `created_at` is the RECORDED time for both record versions — the instant
+    // Postgres accepted the append. V2 additionally carries the producer's
+    // `observed_at`; the two differ by transport and buffering latency and the
+    // event digest commits to the observed one.
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+
+    // ── V2 fenced-attempt columns (required for V2, NULL for V1) ─────────────
+    // The immutable attempt this event belongs to. Without it a reclaimed run's
+    // events interleave across executions with no stable identity.
+    attemptId: uuid("attempt_id"),
+    // Monotonic across attempts, allocated from agent_runs.next_run_seq inside
+    // the append transaction. Drives resumable SSE subscriptions.
+    runSeq: bigint("run_seq", { mode: "number" }),
+    // Producer-assigned, contiguous, and reset to 1 for each new attempt.
+    // Drives unambiguous replay.
+    attemptSeq: integer("attempt_seq"),
+    eventSchemaVersion: text("event_schema_version"),
+    eventType: text("event_type"),
+    // One of the nine evidence stages (EVIDENCE_STAGES in
+    // schema/run-evidence-foundation.ts).
+    stage: text("stage"),
+    // Digest of the canonical payload bytes, whether inline or encrypted.
+    payloadDigest: text("payload_digest"),
+    // Digest over (attempt_seq, schema, type, stage, payload_digest,
+    // observed_at). Identical sequence + identical digest is idempotent;
+    // identical sequence + different digest is a security event.
+    eventDigest: text("event_digest"),
+    // EXACTLY ONE of these two carries the body. Inline is allow-listed receipt
+    // metadata only; anything large or sensitive is an encrypted blob reference
+    // (an `evb_` public id — app-enforced text, the blob index lands in the
+    // evidence-ledger PR).
+    payloadInline: jsonb("payload_inline"),
+    encryptedPayloadRef: text("encrypted_payload_ref"),
+    observedAt: timestamp("observed_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // Partial: legacy rows only. Replaces the former full
+    // UNIQUE(run_id, seq) constraint, which would otherwise collide every V2
+    // row on (run_id, NULL) semantics and blur the discriminant.
+    v1RunSeqUniq: uniqueIndex("agent_run_events_v1_run_seq_uq")
+      .on(t.runId, t.seq)
+      .where(sql`event_record_version = 1`),
+    v2RunSeqUniq: uniqueIndex("agent_run_events_v2_run_seq_uq")
+      .on(t.runId, t.runSeq)
+      .where(sql`event_record_version = 2`),
+    v2AttemptSeqUniq: uniqueIndex("agent_run_events_v2_attempt_seq_uq")
+      .on(t.attemptId, t.attemptSeq)
+      .where(sql`event_record_version = 2`),
+    orgIdx: index("agent_run_events_org_idx").on(t.orgId, t.workspaceId),
+    recordVersionCheck: check(
+      "agent_run_events_record_version_check",
+      sql`${t.eventRecordVersion} IN (1, 2)`,
+    ),
+    // The discriminant, spelled out. A V1 row is exactly the legacy shape with
+    // every V2 field null; a V2 row is exactly the attempt shape with every
+    // legacy field null. Nothing in between is representable.
+    recordShapeCheck: check(
+      "agent_run_events_record_shape_check",
+      sql`(
+        ${t.eventRecordVersion} = 1
+        AND ${t.seq} IS NOT NULL
+        AND ${t.type} IS NOT NULL
+        AND ${t.payload} IS NOT NULL
+        AND ${t.attemptId} IS NULL
+        AND ${t.runSeq} IS NULL
+        AND ${t.attemptSeq} IS NULL
+        AND ${t.eventSchemaVersion} IS NULL
+        AND ${t.eventType} IS NULL
+        AND ${t.stage} IS NULL
+        AND ${t.payloadDigest} IS NULL
+        AND ${t.eventDigest} IS NULL
+        AND ${t.payloadInline} IS NULL
+        AND ${t.encryptedPayloadRef} IS NULL
+        AND ${t.observedAt} IS NULL
+      ) OR (
+        ${t.eventRecordVersion} = 2
+        AND ${t.seq} IS NULL
+        AND ${t.type} IS NULL
+        AND ${t.payload} IS NULL
+        AND ${t.attemptId} IS NOT NULL
+        AND ${t.runSeq} IS NOT NULL
+        AND ${t.attemptSeq} IS NOT NULL
+        AND ${t.eventSchemaVersion} IS NOT NULL
+        AND ${t.eventType} IS NOT NULL
+        AND ${t.stage} IS NOT NULL
+        AND ${t.payloadDigest} IS NOT NULL
+        AND ${t.eventDigest} IS NOT NULL
+        AND ${t.observedAt} IS NOT NULL
+        AND (${t.payloadInline} IS NULL) <> (${t.encryptedPayloadRef} IS NULL)
+      )`,
+    ),
+    stageCheck: check(
+      "agent_run_events_stage_check",
+      sql`${t.stage} IS NULL OR ${t.stage} IN ('admission', 'checkout', 'context', 'model', 'tool', 'change', 'verification', 'provider_publish', 'terminal')`,
+    ),
+    seqBoundsCheck: check(
+      "agent_run_events_seq_bounds_check",
+      sql`(${t.runSeq} IS NULL OR ${t.runSeq} >= 1) AND (${t.attemptSeq} IS NULL OR ${t.attemptSeq} >= 1) AND (${t.seq} IS NULL OR ${t.seq} >= 1)`,
+    ),
+    digestCheck: check(
+      "agent_run_events_digest_check",
+      sql`(${t.payloadDigest} IS NULL OR ${t.payloadDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.eventDigest} IS NULL OR ${t.eventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+  }),
+);
+
+// ── Immutable attempt identity (docs/specs/run-evidence-ingress) ─────────────
+//
+// One row per successful V2 worker claim, created BEFORE any model or tool
+// work. `arat_` is the public identity every API boundary and evidence receipt
+// uses. The resolved engine name/version/build digest is pinned here rather
+// than read back from a live worker, so evidence names the exact binary that
+// executed. A successor that restores an earlier attempt's checkpoint records
+// the complete restore tuple and keeps its OWN attempt identity — attempt IDs
+// are never reused (spec.md §"Attempt identity").
+//
+// Immutable: append-only audit columns and the migration revokes UPDATE/DELETE.
+export const agentRunAttempts = agentSchema.table(
+  "agent_run_attempts",
+  {
+    ...idMixin("arat"),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    runId: uuid("run_id").notNull(),
+    // 1-based, dense, and unique per run — the retry counter the pinned
+    // max_attempts ceiling bounds.
+    attemptNumber: integer("attempt_number").notNull(),
+    // Identity of the claiming worker process (same vocabulary as
+    // agent_runs.claimed_by).
+    workerId: text("worker_id").notNull(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    engineName: text("engine_name").notNull(),
+    engineVersion: text("engine_version").notNull(),
+    // Build or container-image digest of the engine that actually ran.
+    engineBuildDigest: text("engine_build_digest").notNull(),
+    // ── Restore tuple: all four present, or all four absent ──────────────────
+    resumedFromAttemptId: uuid("resumed_from_attempt_id"),
+    resumedFromAttemptPublicId: citext("resumed_from_attempt_public_id"),
+    restoredCheckpointId: uuid("restored_checkpoint_id"),
+    restoredCheckpointDigest: text("restored_checkpoint_digest"),
+  },
+  (t) => ({
+    runAttemptUniq: uniqueIndex("agent_run_attempts_run_attempt_uq").on(
+      t.runId,
+      t.attemptNumber,
+    ),
+    orgIdx: index("agent_run_attempts_org_idx").on(t.orgId, t.workspaceId),
+    runIdx: index("agent_run_attempts_run_idx").on(t.runId),
+    attemptNumberCheck: check(
+      "agent_run_attempts_attempt_number_check",
+      sql`${t.attemptNumber} >= 1`,
+    ),
+    // A partial restore reference cannot prove provenance, so the tuple is
+    // all-or-nothing.
+    restoreTupleCheck: check(
+      "agent_run_attempts_restore_tuple_check",
+      sql`(
+        ${t.resumedFromAttemptId} IS NULL
+        AND ${t.resumedFromAttemptPublicId} IS NULL
+        AND ${t.restoredCheckpointId} IS NULL
+        AND ${t.restoredCheckpointDigest} IS NULL
+      ) OR (
+        ${t.resumedFromAttemptId} IS NOT NULL
+        AND ${t.resumedFromAttemptPublicId} IS NOT NULL
+        AND ${t.restoredCheckpointId} IS NOT NULL
+        AND ${t.restoredCheckpointDigest} IS NOT NULL
+      )`,
+    ),
+    // A successor may never restore from itself.
+    restoreSelfCheck: check(
+      "agent_run_attempts_restore_self_check",
+      sql`${t.resumedFromAttemptId} IS NULL OR ${t.resumedFromAttemptId} <> ${t.id}`,
+    ),
+    digestCheck: check(
+      "agent_run_attempts_digest_check",
+      sql`${t.engineBuildDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.restoredCheckpointDigest} IS NULL OR ${t.restoredCheckpointDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+  }),
+);
+
+// ── Mutable fenced lease (one per attempt) ───────────────────────────────────
+//
+// The ONLY mutable row in the attempt foundation, and the reason the plan calls
+// operational lease state "the exception": renew, append, and seal all update
+// it. It still denies DELETE — a fenced lease is evidence that an attempt lost
+// its claim, not garbage to collect.
+//
+// `lease_epoch` is the fencing token: unique per (run, epoch) and strictly
+// increasing, so a stale worker's late append is rejected at write time exactly
+// like agent.file_lock_fences does for file locks. `fenced_at` is the tombstone
+// the old attempt observes before it may perform any further mutation.
+export const agentRunAttemptLeases = agentSchema.table(
+  "agent_run_attempt_leases",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    attemptId: uuid("attempt_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    // Opaque bearer token the worker echoes on every fenced operation. Never
+    // derived from the attempt id — a leaked attempt id must not grant writes.
+    leaseToken: text("lease_token").notNull(),
+    leaseEpoch: bigint("lease_epoch", { mode: "number" }).notNull(),
+    workerId: text("worker_id").notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    renewedAt: timestamp("renewed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    fencedAt: timestamp("fenced_at", { withTimezone: true, mode: "date" }),
+    fencedReason: text("fenced_reason"),
+    // Advanced in the same transaction as the append, so the lease is the live
+    // pointer a successor and the finalizer both read.
+    lastRunSeq: bigint("last_run_seq", { mode: "number" }),
+    lastAttemptSeq: integer("last_attempt_seq"),
+    eventCount: integer("event_count").notNull().default(0),
+    finalEventDigest: text("final_event_digest"),
+    // Running digest over the ordered (attempt_seq, schema, type,
+    // payload_digest) tuples — the value the seal commits to.
+    eventStreamDigest: text("event_stream_digest"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Exactly one lease per attempt — a second claim must create a new attempt.
+    attemptUniq: uniqueIndex("agent_run_attempt_leases_attempt_uq").on(
+      t.attemptId,
+    ),
+    // The fencing invariant: an epoch is consumed once per run.
+    runEpochUniq: uniqueIndex("agent_run_attempt_leases_run_epoch_uq").on(
+      t.runId,
+      t.leaseEpoch,
+    ),
+    orgIdx: index("agent_run_attempt_leases_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    // Lease-sweeper scan: live (unfenced) leases ordered by expiry. Partial so
+    // it stays proportional to running work, not to history.
+    sweepIdx: index("agent_run_attempt_leases_sweep_idx")
+      .on(t.expiresAt)
+      .where(sql`fenced_at IS NULL`),
+    epochCheck: check(
+      "agent_run_attempt_leases_epoch_check",
+      sql`${t.leaseEpoch} >= 1`,
+    ),
+    fenceCheck: check(
+      "agent_run_attempt_leases_fence_check",
+      sql`(${t.fencedAt} IS NULL AND ${t.fencedReason} IS NULL) OR (${t.fencedAt} IS NOT NULL AND ${t.fencedReason} IS NOT NULL)`,
+    ),
+    eventCountCheck: check(
+      "agent_run_attempt_leases_event_count_check",
+      sql`${t.eventCount} >= 0 AND (${t.eventCount} = 0) = (${t.finalEventDigest} IS NULL)`,
+    ),
+    digestCheck: check(
+      "agent_run_attempt_leases_digest_check",
+      sql`(${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$') AND (${t.eventStreamDigest} IS NULL OR ${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+  }),
+);
+
+// ── Immutable checkpoints ────────────────────────────────────────────────────
+//
+// Written in the SAME transaction as the append it terminates, bound to that
+// final event. Engine state itself is never stored here — it is a tenant-
+// encrypted blob referenced by public id, so a checkpoint row carries identity
+// and digests only.
+//
+// No public id by design: nothing external addresses one checkpoint. What
+// travels is `checkpoint_digest`, which the restoring successor records.
+export const agentRunCheckpoints = agentSchema.table(
+  "agent_run_checkpoints",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    runId: uuid("run_id").notNull(),
+    attemptId: uuid("attempt_id").notNull(),
+    // The final event of the append this checkpoint terminates.
+    eventId: uuid("event_id").notNull(),
+    attemptSeq: integer("attempt_seq").notNull(),
+    runSeq: bigint("run_seq", { mode: "number" }).notNull(),
+    // Version of the engine-state serialization, so a restore can refuse an
+    // incompatible checkpoint rather than mis-parse it.
+    engineStateSchema: text("engine_state_schema").notNull(),
+    checkpointDigest: text("checkpoint_digest").notNull(),
+    // The attempt's stream digest as of this checkpoint — restoring a
+    // checkpoint restores a provable position in the event stream.
+    streamDigest: text("stream_digest").notNull(),
+    // `evb_` public id of the tenant-encrypted engine-state blob.
+    encryptedStateRef: text("encrypted_state_ref").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },
   (t) => ({
-    runSeqUniq: uniqueIndex("agent_run_events_run_seq_uq").on(t.runId, t.seq),
-    orgIdx: index("agent_run_events_org_idx").on(t.orgId, t.workspaceId),
+    attemptSeqUniq: uniqueIndex("agent_run_checkpoints_attempt_seq_uq").on(
+      t.attemptId,
+      t.attemptSeq,
+    ),
+    // One checkpoint per event at most — the append transaction inserts either
+    // zero or one.
+    eventUniq: uniqueIndex("agent_run_checkpoints_event_uq").on(t.eventId),
+    orgIdx: index("agent_run_checkpoints_org_idx").on(t.orgId, t.workspaceId),
+    runSeqIdx: index("agent_run_checkpoints_run_seq_idx").on(t.runId, t.runSeq),
+    seqCheck: check(
+      "agent_run_checkpoints_seq_check",
+      sql`${t.attemptSeq} >= 1 AND ${t.runSeq} >= 1`,
+    ),
+    digestCheck: check(
+      "agent_run_checkpoints_digest_check",
+      sql`${t.checkpointDigest} ~ '^sha256:[0-9a-f]{64}$' AND ${t.streamDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+// ── Immutable attempt seals ──────────────────────────────────────────────────
+//
+// One row per terminated attempt, for EVERY terminal outcome including normal
+// completion — that is what closes the crash window between "finished" and
+// "finalized". A truly zero-event abandoned attempt seals with event_count = 0,
+// a NULL final-event digest, and the canonical empty stream digest; it never
+// invents a terminal event to satisfy the shape.
+export const agentRunAttemptSeals = agentSchema.table(
+  "agent_run_attempt_seals",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    runId: uuid("run_id").notNull(),
+    attemptId: uuid("attempt_id").notNull(),
+    terminalStatus: text("terminal_status").notNull(),
+    reasonCode: text("reason_code"),
+    eventCount: integer("event_count").notNull(),
+    finalRunSeq: bigint("final_run_seq", { mode: "number" }),
+    finalAttemptSeq: integer("final_attempt_seq"),
+    finalEventDigest: text("final_event_digest"),
+    // Always present: the canonical empty-stream digest when event_count = 0.
+    eventStreamDigest: text("event_stream_digest").notNull(),
+    sealerKind: text("sealer_kind").notNull(),
+    sealerWorkerId: text("sealer_worker_id").notNull(),
+    sealedAt: timestamp("sealed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // An attempt seals exactly once — this uniqueness is what makes the
+    // seal/grant/obligation transaction idempotent under duplicate sweeps.
+    attemptUniq: uniqueIndex("agent_run_attempt_seals_attempt_uq").on(
+      t.attemptId,
+    ),
+    orgIdx: index("agent_run_attempt_seals_org_idx").on(t.orgId, t.workspaceId),
+    runIdx: index("agent_run_attempt_seals_run_idx").on(t.runId),
+    terminalStatusCheck: check(
+      "agent_run_attempt_seals_terminal_status_check",
+      sql`${t.terminalStatus} IN ('completed', 'failed', 'cancelled', 'denied', 'abandoned')`,
+    ),
+    sealerKindCheck: check(
+      "agent_run_attempt_seals_sealer_kind_check",
+      sql`${t.sealerKind} IN ('worker', 'reclaimer')`,
+    ),
+    // Zero-event seals carry no final-event evidence; non-zero seals carry all
+    // of it. Anything else is an unprovable claim about the stream.
+    eventEvidenceCheck: check(
+      "agent_run_attempt_seals_event_evidence_check",
+      sql`(
+        ${t.eventCount} = 0
+        AND ${t.finalRunSeq} IS NULL
+        AND ${t.finalAttemptSeq} IS NULL
+        AND ${t.finalEventDigest} IS NULL
+      ) OR (
+        ${t.eventCount} > 0
+        AND ${t.finalRunSeq} IS NOT NULL
+        AND ${t.finalAttemptSeq} IS NOT NULL
+        AND ${t.finalEventDigest} IS NOT NULL
+      )`,
+    ),
+    digestCheck: check(
+      "agent_run_attempt_seals_digest_check",
+      sql`${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+  }),
+);
+
+// ── Immutable one-shot finalization grants ───────────────────────────────────
+//
+// Minted in the SAME transaction as the seal, for every seal. The `afg_` public
+// id is ALSO the evidence envelope's stable `submission_id`, so every retry of
+// the obligation reuses one submission identity instead of forking a new one.
+//
+// It deliberately has NO expiry column: the attempt/seal/digest binding plus
+// one successful consumption are the limiting authority, so a KMS or storage
+// outage can never strand an obligation behind an expired grant (spec.md
+// §"Security and retention rules"). Consumption is recorded by the evidence
+// ledger's grant-use row in the next PR; this table is never updated.
+export const agentRunFinalizationGrants = agentSchema.table(
+  "agent_run_finalization_grants",
+  {
+    ...idMixin("afg"),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    runId: uuid("run_id").notNull(),
+    attemptId: uuid("attempt_id").notNull(),
+    sealId: uuid("seal_id").notNull(),
+    // Copied so the finalizer can build the envelope without a second read.
+    attemptPublicId: citext("attempt_public_id").notNull(),
+    // Constrained to exactly one capability — a grant can never execute tools.
+    capabilityId: text("capability_id")
+      .notNull()
+      .default("ingest_run_evidence"),
+    eventCount: integer("event_count").notNull(),
+    finalEventDigest: text("final_event_digest"),
+    eventStreamDigest: text("event_stream_digest").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    attemptUniq: uniqueIndex("agent_run_finalization_grants_attempt_uq").on(
+      t.attemptId,
+    ),
+    sealUniq: uniqueIndex("agent_run_finalization_grants_seal_uq").on(t.sealId),
+    orgIdx: index("agent_run_finalization_grants_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    capabilityCheck: check(
+      "agent_run_finalization_grants_capability_check",
+      sql`${t.capabilityId} = 'ingest_run_evidence'`,
+    ),
+    eventCountCheck: check(
+      "agent_run_finalization_grants_event_count_check",
+      sql`${t.eventCount} >= 0 AND (${t.eventCount} = 0) = (${t.finalEventDigest} IS NULL)`,
+    ),
+    digestCheck: check(
+      "agent_run_finalization_grants_digest_check",
+      sql`${t.eventStreamDigest} ~ '^sha256:[0-9a-f]{64}$' AND (${t.finalEventDigest} IS NULL OR ${t.finalEventDigest} ~ '^sha256:[0-9a-f]{64}$')`,
+    ),
+  }),
+);
+
+// ── Immutable finalization obligations (the durable outbox) ──────────────────
+//
+// Created in the seal transaction next to the grant. There is deliberately NO
+// `processed_at` column: pending state is DERIVED by anti-joining the evidence
+// ledger's grant-use row, so a crash between "wrote evidence" and "marked done"
+// cannot lose or duplicate an obligation. Mutable retry/claim coordination is a
+// separate table in the evidence-ledger PR — never a mutation of this row.
+export const agentRunFinalizationObligations = agentSchema.table(
+  "agent_run_finalization_obligations",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    grantId: uuid("grant_id").notNull(),
+    // The grant's `afg_` public id, copied verbatim. Stable across every retry.
+    submissionId: citext("submission_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    attemptId: uuid("attempt_id").notNull(),
+    sealId: uuid("seal_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    grantUniq: uniqueIndex("agent_run_finalization_obligations_grant_uq").on(
+      t.grantId,
+    ),
+    // `(org_id, submission_id)` is the finalization idempotency key the
+    // evidence ledger keys on; enforce it here too so a duplicate obligation
+    // cannot exist to be double-processed.
+    submissionUniq: uniqueIndex(
+      "agent_run_finalization_obligations_submission_uq",
+    ).on(t.orgId, t.submissionId),
+    attemptUniq: uniqueIndex(
+      "agent_run_finalization_obligations_attempt_uq",
+    ).on(t.attemptId),
+    orgIdx: index("agent_run_finalization_obligations_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
   }),
 );
