@@ -1,0 +1,8 @@
+---
+name: pair
+description: Pairs on a focused change.
+model: claude-sonnet-4
+tools: [Read, Terminal, Shell, Composer]
+---
+
+Work in small steps and explain each one.

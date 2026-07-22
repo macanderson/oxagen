@@ -243,6 +243,12 @@ export const workspace = {
     // concern; the servers themselves are managed in Workbench → Agent Tools.
     mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/mcp-server-registries`,
+    // Hard period-to-date spend ceilings (org + workspace scope) — powers
+    // get_spend_budget / set_spend_budget (OXA-1079). Workspace-scoped
+    // (real workspaceId) so the RLS-narrowed read returns BOTH scopes; see
+    // ./settings/spend-budgets/actions.ts for the placement rationale.
+    spendBudgets: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/spend-budgets`,
     // Deprecated sub-tab aliases — the four agent-behaviour tabs merged into
     // Agent Defaults, and the ontology moved to Knowledge. Retained so existing
     // callers keep compiling and revalidate the correct destination; proxy.ts

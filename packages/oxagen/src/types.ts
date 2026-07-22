@@ -1,7 +1,9 @@
 import type { z } from "zod";
 import type { LifecycleEvent } from "@oxagen/agent-artifacts";
-// Type-only, so the ./iam/agent-run ↔ ./types cycle is erased at compile time
-// (agent-run imports CapabilityEffect/ResolvedPrincipal back from here).
+// Type-only import: `AgentRunIAMContext` is referenced by CapabilityContext
+// below but was never imported when agent RBAC landed, leaving this package's
+// typecheck red. `import type` is erased at compile time, so the resulting
+// types.ts <-> iam/agent-run.ts cycle costs nothing at runtime.
 import type { AgentRunIAMContext } from "./iam/agent-run";
 
 export type ExecutionMode = "sync" | "async" | "batch";

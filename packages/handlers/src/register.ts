@@ -349,6 +349,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .budgetPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_spend_budget",
+    async () =>
+      (await import("./billing.budget.get"))
+        .billingBudgetGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_spend_budget",
+    async () =>
+      (await import("./billing.budget.set"))
+        .billingBudgetSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_model_settings",
     async () =>
       (await import("./workspace.model_settings.read"))

@@ -544,30 +544,16 @@ export function resolve(input: ResolveInput): ResolveResult {
       matchesCapability(rg.capabilityId),
   );
 
-  const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");
-  if (roleAllowGrant) {
-    const step: TraceStep = {
-      rule: "7:role_grant",
-      description: `Role grant 'allow' via role ${roleAllowGrant.roleId}`,
-      decided: true,
-      outcome: "allow",
-    };
-    steps.push(step);
-    return { outcome: "allow", trace: { steps, decidedBy: step } };
-  }
-  const roleApprovalGrant = matchingRoleGrants.find(
-    (rg) => rg.effect === "require_approval",
-  );
-  if (roleApprovalGrant) {
-    const step: TraceStep = {
-      rule: "7:role_grant",
-      description: `Role grant 'require_approval' via role ${roleApprovalGrant.roleId}`,
-      decided: true,
-      outcome: "pending_approval",
-    };
-    steps.push(step);
-    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
-  }
+  // Effects are evaluated most-restrictive first: deny → require_approval →
+  // allow. `matchingRoleGrants` spans EVERY role the principal belongs to, so a
+  // principal in two roles can hold conflicting effects for one capability. If
+  // `allow` were checked first, an explicit deny grant would be unreachable
+  // whenever any other role also granted allow — silently voiding the deny.
+  //
+  // This ordering is what the Rule 7.5 comment below already assumes when it
+  // states that rules 1, 2, 6 and 7 "all run first and hard-stop, so an owner
+  // CAN restrict themselves through config", and it matches the deny-first
+  // ordering rules 1–3 apply at the workspace tier.
   const roleDenyGrant = matchingRoleGrants.find((rg) => rg.effect === "deny");
   if (roleDenyGrant) {
     const step: TraceStep = {
@@ -582,6 +568,30 @@ export function resolve(input: ResolveInput): ResolveResult {
       reason: "no_grant",
       trace: { steps, decidedBy: step },
     };
+  }
+  const roleApprovalGrant = matchingRoleGrants.find(
+    (rg) => rg.effect === "require_approval",
+  );
+  if (roleApprovalGrant) {
+    const step: TraceStep = {
+      rule: "7:role_grant",
+      description: `Role grant 'require_approval' via role ${roleApprovalGrant.roleId}`,
+      decided: true,
+      outcome: "pending_approval",
+    };
+    steps.push(step);
+    return { outcome: "pending_approval", trace: { steps, decidedBy: step } };
+  }
+  const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");
+  if (roleAllowGrant) {
+    const step: TraceStep = {
+      rule: "7:role_grant",
+      description: `Role grant 'allow' via role ${roleAllowGrant.roleId}`,
+      decided: true,
+      outcome: "allow",
+    };
+    steps.push(step);
+    return { outcome: "allow", trace: { steps, decidedBy: step } };
   }
   steps.push({
     rule: "7:role_grant",

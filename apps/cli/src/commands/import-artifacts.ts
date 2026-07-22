@@ -122,9 +122,11 @@ export async function handleImportArtifacts(
     const marker =
       item.outcome === "imported"
         ? "✓"
-        : item.outcome === "skipped"
-          ? "–"
-          : "!";
+        : item.outcome === "unchanged"
+          ? "="
+          : item.outcome === "skipped"
+            ? "–"
+            : "!";
     lines.push(
       `${marker} ${item.platform} ${item.kind} ${item.name}: ${item.outcome}${item.state === "needs_review" ? " (needs review; non-executable)" : ""}`,
     );

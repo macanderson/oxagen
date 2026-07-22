@@ -106,6 +106,8 @@ import "./contracts/automation.get";
 import "./contracts/automation.list";
 import "./contracts/automation.trigger";
 import "./contracts/automation.update";
+import "./contracts/billing.budget.get";
+import "./contracts/billing.budget.set";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.reseller_attribution_rule.delete";
 import "./contracts/billing.reseller_attribution_rule.list";

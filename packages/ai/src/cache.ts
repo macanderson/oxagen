@@ -6,7 +6,10 @@ import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { insertEvents, type Surface } from "@oxagen/telemetry";
 import { embedText } from "./embed";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.cache" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.cache" },
+});
 
 /**
  * Per-call-site cache configuration. Caching is OPT-IN: a call with no `cache`
@@ -49,6 +52,8 @@ export interface CachedUsage {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
+  /** Prompt-cache write tokens on the original call (#1076). 0 on legacy entries. */
+  cacheWriteTokens: number;
   costUsdMicros: number;
 }
 
@@ -110,14 +115,19 @@ export function buildCacheKey(ctx: {
   surface: string;
   shapeHash: string;
 }): string {
-  return sha256Hex([ctx.promptHash, ctx.model, ctx.surface, ctx.shapeHash].join("|"));
+  return sha256Hex(
+    [ctx.promptHash, ctx.model, ctx.surface, ctx.shapeHash].join("|"),
+  );
 }
 
 /**
  * Cosine similarity of two equal-length vectors. Returns 0 when either vector
  * is degenerate (zero magnitude) or the lengths differ — a safe "no match".
  */
-export function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
+export function cosineSimilarity(
+  a: readonly number[],
+  b: readonly number[],
+): number {
   if (a.length === 0 || a.length !== b.length) return 0;
   let dot = 0;
   let magA = 0;
@@ -150,6 +160,7 @@ function toUsage(raw: unknown): CachedUsage {
     inputTokens: Number(u.inputTokens ?? 0),
     outputTokens: Number(u.outputTokens ?? 0),
     cachedTokens: Number(u.cachedTokens ?? 0),
+    cacheWriteTokens: Number(u.cacheWriteTokens ?? 0),
     costUsdMicros: Number(u.costUsdMicros ?? 0),
   };
 }
@@ -217,7 +228,10 @@ export async function readCache<T>(
   options: CacheOptions,
 ): Promise<CacheReadResult<T>> {
   const cacheKey = buildCacheKey(ctx);
-  const scope: TenantScope = getScope() ?? { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  const scope: TenantScope = getScope() ?? {
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
 
   try {
     return await runInTenantScope(scope, async () => {
@@ -247,10 +261,17 @@ export async function readCache<T>(
 
       if (exact) {
         await bumpHit(exact.id, ctx).catch((err: unknown) =>
-          logger.debug({ err, cacheId: exact.id }, "cache: bumpHit failed (non-fatal)"),
+          logger.debug(
+            { err, cacheId: exact.id },
+            "cache: bumpHit failed (non-fatal)",
+          ),
         );
         const usage = toUsage(exact.usage);
-        emitCacheEvent(ctx, "hit", { semantic: false, similarity: 1, saved: usage });
+        emitCacheEvent(ctx, "hit", {
+          semantic: false,
+          similarity: 1,
+          saved: usage,
+        });
         return {
           hit: {
             value: exact.response as T,
@@ -268,7 +289,8 @@ export async function readCache<T>(
         return { hit: null };
       }
 
-      const threshold = options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
+      const threshold =
+        options.similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
       const limit = options.maxCandidates ?? DEFAULT_MAX_CANDIDATES;
 
       // Embed the prompt for the vector lookup. Metered via embedText; no
@@ -313,17 +335,27 @@ export async function readCache<T>(
         const emb = toEmbedding(row.embedding);
         if (!emb) continue;
         const similarity = cosineSimilarity(queryEmbedding, emb);
-        if (similarity >= threshold && (!best || similarity > best.similarity)) {
+        if (
+          similarity >= threshold &&
+          (!best || similarity > best.similarity)
+        ) {
           best = { row, similarity };
         }
       }
 
       if (best) {
         await bumpHit(best.row.id, ctx).catch((err: unknown) =>
-          logger.debug({ err, cacheId: best.row.id }, "cache: bumpHit failed (non-fatal)"),
+          logger.debug(
+            { err, cacheId: best.row.id },
+            "cache: bumpHit failed (non-fatal)",
+          ),
         );
         const usage = toUsage(best.row.usage);
-        emitCacheEvent(ctx, "hit", { semantic: true, similarity: best.similarity, saved: usage });
+        emitCacheEvent(ctx, "hit", {
+          semantic: true,
+          similarity: best.similarity,
+          saved: usage,
+        });
         return {
           hit: {
             value: best.row.response as T,
@@ -360,7 +392,10 @@ export async function writeCache(
   precomputedEmbedding?: number[],
 ): Promise<void> {
   const cacheKey = buildCacheKey(ctx);
-  const scope: TenantScope = getScope() ?? { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  const scope: TenantScope = getScope() ?? {
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
   const expiresAt = new Date(Date.now() + options.ttlSeconds * 1000);
 
   try {
@@ -423,7 +458,10 @@ export async function writeCache(
 
 /** Increment hit_count / last_hit_at for a served entry. Best-effort. */
 async function bumpHit(id: string, ctx: CacheContext): Promise<void> {
-  const scope: TenantScope = getScope() ?? { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  const scope: TenantScope = getScope() ?? {
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
   await runInTenantScope(scope, () =>
     withTenantDb(async (tx) => {
       await tx

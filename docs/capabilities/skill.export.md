@@ -9,7 +9,7 @@
 
 ## Intent
 
-Export the active (or a specified) version of a skill as a downloadable `.skill.md` string. The returned content round-trips through `parseSkill` — it contains the full YAML frontmatter followed by the skill body, exactly as authored.
+Export the active (or a specified) version of a skill as a downloadable canonical `skill.toml` string. The returned content round-trips through `parseArtifactToml` — deterministic field order, LF line endings, one trailing newline — so exporting the same version twice yields byte-identical output.
 
 ## Input
 
@@ -22,8 +22,8 @@ Export the active (or a specified) version of a skill as a downloadable `.skill.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| filename | string | Suggested download filename (e.g. `my-skill.skill.md`) |
-| content | string | Full `.skill.md` text (YAML frontmatter + body) |
+| filename | string | Suggested download filename (`<slug>.toml`, e.g. `my-skill.toml`) |
+| content | string | Canonical `skill.toml` text |
 | versionNumber | integer | The version number that was exported |
 
 ## Side effects

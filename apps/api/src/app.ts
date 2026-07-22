@@ -121,6 +121,8 @@ import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
 import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
+import { billingBudgetGetRoute } from "./routes/v1/billing.budget.get";
+import { billingBudgetSetRoute } from "./routes/v1/billing.budget.set";
 import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
 import { userWorkspacePreferencesWriteRoute } from "./routes/v1/user.workspace_preferences.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
@@ -613,6 +615,9 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
+// Hard period-to-date spend ceilings (org + workspace, OXA-1079).
+orgScoped.route("/billing/budget", billingBudgetGetRoute);
+orgScoped.route("/billing/budget", billingBudgetSetRoute);
 // Per-(user, workspace) coding-agent defaults (org+workspace scoped).
 orgScoped.route(
   "/user/workspace-preferences",
