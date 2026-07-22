@@ -28,6 +28,104 @@ export {
   type RunSummary,
 } from "./run-store";
 
+// Fenced immutable attempts (PR 1A Task 3). The V2 surface is a SEPARATE
+// interface from `RunStore` so existing V1 callers keep compiling unchanged;
+// `createPostgresRunStore()` returns `RunStore & AttemptRunStore`.
+export {
+  DEFAULT_RECLAIM_LIMIT,
+  EVENT_SEQUENCE_CONFLICT_EVENT,
+  ATTEMPT_TERMINAL_STATUSES,
+  generateLeaseToken,
+  generateAttemptPublicId,
+  buildRunRowIdentityFromSpec,
+  mapRunV2IdentityRow,
+  mapClaimedRunV2,
+  mapAttemptEventReadRow,
+  prepareAttemptEvent,
+  planAttemptBatch,
+  reconcileReplayedEvents,
+  foldAttemptStreamDigest,
+  leaseRejectionReason,
+  assertLeaseUsable,
+  runStatusForTerminal,
+  type AttemptRunStore,
+  type EnqueueRunV2Input,
+  type ClaimNextRunV2Options,
+  type ClaimedRunV2,
+  type ClaimedRunV2Detail,
+  type RunLeaseRef,
+  type ResolvedEngineIdentity,
+  type RestoredCheckpointRef,
+  type AttemptEventInput,
+  type AttemptCheckpointInput,
+  type AppendAttemptBatchInput,
+  type AppendAttemptBatchResult,
+  type AppendedAttemptEvent,
+  type AttemptEventReadRecord,
+  type AttemptTerminalStatus,
+  type SealAttemptInput,
+  type ReclaimExpiredAttemptsOptions,
+  type ReclaimedAttempt,
+  type RunSecurityEventSink,
+  type RunStoreOptions,
+  type PreparedAttemptEvent,
+  type AttemptBatchPlan,
+  type LockedLeaseRow,
+  type ExistingAttemptEventRow,
+  type RunV2IdentityRow,
+} from "./run-store";
+
+// The closed V2 event vocabulary plus the digest contract PR 2's finalizer
+// must reproduce byte for byte.
+export {
+  EVENT_SCHEMA_VERSION,
+  MAX_INLINE_PAYLOAD_BYTES,
+  EVIDENCE_STAGES,
+  RETENTION_CONTENT_CLASSES,
+  EVENT_TYPE_REGISTRY,
+  RUN_EVENT_TYPES,
+  TERMINAL_EVENT_TYPE,
+  FORBIDDEN_INLINE_PAYLOAD_ROOTS,
+  EMPTY_EVENT_STREAM_DIGEST,
+  encryptedBlobRefSchema,
+  observedAtSchema,
+  isRunEventType,
+  requireEventTypeDefinition,
+  stageOfEventType,
+  retentionContentClassOf,
+  isContentClassRetained,
+  isTerminalEventType,
+  isForbiddenPayloadKey,
+  assertNoForbiddenPayloadFields,
+  validateInlineEventPayload,
+  validateEncryptedEventReference,
+  computeEventDigest,
+  advanceEventStreamDigest,
+  computeEventStreamDigest,
+  type EvidenceStage,
+  type RetentionContentClass,
+  type EventTypeDefinition,
+  type RunEventType,
+  type ValidatedInlinePayload,
+  type EventDigestInput,
+  type EventStreamEntry,
+} from "./event-payload-registry";
+
+// The one-shot, non-expiring finalization grant minted atomically with every
+// seal, and the durable obligation that guarantees its evidence is submitted.
+export {
+  FINALIZATION_GRANT_CAPABILITY,
+  generateFinalizationGrantPublicId,
+  buildInsertFinalizationGrantSql,
+  buildInsertFinalizationObligationSql,
+  buildSelectFinalizationHandleSql,
+  mapFinalizationHandleRow,
+  type SealDigests,
+  type FinalizationGrantInput,
+  type FinalizationHandleRow,
+  type SealedAttemptHandle,
+} from "./finalization-grant";
+
 // Run/attempt evidence foundation (PR 1A Task 1;
 // docs/specs/run-evidence-ingress/spec.md). RunSpecV2 is the trusted admission
 // contract — built ONLY by server code, never from a request body. Surfaces
@@ -98,11 +196,26 @@ export {
   RunSpecDigestMismatchError,
   RunSpecIdentityMismatchError,
   UntrustedRunSpecFieldError,
+  UnknownRunEventTypeError,
+  ForbiddenEventPayloadFieldError,
+  RunEventPayloadTooLargeError,
+  RunEventIntegrityError,
+  RunEventSequenceGapError,
+  RunLeaseFencedError,
+  RunStoreStateError,
   isRunSpecValidationError,
   isRunSpecDigestMismatchError,
   isRunSpecIdentityMismatchError,
   isUntrustedRunSpecFieldError,
+  isUnknownRunEventTypeError,
+  isForbiddenEventPayloadFieldError,
+  isRunEventPayloadTooLargeError,
+  isRunEventIntegrityError,
+  isRunEventSequenceGapError,
+  isRunLeaseFencedError,
+  isRunStoreStateError,
   type RunSpecIssue,
+  type LeaseRejectionReason,
 } from "./run-errors";
 
 // Re-exports so surfaces don't need a second engine-facing import. Types are
