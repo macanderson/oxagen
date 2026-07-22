@@ -15,7 +15,15 @@ import {
   roleGrants,
   principalRoleAssignments,
   accessRequests,
+  authorizationSnapshots,
+  authorizationDecisions,
 } from "./schema/iam";
+import {
+  sourceConnections,
+  repositoryBindings,
+  repositoryBindingHeads,
+  governedRepositorySelections,
+} from "./schema/ingestion";
 import { users, sessions, accounts, apiKeys } from "./schema/auth";
 import { workspaces, workspaceUsers } from "./schema/workspace";
 import {
@@ -31,6 +39,14 @@ import {
   approvalRequests,
   subagentFanouts,
   subagentRuns,
+  agentRuns,
+  agentRunEvents,
+  agentRunAttempts,
+  agentRunAttemptLeases,
+  agentRunCheckpoints,
+  agentRunAttemptSeals,
+  agentRunFinalizationGrants,
+  agentRunFinalizationObligations,
 } from "./schema/agent";
 import { mcpServers, mcpConsents, mcpToolSnapshots } from "./schema/mcp";
 import { mcpServerChanges } from "./schema/security";
@@ -704,6 +720,165 @@ export const schemaPropertiesRelations = relations(
     relationshipType: one(relationshipTypes, {
       fields: [schemaProperties.relationshipTypeId],
       references: [relationshipTypes.id],
+    }),
+  }),
+);
+
+// ── Fenced run/attempt foundation (docs/specs/run-evidence-ingress) ──────────
+//
+// These are Drizzle query relations only — the underlying columns carry NO
+// database foreign keys, per the cross-schema storage rule. They exist so a
+// caller can traverse run → attempts → lease/checkpoints/seal → grant →
+// obligation in one typed query instead of hand-joining on app-enforced ids.
+export const agentRunsFoundationRelations = relations(
+  agentRuns,
+  ({ many }) => ({
+    attempts: many(agentRunAttempts),
+    events: many(agentRunEvents),
+    checkpoints: many(agentRunCheckpoints),
+  }),
+);
+
+export const agentRunAttemptsRelations = relations(
+  agentRunAttempts,
+  ({ one, many }) => ({
+    run: one(agentRuns, {
+      fields: [agentRunAttempts.runId],
+      references: [agentRuns.id],
+    }),
+    // Exactly one lease and at most one seal per attempt (unique indexes).
+    lease: one(agentRunAttemptLeases, {
+      fields: [agentRunAttempts.id],
+      references: [agentRunAttemptLeases.attemptId],
+    }),
+    seal: one(agentRunAttemptSeals, {
+      fields: [agentRunAttempts.id],
+      references: [agentRunAttemptSeals.attemptId],
+    }),
+    events: many(agentRunEvents),
+    checkpoints: many(agentRunCheckpoints),
+  }),
+);
+
+export const agentRunEventsRelations = relations(agentRunEvents, ({ one }) => ({
+  run: one(agentRuns, {
+    fields: [agentRunEvents.runId],
+    references: [agentRuns.id],
+  }),
+  // Null for every V1 legacy row — only V2 records belong to an attempt.
+  attempt: one(agentRunAttempts, {
+    fields: [agentRunEvents.attemptId],
+    references: [agentRunAttempts.id],
+  }),
+}));
+
+export const agentRunCheckpointsRelations = relations(
+  agentRunCheckpoints,
+  ({ one }) => ({
+    run: one(agentRuns, {
+      fields: [agentRunCheckpoints.runId],
+      references: [agentRuns.id],
+    }),
+    attempt: one(agentRunAttempts, {
+      fields: [agentRunCheckpoints.attemptId],
+      references: [agentRunAttempts.id],
+    }),
+    event: one(agentRunEvents, {
+      fields: [agentRunCheckpoints.eventId],
+      references: [agentRunEvents.id],
+    }),
+  }),
+);
+
+export const agentRunAttemptLeasesRelations = relations(
+  agentRunAttemptLeases,
+  ({ one }) => ({
+    attempt: one(agentRunAttempts, {
+      fields: [agentRunAttemptLeases.attemptId],
+      references: [agentRunAttempts.id],
+    }),
+  }),
+);
+
+export const agentRunAttemptSealsRelations = relations(
+  agentRunAttemptSeals,
+  ({ one }) => ({
+    attempt: one(agentRunAttempts, {
+      fields: [agentRunAttemptSeals.attemptId],
+      references: [agentRunAttempts.id],
+    }),
+    // Every seal mints exactly one finalization grant in the same transaction.
+    finalizationGrant: one(agentRunFinalizationGrants, {
+      fields: [agentRunAttemptSeals.id],
+      references: [agentRunFinalizationGrants.sealId],
+    }),
+  }),
+);
+
+export const agentRunFinalizationGrantsRelations = relations(
+  agentRunFinalizationGrants,
+  ({ one }) => ({
+    seal: one(agentRunAttemptSeals, {
+      fields: [agentRunFinalizationGrants.sealId],
+      references: [agentRunAttemptSeals.id],
+    }),
+    obligation: one(agentRunFinalizationObligations, {
+      fields: [agentRunFinalizationGrants.id],
+      references: [agentRunFinalizationObligations.grantId],
+    }),
+  }),
+);
+
+export const agentRunFinalizationObligationsRelations = relations(
+  agentRunFinalizationObligations,
+  ({ one }) => ({
+    grant: one(agentRunFinalizationGrants, {
+      fields: [agentRunFinalizationObligations.grantId],
+      references: [agentRunFinalizationGrants.id],
+    }),
+  }),
+);
+
+// Governed repository bindings: the immutable version chain plus the two
+// mutable pointers admission resolves through.
+export const repositoryBindingsRelations = relations(
+  repositoryBindings,
+  ({ one }) => ({
+    connection: one(sourceConnections, {
+      fields: [repositoryBindings.connectionId],
+      references: [sourceConnections.id],
+    }),
+  }),
+);
+
+export const repositoryBindingHeadsRelations = relations(
+  repositoryBindingHeads,
+  ({ one }) => ({
+    currentBinding: one(repositoryBindings, {
+      fields: [repositoryBindingHeads.currentBindingId],
+      references: [repositoryBindings.id],
+    }),
+  }),
+);
+
+export const governedRepositorySelectionsRelations = relations(
+  governedRepositorySelections,
+  ({ one }) => ({
+    primaryBinding: one(repositoryBindings, {
+      fields: [governedRepositorySelections.primaryBindingId],
+      references: [repositoryBindings.id],
+    }),
+  }),
+);
+
+// Authorization foundation: a decision names the pinned snapshot it was
+// evaluated against, so an audit read never has to guess which ceiling applied.
+export const authorizationDecisionsRelations = relations(
+  authorizationDecisions,
+  ({ one }) => ({
+    snapshot: one(authorizationSnapshots, {
+      fields: [authorizationDecisions.authorizationSnapshotId],
+      references: [authorizationSnapshots.id],
     }),
   }),
 );

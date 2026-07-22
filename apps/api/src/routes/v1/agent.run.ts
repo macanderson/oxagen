@@ -3,6 +3,9 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import {
   createPostgresRunStore,
+  buildLegacyRunSpecV1,
+  type AttemptEventReadRecord,
+  type AttemptRunStore,
   type RunSummary,
   type RunStore,
 } from "@oxagen/agent-runner";
@@ -14,13 +17,43 @@ import type { AppEnv } from "../../app";
 /**
  * Durable-run API (agent-engine v2 Phase 2 integration;
  * docs/specs/agent-engine-v2/spec.md §4.2, plan.md Phase 2 — "SSE is a
- * replayable subscription from last seq").
+ * replayable subscription from last seq"; run-evidence-ingress
+ * 02-run-attempt-foundation-plan.md Task 6 for the v1/v2 split below).
  *
- * Flag-gated behind OXAGEN_DURABLE_RUNS ("1"/"true") — OFF by default, every
- * route below 404s until the var is set (packages/config/src/registry.ts).
- * The flag is read PER REQUEST (never at module load — importing this file,
+ * ## Two gates, deliberately not one
+ *
+ * - **OXAGEN_DURABLE_RUNS** mounts the ROUTER. Off ⇒ every route below 404s.
+ * - **OXAGEN_V1_RUN_ADMISSION_ENABLED** gates the POST METHOD only. Off ⇒
+ *   `POST /runs` refuses to admit new legacy v1 work while GET status,
+ *   resumable SSE, and cancel keep serving every historical row.
+ *
+ * Collapsing them into one flag is exactly the mistake Task 6 exists to
+ * avoid: turning off new v1 writes must never remove historical reads or make
+ * already-queued rows unclaimable. The worker's claim path is separate again
+ * (`claimLegacyV1`), so a closed admission gate drains the queue rather than
+ * stranding it.
+ *
+ * Both flags are read PER REQUEST (never at module load — importing this file,
  * or app.ts, must never require env access; same discipline as app.ts's
  * lazy rate-limit budget resolvers).
+ *
+ * ## v1 vs v2 reads
+ *
+ * A run row carries `spec_version`, surfaced on `RunSummary.specVersion`, and
+ * the two record versions have INCOMPATIBLE cursors: v1 events are ordered by
+ * a run-global `seq` integer, v2 events by a `run_seq` bigint carried as an
+ * exact decimal string. The SSE route branches on that discriminant rather
+ * than guessing, and each branch parses `?after=` with its own cursor grammar.
+ *
+ * ## What this route does NOT do
+ *
+ * It admits v1 ONLY. Trusted v2 admission (`enqueueRunV2`) requires a
+ * server-resolved actor binding, a pinned authorization snapshot, and a
+ * retention-policy version — none of which may come from a request body — so
+ * it is not a matter of widening this handler's schema. That admission surface
+ * lands with its own capability contract; until then this route's spec is
+ * built by `buildLegacyRunSpecV1` from @oxagen/agent-runner, the single
+ * definition the worker's claim-side parser also uses.
  *
  * These routes do NOT go through invoke()/the capability kernel — they are a
  * thin adapter over @oxagen/agent-runner's RunStore (the ONLY writer/reader
@@ -32,21 +65,7 @@ import type { AppEnv } from "../../app";
  * POST /runs enqueues a run and returns immediately (202) — the durable
  * worker that claims and executes the run is separate wiring (Phase 2c);
  * this slice is enqueue + status + resumable SSE + cancel-request only.
- *
- * RunSpec v1 — the exact spec JSON persisted to agent_runs.spec and parsed by
- * the worker's driver on the other side. Do not add/rename/reshape fields
- * here without updating the driver in lockstep.
  */
-interface RunSpecV1 {
-  version: 1;
-  instruction: string;
-  model?: string;
-  history?: unknown;
-  toolPolicy?: {
-    allowlist?: string[];
-    riskCeiling?: "low" | "medium" | "high";
-  };
-}
 
 const ToolPolicySchema = z
   .object({
@@ -103,6 +122,46 @@ export function resetRunSseTimingForTests(): void {
   sseHeartbeatIntervalMs = DEFAULT_RUN_SSE_HEARTBEAT_INTERVAL_MS;
 }
 
+/** One SSE frame, already reduced to the three fields the wire carries. */
+interface SseEmission {
+  /** The `id:` field — this run's cursor, always decimal text. */
+  id: string;
+  /** The `event:` field — the event's type. */
+  event: string;
+  /** The `data:` field, JSON-encoded at write time. */
+  data: unknown;
+}
+
+/**
+ * Project one v2 attempt event into an SSE frame.
+ *
+ * Deliberately NOT a pass-through of the read record. Two fields on it are
+ * INTERNAL UUIDs (`eventId`, `attemptId`) and internal ids never cross a
+ * tenant-facing boundary — the attempt is cited by its `arat_` public id
+ * instead. Everything else is the receipt a subscriber needs to verify the
+ * event independently: its digests, its stage, and either the allow-listed
+ * inline payload or the reference to the encrypted blob that holds the real
+ * body.
+ */
+function projectAttemptEvent(evt: AttemptEventReadRecord): SseEmission {
+  return {
+    id: evt.runSeq,
+    event: evt.eventType,
+    data: {
+      attemptId: evt.attemptPublicId,
+      attemptSeq: evt.attemptSeq,
+      runSeq: evt.runSeq,
+      eventSchemaVersion: evt.eventSchemaVersion,
+      stage: evt.stage,
+      payloadDigest: evt.payloadDigest,
+      eventDigest: evt.eventDigest,
+      payload: evt.payload,
+      encryptedPayloadRef: evt.encryptedPayloadRef,
+      observedAt: evt.observedAt,
+    },
+  };
+}
+
 /** Resolve ms then early-resolve on abort; unref()s the timer where the runtime supports it. */
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();
@@ -128,9 +187,26 @@ function durableRunsEnabled(): boolean {
   return v === "1" || v === "true";
 }
 
+/**
+ * Legacy v1 ADMISSION gate (POST only). Defaults to ON when unset: PR 1A
+ * ships the dual reader while queued v1 work is still draining, and closing
+ * admission is PR 1B's cutover step, not this one's. Only an explicit
+ * "0"/"false" closes it — an unset or malformed value must not silently stop
+ * a surface that is still the platform's only durable-run entrypoint.
+ */
+function v1RunAdmissionEnabled(): boolean {
+  const v = process.env.OXAGEN_V1_RUN_ADMISSION_ENABLED;
+  return v !== "0" && v !== "false";
+}
+
 // Lazily constructed so importing this module never touches the DB — the
 // store's methods are pure closures over withTenantDb/withSystemDb.
-const runStore: RunStore = createPostgresRunStore();
+//
+// Typed as BOTH ports: the v2 read path (`readAttemptEventsSince`) lives on
+// `AttemptRunStore`, and widening here is what makes a drift between the two
+// interfaces fail typecheck in this file rather than at runtime on the first
+// v2 subscription.
+const runStore: RunStore & AttemptRunStore = createPostgresRunStore();
 
 export const agentRunRoute = new Hono<AppEnv>();
 
@@ -145,16 +221,27 @@ agentRunRoute.use("*", async (c, next) => {
 });
 
 // POST /runs — enqueue a durable run. 202 { runId: <publicId>, status: "pending" }.
+//
+// 403 (not 404) when v1 admission is closed: the router IS mounted and every
+// other method on this path still works, so a 404 would misreport the resource
+// as absent and send a client hunting for a routing bug instead of reading the
+// error.
 agentRunRoute.post("/", async (c) => {
+  if (!v1RunAdmissionEnabled()) {
+    throw new HTTPException(403, {
+      message:
+        "Legacy RunSpec v1 admission is disabled. Existing runs remain " +
+        "readable and cancellable, and already-queued work still executes.",
+    });
+  }
   const body = CreateRunBodySchema.parse(await c.req.json());
   const ctx = capabilityContext(c);
 
-  const spec: RunSpecV1 = {
-    version: 1,
+  const spec = buildLegacyRunSpecV1({
     instruction: body.instruction,
     ...(body.model !== undefined ? { model: body.model } : {}),
     ...(body.toolPolicy !== undefined ? { toolPolicy: body.toolPolicy } : {}),
-  };
+  });
 
   const { publicId } = await runInTenantScope(
     { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -185,19 +272,43 @@ agentRunRoute.get("/:publicId", async (c) => {
   return c.json(run, 200);
 });
 
-// GET /runs/:publicId/events?after=<seq> — resumable SSE subscription.
+// GET /runs/:publicId/events?after=<cursor> — resumable SSE subscription.
 //
-// Replays agent_run_events from `after` (default 0) with SSE `id:` = seq and
-// `event:` = the event's type, then poll-tails new events until the run
-// reaches a terminal status, at which point it emits `event: done` with the
-// terminal RunSummary and closes. Reconnecting with `?after=<last id>` loses
-// zero events (plan.md Phase 2 exit criterion).
-const AfterQuerySchema = z.coerce.number().int().min(0);
+// Replays the run's event log from `after` (default 0) with SSE `id:` = the
+// cursor and `event:` = the event's type, then poll-tails new events until the
+// run reaches a terminal status, at which point it emits `event: done` with
+// the terminal RunSummary and closes. Reconnecting with `?after=<last id>`
+// loses zero events (plan.md Phase 2 exit criterion).
+//
+// The cursor's MEANING depends on the run's record version: `seq` for v1,
+// `run_seq` for v2. Its GRAMMAR is shared — a non-negative decimal integer —
+// and it is carried as a STRING end to end, because `run_seq` is a Postgres
+// bigint and routing it through a JS number would silently corrupt any cursor
+// past 2^53 and resume a subscriber at the wrong event.
+//
+// The upper bound is checked against the real signed-bigint maximum, not a
+// digit count: `run_seq > $1::bigint` raises on overflow, so a 20-digit — or a
+// 19-digit out-of-range — cursor would come back as a 500 rather than the 400
+// it is.
+const MAX_BIGINT = 9_223_372_036_854_775_807n;
+const DECIMAL_CURSOR_RE = /^\d+$/;
+
+const AfterQuerySchema = z
+  .string()
+  .regex(DECIMAL_CURSOR_RE, "after must be a non-negative decimal integer")
+  .refine(
+    // The shape is re-tested here, not assumed: Zod still runs a refinement
+    // after a failed string CHECK (only an invalid base TYPE aborts), so a
+    // bare `BigInt(value)` would throw a SyntaxError on "abc" and turn a
+    // clean 400 into a 500.
+    (value) => !DECIMAL_CURSOR_RE.test(value) || BigInt(value) <= MAX_BIGINT,
+    "after exceeds the maximum run sequence",
+  );
 
 agentRunRoute.get("/:publicId/events", async (c) => {
   const publicId = c.req.param("publicId");
   const afterRaw = c.req.query("after");
-  const after = afterRaw === undefined ? 0 : AfterQuerySchema.parse(afterRaw);
+  const after = afterRaw === undefined ? "0" : AfterQuerySchema.parse(afterRaw);
   const ctx = capabilityContext(c);
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
@@ -230,40 +341,53 @@ agentRunRoute.get("/:publicId/events", async (c) => {
         }
       }
 
-      function emitEvent(evt: {
-        seq: number;
-        type: string;
-        payload: unknown;
-      }): void {
+      function emitEvent(evt: SseEmission): void {
         write(
-          `id: ${evt.seq}\nevent: ${evt.type}\ndata: ${JSON.stringify(evt.payload)}\n\n`,
+          `id: ${evt.id}\nevent: ${evt.event}\ndata: ${JSON.stringify(evt.data)}\n\n`,
         );
       }
 
-      // Drain every event after `fromSeq`, emitting each and returning the
-      // new last-seen seq. A single `readEventsSince` is page-capped
-      // (DEFAULT_READ_EVENTS_LIMIT rows), so one read only sees the whole
-      // backlog when it fits in a page — a long turn's text-delta stream can
-      // easily exceed that. Loop until a read comes back empty (each call
-      // advances the cursor) so replay/drain never silently truncate.
+      // One page of the log in this run's own record version. Both readers are
+      // page-capped (DEFAULT_READ_EVENTS_LIMIT rows), so the caller loops.
       const runId = run.runId;
-      async function drainSince(fromSeq: number): Promise<number> {
-        let seq = fromSeq;
-        while (!closed) {
-          const batch = await runInTenantScope(scope, () =>
-            runStore.readEventsSince(runId, seq),
+      const isV2 = run.specVersion === 2;
+      async function readPage(cursor: string): Promise<SseEmission[]> {
+        if (isV2) {
+          const rows = await runInTenantScope(scope, () =>
+            runStore.readAttemptEventsSince(runId, cursor),
           );
-          if (batch.length === 0) break;
-          for (const evt of batch) {
+          return rows.map(projectAttemptEvent);
+        }
+        const rows = await runInTenantScope(scope, () =>
+          runStore.readEventsSince(runId, Number(cursor)),
+        );
+        return rows.map((evt) => ({
+          id: String(evt.seq),
+          event: evt.type,
+          data: evt.payload,
+        }));
+      }
+
+      // Drain every event after `fromCursor`, emitting each and returning the
+      // new last-seen cursor. One read only sees the whole backlog when it
+      // fits in a page — a long turn's text-delta stream can easily exceed
+      // that. Loop until a read comes back empty (each call advances the
+      // cursor) so replay/drain never silently truncate.
+      async function drainSince(fromCursor: string): Promise<string> {
+        let cursor = fromCursor;
+        while (!closed) {
+          const page = await readPage(cursor);
+          if (page.length === 0) break;
+          for (const evt of page) {
             emitEvent(evt);
-            seq = evt.seq;
+            cursor = evt.id;
           }
         }
-        return seq;
+        return cursor;
       }
 
       try {
-        let lastSeq = await drainSince(after);
+        let lastCursor = await drainSince(after);
 
         let status = run.status;
         let finalSummary: RunSummary | null = TERMINAL_RUN_STATUSES.has(status)
@@ -275,9 +399,12 @@ agentRunRoute.get("/:publicId/events", async (c) => {
           await sleep(ssePollIntervalMs, signal);
           if (closed) break;
 
-          const beforeSeq = lastSeq;
-          lastSeq = await drainSince(lastSeq);
-          if (lastSeq > beforeSeq) lastActivityAt = Date.now();
+          const beforeCursor = lastCursor;
+          lastCursor = await drainSince(lastCursor);
+          // String inequality, not `>`: the cursor is decimal text and a
+          // lexicographic compare would call "10" older than "9". A drain only
+          // ever moves the cursor forward, so "changed" IS "advanced".
+          if (lastCursor !== beforeCursor) lastActivityAt = Date.now();
 
           const latest = await runInTenantScope(scope, () =>
             runStore.getRunByPublicId(publicId),
@@ -306,7 +433,7 @@ agentRunRoute.get("/:publicId/events", async (c) => {
           // `drainSince` loops until a read returns empty, so a terminal run
           // with a >1-page backlog is fully emitted before `done` closes the
           // stream (the client won't reconnect once it sees `done`).
-          lastSeq = await drainSince(lastSeq);
+          lastCursor = await drainSince(lastCursor);
           write(`event: done\ndata: ${JSON.stringify(finalSummary)}\n\n`);
         }
       } catch (err) {

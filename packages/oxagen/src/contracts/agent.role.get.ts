@@ -23,7 +23,7 @@ export const agentRoleGet = registerCapability({
     "Get one IAM role's status relative to an agent: whether the agent's delegated principal holds it, the assignment provenance when held, and the role's capability grant list (what attaching it confers). Read-only governance introspection.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Governance-posture reads must never be blocked by a zero credit balance.
   noBillingGate: true,

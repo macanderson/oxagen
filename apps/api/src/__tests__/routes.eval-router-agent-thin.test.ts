@@ -598,14 +598,13 @@ describe("skill-version + document read routes", () => {
     expect(input.offset).toBe(0);
   });
 
-  it("GET /skill/version/get falls back to empty ids when the query is absent", async () => {
-    // Exercises the `?? ""` fallback branch (no skill_id / version_id supplied).
+  it("GET /skill/version/get leaves the optional version_id absent", async () => {
     mocks.invoke.mockResolvedValue({ version: null });
     const res = await app.fetch(get("/skill/version/get"));
     expect(res.status).toBe(200);
     const input = invokedInput();
     expect(input.skill_id).toBe("");
-    expect(input.version_id).toBe("");
+    expect(input.version_id).toBeUndefined();
   });
 
   it("GET /document/read forwards the document_id", async () => {

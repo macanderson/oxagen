@@ -62,7 +62,10 @@ beforeAll(async () => {
   const rows = await showCreate.json<{ statement: string }>();
   showCreateStatement = rows[0]?.statement ?? "";
   isClickhouseAvailable = true;
-}, 30_000);
+  // The ClickHouse client may consume its full 30s transport timeout before
+  // rejecting ping. Leave enough hook budget for the catch path to mark this
+  // local-only integration suite skipped when ClickHouse is unavailable.
+}, 60_000);
 
 afterAll(async () => {
   const { clickhouse, closeClickhouse } = await import("./clickhouse");

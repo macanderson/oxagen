@@ -46,6 +46,33 @@ export type {
   GatewayModel,
   ResolvedTierCatalog,
 } from "./catalog";
+
+// Provider capability posture registry — the per-vendor feature matrix
+// (cache / reasoning / structured output / attachments). Client-safe, like the
+// catalog: client components should import "@oxagen/ai/posture" directly so the
+// provider SDKs stay out of the browser bundle.
+export {
+  CACHE_POSTURE,
+  REASONING_POSTURE,
+  STRUCTURED_OUTPUT_POSTURE,
+  ATTACHMENT_POSTURE,
+  WITNESS_SOURCES,
+  allPostures,
+  asVendor,
+  postureBadges,
+  postureForModel,
+  posturesFor,
+  vendorFromModelId,
+} from "./provider-posture";
+export type {
+  AttachmentPosture,
+  CachePosture,
+  PostureBadge,
+  ReasoningPosture,
+  StructuredOutputPosture,
+  VendorPosture,
+} from "./provider-posture";
+
 export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
 export { embedText } from "./embed";

@@ -16,6 +16,7 @@
       "!**/node_modules/**",
       "!**/coverage/**",
       "!**/*.gen.ts",
+      "!**/*.generated.ts",
       "!**/routeTree.gen.ts",
       "!pnpm-lock.yaml",
       "!**/storage-manifest.json"

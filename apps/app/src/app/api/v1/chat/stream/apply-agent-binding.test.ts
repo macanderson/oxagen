@@ -159,3 +159,100 @@ describe("applyAgentBinding", () => {
     });
   });
 });
+
+// ── Agent RBAC Phase 4a: MCP rule intersection (spec §3.7) ───────────────────
+describe("applyAgentBinding — mcp rule intersection", () => {
+  const GH_DEF = def({
+    agentTools: [
+      { type: "mcp_server", ref: "srv_gh" },
+      { type: "mcp_server", ref: "srv_slack" },
+    ],
+  });
+  const NAMES = { srv_gh: "GitHub", srv_slack: "Slack", srv_body: "Linear" };
+
+  it("drops a server whose EVERY tool the rules deny (union → intersection)", () => {
+    const result = applyAgentBinding({
+      def: GH_DEF,
+      skills: [],
+      serverAllowlist: ["srv_body"],
+      mcp: {
+        scope: { ruleSets: [[{ pattern: "github:*", effect: "deny" }]] },
+        serverNamesById: NAMES,
+      },
+    });
+    // srv_gh (name "GitHub") is fully denied and drops — from the AGENT's own
+    // declared servers, proving the binding can no longer only widen.
+    expect(result.serverAllowlist).toEqual(["srv_body", "srv_slack"]);
+  });
+
+  it("keeps a partially-denied server (some tools survive → per-call gate governs)", () => {
+    const result = applyAgentBinding({
+      def: GH_DEF,
+      skills: [],
+      serverAllowlist: [],
+      mcp: {
+        scope: {
+          ruleSets: [[{ pattern: "github:delete_*", effect: "deny" }]],
+        },
+        serverNamesById: NAMES,
+      },
+    });
+    expect(result.serverAllowlist).toEqual(["srv_gh", "srv_slack"]);
+  });
+
+  it("keeps an id with no name mapping (conservative — per-call gate enforces)", () => {
+    const result = applyAgentBinding({
+      def: def({ agentTools: [{ type: "mcp_server", ref: "srv_unknown" }] }),
+      skills: [],
+      serverAllowlist: [],
+      mcp: {
+        scope: { ruleSets: [[{ pattern: "*", effect: "deny" }]] },
+        serverNamesById: {},
+      },
+    });
+    expect(result.serverAllowlist).toEqual(["srv_unknown"]);
+  });
+
+  it("a universal '*' deny drops every mapped server", () => {
+    const result = applyAgentBinding({
+      def: GH_DEF,
+      skills: [],
+      serverAllowlist: ["srv_body"],
+      mcp: {
+        scope: { ruleSets: [[{ pattern: "*", effect: "deny" }]] },
+        serverNamesById: NAMES,
+      },
+    });
+    expect(result.serverAllowlist).toEqual([]);
+  });
+
+  it("ask/allow rules never drop a server (only full denial does)", () => {
+    const result = applyAgentBinding({
+      def: GH_DEF,
+      skills: [],
+      serverAllowlist: [],
+      mcp: {
+        scope: { ruleSets: [[{ pattern: "github:*", effect: "ask" }]] },
+        serverNamesById: NAMES,
+      },
+    });
+    expect(result.serverAllowlist).toEqual(["srv_gh", "srv_slack"]);
+  });
+
+  it("no mcp input → byte-identical to the historical additive union", () => {
+    const base = {
+      def: GH_DEF,
+      skills: ["alpha"],
+      serverAllowlist: ["srv_body", "srv_gh"],
+    };
+    const without = applyAgentBinding(base);
+    const withUndefinedScope = applyAgentBinding({
+      ...base,
+      mcp: { scope: undefined, serverNamesById: NAMES },
+    });
+    const expected = ["srv_body", "srv_gh", "srv_slack"];
+    expect(without.serverAllowlist).toEqual(expected);
+    // An mcp input whose scope is undefined (run with no rules) is inert too.
+    expect(withUndefinedScope).toEqual(without);
+  });
+});

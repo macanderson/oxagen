@@ -8,7 +8,7 @@
 
 ## Intent
 
-Draft a skill configuration from a natural-language description **without persisting anything**. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the markdown body — and returns it for human review. This is the AI-assisted first step of the skill setup flow: the app's skill wizard presents the draft as a prefilled form, and the confirmed configuration is saved via `skill.create`. Headless callers can feed `skillMd` straight into `skill.workspace.install` (`custom.body`).
+Draft a skill configuration from a natural-language description **without persisting anything**. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the instruction body — and returns it for human review. This is the AI-assisted first step of the skill setup flow: the app's skill wizard presents the draft as a prefilled form, and the confirmed configuration is saved via `skill.create`. Headless callers can feed `content` straight into `skill.create`.
 
 ## Input
 
@@ -27,8 +27,9 @@ Draft a skill configuration from a natural-language description **without persis
 | `draft.description` | `string` | One-sentence matcher description used to decide when to load the skill. |
 | `draft.weight` | `"low" \| "high" \| "critical"` | Influence weight for the skill's guidance. |
 | `draft.category?` | `string` | Category label, when the model assigned one. |
-| `draft.body` | `string` | The markdown body that teaches the skill (no frontmatter). |
-| `skillMd` | `string` | The assembled and validated `.skill.md` document (YAML frontmatter + body). |
+| `draft.body` | `string` | The instruction text that teaches the skill. |
+| `content` | `string` | The assembled and validated canonical `skill.toml` document. |
+| `artifact` | `object` | Parsed `SkillArtifact` projection of `content`. |
 
 ## Roles
 
@@ -43,5 +44,5 @@ Org Owner, Org Admin, Workspace Owner, Workspace Admin, Workspace Member.
 
 | code | meaning |
 |---|---|
-| `validation_error` | Input failed Zod parse, or the synthesised document failed `.skill.md` validation. |
+| `validation_error` | Input failed Zod parse, or the synthesised document failed canonical `skill.toml` validation. |
 | `unauthorized` | Caller lacks the required org/workspace role. |

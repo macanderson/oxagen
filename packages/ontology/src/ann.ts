@@ -22,6 +22,19 @@
 export const DEFAULT_OVERSAMPLE_FACTOR = 3;
 
 /**
+ * Over-sampling factor for an AGENT-SCOPED vector search (Agent RBAC Phase 3,
+ * spec §4 Phase 3 risk note: "label filters interact with vector-index entry
+ * points — filter post-ANN with oversampling"). A GraphScope label allow-list
+ * is a second post-ANN predicate ON TOP of the tenancy filter, so attrition
+ * compounds: the global top-k must survive tenant filtering AND scope-label
+ * filtering. Double the default factor (2 × DEFAULT_OVERSAMPLE_FACTOR) buys
+ * headroom for that second filter; DEFAULT_OVERSAMPLE_CAP still bounds the
+ * index fetch, so a scoped query can never scan more than an unscoped one's
+ * ceiling.
+ */
+export const SCOPE_OVERSAMPLE_FACTOR = 6;
+
+/**
  * Hard ceiling on the over-sampled fetch size. Keeps a large requested `limit`
  * from turning into a runaway index scan while still leaving generous headroom
  * for post-filter attrition.

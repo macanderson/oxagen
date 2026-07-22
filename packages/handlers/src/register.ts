@@ -1482,4 +1482,16 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./router.decision.preview"))
         .routerDecisionPreviewHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "list_model_capabilities",
+    async () =>
+      (await import("./model.capability.list"))
+        .modelCapabilityListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "query_lineage",
+    async () =>
+      (await import("./lineage.query"))
+        .lineageQueryHandler as CapabilityHandlerFn,
+  );
 });

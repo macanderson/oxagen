@@ -9,4 +9,5 @@ export {
   oversampledLimit,
   DEFAULT_OVERSAMPLE_FACTOR,
   DEFAULT_OVERSAMPLE_CAP,
+  SCOPE_OVERSAMPLE_FACTOR,
 } from "./ann";

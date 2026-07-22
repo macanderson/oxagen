@@ -23,6 +23,7 @@ function agent(
     managed: false,
     avatarUrl: null,
     summary: null,
+    roleName: "Agent Contributor",
     detailHref: `/acme/default/workbench/agents/agt_${overrides.slug}`,
     launchHref: null,
     ...overrides,

@@ -8,12 +8,22 @@ import {
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
+import {
+  resolveAgentRunCapability,
+  type AgentRunIAMResolution,
+} from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
 import { beforeTool, afterTool, onError } from "../hooks/runtime";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
+import {
+  decideMcpToolEffect,
+  effectiveMcpScopeForRun,
+  emitMcpRuleAudit,
+} from "./mcp-rbac";
+import { mcpServerToolKey } from "@oxagen/oxagen/iam";
 import { isSandboxAvailable } from "@oxagen/sandbox";
 import { clipMiddle } from "@oxagen/agent-engine";
 import {
@@ -364,12 +374,75 @@ export async function materializeTools(
   let entitledPluginIds: Set<string> | null = null;
   let entitlementFetchFailed = false;
 
+  // ── Agent RBAC tool filter (spec §3.5 — the second seam) ────────────────────
+  // When this turn carries an agent-run IAM context, capabilities whose
+  // delegation-ceiling resolution (agent ∩ invoking human, deny-wins) is DENY
+  // are never materialized — the model never sees them. `pending_approval`
+  // (require_approval) tools STAY visible: they route to the approval flow at
+  // invoke time. This layer is UX only; the kernel invoke() gate is the real
+  // enforcement (defense against prompt-injected direct capability names).
+  //
+  // CRITICAL — one resolution per run: this reads ctx.agentRun.resolution, the
+  // SAME cached object the kernel's checkIAM reads/writes
+  // (packages/iam/src/check-iam.ts resolutionForAgentRun), via the SAME pure
+  // per-capability resolver (resolveAgentRunCapability, memoized on
+  // resolution.byCapability). No second fetch, no second policy — whoever
+  // attaches ctx.agentRun (the turn driver) populates `resolution` first.
+  // If an agentRun context arrives WITHOUT its resolution, fail closed for
+  // capability tools: an unattended automation must never see tools its
+  // ceiling was never computed for. Scope: capability/function tools only —
+  // MCP tools, skills, and subagent refs are governed at their own seams
+  // (spec Phase 4), not here.
+  const agentRun = ctx.agentRun;
+  const agentRunResolution: AgentRunIAMResolution | null =
+    agentRun?.principalKind === "agent" ? (agentRun.resolution ?? null) : null;
+  const agentRunFailClosed =
+    agentRun?.principalKind === "agent" && agentRunResolution === null;
+  if (agentRunFailClosed) {
+    logger.error(
+      {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        runId: agentRun?.runId,
+      },
+      "[agent-rbac] ctx.agentRun present without a populated resolution — " +
+        "failing closed: no capability tools will be materialized for this " +
+        "turn. The attacher must populate agentRun.resolution before " +
+        "materializeTools (see turn-driver.ts).",
+    );
+  }
+  // Run-constant resolver inputs (a run is pinned to one org+workspace; one
+  // `now` per materialization mirrors checkIAM's one `now` per check).
+  const agentRunScope = {
+    kind: (ctx.workspaceId ? "workspace" : "org") as "org" | "workspace",
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
+  const agentRunNow = new Date();
+
   for (const cap of all) {
     if (!getSurfaces(cap).includes("agent")) continue;
     if (WORKBENCH_ONLY_SANDBOX_CAPS.has(cap.name)) continue;
     if (opts.excludeCapabilities?.has(cap.name)) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
+    // Agent RBAC (spec §3.5): resolve this capability against the run's cached
+    // resolution and drop it on DENY. The memo written here
+    // (resolution.byCapability) is the memo the kernel hits at invoke time —
+    // the two layers provably share one decision per capability per run.
+    if (agentRunFailClosed) continue;
+    if (agentRunResolution !== null) {
+      const perms = resolveAgentRunCapability(agentRun!, agentRunResolution, {
+        capability: cap.name,
+        scope: agentRunScope,
+        // Same fallback as the kernel's IAM seam (kernel.ts): a capability
+        // without an explicit defaultEffect defaults to "deny".
+        defaultEffect: cap.defaultEffect ?? "deny",
+        now: agentRunNow,
+        clientIp: ctx.clientIp ?? null,
+      });
+      if (perms.outcome === "deny") continue;
+    }
     // Gate the entire sandbox-execution family on a configured driver: both the
     // one-shot execute_code and the durable sandbox session tools require
     // SANDBOX_ENABLED + a driver. Advertising a tool the model cannot actually
@@ -544,6 +617,28 @@ export async function materializeTools(
   // The PluginType spine yields the per-tool work (governance query, connect,
   // credential decrypt, list); the wrapping below applies the IAM gate +
   // metering uniformly to every contributed tool, keyed by externalServerId.
+  //
+  // ── Agent RBAC MCP rules — listing seam (Phase 4a, spec §3.7) ──────────────
+  // When this turn carries an agent-run IAM context, the run's effective
+  // resourceScope.mcp rules (agent ∩ human ceilings, first-match-wins per
+  // rule set, most-restrictive across sets) are evaluated per contributed
+  // tool: a DENY tool is never registered, so the model never sees it. "ask"
+  // tools STAY visible — they route through the agent-subject consent flow at
+  // call time (mirroring how pending_approval capability tools stay listed).
+  // Computed AFTER the capability loop above so the run's byCapability memo is
+  // already warm — effectiveMcpScopeForRun reads the SAME cached resolution
+  // (one resolution per run, §3.5), never a second fetch. No agentRun / no
+  // rules → undefined → this seam is inert (byte-identical listing).
+  const agentRunMcpScope =
+    agentRunResolution !== null
+      ? effectiveMcpScopeForRun(
+          agentRun!,
+          agentRunResolution,
+          agentRunScope,
+          agentRunNow,
+          ctx.clientIp ?? null,
+        )
+      : undefined;
   for (const contributor of getPluginTypeContributors()) {
     let contributed: ContributedRawTool[] = [];
     try {
@@ -560,6 +655,36 @@ export async function materializeTools(
       const capturedKey = raw.realName;
       const externalServerId = raw.externalServerId;
       const capturedExecute = raw.execute;
+      // Agent-RBAC rule identity: rules address "serverName:toolName" (spec
+      // §3.7). Contributors thread both; the fallbacks keep blanket rules
+      // ("*") binding even for a contributor that predates the fields.
+      const capturedServerName = raw.externalServerName ?? raw.externalServerId;
+      const capturedToolName =
+        raw.externalToolName ??
+        parseMcpSyntheticId(capturedKey)?.toolName ??
+        capturedKey;
+      // Fail closed (mirrors the capability loop above): an agentRun without
+      // its resolution must never expose external tools either.
+      if (agentRunFailClosed) continue;
+      // DENY tools are never registered — the model cannot see or call them.
+      if (
+        agentRunMcpScope !== undefined &&
+        decideMcpToolEffect(
+          agentRunMcpScope,
+          capturedServerName,
+          capturedToolName,
+        ) === "deny"
+      ) {
+        logger.info(
+          {
+            capability: capturedKey,
+            serverTool: mcpServerToolKey(capturedServerName, capturedToolName),
+            runId: agentRun?.runId,
+          },
+          "[agent-rbac] MCP tool excluded from listing by resourceScope.mcp deny rule",
+        );
+        continue;
+      }
       register(
         capturedKey,
         tool({
@@ -613,15 +738,209 @@ export async function materializeTools(
             }
             // ── End IAM gate ────────────────────────────────────────────────
 
+            // ── Agent RBAC MCP rule gate (Phase 4a, spec §3.7) ─────────────
+            // Defense-in-depth twin of the listing filter above: even if this
+            // tool was materialized before the run's rules bound (or reached
+            // the model any other way), the call itself re-evaluates the
+            // run's effective resourceScope.mcp rules from the SAME cached
+            // resolution. deny → blocked + audited (principal_kind='agent',
+            // server:tool dimension). ask → the EXISTING mcp_consents
+            // first-use consent flow, with the AGENT PRINCIPAL as the consent
+            // subject (subject_kind='agent'). allow → fall through to the
+            // unchanged gates below. ctx.agentRun is read at CALL time — the
+            // resolution slot is written by the run's first IAM check, which
+            // may postdate materialization.
+            let agentAskConsentHandled = false;
+            const callAgentRun = ctx.agentRun;
+            if (callAgentRun?.principalKind === "agent") {
+              const serverTool = mcpServerToolKey(
+                capturedServerName,
+                capturedToolName,
+              );
+              const callResolution = callAgentRun.resolution ?? null;
+              const meterRbacBlock = async (errorClass: string) => {
+                try {
+                  await insertToolInvocation(
+                    buildInvocationPayload(
+                      {
+                        invocationId,
+                        ctx,
+                        capabilityName: capturedKey,
+                        externalServerId,
+                        inputBytes: byteSize(input),
+                      },
+                      {
+                        status: "failed",
+                        outputBytes: 0,
+                        latencyMs: Date.now() - startedAt,
+                        errorClass,
+                      },
+                    ),
+                  );
+                } catch {
+                  /* telemetry must never fail the call */
+                }
+              };
+              if (callResolution === null) {
+                // Same fail-closed rule as the listing seams: a run context
+                // without its resolution has no computed ceiling — block.
+                logger.error(
+                  { capability: capturedKey, runId: callAgentRun.runId },
+                  "[agent-rbac] MCP tool call with agentRun but no resolution — failing closed",
+                );
+                await meterRbacBlock("McpRuleDenied");
+                return `Tool blocked: agent run carries no IAM resolution for ${capturedKey}`;
+              }
+              const callScope = effectiveMcpScopeForRun(
+                callAgentRun,
+                callResolution,
+                agentRunScope,
+                new Date(),
+                ctx.clientIp ?? null,
+              );
+              const effect = decideMcpToolEffect(
+                callScope,
+                capturedServerName,
+                capturedToolName,
+              );
+              if (effect === "deny") {
+                emitMcpRuleAudit({
+                  ctx,
+                  agentRun: callAgentRun,
+                  capability: capturedKey,
+                  serverTool,
+                  effect: "deny",
+                });
+                await meterRbacBlock("McpRuleDenied");
+                return `Tool blocked by agent role policy: mcp rule deny for ${serverTool}`;
+              }
+              if (effect === "ask") {
+                const agentSubjectId = callAgentRun.agentPrincipal.id;
+                const askParts = parseMcpSyntheticId(capturedKey);
+                if (!askParts) {
+                  // No durable consent identity (e.g. file-based server keys
+                  // carry no mcp_servers uuid) — an "ask" that cannot be
+                  // consented fails closed.
+                  emitMcpRuleAudit({
+                    ctx,
+                    agentRun: callAgentRun,
+                    capability: capturedKey,
+                    serverTool,
+                    effect: "ask",
+                  });
+                  await meterRbacBlock("ConsentRequired");
+                  return `Tool blocked: agent consent required for ${serverTool}, but this server supports no durable consent`;
+                }
+                const agentDecision = await runInTenantScope(
+                  { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                  () =>
+                    checkConsent(
+                      ctx,
+                      agentSubjectId,
+                      askParts.serverId,
+                      askParts.toolName,
+                      "agent",
+                    ),
+                );
+                if (agentDecision?.status === "denied") {
+                  await meterRbacBlock("ConsentDenied");
+                  return `Tool blocked: agent consent denied for ${capturedKey}`;
+                }
+                if (agentDecision === null) {
+                  // Ask-escalation: audit it, then solicit through the SAME
+                  // HITL approval-card machinery the user consent flow uses.
+                  emitMcpRuleAudit({
+                    ctx,
+                    agentRun: callAgentRun,
+                    capability: capturedKey,
+                    serverTool,
+                    effect: "ask",
+                  });
+                  if (!ctx.messageId) {
+                    // Unattended surface (durable runner turn): nothing can
+                    // render a consent card — fail closed, no row written, so
+                    // an interactive surface can grant it later.
+                    await meterRbacBlock("ConsentRequired");
+                    return `Tool blocked: agent consent required for ${serverTool} (no interactive surface to ask)`;
+                  }
+                  const askExpiresAt = new Date(
+                    Date.now() + CONSENT_PROMPT_TTL_MS,
+                  ).toISOString();
+                  const { approvalId } = await runInTenantScope(
+                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                    () =>
+                      createApprovalRequest({
+                        orgId: ctx.orgId,
+                        workspaceId: ctx.workspaceId,
+                        messageId: ctx.messageId!,
+                        capabilityName: capturedKey,
+                        inputPreview: input,
+                        riskLevel: "medium",
+                        ttlMs: CONSENT_PROMPT_TTL_MS,
+                      }),
+                  );
+                  opts.onConsentRequired?.({
+                    approvalId,
+                    capability: capturedKey,
+                    serverId: askParts.serverId,
+                    toolName: askParts.toolName,
+                    inputPreview: input,
+                    expiresAt: askExpiresAt,
+                  });
+                  const askResolution = await waitForApproval(
+                    approvalId,
+                    CONSENT_PROMPT_TTL_MS,
+                  );
+                  const askGranted = askResolution.resolution === "approved";
+                  await runInTenantScope(
+                    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                    () =>
+                      recordConsent({
+                        orgId: ctx.orgId,
+                        workspaceId: ctx.workspaceId,
+                        // AGENT principal as the consent subject, labeled
+                        // distinctly via subject_kind (spec §3.7).
+                        userId: agentSubjectId,
+                        subjectKind: "agent",
+                        serverId: askParts.serverId,
+                        toolName: askParts.toolName,
+                        status: askGranted ? "granted" : "denied",
+                        ttlMs: DEFAULT_CONSENT_TTL_MS,
+                      }),
+                  ).catch(() => {
+                    /* a failed grant write must not crash the turn — re-prompt next time */
+                  });
+                  if (!askGranted) {
+                    await meterRbacBlock("ConsentDenied");
+                    return `Tool blocked: agent consent ${askResolution.resolution} for ${capturedKey}`;
+                  }
+                }
+                // An active or freshly-granted agent consent covers this
+                // call — the user-scoped first-use gate below is skipped so
+                // one human answer isn't solicited twice for the same call.
+                agentAskConsentHandled = true;
+              }
+            }
+            // ── End agent RBAC MCP rule gate ───────────────────────────────
+
             // ── First-use consent gate (OXA-816) ────────────────────────────
             // The FIRST time this (workspace, user, server, tool) is invoked we
             // pause and render a consent card; the decision is durable so the
             // second call runs inline. Only fires on the chat surface (messageId
             // + userId present) — direct API/MCP callers are governed by their
             // own auth surface. A workspace pre-grant (tool_name='*') and any
-            // unexpired prior grant short-circuit without prompting.
+            // unexpired prior grant short-circuit without prompting. Skipped
+            // when the agent-RBAC "ask" flow above already secured an
+            // agent-subject consent for this exact call (never for plain
+            // user turns — agentAskConsentHandled stays false without an
+            // agentRun, keeping this gate byte-identical).
             const mcpParts = parseMcpSyntheticId(capturedKey);
-            if (mcpParts && ctx.messageId && ctx.userId) {
+            if (
+              mcpParts &&
+              ctx.messageId &&
+              ctx.userId &&
+              !agentAskConsentHandled
+            ) {
               const consentUserId = ctx.userId;
               const decision = await runInTenantScope(
                 { orgId: ctx.orgId, workspaceId: ctx.workspaceId },

@@ -27,6 +27,14 @@ export interface RegistryCapability {
    * mutating classification (materialize-tools isMutatingCapability).
    */
   sensitivity?: "low" | "medium" | "high" | "destructive";
+  /**
+   * The contract's IAM default effect. Optional here (decoupled structural
+   * view); when absent, readers MUST fall back to "deny" — the SAME fallback
+   * the kernel applies (packages/oxagen/src/kernel.ts's IAM seam), so the
+   * agent-run tool filter and the kernel gate can never disagree about a
+   * capability's default (Agent RBAC spec §3.5: one resolution, two readers).
+   */
+  defaultEffect?: "allow" | "deny" | "require_approval";
   /** Zod schema or equivalent — typed as unknown to avoid coupling. */
   input?: unknown;
   surfaces?: readonly ("api" | "mcp" | "agent")[];

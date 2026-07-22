@@ -283,9 +283,17 @@ contract-first design, IAM enforcement, and instrumentation.
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
 
+## Lineage (1)
+
+- [lineage.query](lineage.query.md) — Return the dispatch tree for one fan-out/run id — every subagent run reachable from a root dispatch, each carrying its principal (and Agent-RBAC delegation ceiling), observed ClickHouse spend, model/provider, and a derived outcome
+
 ## Mermaid (1)
 
 - [mermaid.generate](mermaid.generate.md) — Produce a Mermaid diagram rendered inline in chat as a client-side SVG artifact
+
+## Model (1)
+
+- [list_model_capabilities](model.capability.list.md) — List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts
 
 ## Notifications (2)
 
@@ -426,19 +434,19 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Skill (14)
 
-- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
-- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
+- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated skill.toml and installs it into the workspace
+- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied skill.toml content (idempotent on slug)
 - [skill.draft](skill.draft.md) — Draft a skill configuration from a natural-language description for human review — the AI-assisted first step of skill setup; persists nothing
-- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the .skill.md body and saves a new activated version (slug immutable)
+- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the skill.toml artifact and saves a new activated version (slug immutable)
 - [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
 - [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
-- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including body and parsed frontmatter
-- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from raw .skill.md content
+- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including canonical skill.toml content and the parsed artifact
+- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from canonical skill.toml content
 - [skill.version.activate](skill.version.activate.md) — Set a specific skill version as the workspace's active version
 - [skill.edit](skill.edit.md) — Save an edited skill body as a new immutable version
-- [skill.export](skill.export.md) — Export a skill version as a downloadable .skill.md string
+- [skill.export](skill.export.md) — Export a skill version as a downloadable skill.toml string
 - [skill.metrics.read](skill.metrics.read.md) — Read aggregated skill usage and cost metrics for the workspace
 
 ## Svg (1)
@@ -449,9 +457,10 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Telemetry (1)
+## Telemetry (2)
 
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
+- [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
 ## User (4)
 

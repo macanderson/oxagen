@@ -25,14 +25,51 @@
  * is safe to replay after a crash because `appendEvents` is idempotent
  * server-side (`ON CONFLICT DO NOTHING` on `(run_id, seq)`); the worker never
  * needs its own dedup bookkeeping.
+ *
+ * ── V2: fenced immutable attempts (docs/specs/run-evidence-ingress/spec.md) ──
+ *
+ * When `opts.attempts` is supplied, each claim loop tries the fenced V2 queue
+ * first and falls back to V1, and a V2 claim is driven by `driveOneAttempt`
+ * instead. The two paths differ in every way that matters:
+ *
+ *   - identity   every claim carries a distinct `RunLeaseRef` (run + attempt +
+ *                token + epoch) that every renew, append, checkpoint, cancel
+ *                check, and seal echoes back;
+ *   - IO         events and the checkpoint that terminates them commit in ONE
+ *                `appendAttemptBatch` transaction — there is no separate
+ *                checkpoint-save call to tear against;
+ *   - fencing    a lost claim THROWS rather than returning `false`, and the
+ *                fenced attempt then performs no store mutation at all — not
+ *                even a terminal one. Another attempt owns that evidence now;
+ *   - terminal   completed/denied/failed/cancelled all go through `sealAttempt`,
+ *                which mints the one-shot finalization grant and its durable
+ *                obligation in the seal transaction. The worker never invokes
+ *                evidence finalization itself.
+ *
+ * `opts.attempts` being optional IS the V2 claim gate: PR 1A wires the V1 path
+ * only (see ./main.ts), so no V2 attempt is claimed before PR 2B's
+ * finalization consumption exists to satisfy the obligations a seal creates.
  */
 import { hostname } from "node:os";
+import { isRunLeaseFencedError } from "@oxagen/agent-runner/run-errors";
 import { computeBackoffDelayMs } from "./backoff";
-import { firstSeqForRun, SeqCounter } from "./seq";
-import { decideTerminalAction } from "./terminal";
+import {
+  assertContiguousAttemptSeqs,
+  AttemptSeqCounter,
+  firstSeqForRun,
+  SeqCounter,
+} from "./seq";
+import { decideAttemptTerminalAction, decideTerminalAction } from "./terminal";
+import type { WorkerSealStatus } from "./terminal";
 import type {
   AgentWorker,
+  AttemptCheckpointRecord,
+  AttemptEventEmission,
+  AttemptEventRecord,
+  AttemptTurnOutcome,
+  AttemptWorkerOptions,
   ClaimedRun,
+  ClaimedRunV2,
   RunEventRecord,
   RunStore,
   TurnDriver,
@@ -48,9 +85,51 @@ export const DEFAULT_POLL_BACKOFF_CAP_MS = 15_000;
 export const DEFAULT_LEASE_RENEW_INTERVAL_MS = 240_000;
 export const DEFAULT_CANCEL_POLL_INTERVAL_MS = 5000;
 
+/**
+ * The single terminal-stage event type; the seal appends it in its own
+ * transaction. Spelled here rather than imported so `worker.ts` keeps its
+ * dependency-free structural-port discipline; the store rejects any other
+ * spelling against the closed registry, so drift fails loudly at the first
+ * seal instead of silently.
+ */
+export const TERMINAL_EVENT_TYPE = "terminal.attempt_terminated";
+
+/**
+ * `reason_code` shape the V2 terminal-event schema accepts. A reason that does
+ * not match is DROPPED rather than sent: the reason is an annotation, and
+ * letting a malformed one reject the terminal event would leave the attempt
+ * unsealed — no seal means no finalization grant, which is the exact failure
+ * the seal transaction exists to prevent.
+ */
+const REASON_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
+
 /** `${hostname}:${pid}` — stable per process, unique enough per host to debug claimed-by. */
 export function defaultWorkerId(): string {
   return `${hostname()}:${process.pid}`;
+}
+
+/** The `terminal.attempt_terminated` payload, minus anything unproven. */
+export function buildTerminalEventPayload(
+  terminalStatus: WorkerSealStatus,
+  reasonCode: string | undefined,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { terminal_status: terminalStatus };
+  // Error and result DIGESTS are legitimate terminal-payload fields, but the
+  // worker has no hasher here and a raw message may carry paths, stdout, or
+  // source. Omitting them is honest; the message itself travels on the run row
+  // via `sealAttempt`'s `error`, never on the event.
+  if (reasonCode !== undefined && REASON_CODE_RE.test(reasonCode)) {
+    payload.reason_code = reasonCode;
+  }
+  return payload;
+}
+
+/**
+ * Was this failure a lost claim? A fenced attempt must stop dead: the events it
+ * would go on to write belong to an attempt that no longer owns the run.
+ */
+function isFence(err: unknown): boolean {
+  return isRunLeaseFencedError(err);
 }
 
 /**
@@ -93,6 +172,8 @@ function interruptibleSleep(ms: number): {
 export function createAgentWorker(opts: WorkerOptions): AgentWorker {
   const store: RunStore = opts.store;
   const driveTurn: TurnDriver = opts.driveTurn;
+  // Undefined ⇒ V2 claims disabled for this process (the PR 1A configuration).
+  const attempts: AttemptWorkerOptions | undefined = opts.attempts;
   const workerId = opts.workerId ?? defaultWorkerId();
   const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
   const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
@@ -254,9 +335,254 @@ export function createAgentWorker(opts: WorkerOptions): AgentWorker {
     }
   }
 
+  /**
+   * Drives one claimed V2 attempt to a sealed terminal decision. Never throws.
+   *
+   * Contrast with `driveOneRun`: there is no `false`-means-lost-lease anywhere
+   * here. Every fenced operation throws, and the FIRST fence stops the attempt
+   * dead — no further append, no checkpoint, and above all no seal. The lease
+   * reclaimer will seal this attempt as `abandoned` (with the canonical empty
+   * stream digest when nothing was ever accepted) and mint its finalization
+   * grant, so evidence is never stranded by this early exit.
+   */
+  async function driveOneAttempt(
+    cfg: AttemptWorkerOptions,
+    claimed: ClaimedRunV2,
+  ): Promise<void> {
+    const lease = claimed.lease;
+    const controller = new AbortController();
+    let fenced = false;
+    let cancelled = false;
+    // ALWAYS 1, even for a successor that restored a checkpoint: `attempt_seq`
+    // is a position within ONE attempt, and the restored position travels on
+    // `claimed.v2.restore`, never as a sequence offset.
+    const seqCounter = new AttemptSeqCounter();
+    let pending: AttemptEventRecord[] = [];
+    /** Highest sequence the store has ACCEPTED. 0 until the first commit lands. */
+    let lastAppendedSeq = 0;
+
+    function fence(err: unknown, phase: string): void {
+      if (fenced) return;
+      fenced = true;
+      controller.abort();
+      reportError(err, { runId: lease.runId, phase });
+    }
+
+    /**
+     * Commit the buffered batch — and, when supplied, the checkpoint that
+     * terminates it — in ONE `appendAttemptBatch` transaction. There is no
+     * separate checkpoint-save call, so events and their checkpoint can never
+     * tear apart: either both are durable or neither is.
+     */
+    async function commit(checkpoint?: AttemptCheckpointRecord): Promise<void> {
+      if (fenced) return;
+      if (pending.length === 0) {
+        if (!checkpoint) return;
+        // A checkpoint is bound to the final event of the append it terminates
+        // — there is no event to bind to. Refusing locally names the mistake at
+        // the call site instead of surfacing it from inside a transaction.
+        throw new RangeError(
+          "a checkpoint must terminate at least one buffered event",
+        );
+      }
+      const batch = pending;
+      assertContiguousAttemptSeqs(
+        lastAppendedSeq,
+        batch.map((event) => event.attemptSeq),
+      );
+      pending = [];
+      try {
+        const result = await cfg.store.appendAttemptBatch({
+          lease,
+          events: batch,
+          checkpoint,
+        });
+        lastAppendedSeq = result.lastAttemptSeq;
+      } catch (err) {
+        if (isFence(err)) {
+          fence(err, "attempt-append");
+          throw err;
+        }
+        // The transaction rolled back — events AND checkpoint together. Put the
+        // batch back with its sequences and observation times UNTOUCHED, so the
+        // next commit replays it byte-identically: a re-stamped `observedAt`
+        // moves `event_digest` and turns a benign retry into a
+        // same-sequence/different-digest integrity conflict.
+        pending = [...batch, ...pending];
+        throw err;
+      }
+    }
+
+    function onEvent(emission: AttemptEventEmission): void {
+      if (fenced) return; // another attempt owns this run's evidence now
+      const hasInline = emission.payload !== undefined;
+      const hasEncrypted = emission.encryptedPayloadRef !== undefined;
+      if (hasInline === hasEncrypted) {
+        throw new RangeError(
+          `event ${emission.eventType} must carry exactly one of an inline ` +
+            `payload or an encrypted payload reference`,
+        );
+      }
+      if (hasEncrypted && emission.payloadDigest === undefined) {
+        throw new RangeError(
+          `event ${emission.eventType} carries an encrypted payload reference ` +
+            `without its precomputed payload digest`,
+        );
+      }
+      pending.push({
+        ...emission,
+        attemptSeq: seqCounter.assign(),
+        // Stamped once, here, and never re-stamped on replay.
+        observedAt: new Date().toISOString(),
+      });
+    }
+
+    const stopLeaseTicker = startTicker(
+      async () => {
+        if (fenced) return;
+        try {
+          await cfg.store.renewAttemptLease(lease, cfg.leaseSeconds);
+        } catch (err) {
+          if (isFence(err)) {
+            fence(err, "attempt-lease-renew");
+            return;
+          }
+          throw err; // transient: reported by the ticker, retried next tick
+        }
+      },
+      leaseRenewIntervalMs,
+      (err) =>
+        reportError(err, { runId: lease.runId, phase: "attempt-lease-renew" }),
+    );
+
+    const stopCancelTicker = startTicker(
+      async () => {
+        if (fenced || cancelled) return;
+        try {
+          if (await cfg.store.isAttemptCancelRequested(lease)) {
+            cancelled = true;
+            controller.abort();
+          }
+        } catch (err) {
+          if (isFence(err)) {
+            // A fenced attempt has no standing to ask whether to keep going —
+            // it must stop either way.
+            fence(err, "attempt-cancel-poll");
+            return;
+          }
+          throw err;
+        }
+      },
+      cancelPollIntervalMs,
+      (err) =>
+        reportError(err, { runId: lease.runId, phase: "attempt-cancel-poll" }),
+    );
+    activeCancelPollStops.add(stopCancelTicker);
+
+    let driverError: { error: unknown } | null = null;
+    let outcome: AttemptTurnOutcome | null = null;
+    try {
+      outcome = await cfg.driveTurn(claimed, {
+        onEvent,
+        checkpoint: (record) => commit(record),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      // A fence rethrown out of `commit` is already recorded; it must not be
+      // mistaken for a driver failure, which would try to seal a fenced attempt.
+      if (!fenced && isFence(err)) fence(err, "attempt-drive");
+      else if (!fenced) driverError = { error: err };
+    } finally {
+      stopCancelTicker();
+      activeCancelPollStops.delete(stopCancelTicker);
+    }
+
+    // Final commit before the seal, unless the attempt is already fenced.
+    if (!fenced) {
+      try {
+        await commit();
+      } catch (err) {
+        if (!fenced) {
+          reportError(err, {
+            runId: lease.runId,
+            phase: "attempt-final-commit",
+          });
+          if (driverError === null) driverError = { error: err };
+        }
+      }
+    }
+
+    const decision = decideAttemptTerminalAction({
+      fenced,
+      cancelled,
+      driverError,
+      outcome,
+    });
+    try {
+      if (decision.kind === "none") return;
+      // The terminal event continues from what the store ACCEPTED, not from the
+      // local counter: events dropped by a failed final commit never became
+      // durable, and numbering past them would leave a gap the append refuses.
+      const handle = await cfg.store.sealAttempt({
+        lease,
+        terminalStatus: decision.status,
+        reasonCode: decision.reasonCode,
+        terminalEvent: {
+          attemptSeq: lastAppendedSeq + 1,
+          eventType: TERMINAL_EVENT_TYPE,
+          observedAt: new Date().toISOString(),
+          payload: buildTerminalEventPayload(
+            decision.status,
+            decision.reasonCode,
+          ),
+        },
+        sealerWorkerId: workerId,
+        error: decision.error,
+        result: decision.result,
+      });
+      if (cfg.onSealed) {
+        try {
+          cfg.onSealed(handle);
+        } catch {
+          // Observability only — see AttemptWorkerOptions.onSealed. The
+          // obligation is already durable; nothing here can strand it.
+        }
+      }
+    } catch (err) {
+      // A seal that could not be written leaves an unsealed attempt whose lease
+      // simply expires; the reclaimer seals it as `abandoned` and mints its
+      // grant. Reported, never retried inline — retrying from a process that
+      // may itself be dying is how double-terminal races start.
+      reportError(err, { runId: lease.runId, phase: "attempt-seal" });
+    } finally {
+      stopLeaseTicker();
+    }
+  }
+
   async function claimLoop(): Promise<void> {
     let attempt = 0;
     while (!stopped) {
+      // V2 first, V1 second: fenced attempts take priority when this process is
+      // configured for them, and already-enqueued legacy work keeps draining
+      // through the same loop either way.
+      if (attempts) {
+        let claimedV2: ClaimedRunV2 | null = null;
+        try {
+          claimedV2 = await attempts.store.claimNextRunV2(workerId, {
+            engine: attempts.engine,
+            restorableEngineStateSchemas: attempts.restorableEngineStateSchemas,
+            leaseSeconds: attempts.leaseSeconds,
+          });
+        } catch (err) {
+          reportError(err, { phase: "attempt-claim" });
+        }
+        if (claimedV2) {
+          attempt = 0;
+          await driveOneAttempt(attempts, claimedV2);
+          continue;
+        }
+      }
+
       let claimed: ClaimedRun | null = null;
       try {
         claimed = await store.claimNextRun(workerId);

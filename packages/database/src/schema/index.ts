@@ -19,6 +19,7 @@ export * from "./plugin";
 export * from "./notification";
 export * from "./privacy";
 export * from "./ingestion";
+export * from "./run-evidence-foundation";
 export * from "./schema-registry";
 export * from "./environments";
 export * from "./ai";

@@ -1,0 +1,6 @@
+schema_version = 1
+kind = "skill"
+name = "testing"
+description = "How to write tests that pin down behavior."
+instructions = "# Testing\n\nWrite the failing test first, then make it pass."
+references = [ "checklist.md" ]

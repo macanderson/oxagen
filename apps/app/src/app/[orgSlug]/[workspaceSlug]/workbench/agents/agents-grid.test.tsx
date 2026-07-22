@@ -57,6 +57,7 @@ function agent(
     managed: false,
     avatarUrl: null,
     summary: null,
+    roleName: null,
     detailHref: `/acme/default/workbench/agents/agt_${overrides.slug}`,
     launchHref: null,
     ...overrides,
@@ -128,6 +129,29 @@ describe("AgentsGrid", () => {
     const qa = screen.getByTestId("agent-row-qa-chat");
     expect(within(qa).getByText(/^draft$/i)).toBeDefined();
     expect(within(qa).getByText("Not deployed")).toBeDefined();
+  });
+
+  it("renders the RBAC role badge when assigned and omits it when null", () => {
+    render(
+      <AgentsGrid
+        agents={[
+          agent({
+            slug: "billing-bot",
+            name: "Billing Bot",
+            roleName: "Agent Operator",
+          }),
+          agent({ slug: "qa-chat", name: "QA Chat" }), // roleName: null
+        ]}
+      />,
+    );
+
+    const billing = screen.getByTestId("agent-row-billing-bot");
+    const badge = within(billing).getByTestId("agent-role-billing-bot");
+    expect(badge.textContent).toContain("Agent Operator");
+
+    // Fail-open contract: no assignment (or a failed lookup) = no badge.
+    const qa = screen.getByTestId("agent-row-qa-chat");
+    expect(within(qa).queryByTestId("agent-role-qa-chat")).toBeNull();
   });
 
   it("filters cards by search query across name/slug/summary", async () => {

@@ -1,6 +1,14 @@
 import type { z } from "zod";
 import type { LifecycleEvent } from "@oxagen/agent-artifacts";
-import type { AgentRunIAMContext } from "./iam/agent-run";
+// Type-only imports: `AgentRunIAMContext` is referenced by CapabilityContext and
+// `AuthorizationDecisionRef` by the authorization-decision seam below, but neither
+// was imported when agent RBAC landed, leaving this package's typecheck red.
+// `import type` is erased at compile time, so the resulting types.ts <->
+// iam/agent-run.ts cycle costs nothing at runtime.
+import type {
+  AgentRunIAMContext,
+  AuthorizationDecisionRef,
+} from "./iam/agent-run";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
@@ -325,7 +333,50 @@ export interface CapabilityContext {
    * a core safety property, not an enterprise feature.
    */
   agentRun?: AgentRunIAMContext;
+  /**
+   * Present ONLY on the pre-run agent surfaces that must act as a deployed
+   * agent before any run (and therefore any `agentRun`) exists — most
+   * importantly governed run admission itself.
+   *
+   * The kernel creates it (`createDeployedAgentInvocationContext`) and records
+   * the object in a module-private registry; a forged or replayed object fails
+   * `isKernelIssuedDeployedAgentInvocation` and is treated as absent. Ordinary
+   * human / API / MCP contexts therefore cannot construct one, which is what
+   * keeps `edit_repo_file` agent-only (spec §"Launch changes", item 1).
+   */
+  deployedAgentInvocation?: DeployedAgentInvocationContext;
 }
+
+/**
+ * A kernel-created binding of an AUTHENTICATED INITIATING HUMAN to a
+ * SERVER-RESOLVED active deployed agent version, for capability invocations
+ * that precede a run.
+ *
+ * It deliberately carries no run id: a caller that could name a run could
+ * borrow that run's pinned ceiling. Admission mints the run (and its
+ * `ras_` snapshot) FROM this context; it never reads one out of it.
+ *
+ * The `__kernelIssued` brand is declared with a module-private unique symbol,
+ * so no code outside this module can even name the key — the compile-time half
+ * of the guarantee. The runtime half is the kernel's registry, because a cast
+ * can defeat any purely structural brand.
+ */
+export interface DeployedAgentInvocationContext {
+  readonly principalKind: "deployed_agent_invocation";
+  /** The authenticated human authorizing this invocation. */
+  readonly initiatingPrincipal: ResolvedPrincipal;
+  /** The deployed agent's own delegated IAM principal. */
+  readonly agentPrincipal: ResolvedPrincipal;
+  /** Agent public id (agt_…). */
+  readonly agentId: string;
+  /** Internal UUID of the ACTIVE agent version — server-resolved, never sent. */
+  readonly agentVersionId: string;
+  /** `sha256:<64 hex>` checksum of that exact version. */
+  readonly agentVersionChecksum: string;
+  readonly [kernelIssuedBrand]: true;
+}
+
+declare const kernelIssuedBrand: unique symbol;
 
 /**
  * Resolved principal identity — populated by the IAM layer after validating
@@ -359,6 +410,18 @@ export interface CheckedContext extends CapabilityContext {
   idempotencyKey?: string;
   /** Present only when the kernel is executing a lifecycle invocation. */
   execution?: LifecycleExecutionContext;
+  /**
+   * The PLATFORM-CREATED reference to the immutable `iam.authorization_decisions`
+   * row that allowed this invocation.
+   *
+   * Only ever present on a CHECKED context, and only for an `allow`: a
+   * deny / approval-pending / evaluation-error decision returns its reference
+   * on the typed kernel result or on the thrown `CapabilityError`, because the
+   * handler never runs. The kernel STRIPS any inbound value off the incoming
+   * `CapabilityContext` before the check — a caller-supplied decision reference
+   * is a forgery attempt, never an input.
+   */
+  authorizationDecision?: AuthorizationDecisionRef;
 }
 
 export interface CapabilityManifestEntry {

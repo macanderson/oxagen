@@ -18,23 +18,25 @@ export const [chatPersistStream] = createFunction(
   { id: "chat.persist-stream", retries: 3 },
   { event: "chat/message.streamed" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, assistantMessageId, content, tokenUsage } = event.data as {
-      orgId: string;
-      workspaceId: string;
-      assistantMessageId: string;
-      content: string;
-      tokenUsage?: {
-        model: string;
-        provider?: string;
-        inputTokens: number;
-        outputTokens: number;
-        cachedTokens?: number;
-        costMicros: number;
-        durationMs?: number;
-        surface?: Surface;
-        promptHash?: string;
-      } | null;
-    };
+    const { orgId, workspaceId, assistantMessageId, content, tokenUsage } =
+      event.data as {
+        orgId: string;
+        workspaceId: string;
+        assistantMessageId: string;
+        content: string;
+        tokenUsage?: {
+          model: string;
+          provider?: string;
+          inputTokens: number;
+          outputTokens: number;
+          cachedTokens?: number;
+          cacheWriteTokens?: number;
+          costMicros: number;
+          durationMs?: number;
+          surface?: Surface;
+          promptHash?: string;
+        } | null;
+      };
 
     await step.run("update-message", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
@@ -64,10 +66,12 @@ export const [chatPersistStream] = createFunction(
             workspace_id: workspaceId,
             model: tokenUsage.model,
             // Thread provider from event payload when available; sentinel "" otherwise.
-            provider: (tokenUsage.provider as "" | "anthropic" | "openai") ?? "",
+            provider:
+              (tokenUsage.provider as "" | "anthropic" | "openai") ?? "",
             input_tokens: tokenUsage.inputTokens,
             output_tokens: tokenUsage.outputTokens,
             cached_tokens: tokenUsage.cachedTokens ?? 0,
+            cache_write_tokens: tokenUsage.cacheWriteTokens ?? 0,
             cost_usd_micros: tokenUsage.costMicros,
             // Thread duration_ms from event payload when available; 0 sentinel otherwise.
             duration_ms: tokenUsage.durationMs ?? 0,
@@ -83,7 +87,10 @@ export const [chatPersistStream] = createFunction(
       });
     }
 
-    logger.info({ assistantMessageId, hasTokenUsage: tokenUsage !== null }, "chat.persist-stream complete");
+    logger.info(
+      { assistantMessageId, hasTokenUsage: tokenUsage !== null },
+      "chat.persist-stream complete",
+    );
     return { persisted: assistantMessageId };
   },
 );

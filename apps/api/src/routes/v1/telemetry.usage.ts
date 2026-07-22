@@ -28,14 +28,20 @@ export const telemetryUsageRoute = new Hono<AppEnv>();
 
 // 60 requests/minute/IP: generous for legitimate CLI usage (at most one event
 // per command invocation) while bounding abuse of a public, unauthed endpoint.
-telemetryUsageRoute.use("*", rateLimiter({ windowMs: 60_000, max: 60 }));
+// Match only this subrouter's concrete endpoint. A wildcard here is cloned
+// under the parent `/v1/telemetry` mount and would unintentionally throttle
+// authenticated sibling routes such as `/v1/telemetry/stella/*`.
+telemetryUsageRoute.use("/usage", rateLimiter({ windowMs: 60_000, max: 60 }));
 
 telemetryUsageRoute.post("/usage", async (c) => {
   let rawBody: unknown;
   try {
     rawBody = await c.req.json();
   } catch {
-    return c.json({ error: "invalid_request", message: "Invalid JSON body" }, 400);
+    return c.json(
+      { error: "invalid_request", message: "Invalid JSON body" },
+      400,
+    );
   }
 
   // Defense in depth: parseUsageEventPayload's `.strict()` schema is the real
@@ -50,10 +56,15 @@ telemetryUsageRoute.post("/usage", async (c) => {
   }
 
   try {
-    await insertUsageEvents([{ ...result.data, timestamp: new Date().toISOString() }]);
+    await insertUsageEvents([
+      { ...result.data, timestamp: new Date().toISOString() },
+    ]);
   } catch (err) {
     logger.error({ err }, "[telemetry.usage] insert failed");
-    return c.json({ error: "internal_error", message: "Failed to record event" }, 500);
+    return c.json(
+      { error: "internal_error", message: "Failed to record event" },
+      500,
+    );
   }
 
   return c.json({ ok: true }, 200);

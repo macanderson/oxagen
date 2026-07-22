@@ -1,14 +1,22 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, inArray } from "drizzle-orm";
 import { insertEvents } from "@oxagen/telemetry";
+import pino from "pino";
 import type { CapabilityContext } from "../types";
 import type {
   AgentSubagentCancelInput,
   AgentSubagentCancelOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.cancel";
 import { FanoutNotFoundError } from "./subagent-errors";
+import { CANCEL_ERROR_REASON } from "../dispatch/lineage-outcome";
+import { projectSubagentFanoutLineage } from "../dispatch/lineage-projection";
 
 export type { AgentSubagentCancelInput, AgentSubagentCancelOutput };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.subagent.cancel" },
+});
 
 // STATUS-TRANSITION NOTE (HALTED SUB-SLICE):
 //
@@ -28,6 +36,11 @@ export type { AgentSubagentCancelInput, AgentSubagentCancelOutput };
 // FANOUT_CANCEL_STATUS and RUN_CANCEL_STATUS below with 'cancelled'.
 const FANOUT_CANCEL_STATUS = "timed_out" as const;
 const RUN_CANCEL_STATUS = "failed" as const;
+
+// CANCEL_ERROR_REASON is the single source of truth (packages/agent/src/dispatch/lineage-outcome.ts) —
+// query_lineage's deriveLineageOutcome and the fleet-lineage graph projection
+// both decode this exact string to distinguish a cancellation from a genuine
+// failure, so it must never drift from the literal written below.
 
 // Non-terminal run statuses — only these rows are transitioned on cancel.
 const NON_TERMINAL_RUN_STATUSES = ["pending", "running"] as const;
@@ -85,7 +98,7 @@ export async function agentSubagentCancelHandler(
         .update(schema.subagentRuns)
         .set({
           status: RUN_CANCEL_STATUS,
-          errorReason: "Cancelled by agent.subagent.cancel",
+          errorReason: CANCEL_ERROR_REASON,
           completedAt: new Date(),
         })
         .where(
@@ -122,6 +135,24 @@ export async function agentSubagentCancelHandler(
   await emitCancelTelemetry(ctx, input.fanoutId, updatedRuns, durationMs).catch(
     () => undefined,
   );
+
+  // 5. Project the (now cancel-terminal) dispatch tree into Neo4j — best
+  //    effort, non-blocking. A graph write failure must never fail a
+  //    successful cancel (mirrors the telemetry swallow above). Cancellation
+  //    is encoded, not a status (see the STATUS-TRANSITION NOTE above), so
+  //    this reads back through the SAME deriveLineageOutcome the graph
+  //    projection uses — a cancelled run is never mistaken for a genuine
+  //    failure in the graph either.
+  await projectSubagentFanoutLineage({
+    fanoutId: fanout.id,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  }).catch((err: unknown) => {
+    logger.warn(
+      { err, fanoutId: input.fanoutId },
+      "agent.subagent.cancel: lineage graph projection failed — cancel still succeeds",
+    );
+  });
 
   return {
     fanoutId: input.fanoutId,

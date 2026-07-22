@@ -7,6 +7,11 @@ import type { ScopeContext } from "@/lib/scope";
 import { requestScopeSlugs } from "@/lib/request-path";
 import { resolveWorkbenchScope } from "@/lib/workbench/scope";
 import { loadEquipSources } from "@/lib/workbench/equip-sources";
+import {
+  listAgentRoleOptions,
+  fallbackSystemRoleOptions,
+  type AgentRoleOption,
+} from "@/lib/workbench/agent-roles";
 import { AgentBuilder } from "../agent-builder";
 import {
   installPlugin,
@@ -41,6 +46,21 @@ export default async function NewAgentPage() {
   // Timeout-guarded so a slow/hanging equip source never blocks the builder.
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
+  // Role picker data (Agent RBAC Phase 5a). Fail-soft: a load failure falls
+  // back to the built-in system role definitions (grant counts unavailable,
+  // honestly flagged) so the builder never renders without an Access step.
+  let roleOptions: AgentRoleOption[];
+  let customRolesAvailable = false;
+  let rolesError: string | null = null;
+  try {
+    const roleData = await listAgentRoleOptions(ctx);
+    roleOptions = roleData.options;
+    customRolesAvailable = roleData.customRolesAvailable;
+  } catch (err) {
+    roleOptions = fallbackSystemRoleOptions();
+    rolesError = err instanceof Error ? err.message : "Unknown error";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -65,6 +85,10 @@ export default async function NewAgentPage() {
         sources={sources}
         installAction={installPlugin}
         installBulkAction={installBulkPlugin}
+        roleOptions={roleOptions}
+        customRolesAvailable={customRolesAvailable}
+        rolesError={rolesError}
+        initialRoleName={null}
       />
     </div>
   );

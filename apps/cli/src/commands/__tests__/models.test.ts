@@ -20,7 +20,8 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("../../runtime/index.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../runtime/index.js")>();
+  const actual =
+    await importOriginal<typeof import("../../runtime/index.js")>();
   class FakeOnDeviceProvider {
     get resolvedRow() {
       return h.state.resolvedRow;
@@ -48,6 +49,7 @@ vi.mock("../../runtime/index.js", async (importOriginal) => {
 
 import {
   handleModelsActive,
+  handleModelsCapabilities,
   handleModelsList,
   handleModelsPull,
   handleModelsStatus,
@@ -188,5 +190,145 @@ describe("models use", () => {
     await handleModelsUse("bogus");
     expect(captured()).toMatch(/Unknown model id/);
     expect(process.exitCode).toBe(1);
+  });
+});
+
+describe("models capabilities", () => {
+  // Reads the real, static @oxagen/ai posture registry directly — no mocks —
+  // the same reason the underlying handler's own tests need none.
+
+  it("prints the full vendor x axis table with no filter", async () => {
+    await handleModelsCapabilities();
+    const text = captured();
+    expect(text).toMatch(/Provider capability posture matrix/);
+    // All 8 gateway vendors must appear as rows.
+    for (const vendor of [
+      "anthropic",
+      "openai",
+      "google",
+      "xai",
+      "meta",
+      "mistral",
+      "deepseek",
+      "bfl",
+    ]) {
+      expect(text).toMatch(new RegExp(`\\b${vendor}\\b`));
+    }
+    // Anthropic's opt-in cache posture is the motivating case — it must show.
+    expect(text).toMatch(/anthropic\s+opt-in/);
+  });
+
+  it("emits the full matrix as JSON matching the capability's output shape", async () => {
+    await handleModelsCapabilities({ json: true });
+    const data = JSON.parse(captured());
+    expect(data.unknownFilter).toBeNull();
+    expect(Array.isArray(data.vendors)).toBe(true);
+    expect(data.vendors).toHaveLength(8);
+    const anthropic = data.vendors.find(
+      (v: { vendor: string }) => v.vendor === "anthropic",
+    );
+    expect(anthropic.label).toBe("Anthropic");
+    expect(anthropic.cache.kind).toBe("opt-in");
+    expect(typeof anthropic.cache.witness).toBe("string");
+    expect(anthropic.models.length).toBeGreaterThan(0);
+  });
+
+  it("filters to one vendor and shows mechanism + witness detail", async () => {
+    await handleModelsCapabilities({ vendor: "anthropic" });
+    const text = captured();
+    expect(text).toMatch(/Anthropic \(anthropic\)/);
+    expect(text).toMatch(/Cache: opt-in/);
+    expect(text).toMatch(/cacheControl/);
+    expect(text).toMatch(/Witness: "prepends the system prompt/);
+    expect(text).toMatch(/Reasoning: controllable/);
+    expect(text).toMatch(/Structured output: native/);
+    expect(text).toMatch(/Attachments: supported/);
+  });
+
+  it("filters to one vendor as JSON", async () => {
+    await handleModelsCapabilities({ vendor: "openai", json: true });
+    const data = JSON.parse(captured());
+    expect(data.unknownFilter).toBeNull();
+    expect(data.vendors).toHaveLength(1);
+    expect(data.vendors[0].vendor).toBe("openai");
+    expect(data.vendors[0].cache.kind).toBe("implicit");
+  });
+
+  it("shows implicit-cache telemetry, a reasoning note, and emulated/text-only detail (deepseek)", async () => {
+    await handleModelsCapabilities({ vendor: "deepseek" });
+    const text = captured();
+    expect(text).toMatch(/DeepSeek \(deepseek\)/);
+    expect(text).toMatch(/Cache: implicit/);
+    expect(text).toMatch(
+      /cacheReadTokens|cached_tokens|prompt_cache_hit_tokens/,
+    );
+    expect(text).toMatch(/Reasoning: unsupported/);
+    expect(text).toMatch(/Structured output: emulated/);
+    expect(text).toMatch(/Attachments: text-only/);
+  });
+
+  it("shows n/a on every axis with its reason (bfl, image-only vendor)", async () => {
+    await handleModelsCapabilities({ vendor: "bfl" });
+    const text = captured();
+    expect(text).toMatch(/Black Forest Labs \(bfl\)/);
+    // displayKind() abbreviates "not-applicable" to "n/a" in human output.
+    expect(text).toMatch(/Cache: n\/a/);
+    expect(text).toMatch(/Reasoning: n\/a/);
+    expect(text).toMatch(/Structured output: n\/a/);
+    expect(text).toMatch(/Attachments: n\/a/);
+    expect(text).not.toMatch(/Witness:/);
+  });
+
+  it("resolves a gateway model id to its vendor's posture", async () => {
+    await handleModelsCapabilities({ model: "anthropic/claude-sonnet-5" });
+    const text = captured();
+    expect(text).toMatch(/Anthropic \(anthropic\)/);
+    expect(text).toMatch(/Cache: opt-in/);
+  });
+
+  it("resolves a gateway model id as JSON", async () => {
+    await handleModelsCapabilities({
+      model: "anthropic/claude-sonnet-5",
+      json: true,
+    });
+    const data = JSON.parse(captured());
+    expect(data.vendors[0].vendor).toBe("anthropic");
+    expect(data.unknownFilter).toBeNull();
+  });
+
+  it("reports an unknown vendor as explicitly unknown, never an empty table", async () => {
+    await handleModelsCapabilities({ vendor: "some-byok-provider" });
+    expect(captured()).toMatch(
+      /No posture declared for "some-byok-provider" — unknown provider/,
+    );
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("reports an unknown model id as explicitly unknown", async () => {
+    await handleModelsCapabilities({
+      model: "some-byok-provider/mystery-model",
+    });
+    expect(captured()).toMatch(
+      /No posture declared for "some-byok-provider\/mystery-model" — unknown provider/,
+    );
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("prefers the model filter over the vendor filter", async () => {
+    await handleModelsCapabilities({
+      vendor: "openai",
+      model: "anthropic/claude-sonnet-5",
+    });
+    expect(captured()).toMatch(/Anthropic \(anthropic\)/);
+  });
+
+  it("returns an all-n/a row for the image-only vendor", async () => {
+    await handleModelsCapabilities({ vendor: "bfl", json: true });
+    const data = JSON.parse(captured());
+    const row = data.vendors[0];
+    expect(row.cache.kind).toBe("not-applicable");
+    expect(row.reasoning.kind).toBe("not-applicable");
+    expect(row.structuredOutput.kind).toBe("not-applicable");
+    expect(row.attachments.kind).toBe("not-applicable");
   });
 });
