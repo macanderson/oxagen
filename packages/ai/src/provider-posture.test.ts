@@ -277,6 +277,29 @@ describe("vendorFromModelId / asVendor / posturesFor", () => {
     expect(postureForModel("bare-slug-no-prefix")).toBeUndefined();
   });
 
+  it("rejects Object.prototype keys instead of returning a garbage row", () => {
+    // `key in obj` walks the prototype chain, so a naive lookup answers true
+    // for "toString"/"constructor" and hands back a function as a posture.
+    // The vendor string is caller-controlled (BYOK), so this must be an
+    // own-property check.
+    for (const key of [
+      "toString",
+      "constructor",
+      "hasOwnProperty",
+      "__proto__",
+    ]) {
+      expect(
+        asVendor(key),
+        `asVendor("${key}") must be undefined`,
+      ).toBeUndefined();
+      expect(
+        posturesFor(key),
+        `posturesFor("${key}") must be undefined`,
+      ).toBeUndefined();
+      expect(postureForModel(`${key}/some-model`)).toBeUndefined();
+    }
+  });
+
   it("lists every vendor exactly once, alphabetically", () => {
     const all = allPostures();
     const vendors = all.map((p) => p.vendor);
