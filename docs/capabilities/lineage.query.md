@@ -46,7 +46,7 @@ Read-only. The recursion spine mirrors `agent.subagent.dispatch`'s `countRootTre
 | `runId` | `string` | `subagent_runs.public_id`. |
 | `fanoutId` | `string` | The dispatch batch this run belongs to — equals `dispatchId` at depth 0. |
 | `parentRunId` | `string \| null` | The run whose own dispatch produced this node's batch; null at depth 0. |
-| `childFanoutId` | `string \| null` | The batch THIS run itself spawned, if any and if walked into this tree. |
+| `childFanoutId` | `string \| null` | The batch THIS run itself spawned, whenever one exists — populated independent of whether that batch's own runs made it into this response. Check for a node with `parentRunId` equal to this `runId` to know whether they did; if not, re-query with this as the new `dispatchId`. Null only for a genuine leaf run. |
 | `depth` | `number` | 0 = direct child of the root fan-out. |
 | `capabilityName` | `string` | |
 | `outcome` | `"pending" \| "running" \| "completed" \| "failed" \| "cancelled"` | Derived — never the raw `status` column. |

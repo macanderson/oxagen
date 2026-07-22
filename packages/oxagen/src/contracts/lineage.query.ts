@@ -118,11 +118,18 @@ const lineageNode = z.object({
   parentRunId: z.string().nullable(),
   /**
    * `public_id` of the fanout THIS run itself dispatched (i.e. this run
-   * decomposed further into its own subagent batch), when one exists and was
-   * walked into this response. Null when this run is a leaf, OR when it has
-   * a child fanout that the walk didn't reach (see `truncated` /
-   * `maxDepthReached` on the response) — re-query with this value as the new
-   * `dispatchId` to continue. When more than one fanout row shares the same
+   * decomposed further into its own subagent batch), whenever one exists —
+   * populated by a plain existence check, INDEPENDENT of whether that child
+   * fanout's own runs made it into this response (they may not have, due to
+   * `maxDepth`/`maxNodes` truncation). Null only when this run is a genuine
+   * leaf (never dispatched further).
+   *
+   * To find out whether the children are actually present in `nodes`, check
+   * whether some other node has `parentRunId` equal to this node's `runId`.
+   * If `childFanoutId` is set but no such node exists, re-query with this
+   * value as the new `dispatchId` (or a larger `maxDepth`/`maxNodes`) to see
+   * the rest of the tree — this is exactly what `maxDepthReached` signals at
+   * the deepest walked level. When more than one fanout row shares the same
    * `parent_message_id` (should not happen by construction, but is not
    * DB-enforced), the earliest-created one is chosen deterministically.
    */

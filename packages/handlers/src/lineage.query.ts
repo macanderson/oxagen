@@ -45,7 +45,11 @@ interface TreeRow extends Record<string, unknown> {
   /** public_id of the fan-out THIS row belongs to. */
   own_fanout_public_id: string;
   depth: number;
-  /** public_id of the fan-out THIS row itself spawned, if any and if walked. */
+  /**
+   * public_id of the fan-out THIS row itself spawned, whenever one exists —
+   * a plain existence check (see the LEFT JOIN LATERAL below), independent
+   * of whether that child fan-out's own runs were walked into `tree`.
+   */
   child_fanout_id: string | null;
 }
 
