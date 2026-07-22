@@ -18,7 +18,11 @@ import type { BillingUsageBreakdownOutput } from "@oxagen/oxagen/contracts/billi
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq } from "drizzle-orm";
-import { resolveOrg, assertOrgMember, assertBillingManager } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  assertBillingManager,
+} from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { Stat, StatGroup } from "@/components/ui/stat";
 import { logger } from "@oxagen/handlers/logger";
@@ -42,6 +46,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
     outputTokens: 0,
     cachedTokens: 0,
     costMicros: 0,
+    messages: 0,
     executions: 0,
   },
   series: [],
@@ -50,6 +55,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
   byWorkspace: [],
   byCapability: [],
   byPrincipal: [],
+  byUser: [],
 };
 
 export default async function BillingUsagePage({
@@ -90,7 +96,10 @@ export default async function BillingUsagePage({
         );
         for (const w of wsRows) workspaceNames[w.id] = w.name;
       } catch (err) {
-        logger.warn({ err, orgId: org.id }, "billing/usage: workspace name resolve failed");
+        logger.warn(
+          { err, orgId: org.id },
+          "billing/usage: workspace name resolve failed",
+        );
       }
 
       try {
@@ -111,7 +120,10 @@ export default async function BillingUsagePage({
         )) as BillingUsageBreakdownOutput;
         return { breakdown: result, queryFailed: false };
       } catch (err) {
-        logger.error({ err, orgId: org.id }, "billing/usage: breakdown invoke failed");
+        logger.error(
+          { err, orgId: org.id },
+          "billing/usage: breakdown invoke failed",
+        );
         return { breakdown: EMPTY, queryFailed: true };
       }
     },
@@ -137,7 +149,8 @@ export default async function BillingUsagePage({
 
       {queryFailed ? (
         <p className="text-xs text-destructive">
-          Usage data is temporarily unavailable — the analytics query failed. Showing zeros.
+          Usage data is temporarily unavailable — the analytics query failed.
+          Showing zeros.
         </p>
       ) : null}
 
