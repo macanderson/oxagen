@@ -28,6 +28,83 @@ export {
   type RunSummary,
 } from "./run-store";
 
+// Run/attempt evidence foundation (PR 1A Task 1;
+// docs/specs/run-evidence-ingress/spec.md). RunSpecV2 is the trusted admission
+// contract — built ONLY by server code, never from a request body. Surfaces
+// parse caller input with `parseCallerRunInfluence` and hand the result to
+// `buildTrustedRunSpecV2` alongside separately-resolved trusted sections.
+export {
+  // primitives
+  canonicalJson,
+  digestOfCanonicalJson,
+  assertSha256Digest,
+  assertDecimalGeneration,
+  RESERVED_PUBLIC_ID_PREFIXES,
+  RUN_ENGINES,
+  REPOSITORY_PROVIDERS,
+  TOOL_RISK_LEVELS,
+  MAX_RUN_ATTEMPTS_CEILING,
+  MAX_RUN_STEPS_CEILING,
+  TRUSTED_RUN_SPEC_SECTIONS,
+  // schemas
+  runSpecV2Schema,
+  generalRunSpecV2Schema,
+  repoEditRunSpecV2Schema,
+  enginePolicySchema,
+  actorBindingSchema,
+  authorizationSnapshotRefSchema,
+  denyGenerationVectorSchema,
+  repositoryBindingSchema,
+  workspacePolicySchema,
+  contextPolicySchema,
+  toolPolicySchema,
+  outputPolicySchema,
+  callerRunInfluenceSchema,
+  callerRunPreferencesSchema,
+  sha256DigestSchema,
+  decimalGenerationSchema,
+  repositoryBindingPublicIdSchema,
+  retentionPolicyPublicIdSchema,
+  // parsers / builders / comparators
+  parseRunSpecV2,
+  parseCallerRunInfluence,
+  buildTrustedRunSpecV2,
+  runSpecV2Digest,
+  assertRunSpecV2Digest,
+  compareRunRowIdentity,
+  assertRunRowMatchesSpec,
+  type RunSpecV2,
+  type RunSpecV2Input,
+  type GeneralRunSpecV2,
+  type RepoEditRunSpecV2,
+  type TrustedRunSpecV2Input,
+  type TrustedRunSpecSection,
+  type CallerRunInfluence,
+  type ParsedCallerRunInfluence,
+  type RunRowIdentity,
+  type RunIdentityMismatch,
+  type RepositoryBinding,
+  type AuthorizationSnapshotRef,
+  type RepositoryBindingPublicId,
+  type RetentionPolicyPublicId,
+  type ReservedPublicIdKind,
+  type Sha256Digest,
+  type DecimalGeneration,
+} from "./run-spec-v2";
+
+export {
+  CanonicalJsonError,
+  RunSpecValidationError,
+  RunSpecDigestMismatchError,
+  RunSpecIdentityMismatchError,
+  UntrustedRunSpecFieldError,
+  isRunSpecValidationError,
+  isRunSpecDigestMismatchError,
+  isRunSpecIdentityMismatchError,
+  isUntrustedRunSpecFieldError,
+  type RunSpecIssue,
+} from "./run-errors";
+
 // Re-exports so surfaces don't need a second engine-facing import. Types are
 // pass-throughs; the constants are advertised limits, not engine behavior.
 export {

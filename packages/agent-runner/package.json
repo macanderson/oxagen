@@ -18,7 +18,8 @@
     "@oxagen/agent-engine": "workspace:*",
     "@oxagen/database": "workspace:*",
     "drizzle-orm": "0.45.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
