@@ -47,6 +47,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
     cachedTokens: 0,
     cacheWriteTokens: 0,
     costMicros: 0,
+    messages: 0,
     executions: 0,
     messages: 0,
   },
