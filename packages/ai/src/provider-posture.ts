@@ -489,9 +489,18 @@ export function vendorFromModelId(modelId: string): string {
   return slash === -1 ? modelId : modelId.slice(0, slash);
 }
 
-/** Narrow an arbitrary string to a known `Vendor`, or undefined. */
+/**
+ * Narrow an arbitrary string to a known `Vendor`, or undefined.
+ *
+ * Uses an own-property check, not `in`: `in` walks the prototype chain, so
+ * `asVendor("toString")` would answer `"toString"` and `posturesFor` would then
+ * hand back `Object.prototype.toString` as a posture row. A BYOK customer can
+ * put any string here, and unknown must read as unknown.
+ */
 export function asVendor(candidate: string): Vendor | undefined {
-  return candidate in CACHE_POSTURE ? (candidate as Vendor) : undefined;
+  return Object.prototype.hasOwnProperty.call(CACHE_POSTURE, candidate)
+    ? (candidate as Vendor)
+    : undefined;
 }
 
 /**
