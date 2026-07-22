@@ -799,17 +799,15 @@ describe("sumTokenUsage", () => {
 
   it("strips the trailing Z from ISO date strings in query params", async () => {
     queryMock.mockResolvedValue({
-      json: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            input_tokens: "0",
-            output_tokens: "0",
-            cached_tokens: "0",
-            cost_micros: "0",
-            row_count: "0",
-          },
-        ]),
+      json: vi.fn().mockResolvedValue([
+        {
+          input_tokens: "0",
+          output_tokens: "0",
+          cached_tokens: "0",
+          cost_micros: "0",
+          row_count: "0",
+        },
+      ]),
     });
 
     const start = new Date("2026-01-01T00:00:00.000Z");
@@ -830,17 +828,15 @@ describe("sumTokenUsage", () => {
 
   it("passes orgId and uses JSONEachRow format", async () => {
     queryMock.mockResolvedValue({
-      json: vi
-        .fn()
-        .mockResolvedValue([
-          {
-            input_tokens: "0",
-            output_tokens: "0",
-            cached_tokens: "0",
-            cost_micros: "0",
-            row_count: "0",
-          },
-        ]),
+      json: vi.fn().mockResolvedValue([
+        {
+          input_tokens: "0",
+          output_tokens: "0",
+          cached_tokens: "0",
+          cost_micros: "0",
+          row_count: "0",
+        },
+      ]),
     });
 
     await mod.sumTokenUsage({
@@ -853,6 +849,126 @@ describe("sumTokenUsage", () => {
     expect(callArgs.query_params.orgId).toBe("my-org-uuid");
     expect(callArgs.format).toBe("JSONEachRow");
     expect(callArgs.query).toContain("token_usage");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sumTokenUsageByExecutionStep
+// ---------------------------------------------------------------------------
+
+describe("sumTokenUsageByExecutionStep", () => {
+  let queryMock: ReturnType<typeof vi.fn>;
+  let mod: typeof import("./clickhouse");
+
+  beforeEach(async () => {
+    queryMock = vi.fn();
+    createClientMock.mockImplementation(() => ({
+      close: vi.fn().mockResolvedValue(undefined),
+      insert: vi.fn().mockResolvedValue(undefined),
+      query: queryMock,
+    }));
+    vi.resetModules();
+    mod = await import("./clickhouse");
+    mod.clickhouse();
+  });
+
+  afterEach(async () => {
+    await mod.closeClickhouse();
+    vi.resetModules();
+  });
+
+  it("returns an empty map without querying ClickHouse when executionStepIds is empty", async () => {
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: [],
+    });
+    expect(result.size).toBe(0);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty map without querying ClickHouse when every id is the NIL_UUID sentinel", async () => {
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: [mod.NIL_UUID, mod.NIL_UUID],
+    });
+    expect(result.size).toBe(0);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("coerces UInt64 decimal-string sums with Number() and keys the map by execution_step_id", async () => {
+    queryMock.mockResolvedValue({
+      json: vi.fn().mockResolvedValue([
+        {
+          execution_step_id: "step-1",
+          cost_micros: "150000",
+          input_tokens: "1000",
+          output_tokens: "500",
+          llm_calls: "3",
+          model: "claude-sonnet-5",
+          provider: "anthropic",
+          principal_id: "prn-1",
+          principal_kind: "agent",
+        },
+      ]),
+    });
+
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1"],
+    });
+
+    expect(result.size).toBe(1);
+    const row = result.get("step-1");
+    expect(row).toEqual({
+      executionStepId: "step-1",
+      costMicros: 150000,
+      inputTokens: 1000,
+      outputTokens: 500,
+      llmCalls: 3,
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      principalId: "prn-1",
+      principalKind: "agent",
+    });
+    expect(typeof row!.costMicros).toBe("number");
+  });
+
+  it("filters the NIL_UUID sentinel out of a mixed id list before querying", async () => {
+    queryMock.mockResolvedValue({ json: vi.fn().mockResolvedValue([]) });
+
+    await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1", mod.NIL_UUID, "step-1"],
+    });
+
+    const callArgs = queryMock.mock.calls[0]![0];
+    expect(callArgs.query_params.ids).toEqual(["step-1"]);
+    expect(callArgs.query_params.orgId).toBe("org-1");
+    expect(callArgs.format).toBe("JSONEachRow");
+    expect(callArgs.query).toContain("token_usage");
+  });
+
+  it("ids absent from the ClickHouse result are simply absent from the map (zero usage)", async () => {
+    queryMock.mockResolvedValue({ json: vi.fn().mockResolvedValue([]) });
+
+    const result = await mod.sumTokenUsageByExecutionStep({
+      orgId: "org-1",
+      executionStepIds: ["step-1", "step-2"],
+    });
+
+    expect(result.size).toBe(0);
+    expect(result.has("step-1")).toBe(false);
+  });
+
+  it("propagates a ClickHouse query failure — callers are responsible for degrading (mirrors getSpendBudgetStatuses)", async () => {
+    queryMock.mockRejectedValue(new Error("clickhouse unavailable"));
+
+    await expect(
+      mod.sumTokenUsageByExecutionStep({
+        orgId: "org-1",
+        executionStepIds: ["step-1"],
+      }),
+    ).rejects.toThrow("clickhouse unavailable");
   });
 });
 

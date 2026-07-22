@@ -283,6 +283,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
 - [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
 
+## Lineage (1)
+
+- [lineage.query](lineage.query.md) — Return the dispatch tree for one fan-out/run id — every subagent run reachable from a root dispatch, each carrying its principal (and Agent-RBAC delegation ceiling), observed ClickHouse spend, model/provider, and a derived outcome
+
 ## Mermaid (1)
 
 - [mermaid.generate](mermaid.generate.md) — Produce a Mermaid diagram rendered inline in chat as a client-side SVG artifact

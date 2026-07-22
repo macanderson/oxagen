@@ -206,6 +206,7 @@ import "./contracts/integration.list";
 import "./contracts/integration.metrics";
 import "./contracts/integration.sync";
 import "./contracts/knowledge.node-ref";
+import "./contracts/lineage.query";
 import "./contracts/markdown.generate";
 import "./contracts/mermaid.generate";
 import "./contracts/model.capability.list";

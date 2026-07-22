@@ -16,6 +16,8 @@ export {
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
 export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
+export * from "./dispatch/lineage-outcome";
+export * from "./dispatch/lineage-projection";
 export * from "./memory/neo4j";
 export * as hooks from "./hooks/runtime";
 export { resolveHandler, invokeCapability } from "./handlers/index";

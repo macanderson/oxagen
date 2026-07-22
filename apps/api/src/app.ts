@@ -96,6 +96,7 @@ import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent_fanout.
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent_fanout.get";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
+import { lineageQueryRoute } from "./routes/v1/lineage.query";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { modelCapabilityListRoute } from "./routes/v1/model.capability.list";
@@ -589,6 +590,9 @@ orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
 orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
+// Fleet-lineage explorer data spine: the dispatch tree rooted at one fan-out,
+// flattened with per-node principal/delegation-ceiling/spend/outcome (#1078).
+orgScoped.route("/lineage/query", lineageQueryRoute);
 // Fleet-wide error triage overview — clusters ClickHouse error_events by
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
 // single-execution failure frame above.

@@ -2854,6 +2854,21 @@
       }
     },
     {
+      "name": "query_lineage",
+      "file": "lineage.query.ts",
+      "domain": "lineage",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "generate_markdown",
       "file": "markdown.generate.ts",
       "domain": "document",
