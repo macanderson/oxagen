@@ -557,11 +557,17 @@ export function resolve(input: ResolveInput): ResolveResult {
   );
   const principalRoleIds = principalRoles.map((r) => r.id);
 
-  // Find role grants for this capability from the principal's roles.
+  // Find role grants for this capability from the principal's roles. A role
+  // grant's conditionsJsonb (e.g. a resourceScope ceiling) must be evaluated
+  // here the same way every other rule (1, 2, 3, 4, 6) evaluates conditions —
+  // a malformed condition fails closed and the grant does not count, rather
+  // than being silently ignored and falling through to a later, more
+  // permissive rule.
   const matchingRoleGrants = roleGrants.filter(
     (rg) =>
       principalRoleIds.includes(rg.roleId) &&
-      matchesCapability(rg.capabilityId),
+      matchesCapability(rg.capabilityId) &&
+      conditionsMet(rg.conditionsJsonb, evalCtx),
   );
 
   // Deny-wins: when a principal's roles carry conflicting grants for the
