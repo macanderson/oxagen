@@ -18,7 +18,11 @@ export default defineConfig({
         // excluding its untested plugin.*.ts functions.
         "src/main.ts",
       ],
-      thresholds: { lines: 90, branches: 81, functions: 90, statements: 90 },
+      // Ratcheted after the fenced-attempt worker path landed (measured:
+      // lines/statements 91.66, branches 94.11, functions 97.61). Raised below
+      // the floor(measured − 2.5) ceiling so the gate keeps headroom for
+      // environment noise; lines/statements stay at the 90 cap.
+      thresholds: { lines: 90, branches: 88, functions: 95, statements: 90 },
     },
   },
 });

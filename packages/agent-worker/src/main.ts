@@ -34,6 +34,7 @@ import { createPostgresRunStore } from "@oxagen/agent-runner";
 import { createPlatformTurnDriver } from "@oxagen/agent";
 import { createAgentWorker } from "./worker";
 import { bootstrap } from "./bootstrap";
+import type { AttemptRunStore, RunStore } from "./types";
 
 function readConcurrency(): number | undefined {
   const raw = process.env.OXAGEN_WORKER_CONCURRENCY;
@@ -51,7 +52,12 @@ async function main(): Promise<void> {
   // claim runs.
   await bootstrap();
 
-  const store = createPostgresRunStore();
+  // Widening the concrete store to BOTH structural ports is the drift check.
+  // `./types.ts` hand-mirrors @oxagen/agent-runner's V2 surface so the harness
+  // stays testable with plain fakes; this line is the one place the mirror is
+  // compared against the real thing, so a divergence fails typecheck here
+  // instead of surfacing in PR 1B the moment V2 claims are switched on.
+  const store: RunStore & AttemptRunStore = createPostgresRunStore();
   const driveTurn = createPlatformTurnDriver();
 
   const worker = createAgentWorker({
