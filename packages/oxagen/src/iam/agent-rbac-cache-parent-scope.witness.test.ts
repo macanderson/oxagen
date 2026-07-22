@@ -51,7 +51,13 @@ it("does not reuse a cached result for a stricter effective parent scope", () =>
     cache,
   };
 
-  const unrestrictedParent = { graph: { labels: [] } };
+  // A genuinely unrestricted parent effective scope omits the dimension
+  // entirely (produced e.g. by intersectEffectiveScope({}, {})) — an
+  // EMPTY labels array is NOT the same thing: per the parentEffectiveScope
+  // contract (always an already-computed EffectiveScope, never a raw
+  // admin-authored literal), `labels: []` means "narrowed to nothing",
+  // not "all labels".
+  const unrestrictedParent = {};
   const broad = resolveAgentEffectivePermissions({
     ...common,
     parentEffectiveScope: unrestrictedParent,

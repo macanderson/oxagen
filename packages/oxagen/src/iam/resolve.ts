@@ -1198,10 +1198,18 @@ export function resolveAgentEffectivePermissions(
   if (humanScope !== undefined)
     resourceScope = intersectEffectiveScope(resourceScope, humanScope);
   if (input.parentEffectiveScope !== undefined) {
-    resourceScope = intersectEffectiveScope(
-      resourceScope,
-      input.parentEffectiveScope,
-    );
+    // parentEffectiveScope is documented (AgentResolveInput) as always an
+    // already-computed EffectiveScope from a prior resolution — never a raw,
+    // admin-authored ResourceScope literal. Its non-enumerable
+    // EFFECTIVE_SCOPE_MARKER is lost whenever the value crosses a
+    // serialization boundary (DB round-trip, IPC, JSON.stringify for
+    // caching/logging), which would otherwise make an intersection
+    // mistakenly treat a genuinely-narrowed-to-empty dimension (e.g.
+    // `labels: []` meaning "nothing survived") as "unrestricted" and
+    // silently widen permissions back out. Re-assert the marker on a shallow
+    // copy here so the ceiling's semantics survive serialization.
+    const parentAsEffective = markEffective({ ...input.parentEffectiveScope });
+    resourceScope = intersectEffectiveScope(resourceScope, parentAsEffective);
   }
 
   const result: AgentEffectivePermissions = {
