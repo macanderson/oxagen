@@ -277,6 +277,100 @@ export interface AttemptRunStore {
 }
 
 /**
+ * One evidence event as a V2 driver hands it to the worker.
+ *
+ * Deliberately WITHOUT `attemptSeq`, `observedAt`, or `stage`:
+ *
+ *  - `attemptSeq` is the worker's — a driver that assigned its own would be
+ *    guessing at a contiguity invariant it cannot see across batches;
+ *  - `observedAt` is stamped ONCE by the worker at emit time and then frozen,
+ *    because it is inside `event_digest`: a replayed batch that re-stamped the
+ *    clock would turn a benign retry into an integrity conflict;
+ *  - `stage` is not a producer input at all. The nine evidence stages are
+ *    derived from the CLOSED event vocabulary by the store
+ *    (`@oxagen/agent-runner`'s `EVENT_TYPE_REGISTRY`), so an event type and its
+ *    stage can never disagree. An unregistered `eventType` is refused before
+ *    any SQL exists.
+ *
+ * Exactly one of `payload` (allow-listed receipt metadata, capped at 32 KiB
+ * after JCS) or `encryptedPayloadRef` + `payloadDigest` (a tenant-encrypted
+ * blob). Large or sensitive bodies take the encrypted branch — the inline
+ * branch rejects raw path/uri/content/prompt/diff/stdout/credential fields.
+ */
+export type AttemptEventEmission = Omit<
+  AttemptEventRecord,
+  "attemptSeq" | "observedAt"
+>;
+
+/** What a V2 driver settles with when it finishes deliberately. */
+export interface AttemptTurnOutcome {
+  result: unknown;
+  /**
+   * `completed` by default. `denied` is the ONLY other deliberate settle: an
+   * authorization refusal is a decided outcome, not a crash, and must seal as
+   * `denied` rather than `failed`. `cancelled` and `failed` are the worker's
+   * to decide (from the cancel poller and from a driver throw), and
+   * `abandoned` belongs exclusively to the lease reclaimer.
+   */
+  terminalStatus?: "completed" | "denied";
+  /** Lowercase snake_case, ≤64 chars; anything else is dropped, not sealed. */
+  reasonCode?: string;
+}
+
+/** The fenced IO surface a V2 driver executes against. */
+export interface AttemptTurnIo {
+  /** Buffer one event. Synchronous — the append happens on the worker's schedule. */
+  onEvent: (emission: AttemptEventEmission) => void;
+  /**
+   * Commit every buffered event AND this checkpoint in ONE `appendAttemptBatch`
+   * transaction. There is no separate checkpoint-save call: a checkpoint is
+   * bound to the final event of the append it terminates, so it cannot be
+   * written without one — calling this with nothing buffered throws.
+   */
+  checkpoint: (checkpoint: AttemptCheckpointRecord) => Promise<void>;
+  signal: AbortSignal;
+}
+
+/**
+ * Drives one claimed V2 attempt. The V1 `TurnDriver` below is kept verbatim
+ * for already-enqueued legacy work; this is a separate port rather than a
+ * widened one because the two record versions have different sequence
+ * semantics, different IO, and different terminal paths.
+ */
+export interface AttemptTurnDriver {
+  (run: ClaimedRunV2, io: AttemptTurnIo): Promise<AttemptTurnOutcome>;
+}
+
+/**
+ * Everything the worker needs to claim and drive fenced V2 attempts.
+ *
+ * Its absence is the V2 claim gate: `WorkerOptions.attempts` is optional, and a
+ * worker configured without it never issues a V2 claim and behaves exactly as
+ * the V1 harness always has. PR 1A ships the path disabled on purpose —
+ * enabling V2 execution before PR 2B's finalization consumption exists would
+ * mint obligations no deployed worker can satisfy.
+ */
+export interface AttemptWorkerOptions {
+  store: AttemptRunStore;
+  driveTurn: AttemptTurnDriver;
+  /** The engine binary this process actually runs; pinned on every attempt. */
+  engine: ResolvedEngineIdentity;
+  /** Engine-state schemas this build can restore. Omit to never restore. */
+  restorableEngineStateSchemas?: readonly string[];
+  leaseSeconds?: number;
+  /**
+   * Best-effort observer of every seal — for logging and telemetry ONLY.
+   *
+   * It is NOT the finalization path and must never become one. The seal
+   * transaction already created the durable obligation carrying this handle's
+   * `submissionId`; finalization is drained from that table by an independent,
+   * retryable consumer, so a worker that crashes the instant after sealing
+   * strands nothing. Anything this observer throws is swallowed.
+   */
+  onSealed?: (handle: SealedAttemptHandle) => void;
+}
+
+/**
  * Drives one claimed run to completion in ordinary process memory. Emits
  * events via `io.onEvent` (synchronous — the worker assigns the seq and
  * buffers the event; flushing happens on the worker's own schedule, never
@@ -307,6 +401,13 @@ export type WorkerErrorHandler = (
 export interface WorkerOptions {
   store: RunStore;
   driveTurn: TurnDriver;
+  /**
+   * Fenced V2 attempt execution. Omitted ⇒ this worker never issues a V2
+   * claim and drives V1 work only — the shipped PR 1A configuration. Supplied
+   * ⇒ each claim loop tries the V2 queue first and falls back to V1, so
+   * already-enqueued legacy work keeps draining either way.
+   */
+  attempts?: AttemptWorkerOptions;
   /** Claim/lease owner identity. Default: `${os.hostname()}:${process.pid}`. */
   workerId?: string;
   /** Simultaneous runs driven by this process. Default 2. */
