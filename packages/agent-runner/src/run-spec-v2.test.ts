@@ -1016,6 +1016,9 @@ describe("parseCallerRunInfluence", () => {
     ["a missing goal", {}],
     ["a non-string goal", { goal: 42 }],
     ["an unknown preference", { goal: "g", preferences: { model: "gpt" } }],
+    // Not a trusted section, so the section guard never sees it — `.strict()`
+    // is the only thing standing between this and a silently-ignored field.
+    ["an unknown top-level key", { goal: "g", foo: 1 }],
     ["a non-object", "goal"],
     ["null", null],
   ])("rejects %s", (_label, raw) => {
