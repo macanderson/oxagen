@@ -190,6 +190,22 @@ export {
   type DecimalGeneration,
 } from "./run-spec-v2";
 
+// The RETAINED legacy admission contract (PR 1A Task 6). Centralized here so
+// the enqueue side (apps/api's /runs POST) and the claim side (@oxagen/agent's
+// turn driver) share ONE definition while queued v1 work drains. v1 rows are
+// explicitly NON-EVIDENCE — see the module doc; they are never promoted to v2.
+export {
+  LEGACY_RUN_SPEC_VERSION,
+  LEGACY_CODE_MODE_SURFACES,
+  isLegacyCodeModeSurface,
+  runSpecV1Schema,
+  parseRunSpecV1,
+  buildLegacyRunSpecV1,
+  type RunSpecV1,
+  type LegacyToolPolicy,
+  type LegacyRunSpecV1Input,
+} from "./run-spec-v1-legacy";
+
 export {
   CanonicalJsonError,
   RunSpecValidationError,

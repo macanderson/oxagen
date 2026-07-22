@@ -438,6 +438,16 @@ export interface RunSummary {
   runId: string;
   publicId: string;
   surface: string;
+  /**
+   * Which event-record contract this run's log obeys: `1` = legacy run-global
+   * `seq`, `2` = fenced attempts cursored on the decimal `run_seq`.
+   *
+   * Part of the PUBLIC projection, not an internal detail: a resumable
+   * subscriber cannot pick a cursor without it, and the two cursors are not
+   * interchangeable (`seq` is a 32-bit-ish counter, `run_seq` is a bigint
+   * carried as an exact decimal string).
+   */
+  specVersion: 1 | 2;
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   result: unknown | null;
   error: string | null;
@@ -682,6 +692,8 @@ type RunSummaryRow = {
   public_id: string;
   surface: string;
   status: string;
+  /** Absent only on a row read by a build predating the expand migration. */
+  spec_version?: number | string | null;
   result: unknown | null;
   error: string | null;
   checkpoint_seq: number | string;
@@ -702,6 +714,12 @@ export function mapRunSummaryRow(row: RunSummaryRow): RunSummary {
     runId: row.id,
     publicId: row.public_id,
     surface: row.surface,
+    // Anything that is not EXACTLY 2 reads as legacy v1. That is the
+    // fail-closed direction: a subscriber that mistakes a v2 run for v1
+    // cursors on `seq`, which is NULL on every v2 event row and therefore
+    // yields nothing — whereas mistaking v1 for v2 would hand a caller a
+    // `run_seq` cursor no v1 row can satisfy.
+    specVersion: Number(row.spec_version) === 2 ? 2 : 1,
     status: row.status as RunSummary["status"],
     result: row.result ?? null,
     error: row.error ?? null,
@@ -906,7 +924,7 @@ export function buildIsCancelRequestedSql(runId: string): SQL {
  */
 export function buildGetRunByPublicIdSql(publicId: string): SQL {
   return sql`
-    SELECT id, public_id, surface, status, result, error, checkpoint_seq, attempts, created_at, started_at, completed_at
+    SELECT id, public_id, surface, spec_version, status, result, error, checkpoint_seq, attempts, created_at, started_at, completed_at
     FROM agent.agent_runs
     WHERE public_id = ${publicId}
   `;

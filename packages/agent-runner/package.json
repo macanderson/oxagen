@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./run-spec-v2": "./src/run-spec-v2.ts",
+    "./run-spec-v1-legacy": "./src/run-spec-v1-legacy.ts",
     "./run-errors": "./src/run-errors.ts"
   },
   "scripts": {

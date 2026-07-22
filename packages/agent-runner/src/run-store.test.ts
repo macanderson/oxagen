@@ -224,6 +224,7 @@ describe("mapRunSummaryRow", () => {
       id: "run-1",
       public_id: "arun_abc",
       surface: "api-chat",
+      spec_version: "1",
       status: "completed",
       result: { text: "done" },
       error: null,
@@ -237,6 +238,7 @@ describe("mapRunSummaryRow", () => {
       runId: "run-1",
       publicId: "arun_abc",
       surface: "api-chat",
+      specVersion: 1,
       status: "completed",
       result: { text: "done" },
       error: null,
@@ -284,6 +286,49 @@ describe("mapRunSummaryRow", () => {
     });
     expect(mapped.error).toBe("boom");
     expect(mapped.status).toBe("failed");
+  });
+
+  it("maps spec_version = 2 to the V2 record contract", () => {
+    const mapped = mapRunSummaryRow({
+      id: "run-4",
+      public_id: "arun_v2",
+      surface: "api-chat",
+      spec_version: 2,
+      status: "running",
+      result: null,
+      error: null,
+      checkpoint_seq: 0,
+      attempts: 1,
+      created_at: new Date("2026-07-18T00:00:00.000Z"),
+      started_at: new Date("2026-07-18T00:00:01.000Z"),
+      completed_at: null,
+    });
+    expect(mapped.specVersion).toBe(2);
+  });
+
+  it.each([
+    ["a missing column (pre-expand build)", undefined],
+    ["an explicit null", null],
+    ["an unexpected version", 3],
+  ])("falls back to legacy v1 for %s", (_label, specVersion) => {
+    // Fail-closed direction: reading a run as v1 cursors on `seq`, which is
+    // NULL on every v2 event row, so a misread yields nothing rather than the
+    // wrong events.
+    const mapped = mapRunSummaryRow({
+      id: "run-5",
+      public_id: "arun_old",
+      surface: "api-chat",
+      spec_version: specVersion,
+      status: "completed",
+      result: null,
+      error: null,
+      checkpoint_seq: 0,
+      attempts: 1,
+      created_at: new Date("2026-07-18T00:00:00.000Z"),
+      started_at: null,
+      completed_at: null,
+    });
+    expect(mapped.specVersion).toBe(1);
   });
 });
 
@@ -433,7 +478,10 @@ describe("buildRequestCancelSql / buildIsCancelRequestedSql", () => {
 describe("buildGetRunByPublicIdSql", () => {
   it("selects the RunSummary columns filtered by public_id (no org/workspace filter — RLS-scoped)", () => {
     const { sql: text, params } = compile(buildGetRunByPublicIdSql("arun_abc"));
-    expect(text).toContain("SELECT id, public_id, surface, status, result");
+    expect(text).toContain("SELECT id, public_id, surface, spec_version");
+    // The record-version discriminant is part of the read projection: without
+    // it a resumable subscriber cannot tell `seq` from `run_seq`.
+    expect(text).toContain("spec_version");
     expect(text).toContain("checkpoint_seq");
     expect(text).toContain("attempts");
     expect(text).toContain("created_at");
@@ -677,6 +725,7 @@ describe("createPostgresRunStore", () => {
           id: "run-1",
           public_id: "arun_abc",
           surface: "api-chat",
+          spec_version: 1,
           status: "running",
           result: null,
           error: null,
@@ -695,6 +744,7 @@ describe("createPostgresRunStore", () => {
       runId: "run-1",
       publicId: "arun_abc",
       surface: "api-chat",
+      specVersion: 1,
       status: "running",
       result: null,
       error: null,
