@@ -19,6 +19,16 @@ describe("organization.create capability", () => {
     expect(parsed.planSlug).toBe("free");
   });
 
+  it("rejects client-selected privileged plan slugs", () => {
+    expect(() =>
+      organizationCreate.input.parse({
+        name: "Forged Enterprise",
+        slug: "forged-enterprise",
+        planSlug: "enterprise",
+      }),
+    ).toThrow();
+  });
+
   it("rejects an uppercase slug", () => {
     expect(() =>
       organizationCreate.input.parse({ name: "Acme", slug: "Acme" }),

@@ -453,9 +453,10 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
-## Telemetry (1)
+## Telemetry (2)
 
 - [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
+- [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
 
 ## User (4)
 

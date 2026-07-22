@@ -4503,9 +4503,9 @@
       "surfaces": ["api"],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {

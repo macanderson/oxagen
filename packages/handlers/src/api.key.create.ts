@@ -21,17 +21,46 @@ import {
   resolveActorOrgRole as resolveActorRole,
   generateApiKey,
 } from "./lib/api-key-authz";
+import { requestsReservedStellaTelemetryPurpose } from "./lib/stella-telemetry-enrollment";
 import { logger } from "./logger";
 
-export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async (input, ctx) => {
+export const apiKeyCreateHandler: CapabilityHandler<
+  typeof apiKeyCreate
+> = async (input, ctx) => {
   // ── Auth + scope guard ─────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "api.key.create: rejected — no authenticated principal");
-    throw new CapabilityError("create_api_key", "authz_denied", "Unauthorized: no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "api.key.create: rejected — no authenticated principal",
+    );
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Unauthorized: no authenticated principal",
+    );
   }
   if (!ctx.orgId) {
     logger.warn({}, "api.key.create: rejected — missing orgId");
-    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: orgId is required");
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: orgId is required",
+    );
+  }
+
+  // The generic key-management capability must never mint the server-owned
+  // enrollment marker. Provisioning is a separate operator workflow; allowing
+  // callers to self-assert this purpose would bypass the intake trust boundary.
+  if (requestsReservedStellaTelemetryPurpose(input.scope)) {
+    logger.warn(
+      { orgId: ctx.orgId },
+      "api.key.create: rejected — reserved Stella telemetry purpose",
+    );
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: reserved API-key scope purpose",
+    );
   }
 
   const actorId = ctx.userId ?? ctx.apiKeyId ?? "system";
@@ -44,7 +73,11 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
       { orgId: ctx.orgId, actorId, actorRole },
       "api.key.create: rejected — insufficient org role",
     );
-    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: only org Owners and Admins can create API keys");
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: only org Owners and Admins can create API keys",
+    );
   }
 
   // ── Generate key material ─────────────────────────────────────────────────
@@ -57,7 +90,11 @@ export const apiKeyCreateHandler: CapabilityHandler<typeof apiKeyCreate> = async
   // one). The resolveApiKey resolver returns the stored workspaceId to bind the
   // machine-auth scope to that workspace on each request.
   if (!ctx.workspaceId) {
-    throw new CapabilityError("create_api_key", "authz_denied", "Forbidden: workspaceId is required to create an API key");
+    throw new CapabilityError(
+      "create_api_key",
+      "authz_denied",
+      "Forbidden: workspaceId is required to create an API key",
+    );
   }
 
   const [inserted] = await withTenantDb((tx) =>

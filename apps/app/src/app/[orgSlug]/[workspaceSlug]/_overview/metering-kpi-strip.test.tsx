@@ -59,6 +59,7 @@ function breakdown(
       costMicros: 0,
       messages: 0,
       executions: 0,
+      messages: 0,
     },
     series: [],
     byModel: [],
@@ -135,6 +136,7 @@ describe("MeteringKpiStrip", () => {
               costMicros: 1_250_000,
               messages: 0,
               executions: 4,
+              messages: 4,
             },
             series: [
               {
@@ -145,6 +147,7 @@ describe("MeteringKpiStrip", () => {
                 costMicros: 600_000,
                 messages: 0,
                 executions: 2,
+                messages: 2,
               },
               {
                 day: "2026-07-11",
@@ -154,6 +157,7 @@ describe("MeteringKpiStrip", () => {
                 costMicros: 650_000,
                 messages: 0,
                 executions: 2,
+                messages: 2,
               },
             ],
           }),

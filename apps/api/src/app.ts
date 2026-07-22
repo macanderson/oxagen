@@ -7,8 +7,10 @@ import { authMiddleware } from "./middleware/auth";
 import { orgMiddleware } from "./middleware/org";
 import { workspaceMiddleware } from "./middleware/workspace";
 import {
+  authorizationFingerprintBucketKey,
   distributedRateLimiter,
   rateLimitBudgets,
+  trustedVercelIpBucketKey,
 } from "./middleware/distributed-rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
@@ -294,6 +296,7 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
 import { a2aWellKnownRoute } from "./routes/a2a/well-known";
 import { a2aRpcRoute } from "./routes/a2a/rpc";
@@ -349,6 +352,32 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
 
+// Shared pre-authentication ceilings for credential stuffing on Stella intake.
+// Register both on the concrete root path before the auth-gated subrouter:
+// Hono preserves parent registration order, so exhausted buckets never reach
+// API-key resolution. The generous trusted-IP ceiling keeps shared enterprise
+// NATs usable; the credential fingerprint limits one abused key across IPs.
+app.use(
+  "/v1/telemetry/stella/*",
+  distributedRateLimiter({
+    keyPrefix: "stella-preauth-ip",
+    max: 3_000,
+    bucketKey: trustedVercelIpBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+app.use(
+  "/v1/telemetry/stella/*",
+  distributedRateLimiter({
+    keyPrefix: "stella-preauth-credential",
+    max: 60,
+    bucketKey: authorizationFingerprintBucketKey,
+    methods: "all",
+    failClosedOnStoreError: true,
+  }),
+);
+
 // Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
 // security model as /v1/telemetry: no auth (callers are website visitors),
 // strict schema validation + per-IP rate limit inside the route. Mounted BEFORE
@@ -375,6 +404,21 @@ userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 userScoped.route("/user/budget/read", budgetPolicyReadRoute);
 userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
+
+// Enrolled Stella operational telemetry is machine-to-machine only. The
+// workspace API key carries its immutable org+workspace scope, so this static
+// path sits outside the human-readable /:org_slug/:workspace_slug group.
+const stellaTelemetryScoped = new Hono<AppEnv>();
+stellaTelemetryScoped.use("*", authMiddleware);
+stellaTelemetryScoped.use(
+  "*",
+  distributedRateLimiter({
+    keyPrefix: "stella-telemetry",
+    max: () => rateLimitBudgets().agentExec,
+  }),
+);
+stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
+app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
 // Distributed, workspace-keyed rate limiters for the expensive surfaces. Budgets
 // are env-tunable (requests/minute) with conservative defaults; the store is

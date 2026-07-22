@@ -65,6 +65,7 @@ function breakdown(
       costMicros: 0,
       messages: 0,
       executions: 0,
+      messages: 0,
     },
     series: [],
     byModel: [],
@@ -94,6 +95,7 @@ describe("UsagePanel", () => {
           costMicros: 1_250_000,
           messages: 0,
           executions: 4,
+          messages: 4,
         },
         series: [
           {
@@ -104,6 +106,7 @@ describe("UsagePanel", () => {
             costMicros: 500_000,
             messages: 0,
             executions: 1,
+            messages: 1,
           },
         ],
         byModel: [
@@ -116,6 +119,7 @@ describe("UsagePanel", () => {
             costMicros: 1_250_000,
             messages: 0,
             executions: 4,
+            messages: 4,
           },
         ],
       }),

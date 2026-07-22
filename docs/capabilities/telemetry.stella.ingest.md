@@ -1,0 +1,126 @@
+# telemetry.stella.ingest
+
+Accept content-free Stella execution rollups for an explicitly enrolled Oxagen Enterprise workspace. This is the Option A integration boundary: Stella remains the local execution engine and retains its raw operational telemetry; Oxagen receives only the closed operational rollup described below. A Stella client must first be enrolled and configured with a workspace API key and signed enrollment labels. This endpoint does not enroll a client.
+
+## Mode
+
+**sync**
+
+## Surface
+
+- API only: `POST /v1/telemetry/stella/operational`
+- Authentication: operator-provisioned Stella enrollment API key only; browser/session credentials and ordinary workspace API keys are rejected
+- Content type: `application/json`
+- Maximum request body: 256 KiB
+- Distributed limit: the workspace shares the configured agent-execution requests-per-minute budget, under an independent `stella-telemetry` counter bucket
+
+The request always enters the capability kernel as `ingest_stella_operational_telemetry`. Tenant scope comes exclusively from the authenticated API key context. Before any ClickHouse append, Oxagen reloads the active, non-deleted, non-expired API-key row inside tenant scope and requires its server-owned `auth.api_keys.scope` value to be exactly:
+
+```json
+{
+  "purpose": "stella_operational_telemetry_v1",
+  "enrollment_id": "<1-128 character bounded enrollment id>"
+}
+```
+
+The object is strict: missing, additional, or malformed fields are denied. Every event in the batch must carry the same `enrollment_id` as both the protected JSON scope binding and the server-owned `auth.api_keys.stella_telemetry_enrollment_id` binding. The key must also have a server-owned enrollment timestamp. Both provenance columns default to `NULL`, so historical or forged marker-only keys fail closed. The generic `create_api_key` and `rotate_api_key` capabilities cannot populate or preserve this provenance; only a separate operator-controlled enrollment process may write it. This intake endpoint only verifies an existing enrollment and never creates or updates one.
+
+The client-supplied `organization_id` and `workspace_id` fields are bounded compatibility labels from the signed Stella enrollment. Phase 1 intake does not compare them with the key-derived tenant; enrollment tooling is responsible for issuing the correct labels. They never authorize the request, are discarded before storage, and are not used by Oxagen to derive or partition the deduplication key. Oxagen uses the submitted `event_id` as the tenant-scoped deduplication key and cannot verify the client's hash preimage.
+
+## Access and governance
+
+This is a scoped, high-sensitivity management action. IAM is default-deny; the default organization grants allow only `Owner` and `Admin`, with no default workspace-role grants. It does not consume AI credits (`noBillingGate: true`). On every attempt, Oxagen requires a canonical `billing.subscriptions` row with `status = 'active'` whose joined plan tier is `enterprise`. The legacy `organizations.plan_type` field is never consulted. A missing, canceled, past-due, or non-Enterprise subscription denies intake even when the organization row or API-key scope claims Enterprise; no event is appended.
+
+Two Postgres-backed pre-authentication ceilings count every HTTP method and reject excess credential attempts before API-key resolution across every server instance. The first allows 3,000 requests/minute for a trusted Vercel client-IP bucket derived only from the platform-owned `x-vercel-forwarded-for` header; caller-controlled `x-forwarded-for` cannot reset it. Outside Vercel, requests deliberately share one `unverified` bucket rather than trusting a spoofable header. The second allows 60 requests/minute for a SHA-256 fingerprint of the normalized Authorization credential. Only the digest enters the counter key—the credential is never logged or stored—and the same credential shares a bucket across source IPs while distinct credentials behind one NAT remain independent. After the shared store observes an exhausted bucket, each warm instance caches that denial until the fixed window resets, returning subsequent `429` responses without another counter write. If the counter store is unavailable, these two pre-authentication boundaries fail closed with a bounded `503` and never enter authentication. After authentication, the existing Postgres-backed limiter remains POST-only, fail-open, keyed by workspace, and configured by `RATE_LIMIT_AGENT_EXEC_PER_MIN`; its `stella-telemetry` prefix prevents telemetry traffic from consuming the interactive agent bucket. A platform WAF or equivalent edge rate limit remains recommended as the outermost defense; the in-application limits are a fail-closed backstop, not a replacement for edge filtering. API-key enrollment, subscription, IAM, strict schema, and tenant-stamped append checks remain fail-closed.
+
+The resulting records are operational telemetry, not compliance or audit evidence. Do not use this capability as a substitute for Oxagen security events, audit logs, execution lineage, or billing usage records.
+
+## Input
+
+The body must be the exact strict `stella.operational.batch.v1` object. Unknown fields at either the batch or event level are rejected. A batch contains 1 through 50 strict `stella.operational.v1` events.
+
+| Field | Type | Required | Constraint |
+|---|---|---|---|
+| `schema` | string | yes | Exactly `stella.operational.batch.v1` |
+| `events` | array | yes | 1–50 `execution_rollup` events |
+
+Each event has exactly these fields:
+
+| Field | Type | Constraint |
+|---|---|---|
+| `schema` | string | Exactly `stella.operational.v1` |
+| `event_class` | string | Exactly `execution_rollup` |
+| `event_id` | string | `evt_` followed by exactly 64 lowercase hexadecimal characters; immutable across retries |
+| `enrollment_id` | string | 1–128 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, `-` |
+| `organization_id` | string | 1–128 characters from the same bounded identifier alphabet; compatibility label only |
+| `workspace_id` | string | 1–128 characters from the same bounded identifier alphabet; compatibility label only |
+| `provider` | string | 1–160 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, `-`; cannot be `.` or `..` |
+| `model` | string | 1–160 characters total; one or two `/`-separated segments, each using the provider alphabet and excluding `.` or `..` |
+| `outcome` | string | One of `completed`, `error`, `failed`, `aborted`, `cancelled`, `indeterminate`, `verification_failed`, `goal_met`, `goal_unmet` |
+| `duration_ms` | integer | Non-negative JavaScript safe integer |
+| `input_tokens` | integer | Non-negative JavaScript safe integer |
+| `output_tokens` | integer | Non-negative JavaScript safe integer |
+| `cost_microusd` | integer | Non-negative JavaScript safe integer |
+| `tool_call_count` | integer | Non-negative JavaScript safe integer |
+| `changed_file_count` | integer | Non-negative JavaScript safe integer |
+| `produced_output` | boolean | Whether the local execution produced an output |
+
+The schema cannot represent prompts, messages, reasoning, filesystem paths, tool arguments or results, source text, stack traces, arbitrary JSON, installation identity, or Stella-local execution/call identifiers. Those values must remain local to Stella and must not be encoded into any bounded identifier or dimension field.
+
+## Output
+
+| Field | Type | Description |
+|---|---|---|
+| `accepted` | integer | Number of events whose append was accepted, 1–50 |
+| `event_ids` | string[] | Accepted event identifiers in request order; length equals `accepted` |
+
+`accepted` means Oxagen accepted the append. It does not mean an event was uniquely inserted, newly observed, or merged. Clients may safely retry the same immutable `event_id` after an ambiguous response.
+
+## Append and retry semantics
+
+Events are appended to ClickHouse with server-owned `received_at` and tenant identifiers stamped from ambient authenticated scope. Storage is append-only. Event identity is the authenticated `(org_id, workspace_id, event_id)` tuple.
+
+Retries use eventual `ReplacingMergeTree` collapse. Because storage is partitioned by the month of `received_at`, exact deduplicated reads must use `FINAL` with cross-partition merging enabled (`do_not_merge_across_partitions_select_final = 0`). Non-`FINAL` reads may temporarily observe duplicate physical rows and must not be used to claim unique insertion.
+
+Phase 1 trusts an explicitly enrolled Stella client to keep the entire operational event immutable when retrying an `event_id`; intake does not read before append or reject a conflicting payload. Reusing an `event_id` with altered stored dimensions is invalid client behavior. Under `FINAL`, `ReplacingMergeTree` selects the row with the greatest millisecond-resolution `received_at`; if conflicting versions have the same timestamp, the selected row is not defined. Identical retries are unaffected by such a tie. Conflict detection is required before these rollups can be treated as compliance-grade evidence.
+
+## Example
+
+```http
+POST /v1/telemetry/stella/operational
+Authorization: Bearer <workspace-api-key>
+Content-Type: application/json
+
+{
+  "schema": "stella.operational.batch.v1",
+  "events": [
+    {
+      "schema": "stella.operational.v1",
+      "event_class": "execution_rollup",
+      "event_id": "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "enrollment_id": "enrollment_01",
+      "organization_id": "signed_org_label",
+      "workspace_id": "signed_workspace_label",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4",
+      "outcome": "completed",
+      "duration_ms": 1200,
+      "input_tokens": 200,
+      "output_tokens": 50,
+      "cost_microusd": 1750,
+      "tool_call_count": 3,
+      "changed_file_count": 1,
+      "produced_output": true
+    }
+  ]
+}
+```
+
+```json
+{
+  "accepted": 1,
+  "event_ids": [
+    "evt_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+}
+```
