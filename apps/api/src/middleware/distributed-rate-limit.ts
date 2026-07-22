@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
+import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { withSystemDb } from "@oxagen/database";
 import { requireEnv } from "@oxagen/config/env";
@@ -55,6 +56,12 @@ export interface DistributedRateLimitOptions {
    * cover the POST writes without throttling the co-located GET reads.
    */
   methods?: readonly string[];
+  /**
+   * Optional unprefixed bucket suffix for pre-authentication or other custom
+   * scopes. The limiter always prepends `keyPrefix`, preventing cross-surface
+   * collisions. Resolvers must return non-secret, bounded values.
+   */
+  bucketKey?: (c: Context<AppEnv>) => string;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -80,6 +87,34 @@ export function deriveBucketKey(c: Context<AppEnv>, keyPrefix: string): string {
   const orgId = c.get("orgId");
   if (orgId) return `${keyPrefix}:org:${orgId}`;
   return `${keyPrefix}:ip:${clientIp(c)}`;
+}
+
+/**
+ * Vercel replaces `x-vercel-forwarded-for` from its trusted network boundary,
+ * unlike caller-controlled `x-forwarded-for`. Outside Vercel, collapse all
+ * traffic into one conservative bucket rather than trusting a spoofable IP.
+ */
+export function trustedVercelIpBucketKey(c: Context<AppEnv>): string {
+  if (process.env.VERCEL !== "1") return "ip:unverified";
+  const trustedForwardedFor = c.req
+    .header("x-vercel-forwarded-for")
+    ?.split(",", 1)[0]
+    ?.trim();
+  return `ip:${trustedForwardedFor || "unverified"}`;
+}
+
+/**
+ * Stable pre-authentication credential bucket. Only a SHA-256 digest enters
+ * Postgres; the Authorization header and raw bearer credential are never
+ * logged or stored by the limiter.
+ */
+export function authorizationFingerprintBucketKey(c: Context<AppEnv>): string {
+  const authorization = c.req.header("authorization")?.trim() ?? "";
+  const credential = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : authorization;
+  const fingerprint = createHash("sha256").update(credential).digest("hex");
+  return `credential:${fingerprint}`;
 }
 
 // Throttle fail-open warnings to at most one per window per route group, so a
@@ -123,7 +158,9 @@ export function distributedRateLimiter(
   return async (c, next) => {
     if (!methods.includes(c.req.method)) return next();
 
-    const key = deriveBucketKey(c, opts.keyPrefix);
+    const key = opts.bucketKey
+      ? `${opts.keyPrefix}:${opts.bucketKey(c)}`
+      : deriveBucketKey(c, opts.keyPrefix);
     const now = Date.now();
     const windowStartMs = Math.floor(now / windowMs) * windowMs;
     const windowStart = new Date(windowStartMs);

@@ -27,9 +27,11 @@ vi.mock("@oxagen/config/env", async (importOriginal) => {
 });
 
 import {
+  authorizationFingerprintBucketKey,
   distributedRateLimiter,
   deriveBucketKey,
   rateLimitBudgets,
+  trustedVercelIpBucketKey,
 } from "./distributed-rate-limit";
 
 type FakeContextOpts = {
@@ -78,6 +80,47 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+describe("pre-authentication bucket keys", () => {
+  it("collapses all off-Vercel IP headers into one unverified bucket", () => {
+    vi.stubEnv("VERCEL", "");
+
+    expect(
+      trustedVercelIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "198.51.100.1",
+            "x-vercel-forwarded-for": "203.0.113.1",
+          },
+        }),
+      ),
+    ).toBe("ip:unverified");
+    expect(
+      trustedVercelIpBucketKey(
+        fakeContext({
+          headers: {
+            "x-forwarded-for": "198.51.100.2",
+            "x-vercel-forwarded-for": "203.0.113.2",
+          },
+        }),
+      ),
+    ).toBe("ip:unverified");
+  });
+
+  it("normalizes a bearer credential and returns only a SHA-256 fingerprint", () => {
+    const compact = authorizationFingerprintBucketKey(
+      fakeContext({ headers: { authorization: "Bearer secret-key" } }),
+    );
+    const padded = authorizationFingerprintBucketKey(
+      fakeContext({ headers: { authorization: "Bearer   secret-key  " } }),
+    );
+
+    expect(compact).toBe(padded);
+    expect(compact).toMatch(/^credential:[a-f0-9]{64}$/);
+    expect(compact).not.toContain("secret-key");
+  });
 });
 
 describe("deriveBucketKey", () => {
@@ -110,6 +153,35 @@ describe("deriveBucketKey", () => {
 });
 
 describe("distributedRateLimiter", () => {
+  it("uses a custom bucket-key resolver without trusting the default client IP", async () => {
+    let observedKey: unknown;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            observedKey = (
+              query as { queryChunks?: unknown[] }
+            ).queryChunks?.at(1);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+    const mw = distributedRateLimiter({
+      keyPrefix: "preauth",
+      max: 60,
+      bucketKey: () => "credential:sha256",
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await mw(
+      fakeContext({ headers: { "x-forwarded-for": "spoofed.example" } }),
+      next,
+    );
+
+    expect(observedKey).toBe("preauth:credential:sha256");
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("increments the window and sets X-RateLimit headers when under the limit", async () => {
     scriptCount(1);
     const mw = distributedRateLimiter({ keyPrefix: "chat", max: 60 });

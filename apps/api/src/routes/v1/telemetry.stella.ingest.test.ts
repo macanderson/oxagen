@@ -141,6 +141,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("POST /v1/telemetry/stella/operational", () => {
@@ -193,11 +194,24 @@ describe("POST /v1/telemetry/stella/operational", () => {
   );
 
   it("rate-limits globally by the authenticated workspace before invoke", async () => {
-    let count = 0;
+    let workspaceCount = 0;
     mocks.withSystemDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
-          execute: vi.fn().mockImplementation(async () => [{ count: ++count }]),
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            return [
+              {
+                count:
+                  typeof key === "string" &&
+                  key.startsWith("stella-telemetry:ws:")
+                    ? ++workspaceCount
+                    : 1,
+              },
+            ];
+          }),
         }),
     );
 
@@ -220,27 +234,119 @@ describe("POST /v1/telemetry/stella/operational", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("exhausts a cheap IP limit before attempting API-key authentication", async () => {
-    const headers = {
-      authorization: "Bearer invalid_key",
-      "x-forwarded-for": "203.0.113.250",
-    };
+  it("cannot reset the trusted Vercel IP bucket by varying x-forwarded-for", async () => {
+    vi.stubEnv("VERCEL", "1");
     mocks.resolveApiKey.mockResolvedValue({ ok: false });
+    const observedKeys: string[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            if (typeof key === "string") observedKeys.push(key);
+            return [{ count: 1 }];
+          }),
+        }),
+    );
 
-    for (let request = 1; request <= 300; request++) {
-      const response = await post(VALID_BATCH, headers);
+    for (const spoofedIp of ["198.51.100.1", "198.51.100.2"]) {
+      const response = await post(VALID_BATCH, {
+        authorization: "Bearer invalid_key",
+        "x-forwarded-for": spoofedIp,
+        "x-vercel-forwarded-for": "203.0.113.250",
+      });
       expect(response.status).toBe(401);
     }
 
-    expect(mocks.resolveApiKey).toHaveBeenCalledTimes(300);
+    expect(
+      observedKeys.filter((key) => key.startsWith("stella-preauth-ip:")),
+    ).toEqual([
+      "stella-preauth-ip:ip:203.0.113.250",
+      "stella-preauth-ip:ip:203.0.113.250",
+    ]);
+    expect(mocks.resolveApiKey).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps distinct credential fingerprints independent behind one NAT", async () => {
+    vi.stubEnv("VERCEL", "1");
+    const observedFingerprintKeys: string[] = [];
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            if (
+              typeof key === "string" &&
+              key.startsWith("stella-preauth-credential:")
+            ) {
+              observedFingerprintKeys.push(key);
+            }
+            return [{ count: 1 }];
+          }),
+        }),
+    );
+
+    for (const credential of ["ox_valid_one", "ox_valid_two"]) {
+      const response = await post(VALID_BATCH, {
+        authorization: `Bearer ${credential}`,
+        "x-forwarded-for": "198.51.100.99",
+        "x-vercel-forwarded-for": "203.0.113.250",
+      });
+      expect(response.status).toBe(200);
+    }
+
+    expect(new Set(observedFingerprintKeys).size).toBe(2);
+    expect(
+      observedFingerprintKeys.every((key) => !key.includes("ox_valid")),
+    ).toBe(true);
+  });
+
+  it("blocks an exhausted credential fingerprint across IPs before resolveApiKey", async () => {
+    vi.stubEnv("VERCEL", "1");
+    let fingerprintCount = 59;
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn().mockImplementation(async (query: unknown) => {
+            const key = (query as { queryChunks?: unknown[] }).queryChunks?.at(
+              1,
+            );
+            return [
+              {
+                count:
+                  typeof key === "string" &&
+                  key.startsWith("stella-preauth-credential:")
+                    ? ++fingerprintCount
+                    : 1,
+              },
+            ];
+          }),
+        }),
+    );
+
+    const atLimit = await post(VALID_BATCH, {
+      authorization: "Bearer repeatedly_abused_key",
+      "x-forwarded-for": "192.0.2.44",
+      "x-vercel-forwarded-for": "203.0.113.77",
+    });
+    expect(atLimit.status).toBe(200);
+    expect(mocks.resolveApiKey).toHaveBeenCalled();
 
     mocks.resolveApiKey.mockClear();
-    const response = await post(VALID_BATCH, headers);
+    mocks.invoke.mockClear();
+    const response = await post(VALID_BATCH, {
+      authorization: "Bearer repeatedly_abused_key",
+      "x-forwarded-for": "192.0.2.99",
+      "x-vercel-forwarded-for": "203.0.113.88",
+    });
 
     expect(response.status).toBe(429);
     expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(mocks.resolveApiKey).not.toHaveBeenCalled();
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 

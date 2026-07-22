@@ -7,10 +7,11 @@ import { authMiddleware } from "./middleware/auth";
 import { orgMiddleware } from "./middleware/org";
 import { workspaceMiddleware } from "./middleware/workspace";
 import {
+  authorizationFingerprintBucketKey,
   distributedRateLimiter,
   rateLimitBudgets,
+  trustedVercelIpBucketKey,
 } from "./middleware/distributed-rate-limit";
-import { rateLimiter } from "./middleware/rate-limit";
 import { health } from "./routes/health";
 import { stripeWebhook } from "./routes/stripe";
 import { inngestRoute } from "./routes/inngest";
@@ -348,12 +349,27 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
 
-// Cheap pre-authentication ceiling for credential stuffing on Stella intake.
-// Register it on the concrete root path before the auth-gated subrouter: Hono
-// preserves parent registration order, so exhausted IPs never reach API-key
-// resolution. This is deliberately much higher than the authenticated
-// 30/workspace budget to avoid making shared enterprise NATs the main throttle.
-app.use("/v1/telemetry/stella/*", rateLimiter({ windowMs: 60_000, max: 300 }));
+// Shared pre-authentication ceilings for credential stuffing on Stella intake.
+// Register both on the concrete root path before the auth-gated subrouter:
+// Hono preserves parent registration order, so exhausted buckets never reach
+// API-key resolution. The generous trusted-IP ceiling keeps shared enterprise
+// NATs usable; the credential fingerprint limits one abused key across IPs.
+app.use(
+  "/v1/telemetry/stella/*",
+  distributedRateLimiter({
+    keyPrefix: "stella-preauth-ip",
+    max: 3_000,
+    bucketKey: trustedVercelIpBucketKey,
+  }),
+);
+app.use(
+  "/v1/telemetry/stella/*",
+  distributedRateLimiter({
+    keyPrefix: "stella-preauth-credential",
+    max: 60,
+    bucketKey: authorizationFingerprintBucketKey,
+  }),
+);
 
 // Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
 // security model as /v1/telemetry: no auth (callers are website visitors),
