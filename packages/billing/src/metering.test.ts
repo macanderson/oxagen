@@ -16,19 +16,29 @@ const consumeState: { chargedCents: bigint; shortfallCents: bigint } = {
   chargedCents: 0n,
   shortfallCents: 0n,
 };
-const consumeCredits = vi.fn(async () => ({ ...consumeState, balanceCents: 0n }));
+const consumeCredits = vi.fn(async () => ({
+  ...consumeState,
+  balanceCents: 0n,
+}));
 
 const effectiveBalanceState: { value: bigint } = { value: 0n };
-const effectiveBalance = vi.fn(async (_orgId: string) => effectiveBalanceState.value);
+const effectiveBalance = vi.fn(
+  async (_orgId: string) => effectiveBalanceState.value,
+);
 
 vi.mock("./credits", () => ({ consumeCredits, effectiveBalance }));
 
-const { chargeUsageCredits, hasCreditBalance, meterCreditsForUsage } = await import("./metering");
+const { chargeUsageCredits, hasCreditBalance, meterCreditsForUsage } =
+  await import("./metering");
 
 // Markup solved for the default 65% target — passed explicitly so these tests
 // don't depend on env. ($0.06 cost × 3.319 / $0.01 = 19.9 → ceil 20 credits.)
 const MARKUP = 3.319;
-const sonnetCall = { model: "claude-sonnet-5", inputTokens: 10_000, outputTokens: 2_000 };
+const sonnetCall = {
+  model: "claude-sonnet-5",
+  inputTokens: 10_000,
+  outputTokens: 2_000,
+};
 
 describe("meterCreditsForUsage", () => {
   it("rounds credits up from provider cost × markup", () => {
@@ -37,8 +47,37 @@ describe("meterCreditsForUsage", () => {
 
   it("returns 0 credits for a zero-cost call", () => {
     expect(
-      meterCreditsForUsage({ model: "claude-sonnet-5", inputTokens: 0, outputTokens: 0 }, { markup: MARKUP }),
+      meterCreditsForUsage(
+        { model: "claude-sonnet-5", inputTokens: 0, outputTokens: 0 },
+        { markup: MARKUP },
+      ),
     ).toBe(0n);
+  });
+
+  // ── #1076 cache-aware metering witnesses ──────────────────────────────────
+  // These prove the billed credit amount actually reflects the cache split — the
+  // whole point of the feature — not just that the cost function returns a number.
+
+  it("bills a cache-read-heavy call FEWER credits than the same call uncached", () => {
+    // Same 10k inclusive input, but 8k served from cache (0.1x rate) → cheaper.
+    const uncached = meterCreditsForUsage(sonnetCall, { markup: MARKUP });
+    const cached = meterCreditsForUsage(
+      { ...sonnetCall, cachedTokens: 8_000 },
+      { markup: MARKUP },
+    );
+    expect(cached).toBeLessThan(uncached);
+  });
+
+  it("bills a cache-write-heavy call MORE credits than treating those tokens as fresh input", () => {
+    // The core #1076 fix: 8k of the input were cache writes (1.25x premium on
+    // Anthropic), so the call must bill MORE than the identical call that (pre-fix)
+    // counted those tokens as fresh 1x input.
+    const asFresh = meterCreditsForUsage(sonnetCall, { markup: MARKUP });
+    const withWrites = meterCreditsForUsage(
+      { ...sonnetCall, cacheWriteTokens: 8_000 },
+      { markup: MARKUP },
+    );
+    expect(withWrites).toBeGreaterThan(asFresh);
   });
 });
 
@@ -51,7 +90,12 @@ describe("chargeUsageCredits", () => {
 
   it("meters the call and delegates the full debit to consumeCredits", async () => {
     consumeState.chargedCents = 20n;
-    const result = await chargeUsageCredits({ orgId: "org-1", referenceId: "msg-1", markup: MARKUP, ...sonnetCall });
+    const result = await chargeUsageCredits({
+      orgId: "org-1",
+      referenceId: "msg-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
 
     expect(result.creditsMetered).toBe(20n);
     expect(result.creditsCharged).toBe(20n);
@@ -69,12 +113,18 @@ describe("chargeUsageCredits", () => {
   it("surfaces the clamp/shortfall reported by consumeCredits", async () => {
     consumeState.chargedCents = 5n;
     consumeState.shortfallCents = 15n;
-    const result = await chargeUsageCredits({ orgId: "org-1", markup: MARKUP, ...sonnetCall });
+    const result = await chargeUsageCredits({
+      orgId: "org-1",
+      markup: MARKUP,
+      ...sonnetCall,
+    });
 
     expect(result.creditsMetered).toBe(20n);
     expect(result.creditsCharged).toBe(5n);
     expect(result.shortfallCredits).toBe(15n);
-    expect(consumeCredits).toHaveBeenCalledWith(expect.objectContaining({ requestedCents: 20n }));
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedCents: 20n }),
+    );
   });
 
   it("never calls consumeCredits for a zero-cost call", async () => {

@@ -17,7 +17,13 @@ import { registerCapability } from "../registry";
 const totals = z.object({
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
+  /** Prompt-cache READ tokens (cache hits) — a subset of inputTokens. */
   cachedTokens: z.number().int().nonnegative(),
+  /**
+   * Prompt-cache WRITE tokens (cache creation) — a subset of inputTokens billed
+   * at the provider premium (#1076). Zero on pre-migration-0026 rows.
+   */
+  cacheWriteTokens: z.number().int().nonnegative(),
   /** Cost in micro-USD (1 USD = 1_000_000). */
   costMicros: z.number().int().nonnegative(),
   /** Number of metered LLM calls (token_usage rows). */
@@ -103,6 +109,16 @@ export const billingUsageBreakdown = registerCapability({
   output: z.object({
     range: z.object({ start: z.string(), end: z.string() }),
     totals,
+    /**
+     * Estimated cache savings in micro-USD over the window, NET of the cache-write
+     * premium: the reads served cheaply (inputPer1M − cachedInputPer1M per cached
+     * token) minus what the writes cost above fresh input (cacheWritePer1M −
+     * inputPer1M per write token), summed across models via the provider rate card.
+     * Positive = caching netted the org money; can go negative for a workload that
+     * paid the write premium without reaping enough reads. Powers the dashboard's
+     * "cache savings" figure — the discount a cache-friendly agent earns (#1076).
+     */
+    cacheSavingsMicros: z.number().int(),
     series: z.array(
       totals.extend({ day: z.string().describe("YYYY-MM-DD (UTC)") }),
     ),

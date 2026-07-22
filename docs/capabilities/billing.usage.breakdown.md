@@ -29,18 +29,25 @@ within it, never across orgs.
 
 ## Output
 
-Every measure below is `input_tokens` / `output_tokens` / `cached_tokens`
-(non-negative integers), `costMicros` (micro-USD; 1 USD = 1,000,000), and
-`executions` (metered `token_usage` rows).
+Every measure below is `inputTokens` / `outputTokens` / `cachedTokens` (prompt-cache
+READS) / `cacheWriteTokens` (prompt-cache WRITES, billed at the provider premium —
+#1076) — all non-negative integers, `costMicros` (micro-USD; 1 USD = 1,000,000),
+`executions` (metered `token_usage` rows), and `messages` (distinct chat turns).
+`cachedTokens` and `cacheWriteTokens` are both SUBSETS of `inputTokens`, not
+additive (the `@oxagen/ai` gateway reports `inputTokens` as the inclusive total).
 
-| Field         | Type                       | Notes                                                        |
-| ------------- | -------------------------- | ------------------------------------------------------------ |
-| `range`       | `{ start, end }`           | Echoes the requested window.                                 |
-| `totals`      | measures                   | Sum across the window (derived from `byModel`).              |
-| `series`      | array of `{ day, …measures }` | One point per UTC calendar day, chronological.            |
-| `byModel`     | array of `{ key, provider, …measures }` | Grouped by model; `provider` is the provider slug. |
-| `bySurface`   | array of `{ key, provider: "", …measures }` | Grouped by surface (`api`/`mcp`/`app`/`agent`/…). |
-| `byWorkspace` | array of `{ key, provider: "", …measures }` | Grouped by `workspace_id`.                     |
+| Field               | Type                       | Notes                                                        |
+| ------------------- | -------------------------- | ------------------------------------------------------------ |
+| `range`             | `{ start, end }`           | Echoes the requested window.                                 |
+| `totals`            | measures                   | Sum across the window (derived from `byModel`).              |
+| `cacheSavingsMicros`| integer (micro-USD)        | Estimated cache savings NET of the write premium: reads served cheaply minus writes' premium over fresh input, summed across models via the provider rate card. Positive = caching netted money; can go negative. Powers the dashboard "cache savings" figure. |
+| `series`            | array of `{ day, …measures }` | One point per UTC calendar day, chronological.            |
+| `byModel`           | array of `{ key, provider, …measures }` | Grouped by model; `provider` is the provider slug. |
+| `bySurface`         | array of `{ key, provider: "", …measures }` | Grouped by surface (`api`/`mcp`/`app`/`agent`/…). |
+| `byWorkspace`       | array of `{ key, provider: "", …measures }` | Grouped by `workspace_id`.                     |
+| `byCapability`      | array of `{ key, provider: "", …measures }` | Grouped by capability name (principal spine). |
+| `byPrincipal`       | array of `{ principalId, principalKind, …measures }` | Grouped by acting principal.         |
+| `byUser`            | array of `{ userId, …measures }` | Grouped by acting user (seat-level view).                |
 
 Breakdown rows are ordered by cost descending, then executions descending.
 

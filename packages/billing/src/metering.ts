@@ -20,7 +20,9 @@ export class InsufficientCreditsError extends Error {
   readonly code = "insufficient_credits" as const;
 
   constructor() {
-    super("Insufficient credits: your balance is empty. Please add credits to continue.");
+    super(
+      "Insufficient credits: your balance is empty. Please add credits to continue.",
+    );
     this.name = "InsufficientCreditsError";
   }
 }
@@ -83,7 +85,10 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
  */
 
 /** Credits to debit for a known provider cost: ceil(costUsd × markup ÷ creditValue). */
-export function creditsForCostUsd(costUsd: number, markup: number = resolveMeterMarkup()): bigint {
+export function creditsForCostUsd(
+  costUsd: number,
+  markup: number = resolveMeterMarkup(),
+): bigint {
   const creditsExact = (costUsd * markup) / CREDIT_VALUE_USD;
   return creditsExact <= 0 ? 0n : BigInt(Math.ceil(creditsExact));
 }
@@ -93,7 +98,10 @@ export function meterCreditsForUsage(
   usage: TokenUsageInput,
   opts: { markup?: number; rateCard?: RateCard } = {},
 ): bigint {
-  return creditsForCostUsd(providerCostUsd(usage, opts.rateCard), opts.markup ?? resolveMeterMarkup());
+  return creditsForCostUsd(
+    providerCostUsd(usage, opts.rateCard),
+    opts.markup ?? resolveMeterMarkup(),
+  );
 }
 
 export interface ChargeUsageResult {
@@ -131,13 +139,27 @@ async function chargeCostUsd(params: {
 }): Promise<ChargeUsageResult> {
   const start = Date.now();
   const costUsdMicros = Math.round(params.costUsd * 1_000_000);
-  const creditsMetered = creditsForCostUsd(params.costUsd, params.markup ?? resolveMeterMarkup());
+  const creditsMetered = creditsForCostUsd(
+    params.costUsd,
+    params.markup ?? resolveMeterMarkup(),
+  );
   if (creditsMetered <= 0n) {
     logger.debug(
-      { orgId: params.orgId, model: params.model, costUsdMicros, creditsMetered: 0, durationMs: Date.now() - start },
+      {
+        orgId: params.orgId,
+        model: params.model,
+        costUsdMicros,
+        creditsMetered: 0,
+        durationMs: Date.now() - start,
+      },
       "billing: meter — zero cost call, no charge",
     );
-    return { costUsdMicros, creditsMetered: 0n, creditsCharged: 0n, shortfallCredits: 0n };
+    return {
+      costUsdMicros,
+      creditsMetered: 0n,
+      creditsCharged: 0n,
+      shortfallCredits: 0n,
+    };
   }
 
   const { chargedCents, shortfallCents } = await consumeCredits({
@@ -163,7 +185,12 @@ async function chargeCostUsd(params: {
     "billing: meter — usage charged",
   );
 
-  return { costUsdMicros, creditsMetered, creditsCharged: chargedCents, shortfallCredits: shortfallCents };
+  return {
+    costUsdMicros,
+    creditsMetered,
+    creditsCharged: chargedCents,
+    shortfallCredits: shortfallCents,
+  };
 }
 
 export interface ChargeUsageArgs extends TokenUsageInput {
@@ -176,7 +203,9 @@ export interface ChargeUsageArgs extends TokenUsageInput {
 }
 
 /** Charge an org for one metered TEXT (token) call. */
-export async function chargeUsageCredits(args: ChargeUsageArgs): Promise<ChargeUsageResult> {
+export async function chargeUsageCredits(
+  args: ChargeUsageArgs,
+): Promise<ChargeUsageResult> {
   return chargeCostUsd({
     orgId: args.orgId,
     model: args.model,
@@ -187,6 +216,7 @@ export async function chargeUsageCredits(args: ChargeUsageArgs): Promise<ChargeU
       inputTokens: args.inputTokens,
       outputTokens: args.outputTokens,
       cachedTokens: args.cachedTokens ?? 0,
+      cacheWriteTokens: args.cacheWriteTokens ?? 0,
     },
   });
 }
@@ -204,7 +234,9 @@ export interface ChargeImageArgs {
 }
 
 /** Charge an org for one metered IMAGE call (per-image pricing). */
-export async function chargeImageCredits(args: ChargeImageArgs): Promise<ChargeUsageResult> {
+export async function chargeImageCredits(
+  args: ChargeImageArgs,
+): Promise<ChargeUsageResult> {
   return chargeCostUsd({
     orgId: args.orgId,
     model: args.model,
@@ -226,7 +258,9 @@ export interface ChargeVideoArgs {
 }
 
 /** Charge an org for one metered VIDEO call (per-second pricing). */
-export async function chargeVideoCredits(args: ChargeVideoArgs): Promise<ChargeUsageResult> {
+export async function chargeVideoCredits(
+  args: ChargeVideoArgs,
+): Promise<ChargeUsageResult> {
   return chargeCostUsd({
     orgId: args.orgId,
     model: args.model,
