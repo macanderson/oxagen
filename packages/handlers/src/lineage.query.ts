@@ -6,13 +6,24 @@ import {
   type LineageNodeDto,
   type LineageQueryOutput,
 } from "@oxagen/oxagen/contracts/lineage.query";
-import { FanoutNotFoundError } from "@oxagen/agent";
+import {
+  CANCEL_ERROR_REASON,
+  deriveLineageOutcome,
+  FanoutNotFoundError,
+} from "@oxagen/agent";
 import {
   NIL_UUID,
   sumTokenUsageByExecutionStep,
   type TokenUsageByStepRow,
 } from "@oxagen/telemetry";
 import { logger } from "./logger";
+
+// deriveLineageOutcome + CANCEL_ERROR_REASON live in @oxagen/agent
+// (packages/agent/src/dispatch/lineage-outcome.ts) — the fleet-lineage graph
+// projection (packages/agent/src/dispatch/lineage-projection.ts) needs the
+// exact same derivation and @oxagen/handlers already depends on @oxagen/agent
+// (not the reverse), so this re-exports rather than duplicating the logic.
+export { deriveLineageOutcome };
 
 // query_lineage — walks the dispatch tree rooted at one agent.subagent_fanouts
 // row (issue #1078). Data flow:
@@ -61,36 +72,11 @@ interface PrincipalRow {
   status: string;
 }
 
-// The exact error_reason the cancel handler writes
-// (packages/agent/src/handlers/agent.subagent.cancel.ts) — the only way a
-// subagent_runs row distinguishes a genuine failure from a cancellation,
-// since the status column's CHECK constraint has no 'cancelled' value.
-const CANCEL_ERROR_REASON = "Cancelled by agent.subagent.cancel";
-
 // The kernel's exact IAM-denial message shapes (packages/oxagen/src/kernel.ts)
 // — see the long HONESTY NOTE on the contract's delegationViolation field for
 // what this can and cannot prove.
 const IAM_DENIED_RE = /^IAM denied "[^"]+" for principal: (.+)$/;
 const IAM_PENDING_APPROVAL_PREFIX = 'IAM requires approval for "';
-
-/**
- * Derive the node's `outcome` from the raw DB status + error_reason — never
- * pass `status` through raw, per the issue's acceptance criteria.
- */
-export function deriveLineageOutcome(
-  status: string,
-  errorReason: string | null,
-): LineageNodeDto["outcome"] {
-  if (status === "failed") {
-    return errorReason === CANCEL_ERROR_REASON ? "cancelled" : "failed";
-  }
-  if (status === "pending" || status === "running" || status === "completed") {
-    return status;
-  }
-  // Defensive: subagent_runs.status is DB-constrained to
-  // pending|running|completed|failed, so this should be unreachable.
-  return "failed";
-}
 
 /**
  * Parse `error_reason` for the kernel's IAM-denial message shape. See the
