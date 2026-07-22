@@ -10,15 +10,8 @@ import {
   INTERACTIVE_AGENT_SLUG,
 } from "@oxagen/oxagen/interactive-agent";
 import { AgentManagedReadOnlyError } from "./_agent-definition";
-import { and, eq } from "drizzle-orm";
 
 export type { AgentDefinitionCreateInput, AgentDefinitionCreateOutput };
-
-/** System-default agent role auto-assigned to every newly-provisioned agent
- * principal (docs/specs/agent-rbac/spec.md §3.2) — there is no unassigned/
- * legacy state; every agent carries exactly one role from the moment its
- * principal is created. */
-const DEFAULT_AGENT_ROLE_NAME = "Agent Contributor";
 
 /**
  * Create a new agent definition: the identity row (status 'draft',
@@ -68,32 +61,12 @@ export async function agentDefinitionCreateHandler(
       .returning({ id: schema.principals.id });
     if (!principal) throw new Error("principals insert failed");
 
-    // Auto-assign the default system agent role (Agent Contributor) so the
-    // principal carries exactly one role from the moment it exists — no
-    // unassigned/legacy state (spec §3.2, Phase 1 acceptance). Looked up by
-    // name rather than hardcoded id since seed-iam-defaults.ts owns role ids.
-    const [defaultRole] = await tx
-      .select({ id: schema.roles.id })
-      .from(schema.roles)
-      .where(
-        and(
-          eq(schema.roles.orgId, ctx.orgId),
-          eq(schema.roles.name, DEFAULT_AGENT_ROLE_NAME),
-          eq(schema.roles.isSystemDefault, true),
-        ),
-      )
-      .limit(1);
-    if (defaultRole) {
-      await tx.insert(schema.principalRoleAssignments).values({
-        principalId: principal.id,
-        roleId: defaultRole.id,
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        assignedBy: userId,
-        createdByUserId: userId,
-        updatedByUserId: userId,
-      });
-    }
+    // Role assignment is explicitly OUT of scope here — provisioning the
+    // agent's IAM identity (this handler) and assigning it a role are
+    // separate concerns owned by the role-contracts work
+    // (agent.role.assign.ts et al., docs/specs/agent-rbac/spec.md §3.2). A
+    // freshly created agent principal carries no role assignment until an
+    // explicit agent.role.assign call is made.
 
     const [agent] = await tx
       .insert(schema.agents)
