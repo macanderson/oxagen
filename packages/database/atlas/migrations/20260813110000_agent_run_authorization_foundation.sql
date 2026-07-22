@@ -278,14 +278,24 @@ CREATE INDEX "authorization_decisions_request_idx"
 -- to pg_catalog, public — public is needed for the `citext`/`uuid` extension
 -- types these tables use, and pinning it defeats search_path injection.
 --
--- RLS interaction: authorization_deny_generations carries FORCE ROW LEVEL
--- SECURITY, so a non-superuser definer is itself subject to tenant_isolation.
--- That is intentional and consistent — the scope written here is always taken
+-- RLS interaction, and why `SET app.rls_bypass = 'on'` is on this function:
+--
+-- authorization_deny_generations carries FORCE ROW LEVEL SECURITY, so a
+-- NON-SUPERUSER definer would itself be subject to tenant_isolation. In every
+-- reachable case the predicate would pass — the scope written here is taken
 -- from the row whose mutation fired the trigger, and that row was already
 -- visible under the same tenant predicate (or under app.rls_bypass='on' for a
--- withSystemDb path). A superuser definer bypasses RLS outright. Either way the
--- bump lands; there is no case where the source mutation succeeds and the
--- generation silently fails to advance.
+-- withSystemDb path) — and a SUPERUSER definer bypasses RLS outright. But the
+-- consequence of being wrong is severe and asymmetric: a failed bump aborts the
+-- SOURCE transaction, so a principal suspension would simply not apply. Whether
+-- the deploy role is a superuser or the plain table owner must not decide that.
+--
+-- The SET clause is FUNCTION-SCOPED: PostgreSQL saves the previous value on
+-- entry and restores it on exit, so the bypass cannot leak into the caller's
+-- transaction. (`set_config(..., true)` inside the body would be TRANSACTION-
+-- scoped and WOULD leak — never do that here.) It is safe because the function
+-- is EXECUTE-revoked from PUBLIC below and writes exactly one row, whose scope
+-- it receives from the trigger rather than from any caller.
 CREATE OR REPLACE FUNCTION "iam"."bump_deny_generation"(
   p_org_id uuid,
   p_workspace_id uuid
@@ -294,6 +304,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
+SET app.rls_bypass = 'on'
 AS $$
 BEGIN
   IF p_org_id IS NULL THEN

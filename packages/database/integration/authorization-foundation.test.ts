@@ -385,6 +385,37 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
     }
   });
 
+  it("bump_deny_generation carries a function-scoped rls_bypass so a non-superuser owner still bumps", async () => {
+    // The counter table has FORCE ROW LEVEL SECURITY, so a NON-superuser
+    // definer would be subject to tenant_isolation. A failed bump aborts the
+    // SOURCE transaction, meaning a principal suspension would simply not
+    // apply — that must not depend on whether the deploy role is a superuser.
+    // The SET is function-scoped (saved/restored around the call), so it cannot
+    // leak into the caller's transaction.
+    const rows = await sql<{ proconfig: string[] | null }[]>`
+      SELECT p.proconfig
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'iam' AND p.proname = 'bump_deny_generation'
+    `;
+    expect(rows[0]?.proconfig ?? []).toContain("app.rls_bypass=on");
+  });
+
+  it("the bypass does NOT leak into the caller's transaction", async () => {
+    // If the migration ever used set_config(..., true) in the body instead of
+    // the CREATE FUNCTION SET clause, the bypass would be transaction-scoped
+    // and every statement after an IAM write would silently run unfiltered.
+    const after = await asSystem(async (tx) => {
+      await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
+      await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
+      await tx`SELECT set_config('app.current_workspace_id', ${WS_A}, true)`;
+      await tx`UPDATE iam.principals SET display_name = 'AZF Human' WHERE id = ${HUMAN_PRINCIPAL}`;
+      return tx<
+        { v: string | null }[]
+      >`SELECT current_setting('app.rls_bypass', true) AS v`;
+    });
+    expect(after[0]?.v).toBe("off");
+  });
+
   it("PUBLIC cannot execute the bump function", async () => {
     // Otherwise any role could invalidate an arbitrary tenant's cached allows —
     // a denial-of-service on authorization.
