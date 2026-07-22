@@ -879,6 +879,26 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "worker-1:12345",
   },
+  OXAGEN_RUN_V2_CLAIMS_ENABLED: {
+    group: "Inngest",
+    description:
+      'Feature flag — set "1"/"true" to let one @oxagen/agent-worker process claim fenced ' +
+      "RunSpecV2 attempts (docs/specs/run-evidence-ingress/02-run-attempt-foundation-plan.md). " +
+      "OFF by default, and PR 1A reads it nowhere: main.ts does not pass `attempts` to " +
+      "createAgentWorker, and that omission is the real gate — this var documents the " +
+      "operational contract PR 1B wires it to. Enabling v2 execution makes every attempt seal " +
+      "mint a one-shot finalization grant (afg_) and a durable obligation, so it MUST stay off " +
+      "until PR 2B deploys finalization consumption, the evidence ledger, and the obligation " +
+      "worker — otherwise each seal creates an obligation no running process can satisfy. " +
+      "Turning it on does NOT stop v1 claims; the worker tries v2 first and falls back, so " +
+      "already-enqueued legacy work keeps draining either way.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "false" },
+  },
 
   // ── AI providers ──────────────────────────────────────────────────────────────
   BLOB_READ_WRITE_TOKEN: {
@@ -1356,6 +1376,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { "*": "false" },
+  },
+  OXAGEN_V1_RUN_ADMISSION_ENABLED: {
+    group: "Observability",
+    description:
+      "Feature flag — METHOD-LEVEL gate on legacy RunSpec v1 admission (POST /runs only). " +
+      'Set "0"/"false" to stop admitting NEW v1 runs. ON by default: PR 1A ships the dual ' +
+      "v1/v2 reader while already-enqueued v1 work is still draining, and turning admission " +
+      "off before the drain would be a change of behavior PR 1B owns (docs/specs/" +
+      "run-evidence-ingress/02-run-attempt-foundation-plan.md Task 6). This gate is " +
+      "DELIBERATELY separate from OXAGEN_DURABLE_RUNS, which mounts the whole /runs router: " +
+      "disabling new v1 writes must never remove historical reads (GET status, resumable SSE) " +
+      "or make already-queued rows unclaimable.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "true" },
   },
   MCP_PORT: {
     group: "Observability",

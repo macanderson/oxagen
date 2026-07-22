@@ -78,6 +78,21 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // child) but is still row-scoped, same as file_lock_fences above.
   { table: "agent.agent_runs", policyClass: "standard" },
   { table: "agent.agent_run_events", policyClass: "standard" },
+  // Fenced attempt foundation (docs/specs/run-evidence-ingress). All six carry
+  // orgScopeMixin-equivalent scope columns (org_id + workspace_id NOT NULL) +
+  // forced tenant_isolation RLS from the run-attempt-foundation migration.
+  // Every one of them EXCEPT the lease is append-only at the grant level
+  // (SELECT, INSERT — never UPDATE/DELETE for oxagen_app); RLS is orthogonal to
+  // that and still required, or a tenant could read another tenant's evidence.
+  { table: "agent.agent_run_attempts", policyClass: "standard" },
+  { table: "agent.agent_run_attempt_leases", policyClass: "standard" },
+  { table: "agent.agent_run_checkpoints", policyClass: "standard" },
+  { table: "agent.agent_run_attempt_seals", policyClass: "standard" },
+  { table: "agent.agent_run_finalization_grants", policyClass: "standard" },
+  {
+    table: "agent.agent_run_finalization_obligations",
+    policyClass: "standard",
+  },
 
   // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
   // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
@@ -110,6 +125,14 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
+  // Period-to-date spend ceiling (OXA-1079, 20260806120000_spend_budgets.sql).
+  // org_id NOT NULL + workspace_id NULLABLE (a NULL-workspace row is the
+  // org-level ceiling) → workspace_nullable, matching the RLS DDL that
+  // migration already shipped inline. The manifest entry was missed when the
+  // migration landed, so a future re-baseline would have silently dropped the
+  // policy — the same defect class the reseller/routing-policy notes below
+  // record.
+  { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
   // Reseller Revenue — org-only tenant_isolation RLS created in
   // 20260725120000_reseller_revenue.sql (Stripe-for-agents re-bill loop).
   { table: "billing.reseller_price_plans", policyClass: "org_only" },
@@ -141,6 +164,18 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "iam.roles", policyClass: "org_only" },
   { table: "iam.role_grants", policyClass: "org_only" },
   { table: "iam.access_requests", policyClass: "org_only" },
+  // Governed-run authorization foundation (docs/specs/run-evidence-ingress).
+  // authorization_snapshots is always bound to one executing workspace
+  // (org_id + workspace_id NOT NULL) → standard. The other three are legitimately
+  // org-wide OR workspace-scoped (workspace_id NULLABLE) → workspace_nullable,
+  // same shape as iam.principals above.
+  { table: "iam.authorization_snapshots", policyClass: "standard" },
+  {
+    table: "iam.authorization_deny_generations",
+    policyClass: "workspace_nullable",
+  },
+  { table: "iam.emergency_denies", policyClass: "workspace_nullable" },
+  { table: "iam.authorization_decisions", policyClass: "workspace_nullable" },
 
   // ── ingestion.* — connector epic. Child tables (auth_credentials,
   //   oauth_tokens, webhook_subscriptions) have no org cols; isolation is
@@ -151,6 +186,15 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "ingestion.setup_suggestions", policyClass: "standard" },
   { table: "ingestion.deletion_jobs", policyClass: "standard" },
   { table: "ingestion.oauth_accounts", policyClass: "org_only" },
+  // Governed repository bindings (docs/specs/run-evidence-ingress). The
+  // immutable versioned binding plus its two mutable pointer tables; all three
+  // carry org_id + workspace_id NOT NULL → standard.
+  { table: "ingestion.repository_bindings", policyClass: "standard" },
+  { table: "ingestion.repository_binding_heads", policyClass: "standard" },
+  {
+    table: "ingestion.governed_repository_selections",
+    policyClass: "standard",
+  },
 
   // ── mcp.* — all three tables below are tenant-owned (workspace-scoped).
   //   catalog_servers still exists (schema/mcp.ts) but is deliberately NOT
@@ -248,4 +292,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "environments.sandbox_templates", policyClass: "standard" },
   { table: "environments.sandbox_template_tools", policyClass: "standard" },
   { table: "environments.agent_environment_bindings", policyClass: "standard" },
+
+  // ── evidence.* — immutable governed-run evidence (run-evidence-ingress).
+  //   Only the pinned retention-policy version exists at foundation time; the
+  //   manifest/blob ledger lands in the evidence-ledger PR. org_id +
+  //   workspace_id both NOT NULL → standard tenant_isolation.
+  { table: "evidence.retention_policy_versions", policyClass: "standard" },
 ];

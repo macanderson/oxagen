@@ -8,10 +8,14 @@ export * from "./runtime/stream-events";
 export {
   createPlatformTurnDriver,
   parseRunSpec,
+  assertClaimIsLegacyV1,
+  hydrateAgentRunContext,
+  runRowIdentityFromClaim,
   type ClaimedRun,
   type RunEventRecord,
   type TurnDriver,
   type RunSpecV1,
+  type HydratedAgentRun,
 } from "./runtime/turn-driver";
 export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
 export * from "./dispatch/subagent";

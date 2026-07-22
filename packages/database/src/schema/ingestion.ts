@@ -7,11 +7,18 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { ingestionSchema } from "./_schemas";
-import { citext, idMixin, uuidv7Default } from "./_mixins";
+import {
+  appendOnlyAuditMixin,
+  citext,
+  idMixin,
+  orgScopeMixin,
+  uuidv7Default,
+} from "./_mixins";
 
 // ── ingestion.source_connections ─────────────────────────────────────────────
 
@@ -449,3 +456,146 @@ export const githubInstallations = ingestionSchema.table(
     ),
   }),
 );
+
+// ── Governed repository bindings (docs/specs/run-evidence-ingress) ───────────
+//
+// The trusted repository identity a governed agent run is admitted against.
+// This exists because `source_connections.delivery_config` is a mutable JSONB
+// bag: reading repository identity from it means a rename or a reconfigured
+// default ref silently changes what an already-admitted run claims it saw.
+//
+// A binding is IMMUTABLE and VERSIONED. A rename or default-ref reconfiguration
+// INSERTS a new version pointing at the one it supersedes; it never edits an
+// admitted binding. `provider_repository_id` is the provider's own immutable
+// numeric/opaque id — the only field that survives a rename, which is why
+// identity keys on it rather than on owner/name.
+export const repositoryBindings = ingestionSchema.table(
+  "repository_bindings",
+  {
+    ...idMixin("rpb"),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    connectionId: uuid("connection_id").notNull(),
+    provider: text("provider").notNull(),
+    // Immutable across renames (e.g. GitHub's numeric repository id).
+    providerRepositoryId: text("provider_repository_id").notNull(),
+    // What the provider reported at `observed_at` — annotations, not identity.
+    providerOwner: text("provider_owner").notNull(),
+    providerName: text("provider_name").notNull(),
+    providerFullName: text("provider_full_name").notNull(),
+    // The EXACT configured default ref. Admission never falls back to the
+    // string "main" (spec.md §"Launch changes", item 2).
+    configuredDefaultRef: text("configured_default_ref").notNull(),
+    observedAt: timestamp("observed_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    version: integer("version").notNull(),
+    supersedesBindingId: uuid("supersedes_binding_id"),
+  },
+  (t) => ({
+    repositoryVersionUniq: uniqueIndex(
+      "repository_bindings_repository_version_uq",
+    ).on(t.connectionId, t.providerRepositoryId, t.version),
+    orgIdx: index("repository_bindings_org_idx").on(t.orgId, t.workspaceId),
+    connectionIdx: index("repository_bindings_connection_idx").on(
+      t.connectionId,
+    ),
+    versionCheck: check(
+      "repository_bindings_version_check",
+      sql`${t.version} > 0`,
+    ),
+    // Version 1 supersedes nothing; every later version must name its parent,
+    // so the chain back to the first observation is never broken.
+    supersedesCheck: check(
+      "repository_bindings_supersedes_check",
+      sql`(${t.version} = 1 AND ${t.supersedesBindingId} IS NULL) OR (${t.version} > 1 AND ${t.supersedesBindingId} IS NOT NULL)`,
+    ),
+    supersedesSelfCheck: check(
+      "repository_bindings_supersedes_self_check",
+      sql`${t.supersedesBindingId} IS NULL OR ${t.supersedesBindingId} <> ${t.id}`,
+    ),
+    // The configured default ref must be a real ref, never an empty string that
+    // would read as "unset" and invite a fallback.
+    defaultRefCheck: check(
+      "repository_bindings_default_ref_check",
+      sql`length(${t.configuredDefaultRef}) > 0`,
+    ),
+  }),
+);
+
+// ── Mutable head pointer per (connection, provider repository) ───────────────
+//
+// Which binding VERSION is current for one repository. Mutable on purpose: it
+// is a pointer, not evidence. Admission reads the head to resolve, then copies
+// the resolved binding's identity into the immutable run row — so advancing the
+// head afterwards can never rewrite what an admitted run claims.
+export const repositoryBindingHeads = ingestionSchema.table(
+  "repository_binding_heads",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    connectionId: uuid("connection_id").notNull(),
+    provider: text("provider").notNull(),
+    providerRepositoryId: text("provider_repository_id").notNull(),
+    currentBindingId: uuid("current_binding_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    repositoryUniq: uniqueIndex("repository_binding_heads_repository_uq").on(
+      t.connectionId,
+      t.providerRepositoryId,
+    ),
+    orgIdx: index("repository_binding_heads_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+  }),
+);
+
+// ── Explicit primary-repository selection per governed connection ────────────
+//
+// Security admission follows THIS pointer and never infers repository identity
+// from `delivery_config`. The unique key is the connection, so a connection
+// with several repositories and no explicit selection has no row and admission
+// FAILS CLOSED rather than guessing which repository the agent may edit.
+export const governedRepositorySelections = ingestionSchema.table(
+  "governed_repository_selections",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    connectionId: uuid("connection_id").notNull(),
+    primaryBindingId: uuid("primary_binding_id").notNull(),
+    selectedByUserId: uuid("selected_by_user_id"),
+    selectedAt: timestamp("selected_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Exactly one current primary binding per governed connection.
+    connectionUniq: uniqueIndex(
+      "governed_repository_selections_connection_uq",
+    ).on(t.connectionId),
+    orgIdx: index("governed_repository_selections_org_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+  }),
+);
+
+export type RepositoryBinding = typeof repositoryBindings.$inferSelect;
+export type NewRepositoryBinding = typeof repositoryBindings.$inferInsert;
+export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
+export type GovernedRepositorySelection =
+  typeof governedRepositorySelections.$inferSelect;

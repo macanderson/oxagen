@@ -149,6 +149,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
     allowed: true,
     outcome: "allow",
     reason: null,
+    decision: null,
   })),
 }));
 
@@ -335,6 +336,7 @@ describe("materializeTools", () => {
       allowed: true,
       outcome: "allow",
       reason: null,
+      decision: null,
     });
     mocks.insertToolInvocation.mockClear();
     mocks.insertToolInvocation.mockResolvedValue(undefined);
@@ -639,6 +641,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       allowed: true,
       outcome: "allow",
       reason: null,
+      decision: null,
     });
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();
@@ -684,7 +687,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     let scopeAtIam: unknown = "UNSET";
     vi.mocked(authorizeExternalCapability).mockImplementationOnce(async () => {
       scopeAtIam = tenancyMock.state.current;
-      return { allowed: true, outcome: "allow", reason: null };
+      return { allowed: true, outcome: "allow", reason: null, decision: null };
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
@@ -702,6 +705,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       allowed: false,
       outcome: "deny",
       reason: "workspace_policy_deny",
+      decision: null,
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
@@ -722,6 +726,7 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
       allowed: false,
       outcome: "deny",
       reason: "explicit_deny",
+      decision: null,
     });
     const { tools } = await materializeTools(CTX);
     const toolAlias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
@@ -849,6 +854,7 @@ describe("materializeTools — first-use consent gate (OXA-816)", () => {
       allowed: true,
       outcome: "allow",
       reason: null,
+      decision: null,
     });
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();
@@ -1529,6 +1535,7 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
       allowed: true,
       outcome: "allow",
       reason: null,
+      decision: null,
     });
     fakeExecute.mockClear();
     mocks.insertToolInvocation.mockClear();

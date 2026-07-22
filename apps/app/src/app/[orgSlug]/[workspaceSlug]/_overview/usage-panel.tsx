@@ -54,6 +54,7 @@ const EMPTY_BREAKDOWN: BillingUsageBreakdownOutput = {
   byCapability: [],
   byPrincipal: [],
   byUser: [],
+  cacheSavingsMicros: 0,
 };
 
 export async function UsagePanel({
