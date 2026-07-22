@@ -55,4 +55,50 @@ describe("formatError", () => {
     const err = new Error("no cause here");
     expect(formatError(err)).toBe("no cause here");
   });
+
+  it("falls back to the first sub-error when an AggregateError has an empty top-level message (Node's ECONNREFUSED multi-address connect failure shape)", () => {
+    // Reproduces exactly what `postgres` (and Node's own net.connect) throw
+    // when localhost refuses a connection: AggregateError with message="" and
+    // .errors = [ECONNREFUSED, ...]. Before this fix, formatError() printed
+    // an empty string for this — the single most common local-dev failure
+    // mode a seed/backfill script hits.
+    const sub = new Error("connect ECONNREFUSED 127.0.0.1:5433") as Error & {
+      code?: string;
+    };
+    sub.code = "ECONNREFUSED";
+    const agg = new AggregateError([sub], "");
+    const result = formatError(agg);
+    expect(result).not.toBe("");
+    expect(result).toContain("ECONNREFUSED");
+  });
+
+  it("falls back to the first sub-error's String() when it is not an Error instance", () => {
+    const agg = new AggregateError(["plain string failure"], "");
+    expect(formatError(agg)).toContain("plain string failure");
+  });
+
+  it("returns the AggregateError's own name when .errors is empty", () => {
+    const agg = new AggregateError([], "");
+    expect(formatError(agg)).toBe("AggregateError");
+  });
+
+  it("prefers a non-empty top-level message over unwrapping .errors, even if .errors is present", () => {
+    const sub = new Error("sub detail");
+    const agg = new AggregateError([sub], "top-level message wins");
+    expect(formatError(agg)).toBe("top-level message wins");
+  });
+
+  it("unwraps an AggregateError nested as a cause, not just at the top level", () => {
+    const sub = new Error("connect ECONNREFUSED 127.0.0.1:5433") as Error & {
+      code?: string;
+    };
+    sub.code = "ECONNREFUSED";
+    const agg = new AggregateError([sub], "");
+    const outer = new Error("Failed query: insert into iam.roles", {
+      cause: agg,
+    });
+    const result = formatError(outer);
+    expect(result).toContain("Failed query: insert into iam.roles");
+    expect(result).toContain("ECONNREFUSED");
+  });
 });
