@@ -315,6 +315,22 @@ describe("seed-iam-defaults.ts SQL upsert shape", () => {
     );
   });
 
+  it("bulk-chunks the agent-phase role_grants upsert (materializes rows client-side, then batches via sql(chunk, ...)) rather than issuing one INSERT per (role, capability) pair", () => {
+    // Regression guard for the ~1,011-sequential-round-trips-per-org
+    // (3 roles × ~337 agent-surfaced capabilities) shape: the agent phase
+    // must build an array of rows and hand batches to postgres.js's bulk
+    // `sql(chunk, ...)` helper — the same pattern the legacy phase already
+    // used — rather than looping `await sql\`INSERT ...\`` once per
+    // capability inside the role loop.
+    expect(seedSource).toMatch(/AGENT_GRANT_CHUNK/);
+    expect(seedSource).toMatch(
+      /agentGrantRows\.slice\(i, i \+ AGENT_GRANT_CHUNK\)/,
+    );
+    expect(seedSource).toMatch(
+      /sql\(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb"\)/,
+    );
+  });
+
   it("derives role_grant public_ids from makeRoleGrantPublicId, not an ad-hoc scheme", () => {
     expect(seedSource).toMatch(/makeRoleGrantPublicId\(roleId, cap\.name\)/);
   });

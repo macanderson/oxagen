@@ -30,9 +30,10 @@
  *   - role_grants (legacy phase): INSERT ... ON CONFLICT DO NOTHING.
  *   - iam.roles (agent phase): INSERT ... ON CONFLICT (public_id) DO UPDATE
  *     so re-running updates an existing role's description/flags in place.
- *   - iam.role_grants (agent phase): INSERT ... ON CONFLICT (public_id) DO
- *     UPDATE so a capability's effect/resourceScope changing on re-run is
- *     reflected, not silently skipped.
+ *   - iam.role_grants (agent phase): bulk chunked INSERT ... SELECT ...
+ *     FROM (VALUES ...) ... ON CONFLICT (public_id) DO UPDATE, mirroring the
+ *     legacy phase's chunking, so a capability's effect/resourceScope
+ *     changing on re-run is reflected, not silently skipped.
  *
  * Run via:
  *   pnpm db:seed-iam
@@ -307,6 +308,25 @@ async function main(): Promise<void> {
       // condition (packages/oxagen/src/iam/conditions.ts). Seed data only —
       // the resolver's role-grant resourceScope read path is a separate
       // change.
+      //
+      // Materialize every row client-side, then bulk-upsert in chunks —
+      // the same fix already applied to the legacy phase above. The
+      // previous version issued one INSERT per (role, capability) pair
+      // (~3 roles × ~337 agent-surfaced capabilities = ~1,011 sequential
+      // round-trips per org), which is minutes against a WAN-latency
+      // Postgres for a multi-org seed. Chunked multi-row upserts cut that
+      // to a handful of round-trips per org while preserving the exact
+      // same ON CONFLICT (public_id) DO UPDATE semantics per row.
+      interface AgentGrantRow {
+        public_id: string;
+        org_id: string;
+        role_id: string;
+        capability_id: string;
+        effect: Effect;
+        conditions_jsonb: string;
+      }
+
+      const agentGrantRows: AgentGrantRow[] = [];
       for (const roleName of AGENT_ROLE_NAMES) {
         const roleId = agentRoleIdByName.get(roleName);
         if (!roleId) continue;
@@ -314,29 +334,37 @@ async function main(): Promise<void> {
         const conditionsJsonb = JSON.stringify({ resourceScope });
 
         for (const cap of agentCapabilities) {
-          const category = cap.agent?.category;
-          const riskLevel = cap.agent?.riskLevel;
-          const requiresApproval = cap.agent?.requiresApproval;
           const effect = agentRoleEffect(
             roleName,
-            category,
-            riskLevel,
-            requiresApproval,
+            cap.agent?.category,
+            cap.agent?.riskLevel,
+            cap.agent?.requiresApproval,
           );
-          const publicId = makeRoleGrantPublicId(roleId, cap.name);
-
-          await sql`
-            INSERT INTO iam.role_grants
-              (public_id, org_id, role_id, capability_id, effect, conditions_jsonb)
-            VALUES
-              (${publicId}, ${orgId}, ${roleId}, ${cap.name}, ${effect}, ${conditionsJsonb}::jsonb)
-            ON CONFLICT (public_id) DO UPDATE
-              SET effect = EXCLUDED.effect,
-                  conditions_jsonb = EXCLUDED.conditions_jsonb,
-                  updated_at = now()
-          `;
-          agentGrantsUpserted += 1;
+          agentGrantRows.push({
+            public_id: makeRoleGrantPublicId(roleId, cap.name),
+            org_id: orgId,
+            role_id: roleId,
+            capability_id: cap.name,
+            effect,
+            conditions_jsonb: conditionsJsonb,
+          });
         }
+      }
+
+      const AGENT_GRANT_CHUNK = 500;
+      for (let i = 0; i < agentGrantRows.length; i += AGENT_GRANT_CHUNK) {
+        const chunk = agentGrantRows.slice(i, i + AGENT_GRANT_CHUNK);
+        await sql`
+          INSERT INTO iam.role_grants
+            (public_id, org_id, role_id, capability_id, effect, conditions_jsonb)
+          SELECT public_id, org_id, role_id, capability_id, effect, conditions_jsonb::jsonb
+          FROM ${sql(chunk, "public_id", "org_id", "role_id", "capability_id", "effect", "conditions_jsonb")}
+          ON CONFLICT (public_id) DO UPDATE
+            SET effect = EXCLUDED.effect,
+                conditions_jsonb = EXCLUDED.conditions_jsonb,
+                updated_at = now()
+        `;
+        agentGrantsUpserted += chunk.length;
       }
     }
 
