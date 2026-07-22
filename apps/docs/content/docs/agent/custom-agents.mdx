@@ -24,8 +24,11 @@ The audit consequence: what an agent was configured to do at any point in time i
 | Graph access | Which ontology it can read (or extend), the retrieval strategy (semantic / lexical / hybrid / explicit), and a traversal budget (max hops, max nodes, min relevance) |
 | Tools | Explicitly equipped capabilities, skills, MCP servers, or other agents |
 | Triggers | What starts it: `manual`, `schedule` (cron), or `event` (source events, with branch and path-glob filters) |
+| Access | The agent's [role](/docs/governance/agent-roles) — the ceiling on everything above. New agents start as **Agent Contributor**. |
 
-AI can draft all of this for you: describe the agent in plain language and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities — you review and save. Revisions work the same way and always land as a new unpublished version, so an AI edit never silently changes what is live.
+Everything in that table except Access is the agent's **request**. The role is the **ceiling**, and what the agent can actually do is the intersection of the two — so equipping a tool the role denies is inert rather than an error. The builder's Review step shows you that intersection before you save. See [Agent roles](/docs/governance/agent-roles).
+
+AI can draft all of this for you: describe the agent in plain language and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities — including the narrowest role that still lets the drafted agent do its job — and you review and save. Revisions work the same way and always land as a new unpublished version, so an AI edit never silently changes what is live.
 
 ## Triggers
 

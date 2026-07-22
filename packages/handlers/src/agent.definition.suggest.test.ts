@@ -68,7 +68,11 @@ function baseSynthesis() {
         strategy: "hybrid" as "semantic" | "lexical" | "hybrid" | "explicit",
         scopeToTypes: ["Deal"] as string[] | undefined,
       },
-      budget: { maxHops: 2, maxNodes: 40, minRelevance: 0.5 as number | undefined },
+      budget: {
+        maxHops: 2,
+        maxNodes: 40,
+        minRelevance: 0.5 as number | undefined,
+      },
     },
     agentTools: [
       { type: "function", ref: "graph.query" },
@@ -83,9 +87,9 @@ function baseSynthesis() {
  *  server, one active agent already named "existing-agent". */
 function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
   const skillLoaded = opts.skillLoaded ?? true;
-  const schemas =
-    opts.schemas ??
-    [{ schemaName: "sales", displayName: "Sales", enabled: true }];
+  const schemas = opts.schemas ?? [
+    { schemaName: "sales", displayName: "Sales", enabled: true },
+  ];
 
   mocks.invoke.mockImplementation(async (cap: string) => {
     switch (cap) {
@@ -96,8 +100,16 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
       case "list_agent_skills":
         return {
           skills: [
-            { slug: "summarization", name: "Summarise Text", description: "Summarise text" },
-            { slug: "deep-review", name: "Deep Review", description: "Deep code review" },
+            {
+              slug: "summarization",
+              name: "Summarise Text",
+              description: "Summarise text",
+            },
+            {
+              slug: "deep-review",
+              name: "Deep Review",
+              description: "Deep code review",
+            },
           ],
         };
       case "list_workspace_skills":
@@ -105,8 +117,18 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
         // so it is a recommendation candidate, not an equipable one.
         return {
           skills: [
-            { id: "sk_summ", name: "Summarise Text", description: "Summarise text", enabled: true },
-            { id: "sk_review", name: "Deep Review", description: "Deep code review", enabled: false },
+            {
+              id: "sk_summ",
+              name: "Summarise Text",
+              description: "Summarise text",
+              enabled: true,
+            },
+            {
+              id: "sk_review",
+              name: "Deep Review",
+              description: "Deep code review",
+              enabled: false,
+            },
           ],
         };
       case "browse_plugin_catalog":
@@ -123,7 +145,8 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
             {
               name: "supabase/supabase-mcp",
               title: "Supabase",
-              description: "Query Supabase Postgres databases and inspect schemas.",
+              description:
+                "Query Supabase Postgres databases and inspect schemas.",
               installed: false,
             },
           ],
@@ -135,7 +158,11 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
       case "list_agent_defs":
         return {
           agents: [
-            { slug: "existing-agent", description: "already here", status: "active" },
+            {
+              slug: "existing-agent",
+              description: "already here",
+              status: "active",
+            },
           ],
         };
       default:
@@ -155,7 +182,9 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
   mocks.getSurfaces.mockReturnValue(["agent"]);
 }
 
-const INPUT = { description: "Scan every new deal and flag the risky ones for review." };
+const INPUT = {
+  description: "Scan every new deal and flag the risky ones for review.",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -174,7 +203,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(result.suggestion.name).toBe("Deal Scanner");
     expect(result.suggestion.agentType).toBe("custom");
     expect(result.suggestion.config.graph.ontologyId).toBe("sales");
-    expect(result.suggestion.config.instructions).toContain("Inspect each deal");
+    expect(result.suggestion.config.instructions).toContain(
+      "Inspect each deal",
+    );
     expect(result.suggestion.config.agentTools).toHaveLength(2);
     expect(result.rationale).toContain("read-only scanner");
     expect(result.warnings).toEqual([]);
@@ -193,7 +224,12 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
       temperature: number;
       system: string;
       prompt: string;
-      telemetry: { orgId: string; workspaceId: string; surface: string; messageId: string | null };
+      telemetry: {
+        orgId: string;
+        workspaceId: string;
+        surface: string;
+        messageId: string | null;
+      };
     };
     expect(call.temperature).toBe(0.3);
     expect(call.system).toContain(SKILL_BODY);
@@ -246,7 +282,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     for (const t of result.suggestion.config.triggers) {
       expect(t.enabled).toBe(false);
     }
-    expect(result.warnings.filter((w) => w.toLowerCase().includes("trigger"))).toHaveLength(2);
+    expect(
+      result.warnings.filter((w) => w.toLowerCase().includes("trigger")),
+    ).toHaveLength(2);
   });
 
   it("substitutes an out-of-workspace ontologyId with the first candidate and warns", async () => {
@@ -258,7 +296,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
     expect(result.suggestion.config.graph.ontologyId).toBe("sales");
-    expect(result.warnings.some((w) => w.includes("does-not-exist"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("does-not-exist"))).toBe(
+      true,
+    );
   });
 
   it("leaves the ontology unbound (empty) when the workspace has no graph schema", async () => {
@@ -270,7 +310,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
     expect(result.suggestion.config.graph.ontologyId).toBe("");
-    expect(result.warnings.some((w) => w.toLowerCase().includes("unbound"))).toBe(true);
+    expect(
+      result.warnings.some((w) => w.toLowerCase().includes("unbound")),
+    ).toBe(true);
   });
 
   it("de-conflicts a slug that collides with an existing agent", async () => {
@@ -282,7 +324,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
     expect(result.suggestion.slug).toBe("existing-agent-2");
-    expect(result.warnings.some((w) => w.includes("existing-agent"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("existing-agent"))).toBe(
+      true,
+    );
   });
 
   it("honours a kebab nameHint over the model's slug", async () => {
@@ -335,23 +379,29 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     setupWorld();
     const base = mocks.invoke.getMockImplementation()!;
     // schema.list is unavailable; every other read keeps working.
-    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "list_schemas") throw new Error("clickhouse is on fire");
-      return base(cap, input, ctx);
-    });
+    mocks.invoke.mockImplementation(
+      async (cap: string, input: unknown, ctx: unknown) => {
+        if (cap === "list_schemas") throw new Error("clickhouse is on fire");
+        return base(cap, input, ctx);
+      },
+    );
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
 
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
     // Ontology candidates fell back to empty → the model's id can't bind.
     expect(result.suggestion.config.graph.ontologyId).toBe("");
-    expect(result.warnings.some((w) => w.includes("no graph schema"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("no graph schema"))).toBe(
+      true,
+    );
     // The other candidate sources still ground the suggestion.
     expect(result.suggestion.config.agentTools).toContainEqual({
       type: "skill",
       ref: "summarization",
     });
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      system: string;
+    };
     expect(call.system).toContain("summarization");
     // Still a contract-valid, create-shaped suggestion.
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
@@ -365,7 +415,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
     await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      system: string;
+    };
     expect(call.system).toContain("CONNECTABLE");
     expect(call.system).toContain("github/github-mcp-server");
     expect(call.system).toContain("supabase/supabase-mcp");
@@ -460,8 +512,12 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
     expect(result.recommendations).toEqual([]);
-    expect(result.warnings.some((w) => w.includes("made-up/ghost-mcp"))).toBe(true);
-    expect(result.warnings.some((w) => w.includes("nonexistent-skill"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("made-up/ghost-mcp"))).toBe(
+      true,
+    );
+    expect(result.warnings.some((w) => w.includes("nonexistent-skill"))).toBe(
+      true,
+    );
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
   });
 
@@ -488,17 +544,22 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
       type: "mcp_server",
       ref: "mcp_srv1",
     });
-    expect(result.warnings.some((w) => w.includes("already registered"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("already registered"))).toBe(
+      true,
+    );
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
   });
 
   it("degrades to empty recommendations when the catalog source fails", async () => {
     setupWorld();
     const base = mocks.invoke.getMockImplementation()!;
-    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "browse_plugin_catalog") throw new Error("registry unreachable");
-      return base(cap, input, ctx);
-    });
+    mocks.invoke.mockImplementation(
+      async (cap: string, input: unknown, ctx: unknown) => {
+        if (cap === "browse_plugin_catalog")
+          throw new Error("registry unreachable");
+        return base(cap, input, ctx);
+      },
+    );
     const synth = {
       ...baseSynthesis(),
       recommendations: [
@@ -516,7 +577,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
     // Catalog unreachable → the recommendation can't be validated → dropped.
     expect(result.recommendations).toEqual([]);
-    expect(result.warnings.some((w) => w.includes("github/github-mcp-server"))).toBe(true);
+    expect(
+      result.warnings.some((w) => w.includes("github/github-mcp-server")),
+    ).toBe(true);
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
   });
 
@@ -527,16 +590,22 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     // 25-char slug; clamps to "audit-schema-addit" (18). Seed that clamped value
     // as an existing agent so the de-conflict must ALSO stay within 18 chars.
     const base = mocks.invoke.getMockImplementation()!;
-    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
-      if (cap === "list_agent_defs") {
-        return {
-          agents: [
-            { slug: "audit-schema-addit", description: "collision", status: "active" },
-          ],
-        };
-      }
-      return base(cap, input, ctx);
-    });
+    mocks.invoke.mockImplementation(
+      async (cap: string, input: unknown, ctx: unknown) => {
+        if (cap === "list_agent_defs") {
+          return {
+            agents: [
+              {
+                slug: "audit-schema-addit",
+                description: "collision",
+                status: "active",
+              },
+            ],
+          };
+        }
+        return base(cap, input, ctx);
+      },
+    );
     const synth = { ...baseSynthesis(), slug: "audit-schema-additions-pr" };
     expect(synth.slug.length).toBe(25);
     mocks.generateObjectFor.mockResolvedValue({ object: synth });
@@ -560,7 +629,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
     expect(mocks.createBuiltinSkillRegistry).toHaveBeenCalledTimes(1);
     expect(mocks.registryGet).toHaveBeenCalledWith("create-agent");
-    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as {
+      system: string;
+    };
     expect(call.system).toContain("builtin create-agent body");
   });
 
@@ -570,10 +641,12 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     setupWorld();
     mocks.generateObjectFor.mockRejectedValue(new Error("gateway down"));
 
-    await expect(agentDefinitionSuggestHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
-      AgentSuggestError,
-    );
-    await expect(agentDefinitionSuggestHandler(INPUT, TEST_CTX)).rejects.toThrow(/gateway down/);
+    await expect(
+      agentDefinitionSuggestHandler(INPUT, TEST_CTX),
+    ).rejects.toBeInstanceOf(AgentSuggestError);
+    await expect(
+      agentDefinitionSuggestHandler(INPUT, TEST_CTX),
+    ).rejects.toThrow(/gateway down/);
   });
 
   it("throws AgentSuggestError when the create-agent skill is unavailable entirely", async () => {
@@ -581,9 +654,9 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     mocks.registryGet.mockResolvedValue(undefined);
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
 
-    await expect(agentDefinitionSuggestHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
-      AgentSuggestError,
-    );
+    await expect(
+      agentDefinitionSuggestHandler(INPUT, TEST_CTX),
+    ).rejects.toBeInstanceOf(AgentSuggestError);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
   });
 
@@ -596,10 +669,110 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     );
   });
 
+  // ── suggested role (Agent RBAC Phase 5b) ────────────────────────────────────
+  //
+  // The narrowest-adequate mapping itself is exhaustively covered in
+  // lib/agent-role-suggest.test.ts; these assert the HANDLER wiring — that the
+  // suggestion is computed off the REPAIRED config (not the raw synthesis) and
+  // survives the contract's output schema.
+
+  it("returns a suggestedRole computed from the repaired config", async () => {
+    setupWorld();
+    mocks.listCapabilities.mockReturnValue([
+      {
+        name: "graph.query",
+        description: "Query the knowledge graph",
+        agent: { category: "graph", riskLevel: "low" },
+      },
+    ]);
+    // baseSynthesis equips graph.query (read-like) + a skill, graph mode read,
+    // manual trigger only ⇒ read/answer only.
+    mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.suggestedRole?.roleName).toBe("Agent Observer");
+    expect(result.suggestedRole?.reason.length).toBeGreaterThan(0);
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  it("escalates the suggested role when the draft mutates", async () => {
+    setupWorld();
+    mocks.listCapabilities.mockReturnValue([
+      {
+        name: "graph.query",
+        description: "Mutating capability under a non-read category",
+        agent: { category: "write", riskLevel: "low" },
+      },
+    ]);
+    mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.suggestedRole?.roleName).toBe("Agent Contributor");
+  });
+
+  it("escalates to Agent Operator for an unattended high-risk draft", async () => {
+    setupWorld();
+    mocks.listCapabilities.mockReturnValue([
+      {
+        name: "graph.query",
+        description: "High-risk, non-carve-out",
+        agent: { category: "destructive", riskLevel: "high" },
+      },
+    ]);
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        ...baseSynthesis(),
+        // repairSynthesis forces enabled:false on this trigger — the suggestion
+        // must key off the trigger TYPE, not its enabled flag.
+        triggers: [
+          { type: "schedule", schedule: "0 * * * *" },
+        ] as TriggerFixture[],
+      },
+    });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.suggestedRole?.roleName).toBe("Agent Operator");
+    expect(result.suggestedRole?.reason).toMatch(/unattended/i);
+  });
+
+  it("computes the role from the REPAIRED tools — a dropped hallucinated ref never escalates it", async () => {
+    setupWorld();
+    mocks.listCapabilities.mockReturnValue([
+      {
+        name: "graph.query",
+        description: "Query the knowledge graph",
+        agent: { category: "graph", riskLevel: "low" },
+      },
+    ]);
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        ...baseSynthesis(),
+        agentTools: [
+          { type: "function", ref: "graph.query" },
+          // Not in the candidate world ⇒ repairSynthesis drops it with a warning.
+          { type: "mcp_server", ref: "hallucinated-server" },
+        ] as ToolFixture[],
+      },
+    });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.warnings.some((w) => w.includes("hallucinated-server"))).toBe(
+      true,
+    );
+    // Had the dropped MCP server counted, this would have been Contributor.
+    expect(result.suggestedRole?.roleName).toBe("Agent Observer");
+  });
+
   // ── contract input validation ───────────────────────────────────────────────
 
   it("rejects a description shorter than the contract minimum", () => {
-    expect(() => agentDefinitionSuggest.input.parse({ description: "too short" })).toThrow();
+    expect(() =>
+      agentDefinitionSuggest.input.parse({ description: "too short" }),
+    ).toThrow();
     expect(() =>
       agentDefinitionSuggest.input.parse({ description: INPUT.description }),
     ).not.toThrow();
@@ -607,7 +780,10 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
   it("rejects a non-kebab nameHint at the contract boundary", () => {
     expect(() =>
-      agentDefinitionSuggest.input.parse({ description: INPUT.description, nameHint: "Not Kebab" }),
+      agentDefinitionSuggest.input.parse({
+        description: INPUT.description,
+        nameHint: "Not Kebab",
+      }),
     ).toThrow();
   });
 });

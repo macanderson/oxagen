@@ -6,6 +6,11 @@ import {
   loadWorkspacePromptConfig,
 } from "@oxagen/ai";
 import { materializeTools, resolveAgentForA2A } from "@oxagen/agent";
+import {
+  createAgentRunResolution,
+  type AgentRunIAMContext,
+} from "@oxagen/oxagen/iam";
+import { resolveAgentRunAuthzContext, fetchAgentRunAuthz } from "@oxagen/iam";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { executeTurn, DEFAULT_MAX_AGENT_STEPS } from "@oxagen/agent-runner";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -371,6 +376,57 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       )
     : null;
 
+  // Agent RBAC Q2 (docs/specs/agent-rbac §6): an inbound A2A task addressed to
+  // a workspace agent resolves as the TARGET agent's principal INTERSECTED with
+  // the caller's scope. The API-key capability gate at the route layer keeps
+  // applying (the first half of the intersection, unchanged); attaching
+  // `agentRun` here activates the second half — the kernel resolves every tool
+  // call against the agent principal (∩ the sentinel service ceiling when no
+  // human user is attached to the key), and tool materialization filters from
+  // the same cached resolution. A skill-addressed task whose agent cannot
+  // anchor to a live principal FAILS the task (Q1: no ungoverned legacy path);
+  // a generic non-agent-addressed task carries no agentRun — today's behavior.
+  let agentRun: AgentRunIAMContext | undefined;
+  if (resolvedAgent !== null) {
+    const authzCtx = await runInTenantScope(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      () =>
+        resolveAgentRunAuthzContext({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          agentId: resolvedAgent.publicId,
+          initiatingUserId: ctx.userId ?? null,
+        }),
+    );
+    if (authzCtx === null) {
+      throw new Error(
+        `A2A task rejected: agent "${resolvedAgent.publicId}" could not be ` +
+          `resolved to a live agent principal — failing closed (an A2A task ` +
+          `never executes without its delegation ceiling)`,
+      );
+    }
+    agentRun = {
+      principalKind: "agent",
+      agentPrincipal: authzCtx.agentPrincipal,
+      humanPrincipal: authzCtx.humanPrincipal,
+      agentId: resolvedAgent.publicId,
+      runId: ctx.requestId,
+      parentRunId: null,
+    };
+    agentRun.resolution = createAgentRunResolution(
+      await runInTenantScope(
+        { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        () =>
+          fetchAgentRunAuthz({
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            agentPrincipalId: authzCtx.agentPrincipal.id,
+            humanPrincipalId: authzCtx.humanPrincipal?.id ?? null,
+          }),
+      ),
+    );
+  }
+
   // Cross-task lineage (spec §3.2): a referenced prior task's execution row
   // becomes this execution's parent, so agent.trace.get renders full A2A
   // conversation chains the same way it renders subagent fan-out chains.
@@ -444,6 +500,10 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
           surface: "api",
           messageId: ctx.requestId,
           clientIp: ctx.clientIp,
+          // Agent RBAC Q2: the target agent's delegation context — the tools
+          // this returns close over this ctx, so BOTH the model-facing filter
+          // and every kernel invoke() of the task enforce the agent ceiling.
+          ...(agentRun !== undefined ? { agentRun } : {}),
         }),
         loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
         recallWorkspaceMemoryMessage({

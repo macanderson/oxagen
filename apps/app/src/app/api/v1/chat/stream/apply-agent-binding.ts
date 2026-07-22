@@ -10,8 +10,23 @@
 // it can be unit-tested in isolation — the route only does the async load, the
 // try/catch, and the wiring of these outputs into resolvePrompt/materializeTools.
 //
-// Every merge is ADDITIVE and idempotent: an unbound turn never calls this, and
-// a bound turn only ever widens (union) skills/servers and appends instructions.
+// Every merge is ADDITIVE and idempotent for skills/instructions: an unbound
+// turn never calls this, and a bound turn only ever widens (union) skills and
+// appends instructions.
+//
+// MCP servers are the exception (Agent RBAC Phase 4a, spec §3.7): when the
+// caller supplies the run's effective role `mcp` rules, the merged server
+// allowlist becomes an INTERSECTION — the union of body + agent servers is
+// then filtered against the rules, and a server whose EVERY tool is denied
+// drops from the binding entirely. The fully-denied check is the shared
+// engine's `mcpServerFullyDenied` (@oxagen/oxagen/iam) — the same
+// first-match-wins rule evaluation the resolver and the runtime MCP bridge
+// use, so there is exactly ONE matcher in the system. Without an `mcp` input
+// (no agent-run context, or a run with no rules) the behavior is
+// byte-identical to the historical additive union.
+
+import { mcpServerFullyDenied } from "@oxagen/oxagen/iam";
+import type { EffectiveMcpScope } from "@oxagen/oxagen/iam";
 
 /**
  * The slice of an `agent.definition.get` output this binding needs. Kept
@@ -30,6 +45,22 @@ export interface AgentBindingDefinition {
   };
 }
 
+/**
+ * The run's effective MCP rule ceiling + the server-name lookup needed to
+ * evaluate it. `scope` comes from the agent run's cached IAM resolution
+ * (ctx.agentRun.resolution → EffectivePermissions.resourceScope.mcp);
+ * `serverNamesById` maps each allowlist entry (mcp_servers publicId) to the
+ * server's name, which is what "server:tool" rule patterns address. An id
+ * with no name mapping is KEPT (conservative — the per-tool-call gate in the
+ * runtime MCP bridge is the authoritative enforcement and still evaluates
+ * every invocation; a binding drop is UX narrowing, never the security
+ * boundary).
+ */
+export interface AgentBindingMcpInput {
+  scope: EffectiveMcpScope | undefined;
+  serverNamesById: Readonly<Record<string, string>>;
+}
+
 export interface AgentBindingInput {
   /** The bound agent definition. */
   def: AgentBindingDefinition;
@@ -37,6 +68,14 @@ export interface AgentBindingInput {
   skills: string[];
   /** Per-turn MCP server allowlist the request already set (activeServerIds). */
   serverAllowlist: string[];
+  /**
+   * Effective role MCP rules for the run (Agent RBAC Phase 4a). Absent — the
+   * normal case for interactive chat turns, which carry no agent-run IAM
+   * context today — the server allowlist stays the historical additive union,
+   * byte-identical. Present, the union is intersected against the rules and
+   * fully-denied servers drop.
+   */
+  mcp?: AgentBindingMcpInput;
 }
 
 export interface AgentBindingResult {
@@ -94,12 +133,33 @@ export function applyAgentBinding(
 
   const instructions = (def.config.instructions ?? "").trim();
 
+  // Historical additive union first (body entries keep position priority)…
+  let mergedServers = unionOrdered(serverAllowlist, serverRefs);
+  // …then, when the run carries an effective MCP rule ceiling, INTERSECT:
+  // drop every server whose EVERY tool the rules deny (Agent RBAC Phase 4a).
+  // The shared engine (mcpServerFullyDenied, @oxagen/oxagen/iam) is the same
+  // first-match-wins evaluation the runtime MCP bridge applies per call, so
+  // the binding can never diverge from the per-call policy. No `mcp` input →
+  // this branch never runs → byte-identical additive behavior.
+  const mcpScope = input.mcp?.scope;
+  if (mcpScope !== undefined) {
+    const namesById = input.mcp?.serverNamesById ?? {};
+    mergedServers = mergedServers.filter((serverId) => {
+      const name = namesById[serverId];
+      // Unknown id→name mapping: keep the server (conservative — the
+      // per-tool-call gate still evaluates every invocation; see
+      // AgentBindingMcpInput).
+      if (name === undefined) return true;
+      return !mcpServerFullyDenied(mcpScope, name);
+    });
+  }
+
   return {
     instructions,
     // Body-pinned skills keep priority; the cap bounds prompt size exactly like
     // the request schema does, so a skill-heavy agent can't blow the budget.
     skills: unionOrdered(skills, skillRefs).slice(0, MAX_PINNED_SKILLS),
-    serverAllowlist: unionOrdered(serverAllowlist, serverRefs),
+    serverAllowlist: mergedServers,
     // Coding flow derives from the agent DEFINITION alone — the request can
     // never force it. Read-tolerant of the earlier "coding" spelling; "code"
     // is the convention.

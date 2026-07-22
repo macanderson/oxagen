@@ -7,6 +7,10 @@ import {
   resolveAgentEffectivePermissions,
   intersectEffectiveScope,
   evaluateEffectiveMcpScope,
+  evaluateMcpRules,
+  mcpRuleSetFullyDeniesServer,
+  mcpServerFullyDenied,
+  mcpServerToolKey,
   type ResolveAgentInput,
   type Grant,
   type Role,
@@ -200,6 +204,129 @@ describe("evaluateEffectiveMcpScope — most-restrictive-effect merge", () => {
     expect(evaluateEffectiveMcpScope(undefined, "github:read_repo")).toBe(
       "allow",
     );
+  });
+});
+
+describe("evaluateMcpRules — first-match-wins ordering", () => {
+  it("the FIRST matching rule decides — a later broader rule never overrides", () => {
+    const rules = [
+      { pattern: "github:read_*", effect: "allow" as const },
+      { pattern: "github:*", effect: "deny" as const },
+    ];
+    expect(evaluateMcpRules(rules, "github:read_repo")).toBe("allow");
+    expect(evaluateMcpRules(rules, "github:delete_repo")).toBe("deny");
+  });
+
+  it("reversing the order flips the decision (ordering is semantic, not cosmetic)", () => {
+    const rules = [
+      { pattern: "github:*", effect: "deny" as const },
+      { pattern: "github:read_*", effect: "allow" as const },
+    ];
+    // The blanket deny is first, so the specific allow below it is dead.
+    expect(evaluateMcpRules(rules, "github:read_repo")).toBe("deny");
+  });
+
+  it("no matching rule falls through to allow (undefined = unrestricted)", () => {
+    expect(
+      evaluateMcpRules([{ pattern: "slack:*", effect: "deny" }], "github:x"),
+    ).toBe("allow");
+  });
+});
+
+describe("mcpServerToolKey — canonical rule key", () => {
+  it("lowercases the server segment and passes the tool name verbatim", () => {
+    expect(mcpServerToolKey("GitHub", "List_PRs")).toBe("github:List_PRs");
+  });
+});
+
+describe("mcpServerFullyDenied — binding-time server drop (Phase 4a)", () => {
+  it("a blanket 'server:*' deny fully denies that server", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [{ pattern: "github:*", effect: "deny" }],
+        "github",
+      ),
+    ).toBe(true);
+    // Other servers are untouched.
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [{ pattern: "github:*", effect: "deny" }],
+        "slack",
+      ),
+    ).toBe(false);
+  });
+
+  it("the universal '*' deny fully denies every server", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer([{ pattern: "*", effect: "deny" }], "github"),
+    ).toBe(true);
+  });
+
+  it("a partial deny does NOT fully deny (unmatched tools default to allow)", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [{ pattern: "github:delete_*", effect: "deny" }],
+        "github",
+      ),
+    ).toBe(false);
+  });
+
+  it("first-match-wins: an earlier specific allow rescues the server from a later blanket deny", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [
+          { pattern: "github:read_*", effect: "allow" },
+          { pattern: "github:*", effect: "deny" },
+        ],
+        "github",
+      ),
+    ).toBe(false);
+  });
+
+  it("an earlier allow addressing a DIFFERENT server does not rescue this one", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [
+          { pattern: "slack:*", effect: "allow" },
+          { pattern: "github:*", effect: "deny" },
+        ],
+        "github",
+      ),
+    ).toBe(true);
+  });
+
+  it("matches the server case-insensitively (display name 'GitHub' vs rule 'github:*')", () => {
+    expect(
+      mcpRuleSetFullyDeniesServer(
+        [{ pattern: "github:*", effect: "deny" }],
+        "GitHub",
+      ),
+    ).toBe(true);
+  });
+
+  it("effective scope: ANY contributing ceiling that fully denies wins (most-restrictive)", () => {
+    expect(
+      mcpServerFullyDenied(
+        {
+          ruleSets: [
+            [{ pattern: "github:*", effect: "allow" }],
+            [{ pattern: "github:*", effect: "deny" }],
+          ],
+        },
+        "github",
+      ),
+    ).toBe(true);
+    expect(mcpServerFullyDenied(undefined, "github")).toBe(false);
+  });
+
+  it("agrees with evaluateEffectiveMcpScope on every tool of a fully-denied server", () => {
+    const scope = {
+      ruleSets: [[{ pattern: "github:*", effect: "deny" as const }]],
+    };
+    expect(mcpServerFullyDenied(scope, "github")).toBe(true);
+    for (const tool of ["read_repo", "delete_repo", "x", ""]) {
+      expect(evaluateEffectiveMcpScope(scope, `github:${tool}`)).toBe("deny");
+    }
   });
 });
 

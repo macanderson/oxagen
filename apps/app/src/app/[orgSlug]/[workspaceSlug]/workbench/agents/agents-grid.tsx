@@ -15,7 +15,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Bot, Rocket } from "lucide-react";
+import { Bot, Rocket, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -42,6 +42,11 @@ export type AgentGridRow = AgentListRow & {
   detailHref: string;
   /** Ask-surface launch href — null when the agent is not deployed. */
   launchHref: string | null;
+  /**
+   * The agent's assigned IAM role (Agent RBAC), resolved server-side via
+   * list_agent_roles — null when unassigned or the lookup failed (fail-open).
+   */
+  roleName: string | null;
 };
 
 const SORT_OPTIONS: ListSortOption<AgentGridRow>[] = [
@@ -68,6 +73,7 @@ const CSV_COLUMNS: CsvColumn[] = [
   { key: "agentKey", header: "Agent key" },
   { key: "status", header: "Status" },
   { key: "deploymentStatus", header: "Deployment" },
+  { key: "roleName", header: "Role" },
   { key: "latestVersion", header: "Version" },
   { key: "summary", header: "Summary" },
   { key: "description", header: "Description" },
@@ -264,6 +270,22 @@ export function AgentsGrid({ agents }: { agents: AgentGridRow[] }) {
                     >
                       {agent.status}
                     </Badge>
+                    {agent.roleName ? (
+                      // Agent RBAC role badge — the agent's permission ceiling
+                      // at a glance (spec §4 Phase 5 acceptance).
+                      <Badge
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 text-[10px]"
+                        data-testid={`agent-role-${agent.slug}`}
+                      >
+                        <ShieldCheck
+                          className="mr-0.5 h-2.5 w-2.5"
+                          aria-hidden="true"
+                        />
+                        {agent.roleName}
+                      </Badge>
+                    ) : null}
                     <StatusDot
                       status={deployed ? "success" : "neutral"}
                       pulse={deployed}

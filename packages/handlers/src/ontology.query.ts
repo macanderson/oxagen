@@ -8,6 +8,7 @@ import {
 } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getPinnedSchema } from "./schema.pinned";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
 import { logger } from "./logger";
 
 interface TraversedNode {
@@ -122,18 +123,29 @@ export const ontologyQueryHandler: CapabilityHandler<
     input.maxDepth,
   );
 
+  // Agent RBAC Phase 3 (spec §3.6): effective GraphScope = role ceiling ∩ the
+  // agent's graphAccess declaration. `undefined` for human / API-key callers —
+  // byte-identical pass-through. When present, the walk runs on a scope-bound
+  // session (below) whose seam clamps the variable-length hop bound to maxHops
+  // and the literal LIMIT to maxNodes, and rejects writes under a read ceiling.
+  const scope = effectiveGraphScope(ctx, ontologyQuery.name);
+  const scoped = scope !== undefined;
+
   let startNode: TraversedNode | null = null;
   const nodesById = new Map<string, TraversedNode>();
   const edges: TraversedEdge[] = [];
   let truncated = false;
 
   await runInTenantScope({ orgId, workspaceId }, async () => {
-    const session = scopedSession();
+    // 1) Resolve the start node, scoped by BOTH orgId AND workspaceId so a
+    //    same-publicId node in another workspace can never seed a traversal
+    //    (tenant isolation, §0). This probe MATCHes no relationship, so it runs
+    //    on a tenancy-only session — the seam's per-query marker guard rejects a
+    //    relationship-free query on a rel-type-constrained scope. Scope binds on
+    //    the walk (step 2), which is what returns traversable data.
+    const probe = scopedSession();
     try {
-      // 1) Resolve the start node, scoped by BOTH orgId AND workspaceId so a
-      //    same-publicId node in another workspace can never seed a traversal
-      //    (tenant isolation, §0).
-      const startResult = await session.run(
+      const startResult = await probe.run(
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          WHERE start.is_system = false
          RETURN start.publicId AS nodeId, start.label AS label,
@@ -153,22 +165,47 @@ export const ontologyQueryHandler: CapabilityHandler<
         depth: 0,
       };
       nodesById.set(startNode.nodeId, startNode);
+    } finally {
+      await probe.close();
+    }
 
-      // 2) Walk the graph. Every reached node and every relationship along the
-      //    path is constrained to the same org + workspace. We fetch one extra
-      //    row beyond `limit` to detect truncation.
-      // BigInt forces the Bolt driver to send INTEGER — plain JS numbers become
-      // Float and Neo4j rejects them for LIMIT.
-      // Bi-temporal read filter applied to EVERY relationship on the path, so a
-      // traversal only crosses edges that are valid + known at the requested
-      // instants. Defaults to now/now; null lower bounds keep unstamped legacy
-      // edges traversable (behaviour-preserving).
-      const validity = buildValidityFilter("rel", {
-        asOf: input.asOf,
-        asKnownAt: input.asKnownAt,
-      });
+    // 2) Walk the graph. Every reached node and every relationship along the
+    //    path is constrained to the same org + workspace. We fetch one extra
+    //    row beyond `limit` to detect truncation.
+    // Bi-temporal read filter applied to EVERY relationship on the path, so a
+    // traversal only crosses edges that are valid + known at the requested
+    // instants. Defaults to now/now; null lower bounds keep unstamped legacy
+    // edges traversable (behaviour-preserving).
+    const validity = buildValidityFilter("rel", {
+      asOf: input.asOf,
+      asKnownAt: input.asKnownAt,
+    });
 
-      const fetchLimit = BigInt(input.limit + 1);
+    // Agent-scope predicates — REAL path filters consuming the seam's reserved
+    // scope markers (never decorative), added only for a constrained dimension:
+    // EVERY node on the path must carry an allowed label, EVERY relationship an
+    // allowed type. The seam separately clamps the `*1..maxDepth` quantifier to
+    // the budget's maxHops.
+    const scopeLabelClause =
+      scope?.labels !== undefined
+        ? "AND ALL(n IN nodes(path) WHERE any(l IN labels(n) WHERE l IN $__scopeLabels))"
+        : "";
+    const scopeRelClause =
+      scope?.relationshipTypes !== undefined
+        ? "AND ALL(rel IN relationships(path) WHERE type(rel) IN $__scopeRelTypes)"
+        : "";
+
+    // Under an agent scope the LIMIT must be a LITERAL (input.limit is a
+    // contract-validated integer): the seam FAILS CLOSED on a parameterized
+    // `LIMIT $x` because it cannot clamp it to maxNodes. Humans keep the
+    // parameterized `$fetchLimit` (BigInt forces INTEGER on the Bolt wire).
+    const fetchLimit = BigInt(input.limit + 1);
+    const limitLine = scoped
+      ? `LIMIT ${input.limit + 1}`
+      : "LIMIT $fetchLimit";
+
+    const session = scopedSession(scope);
+    try {
       const traverseResult = await session.run(
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH path = ${matchPattern}
@@ -177,9 +214,11 @@ export const ontologyQueryHandler: CapabilityHandler<
            AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
              AND n.is_system = false)
            AND ALL(rel IN relationships(path) WHERE ${validity.clause})
+           ${scopeLabelClause}
+           ${scopeRelClause}
          WITH reached, length(path) AS depth, relationships(path) AS rels, nodes(path) AS pathNodes
          ORDER BY depth ASC
-         LIMIT $fetchLimit
+         ${limitLine}
          RETURN
            reached.publicId    AS nodeId,
            reached.label       AS label,
@@ -196,7 +235,7 @@ export const ontologyQueryHandler: CapabilityHandler<
           startNodeId: input.startNodeId,
           orgId,
           workspaceId,
-          fetchLimit,
+          ...(scoped ? {} : { fetchLimit }),
           ...validity.params,
         },
       );
@@ -281,6 +320,9 @@ export const ontologyQueryHandler: CapabilityHandler<
       nodeCount: nodes.length,
       edgeCount: keptEdges.length,
       truncated,
+      // Observability (spec §5): annotate whether an agent GraphScope bound this
+      // walk (labels/rel-types/budget clamps applied server-side).
+      scopeApplied: scoped,
       orgId,
       workspaceId,
     },

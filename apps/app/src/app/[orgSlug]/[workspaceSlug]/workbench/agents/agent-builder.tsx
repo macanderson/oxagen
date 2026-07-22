@@ -5,7 +5,7 @@
  *
  * A useState-driven wizard (there is no Stepper primitive) that walks the
  * builder through the stages of defining an interactive agent. Create mode
- * leads with an AI-assisted "Describe" step (7 steps); edit mode omits it (6):
+ * leads with an AI-assisted "Describe" step (8 steps); edit mode omits it (7):
  *
  *   0. Describe  — (create only) plain-language description → agent.definition
  *                  .suggest generates a complete config, pre-filled into the
@@ -15,8 +15,13 @@
  *   2. Prompt    — the inline system prompt / instructions.
  *   3. Equip     — the uniform agentTools[] picker (skills/tools/MCP/subagents).
  *   4. Ground    — GraphAccess: ontology binding, mode, retrieval, budget.
- *   5. Triggers  — manual (default) plus optional schedule / event triggers.
- *   6. Review    — summary + Save draft / Publish / Publish & Deploy.
+ *   5. Access    — the agent's IAM role (Agent RBAC): the permission ceiling
+ *                  the configuration is intersected with. Persisted separately
+ *                  via assign_agent_role on save; new agents default to
+ *                  "Agent Contributor" (auto-assigned by the backend).
+ *   6. Triggers  — manual (default) plus optional schedule / event triggers.
+ *   7. Review    — summary + effective scope (role ∩ config) + Save draft /
+ *                  Publish / Publish & Deploy.
  *
  * All persistence flows through the server actions in ./actions.ts, which gate
  * every mutation on workspace Owner/Admin. A `readOnly` builder (managed agent
@@ -72,9 +77,16 @@ import {
   publishAgentAction,
   deployAgentAction,
   suggestAgentAction,
+  assignAgentRoleAction,
 } from "./actions";
+import type { AgentRoleOption } from "@/lib/workbench/agent-roles";
+import { RolePicker } from "./role-picker";
+import { EffectiveScopePanel } from "./effective-scope-panel";
 import {
   mapSuggestionToPrefill,
+  planRoleAssignment,
+  resolveSuggestedRole,
+  DEFAULT_AGENT_ROLE_NAME,
   type BuilderPrefill,
   type AgentRecommendation,
 } from "./suggestion-mapping";
@@ -88,6 +100,12 @@ import { RecommendedConnections } from "./recommended-connections";
  */
 const CODING_AGENT_TYPE = "code";
 const DEFAULT_AGENT_TYPE = "custom";
+
+// DEFAULT_AGENT_ROLE_NAME ("Agent Contributor" — the role the backend
+// auto-assigns to every newly created agent, and the fallback when a
+// suggestion carries no suggestedRole) is imported from ./suggestion-mapping
+// so the client-safe mirror of packages/agent/src/handlers/_agent-role.ts
+// exists in exactly one place.
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +163,16 @@ export interface AgentBuilderProps {
       pluginId?: string;
     }>;
   }) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * Role picker data (Agent RBAC Phase 5a), resolved server-side: candidate
+   * roles with grants + delegation-ceiling pre-check, whether the tier allows
+   * custom roles, a load error (degraded render), and — edit mode — the
+   * currently-assigned role name (null for a pre-RBAC agent).
+   */
+  roleOptions: AgentRoleOption[];
+  customRolesAvailable: boolean;
+  rolesError: string | null;
+  initialRoleName: string | null;
 }
 
 type EquipInstallPluginType =
@@ -167,6 +195,7 @@ const CORE_STEPS = [
   { key: "prompt", label: "Prompt" },
   { key: "equip", label: "Equip" },
   { key: "ground", label: "Ground" },
+  { key: "access", label: "Access" },
   { key: "triggers", label: "Triggers" },
   { key: "review", label: "Review" },
 ] as const;
@@ -175,7 +204,7 @@ const DESCRIBE_STEP = { key: "describe", label: "Describe" } as const;
 
 type BuilderStep = { key: string; label: string };
 
-/** 7 steps in create mode (Describe first), 6 in edit mode (Describe omitted). */
+/** 8 steps in create mode (Describe first), 7 in edit mode (Describe omitted). */
 function stepsFor(mode: "create" | "edit"): BuilderStep[] {
   return mode === "create" ? [DESCRIBE_STEP, ...CORE_STEPS] : [...CORE_STEPS];
 }
@@ -199,6 +228,10 @@ export function AgentBuilder({
   initialAgent,
   installAction,
   installBulkAction,
+  roleOptions,
+  customRolesAvailable,
+  rolesError,
+  initialRoleName,
 }: AgentBuilderProps) {
   const router = useRouter();
   const { add } = useToast();
@@ -250,6 +283,29 @@ export function AgentBuilder({
   const [maxNodes, setMaxNodes] = React.useState(
     initialGraph?.budget.maxNodes ?? 40,
   );
+
+  // Access (Agent RBAC role). selectedRoleName is what the user picked;
+  // assignedRoleName is what is persisted on the agent (updates after a
+  // successful assign; defaults to "Agent Contributor" right after create
+  // because the backend auto-assigns it).
+  const [selectedRoleName, setSelectedRoleName] = React.useState(
+    initialRoleName ?? DEFAULT_AGENT_ROLE_NAME,
+  );
+  const [assignedRoleName, setAssignedRoleName] = React.useState<string | null>(
+    initialRoleName,
+  );
+  // Last role-assignment failure (delegation-ceiling race, tier gate, …) —
+  // shown on the Access step until the next save attempt.
+  const [roleActionError, setRoleActionError] = React.useState<string | null>(
+    null,
+  );
+  // Provenance for an AI-pre-selected role (Agent RBAC Phase 5b): why the
+  // suggestion landed on this ceiling and not a narrower one. Cleared the
+  // moment the user picks a different role — the line would no longer describe
+  // the selection. Null whenever the role was not AI-set.
+  const [roleSuggestionReason, setRoleSuggestionReason] = React.useState<
+    string | null
+  >(null);
 
   // Triggers
   const [manualEnabled, setManualEnabled] = React.useState(
@@ -318,6 +374,11 @@ export function AgentBuilder({
 
   const step = steps[stepIdx]!;
   const disabled = readOnly || busy;
+  // The selected role's option row — feeds the Review step's effective-scope
+  // accountability view (role ceiling ∩ config, display-only).
+  const selectedRoleOption = roleOptions.find(
+    (o) => o.roleName === selectedRoleName,
+  );
 
   function onNameChange(value: string) {
     setName(value);
@@ -329,7 +390,7 @@ export function AgentBuilder({
    * user-edited so the AI-chosen slug survives later name edits, and leaves
    * every field fully editable in the normal steps.
    */
-  function applyPrefill(p: BuilderPrefill) {
+  function applyPrefill(p: BuilderPrefill, roleReason?: string) {
     setName(p.name);
     setSlug(p.slug);
     setSlugEdited(true);
@@ -347,6 +408,17 @@ export function AgentBuilder({
     setEventSource(p.eventSource);
     setEventType(p.eventType);
     setEventConnection(p.eventConnection);
+    // Access step: the role is a prefill field like any other — pre-selected,
+    // then reviewed on the Access step and re-checked on the Review step's
+    // effective-scope panel (role ceiling ∩ this config) before anything saves.
+    // resolveSuggestedRole refuses a role the picker does not actually offer,
+    // so the AI can never select past the viewer's own delegation ceiling.
+    const resolved = resolveSuggestedRole(p.roleName, roleOptions);
+    setSelectedRoleName(resolved.roleName);
+    setRoleSuggestionReason(
+      resolved.aiSelected && roleReason?.trim() ? roleReason : null,
+    );
+    setRoleActionError(null);
   }
 
   async function onGenerate() {
@@ -367,7 +439,10 @@ export function AgentBuilder({
         setSuggestError(res.error);
         return;
       }
-      applyPrefill(mapSuggestionToPrefill(res.suggestion));
+      applyPrefill(
+        mapSuggestionToPrefill(res.suggestion, res.suggestedRole),
+        res.suggestedRole?.reason,
+      );
       setPrefillMeta({ rationale: res.rationale, warnings: res.warnings });
       setRecommendations(res.recommendations);
       setBannerDismissed(false);
@@ -403,11 +478,28 @@ export function AgentBuilder({
         enabled: true,
       });
     }
+    // scopeToTypes / minRelevance / maxTraversalMs are not (yet) editable in
+    // the wizard — preserve them from the loaded config instead of silently
+    // dropping them on save (they are real dimensions of the effective scope).
     const graph: GraphAccess = {
       ontologyId: ontologyId.trim(),
       mode: graphMode,
-      retrieval: { strategy },
-      budget: { maxHops, maxNodes },
+      retrieval: {
+        strategy,
+        ...(initialGraph?.retrieval.scopeToTypes !== undefined
+          ? { scopeToTypes: initialGraph.retrieval.scopeToTypes }
+          : {}),
+      },
+      budget: {
+        maxHops,
+        maxNodes,
+        ...(initialGraph?.budget.minRelevance !== undefined
+          ? { minRelevance: initialGraph.budget.minRelevance }
+          : {}),
+        ...(initialGraph?.budget.maxTraversalMs !== undefined
+          ? { maxTraversalMs: initialGraph.budget.maxTraversalMs }
+          : {}),
+      },
     };
     return {
       graph,
@@ -422,8 +514,67 @@ export function AgentBuilder({
   }
 
   /**
+   * Persist the role selection once the definition is saved (Agent RBAC
+   * Phase 5a). A freshly-created agent already holds "Agent Contributor"
+   * (auto-assigned by the backend), so the sync is a no-op unless the picker
+   * diverges from what is persisted. Assign-then-revoke ordering lives in
+   * the server action. Non-fatal by design: a rejected assignment (e.g. the
+   * delegation ceiling losing a race, a tier gate) never undoes the saved
+   * draft — it surfaces as a partial-success toast plus an inline error on
+   * the Access step, and the persisted role stays what it was.
+   */
+  async function syncRole(
+    agentPublicId: string,
+    wasCreated: boolean,
+  ): Promise<void> {
+    const persistedRole = wasCreated
+      ? DEFAULT_AGENT_ROLE_NAME
+      : assignedRoleName;
+    if (wasCreated) setAssignedRoleName(DEFAULT_AGENT_ROLE_NAME);
+    // Pure decision (unit-tested in suggestion-mapping.test.ts): assign only
+    // when the selection diverges from what is persisted, revoking the role it
+    // replaces. An AI-suggested role reaches assign_agent_role through exactly
+    // this path — there is no separate mechanism for AI-drafted agents.
+    const plan = planRoleAssignment({
+      selectedRoleName,
+      persistedRoleName: persistedRole,
+    });
+    if (plan.assign === null) {
+      setRoleActionError(null);
+      return;
+    }
+    const res = await assignAgentRoleAction({
+      orgSlug,
+      workspaceSlug,
+      agentId: agentPublicId,
+      roleName: plan.assign,
+      ...(plan.revoke !== undefined ? { previousRoleName: plan.revoke } : {}),
+    });
+    if (res.ok) {
+      setAssignedRoleName(res.roleName);
+      setRoleActionError(null);
+      return;
+    }
+    const message =
+      res.code === "agent_role_ceiling_exceeded"
+        ? `You cannot delegate permissions you do not hold — "${selectedRoleName}" ` +
+          `grants capabilities beyond your own access` +
+          (res.capabilities && res.capabilities.length > 0
+            ? ` (${res.capabilities.slice(0, 3).join(", ")}${res.capabilities.length > 3 ? ", …" : ""}).`
+            : ".")
+        : res.error;
+    setRoleActionError(message);
+    add({
+      title: "Draft saved — role not applied",
+      description: message,
+      type: "error",
+    });
+  }
+
+  /**
    * Persist the draft: create on first save, update thereafter. Returns the
    * live agent public id, or null on failure (a toast is raised either way).
+   * A successful save also syncs the Access step's role selection.
    */
   async function persistDraft(): Promise<string | null> {
     const config = buildConfig();
@@ -443,6 +594,7 @@ export function AgentBuilder({
         add({ title: "Save failed", description: res.error, type: "error" });
         return null;
       }
+      await syncRole(agentId, false);
       return agentId;
     }
     const res = await createAgentAction({
@@ -460,6 +612,7 @@ export function AgentBuilder({
       return null;
     }
     setAgentId(res.publicId);
+    await syncRole(res.publicId, true);
     // Move the URL to the durable edit route so a refresh lands on the agent.
     router.replace(workspace.workbench.agent(routeCtx, res.publicId));
     return res.publicId;
@@ -558,6 +711,12 @@ export function AgentBuilder({
         return agentTools.length > 0;
       case "ground":
         return ontologyId.trim().length > 0;
+      case "access":
+        // A role is always selected (default "Agent Contributor"); the chip
+        // fills once the selection is persisted on the agent.
+        return (
+          assignedRoleName !== null && assignedRoleName === selectedRoleName
+        );
       case "triggers":
         return (
           manualEnabled ||
@@ -1072,6 +1231,56 @@ export function AgentBuilder({
             </div>
           ) : null}
 
+          {/* ── Access (Agent RBAC role) ─────────────────────────────────── */}
+          {step.key === "access" ? (
+            <div className="flex flex-col gap-4" data-testid="step-access">
+              {roleActionError ? (
+                <div
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                  data-testid="agent-role-action-error"
+                >
+                  {roleActionError}
+                </div>
+              ) : null}
+              {roleSuggestionReason ? (
+                <div
+                  className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2"
+                  role="status"
+                  data-testid="agent-role-suggestion-reason"
+                >
+                  <Sparkles
+                    className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {selectedRoleName}
+                    </span>{" "}
+                    was pre-selected from your description — the narrowest role
+                    that can still do the job. {roleSuggestionReason} Pick a
+                    different one if that is not the ceiling you want.
+                  </p>
+                </div>
+              ) : null}
+              <RolePicker
+                options={roleOptions}
+                value={selectedRoleName}
+                onChange={(roleName) => {
+                  setSelectedRoleName(roleName);
+                  setRoleActionError(null);
+                  // The AI provenance described the previous selection — a
+                  // manual pick is the user's own, so stop attributing it.
+                  setRoleSuggestionReason(null);
+                }}
+                disabled={disabled}
+                customRolesAvailable={customRolesAvailable}
+                rolesError={rolesError}
+                assignedRoleName={assignedRoleName}
+              />
+            </div>
+          ) : null}
+
           {/* ── Triggers ─────────────────────────────────────────────────── */}
           {step.key === "triggers" ? (
             <div className="flex flex-col gap-5" data-testid="step-triggers">
@@ -1183,6 +1392,15 @@ export function AgentBuilder({
                   value={`${graphMode} · ${strategy} · ${maxHops} hops / ${maxNodes} nodes`}
                 />
                 <SummaryItem
+                  label="Role"
+                  value={
+                    selectedRoleName +
+                    (assignedRoleName !== selectedRoleName
+                      ? " (applied on save)"
+                      : "")
+                  }
+                />
+                <SummaryItem
                   label="Triggers"
                   value={
                     [
@@ -1238,6 +1456,28 @@ export function AgentBuilder({
                   ))}
                 </div>
               ) : null}
+
+              {/* Effective scope (Agent RBAC): role ceiling ∩ configuration
+                  across capabilities / graph / MCP / skills+subagents.
+                  Display-only — computed with the resolver's own exported
+                  intersection helpers, never enforced here. */}
+              <div className="border-t pt-4">
+                <EffectiveScopePanel
+                  role={selectedRoleOption}
+                  graph={{
+                    mode: graphMode,
+                    maxHops,
+                    maxNodes,
+                    ...(initialGraph?.budget.maxTraversalMs !== undefined
+                      ? { maxTraversalMs: initialGraph.budget.maxTraversalMs }
+                      : {}),
+                    ...(initialGraph?.retrieval.scopeToTypes !== undefined
+                      ? { scopeToTypes: initialGraph.retrieval.scopeToTypes }
+                      : {}),
+                  }}
+                  agentTools={agentTools}
+                />
+              </div>
 
               {!readOnly ? (
                 <div className="flex flex-wrap items-center gap-3 border-t pt-4">

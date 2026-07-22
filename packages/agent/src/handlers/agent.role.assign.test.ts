@@ -270,3 +270,27 @@ describe("agent.role.assign handler", () => {
     ).rejects.toThrow(/Unauthorized/);
   });
 });
+
+// ── Q1 regression: no back-compat "Agent Legacy" role ─────────────────────────
+
+describe("AGENT_SYSTEM_ROLE_NAMES — tier-exemption allow-list", () => {
+  it("contains exactly the three seeded system roles", async () => {
+    const { AGENT_SYSTEM_ROLE_NAMES } = await import("./_agent-role");
+    expect([...AGENT_SYSTEM_ROLE_NAMES].sort()).toEqual([
+      "Agent Contributor",
+      "Agent Observer",
+      "Agent Operator",
+    ]);
+  });
+
+  it("excludes the spec's back-compat 'Agent Legacy (unrestricted)' role", async () => {
+    // Spec §6 Q1: pre-launch, no customers, so no back-compat role is seeded.
+    // Membership in this set is a TIER EXEMPTION — listing an unseeded name
+    // would let an org mint a CUSTOM role under it and have it treated as a
+    // tier-exempt system role, escalating under a name meaning "unrestricted".
+    const { AGENT_SYSTEM_ROLE_NAMES } = await import("./_agent-role");
+    expect(AGENT_SYSTEM_ROLE_NAMES.has("Agent Legacy (unrestricted)")).toBe(
+      false,
+    );
+  });
+});

@@ -10,6 +10,7 @@ import {
 } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getPinnedSchema } from "./schema.pinned";
+import { effectiveGraphScope } from "./lib/effective-graph-scope";
 import { logger } from "./logger";
 
 interface NeighborEntry extends EdgeValidity {
@@ -84,17 +85,30 @@ export const ontologyNeighborsHandler: CapabilityHandler<
     : null;
   const edgeTypes = resolveRelationshipTypes(input.edgeTypes, activeVocab);
 
+  // Agent RBAC Phase 3 (spec §3.6): effective GraphScope = role ceiling ∩ the
+  // agent's graphAccess declaration. `undefined` for humans / API-key / service
+  // callers — byte-identical pass-through. When present, the traversal runs on a
+  // scope-bound session and carries the reserved scope markers in REAL
+  // predicates below; the seam clamps the literal LIMIT to the budget's maxNodes
+  // and rejects writes under a read-mode ceiling.
+  const scope = effectiveGraphScope(ctx, ontologyNeighbors.name);
+  const scoped = scope !== undefined;
+
   let found = false;
   const neighbors: NeighborEntry[] = [];
   let truncated = false;
 
   await runInTenantScope({ orgId, workspaceId }, async () => {
-    const session = scopedSession();
+    // 1) Confirm the node exists in THIS org + workspace before reporting any
+    //    neighbors — a same-publicId node in another workspace must never be
+    //    treated as found (tenant isolation, §0). This probe MATCHes no
+    //    relationship, so it runs on a tenancy-only session: the seam's
+    //    per-query marker guard would reject a relationship-free query on a
+    //    rel-type-constrained scope. Scope enforcement lives on the traversal,
+    //    which is what actually returns out-of-scope-capable data.
+    const probe = scopedSession();
     try {
-      // 1) Confirm the node exists in THIS org + workspace before reporting any
-      //    neighbors — a same-publicId node in another workspace must never be
-      //    treated as found (tenant isolation, §0).
-      const existsResult = await session.run(
+      const existsResult = await probe.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          WHERE n.is_system = false
          RETURN n.publicId AS nodeId`,
@@ -104,34 +118,60 @@ export const ontologyNeighborsHandler: CapabilityHandler<
         return;
       }
       found = true;
+    } finally {
+      await probe.close();
+    }
 
-      // Direction filter relative to the anchor node. 'both' applies no filter
-      // and the CASE expression below labels each edge's actual orientation.
-      const directionClause =
-        input.direction === "out"
-          ? "AND startNode(r) = n"
-          : input.direction === "in"
-            ? "AND endNode(r) = n"
-            : "";
+    // Direction filter relative to the anchor node. 'both' applies no filter
+    // and the CASE expression below labels each edge's actual orientation.
+    const directionClause =
+      input.direction === "out"
+        ? "AND startNode(r) = n"
+        : input.direction === "in"
+          ? "AND endNode(r) = n"
+          : "";
 
-      // Relationship-type filter — `type(r) IN $edgeTypes` is a PARAMETER (never
-      // concatenated), so this is safe even before the lexical guard; when
-      // `edgeTypes` is null (no filter + no pin) the clause is omitted entirely
-      // for an unconstrained traversal.
-      const relTypeClause = edgeTypes ? "AND type(r) IN $edgeTypes" : "";
+    // Relationship-type filter — `type(r) IN $edgeTypes` is a PARAMETER (never
+    // concatenated), so this is safe even before the lexical guard; when
+    // `edgeTypes` is null (no filter + no pin) the clause is omitted entirely
+    // for an unconstrained traversal.
+    const relTypeClause = edgeTypes ? "AND type(r) IN $edgeTypes" : "";
 
-      // Bi-temporal read filter — only edges valid + known at the requested
-      // instants survive. Defaults to now/now so an unstamped legacy edge (null
-      // lower bounds) and a currently-valid edge both pass unchanged.
-      const validity = buildValidityFilter("r", {
-        asOf: input.asOf,
-        asKnownAt: input.asKnownAt,
-      });
+    // Agent-scope predicates — REAL WHERE filters that consume the seam's
+    // reserved scope markers (never decorative), added only for a constrained
+    // dimension. The neighbor node `m` must carry an allowed label; the edge `r`
+    // must be an allowed type. Presence of these markers is what the seam's
+    // bypass guard requires; correctness of the predicate is owned here.
+    const scopeLabelClause =
+      scope?.labels !== undefined
+        ? "AND any(l IN labels(m) WHERE l IN $__scopeLabels)"
+        : "";
+    const scopeRelClause =
+      scope?.relationshipTypes !== undefined
+        ? "AND type(r) IN $__scopeRelTypes"
+        : "";
 
-      // Fetch one extra row beyond the cap so we can flag truncation honestly.
-      // BigInt forces the driver to send INTEGER on the Bolt wire — a plain JS
-      // number would be serialised as Float and Neo4j rejects it for LIMIT.
-      const fetchLimit = BigInt(input.limit + 1);
+    // Bi-temporal read filter — only edges valid + known at the requested
+    // instants survive. Defaults to now/now so an unstamped legacy edge (null
+    // lower bounds) and a currently-valid edge both pass unchanged.
+    const validity = buildValidityFilter("r", {
+      asOf: input.asOf,
+      asKnownAt: input.asKnownAt,
+    });
+
+    // Fetch one extra row beyond the cap so we can flag truncation honestly.
+    // Under an agent scope the LIMIT must be a LITERAL (input.limit is a
+    // contract-validated integer): the seam FAILS CLOSED on a parameterized
+    // `LIMIT $x` because it cannot clamp it to the budget's maxNodes. Humans
+    // keep the parameterized `$fetchLimit` (BigInt forces INTEGER on the Bolt
+    // wire) so their path is byte-identical.
+    const fetchLimit = BigInt(input.limit + 1);
+    const limitLine = scoped
+      ? `LIMIT ${input.limit + 1}`
+      : "LIMIT $fetchLimit";
+
+    const session = scopedSession(scope);
+    try {
       const result = await session.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH (n)-[r]-(m:GraphNode)
@@ -139,6 +179,8 @@ export const ontologyNeighborsHandler: CapabilityHandler<
            AND n.is_system = false
            AND m.is_system = false
            ${relTypeClause}
+           ${scopeRelClause}
+           ${scopeLabelClause}
            ${directionClause}
            AND ${validity.clause}
          RETURN
@@ -150,13 +192,13 @@ export const ontologyNeighborsHandler: CapabilityHandler<
            CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END AS direction,
            ${edgeValidityReturn("r")}
          ORDER BY m.displayName ASC
-         LIMIT $fetchLimit`,
+         ${limitLine}`,
         {
           nodeId: input.nodeId,
           orgId,
           workspaceId,
           edgeTypes,
-          fetchLimit,
+          ...(scoped ? {} : { fetchLimit }),
           ...validity.params,
         },
       );
@@ -188,6 +230,9 @@ export const ontologyNeighborsHandler: CapabilityHandler<
       found,
       neighborCount: neighbors.length,
       truncated,
+      // Observability (spec §5): a graph_query trace annotates whether an agent
+      // GraphScope was injected into this read.
+      scopeApplied: scoped,
       orgId,
       workspaceId,
     },

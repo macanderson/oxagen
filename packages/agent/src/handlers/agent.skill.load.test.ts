@@ -7,6 +7,11 @@ import type { SkillLoadRow } from "@oxagen/telemetry";
 const mocks = vi.hoisted(() => ({
   dbCallResults: [] as unknown[],
   recordSkillLoad: vi.fn<(row: unknown) => Promise<void>>(async () => {}),
+  emitAudit: vi.fn(async (_args: unknown) => {}),
+}));
+
+vi.mock("@oxagen/iam", () => ({
+  emitAudit: mocks.emitAudit,
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
@@ -184,5 +189,95 @@ describe("agent.skill.load handler", () => {
     enqueue([{}]); // usage bump update
     const result = await agentSkillLoadHandler({ skillSlug: "plain" }, CTX);
     expect(result.capabilities).toEqual([]);
+  });
+});
+
+// ── Agent RBAC skills.slugs gate (spec §3.3, Phase 4b) ─────────────────────────
+
+describe("agent.skill.load — role scope gate", () => {
+  beforeEach(() => {
+    mocks.dbCallResults = [];
+    mocks.recordSkillLoad.mockClear();
+    mocks.emitAudit.mockClear();
+  });
+
+  /** CTX carrying an agentRun whose effective skills scope is `slugs`. */
+  function agentCtx(slugs: string[] | undefined) {
+    const byCapability = new Map<string, unknown>();
+    byCapability.set("load_agent_skill", {
+      outcome: "allow",
+      agentResolution: {},
+      humanResolution: {},
+      resourceScope: { skills: slugs === undefined ? {} : { slugs } },
+    });
+    return {
+      ...CTX,
+      agentRun: {
+        agentPrincipal: {
+          id: "prn_agent",
+          kind: "agent",
+          orgId: CTX.orgId,
+          workspaceId: CTX.workspaceId,
+        },
+        humanPrincipal: null,
+        agentId: "agt_1",
+        runId: "run_1",
+        resolution: { byCapability },
+      },
+    } as typeof CTX;
+  }
+
+  it("denies a slug outside the allow-list without touching the DB, and audits", async () => {
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "forbidden-skill" },
+      agentCtx(["allowed-skill"]),
+    );
+    expect(result.loaded).toBe(false);
+    expect(result.dependencyErrors[0]!.reason).toContain("role scope");
+    expect(mocks.dbCallResults).toHaveLength(0); // nothing dequeued — no query ran
+    expect(mocks.emitAudit).toHaveBeenCalledTimes(1);
+    expect(mocks.emitAudit.mock.calls[0]![0]).toMatchObject({
+      capability: "load_agent_skill",
+      target: { kind: "skill", id: "forbidden-skill" },
+    });
+  });
+
+  it("loads an in-scope slug normally", async () => {
+    enqueue([{ id: "skl_1", activeVersionId: null }]);
+    enqueue([{ id: "slv_1", versionNumber: 1, body: "## Capability: x.y" }]);
+    enqueue([{}]); // usage bump
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "allowed-skill" },
+      agentCtx(["allowed-skill"]),
+    );
+    expect(result.loaded).toBe(true);
+    expect(mocks.emitAudit).not.toHaveBeenCalled();
+  });
+
+  it("treats undefined slugs as unrestricted (all enabled workspace skills)", async () => {
+    enqueue([{ id: "skl_1", activeVersionId: null }]);
+    enqueue([{ id: "slv_1", versionNumber: 1, body: "body" }]);
+    enqueue([{}]);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "any-skill" },
+      agentCtx(undefined),
+    );
+    expect(result.loaded).toBe(true);
+  });
+
+  it("filters out-of-scope declared dependencies with a per-slug error", async () => {
+    // Primary skill is in scope; dep "outside" is not. Only the primary's
+    // queries run (dep query is skipped by the filter).
+    enqueue([{ id: "skl_1", activeVersionId: null }]);
+    enqueue([{ id: "slv_1", versionNumber: 1, body: "body" }]);
+    enqueue([{}]);
+    const result = await agentSkillLoadHandler(
+      { skillSlug: "allowed-skill", dependencies: ["outside"] },
+      agentCtx(["allowed-skill"]),
+    );
+    expect(result.loaded).toBe(true);
+    expect(result.dependencyErrors).toHaveLength(1);
+    expect(result.dependencyErrors[0]!).toMatchObject({ slug: "outside" });
+    expect(result.dependencyErrors[0]!.reason).toContain("role scope");
   });
 });
