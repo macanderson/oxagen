@@ -83,3 +83,15 @@ pre-push:
         - ".claude/**"
         - "scripts/**"
       run: pnpm env:check
+
+    # The vendored Context Graph Protocol conformance fixtures are a pinned,
+    # byte-for-byte mirror of the canonical upstream (ADR-035). An unenforced
+    # mirror silently diverges — the exact failure #1082 describes — so any edit
+    # to the fixtures, their manifest, or the frozen-digest check must re-run the
+    # offline drift check. Set CONTEXT_GRAPH_PROTOCOL_DIR to upgrade to full
+    # byte-parity against a local canonical checkout.
+    contextgraph-fixtures:
+      glob:
+        - "packages/run-evidence/fixtures/contextgraph/**"
+        - "tools/scripts/check-contextgraph-fixtures.ts"
+      run: pnpm check:contextgraph-fixtures
