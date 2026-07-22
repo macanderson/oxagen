@@ -208,6 +208,7 @@ import "./contracts/integration.sync";
 import "./contracts/knowledge.node-ref";
 import "./contracts/markdown.generate";
 import "./contracts/mermaid.generate";
+import "./contracts/model.capability.list";
 import "./contracts/notification.list";
 import "./contracts/notification.mark";
 import "./contracts/ontology.neighbors";

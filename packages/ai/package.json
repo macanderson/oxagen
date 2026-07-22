@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./catalog": "./src/catalog.ts",
+    "./posture": "./src/provider-posture.ts",
     "./slash-commands": "./src/prompts/slash-commands.ts",
     "./mentions": "./src/prompts/mentions.ts"
   },

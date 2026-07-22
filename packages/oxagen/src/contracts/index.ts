@@ -54,6 +54,7 @@ import { agentTriggerUpdate } from "./agent.trigger.update";
 import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionList } from "./agent.execution.list";
+import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentDebugTrace } from "./agent.debug.trace";
@@ -566,6 +567,7 @@ export {
   agentTriggerList,
   agentExecutionList,
   agentExecutionRecord,
+  modelCapabilityList,
   agentUiRender,
   documentsGenerate,
   documentsPdfCreate,
@@ -1071,6 +1073,7 @@ export const contracts = [
   skillEnable,
   agentExecutionList,
   agentExecutionRecord,
+  modelCapabilityList,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,

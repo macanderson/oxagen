@@ -442,6 +442,9 @@ importers:
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../../packages/agent-engine
+      '@oxagen/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing

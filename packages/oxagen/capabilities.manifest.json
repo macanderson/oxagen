@@ -2882,6 +2882,19 @@
       }
     },
     {
+      "name": "list_model_capabilities",
+      "file": "model.capability.list.ts",
+      "domain": "model",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_notifications",
       "file": "notification.list.ts",
       "domain": "notification",
