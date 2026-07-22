@@ -319,29 +319,31 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
 
   it("replays only events after `after`, with id=seq and event=type, then emits done for an already-terminal run", async () => {
     mocks.getRunByPublicId.mockResolvedValue(summary({ status: "completed" }));
-    mocks.readEventsSince.mockImplementation(
-      async (_runId: string, afterSeq: number) =>
-        [
-          {
-            seq: 1,
-            type: "text-delta",
-            payload: { text: "a" },
-            createdAt: new Date(),
-          },
-          {
-            seq: 2,
-            type: "text-delta",
-            payload: { text: "b" },
-            createdAt: new Date(),
-          },
-          {
-            seq: 3,
-            type: "final-diff",
-            payload: { diff: "x" },
-            createdAt: new Date(),
-          },
-        ].filter((e) => e.seq > afterSeq),
-    );
+    const replayEvents = [
+      {
+        seq: 1,
+        type: "text-delta",
+        payload: { text: "a" },
+        createdAt: new Date(),
+      },
+      {
+        seq: 2,
+        type: "text-delta",
+        payload: { text: "b" },
+        createdAt: new Date(),
+      },
+      {
+        seq: 3,
+        type: "final-diff",
+        payload: { diff: "x" },
+        createdAt: new Date(),
+      },
+    ];
+    mocks.readEventsSince
+      .mockImplementationOnce(async (_runId: string, afterSeq: number) => {
+        return replayEvents.filter((event) => event.seq > afterSeq);
+      })
+      .mockResolvedValue([]);
 
     const res = await app.fetch(get("/runs/arun_abc123/events?after=1"));
     expect(res.status).toBe(200);
@@ -364,6 +366,8 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
       event: "final-diff",
       data: { diff: "x" },
     });
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(1, "run-uuid-1", 1);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(2, "run-uuid-1", 3);
 
     const done = records.find((r) => r.event === "done");
     expect(done).toBeDefined();
@@ -417,19 +421,18 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
     // Call 1 = initial replay, call 2 = the loop iteration's own read (both
     // still empty — the commit hasn't landed yet); call 3+ = the drain read
     // that runs after the terminal status observation (commit now visible).
-    let readCall = 0;
-    mocks.readEventsSince.mockImplementation(async () => {
-      readCall += 1;
-      if (readCall < 3) return [];
-      return [
+    mocks.readEventsSince
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
         {
           seq: 1,
           type: "final-diff",
           payload: { diff: "final" },
           createdAt: new Date(),
         },
-      ];
-    });
+      ])
+      .mockResolvedValue([]);
 
     const res = await app.fetch(get("/runs/arun_abc123/events"));
     const text = await res.text();
@@ -445,6 +448,8 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
     const finalEventIndex = records.findIndex((r) => r.id === "1");
     expect(finalEventIndex).toBeGreaterThanOrEqual(0);
     expect(finalEventIndex).toBeLessThan(doneIndex);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(3, "run-uuid-1", 0);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(4, "run-uuid-1", 1);
   });
 });
 
