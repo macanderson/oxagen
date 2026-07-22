@@ -505,8 +505,11 @@ describe("evaluateAgentRunAuthorization() — live narrowing", () => {
     });
     expect(result.outcome).toBe("deny");
     expect(result.reason).toBe("refresh_failed");
-    // Still recorded: an unreadable ceiling is a decision, not a silent gap.
-    expect(rec.rows[0]?.outcome).toBe("deny");
+    // Still recorded, and recorded as an EVALUATION ERROR rather than a policy
+    // deny — an operator reading the ledger must be able to tell an outage from
+    // a refusal.
+    expect(rec.rows[0]?.outcome).toBe("error");
+    expect(rec.rows[0]?.reasonCode).toBe("refresh_failed");
     expect(rec.rows[0]?.denyGeneration).toEqual({ org: 0, workspace: 0 });
   });
 });
@@ -798,5 +801,11 @@ describe("persistedOutcomeOf()", () => {
     expect(persistedOutcomeOf("pending_approval")).toBe("approval_pending");
     expect(persistedOutcomeOf("allow")).toBe("allow");
     expect(persistedOutcomeOf("deny")).toBe("deny");
+  });
+
+  it("records an unevaluatable check as `error`, not as a policy deny", () => {
+    expect(persistedOutcomeOf("deny", "refresh_failed")).toBe("error");
+    // A real policy denial stays a deny even though it carries a reason.
+    expect(persistedOutcomeOf("deny", "live_denies")).toBe("deny");
   });
 });

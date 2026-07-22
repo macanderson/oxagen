@@ -352,10 +352,28 @@ export type PersistAuthorizationDecisionFn = (
   args: PersistAuthorizationDecisionArgs,
 ) => Promise<AuthorizationDecisionRef>;
 
-/** Map an agent-run outcome onto the persisted vocabulary. */
+/**
+ * Reasons that mean "the check could not be EVALUATED", as opposed to
+ * "evaluated, and the answer is no". Both deny the operation — that is the
+ * fail-closed rule — but the decision row must say which, or an operator
+ * reading the ledger cannot tell a policy denial from an outage.
+ */
+const EVALUATION_FAILURE_REASONS: ReadonlySet<LiveDenyReason> = new Set([
+  "refresh_failed",
+]);
+
+/**
+ * Map an agent-run outcome (+ its reason) onto the persisted vocabulary.
+ *
+ * `approval_pending` is the table's spelling of `pending_approval`. `error` is
+ * reserved for an evaluation failure, so the four-valued column really carries
+ * four distinct meanings rather than three plus an unused slot.
+ */
 export function persistedOutcomeOf(
   outcome: AgentRunAuthorizationOutcome,
+  reason: LiveDenyReason | null = null,
 ): PersistedDecisionOutcome {
+  if (reason !== null && EVALUATION_FAILURE_REASONS.has(reason)) return "error";
   return outcome === "pending_approval" ? "approval_pending" : outcome;
 }
 
@@ -734,7 +752,7 @@ async function recordDecision(args: {
             }
           : null,
       denyGeneration: verdict.denyGeneration,
-      outcome: persistedOutcomeOf(verdict.outcome),
+      outcome: persistedOutcomeOf(verdict.outcome, verdict.reason),
       reasonCode: verdict.reason,
       approvalRequestId: null,
       inputDigest: args.inputDigest,
