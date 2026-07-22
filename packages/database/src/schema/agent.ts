@@ -224,6 +224,12 @@ export const skillVersions = agentSchema.table(
     changeSummary: text("change_summary"),
     // checksum: SHA-256 hex over body — immutability contract (see agent_versions).
     checksum: text("checksum"),
+    // Markdown → TOML backfill provenance. NULL means "never converted", which
+    // is what makes the backfill idempotent. See migration
+    // 20260807090000_skill_versions_legacy_body.sql.
+    legacyBody: text("legacy_body"),
+    legacyBodyChecksum: text("legacy_body_checksum"),
+    migratedAt: timestamp("migrated_at", { withTimezone: true }),
   },
   (t) => ({
     skillIdx: index("skill_versions_skill_idx").on(t.skillId),

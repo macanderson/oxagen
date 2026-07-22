@@ -1562,6 +1562,18 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "get_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "get_subagent_fanout",
       "reads": [],
@@ -1692,6 +1704,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "telemetry",
+      "name": "ingest_stella_operational_telemetry",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -2017,6 +2038,17 @@
     {
       "domain": "agent",
       "name": "list_memory_promotions",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "model",
+      "name": "list_model_capabilities",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3096,6 +3128,18 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "set_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "setup_schema",
       "reads": [],
@@ -3660,7 +3704,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9e7ab1e1da75b6ba02d7d296350ca0d358de69747be401d9759c4abd21365830",
+  "contentHash": "e4d83e878c5cdcd2d006e676e7f75aa0a3c84320e33cc416d3866403d62869e7",
   "domains": [
     {
       "name": "agent",
@@ -3759,6 +3803,7 @@
         "postgres:billing.reseller_rebill_line_items",
         "postgres:billing.reseller_rebill_runs",
         "postgres:billing.reseller_settings",
+        "postgres:billing.spend_budgets",
         "postgres:billing.stripe_event_processing",
         "postgres:billing.stripe_events",
         "postgres:billing.subscriptions"
@@ -4044,7 +4089,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 119
+      "tableCount": 120
     },
     {
       "domains": [
@@ -5055,6 +5100,12 @@
         },
         {
           "name": "cached_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "cache_write_tokens",
           "nullable": false,
           "primaryKey": false,
           "type": "UInt64"
@@ -7744,6 +7795,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "legacy_body",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "legacy_body_checksum",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "migrated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "agent",
@@ -8594,6 +8663,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "stella_telemetry_enrollment_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "stella_telemetry_enrolled_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "expires_at",
@@ -10517,6 +10598,99 @@
       "rls": "org_only",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_user_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "enabled",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "period",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "window_days",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "limit_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "notified_threshold",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "notified_period_start",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.spend_budgets",
+      "name": "spend_budgets",
+      "store": "postgres",
+      "tenantScoped": false
     },
     {
       "columns": [
