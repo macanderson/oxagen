@@ -52,7 +52,11 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     chargeUsageCredits: mocks.chargeUsageCredits,
   };
 });
-vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
+vi.mock("./models", () => ({
+  defaultModel: mocks.defaultModel,
+  modelIdOf: (m: { modelId: string } | string) =>
+    typeof m === "string" ? m : m.modelId,
+}));
 
 import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import { generateObjectFor } from "./generate-object";
@@ -130,7 +134,10 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
 
     expect(mocks.generateObject).toHaveBeenCalledTimes(1);
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.temperature).toBe(0);
     expect(arg.schema).toBe(SCHEMA);
   });
@@ -148,13 +155,22 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
     const after = mocks.defaultModel.mock.calls.length;
     expect(after - before).toBe(0);
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect((arg.model as { modelId: string }).modelId).toBe("claude-3-haiku-20240307");
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect((arg.model as { modelId: string }).modelId).toBe(
+      "claude-3-haiku-20240307",
+    );
   });
 
   it("uses defaultModel() when no model is supplied", async () => {
     const before = mocks.defaultModel.mock.calls.length;
-    await generateObjectFor({ schema: SCHEMA, prompt: "test", telemetry: TELEMETRY });
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "test",
+      telemetry: TELEMETRY,
+    });
     const after = mocks.defaultModel.mock.calls.length;
     expect(after - before).toBe(1);
   });
@@ -235,7 +251,41 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       inputTokens: 12,
       outputTokens: 8,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
     });
+  });
+
+  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter (#1076)", async () => {
+    mocks.generateObject.mockResolvedValueOnce({
+      object: FIXED_OBJECT,
+      // Flat inputTokens is the INCLUSIVE total: 20 fresh + 12 read + 8 write.
+      usage: {
+        inputTokens: 40,
+        outputTokens: 8,
+        totalTokens: 48,
+        inputTokenDetails: { cacheReadTokens: 12, cacheWriteTokens: 8 },
+      },
+      finishReason: "stop",
+    });
+
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "test",
+      telemetry: TELEMETRY,
+    });
+
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+    )[0];
+    expect(rows[0]?.cache_write_tokens).toBe(8);
+    expect(rows[0]?.cached_tokens).toBe(12);
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputTokens: 40,
+        cachedTokens: 12,
+        cacheWriteTokens: 8,
+      }),
+    );
   });
 
   // ── Tenant-scope regression (Inngest billing leak) ─────────────────────────
@@ -249,10 +299,19 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockImplementation(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 156, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 156,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
-    await generateObjectFor({ schema: SCHEMA, prompt: "inngest step", telemetry: TELEMETRY });
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "inngest step",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(chargeSucceeded).toBe(true);
@@ -263,13 +322,22 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockImplementation(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 156, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 156,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     await runInTenantScope(
       { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
       async () => {
-        await generateObjectFor({ schema: SCHEMA, prompt: "request turn", telemetry: TELEMETRY });
+        await generateObjectFor({
+          schema: SCHEMA,
+          prompt: "request turn",
+          telemetry: TELEMETRY,
+        });
       },
     );
 
@@ -320,7 +388,10 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.temperature).toBe(1.2);
   });
 
@@ -333,7 +404,10 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.system).toBe("You are a geography expert.");
     expect(arg.messages).toBe(messages);
   });
@@ -347,7 +421,10 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       abortSignal: signal,
     });
 
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.abortSignal).toBe(signal);
   });
 
@@ -359,21 +436,33 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       maxRetries: 0,
     });
 
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.maxRetries).toBe(0);
   });
 
   it("omits abortSignal and maxRetries entirely when the caller does not set them", async () => {
-    await generateObjectFor({ schema: SCHEMA, prompt: "defaults", telemetry: TELEMETRY });
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "defaults",
+      telemetry: TELEMETRY,
+    });
 
-    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect("abortSignal" in arg).toBe(false);
     expect("maxRetries" in arg).toBe(false);
   });
 
   it("propagates an AbortError when the underlying call is aborted", async () => {
     mocks.generateObject.mockRejectedValueOnce(
-      Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }),
+      Object.assign(new Error("The operation was aborted"), {
+        name: "TimeoutError",
+      }),
     );
 
     await expect(

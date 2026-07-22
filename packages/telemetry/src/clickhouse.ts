@@ -72,7 +72,12 @@ export async function closeClickhouse(): Promise<void> {
 }
 
 export interface TokenUsageRollup {
-  metric: "tokens_input" | "tokens_output" | "tokens_cached" | "executions";
+  metric:
+    | "tokens_input"
+    | "tokens_output"
+    | "tokens_cached"
+    | "tokens_cache_write"
+    | "executions";
   quantity: number;
   costMicros: bigint;
 }
@@ -98,6 +103,7 @@ export async function sumTokenUsage(args: {
         sum(input_tokens)  AS input_tokens,
         sum(output_tokens) AS output_tokens,
         sum(cached_tokens) AS cached_tokens,
+        sum(cache_write_tokens) AS cache_write_tokens,
         sum(cost_usd_micros) AS cost_micros,
         count()            AS row_count
       FROM token_usage
@@ -117,6 +123,7 @@ export async function sumTokenUsage(args: {
     input_tokens: string;
     output_tokens: string;
     cached_tokens: string;
+    cache_write_tokens: string;
     cost_micros: string;
     row_count: string;
   };
@@ -125,6 +132,7 @@ export async function sumTokenUsage(args: {
     input_tokens: "0",
     output_tokens: "0",
     cached_tokens: "0",
+    cache_write_tokens: "0",
     cost_micros: "0",
     row_count: "0",
   };
@@ -143,6 +151,11 @@ export async function sumTokenUsage(args: {
     {
       metric: "tokens_cached",
       quantity: Number(row.cached_tokens),
+      costMicros: 0n,
+    },
+    {
+      metric: "tokens_cache_write",
+      quantity: Number(row.cache_write_tokens),
       costMicros: 0n,
     },
     // Total cost attributed to executions metric; per-metric cost requires
@@ -274,7 +287,21 @@ export interface TokenUsageRow {
   provider: Provider;
   input_tokens: number;
   output_tokens: number;
+  /**
+   * Prompt-cache READ tokens (cache hits). A SUBSET of `input_tokens`, not
+   * additive — the @oxagen/ai gateway normalizes `input_tokens` to the inclusive
+   * total, so fresh input = `input_tokens - cached_tokens - cache_write_tokens`.
+   */
   cached_tokens: number;
+  /**
+   * Prompt-cache WRITE tokens (cache creation), billed by the provider at a
+   * premium (~1.25x base input on Anthropic, 5-min TTL). Also a subset of
+   * `input_tokens`. Optional at the type boundary — non-text callers (embeddings,
+   * image/video generation) never write cache, so they omit it and it coalesces
+   * to 0 in `insertTokenUsage`, matching the ClickHouse column DEFAULT (migration
+   * 0026). Text callers routed through `@oxagen/ai` forward the real count.
+   */
+  cache_write_tokens?: number;
   cost_usd_micros: number;
   /** Wall-clock for the LLM call (first request byte → final token). */
   duration_ms: number;
@@ -442,6 +469,10 @@ export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
       ...(r.execution_step_id == null
         ? { ...r, execution_step_id: NIL_UUID }
         : r),
+      // Coalesce the optional cache-write count to 0 so non-text callers
+      // (embeddings, image/video) never have to spell it out — matches the
+      // ClickHouse column DEFAULT 0 (migration 0026).
+      cache_write_tokens: r.cache_write_tokens ?? 0,
       trace_id: r.trace_id ?? trace_id,
       span_id: r.span_id ?? span_id,
       principal_id: r.principal_id ?? attribution.principal_id,
