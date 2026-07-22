@@ -1,6 +1,6 @@
 # Enterprise Agent IAM and Graph Context Permissions
 
-- **Status:** Design approved; written specification awaiting final review
+- **Status:** Approved for implementation
 - **Date:** 2026-07-21
 - **Owner:** Platform
 - **Canonical scope:** Agent identity, RBAC, graph context authorization, tool authorization, administration UI, and audit evidence
@@ -238,9 +238,6 @@ external identity metadata for human principals.
 
 An agent receives exactly one principal for its stable agent identity, not one
 per version or run. A service account receives one stable service principal.
-Principal uniqueness is unconditional across active, suspended, and soft-deleted
-rows. Recreating or restoring a subject reactivates the same principal row; it
-never creates a second identity and splits assignment or audit lineage.
 API keys are rotatable credentials whose records carry an explicit
 `principal_id`; rotation or multiple active keys do not create additional
 principals. Credentials authenticate a human or service principal but are not
@@ -366,27 +363,6 @@ Composite-string aliases are prohibited.
 The runtime delegation chain is persisted on the run and audit events; it is not
 inferred from agent ownership.
 
-Phase 1 runtime admission authorizes exactly one server-resolved authenticated
-principal. Surface context builders may supply session identity, an API-key
-credential reference, or another host-attested subject reference, but callers
-cannot submit the authenticated/acting principal identity or its authority
-chain as capability input. IAM management inputs may name a target principal by
-public id, but that target reference never becomes caller authority. The pure
-resolver and simulator accept ordered chains in Phase 1 to freeze intersection
-semantics; production multi-principal runtime chains begin only with the
-persisted delegation and `RunSpecV2` trust boundary in Phase 2.
-For Phase 1 evidence, that authenticated principal is both initiator and actor
-and the ordered chain is the singleton `[principal]`; the fields remain explicit
-rather than null or caller-authored.
-
-Organization creation is the one tenant-bootstrap exception: no tenant scope
-exists before the organization row. A narrowly named, authenticated system
-transaction atomically creates the organization, membership, human principal,
-policy-version row, protected Owner assignment, and immutable audit obligation.
-It cannot be called as a general tenant bypass. Credential-to-principal lookup
-may likewise use a named pre-scope system read constrained by the credential
-hash/id; ordinary IAM handlers remain tenant scoped.
-
 ## 5. Role and resource-grant model
 
 ### 5.1 Role behavior
@@ -412,16 +388,6 @@ but receives explicit system grants rather than a synthetic allow for every
 resource. Data-plane graph and tool access remains reviewable. Owner authority
 cannot be assigned to or inherited by agents; emergency data access uses the
 audited break-glass path.
-
-The pre-launch role migration is explicit: organization `Owner` remains
-human-only; `Admin`, `Compliance`, and `Billing` accept human or service
-principals; workspace `Viewer`, `Member`, and `Owner` metadata map to the
-`Observer`, `Contributor`, and `Operator` templates respectively, whose
-published versions accept human, agent, or service principals. Agents cannot
-receive organization roles. A service account may be organization- or
-workspace-scoped and must receive at least one active, eligible role in that
-exact scope before activation. Every legacy `defaultRoles` key must map through
-this table or fail the seed; none is silently discarded or broadened.
 
 ### 5.2 Versioned policy state
 
@@ -573,12 +539,6 @@ enforcement point, hooks are observe-only; any attempted mutation invalidates
 the decision and restarts normalization, approval, and authorization. No engine
 or adapter may alter an authorized command, query plan, tool input, dispatch
 target, or context request on the way to execution.
-
-The authorization-binding hash is computed over the complete canonical final
-input or graph plan, including sensitive fields; only the digest is persisted.
-Redaction is a separate audit-display operation: the stored audit payload/diff
-is redacted first and may have its own payload hash. A redacted representation
-is never the preimage for an approval or execution-binding hash.
 
 If one graph plan touches any approval-required label or relationship, the whole
 normalized plan pauses. Approval binds to the complete plan hash; the broker
@@ -1097,6 +1057,10 @@ Evolve `list_iam_roles` to the versioned resource model and add:
 - `list_iam_role_versions`
 - `restore_iam_role_version`
 - `search_iam_principals`
+- `get_iam_principal`
+- `create_iam_service_account`
+- `suspend_iam_service_account`
+- `restore_iam_service_account`
 - `list_iam_role_assignments`
 - `assign_principal_role`
 - `revoke_principal_role`
@@ -1115,16 +1079,23 @@ Evolve `list_iam_roles` to the versioned resource model and add:
 - `complete_iam_access_review`
 - `export_iam_access_review`
 
+The service-account lifecycle contracts create or change the service-account
+record and its sibling `kind=service` principal in one transaction. Service
+accounts are listed through `search_iam_principals`; a second, divergent service
+directory is prohibited. Phase 1 delivers the role, principal, resource,
+simulator, permission-export, and access-request contracts through
+`deny_iam_access_request`. The access-review contract family is implemented in
+Phase 5 when review evidence and signed exports are hardened for launch.
+
+`export_iam_permissions` is schema-stable in Phase 1: deterministic JSON,
+NDJSON, and CSV payloads carry a canonical manifest hash and explicit unsigned
+integrity metadata. Phase 5 adds the signing key, signature, retention, and
+review-evidence workflow without changing the exported access-matrix model.
+
 Management contracts are no-billing, high-sensitivity capabilities with default
 deny and explicit Owner/Admin grants. Compliance receives read, simulation, and
 export access but not mutation access. IAM mutation contracts are not exposed on
 the agent surface. Every contract follows API/MCP parity and app-layer mapping.
-
-During Phase 1, new management contracts declare API/MCP/docs/unit layers but
-do not claim the `app` layer before the Phase 4 Permissions routes exist. The
-existing `list_iam_roles` binding remains real and is adapted to the new read
-model. Phase 4 adds each app-layer declaration and binding together with its
-actual page/action and proof; placeholder UI mappings are prohibited.
 
 App Server Actions live in the owning route segment's `actions.ts`, validate
 inputs, assert the authenticated management envelope, and call the capability.
@@ -1166,6 +1137,13 @@ The implementation plan must include migrations for:
 - transactional IAM audit outbox records; and
 - assignment review/export coverage for all principal kinds.
 
+This is the program-wide persistence inventory. Phase 1 creates principal,
+service-account, credential-binding, role/version/grant, assignment,
+policy-version, access-request, approval-authorization, runtime-obligation, and
+transactional audit-outbox state. Phase 2 adds principal delegations and
+authorization snapshots alongside `RunSpecV2`; Phase 5 adds durable access
+review state.
+
 There are no production customers. Do not add `Agent Legacy`, permissive
 backfills, dual-read compatibility, or default-all migrations. Reset and reseed
 pre-launch environments after the migration, then require explicit roles and
@@ -1197,12 +1175,6 @@ Every draft publication, role archive/restore, assignment, revocation, principal
 status change, approval, and break-glass action writes an immutable event in the
 same transaction as the state change. A durable outbox projects those events to
 ClickHouse without making ClickHouse mutable policy state.
-
-Runtime admission uses the same organization policy-version row as mutation.
-One transaction locks the version, loads effective authority, resolves the
-decision, and writes its immutable event plus obligation/request before commit;
-policy-changing transactions contend on that row. A revoke that commits first
-therefore cannot be followed by a decision recorded against the older version.
 
 Wall-clock expiry becomes ineffective at `validUntil` without waiting for a
 write. An idempotent sweeper records the explicit expired state and emits one

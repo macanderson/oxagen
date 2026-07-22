@@ -22,7 +22,7 @@
 - A policy mutation, its org policy-version increment, immutable audit event, and outbox delivery row commit together. ClickHouse failure cannot roll back policy and cannot erase the delivery obligation.
 - Policy mutations and runtime admission contend on the same org policy-version row. Runtime authority reads, resolution, and durable allow/deny/approval recording share one transaction; a version-changing mutation cannot commit between resolution and admission evidence.
 - Runtime allow, deny, and approval outcomes are durably recorded before an agent-visible result or side effect. Exact approval claims and final execution decisions are never cached.
-- Phase 1 runtime admission resolves exactly one server-authenticated acting principal. Capability input can never supply that acting identity or its authority chain. IAM management input may name a target principal by public ID, but target identity never populates caller authority. Ordered multi-principal input exists only in the pure resolver and privileged simulator until Phase 2 introduces persisted delegations and `RunSpecV2`.
+- Phase 1 runtime admission resolves exactly one server-authenticated principal. Capability input can never supply a principal id or chain. Ordered multi-principal input exists only in the pure resolver and privileged simulator until Phase 2 introduces persisted delegations and `RunSpecV2`.
 - Authorization-binding hashes cover the complete canonical normalized input/plan and persist only the digest. Redacted audit payloads/diffs are separate values with separate hashes; redaction never defines approval equivalence.
 - Unknown and denied resources are indistinguishable to non-admin callers. Logs and audit payloads contain identifiers/hashes and metadata, never credentials, prompts, retrieved context, graph property values, or inferred forbidden names.
 - All clocks, UUID generation, canonical hashing, and current policy versions are injectable in tests. The pure resolver never calls `new Date()` or performs I/O.
@@ -181,8 +181,6 @@ git commit -m "feat(iam): enforce deny-biased authority intersection"
 - Modify: `tools/scripts/check-contracts.mjs`
 - Modify: `tools/scripts/check_manifest.mjs`
 - Modify: `tools/scripts/check_manifest.test.ts`
-- Regenerate: `packages/oxagen/src/contracts.generated.ts`
-- Regenerate: `packages/oxagen/capabilities.manifest.json`
 
 **Interfaces:**
 
@@ -227,7 +225,7 @@ Expected: PASS with zero unclassified or scope-inconsistent contracts.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/oxagen/src packages/oxagen/capabilities.manifest.json tools/scripts/check-contracts.mjs tools/scripts/check_manifest.mjs tools/scripts/check_manifest.test.ts
+git add packages/oxagen/src tools/scripts/check-contracts.mjs tools/scripts/check_manifest.mjs tools/scripts/check_manifest.test.ts
 git commit -m "feat(capabilities): declare IAM resource scopes"
 ```
 
@@ -333,7 +331,6 @@ git commit -m "feat(database): add versioned enterprise IAM schema"
 - Modify: `packages/oxagen/src/kernel.tenant-scope.test.ts`
 - Modify: `packages/oxagen/src/types.ts`
 - Modify: `packages/oxagen/src/types.test.ts`
-- Modify: `packages/agent/src/types.ts`
 - Modify: every `CapabilityContext` literal/factory returned by `rg -l 'CapabilityContext|makeCTX|makeContext' apps packages -g '*.{ts,tsx}'`
 - Modify: `apps/api/src/lib/context.ts`
 - Modify: `apps/api/src/__tests__/context.test.ts`
@@ -350,7 +347,6 @@ git commit -m "feat(database): add versioned enterprise IAM schema"
 - `TenantScope` becomes the same discriminated org/workspace union as `AuthorizationScope`.
 - `runInTenantScope(scope, fn)` and `withTenantDb(fn)` set org GUCs for both variants and a workspace GUC only for workspace scope.
 - `CapabilityContext.authorizationScope` becomes required in this task and is the sole source used by IAM, audit, and kernel scope checks. `ctx.workspaceId` may remain for legacy workspace handlers but is never used to infer authorization scope.
-- `CapabilityContext` continues to carry only surface-authenticated credential material (`userId` or `apiKeyId`) in Phase 1. It gains no caller-writable acting-principal or authority-chain field; Task 10 resolves one canonical actor server-side. Separately validated target-principal public IDs remain ordinary inputs for IAM management operations.
 
 - [ ] **Step 1: Write failing scope regression tests**
 
@@ -372,7 +368,7 @@ Expected: FAIL because the current context requires a workspace and the app help
 
 Use a nullable/cleared workspace GUC for org scope and explicit hierarchical RLS predicates generated consistently for every policy class. Org scope is an intentional same-org administrative elevation, so the capability registry must authorize that scope before the kernel opens the transaction. `standard` and `workspace_nullable` rows remain constrained by `org_id`; `workspace_only` tables have no org key and therefore return no rows under org scope rather than becoming cross-workspace visible. Preserve existing global/builtin read asymmetry. Permit only monotonic nested narrowing from org to one workspace in the same org; reject workspace-to-org, workspace-to-other-workspace, and cross-org nesting. Preserve workspace handler compatibility through a guarded `requireWorkspaceScope(ctx)` helper that throws `iam_scope_mismatch`; never substitute an empty string or zero UUID.
 
-Update API/MCP context builders to accept an explicit validated authorization scope and reject ambiguous/multiple authentication subjects. An API key's credential-bound workspace may authenticate the caller but cannot silently change an org-scoped IAM target into a workspace decision. Do not deserialize an acting-principal or authority-chain field from request input or headers; target principal IDs are parsed only by the owning management contract.
+Update API/MCP context builders to accept an explicit validated authorization scope. An API key's credential-bound workspace may authenticate the caller but cannot silently change an org-scoped IAM target into a workspace decision.
 
 - [ ] **Step 4: Replace the app org helper and correct stale comments**
 
@@ -401,7 +397,7 @@ Expected: PASS and `rg -n '00000000-0000-0000-0000-000000000000' apps/app/src/ap
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/tenancy packages/database/src/tenant.ts packages/database/src/tenant.test.ts packages/database/atlas/migrations/20260804120000_hierarchical_org_scope_rls.sql packages/database/atlas/migrations/atlas.sum packages/oxagen/src/types.ts packages/oxagen/src/types.test.ts packages/oxagen/src/kernel.ts packages/oxagen/src/kernel.tenant-scope.test.ts packages/agent/src/types.ts apps/api/src/lib/context.ts apps/api/src/__tests__/context.test.ts apps/mcp/src/context.ts apps/mcp/src/context.test.ts 'apps/app/src/app/[orgSlug]/governance/_lib/invoke-org.ts' 'apps/app/src/app/[orgSlug]/governance/_lib/invoke-org.test.ts' packages/iam/src/bootstrap.ts tools/scripts/gen-rls-migration.ts
+git add packages/tenancy packages/database/src/tenant.ts packages/database/src/tenant.test.ts packages/database/atlas/migrations/20260804120000_hierarchical_org_scope_rls.sql packages/database/atlas/migrations/atlas.sum packages/oxagen/src/types.ts packages/oxagen/src/types.test.ts packages/oxagen/src/kernel.ts packages/oxagen/src/kernel.tenant-scope.test.ts apps/api/src/lib/context.ts apps/api/src/__tests__/context.test.ts apps/mcp/src/context.ts apps/mcp/src/context.test.ts 'apps/app/src/app/[orgSlug]/governance/_lib/invoke-org.ts' 'apps/app/src/app/[orgSlug]/governance/_lib/invoke-org.test.ts' packages/iam/src/bootstrap.ts tools/scripts/gen-rls-migration.ts
 git commit -m "feat(tenancy): support explicit org authorization scope"
 ```
 
@@ -493,8 +489,6 @@ git commit -m "feat(iam): add transactional policy audit primitives"
 - Create: `packages/iam/src/service-account-service.test.ts`
 - Create: `packages/iam/src/assignment-service.ts`
 - Create: `packages/iam/src/assignment-service.test.ts`
-- Create: `packages/iam/src/system-policy-seed.ts`
-- Create: `packages/iam/src/system-policy-seed.test.ts`
 - Create: `packages/iam/src/principal-writer-coverage.test.ts`
 - Modify: `packages/iam/src/index.ts`
 - Modify: `packages/handlers/package.json`
@@ -559,12 +553,10 @@ git commit -m "feat(iam): add transactional policy audit primitives"
 - Regenerate: `docs/capabilities/schemas/api.key.create.json`
 - Regenerate: `docs/capabilities/schemas/_index.json`
 - Regenerate: `docs/capabilities/schemas/README.md`
-- Regenerate: `packages/oxagen/capabilities.manifest.json`
 
 **Interfaces:**
 - `provisionPrincipalTx(tx, { kind, subjectId, scope, display, actorPrincipalId })` validates the source record and returns the one canonical principal.
-- `ensureSystemPolicyTx` deterministically creates/restores the frozen org/workspace system-role identities, immutable active versions, explicit grants, and policy-version row from the Task 3 capability metadata and the approved role migration table. It is idempotent and is the only system-role seed implementation used by both new-organization bootstrap and Task 15 reset/reseed.
-- `bootstrapOrganizationIamTx` is the sole pre-tenant system transaction: after authenticating the creating human, it atomically creates the organization/membership, calls `ensureSystemPolicyTx`, creates the human principal and protected Owner assignment against the seeded active Owner version, and commits the immutable event/outbox obligation.
+- `bootstrapOrganizationIamTx` is the sole pre-tenant system transaction: after authenticating the creating human, it atomically creates the organization/membership, human principal, policy-version row, protected Owner assignment, immutable event, and outbox obligation.
 - `createServiceAccountTx` accepts an org or workspace scope, requires at least one eligible initial role in that exact scope before activation, and atomically creates service account, principal, assignments, policy event, and version.
 - `setPrincipalStatusTx` suspends/restores the bound subject, revokes invalid assignments, and records the policy mutation.
 - `assignPrincipalRolesTx` provides the canonical exact-scope/eligible-kind/active-role assignment primitive needed by service creation and agent deployment; Task 8 completes its bulk, last-Owner, JIT, and archive semantics.
@@ -574,15 +566,13 @@ git commit -m "feat(iam): add transactional policy audit primitives"
 
 Cover: one human owning multiple agents yields one human principal plus one principal per stable agent; agent `subjectId` equals the agent row ID; agent creation and principal creation roll back together; ownership grants nothing; duplicate provisioning restores/returns the unconditional unique principal rather than inserting a new row; cross-org/workspace or wrong-kind bindings fail; draft agent may lack a role but deployment fails; publish/deploy succeeds only with an active workspace assignment; agent display-name changes update principal search metadata transactionally; and status transitions increment policy version plus audit. Exercise both ordinary agent definition creation and the built-in `qa-chat` workspace bootstrap writer.
 
-System-policy/bootstrap tests prove a brand-new post-cutover organization receives the complete deterministic role matrix, one immutable active version per role, explicit grants only, a policy-version row, a human principal, and a valid protected Owner assignment in the same transaction. Failure at any seed/grant/assignment/event step rolls the organization back. Re-running the system seeder returns the same role/version/grant manifest without duplicates; missing or unmapped `defaultRoles` metadata fails closed.
-
 For service/API-key cases cover: account plus service principal plus exact-scope initial assignment is atomic for org and workspace services; no active service account can be created without a role; key creation requires explicit human/service principal; an Owner creating a key for an unprivileged service does not transfer Owner; rotation retains `principal_id`; revoking one key leaves sibling keys and principal active; expired/revoked credentials fail before role resolution; the CLI PKCE exchange binds the approved human principal; and privacy export exposes only safe subject-principal metadata, never credential material or creator-derived authority.
 
 Add a repository-source coverage test that enumerates every production insert/update of `schema.agents` and `schema.apiKeys` plus every read of `apiKeys.createdByUserId`. The allowlist names the lifecycle service, ordinary agent handler, built-in workspace bootstrap, CLI token exchange, auth resolver, org/workspace readers, and privacy projector explicitly; an unreviewed writer or creator-based authorization read fails the test.
 
 - [ ] **Step 2: Run focused tests and confirm failure**
 
-Run: `pnpm --filter @oxagen/iam test:unit -- src/principal-service.test.ts src/service-account-service.test.ts src/assignment-service.test.ts src/system-policy-seed.test.ts src/principal-writer-coverage.test.ts`
+Run: `pnpm --filter @oxagen/iam test:unit -- src/principal-service.test.ts src/service-account-service.test.ts src/assignment-service.test.ts src/principal-writer-coverage.test.ts`
 
 Run: `pnpm --filter @oxagen/handlers test:unit -- src/iam-provision.test.ts src/org.create.test.ts src/org.member_invite.accept.test.ts src/org.member.remove.test.ts src/org.member_role.change.test.ts src/api.key.create.test.ts src/api.key.rotate.test.ts src/api.key.revoke.test.ts`
 
@@ -610,7 +600,7 @@ Update `@oxagen/auth` to authenticate from `api_keys.principal_id` and return th
 
 - [ ] **Step 6: Verify narrow tests and types**
 
-Run all five commands from Step 2.
+Run the three commands from Step 2.
 
 Run: `pnpm --filter @oxagen/iam typecheck && pnpm --filter @oxagen/handlers typecheck && pnpm --filter @oxagen/agent typecheck && pnpm --filter @oxagen/auth typecheck && pnpm --filter @oxagen/api typecheck && pnpm --filter @oxagen/mcp typecheck && pnpm --filter @oxagen/app typecheck`
 
@@ -621,7 +611,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/iam packages/handlers packages/agent packages/auth packages/oxagen/src/contracts/api.key.create.ts packages/oxagen/src/contracts/api.key.create.test.ts packages/oxagen/capabilities.manifest.json packages/inngest-functions/src/functions/privacy.export.process.ts packages/inngest-functions/src/functions/privacy.export.process.test.ts packages/ai/src/prompts/registry.ts packages/ai/src/prompts/registry.test.ts apps/api/src/routes/v1/api.key.create.ts apps/api/src/routes/v1/auth.cli.token.ts apps/api/src/routes/v1/auth.cli.token.test.ts apps/api/src/__tests__/routes.billing.test.ts apps/mcp/src/tools/api.key.create.ts apps/mcp/src/tools/billing.handlers.test.ts 'apps/app/src/app/(onboarding)/new-organization/actions.ts' 'apps/app/src/app/(onboarding)/new-organization/actions.test.ts' 'apps/app/src/app/[orgSlug]/new-workspace/actions.ts' 'apps/app/src/app/[orgSlug]/new-workspace/actions.test.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/api-key.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/api-key.test.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/tokens-panel.tsx' apps/app/e2e/developer-tokens.spec.ts docs/capabilities/api.key.create.md docs/capabilities/schemas/api.key.create.json docs/capabilities/schemas/_index.json docs/capabilities/schemas/README.md pnpm-lock.yaml
+git add packages/iam packages/handlers packages/agent packages/auth packages/oxagen/src/contracts/api.key.create.ts packages/oxagen/src/contracts/api.key.create.test.ts packages/inngest-functions/src/functions/privacy.export.process.ts packages/inngest-functions/src/functions/privacy.export.process.test.ts packages/ai/src/prompts/registry.ts packages/ai/src/prompts/registry.test.ts apps/api/src/routes/v1/api.key.create.ts apps/api/src/routes/v1/auth.cli.token.ts apps/api/src/routes/v1/auth.cli.token.test.ts apps/api/src/__tests__/routes.billing.test.ts apps/mcp/src/tools/api.key.create.ts apps/mcp/src/tools/billing.handlers.test.ts 'apps/app/src/app/(onboarding)/new-organization/actions.ts' 'apps/app/src/app/(onboarding)/new-organization/actions.test.ts' 'apps/app/src/app/[orgSlug]/new-workspace/actions.ts' 'apps/app/src/app/[orgSlug]/new-workspace/actions.test.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/api-key.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/api-key.test.ts' 'apps/app/src/app/[orgSlug]/developer/tokens/tokens-panel.tsx' apps/app/e2e/developer-tokens.spec.ts docs/capabilities/api.key.create.md docs/capabilities/schemas/api.key.create.json docs/capabilities/schemas/_index.json docs/capabilities/schemas/README.md pnpm-lock.yaml
 git commit -m "feat(iam): provision human agent and service principals"
 ```
 
@@ -699,7 +689,7 @@ git commit -m "feat(iam): add immutable role policy lifecycle"
 
 - [ ] **Step 1: Write failing request state-machine tests**
 
-Cover exact and temporary kinds; one pending duplicate per canonical request; required reason/expiry; requester/approver principal kinds; self-approval denial; approve/deny terminal transitions; stale policy; newer deny; changed input/graph-plan hash; changed singleton actor/scope/resource/run/step; rejection of caller-supplied acting-principal/authority-chain fields while preserving validated target-principal inputs; expired/revoked request; and database failure propagating `iam_policy_unavailable` instead of returning `null`.
+Cover exact and temporary kinds; one pending duplicate per canonical request; required reason/expiry; requester/approver principal kinds; self-approval denial; approve/deny terminal transitions; stale policy; newer deny; changed input/graph-plan hash; changed singleton principal/scope/resource/run/step; rejection of caller-supplied principal/chain fields; expired/revoked request; and database failure propagating `iam_policy_unavailable` instead of returning `null`.
 
 - [ ] **Step 2: Write failing concurrency/replay tests**
 
@@ -763,7 +753,7 @@ git commit -m "feat(iam): add durable single-use approvals"
 - Modify: `apps/mcp/src/middleware.ts`
 - Create: `apps/mcp/src/middleware.test.ts`
 - Modify: `apps/app/instrumentation.ts`
-- Create: `apps/app/src/instrumentation.test.ts`
+- Create: `apps/app/instrumentation.test.ts`
 - Modify: every stale app source comment returned by `rg -l 'apps/app does (not|NOT) bootstrap|app does (not|NOT) bootstrap IAM|does not bootstrap kernel IAM|does NOT bootstrap IAM' apps/app/src -g '*.{ts,tsx}'`
 
 **Runtime flow:**
@@ -780,7 +770,7 @@ authenticate credential -> resolve exactly one explicit principal server-side
 
 - [ ] **Step 1: Write failing loader/cache tests**
 
-Prove human/service runtime lookup uses server-authenticated session identity or explicit API-key `principal_id`; capability input cannot name the acting principal or authority chain, while management contracts may carry a separately validated target principal; missing/inactive/expired/cross-scope state denies; expired rows reach the resolver so `validUntil` is correct; only active role versions load; grant/resource scope drift denies; and a policy-version lookup error is `iam_policy_unavailable`. Agent principals are assignable and simulatable in Phase 1, while production agent-chain admission waits for Phase 2's persisted delegation/`RunSpecV2` boundary.
+Prove human/service runtime lookup uses server-authenticated session identity or explicit API-key `principal_id`; capability input cannot name a principal or chain; missing/inactive/expired/cross-scope state denies; expired rows reach the resolver so `validUntil` is correct; only active role versions load; grant/resource scope drift denies; and a policy-version lookup error is `iam_policy_unavailable`. Agent principals are assignable and simulatable in Phase 1, while production agent-chain admission waits for Phase 2's persisted delegation/`RunSpecV2` boundary.
 
 Cache tests must prove the key contains principal chain, exact scope/resource/action, policy version, requested-scope hash, and relevant catalog hash; every hit compares current policy version and wall-clock expiry; cache values are pure predecisions only; exact approvals/final obligations never enter it; and a version change misses without a cross-process invalidation race.
 
@@ -816,7 +806,7 @@ Run the two commands from Step 3.
 
 Run: `pnpm --filter @oxagen/iam typecheck && pnpm --filter @oxagen/oxagen typecheck && pnpm --filter @oxagen/api typecheck && pnpm --filter @oxagen/mcp typecheck && pnpm --filter @oxagen/app typecheck`
 
-Run: `pnpm --filter @oxagen/app test:unit -- src/instrumentation.test.ts`
+Run: `pnpm --filter @oxagen/app test:unit -- instrumentation.test.ts`
 
 Expected: PASS.
 
@@ -910,7 +900,7 @@ git commit -m "feat(iam): project durable authorization evidence"
 - All queries are cursor-paginated, tenant-scoped, stable-sort by public ID after relevance/name, and return public IDs only.
 - Resource catalog IDs are: canonical graph label/type names; capability registered names; canonical `mcp_server_public_id/tool_name`; skill public IDs; and agent public IDs.
 - Catalog reads never call `getOrCreateRegistry` or mutate state. They use only the current pinned/enabled schema version, current installed/enabled MCP servers and latest descriptor per tool, current live skills, and current live agents.
-- Simulator calls the production loader and pure resolver. Singleton previews must match Phase 1 runtime exactly. It may include one selected acting agent for an administrator's explicitly hypothetical future-chain impact preview, but labels that result non-executable and creates no delegation, assignment, snapshot, approval, or runtime authorization reference.
+- Simulator calls the production loader and pure resolver. It may include one selected acting agent for an administrator's hypothetical impact preview, but it creates no executable delegation, assignment, snapshot, or approval.
 
 - [ ] **Step 1: Write failing resource-catalog tests**
 
@@ -924,7 +914,7 @@ Posture computes deployable agents without active roles, agents without graph gr
 
 - [ ] **Step 3: Write failing simulator and export tests**
 
-For the same persisted singleton authority input, `previewIamAccess` and runtime resolution must return the same outcome, reason, policy version, scope hash, and trace IDs. A hypothetical human/service-plus-agent preview must be administrator-authored, tenant-validated, visibly `executable:false`, and use the same intersection code without being accepted by the kernel. Reject arbitrary cross-tenant chains, invalid target scope, non-owned draft overlays, and non-empty persisted delegation IDs until Phase 2 provides those records. Draft overlay is caller-owned, preview-only, and cannot create authority.
+For the same persisted authority input, `previewIamAccess` and runtime resolution must return the same outcome, reason, policy version, scope hash, and trace IDs. Reject arbitrary cross-tenant chains, invalid target scope, non-owned draft overlays, and non-empty persisted delegation IDs until Phase 2 provides those records. Draft overlay is caller-owned, preview-only, and cannot create authority.
 
 Permission exports are deterministic across query order and include principal kinds/status, role and active version IDs/hashes, exact grants, assignments/expiry, scope, policy version, timestamps, and manifest hash in JSON, NDJSON, and flat CSV. Phase 1 returns explicit `{ signed: false, signature: null, keyId: null }`; it never labels the artifact signed evidence.
 
@@ -958,8 +948,6 @@ git commit -m "feat(iam): add resource catalog and access read models"
 **Files:**
 - Create: `packages/oxagen/src/iam/schemas.ts`
 - Create: `packages/oxagen/src/iam/schemas.test.ts`
-- Regenerate: `packages/oxagen/src/contracts.generated.ts`
-- Regenerate: `packages/oxagen/capabilities.manifest.json`
 - Evolve: `packages/oxagen/src/contracts/iam.role.list.ts`
 - Evolve: `packages/oxagen/src/contracts/iam.role.list.test.ts`
 - Create contract + co-located test for each stem:
@@ -1043,7 +1031,7 @@ Run: `pnpm --filter @oxagen/oxagen test:unit -- src/iam/schemas.test.ts src/cont
 
 Run: `pnpm --filter @oxagen/handlers test:unit -- src/iam.role.list.test.ts src/iam-management.test.ts`
 
-Run: `pnpm check:contracts && pnpm check:manifest --json`
+Run: `pnpm check:contracts`
 
 Run: `pnpm --filter @oxagen/oxagen typecheck && pnpm --filter @oxagen/handlers typecheck`
 
@@ -1052,7 +1040,7 @@ Expected: PASS with every registered name resolving to exactly one lazy handler.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/oxagen/src/iam/schemas.ts packages/oxagen/src/iam/schemas.test.ts packages/oxagen/src/contracts packages/oxagen/src/contracts.generated.ts packages/oxagen/capabilities.manifest.json packages/handlers/src
+git add packages/oxagen/src/iam/schemas.ts packages/oxagen/src/iam/schemas.test.ts packages/oxagen/src/contracts packages/handlers/src
 git commit -m "feat(iam): add enterprise policy management capabilities"
 ```
 
@@ -1072,12 +1060,9 @@ git commit -m "feat(iam): add enterprise policy management capabilities"
 - Verify/modify: `apps/mcp/src/tools/tool-registry.test.ts`
 - Create/update: `docs/capabilities/<stem>.md` for every Task 13 stem
 - Modify: `docs/capabilities/_index.md`
-- Regenerate: `docs/capabilities/schemas/` with `pnpm docs:schemas`
 - Modify: `apps/app/src/app/[orgSlug]/governance/policies/page.tsx`
 - Modify: tests for the existing Governance Policies roles table
 - Modify: `apps/app/capability-ui-map.json` only for the existing `list_iam_roles` binding if its description changes
-- Regenerate: `packages/oxagen/src/contracts.generated.ts`
-- Regenerate: `packages/oxagen/capabilities.manifest.json`
 
 **API route map:**
 
@@ -1131,7 +1116,7 @@ Keep one thin adapter module per capability; `iam.ts` only composes those module
 
 - [ ] **Step 5: Update capability docs and the existing read-only page**
 
-Document scope, eligible principals, input/output, concurrency, typed errors, audit events, and examples for every contract, then run `pnpm docs:schemas` so the hosted JSON schemas match. Adapt the current Governance Policies role table to the versioned list output so its existing app-layer promise remains honest. Do not build the Phase 4 editable Permissions UI in this task and do not add fake app bindings for the new capabilities.
+Document scope, eligible principals, input/output, concurrency, typed errors, audit events, and examples for every contract. Adapt the current Governance Policies role table to the versioned list output so its existing app-layer promise remains honest. Do not build the Phase 4 editable Permissions UI in this task and do not add fake app bindings for the new capabilities.
 
 - [ ] **Step 6: Run parity and UI binding gates**
 
@@ -1141,8 +1126,6 @@ Run: `pnpm --filter @oxagen/mcp test:unit -- src/tools/iam.schema.test.ts src/to
 
 Run: `pnpm check:manifest --json && pnpm check:ui-parity && pnpm check:mobile-parity`
 
-Run: `pnpm docs:schemas`
-
 Run: `pnpm --filter @oxagen/api typecheck && pnpm --filter @oxagen/mcp typecheck && pnpm --filter @oxagen/app typecheck`
 
 Expected: PASS; all API capabilities have MCP parity, and only `list_iam_roles` claims an app binding in Phase 1.
@@ -1150,7 +1133,7 @@ Expected: PASS; all API capabilities have MCP parity, and only `list_iam_roles` 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/api apps/mcp apps/app/src/app/'[orgSlug]'/governance/policies apps/app/capability-ui-map.json docs/capabilities packages/oxagen/src/contracts.generated.ts packages/oxagen/capabilities.manifest.json
+git add apps/api apps/mcp apps/app/src/app/'[orgSlug]'/governance/policies apps/app/capability-ui-map.json docs/capabilities
 git commit -m "feat(iam): expose org policy management surfaces"
 ```
 
@@ -1203,7 +1186,7 @@ Expected: FAIL because seeding uses mutable roles/flat grants and no cutover rea
 
 - [ ] **Step 3: Implement guarded reset and deterministic reseed**
 
-Add `pnpm db:reset-iam-prelaunch -- --dry-run` and an explicit live mode requiring the task-specific confirmation variable. Use `ensureSystemPolicyTx` from Task 7 plus the mutation/assignment services from Tasks 6-8; the reset script must not carry a second copy of role/version/grant SQL or its own role mapping. Add a post-cutover new-organization regression proving the ordinary bootstrap path and reset path produce the same system-policy manifest. The runbook orders backup, dry-run counts, exact database verification, expand/RLS migrations through version `20260804120000`, reset/reseed, the contract migration `20260804130000`, readiness, smoke tests, and rollback from backup. The contract migration begins with assertions that abort if any required subject/credential binding or reset invariant is unsatisfied. There is no deployed interval in which runtime reads both models: application cutover and reset/contract migration are one release gate.
+Add `pnpm db:reset-iam-prelaunch -- --dry-run` and an explicit live mode requiring the task-specific confirmation variable. Use services from Tasks 6-8; do not duplicate mutation SQL in the script. The runbook orders backup, dry-run counts, exact database verification, expand/RLS migrations through version `20260804120000`, reset/reseed, the contract migration `20260804130000`, readiness, smoke tests, and rollback from backup. The contract migration begins with assertions that abort if any required subject/credential binding or reset invariant is unsatisfied. There is no deployed interval in which runtime reads both models: application cutover and reset/contract migration are one release gate.
 
 - [ ] **Step 4: Apply and verify only against the explicit local database**
 
