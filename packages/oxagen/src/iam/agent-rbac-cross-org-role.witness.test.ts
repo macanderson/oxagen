@@ -1,3 +1,12 @@
+// Witness test: a role only counts toward Rule 7 (role-inherited grant) and
+// the resourceScope role-ceiling collector when it belongs to the SAME org
+// as the invocation. iam.roles/iam.role_grants never cross an org boundary
+// (packages/database/src/schema/iam.ts), so a role fetched for another org
+// that happens to list this principal in principalIds (stale data, or a
+// caller that fetched roles across orgs) must never grant capabilities
+// within this org's scope. Without the r.orgId === scope.orgId guard in
+// resolve.ts, this fixture would resolve to "allow" — a cross-tenant
+// privilege leak.
 import { expect, it } from "vitest";
 import { resolveAgentEffectivePermissions } from "./resolve";
 
