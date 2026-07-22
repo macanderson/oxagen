@@ -24,8 +24,13 @@
 import { and, eq } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
-// Side-effect import: binds every handler so invoke() can resolve.
+// Side-effect imports: bind handlers into the kernel so invoke() can resolve.
+// BOTH are required here — query_lineage lives in @oxagen/handlers, but the
+// dispatch picker's list_subagent_fanouts is bound only by @oxagen/agent's
+// register module. Dropping the second one makes the picker throw
+// "No handler registered" at runtime (see src/test/agent-register-invariant.test.ts).
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { LineageQueryOutput } from "@oxagen/oxagen/contracts/lineage.query";
 import type { AgentSubagentFanoutListOutput } from "@oxagen/oxagen/contracts/agent.subagent_fanout.list";
