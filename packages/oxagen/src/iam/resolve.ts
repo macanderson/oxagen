@@ -551,9 +551,14 @@ export function resolve(input: ResolveInput): ResolveResult {
   });
 
   // ── Rule 7: Role-inherited grant ───────────────────────────────────────────
-  // Find all roles this principal is a member of.
-  const principalRoles = roles.filter((r) =>
-    r.principalIds.includes(principal.id),
+  // Find all roles this principal is a member of. A role only counts when it
+  // belongs to the invocation's own org — roles (and their role_grants) never
+  // cross an org boundary, even when a principalIds list happens to name this
+  // principal (e.g. stale data, or a caller that fetched roles across orgs).
+  // Without this check, a role from a *different* org that happens to list
+  // this principal would silently grant capabilities within THIS org's scope.
+  const principalRoles = roles.filter(
+    (r) => r.principalIds.includes(principal.id) && r.orgId === scope.orgId,
   );
   const principalRoleIds = principalRoles.map((r) => r.id);
 
@@ -1073,8 +1078,12 @@ function principalScopeCeiling(
   // (Rule 7 above). Without this, a role that grants both a capability AND a
   // ceiling on it would silently drop the ceiling for principals who hold
   // the capability only through the role (no direct grant row).
+  // Same org-boundary rule as Rule 7 above: a role only counts when it
+  // belongs to the invocation's own org.
   const principalRoleIds = roles
-    .filter((r) => r.principalIds.includes(principalId))
+    .filter(
+      (r) => r.principalIds.includes(principalId) && r.orgId === scope.orgId,
+    )
     .map((r) => r.id);
   for (const rg of roleGrants) {
     if (!principalRoleIds.includes(rg.roleId)) continue;
