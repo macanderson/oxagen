@@ -168,6 +168,28 @@ export async function resolveAgentRunAuthzContext(
             "run's human ceiling resolves to the unprivileged sentinel",
         );
       }
+    } else {
+      // No initiating human at all. This is the path a machine-initiated run
+      // takes: the A2A bridge with no `ctx.userId`, or a v1 delegated run whose
+      // `delegation.userId` is absent (the field is optional in RunSpec v1).
+      //
+      // It is logged because the consequence is invisible otherwise. Before the
+      // run-evidence foundation landed, an absent delegator fell back to the
+      // agent's CREATOR (`principals.parentUserId`) and the run executed with
+      // that human's ceiling. It now resolves to the unprivileged sentinel, so
+      // such a run materializes no capability tools and fails closed. That is
+      // the intended, strictly-narrower behavior — the initiating human and the
+      // agent are an intersection, not alternative authorities — but a run that
+      // silently stops doing anything is indistinguishable from a broken one.
+      // Operators need this line to tell "correctly denied" from "mysteriously
+      // inert", and it is the signal for whether the legacy v1 path still needs
+      // a bounded creator fallback while v1 runs drain.
+      logger.warn(
+        { orgId, agentId },
+        "[iam] no initiating human supplied — the run's human ceiling resolves " +
+          "to the unprivileged sentinel (no creator fallback); this run can " +
+          "materialize no capability tools",
+      );
     }
 
     return { principalKind: "agent", agentPrincipal, humanPrincipal };
