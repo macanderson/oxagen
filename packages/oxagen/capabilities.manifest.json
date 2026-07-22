@@ -2852,6 +2852,19 @@
       }
     },
     {
+      "name": "list_model_capabilities",
+      "file": "model.capability.list.ts",
+      "domain": "model",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_notifications",
       "file": "notification.list.ts",
       "domain": "notification",
@@ -4236,7 +4249,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -4450,6 +4463,19 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "ingest_stella_operational_telemetry",
+      "file": "telemetry.stella.ingest.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "unit": true,
+        "docs": false
       }
     },
     {
