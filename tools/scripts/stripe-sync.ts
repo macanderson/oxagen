@@ -45,7 +45,12 @@ interface Flags {
 }
 
 function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { apply: false, report: false, noDb: false, margin: null };
+  const flags: Flags = {
+    apply: false,
+    report: false,
+    noDb: false,
+    margin: null,
+  };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;
     else if (arg === "--report") flags.report = true;
@@ -65,7 +70,8 @@ function parseFlags(argv: string[]): Flags {
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
-const lookupKey = (slug: string, suffix: string) => `${slug.replace(/-/g, "_")}_${suffix}`;
+const lookupKey = (slug: string, suffix: string) =>
+  `${slug.replace(/-/g, "_")}_${suffix}`;
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
@@ -73,15 +79,23 @@ function printReport(margin: number): ReturnType<typeof derivePricing> {
   const d = derivePricing(margin);
 
   console.log(kleur.bold().cyan("\n══ Oxagen pricing model ══\n"));
-  console.log(`  Credit value         ${kleur.bold(`$${d.creditValueUsd.toFixed(4)}`)} (1 credit = 1 cent, locked)`);
+  console.log(
+    `  Credit value         ${kleur.bold(`$${d.creditValueUsd.toFixed(4)}`)} (1 credit = 1 cent, locked)`,
+  );
   console.log(`  Target blended margin ${kleur.bold(pct(d.targetMargin))}`);
-  console.log(`  ${kleur.yellow().bold(`Meter markup         ${d.meterMarkup.toFixed(4)}×`)}  (the gate burns credits this fast)`);
-  console.log(`  Blended margin (calc) ${kleur.bold(pct(d.blendedMargin))}  (== target by construction)\n`);
+  console.log(
+    `  ${kleur.yellow().bold(`Meter markup         ${d.meterMarkup.toFixed(4)}×`)}  (the gate burns credits this fast)`,
+  );
+  console.log(
+    `  Blended margin (calc) ${kleur.bold(pct(d.blendedMargin))}  (== target by construction)\n`,
+  );
 
-  console.log(kleur.bold("  Cost meter — provider rate card (USD / 1M tokens):"));
+  console.log(
+    kleur.bold("  Cost meter — provider rate card (USD / 1M tokens):"),
+  );
   for (const [model, r] of Object.entries(PROVIDER_RATE_CARD)) {
     console.log(
-      `    ${model.padEnd(26)} in ${`$${r.inputPer1M}`.padStart(7)}  out ${`$${r.outputPer1M}`.padStart(7)}  cached ${`$${r.cachedInputPer1M}`.padStart(6)}  [${r.provider}]`,
+      `    ${model.padEnd(26)} in ${`$${r.inputPer1M}`.padStart(7)}  out ${`$${r.outputPer1M}`.padStart(7)}  cRead ${`$${r.cachedInputPer1M}`.padStart(6)}  cWrite ${`$${r.cacheWritePer1M}`.padStart(6)}  [${r.provider}]`,
     );
   }
 
@@ -89,7 +103,8 @@ function printReport(margin: number): ReturnType<typeof derivePricing> {
   console.log(kleur.bold(header));
   console.log("  " + "─".repeat(70));
   for (const p of d.products) {
-    const price = p.kind === "subscription" ? `${usd(p.priceCents)}/mo` : usd(p.priceCents);
+    const price =
+      p.kind === "subscription" ? `${usd(p.priceCents)}/mo` : usd(p.priceCents);
     const marginColor = p.marginPct >= d.targetMargin ? kleur.green : kleur.red;
     console.log(
       `  ${p.displayName.padEnd(22)}${p.kind.padEnd(14)}${price.padStart(9)}${String(p.credits).padStart(10)}${p.creditsPerCent.toFixed(2).padStart(8)}${marginColor(pct(p.marginPct).padStart(9))}`,
@@ -97,16 +112,24 @@ function printReport(margin: number): ReturnType<typeof derivePricing> {
   }
   console.log("  " + "─".repeat(70));
 
-  console.log(kleur.bold("\n  Set these so the runtime gate matches this report:"));
+  console.log(
+    kleur.bold("\n  Set these so the runtime gate matches this report:"),
+  );
   console.log(kleur.green(`    OXAGEN_TARGET_MARGIN=${d.targetMargin}`));
-  console.log(kleur.green(`    OXAGEN_METER_MARKUP=${d.meterMarkup.toFixed(4)}`));
+  console.log(
+    kleur.green(`    OXAGEN_METER_MARKUP=${d.meterMarkup.toFixed(4)}`),
+  );
   console.log();
   return d;
 }
 
 // ── Stripe reconcile ──────────────────────────────────────────────────────────
 
-const SyncAction = { CREATE: "create", UPDATE: "update", REUSE: "reuse" } as const;
+const SyncAction = {
+  CREATE: "create",
+  UPDATE: "update",
+  REUSE: "reuse",
+} as const;
 type SyncAction = (typeof SyncAction)[keyof typeof SyncAction];
 
 function actionLabel(a: SyncAction): string {
@@ -115,14 +138,23 @@ function actionLabel(a: SyncAction): string {
   return kleur.dim("reuse ");
 }
 
-async function findProductBySlug(stripe: Stripe, slug: string): Promise<Stripe.Product | null> {
+async function findProductBySlug(
+  stripe: Stripe,
+  slug: string,
+): Promise<Stripe.Product | null> {
   try {
-    const found = await stripe.products.search({ query: `metadata['oxagen_slug']:'${slug}'`, limit: 1 });
+    const found = await stripe.products.search({
+      query: `metadata['oxagen_slug']:'${slug}'`,
+      limit: 1,
+    });
     if (found.data[0]) return found.data[0];
   } catch {
     // Search API unavailable / not indexed yet — fall back to a bounded list scan.
   }
-  for await (const product of stripe.products.list({ limit: 100, active: true })) {
+  for await (const product of stripe.products.list({
+    limit: 100,
+    active: true,
+  })) {
     if (product.metadata?.oxagen_slug === slug) return product;
   }
   return null;
@@ -130,19 +162,29 @@ async function findProductBySlug(stripe: Stripe, slug: string): Promise<Stripe.P
 
 async function ensureProduct(
   stripe: Stripe,
-  args: { slug: string; name: string; metadata: Record<string, string>; apply: boolean },
+  args: {
+    slug: string;
+    name: string;
+    metadata: Record<string, string>;
+    apply: boolean;
+  },
 ): Promise<{ id: string; action: SyncAction }> {
   const existing = await findProductBySlug(stripe, args.slug);
   const params: Stripe.ProductUpdateParams & Stripe.ProductCreateParams = {
     name: args.name,
     active: true,
-    metadata: { oxagen_slug: args.slug, oxagen_version: "v2", ...args.metadata },
+    metadata: {
+      oxagen_slug: args.slug,
+      oxagen_version: "v2",
+      ...args.metadata,
+    },
   };
   if (existing) {
     if (args.apply) await stripe.products.update(existing.id, params);
     return { id: existing.id, action: SyncAction.UPDATE };
   }
-  if (!args.apply) return { id: `prod_DRYRUN_${args.slug}`, action: SyncAction.CREATE };
+  if (!args.apply)
+    return { id: `prod_DRYRUN_${args.slug}`, action: SyncAction.CREATE };
   const created = await stripe.products.create(params);
   return { id: created.id, action: SyncAction.CREATE };
 }
@@ -158,14 +200,23 @@ async function ensurePrice(
     apply: boolean;
   },
 ): Promise<{ id: string; action: SyncAction }> {
-  const found = await stripe.prices.list({ lookup_keys: [args.lookupKey], active: true, limit: 1 });
+  const found = await stripe.prices.list({
+    lookup_keys: [args.lookupKey],
+    active: true,
+    limit: 1,
+  });
   const existing = found.data[0];
-  const intervalMatches = (existing?.recurring?.interval ?? undefined) === (args.recurring?.interval ?? undefined);
+  const intervalMatches =
+    (existing?.recurring?.interval ?? undefined) ===
+    (args.recurring?.interval ?? undefined);
   if (existing && existing.unit_amount === args.unitAmount && intervalMatches) {
     return { id: existing.id, action: SyncAction.REUSE };
   }
   if (!args.apply) {
-    return { id: existing?.id ?? `price_DRYRUN_${args.lookupKey}`, action: existing ? SyncAction.UPDATE : SyncAction.CREATE };
+    return {
+      id: existing?.id ?? `price_DRYRUN_${args.lookupKey}`,
+      action: existing ? SyncAction.UPDATE : SyncAction.CREATE,
+    };
   }
   const created = await stripe.prices.create({
     product: args.productId,
@@ -178,7 +229,10 @@ async function ensurePrice(
     metadata: args.metadata,
   });
   if (existing) await stripe.prices.update(existing.id, { active: false });
-  return { id: created.id, action: existing ? SyncAction.UPDATE : SyncAction.CREATE };
+  return {
+    id: created.id,
+    action: existing ? SyncAction.UPDATE : SyncAction.CREATE,
+  };
 }
 
 interface SyncedPlan {
@@ -198,7 +252,9 @@ async function syncStripe(
     oxagen_target_margin: String(derivation.targetMargin),
     oxagen_meter_markup: derivation.meterMarkup.toFixed(6),
   };
-  console.log(kleur.bold().cyan(`\n══ Stripe ${apply ? "APPLY" : "DRY-RUN"} ══\n`));
+  console.log(
+    kleur.bold().cyan(`\n══ Stripe ${apply ? "APPLY" : "DRY-RUN"} ══\n`),
+  );
   const synced: SyncedPlan[] = [];
 
   for (const plan of SUBSCRIPTION_PLANS) {
@@ -215,7 +271,10 @@ async function syncStripe(
         margin_pct: d.marginPct.toFixed(4),
       },
     });
-    const priceMeta = { ...sharedMeta, included_credits: String(plan.includedCredits) };
+    const priceMeta = {
+      ...sharedMeta,
+      included_credits: String(plan.includedCredits),
+    };
     const monthly = await ensurePrice(stripe, {
       productId: product.id,
       lookupKey: lookupKey(plan.slug, "month"),
@@ -236,7 +295,12 @@ async function syncStripe(
       `  ${actionLabel(product.action)} ${kleur.bold(plan.displayName.padEnd(20))} ${kleur.dim(plan.slug)}\n` +
         `         monthly ${actionLabel(monthly.action)} ${usd(plan.monthlyCents)}  annual ${actionLabel(annual.action)} ${usd(plan.annualCents)}  · ${plan.includedCredits} cr/mo · margin ${pct(d.marginPct)}`,
     );
-    synced.push({ slug: plan.slug, productId: product.id, priceIdMonthly: monthly.id, priceIdAnnual: annual.id });
+    synced.push({
+      slug: plan.slug,
+      productId: product.id,
+      priceIdMonthly: monthly.id,
+      priceIdAnnual: annual.id,
+    });
   }
 
   for (const pack of CREDIT_PACKS) {
@@ -271,8 +335,15 @@ async function syncStripe(
 
 // ── billing.plans upsert ──────────────────────────────────────────────────────
 
-async function upsertPlans(synced: SyncedPlan[], apply: boolean): Promise<void> {
-  console.log(kleur.bold().cyan(`\n══ billing.plans ${apply ? "UPSERT" : "DRY-RUN"} ══\n`));
+async function upsertPlans(
+  synced: SyncedPlan[],
+  apply: boolean,
+): Promise<void> {
+  console.log(
+    kleur
+      .bold()
+      .cyan(`\n══ billing.plans ${apply ? "UPSERT" : "DRY-RUN"} ══\n`),
+  );
   const d = db();
   for (const plan of SUBSCRIPTION_PLANS) {
     const s = synced.find((x) => x.slug === plan.slug);
@@ -293,7 +364,9 @@ async function upsertPlans(synced: SyncedPlan[], apply: boolean): Promise<void> 
       isPublic: true,
     };
     if (!apply) {
-      console.log(`  ${kleur.dim("would upsert")} ${plan.slug} → product ${s.productId}`);
+      console.log(
+        `  ${kleur.dim("would upsert")} ${plan.slug} → product ${s.productId}`,
+      );
       continue;
     }
     await d
@@ -320,7 +393,9 @@ async function upsertPlans(synced: SyncedPlan[], apply: boolean): Promise<void> 
       where: eq(schema.plans.slug, plan.slug),
       columns: { id: true, stripeProductId: true },
     });
-    console.log(`  ${kleur.green("upserted")} ${plan.slug} → plan ${back?.id} (product ${back?.stripeProductId})`);
+    console.log(
+      `  ${kleur.green("upserted")} ${plan.slug} → plan ${back?.id} (product ${back?.stripeProductId})`,
+    );
   }
 
   // Reconcile deletions. upsertPlans only ever *adds* the canonical plans, so
@@ -334,16 +409,27 @@ async function upsertPlans(synced: SyncedPlan[], apply: boolean): Promise<void> 
     const hidden = await d
       .update(schema.plans)
       .set({ isPublic: false, updatedAt: new Date() })
-      .where(and(eq(schema.plans.isPublic, true), notInArray(schema.plans.slug, canonicalSlugs)))
+      .where(
+        and(
+          eq(schema.plans.isPublic, true),
+          notInArray(schema.plans.slug, canonicalSlugs),
+        ),
+      )
       .returning({ slug: schema.plans.slug });
     for (const row of hidden) {
-      console.log(`  ${kleur.yellow("hidden")}   ${row.slug} (not in source of truth → is_public=false)`);
+      console.log(
+        `  ${kleur.yellow("hidden")}   ${row.slug} (not in source of truth → is_public=false)`,
+      );
     }
     if (hidden.length === 0) {
       console.log(kleur.dim("  no stale public plans to hide"));
     }
   } else {
-    console.log(kleur.dim(`  would hide any public plan whose slug ∉ {${canonicalSlugs.join(", ")}}`));
+    console.log(
+      kleur.dim(
+        `  would hide any public plan whose slug ∉ {${canonicalSlugs.join(", ")}}`,
+      ),
+    );
   }
 }
 
@@ -358,10 +444,16 @@ async function main(): Promise<void> {
 
   const stripe = stripeClient();
   // Surface which Stripe account we're about to touch — test vs live.
-  const mode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live") ? kleur.red().bold("LIVE") : kleur.green("test");
+  const mode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live")
+    ? kleur.red().bold("LIVE")
+    : kleur.green("test");
   console.log(`  Stripe account mode: ${mode}`);
   if (!flags.apply) {
-    console.log(kleur.dim("  (dry-run — pass --apply to write. Stripe reads below are non-mutating.)"));
+    console.log(
+      kleur.dim(
+        "  (dry-run — pass --apply to write. Stripe reads below are non-mutating.)",
+      ),
+    );
   }
 
   const synced = await syncStripe(stripe, derivation, flags.apply);
@@ -383,7 +475,10 @@ main()
   .then(() => closeDatabase())
   .then(() => process.exit(0))
   .catch(async (err) => {
-    console.error(kleur.red("\nstripe-sync failed:"), err instanceof Error ? err.message : err);
+    console.error(
+      kleur.red("\nstripe-sync failed:"),
+      err instanceof Error ? err.message : err,
+    );
     await closeDatabase().catch(() => {});
     process.exit(1);
   });

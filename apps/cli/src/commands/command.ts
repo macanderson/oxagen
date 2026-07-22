@@ -3,7 +3,7 @@
  *
  *   oxagen command list                List available slash commands
  *   oxagen command show <name>         Show a command's template
- *   oxagen command new <name>          Scaffold .oxagen/commands/<name>.md
+ *   oxagen command new <name>          Scaffold .oxagen/commands/<name>.toml
  *   oxagen command run <name> [args…]  Expand the template and run it as a turn
  *
  * In the interactive REPL, the same commands are invoked as `/name args`.
@@ -26,7 +26,10 @@ import {
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
-export type CommandCmdCtx = Pick<LoadCommandsOptions, "cwd" | "userCommandsDir"> & {
+export type CommandCmdCtx = Pick<
+  LoadCommandsOptions,
+  "cwd" | "userCommandsDir"
+> & {
   /** `--json`: emit the result as one machine-readable JSON value on stdout (ADR-023 §4). */
   json?: boolean;
 };
@@ -50,9 +53,14 @@ function summarizeCommand(c: SlashCommand): CommandSummary {
   };
 }
 
-export function commandList(ctx: CommandCmdCtx = {}, writer: CommandWriter = stdoutWriter): void {
+export function commandList(
+  ctx: CommandCmdCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const out = createOutput({ json: ctx.json }, writer);
-  const commands = [...loadCommands(ctx).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const commands = [...loadCommands(ctx).values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
   out.data(commands.map(summarizeCommand), () => prettyCommandList(commands));
 }
 
@@ -64,7 +72,10 @@ export function commandShow(
   const out = createOutput({ json: ctx.json }, writer);
   const command = loadCommands(ctx).get(name);
   if (!command) {
-    out.error(`Unknown command "/${name}". Run \`oxagen command list\`.`, "not_found");
+    out.error(
+      `Unknown command "/${name}". Run \`oxagen command list\`.`,
+      "not_found",
+    );
     return;
   }
   out.data(command, () => prettyCommand(command));
@@ -79,7 +90,10 @@ export function commandNew(
   if (!/^[A-Za-z0-9][\w-]*$/.test(name)) {
     // Malformed input → usage error (exit 2). Set before out.error so it wins.
     process.exitCode = 2;
-    out.error(`Invalid command name "${name}". Use letters, digits, dashes, underscores.`, "usage");
+    out.error(
+      `Invalid command name "${name}". Use letters, digits, dashes, underscores.`,
+      "usage",
+    );
     return;
   }
   const { path, created } = scaffoldCommand({ name, cwd: ctx.cwd });
@@ -102,7 +116,10 @@ export async function commandRun(
   const invocation = `/${name}${args.length ? " " + args.join(" ") : ""}`;
   const expanded = loadAndExpand(invocation, ctx);
   if (expanded === null) {
-    out.error(`Unknown command "/${name}". Run \`oxagen command list\`.`, "not_found");
+    out.error(
+      `Unknown command "/${name}". Run \`oxagen command list\`.`,
+      "not_found",
+    );
     return;
   }
   if ("error" in expanded) {

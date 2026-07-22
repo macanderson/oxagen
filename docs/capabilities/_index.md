@@ -135,7 +135,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [iam.role.list](iam.role.list.md) — List the org's IAM roles with capability grants and active assignment counts; read-only (writes remain provisioning-script-only)
 
-## Billing (18)
+## Billing (20)
 
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
@@ -156,6 +156,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [billing.reseller_rebill.list_runs](billing.reseller_rebill.list_runs.md) — List past re-bill runs (period, subtotal, billed total, Stripe invoice, status, line items), most recent first
 - [billing.reseller_stripe.configure](billing.reseller_stripe.configure.md) — Store the reseller's own Stripe secret key (envelope-encrypted at rest via @oxagen/crypto) so re-bill pushes invoice from their account, not the platform's. Returns only a last-4 fingerprint, never the key. Highest sensitivity
 - [billing.reseller_stripe.status](billing.reseller_stripe.status.md) — Report whether a reseller Stripe key is connected for the org, with its label and last-4 fingerprint. Drives the connect-your-account empty state. Never returns the key
+- [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
+- [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
 
 ## Browser (7)
 
@@ -424,19 +426,19 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Skill (14)
 
-- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
-- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
+- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated skill.toml and installs it into the workspace
+- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied skill.toml content (idempotent on slug)
 - [skill.draft](skill.draft.md) — Draft a skill configuration from a natural-language description for human review — the AI-assisted first step of skill setup; persists nothing
-- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the .skill.md body and saves a new activated version (slug immutable)
+- [revise_skill](revise_skill.md) — AI-driven edit of an existing skill from a plain-language prompt; the model redesigns the skill.toml artifact and saves a new activated version (slug immutable)
 - [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
 - [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
-- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including body and parsed frontmatter
-- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from raw .skill.md content
+- [skill.version.get](skill.version.get.md) — Fetch a specific version of a workspace skill including canonical skill.toml content and the parsed artifact
+- [skill.version.upload](skill.version.upload.md) — Upload a new immutable skill version from canonical skill.toml content
 - [skill.version.activate](skill.version.activate.md) — Set a specific skill version as the workspace's active version
 - [skill.edit](skill.edit.md) — Save an edited skill body as a new immutable version
-- [skill.export](skill.export.md) — Export a skill version as a downloadable .skill.md string
+- [skill.export](skill.export.md) — Export a skill version as a downloadable skill.toml string
 - [skill.metrics.read](skill.metrics.read.md) — Read aggregated skill usage and cost metrics for the workspace
 
 ## Svg (1)

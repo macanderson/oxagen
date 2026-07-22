@@ -30,7 +30,11 @@ export default async function SettingsLayout({
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Agent Defaults", href: workspace.settings.agentDefaults(ctx) },
     { label: "GitHub", href: workspace.settings.github(ctx) },
-    { label: "MCP Registries", href: workspace.settings.mcpServerRegistries(ctx) },
+    {
+      label: "MCP Registries",
+      href: workspace.settings.mcpServerRegistries(ctx),
+    },
+    { label: "Spend Budgets", href: workspace.settings.spendBudgets(ctx) },
   ];
 
   return (
@@ -38,11 +42,7 @@ export default async function SettingsLayout({
       <PageHeader
         title="Settings"
         description="Workspace configuration, members, and models."
-        breadcrumb={
-          <Breadcrumb
-            items={[wsCrumb, { label: "Settings" }]}
-          />
-        }
+        breadcrumb={<Breadcrumb items={[wsCrumb, { label: "Settings" }]} />}
       />
       {/* Desktop: fixed sidebar. Mobile: full-width content + MobileSettingsNav,
           a thumb-reachable bottom-sheet switcher (same items — parity per ADR-026). */}

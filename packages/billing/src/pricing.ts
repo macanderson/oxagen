@@ -49,6 +49,14 @@ export interface ProviderModelRate {
   outputPer1M: number;
   /** USD per 1,000,000 cached-input (prompt-cache read) tokens. */
   cachedInputPer1M: number;
+  /**
+   * USD per 1,000,000 prompt-cache WRITE (cache creation) tokens. Anthropic
+   * bills these at 1.25x base input (5-minute TTL); providers with no write
+   * premium (OpenAI's automatic caching) charge fresh input rate, so their
+   * value equals `inputPer1M`. Folding cache writes into `inputPer1M` — the
+   * pre-#1076 behavior — under-charges the Anthropic premium by 25%.
+   */
+  cacheWritePer1M: number;
 }
 
 export type RateCard = Record<string, ProviderModelRate>;
@@ -65,18 +73,83 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // keys never prefix-match any `claude-opus`/`claude-sonnet` row, so without an
   // explicit entry Fable would fall back to the Sonnet rate and silently
   // UNDER-charge. Matches the CLI/agent-engine fable rows ($15/$75).
-  "claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
-  "claude-opus-4-8": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
-  "claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  // Anthropic cache writes bill at 1.25x base input (5-min TTL) — cacheWritePer1M
+  // = inputPer1M * 1.25. Folding them into fresh input (the pre-#1076 behavior)
+  // under-charged the premium by 25% on every cache-write token.
+  "claude-fable-5": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "claude-opus-4-8": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "claude-opus-4": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
   // Claude Sonnet 5 — same $3/$15 Sonnet-tier rate. An explicit key keeps it off
   // the fallback path (the `claude-sonnet-4` prefix does not match `-5`).
-  "claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
-  "claude-sonnet-4-6": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
-  "claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
-  "claude-haiku-4-5": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
-  "claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
-  "gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
-  "gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
+  "claude-sonnet-5": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "claude-sonnet-4-6": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "claude-sonnet-4": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "claude-haiku-4-5": {
+    provider: "anthropic",
+    inputPer1M: 1.0,
+    outputPer1M: 5.0,
+    cachedInputPer1M: 0.1,
+    cacheWritePer1M: 1.25,
+  },
+  "claude-haiku-4": {
+    provider: "anthropic",
+    inputPer1M: 1.0,
+    outputPer1M: 5.0,
+    cachedInputPer1M: 0.1,
+    cacheWritePer1M: 1.25,
+  },
+  // OpenAI caching is automatic with no write premium — cache creation is billed
+  // at the fresh input rate, so cacheWritePer1M == inputPer1M.
+  "gpt-4o": {
+    provider: "openai",
+    inputPer1M: 2.5,
+    outputPer1M: 10.0,
+    cachedInputPer1M: 1.25,
+    cacheWritePer1M: 2.5,
+  },
+  "gpt-4o-mini": {
+    provider: "openai",
+    inputPer1M: 0.15,
+    outputPer1M: 0.6,
+    cachedInputPer1M: 0.075,
+    cacheWritePer1M: 0.15,
+  },
   // ── Vercel AI Gateway model ids (creator/model form) ───────────────────────
   // When @oxagen/ai routes through the gateway, model.modelId arrives as
   // "anthropic/claude-sonnet-4.6" (slash + dotted version) rather than the bare
@@ -85,19 +158,73 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // the Sonnet rate (over-charging Opus, under-charging Haiku). The `…-4` keys
   // are deliberate PREFIXES so a future dotted minor (e.g. "…-4.7") still
   // resolves to the right family via {@link resolveRate}.
-  "anthropic/claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
-  "anthropic/claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
-  "anthropic/claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
-  "anthropic/claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
-  "anthropic/claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
-  "openai/gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
-  "openai/gpt-4o": { provider: "openai", inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 },
+  "anthropic/claude-fable-5": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "anthropic/claude-opus-4": {
+    provider: "anthropic",
+    inputPer1M: 15.0,
+    outputPer1M: 75.0,
+    cachedInputPer1M: 1.5,
+    cacheWritePer1M: 18.75,
+  },
+  "anthropic/claude-sonnet-5": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "anthropic/claude-sonnet-4": {
+    provider: "anthropic",
+    inputPer1M: 3.0,
+    outputPer1M: 15.0,
+    cachedInputPer1M: 0.3,
+    cacheWritePer1M: 3.75,
+  },
+  "anthropic/claude-haiku-4": {
+    provider: "anthropic",
+    inputPer1M: 1.0,
+    outputPer1M: 5.0,
+    cachedInputPer1M: 0.1,
+    cacheWritePer1M: 1.25,
+  },
+  "openai/gpt-4o-mini": {
+    provider: "openai",
+    inputPer1M: 0.15,
+    outputPer1M: 0.6,
+    cachedInputPer1M: 0.075,
+    cacheWritePer1M: 0.15,
+  },
+  "openai/gpt-4o": {
+    provider: "openai",
+    inputPer1M: 2.5,
+    outputPer1M: 10.0,
+    cachedInputPer1M: 1.25,
+    cacheWritePer1M: 2.5,
+  },
   // NOTE: image & video models are billed PER ASSET, not per token — they live in
   // IMAGE_RATE_CARD / VIDEO_RATE_CARD below, not here. The per-1M-token fields
   // cannot express a per-image price, so a token-rate entry for them would always
   // be wrong (it priced image gen at $0 before this was split out).
-  "text-embedding-3-small": { provider: "openai", inputPer1M: 0.02, outputPer1M: 0.0, cachedInputPer1M: 0.02 },
-  "text-embedding-3-large": { provider: "openai", inputPer1M: 0.13, outputPer1M: 0.0, cachedInputPer1M: 0.13 },
+  "text-embedding-3-small": {
+    provider: "openai",
+    inputPer1M: 0.02,
+    outputPer1M: 0.0,
+    cachedInputPer1M: 0.02,
+    cacheWritePer1M: 0.02,
+  },
+  "text-embedding-3-large": {
+    provider: "openai",
+    inputPer1M: 0.13,
+    outputPer1M: 0.0,
+    cachedInputPer1M: 0.13,
+    cacheWritePer1M: 0.13,
+  },
 };
 
 /**
@@ -108,7 +235,10 @@ export const PROVIDER_RATE_CARD: RateCard = {
 export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 
 /** Resolve a model id to its rate, matching the longest rate-card key prefix. */
-export function resolveRate(modelId: string, rateCard: RateCard = PROVIDER_RATE_CARD): ProviderModelRate {
+export function resolveRate(
+  modelId: string,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): ProviderModelRate {
   if (rateCard[modelId]) return rateCard[modelId];
   let best: { key: string; rate: ProviderModelRate } | null = null;
   for (const [key, rate] of Object.entries(rateCard)) {
@@ -125,26 +255,42 @@ export interface TokenUsageInput {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  /** Cached-input tokens, billed at the cheaper cached rate. Defaults to 0. */
+  /** Cached-input (prompt-cache READ) tokens, billed at the cheaper cached rate. Defaults to 0. */
   cachedTokens?: number;
+  /**
+   * Prompt-cache WRITE (cache creation) tokens, billed at the provider's write
+   * rate ({@link ProviderModelRate.cacheWritePer1M} — a premium on Anthropic).
+   * A subset of `inputTokens` like `cachedTokens`. Defaults to 0, which reproduces
+   * the pre-#1076 behavior (writes billed as fresh input).
+   */
+  cacheWriteTokens?: number;
 }
 
 /** USD the provider charges us for one metered call. */
-export function providerCostUsd(usage: TokenUsageInput, rateCard: RateCard = PROVIDER_RATE_CARD): number {
+export function providerCostUsd(
+  usage: TokenUsageInput,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): number {
   const rate = resolveRate(usage.model, rateCard);
   const cached = Math.max(0, usage.cachedTokens ?? 0);
-  // input_tokens from the AI SDK is the full prompt; cached reads are a subset
-  // billed cheaper, so split them out and never let billable input go negative.
-  const billableInput = Math.max(0, usage.inputTokens - cached);
+  const cacheWrite = Math.max(0, usage.cacheWriteTokens ?? 0);
+  // input_tokens from the AI SDK gateway is the INCLUSIVE total (fresh input +
+  // cache reads + cache writes). Reads and writes are subsets billed at their own
+  // rates, so split both out; never let billable fresh input go negative.
+  const billableInput = Math.max(0, usage.inputTokens - cached - cacheWrite);
   return (
     (billableInput / 1_000_000) * rate.inputPer1M +
     (cached / 1_000_000) * rate.cachedInputPer1M +
+    (cacheWrite / 1_000_000) * rate.cacheWritePer1M +
     (Math.max(0, usage.outputTokens) / 1_000_000) * rate.outputPer1M
   );
 }
 
 /** Provider cost in micro-USD (millionths) for ClickHouse `cost_usd_micros`. */
-export function providerCostUsdMicros(usage: TokenUsageInput, rateCard: RateCard = PROVIDER_RATE_CARD): number {
+export function providerCostUsdMicros(
+  usage: TokenUsageInput,
+  rateCard: RateCard = PROVIDER_RATE_CARD,
+): number {
   return Math.round(providerCostUsd(usage, rateCard) * 1_000_000);
 }
 
@@ -206,13 +352,25 @@ export const IMAGE_RATE_CARD: Record<string, ImageModelRate> = {
 /** Per-second provider list prices (USD), keyed by gateway model id prefix. */
 export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
   // Google Veo 3 — "fast" tier ~$0.35/sec, standard ~$0.75/sec (list, 2026-05).
-  "google/veo-3.0-fast": { vendor: "google", usdPerSecond: 0.35, defaultSeconds: 5 },
+  "google/veo-3.0-fast": {
+    vendor: "google",
+    usdPerSecond: 0.35,
+    defaultSeconds: 5,
+  },
   "google/veo-3.0": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
-  "google/veo-3.1-fast": { vendor: "google", usdPerSecond: 0.4, defaultSeconds: 5 },
+  "google/veo-3.1-fast": {
+    vendor: "google",
+    usdPerSecond: 0.4,
+    defaultSeconds: 5,
+  },
   "google/veo-3.1": { vendor: "google", usdPerSecond: 0.8, defaultSeconds: 5 },
   "google/veo": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
   // OpenAI Sora 2 — ~$0.10/sec, pro ~$0.30–0.50/sec (list, 2026-05; bias high).
-  "openai/sora-2-pro": { vendor: "openai", usdPerSecond: 0.5, defaultSeconds: 4 },
+  "openai/sora-2-pro": {
+    vendor: "openai",
+    usdPerSecond: 0.5,
+    defaultSeconds: 4,
+  },
   "openai/sora-2": { vendor: "openai", usdPerSecond: 0.1, defaultSeconds: 4 },
 };
 
@@ -221,11 +379,22 @@ export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
  * mirroring {@link FALLBACK_RATE_MODEL} for tokens. These are the most expensive
  * plausible asset prices so a missing card entry can't under-bill us.
  */
-export const IMAGE_FALLBACK_RATE: ImageModelRate = { vendor: "", usdPerImage: 0.08 };
-export const VIDEO_FALLBACK_RATE: VideoModelRate = { vendor: "", usdPerSecond: 0.75, defaultSeconds: 5 };
+export const IMAGE_FALLBACK_RATE: ImageModelRate = {
+  vendor: "",
+  usdPerImage: 0.08,
+};
+export const VIDEO_FALLBACK_RATE: VideoModelRate = {
+  vendor: "",
+  usdPerSecond: 0.75,
+  defaultSeconds: 5,
+};
 
 /** Resolve a media model id to its rate by longest-prefix match (generic). */
-function resolveMediaRate<T>(modelId: string, card: Record<string, T>, fallback: T): T {
+function resolveMediaRate<T>(
+  modelId: string,
+  card: Record<string, T>,
+  fallback: T,
+): T {
   if (card[modelId]) return card[modelId]!;
   let best: { key: string; rate: T } | null = null;
   for (const [key, rate] of Object.entries(card)) {
@@ -260,12 +429,19 @@ export function videoProviderCostUsd(
 }
 
 /** Image provider cost in micro-USD for ClickHouse `cost_usd_micros`. */
-export function imageProviderCostUsdMicros(model: string, imageCount: number, size?: string): number {
+export function imageProviderCostUsdMicros(
+  model: string,
+  imageCount: number,
+  size?: string,
+): number {
   return Math.round(imageProviderCostUsd(model, imageCount, size) * 1_000_000);
 }
 
 /** Video provider cost in micro-USD for ClickHouse `cost_usd_micros`. */
-export function videoProviderCostUsdMicros(model: string, seconds?: number): number {
+export function videoProviderCostUsdMicros(
+  model: string,
+  seconds?: number,
+): number {
   return Math.round(videoProviderCostUsd(model, seconds) * 1_000_000);
 }
 
@@ -335,7 +511,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     annualCents: 20_000, // 2 months free
     seats: 5,
     weight: 0.35,
-    features: { list: ["All tools & integrations", "Up to 25 concurrent agents", "Email support"] },
+    features: {
+      list: [
+        "All tools & integrations",
+        "Up to 25 concurrent agents",
+        "Email support",
+      ],
+    },
   },
   {
     slug: "scale-v2",
@@ -346,7 +528,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
     annualCents: 99_000, // 2 months free
     seats: 25,
     weight: 0.2,
-    features: { list: ["All tools & integrations", "Unlimited concurrent agents", "Priority support"] },
+    features: {
+      list: [
+        "All tools & integrations",
+        "Unlimited concurrent agents",
+        "Priority support",
+      ],
+    },
   },
   {
     // Priced self-serve plan (Enterprise customers may also engage at rate card
@@ -382,9 +570,27 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlanDef[] = [
  * their margin slightly — the volume incentive.
  */
 export const CREDIT_PACKS: CreditPackDef[] = [
-  { slug: "credits-starter-v2", displayName: "Starter Credit Pack", priceCents: 1_000, credits: 1_000, weight: 0.1 },
-  { slug: "credits-power-v2", displayName: "Power Credit Pack", priceCents: 5_000, credits: 5_250, weight: 0.2 },
-  { slug: "credits-scale-v2", displayName: "Scale Credit Pack", priceCents: 20_000, credits: 22_000, weight: 0.15 },
+  {
+    slug: "credits-starter-v2",
+    displayName: "Starter Credit Pack",
+    priceCents: 1_000,
+    credits: 1_000,
+    weight: 0.1,
+  },
+  {
+    slug: "credits-power-v2",
+    displayName: "Power Credit Pack",
+    priceCents: 5_000,
+    credits: 5_250,
+    weight: 0.2,
+  },
+  {
+    slug: "credits-scale-v2",
+    displayName: "Scale Credit Pack",
+    priceCents: 20_000,
+    credits: 22_000,
+    weight: 0.15,
+  },
 ];
 
 // ── The margin solve ────────────────────────────────────────────────────
@@ -436,13 +642,20 @@ interface RatioWeight {
  * face value of the credits consumed. Generous products (high creditsPerCent)
  * eat more of the markup, so the blend pins M above the naive 1/(1−m).
  */
-export function solveMeterMarkup(products: RatioWeight[], targetMargin: number): number {
+export function solveMeterMarkup(
+  products: RatioWeight[],
+  targetMargin: number,
+): number {
   if (targetMargin <= 0 || targetMargin >= 1) {
     throw new Error(`targetMargin must be in (0,1); got ${targetMargin}`);
   }
   const totalWeight = products.reduce((s, p) => s + p.weight, 0);
-  if (totalWeight <= 0) throw new Error("product weights must sum to a positive number");
-  const weightedRatio = products.reduce((s, p) => s + (p.weight / totalWeight) * p.creditsPerCent, 0);
+  if (totalWeight <= 0)
+    throw new Error("product weights must sum to a positive number");
+  const weightedRatio = products.reduce(
+    (s, p) => s + (p.weight / totalWeight) * p.creditsPerCent,
+    0,
+  );
   return weightedRatio / (1 - targetMargin);
 }
 
@@ -451,8 +664,13 @@ export function solveMeterMarkup(products: RatioWeight[], targetMargin: number):
  * every product's price/credits/realised margin, and the blended margin.
  * Pure — no I/O. This is what the sync script and the gate both read from.
  */
-export function derivePricing(targetMargin: number = resolveTargetMargin()): PricingDerivation {
-  const ratios: (RatioWeight & { def: SubscriptionPlanDef | CreditPackDef; kind: ProductKind })[] = [
+export function derivePricing(
+  targetMargin: number = resolveTargetMargin(),
+): PricingDerivation {
+  const ratios: (RatioWeight & {
+    def: SubscriptionPlanDef | CreditPackDef;
+    kind: ProductKind;
+  })[] = [
     ...SUBSCRIPTION_PLANS.map((p) => ({
       creditsPerCent: p.includedCredits / p.monthlyCents,
       weight: p.weight,
@@ -499,9 +717,18 @@ export function derivePricing(targetMargin: number = resolveTargetMargin()): Pri
   });
 
   const totalWeight = products.reduce((s, p) => s + p.weight, 0);
-  const blendedMargin = products.reduce((s, p) => s + (p.weight / totalWeight) * p.marginPct, 0);
+  const blendedMargin = products.reduce(
+    (s, p) => s + (p.weight / totalWeight) * p.marginPct,
+    0,
+  );
 
-  return { targetMargin, creditValueUsd: CREDIT_VALUE_USD, meterMarkup, blendedMargin, products };
+  return {
+    targetMargin,
+    creditValueUsd: CREDIT_VALUE_USD,
+    meterMarkup,
+    blendedMargin,
+    products,
+  };
 }
 
 // ── Runtime configuration ──────────────────────────────────────────────
@@ -530,6 +757,7 @@ export function resolveTargetMargin(): number {
 export function resolveMeterMarkup(): number {
   if (_resolvedMarkup !== null) return _resolvedMarkup;
   const { OXAGEN_METER_MARKUP } = requireEnv(["OXAGEN_METER_MARKUP"]);
-  _resolvedMarkup = OXAGEN_METER_MARKUP ?? derivePricing(resolveTargetMargin()).meterMarkup;
+  _resolvedMarkup =
+    OXAGEN_METER_MARKUP ?? derivePricing(resolveTargetMargin()).meterMarkup;
   return _resolvedMarkup;
 }

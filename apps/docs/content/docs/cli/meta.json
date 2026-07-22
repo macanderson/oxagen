@@ -10,6 +10,7 @@
     "repl-commands",
     "agent-engine",
     "custom-commands",
+    "import-artifacts",
     "fleet",
     "scripting",
     "configuration",
