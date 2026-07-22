@@ -8,7 +8,7 @@
 
 ## Intent
 
-Author a new skill from a natural-language prompt. The model synthesises a complete `.skill.md` document (YAML frontmatter + body), validates it, then installs it into the workspace via `skill.workspace.install`. Returns the installed skill's publicId, slug, active version number, the generated body, and whether this was a new install.
+Author a new skill from a natural-language prompt. The model synthesises structured skill fields, the shared serializer assembles them into a canonical `skill.toml` document, it is validated, then installed into the workspace via `skill.workspace.install`. Returns the installed skill's publicId, slug, active version number, the generated content, and whether this was a new install.
 
 ## Input
 
@@ -26,7 +26,7 @@ Author a new skill from a natural-language prompt. The model synthesises a compl
 |---|---|---|
 | `publicId` | `string` | Public ID of the installed skill (`skl_…`). |
 | `slug` | `string` | Kebab-case slug of the installed skill. |
-| `body` | `string` | The generated `.skill.md` content (YAML frontmatter + body). |
+| `content` | `string` | The generated canonical `skill.toml` content. |
 | `activeVersion` | `int > 0` | Active version number after installation. |
 | `installed` | `boolean` | `true` if a new skill was created, `false` if an identically-slugged skill already existed (idempotent). |
 
@@ -37,7 +37,7 @@ Org Owner, Org Admin, Workspace Owner, Workspace Admin, Workspace Member.
 ## Side effects
 
 - Postgres: inserts a `skills` row and an initial skill version (via `skill.workspace.install`).
-- LLM: a model call synthesises the `.skill.md` document (metered via `@oxagen/ai`).
+- LLM: a model call synthesises the skill fields, which the shared serializer renders as canonical `skill.toml` (metered via `@oxagen/ai`).
 
 ## Errors
 

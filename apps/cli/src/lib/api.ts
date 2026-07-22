@@ -378,6 +378,69 @@ export async function apiPostOrThrow<T>(
 }
 
 /**
+ * PUT an org-scoped capability and return the parsed JSON. Throws `ApiError`
+ * on missing scope, network failure, or a non-2xx response — never exits.
+ * Mirrors {@link apiPostOrThrow} exactly (same diagnostics, same shape); the
+ * only difference is the HTTP verb, needed for routes that model "set" as a
+ * replace-in-place at the read path's own URL (e.g. `billing/budget`) rather
+ * than a separate `.../set` POST route.
+ */
+export async function apiPutOrThrow<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const ctx = resolveApiContext();
+  if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  const category: DebugCategory = "api";
+  const url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
+  void debugLog(category, "api.put.request", {
+    method: "PUT",
+    url,
+    path,
+    body,
+  });
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${ctx.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch (err) {
+    throw await buildNetworkError(
+      "api.put.network",
+      "PUT",
+      url,
+      path,
+      err,
+      startedAt,
+    );
+  }
+  if (!res.ok) {
+    throw await buildHttpError(
+      "api.put.response",
+      "PUT",
+      url,
+      path,
+      res,
+      startedAt,
+    );
+  }
+  const json = (await res.json()) as T;
+  void debugLog(category, "api.put.response", {
+    path,
+    status: res.status,
+    durationMs: Date.now() - startedAt,
+    body: json,
+  });
+  return json;
+}
+
+/**
  * POST an org-scoped capability and return the parsed JSON, or exit(1) on
  * error — UNLESS `writer` is a non-default (capture) writer, in which case it
  * throws `ApiError` instead so the REPL's inline capture-execution seam can

@@ -98,6 +98,7 @@ import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
+import { modelCapabilityListRoute } from "./routes/v1/model.capability.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
@@ -122,6 +123,8 @@ import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
 import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
+import { billingBudgetGetRoute } from "./routes/v1/billing.budget.get";
+import { billingBudgetSetRoute } from "./routes/v1/billing.budget.set";
 import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
 import { userWorkspacePreferencesWriteRoute } from "./routes/v1/user.workspace_preferences.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
@@ -590,6 +593,10 @@ orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
 // single-execution failure frame above.
 orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
+// Provider capability posture matrix — what a BYOK-configured vendor actually
+// supports (cache opt-in vs implicit, reasoning control, structured output,
+// attachments) before work is routed to it.
+orgScoped.route("/model/capabilities", modelCapabilityListRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
@@ -652,6 +659,9 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
 orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
+// Hard period-to-date spend ceilings (org + workspace, OXA-1079).
+orgScoped.route("/billing/budget", billingBudgetGetRoute);
+orgScoped.route("/billing/budget", billingBudgetSetRoute);
 // Per-(user, workspace) coding-agent defaults (org+workspace scoped).
 orgScoped.route(
   "/user/workspace-preferences",

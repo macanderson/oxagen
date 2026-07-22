@@ -23,6 +23,7 @@ const BREAKDOWN = {
     inputTokens: 100,
     outputTokens: 40,
     cachedTokens: 10,
+    cacheWriteTokens: 20,
     costMicros: 5000,
     executions: 3,
     messages: 2,
@@ -33,6 +34,7 @@ const BREAKDOWN = {
       inputTokens: 100,
       outputTokens: 40,
       cachedTokens: 10,
+      cacheWriteTokens: 20,
       costMicros: 5000,
       executions: 3,
       messages: 2,
@@ -45,6 +47,7 @@ const BREAKDOWN = {
       inputTokens: 100,
       outputTokens: 40,
       cachedTokens: 10,
+      cacheWriteTokens: 20,
       costMicros: 5000,
       executions: 3,
       messages: 2,
@@ -57,6 +60,7 @@ const BREAKDOWN = {
       inputTokens: 100,
       outputTokens: 40,
       cachedTokens: 10,
+      cacheWriteTokens: 20,
       costMicros: 5000,
       executions: 3,
       messages: 2,
@@ -69,6 +73,7 @@ const BREAKDOWN = {
       inputTokens: 100,
       outputTokens: 40,
       cachedTokens: 10,
+      cacheWriteTokens: 20,
       costMicros: 5000,
       executions: 3,
       messages: 2,
@@ -81,6 +86,7 @@ const BREAKDOWN = {
       inputTokens: 60,
       outputTokens: 20,
       cachedTokens: 5,
+      cacheWriteTokens: 10,
       costMicros: 3000,
       executions: 2,
       messages: 1,
@@ -93,6 +99,7 @@ const BREAKDOWN = {
       inputTokens: 60,
       outputTokens: 20,
       cachedTokens: 5,
+      cacheWriteTokens: 10,
       costMicros: 3000,
       executions: 2,
       messages: 1,
@@ -104,6 +111,7 @@ const BREAKDOWN = {
       inputTokens: 60,
       outputTokens: 20,
       cachedTokens: 5,
+      cacheWriteTokens: 10,
       costMicros: 3000,
       executions: 2,
       messages: 1,
@@ -140,6 +148,30 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
     expect(out.byPrincipal).toEqual(BREAKDOWN.byPrincipal);
     expect(out.byUser).toEqual(BREAKDOWN.byUser);
     expect(out.series).toEqual(BREAKDOWN.series);
+  });
+
+  it("estimates net cache savings from byModel using the provider rate card (#1076)", async () => {
+    // claude-sonnet-5 rate: input $3, cachedInput $0.3, cacheWrite $3.75 per 1M.
+    // reads saved  = 10 × (3.0 − 0.3)  = 27 micro-USD
+    // writes cost  = 20 × (3.75 − 3.0) = 15 micro-USD
+    // net savings  = 27 − 15 = 12 micro-USD
+    const out = await billingUsageBreakdownHandler(INPUT, TEST_CTX);
+    expect(out.cacheSavingsMicros).toBe(12);
+  });
+
+  it("reports zero cache savings when no tokens were cached", async () => {
+    mocks.readUsageBreakdown.mockResolvedValueOnce({
+      ...BREAKDOWN,
+      byModel: [
+        {
+          ...BREAKDOWN.byModel[0],
+          cachedTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      ],
+    });
+    const out = await billingUsageBreakdownHandler(INPUT, TEST_CTX);
+    expect(out.cacheSavingsMicros).toBe(0);
   });
 
   it("threads input.workspaceId to narrow within the org", async () => {

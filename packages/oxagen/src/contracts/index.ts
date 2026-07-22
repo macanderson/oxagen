@@ -54,6 +54,7 @@ import { agentTriggerUpdate } from "./agent.trigger.update";
 import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionList } from "./agent.execution.list";
+import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentDebugTrace } from "./agent.debug.trace";
@@ -158,6 +159,8 @@ import { budgetPolicyRead } from "./budget.policy.read";
 import { budgetPolicyWrite } from "./budget.policy.write";
 import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
 import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
+import { billingBudgetGet } from "./billing.budget.get";
+import { billingBudgetSet } from "./billing.budget.set";
 import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model_settings.write";
 import { promptSettingsRead } from "./prompt.settings.read";
@@ -564,6 +567,7 @@ export {
   agentTriggerList,
   agentExecutionList,
   agentExecutionRecord,
+  modelCapabilityList,
   agentUiRender,
   documentsGenerate,
   documentsPdfCreate,
@@ -663,6 +667,8 @@ export {
   userWorkspacePreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
+  billingBudgetGet,
+  billingBudgetSet,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
@@ -1007,6 +1013,8 @@ export const contracts = [
   userWorkspacePreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
+  billingBudgetGet,
+  billingBudgetSet,
   workspaceBudgetPolicyRead,
   workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
@@ -1065,6 +1073,7 @@ export const contracts = [
   skillEnable,
   agentExecutionList,
   agentExecutionRecord,
+  modelCapabilityList,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,

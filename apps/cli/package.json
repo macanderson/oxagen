@@ -44,6 +44,7 @@
     "@ai-sdk/provider": "4.0.2",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/ai": "workspace:*",
     "@oxagen/agent-artifacts": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/code-graph": "workspace:*",

@@ -10,7 +10,7 @@
 
 AI-driven edit of an **existing** skill — the edit counterpart to `author_skill`
 (AI-create). Takes a plain-language description of the change you want plus the
-skill's current active-version body, has the model redesign the `.skill.md` body
+skill's current active-version content, has the model redesign the skill artifact
 (and description/weight) accordingly, then saves the result as a **new immutable
 version** via the shared `createNewSkillVersion` helper — the same version-bump
 path `edit_skill` and `upload_skill_version` use.
@@ -36,7 +36,7 @@ default**; pass `activate: false` to stage it without going live.
 | `version_id` | `string` | Public ID of the new skill version (`slv_…`). |
 | `version_number` | `number` | The newly-created (bumped) version number. |
 | `activated` | `boolean` | Whether this version is now the skill's active version. |
-| `body` | `string` | The revised `.skill.md` content (YAML frontmatter + body). |
+| `content` | `string` | The revised canonical `skill.toml` content. |
 | `changeSummary` | `string[]` | Short bullets of what changed versus the prior version (diff line). |
 
 ## Roles
@@ -53,5 +53,5 @@ Org Owner, Org Admin, Workspace Owner, Workspace Admin.
 | code | meaning |
 |---|---|
 | `skill_revise_failed` | Skill not found, has no versions to revise, or model synthesis failed. |
-| `validation_error` | Input failed Zod parse, or the synthesised document failed `.skill.md` validation. |
+| `validation_error` | Input failed Zod parse, or the synthesised document failed canonical `skill.toml` validation. |
 | `unauthorized` | Caller lacks the required org/workspace role. |
