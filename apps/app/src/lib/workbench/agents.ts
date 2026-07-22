@@ -10,6 +10,9 @@
  * Server-only. Never import from a "use client" module.
  */
 import "@oxagen/handlers/register";
+// suggest_agent_def moved into the agent package with the Agent RBAC role
+// work — without this the kernel has no handler bound for it at runtime.
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { AgentDefinitionConfig } from "@oxagen/oxagen/agent-schema";
 import type { AgentDefinitionSuggestOutput } from "@oxagen/oxagen/contracts/agent.definition.suggest";
