@@ -395,7 +395,7 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           agentId: resolvedAgent.publicId,
-          invokingUserId: ctx.userId ?? null,
+          initiatingUserId: ctx.userId ?? null,
         }),
     );
     if (authzCtx === null) {

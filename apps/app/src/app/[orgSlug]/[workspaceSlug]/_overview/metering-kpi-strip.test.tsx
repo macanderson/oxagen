@@ -86,7 +86,6 @@ function subscription(
       cachedTokens: 0,
       costMicros: 0,
       executions: 0,
-      messages: 0,
     },
     ...overrides,
   };
@@ -177,7 +176,6 @@ describe("MeteringKpiStrip", () => {
               cachedTokens: 0,
               costMicros: 1_250_000,
               executions: 4,
-              messages: 4,
             },
           }),
         ),
