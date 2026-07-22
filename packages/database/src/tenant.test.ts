@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 mocks.transaction.mockImplementation(
-  async (cb: (tx: unknown) => Promise<unknown>) => cb({ execute: mocks.execute }),
+  async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb({ execute: mocks.execute }),
 );
 
 vi.mock("./client", () => ({
@@ -35,6 +36,7 @@ vi.mock("./unscoped-meter", () => ({
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   withTenantDb,
+  withRepeatableReadTenantDb,
   withSystemDb,
   assertRlsConnectionSafe,
   assertRlsEnforcedInProduction,
@@ -88,6 +90,58 @@ describe("withTenantDb", () => {
     const arg = sqlText((calls2[0] as unknown[])[0]);
     // Enforcement on → bypass='off' (always set, never absent)
     expect(arg).toContain("app.rls_bypass");
+    expect(arg).toContain('"off"');
+    expect(arg).not.toContain('"on"');
+  });
+});
+
+describe("withRepeatableReadTenantDb", () => {
+  it("requires an active scope (fail-closed, same as withTenantDb)", async () => {
+    await expect(withRepeatableReadTenantDb(async () => 1)).rejects.toThrow(
+      /tenant scope/,
+    );
+  });
+
+  it("raises the isolation level BEFORE any other statement", async () => {
+    // Postgres rejects SET TRANSACTION ISOLATION LEVEL once the transaction has
+    // read anything, so ordering here is correctness, not style: if the
+    // set_config statement ran first the snapshot would already be taken and
+    // the whole point of the helper (one MVCC snapshot across the grant ceiling
+    // AND its deny-generation vector) would be silently lost.
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withRepeatableReadTenantDb(async () => "ok"),
+    );
+    const calls = mocks.execute.mock.calls as unknown[][];
+    expect(calls.length).toBe(2);
+    expect(sqlText((calls[0] as unknown[])[0])).toContain(
+      "set transaction isolation level repeatable read",
+    );
+  });
+
+  it("sets the same tenant GUCs as withTenantDb", async () => {
+    const result = await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withRepeatableReadTenantDb(async (tx) => {
+        expect(tx).toBeDefined();
+        return "snapshot";
+      }),
+    );
+    expect(result).toBe("snapshot");
+    const calls = mocks.execute.mock.calls as unknown[][];
+    const arg = sqlText((calls[1] as unknown[])[0]);
+    expect(arg).toContain("app.current_org_id");
+    expect(arg).toContain("app.current_workspace_id");
+    expect(arg).toContain("app.rls_bypass");
+    // Enforcement off in this suite → bypass='on'.
+    expect(arg).toContain('"on"');
+  });
+
+  it("sets bypass='off' when enforcement is enabled", async () => {
+    mocks.rlsEnforced.mockReturnValue(true);
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withRepeatableReadTenantDb(async () => undefined),
+    );
+    const calls = mocks.execute.mock.calls as unknown[][];
+    const arg = sqlText((calls[1] as unknown[])[0]);
     expect(arg).toContain('"off"');
     expect(arg).not.toContain('"on"');
   });

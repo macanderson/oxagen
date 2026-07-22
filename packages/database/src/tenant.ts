@@ -35,6 +35,44 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 }
 
 /**
+ * Like `withTenantDb`, but the transaction runs at REPEATABLE READ.
+ *
+ * Narrow by design: this exists for ADMISSION-TIME AUTHORIZATION SNAPSHOT
+ * CONSTRUCTION and nothing else (docs/specs/run-evidence-ingress). Building a
+ * pinned grant ceiling means reading role assignments, role grants, principal
+ * status, AND the deny-generation counters, then digesting the result. Under
+ * READ COMMITTED each of those statements sees a different snapshot, so a grant
+ * revoked mid-read can land in the ceiling while the generation bump that
+ * should have invalidated it is also read — producing a snapshot that never
+ * existed at any instant. REPEATABLE READ makes the whole ceiling and its
+ * generation vector share one MVCC snapshot, which is exactly the property the
+ * "later grants cannot expand an active run" rule depends on.
+ *
+ * Do NOT reach for this as a general-purpose stronger transaction: repeatable
+ * read can fail with a serialization error (40001) that the caller must be
+ * prepared to retry, and holding it across slow work amplifies that. Use
+ * `withTenantDb` everywhere else.
+ */
+export async function withRepeatableReadTenantDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  const { orgId, workspaceId } = requireScope();
+  const bypass = rlsEnforced() ? "off" : "on";
+  return db().transaction(async (tx) => {
+    // Must be the first statement after BEGIN — Postgres rejects
+    // SET TRANSACTION ISOLATION LEVEL once the transaction has read anything.
+    await tx.execute(sql`set transaction isolation level repeatable read`);
+    await tx.execute(sql`
+      select
+        set_config('app.current_org_id', ${orgId}, true),
+        set_config('app.current_workspace_id', ${workspaceId}, true),
+        set_config('app.rls_bypass', ${bypass}, true)
+    `);
+    return fn(tx);
+  });
+}
+
+/**
  * Run DB work in a transaction with RLS DELIBERATELY BYPASSED
  * (app.rls_bypass='on') — the explicit, audited, greppable escape hatch for the
  * narrow set of operations that legitimately cross (or precede) a tenant scope:

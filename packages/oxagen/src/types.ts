@@ -1,5 +1,10 @@
 import type { z } from "zod";
 import type { LifecycleEvent } from "@oxagen/agent-artifacts";
+// CapabilityContext.agentRun references this below. The import was missing, so
+// the package did not compile. Type-only and therefore safe despite the cycle
+// (iam/agent-run.ts imports CapabilityEffect/ResolvedPrincipal from here) —
+// `import type` is fully erased, so no runtime module cycle is created.
+import type { AgentRunIAMContext } from "./iam/agent-run";
 
 export type ExecutionMode = "sync" | "async" | "batch";
 
