@@ -26,13 +26,13 @@
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/github": "workspace:*",
-    "@oxagen/sandbox": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/sandbox": "workspace:*",
     "@oxagen/skills": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
@@ -48,6 +48,7 @@
     "pdf-lib": "1.17.1",
     "pino": "9.14.0",
     "pptxgenjs": "4.0.1",
+    "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {

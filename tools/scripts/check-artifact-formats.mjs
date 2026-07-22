@@ -65,6 +65,11 @@ export const ALLOWLIST = [
     path: "apps/cli/src/artifact-import/",
     reason: "import adapters parse foreign Markdown by design",
   },
+  {
+    path: "packages/handlers/src/skill-legacy-migration.ts",
+    reason:
+      "one-way converter for pre-cutover managed skill rows; the only server-side legacy reader",
+  },
 
   // --- Documentation *of* the importer: must name what it converts from. ---
   {
