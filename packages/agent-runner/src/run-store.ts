@@ -1380,7 +1380,20 @@ export function buildEnqueueRunV2Sql(
  * would strand exactly the evidence the reclaim exists to preserve.
  */
 export function buildLockClaimableRunV2Sql(): SQL {
+  // The lock is taken in its own CTE over the bare table, then the identity
+  // projection joins to it. Same shape as V1's `WHERE id = (SELECT … FOR UPDATE
+  // SKIP LOCKED)`: a locking clause alongside outer joins has awkward
+  // restrictions, and the row is already pinned by the time the joins run.
   return sql`
+    WITH locked AS (
+      SELECT id FROM agent.agent_runs
+      WHERE spec_version = 2
+        AND status = 'pending'
+        AND attempt_count < max_attempts
+      ORDER BY created_at
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    )
     SELECT
       r.id, r.public_id, r.org_id, r.workspace_id, r.surface, r.spec,
       r.run_kind, r.spec_digest, r.initiating_principal_id,
@@ -1393,15 +1406,10 @@ export function buildLockClaimableRunV2Sql(): SQL {
       r.max_attempts, r.attempt_count, r.next_run_seq, r.latest_checkpoint_id,
       rb.public_id AS repository_binding_public_id,
       rpv.public_id AS retention_policy_public_id
-    FROM agent.agent_runs r
+    FROM locked lk
+    JOIN agent.agent_runs r ON r.id = lk.id
     LEFT JOIN ingestion.repository_bindings rb ON rb.id = r.repository_binding_id
     LEFT JOIN evidence.retention_policy_versions rpv ON rpv.id = r.retention_policy_id
-    WHERE r.spec_version = 2
-      AND r.status = 'pending'
-      AND r.attempt_count < r.max_attempts
-    ORDER BY r.created_at
-    LIMIT 1
-    FOR UPDATE OF r SKIP LOCKED
   `;
 }
 
@@ -1552,7 +1560,15 @@ export function buildMarkRunClaimedV2Sql(
  * tombstone, and whether a seal already exists.
  */
 export function buildLockAttemptLeaseSql(attemptId: string): SQL {
+  // Lock in its own CTE, project afterwards — see buildLockClaimableRunV2Sql.
+  // `expired` is computed by the SERVER: a worker's own clock is exactly the
+  // thing a fencing check must not depend on.
   return sql`
+    WITH locked AS (
+      SELECT id FROM agent.agent_run_attempt_leases
+      WHERE attempt_id = ${attemptId}::uuid
+      FOR UPDATE
+    )
     SELECT
       l.id, l.attempt_id, l.run_id, l.org_id, l.workspace_id,
       l.lease_token, l.lease_epoch, l.worker_id,
@@ -1561,11 +1577,10 @@ export function buildLockAttemptLeaseSql(attemptId: string): SQL {
       l.event_count, l.final_event_digest, l.event_stream_digest,
       a.public_id AS attempt_public_id,
       s.id AS seal_id
-    FROM agent.agent_run_attempt_leases l
+    FROM locked lk
+    JOIN agent.agent_run_attempt_leases l ON l.id = lk.id
     JOIN agent.agent_run_attempts a ON a.id = l.attempt_id
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = l.attempt_id
-    WHERE l.attempt_id = ${attemptId}::uuid
-    FOR UPDATE OF l
   `;
 }
 

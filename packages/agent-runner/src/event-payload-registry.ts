@@ -674,12 +674,15 @@ export interface ValidatedInlinePayload {
  *   5. canonicalize + cap   — the authoritative 32 KiB on the JCS bytes;
  *   6. digest               — over those same canonical bytes.
  *
- * The cap is checked twice against the SAME limit. Step 5 is authoritative
- * (the spec says "after JCS"), but a multi-megabyte payload must not first be
- * walked key by key and run through a Zod parse just to be told it is too big.
- * Step 2 is sound as an early exit because `.strict()` schemas reject unknown
- * keys rather than stripping them, so the canonical bytes of a parsed payload
- * are never longer than a whitespace-free serialization of the raw one.
+ * The cap is checked twice against the SAME limit, and neither check is
+ * redundant. Step 2 is the cheap early exit — a multi-megabyte payload must not
+ * be walked key by key and run through a Zod parse just to be told it is too
+ * big — and it is sound because `.strict()` schemas reject unknown keys rather
+ * than stripping them. Step 5 is the AUTHORITATIVE one the spec names ("after
+ * JCS"): a schema that ever grows a `.default()` produces parsed output the raw
+ * input did not contain, so the canonical bytes can exceed what step 2 measured.
+ * With today's bounded schemas step 2 always fires first; step 5 is the backstop
+ * that stays correct when that stops being true.
  *
  * Every failure throws. There is no "sanitize and continue" path: a payload
  * this function repaired would digest to something the producer cannot

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   SECURITY_EVENT_TYPES,
@@ -14,7 +16,9 @@ import {
 
 describe("security event taxonomy invariants", () => {
   it("has no duplicate event types", () => {
-    expect(new Set(SECURITY_EVENT_TYPES).size).toBe(SECURITY_EVENT_TYPES.length);
+    expect(new Set(SECURITY_EVENT_TYPES).size).toBe(
+      SECURITY_EVENT_TYPES.length,
+    );
   });
 
   it("has no duplicate outcomes", () => {
@@ -45,7 +49,9 @@ describe("security event taxonomy invariants", () => {
   it("includes exactly the expected plugin.* governance event types", () => {
     // SOC2 CC6.3/CC6.8 drift guard — privileged plugin mutations (install,
     // uninstall, enabled-state change, denylist add/remove) must stay auditable.
-    const pluginTypes = SECURITY_EVENT_TYPES.filter((t) => t.startsWith("plugin."));
+    const pluginTypes = SECURITY_EVENT_TYPES.filter((t) =>
+      t.startsWith("plugin."),
+    );
     const expected = [
       "plugin.installed",
       "plugin.uninstalled",
@@ -54,6 +60,48 @@ describe("security event taxonomy invariants", () => {
       "plugin.denylist_removed",
     ];
     expect([...pluginTypes].sort()).toEqual([...expected].sort());
+  });
+
+  it("includes exactly the four governed-run integrity event types", () => {
+    // docs/specs/run-evidence-ingress — drift guard. These are INTEGRITY
+    // failures (a contradicted evidence chain), never ordinary policy denials,
+    // which stay on capability.invoke_denied.
+    const runTypes = SECURITY_EVENT_TYPES.filter((t) =>
+      t.startsWith("agent_run."),
+    );
+    expect([...runTypes].sort()).toEqual([
+      "agent_run.event_sequence_conflict",
+      "agent_run.finalization_grant_misuse",
+      "agent_run.forged_decision_reference",
+      "agent_run.stale_deny_generation",
+    ]);
+  });
+});
+
+describe("migration drift — the DB CHECK must match the taxonomy", () => {
+  // The newest security_events CHECK migration is generated FROM this module
+  // (see db-check.ts). If someone adds an event type without the paired
+  // additive migration, inserts of that type fail at runtime with a constraint
+  // violation — silently, because the TS union already admits it. This test is
+  // the thing that fails first.
+  const MIGRATION = fileURLToPath(
+    new URL(
+      "../../database/atlas/migrations/" +
+        "20260813120000_agent_run_authorization_security_events.sql",
+      import.meta.url,
+    ),
+  );
+
+  it("the latest event_type migration contains every value in SECURITY_EVENT_TYPES", () => {
+    const sql = readFileSync(MIGRATION, "utf8");
+    for (const type of SECURITY_EVENT_TYPES) {
+      expect(sql).toContain(`'${type}'`);
+    }
+  });
+
+  it("the migration's CHECK body is byte-identical to the generated clause", () => {
+    const sql = readFileSync(MIGRATION, "utf8");
+    expect(sql).toContain(generateEventTypeCheckClause("event_type"));
   });
 });
 
@@ -92,11 +140,15 @@ describe("db CHECK clause generation", () => {
   });
 
   it("builds a column-scoped IN expression for outcomes", () => {
-    expect(generateOutcomeCheckClause()).toBe(`outcome IN (${quotedOutcomeList()})`);
+    expect(generateOutcomeCheckClause()).toBe(
+      `outcome IN (${quotedOutcomeList()})`,
+    );
   });
 
   it("escapes embedded single quotes (injection-safety regression)", () => {
     // Drive the escape branch directly; our real constants never contain quotes.
-    expect(quotedEventTypeList(["o'brien.test" as never])).toBe("'o''brien.test'");
+    expect(quotedEventTypeList(["o'brien.test" as never])).toBe(
+      "'o''brien.test'",
+    );
   });
 });
