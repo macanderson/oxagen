@@ -2565,6 +2565,18 @@
       "writes": []
     },
     {
+      "domain": "lineage",
+      "name": "query_lineage",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "ontology",
       "name": "query_ontology",
       "reads": [],
@@ -3704,7 +3716,7 @@
       "writes": []
     }
   ],
-  "contentHash": "695294f8e1dc61b255efacd22cfc2d146144bc959ae84fccf786f3eaf557b3a1",
+  "contentHash": "31d59ec827ccadb52fb451f1068ab8a01348f1ee0942f550723b9cc4ca946672",
   "domains": [
     {
       "name": "agent",
@@ -3900,7 +3912,9 @@
       ],
       "tables": [
         "neo4j:Demotion",
-        "neo4j:GraphNode"
+        "neo4j:GraphNode",
+        "neo4j:SubagentFanout",
+        "neo4j:SubagentRun"
       ]
     },
     {
@@ -4139,7 +4153,7 @@
       ],
       "kind": "neo4j",
       "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 26
+      "tableCount": 28
     },
     {
       "domains": [
@@ -5901,6 +5915,56 @@
         "indexes": "ingestion_org_source"
       },
       "name": "SourceConnection",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:SubagentFanout",
+      "meta": {
+        "constraints": "subagent_fanout_public_id",
+        "indexes": "subagent_fanout_org"
+      },
+      "name": "SubagentFanout",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:SubagentRun",
+      "meta": {
+        "constraints": "subagent_run_public_id",
+        "indexes": "subagent_run_org"
+      },
+      "name": "SubagentRun",
       "store": "neo4j",
       "tenantScoped": true
     },
