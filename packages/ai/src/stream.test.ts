@@ -66,7 +66,10 @@ type StreamResult = ReturnType<typeof streamAgentReply> & {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
-      inputTokenDetails?: { cacheReadTokens?: number };
+      inputTokenDetails?: {
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+      };
     };
     finishReason: string;
   }) => Promise<void>;
@@ -258,6 +261,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       inputTokens: 10,
       outputTokens: 20,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
     });
   });
 
@@ -287,6 +291,41 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
         cachedTokens: 80,
         inputTokens: 100,
         outputTokens: 20,
+      }),
+    );
+  });
+
+  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter (#1076)", async () => {
+    const result = streamAgentReply({
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    }) as StreamResult;
+    await result._onFinish({
+      text: "hi there",
+      totalUsage: {
+        // Flat inputTokens is the INCLUSIVE total (fresh + reads + writes) — the
+        // AI SDK v7 gateway convention. Here 40 fresh + 30 read + 30 write.
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        inputTokenDetails: { cacheReadTokens: 30, cacheWriteTokens: 30 },
+      },
+      finishReason: "stop",
+    });
+    // Telemetry row records the fourth token class so the billing rollup can
+    // price cache writes at the provider premium instead of as fresh input.
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+    )[0];
+    expect(rows[0]?.cache_write_tokens).toBe(30);
+    expect(rows[0]?.cached_tokens).toBe(30);
+    // The meter receives cacheWriteTokens so it prices the write portion at the
+    // premium rate (Anthropic 1.25x base input), not fresh 1x input.
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputTokens: 100,
+        cachedTokens: 30,
+        cacheWriteTokens: 30,
       }),
     );
   });

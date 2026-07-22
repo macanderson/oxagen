@@ -1,0 +1,5 @@
+schema_version = 1
+kind = "command"
+name = "ship"
+description = "Run the ship checklist."
+prompt = "Run the ship checklist for $ARGUMENTS."

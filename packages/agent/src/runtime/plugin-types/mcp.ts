@@ -250,6 +250,10 @@ async function contributeMcpTools(
           inputSchema: pinnedTool.inputSchema,
           execute: pinnedTool.execute,
           externalServerId: server.id,
+          // Agent-RBAC rule identity (spec §3.7): rules address servers by
+          // NAME ("github:*"), not by row uuid.
+          externalServerName: server.name,
+          externalToolName: pinnedTool.toolName,
         });
       }
     } catch (err) {

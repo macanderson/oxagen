@@ -76,6 +76,28 @@ export const SECURITY_EVENT_TYPES = [
   // Security policy
   "security.mfa_policy_updated",
   "security.session_revoked",
+  // Governed agent runs (docs/specs/run-evidence-ingress/spec.md). These four
+  // are INTEGRITY failures, not ordinary denials: each one means some part of
+  // the run-evidence chain was contradicted, and none can be produced by
+  // legitimate use. `capability.invoke_denied` above still covers a routine
+  // policy deny — do not overload these for that.
+  //
+  //   event_sequence_conflict   two events claimed the same (run_seq) or
+  //                             (attempt_id, attempt_seq) with DIFFERENT
+  //                             payload digests — the ordered stream forked
+  //   forged_decision_reference  a caller supplied an authorization-decision
+  //                             reference on a CapabilityContext; that binding
+  //                             is platform-created and can never be an input
+  //   stale_deny_generation      an operation was evaluated against a
+  //                             deny-generation older than the current one —
+  //                             a cached allow outlived its invalidation
+  //   finalization_grant_misuse  a one-shot finalization grant was presented
+  //                             for a different attempt, digest, or capability
+  //                             than the seal it was minted for
+  "agent_run.event_sequence_conflict",
+  "agent_run.forged_decision_reference",
+  "agent_run.stale_deny_generation",
+  "agent_run.finalization_grant_misuse",
   // Access review
   "access.review_completed",
   "access.member_access_confirmed",

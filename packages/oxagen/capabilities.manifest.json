@@ -1459,6 +1459,36 @@
       }
     },
     {
+      "name": "get_spend_budget",
+      "file": "billing.budget.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_spend_budget",
+      "file": "billing.budget.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -2821,6 +2851,21 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "query_lineage",
+      "file": "lineage.query.ts",
+      "domain": "lineage",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -4473,9 +4518,9 @@
       "surfaces": ["api"],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {

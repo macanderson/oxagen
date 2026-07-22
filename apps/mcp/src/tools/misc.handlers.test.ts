@@ -296,7 +296,7 @@ describe("organization.create handler", () => {
     const args = {
       name: "Acme Corp",
       slug: "acme-corp",
-      planSlug: "free",
+      planSlug: "free" as const,
       type: "business" as const,
       website: undefined,
       industry: undefined,

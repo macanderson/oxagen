@@ -24,11 +24,17 @@ export interface AutomationsHeaderProps {
   actions?: ReactNode;
 }
 
-export function AutomationsHeader({ ctx, title, description, actions }: AutomationsHeaderProps) {
+export function AutomationsHeader({
+  ctx,
+  title,
+  description,
+  actions,
+}: AutomationsHeaderProps) {
   const tabs = [
     { label: "Automations", href: workspace.automations.root(ctx) },
     { label: "Triggers", href: workspace.automations.triggers(ctx) },
     { label: "Workflows", href: workspace.automations.workflows(ctx) },
+    { label: "Lineage", href: workspace.automations.lineage(ctx) },
   ];
 
   return (

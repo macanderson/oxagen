@@ -39,17 +39,24 @@ const logger = pino({
 
 /**
  * The system default agent roles (spec §3.2), seeded by
- * tools/scripts/seed-iam-defaults.ts. Looked up BY NAME at runtime — never by
- * id — so seeding and assignment stay decoupled. "Agent Legacy (unrestricted)"
- * is the back-compat role backfill assigns to pre-RBAC agents; it is included
- * here so re-attaching it through the contract (rather than only via the
- * backfill script) stays possible.
+ * tools/scripts/seed-iam-defaults.ts and packages/handlers' bootstrapOrgIAM.
+ * Looked up BY NAME at runtime — never by id — so seeding and assignment stay
+ * decoupled.
+ *
+ * Membership here is a TIER EXEMPTION: these names are assignable at every org
+ * tier, while any other role is a custom role gated to enterprise. So this set
+ * must contain exactly the roles that are actually seeded — nothing more. The
+ * spec's back-compat "Agent Legacy (unrestricted)" role is deliberately ABSENT:
+ * spec §6 Q1 resolved that this is a pre-launch product with no customers and
+ * therefore no back-compat path, so it is never seeded. Listing an unseeded
+ * name here would let an org mint a CUSTOM role under that name and have it
+ * treated as a tier-exempt system role — an escalation under a name that means
+ * "unrestricted".
  */
 export const AGENT_SYSTEM_ROLE_NAMES: ReadonlySet<string> = new Set([
   "Agent Observer",
   "Agent Contributor",
   "Agent Operator",
-  "Agent Legacy (unrestricted)",
 ]);
 
 /** Auto-assigned to every newly created agent (spec §3.2 — "New agents created after Phase 1 default to Agent Contributor"). */

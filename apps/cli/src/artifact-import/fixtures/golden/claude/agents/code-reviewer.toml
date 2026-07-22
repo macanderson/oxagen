@@ -1,0 +1,9 @@
+schema_version = 1
+kind = "agent"
+name = "code-reviewer"
+description = "Reviews changed code for correctness and convention fit."
+model = "powerful"
+developer_instructions = "Review the diff. Lead with the highest-severity finding.\nCite exact file:line locations."
+tools = [ "read_file", "list_dir", "glob", "grep", "write_file", "bash", "search_web" ]
+skills = [ "coding-standards" ]
+unresolved_tools = []

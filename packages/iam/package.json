@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@oxagen/agent-runner": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/oxagen": "workspace:*",

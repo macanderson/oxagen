@@ -3,7 +3,9 @@ import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getInngestClient } from "../dispatch/inngest-client";
 import { getOxagenRegistry } from "../registry-loader";
+import { resolveAgentRunCapability } from "@oxagen/oxagen/iam";
 import type { CapabilityContext } from "../types";
+import { effectiveResourceScope, auditScopeDenial } from "./_effective-scope";
 import type {
   AgentSubagentDispatchInput,
   AgentSubagentDispatchOutput,
@@ -36,7 +38,10 @@ export const MAX_TOTAL_DESCENDANTS = 250;
  * every join; lvl guards bound the walk far beyond MAX_FANOUT_DEPTH so a
  * corrupt lineage cycle can never hang the dispatch.
  */
-async function countRootTreeDescendants(orgId: string, parentMessageId: string): Promise<number> {
+async function countRootTreeDescendants(
+  orgId: string,
+  parentMessageId: string,
+): Promise<number> {
   const rows = await withTenantDb((tx) =>
     tx.execute<{ descendant_count: number }>(sql`
       WITH RECURSIVE up AS (
@@ -95,6 +100,21 @@ export async function agentSubagentDispatchHandler(
   const { getCapability } = await getOxagenRegistry();
   const unknownNames: string[] = [];
   let ceiling = TIMEOUT_CEILING_BY_RISK.low;
+
+  // Agent RBAC Phase 4 (spec §2.7): a delegated run's fan-out can only NARROW
+  // its own authority. In this architecture a dispatched child is a capability
+  // task (not a nested named agent), so both allow-lists bind on the task's
+  // capabilityName: (a) the effective agents.refs list — the role's explicit
+  // "what this agent may fan out to" ceiling (undefined = no extra ceiling
+  // beyond the agent's own capability grants); (b) the run's own effective
+  // capability outcome via the SAME cached resolution the kernel enforces —
+  // a capability this run could not invoke directly cannot be laundered
+  // through a subagent either (fail fast here; the executor's kernel gate is
+  // the backstop). Humans / non-delegated runs carry no scope → unchanged.
+  const agentRun = ctx.agentRun;
+  const dispatchRefs = effectiveResourceScope(ctx)?.agents?.refs;
+  const scopeDenied: string[] = [];
+
   for (const task of tasks) {
     const cap = getCapability(task.capabilityName);
     if (!cap) {
@@ -103,10 +123,45 @@ export async function agentSubagentDispatchHandler(
     }
     const risk = cap.agent?.riskLevel ?? "medium";
     ceiling = Math.min(ceiling, TIMEOUT_CEILING_BY_RISK[risk]);
+
+    if (
+      dispatchRefs !== undefined &&
+      !dispatchRefs.includes(task.capabilityName)
+    ) {
+      scopeDenied.push(task.capabilityName);
+      continue;
+    }
+    if (agentRun?.resolution) {
+      const perms = resolveAgentRunCapability(agentRun, agentRun.resolution, {
+        capability: task.capabilityName,
+        scope: {
+          kind: "workspace",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+        defaultEffect: cap.defaultEffect ?? "deny",
+      });
+      if (perms.outcome === "deny") scopeDenied.push(task.capabilityName);
+    }
   }
   if (unknownNames.length > 0) {
     throw new Error(
       `Unknown capability name(s) in dispatch: ${[...new Set(unknownNames)].join(", ")}`,
+    );
+  }
+  if (scopeDenied.length > 0) {
+    const denied = [...new Set(scopeDenied)];
+    auditScopeDenial({
+      ctx,
+      capability: "dispatch_subagents",
+      rule: "agent_subagent_scope",
+      description: `Dispatch rejected: capability task(s) outside the agent's effective scope: ${denied.join(", ")}`,
+      rawInputJson: JSON.stringify({ parentMessageId, denied }),
+      target: { kind: "fanout", id: parentMessageId },
+    });
+    throw new Error(
+      `Dispatch rejected: the agent's role scope does not permit fanning out to: ${denied.join(", ")}. ` +
+        `A subagent can only narrow, never widen, this run's authority.`,
     );
   }
 
@@ -119,7 +174,10 @@ export async function agentSubagentDispatchHandler(
   // Total-descendant budget (Phase 2 §4): a nested dispatch that would push
   // its ROOT fanout tree past the cap is rejected before any row is created.
   // The worker should decompose less aggressively or summarize what it has.
-  const existingDescendants = await countRootTreeDescendants(ctx.orgId, parentMessageId);
+  const existingDescendants = await countRootTreeDescendants(
+    ctx.orgId,
+    parentMessageId,
+  );
   if (existingDescendants + tasks.length > MAX_TOTAL_DESCENDANTS) {
     throw new Error(
       `Dispatch rejected: root fanout tree already has ${existingDescendants} descendant task(s); ` +

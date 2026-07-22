@@ -18,6 +18,15 @@ export const pluginSchema = pgSchema("plugin");
 export const notificationSchema = pgSchema("notification");
 export const ingestionSchema = pgSchema("ingestion");
 export const iamSchema = pgSchema("iam");
+// evidence — the immutable governed-run evidence domain
+// (docs/specs/run-evidence-ingress/spec.md). Isolated from `agent` on purpose:
+// these rows are chain-of-custody records with append-only grants (SELECT +
+// INSERT, never UPDATE/DELETE for the application role) and their own retention
+// administration path, so keeping them in a dedicated schema makes the
+// privilege boundary a schema-level fact rather than a per-table convention.
+// The foundation lands `retention_policy_versions` here; the manifest/blob
+// ledger follows in the evidence-ledger PR. See schema/run-evidence-foundation.ts.
+export const evidenceSchema = pgSchema("evidence");
 export const privacySchema = pgSchema("privacy");
 export const schemaRegistrySchema = pgSchema("schema_registry");
 export const environmentsSchema = pgSchema("environments");

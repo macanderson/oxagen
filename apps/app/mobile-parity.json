@@ -31,6 +31,12 @@
       "equivalent": "The persistent header AskBar is desktop-only; the same ask capability is reachable on mobile via the \"Ask\" primary tab shared by MobileBottomBar's getSidebarConfig, which routes to the identical /ask page."
     },
     {
+      "file": "apps/app/src/components/shell/balance-pill.tsx",
+      "match": "max-sm:hidden",
+      "kind": "reflow",
+      "equivalent": "The desktop compact balance label hides below sm, where the adjacent sm:hidden label renders the same balance without cents to fit the mobile header. The billing link, low-balance treatment, exact aria-label, and 44px touch target remain available."
+    },
+    {
       "file": "apps/app/src/components/shell/ask/command-menu.tsx",
       "match": "hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block",
       "kind": "reflow",
