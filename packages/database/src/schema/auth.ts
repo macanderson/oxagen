@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   real,
@@ -92,12 +93,25 @@ export const apiKeys = authSchema.table(
     keyHash: text("key_hash").notNull(),
     name: text("name").notNull(),
     scope: jsonb("scope").notNull(),
+    // Server-owned proof that this key was issued by the Stella enrollment
+    // workflow. Generic API-key create/rotate capabilities never accept or
+    // populate these columns; nullable defaults make pre-rollout scope markers
+    // fail closed until an operator enrollment explicitly binds the key.
+    stellaTelemetryEnrollmentId: text("stella_telemetry_enrollment_id"),
+    stellaTelemetryEnrolledAt: timestamp("stella_telemetry_enrolled_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
   },
   (t) => ({
     keyPrefixIdx: uniqueIndex("api_keys_key_prefix_idx").on(t.keyPrefix),
     orgIdx: index("api_keys_org_idx").on(t.orgId, t.workspaceId),
+    stellaTelemetryEnrollmentCheck: check(
+      "api_keys_stella_telemetry_enrollment_check",
+      sql`(${t.stellaTelemetryEnrollmentId} IS NULL AND ${t.stellaTelemetryEnrolledAt} IS NULL) OR (${t.stellaTelemetryEnrollmentId} IS NOT NULL AND ${t.stellaTelemetryEnrollmentId} ~ '^[A-Za-z0-9._:-]{1,128}$' AND ${t.stellaTelemetryEnrolledAt} IS NOT NULL)`,
+    ),
   }),
 );
 

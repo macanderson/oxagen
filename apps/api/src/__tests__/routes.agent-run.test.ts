@@ -437,29 +437,31 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
 
   it("replays only events after `after`, with id=seq and event=type, then emits done for an already-terminal run", async () => {
     mocks.getRunByPublicId.mockResolvedValue(summary({ status: "completed" }));
-    mocks.readEventsSince.mockImplementation(
-      async (_runId: string, afterSeq: number) =>
-        [
-          {
-            seq: 1,
-            type: "text-delta",
-            payload: { text: "a" },
-            createdAt: new Date(),
-          },
-          {
-            seq: 2,
-            type: "text-delta",
-            payload: { text: "b" },
-            createdAt: new Date(),
-          },
-          {
-            seq: 3,
-            type: "final-diff",
-            payload: { diff: "x" },
-            createdAt: new Date(),
-          },
-        ].filter((e) => e.seq > afterSeq),
-    );
+    const replayEvents = [
+      {
+        seq: 1,
+        type: "text-delta",
+        payload: { text: "a" },
+        createdAt: new Date(),
+      },
+      {
+        seq: 2,
+        type: "text-delta",
+        payload: { text: "b" },
+        createdAt: new Date(),
+      },
+      {
+        seq: 3,
+        type: "final-diff",
+        payload: { diff: "x" },
+        createdAt: new Date(),
+      },
+    ];
+    mocks.readEventsSince
+      .mockImplementationOnce(async (_runId: string, afterSeq: number) => {
+        return replayEvents.filter((event) => event.seq > afterSeq);
+      })
+      .mockResolvedValue([]);
 
     const res = await app.fetch(get("/runs/arun_abc123/events?after=1"));
     expect(res.status).toBe(200);
@@ -482,6 +484,8 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
       event: "final-diff",
       data: { diff: "x" },
     });
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(1, "run-uuid-1", 1);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(2, "run-uuid-1", 3);
 
     const done = records.find((r) => r.event === "done");
     expect(done).toBeDefined();
@@ -545,6 +549,9 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
         // backlog when it fits in one page), so a mock that re-served the same
         // row on every call — as the real query never would, its WHERE clause
         // being `seq > afterSeq` — would spin forever and exhaust the heap.
+        // A `mockResolvedValueOnce` chain terminates too, but by exhausting a
+        // fixed script rather than by modelling the query, so it would go on
+        // passing if the route stopped advancing its cursor.
         return [
           {
             seq: 1,
@@ -570,6 +577,8 @@ describe("durable-run API: GET /runs/:publicId/events", () => {
     const finalEventIndex = records.findIndex((r) => r.id === "1");
     expect(finalEventIndex).toBeGreaterThanOrEqual(0);
     expect(finalEventIndex).toBeLessThan(doneIndex);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(3, "run-uuid-1", 0);
+    expect(mocks.readEventsSince).toHaveBeenNthCalledWith(4, "run-uuid-1", 1);
   });
 
   // ── Cursor grammar, shared by both record versions ───────────────────────

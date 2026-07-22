@@ -76,6 +76,8 @@ function buildDbMock(overrides: {
       if (call === 3) return makeChain(humanPrincipal);
       return makeChain([]);
     },
+    /** Test-only: how many selects ran (3rd = the delegator lookup). */
+    __selectCount: () => call,
   };
 }
 
@@ -211,5 +213,90 @@ describe("resolveAgentRunAuthzContext()", () => {
     );
     const result = await resolveAgentRunAuthzContext(BASE);
     expect(result?.humanPrincipal).toBeNull();
+  });
+
+  // ── The initiating user — Agent RBAC Phase 2b (RunSpec delegation.userId) ─
+  // The V1 delegated path threads `delegation.userId` in as
+  // `initiatingUserId`. These cases pin the QUERY COUNT, which is the only
+  // way to prove the creator is never consulted: a creator fallback would
+  // show up as a fourth select (or a third where there should be two).
+
+  it("resolves the delegator from initiatingUserId even when the agent principal carries NO parentUserId", async () => {
+    // Pre-Phase-2b behavior: parentUserId null ⇒ humanPrincipal null, no third
+    // query. With an initiating user, the delegator lookup MUST still run —
+    // the agent row's own parentUserId is irrelevant to it either way.
+    const dbMock = buildDbMock({
+      agentPrincipal: [
+        {
+          id: "prn_agent",
+          kind: "agent",
+          orgId: "org_1",
+          workspaceId: "ws_1",
+          parentUserId: null,
+          status: "active",
+        },
+      ],
+    });
+    mocks.dbFn.mockReturnValue(dbMock);
+
+    const result = await resolveAgentRunAuthzContext({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      agentId: "agt_1",
+      initiatingUserId: "usr_invoker",
+    });
+
+    expect(result?.humanPrincipal).toMatchObject({
+      id: "prn_initiator",
+      kind: "human",
+    });
+    expect(dbMock.__selectCount()).toBe(3);
+  });
+
+  it("fails closed (humanPrincipal null) when the initiating user has no principal — never falls back to the creator", async () => {
+    // The agent's creator HAS a resolvable principal in this fixture, but the
+    // initiating user does not: the third query returns no rows and the
+    // resolver must NOT retry with the creator (a missing delegator never
+    // widens access — the sentinel ceiling applies downstream).
+    const dbMock = buildDbMock({ humanPrincipal: [] });
+    mocks.dbFn.mockReturnValue(dbMock);
+
+    const result = await resolveAgentRunAuthzContext({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      agentId: "agt_1",
+      initiatingUserId: "usr_without_principal",
+    });
+
+    expect(result?.humanPrincipal).toBeNull();
+    // Exactly one delegator lookup — no creator-fallback second query.
+    expect(dbMock.__selectCount()).toBe(3);
+  });
+
+  it("skips the delegator lookup entirely when no initiating user is supplied, even with a creator on the row", async () => {
+    const dbMock = buildDbMock({
+      agentPrincipal: [
+        {
+          id: "prn_agent",
+          kind: "agent",
+          orgId: "org_1",
+          workspaceId: "ws_1",
+          // A creator IS recorded — and is still never consulted.
+          parentUserId: CREATOR_USER,
+          status: "active",
+        },
+      ],
+    });
+    mocks.dbFn.mockReturnValue(dbMock);
+
+    const result = await resolveAgentRunAuthzContext({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      agentId: "agt_1",
+      initiatingUserId: null,
+    });
+
+    expect(result?.humanPrincipal).toBeNull();
+    expect(dbMock.__selectCount()).toBe(2);
   });
 });

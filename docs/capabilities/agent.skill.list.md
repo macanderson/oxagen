@@ -9,7 +9,7 @@
 ## Intent
 
 List skills available in the active workspace — built-in filesystem
-skills from `packages/skills/skills/*.skill.md` plus tenant-defined
+skills from `packages/skills/skills/<slug>/skill.toml` plus tenant-defined
 skills from `workflow.prompt_templates`.
 
 ## Input

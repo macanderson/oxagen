@@ -105,6 +105,26 @@ const legacyHistoryMessageSchema = z
   .passthrough();
 
 /**
+ * Agent RBAC delegation block (docs/specs/agent-rbac/spec.md §3.4/§3.5).
+ * Optional and additive — a pre-delegation legacy row parses unchanged.
+ *
+ * This is the ONLY place a v1 row can name an identity, and it is untrusted
+ * caller-supplied JSON, not a typed column: the claim-side driver resolves
+ * `agentId` against a LIVE agent principal and fails the run when it cannot
+ * (`turn-driver.ts`), and `userId` is honoured only as the AUTHENTICATED
+ * initiating human the enqueue surface stamped — absent means the run's human
+ * ceiling is the unprivileged sentinel, never the agent's creator. That is
+ * precisely why v1 is non-evidence: a v2 row pins the same two principals in
+ * trusted COLUMNS covered by the spec digest.
+ */
+const legacyDelegationSchema = z.object({
+  /** Deployed agent identity (agt_… public id or UUID) this run acts as. */
+  agentId: z.string().min(1).optional(),
+  /** The human who enqueued/invoked this run (delegation ceiling). */
+  userId: z.string().min(1).optional(),
+});
+
+/**
  * Non-strict on purpose: unknown keys are STRIPPED, not rejected, so an
  * additive field written by a newer enqueuing build does not fail an otherwise
  * valid legacy row on the claim side. The `version` literal is the real
@@ -117,6 +137,7 @@ export const runSpecV1Schema = z.object({
   model: z.string().min(1).optional(),
   history: z.array(legacyHistoryMessageSchema).optional(),
   toolPolicy: legacyToolPolicySchema.optional(),
+  delegation: legacyDelegationSchema.optional(),
 });
 
 export type RunSpecV1 = z.infer<typeof runSpecV1Schema>;

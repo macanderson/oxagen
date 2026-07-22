@@ -4,12 +4,13 @@ import {
   mkdir,
   mkdtemp,
   readdir,
+  readFile,
   rename,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   hashArtifact,
   parseArtifactToml,
@@ -70,6 +71,22 @@ async function renamedDestination(path: string): Promise<string> {
   );
 }
 
+/**
+ * Canonical hash of the artifact already on disk, or null when the destination
+ * is absent/unreadable/not a valid artifact.
+ *
+ * Hashes the *parsed* artifact rather than the raw bytes, so an identical
+ * artifact is recognized as unchanged even if the file on disk was written by
+ * an older serializer.
+ */
+async function existingArtifactHash(path: string): Promise<string | null> {
+  try {
+    return hashArtifact(parseArtifactToml(await readFile(path, "utf8")));
+  } catch {
+    return null;
+  }
+}
+
 async function copySkillSidecars(
   sourceRoot: string,
   sourceManifest: string,
@@ -119,6 +136,16 @@ async function activateSkillBundle(
         normalized.candidate.sourcePath,
         stagingRoot,
       );
+      // For oxagen-legacy at workspace scope the source bundle *is* the
+      // destination (`.oxagen/skills/<name>`), so the swap below would delete
+      // the original manifest along with the old directory. Carry it into the
+      // new bundle: source files are never destroyed by an import.
+      if (resolve(sourceRoot) === resolve(destinationRoot)) {
+        await copyFile(
+          normalized.candidate.sourcePath,
+          join(stagingRoot, basename(normalized.candidate.sourcePath)),
+        );
+      }
     }
     await writeFile(join(stagingRoot, "skill.toml"), content, {
       encoding: "utf8",
@@ -157,7 +184,7 @@ export async function activateImportedArtifact(
 ): Promise<{
   destinationPath: string;
   decision: ConflictDecision;
-  outcome: "imported" | "skipped";
+  outcome: "imported" | "skipped" | "unchanged";
   artifactHash: string;
 }> {
   const cwd = options.cwd ?? process.cwd();
@@ -172,6 +199,24 @@ export async function activateImportedArtifact(
       ? ((await pathKind(destinationPath)) ??
         (await pathKind(dirname(destinationPath))))
       : await pathKind(destinationPath);
+  const incomingHash = hashArtifact(normalized.artifact);
+
+  // A re-import of an artifact that is already byte-identical is not a
+  // conflict. Report it as `unchanged` and neither prompt nor write, so a
+  // rerun distinguishes "already imported, nothing to do" from "a real
+  // conflict you must decide about".
+  if (
+    existing &&
+    (await existingArtifactHash(destinationPath)) === incomingHash
+  ) {
+    return {
+      destinationPath,
+      decision: "skip",
+      outcome: "unchanged",
+      artifactHash: incomingHash,
+    };
+  }
+
   let decision: ConflictDecision = options.conflict ?? "skip";
   if (existing && options.resolveConflict) {
     decision = await options.resolveConflict({
@@ -185,7 +230,7 @@ export async function activateImportedArtifact(
       destinationPath,
       decision,
       outcome: "skipped",
-      artifactHash: hashArtifact(normalized.artifact),
+      artifactHash: incomingHash,
     };
   }
   if (existing && decision === "rename")
@@ -193,7 +238,7 @@ export async function activateImportedArtifact(
 
   const content = serializeArtifactToml(normalized.artifact);
   parseArtifactToml(content);
-  const artifactHash = hashArtifact(normalized.artifact);
+  const artifactHash = incomingHash;
   if (options.dryRun)
     return { destinationPath, decision, outcome: "imported", artifactHash };
 
@@ -207,11 +252,18 @@ export async function activateImportedArtifact(
     join(dirname(destinationPath), ".oxagen-import-"),
   );
   const staged = join(stagingDir, "artifact.toml");
-  await writeFile(staged, content, {
-    encoding: "utf8",
-    flag: "wx",
-    mode: 0o600,
-  });
-  await rename(staged, destinationPath);
+  try {
+    await writeFile(staged, content, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+    await rename(staged, destinationPath);
+  } finally {
+    // The rename moves the file out but leaves the mkdtemp directory behind;
+    // remove it either way so a repeated import cannot litter the destination
+    // parent with empty .oxagen-import-* directories.
+    await rm(stagingDir, { recursive: true, force: true });
+  }
   return { destinationPath, decision, outcome: "imported", artifactHash };
 }

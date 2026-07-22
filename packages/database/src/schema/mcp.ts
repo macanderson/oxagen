@@ -204,6 +204,17 @@ export const mcpServers = mcpSchema.table(
  * tenant-owned table in the RLS manifest. user_id makes each grant
  * per-(workspace,user,server,tool) — different users on the same workspace
  * consent independently.
+ *
+ * Consent SUBJECT (Agent RBAC Phase 4a, spec §3.7): subject_kind
+ * discriminates WHO the consent is scoped to. 'user' (the default, and every
+ * pre-existing row) keeps the original semantics — user_id is a human user
+ * id. 'agent' rows record an AGENT-scoped consent created when a role's
+ * resourceScope.mcp rule resolves "ask" for a tool: user_id then holds the
+ * agent PRINCIPAL id (iam principals uuid), so agent consents are labeled
+ * distinctly from user consents and never collide (user ids and principal
+ * ids live in disjoint uuid spaces, which is also why the pre-existing
+ * (workspace,user,server,tool) unique key stays sufficient without
+ * subject_kind in it).
  */
 export const mcpConsents = mcpSchema.table(
   "consents",
@@ -212,6 +223,9 @@ export const mcpConsents = mcpSchema.table(
     ...auditMixin(),
     ...orgScopeMixin(),
     userId: uuid("user_id").notNull(),
+    /** Consent subject discriminator: 'user' (user_id = human user id) |
+     *  'agent' (user_id = agent principal id). */
+    subjectKind: text("subject_kind").notNull().default("user"),
     mcpServerId: uuid("mcp_server_id").notNull(),
     // '*' is the wildcard pre-grant covering every tool on the server.
     toolName: text("tool_name").notNull(),
@@ -240,6 +254,10 @@ export const mcpConsents = mcpSchema.table(
     statusCheck: check(
       "consents_status_check",
       sql`${t.status} IN ('granted','denied')`,
+    ),
+    subjectKindCheck: check(
+      "consents_subject_kind_check",
+      sql`${t.subjectKind} IN ('user','agent')`,
     ),
   }),
 );

@@ -15,7 +15,9 @@ export const organizationCreateInputBase = z.object({
     .min(2)
     .max(40)
     .regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only"),
-  planSlug: z.string().min(1).default("free"),
+  // Organization creation is not a billing entitlement grant. Privileged plans
+  // are established only through the canonical subscription lifecycle.
+  planSlug: z.literal("free").default("free"),
   type: z.enum(ORG_TYPE_VALUES).default("business"),
   // Business-only fields — superRefine rejects these on personal accounts.
   website: z.string().trim().url().max(2048).optional(),

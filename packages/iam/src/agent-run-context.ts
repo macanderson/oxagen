@@ -59,6 +59,12 @@ export interface ResolveAgentRunAuthzContextArgs {
    * authorized this execution. Deliberately required (nullable, not optional)
    * so a caller has to state explicitly that there is no initiating human
    * rather than forget the field and silently get a wrong ceiling.
+   *
+   * The V1 delegated path threads it from RunSpec v1's `delegation.userId`
+   * (Agent RBAC Phase 2b), stamped by the enqueue surface from its
+   * authenticated ctx. Null there means the enqueue surface captured no human
+   * — which resolves to the unprivileged sentinel, NOT to the agent's creator
+   * (see the header).
    */
   initiatingUserId: string | null;
 }

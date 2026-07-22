@@ -159,12 +159,17 @@ export async function resolveOrgOrRedirect(
   return org;
 }
 
-function rewriteOrgSlug(pathname: string, oldSlug: string, newSlug: string): string {
+function rewriteOrgSlug(
+  pathname: string,
+  oldSlug: string,
+  newSlug: string,
+): string {
   // pathname is always /{orgSlug}/... — replace only the first segment so a
   // path like /old/old/foo stays /new/old/foo (the second "old" is real data).
   if (pathname === `/${oldSlug}`) return `/${newSlug}`;
   const prefix = `/${oldSlug}/`;
-  if (pathname.startsWith(prefix)) return `/${newSlug}/${pathname.slice(prefix.length)}`;
+  if (pathname.startsWith(prefix))
+    return `/${newSlug}/${pathname.slice(prefix.length)}`;
   // Defensive fallback: redirect to the org root rather than render at the
   // stale URL. Should never trigger if the layout's params actually came from
   // the request URL.
@@ -181,7 +186,12 @@ export const resolveWorkspace = cache(
       tx
         .select()
         .from(schema.workspaces)
-        .where(and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)))
+        .where(
+          and(
+            eq(schema.workspaces.orgId, orgId),
+            eq(schema.workspaces.slug, slug),
+          ),
+        )
         .limit(1),
     );
     const row = rows[0];
@@ -221,7 +231,12 @@ export const resolveWorkspaceWithRedirect = cache(
       tx
         .select()
         .from(schema.workspaces)
-        .where(and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)))
+        .where(
+          and(
+            eq(schema.workspaces.orgId, orgId),
+            eq(schema.workspaces.slug, slug),
+          ),
+        )
         .limit(1),
     );
     if (direct[0]) return mapWorkspaceRow(direct[0]);
@@ -275,7 +290,8 @@ export async function resolveWorkspaceOrRedirect(
   const ws = await resolveWorkspaceWithRedirect(orgId, urlWorkspaceSlug);
   if (ws.slug !== urlWorkspaceSlug) {
     permanentRedirect(
-      rewriteWorkspaceSlug(pathname, orgSlug, urlWorkspaceSlug, ws.slug) + search,
+      rewriteWorkspaceSlug(pathname, orgSlug, urlWorkspaceSlug, ws.slug) +
+        search,
     );
   }
   return ws;
@@ -369,8 +385,15 @@ export const assertMcpManager = cache(
   },
 );
 
-/** Roles permitted to manage billing (mirror of the billing actions gate). */
-const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
+/**
+ * Roles permitted to manage billing (mirror of the billing actions gate).
+ * Exported (like {@link SECURITY_MANAGER_ROLES}) so a page can pair it with
+ * the read-only {@link getOrgRole} for UI-gating (e.g. hiding a billing
+ * control for a non-manager) without re-deriving or duplicating the role
+ * list — see security/audit/page.tsx's `isManager` for the established
+ * pattern this mirrors.
+ */
+export const BILLING_MANAGER_ROLES = new Set(["owner", "admin", "billing"]);
 
 /**
  * Assert that the user is a member of the org AND holds a billing-management
@@ -522,7 +545,12 @@ export const getOrgRole = cache(
       tx
         .select({ role: schema.orgUsers.role })
         .from(schema.orgUsers)
-        .where(and(eq(schema.orgUsers.orgId, orgId), eq(schema.orgUsers.userId, userId)))
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, orgId),
+            eq(schema.orgUsers.userId, userId),
+          ),
+        )
         .limit(1),
     );
     return rows[0]?.role ?? null;

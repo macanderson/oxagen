@@ -1562,6 +1562,18 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "get_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "get_subagent_fanout",
       "reads": [],
@@ -2026,6 +2038,17 @@
     {
       "domain": "agent",
       "name": "list_memory_promotions",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "model",
+      "name": "list_model_capabilities",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3105,6 +3128,18 @@
       "writes": []
     },
     {
+      "domain": "billing",
+      "name": "set_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "setup_schema",
       "reads": [],
@@ -3669,7 +3704,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d13903e8c24f6b17006a293937dcdb335d31ef2a5a4c231d5dba54c9bc0991da",
+  "contentHash": "695294f8e1dc61b255efacd22cfc2d146144bc959ae84fccf786f3eaf557b3a1",
   "domains": [
     {
       "name": "agent",
@@ -5088,6 +5123,12 @@
         },
         {
           "name": "cached_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "cache_write_tokens",
           "nullable": false,
           "primaryKey": false,
           "type": "UInt64"
@@ -8587,6 +8628,24 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "legacy_body",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "legacy_body_checksum",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "migrated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         }
       ],
       "domain": "agent",
@@ -9437,6 +9496,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "stella_telemetry_enrollment_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "stella_telemetry_enrolled_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "expires_at",
@@ -15746,6 +15817,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "subject_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "mcp_server_id",

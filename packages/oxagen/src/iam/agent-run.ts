@@ -34,6 +34,19 @@
 // revocation, or an emergency-deny generation invalidates cached allows before
 // the next operation."
 //
+// ── V1 delegated runs keep the resolution cache ─────────────────────────────
+//
+// "Replaced" is scoped to GOVERNED V2 RUNS. The legacy V1 delegated path
+// (Agent RBAC Phase 2b/4a/4b) has no admission snapshot to pin and no attempt
+// to fence, so it still resolves through `AgentRunIAMResolution` /
+// `resolveAgentRunCapability` below — which is also the only carrier of the
+// run-constant `resourceScope` dimensions (MCP rules, skills, subagent refs)
+// that the pinned/live pair does not model. Both live here on purpose: they
+// share `resolveAgentEffectivePermissions`, so there is exactly ONE policy
+// engine and the two models can never disagree about agent ∩ human deny-wins.
+// V2 execution never populates `resolution`, and the V1 memo is never the
+// gate for a V2 run.
+//
 // This module stays PURE — no I/O, no digest primitives, no DB. It owns the
 // shapes and the deterministic ordering; `@oxagen/iam` owns reading rows,
 // digesting the canonical form, and persisting decisions. That split is forced
@@ -42,6 +55,8 @@
 // oxagen → agent-runner → database → oxagen.
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
+// Type-only — erased at compile time, so no runtime cycle with agent-schema.
+import type { GraphAccess } from "../agent-schema";
 import {
   intersectEffectiveScope,
   resolveAgentEffectivePermissions,
@@ -527,6 +542,38 @@ export interface AgentRunIAMContext {
    */
   readonly attemptId?: string | null;
   /**
+   * The parent run's already-resolved effective resourceScope, set by the
+   * dispatch/bridge path that created this child context (subagent executor,
+   * A2A inbound). When present it is an ADDITIONAL ceiling on every
+   * resolution — the resolver intersects it dimension-wise, so a child can
+   * only narrow, never widen, its parent's scope (spec §0/§3.3). Absent for
+   * top-level runs.
+   */
+  readonly parentEffectiveScope?: EffectiveResourceScope;
+  /**
+   * The agent DEFINITION's `graphAccess` declaration (agent-schema.ts),
+   * populated by the run driver from the deployed definition version when the
+   * run context is constructed. Phase 3 (spec §3.6) intersects this — the
+   * *request* — with the role ceiling (`resolution`'s resourceScope.graph) to
+   * produce the effective GraphScope every ontology / semantic graph query
+   * runs under. Absent ⇒ the declaration contributes no restriction (the role
+   * ceiling alone applies); a missing declaration can never widen access
+   * because the ceiling still binds.
+   */
+  readonly graphAccess?: GraphAccess;
+  /**
+   * Per-run RESOURCE-SCOPE resolution cache — the V1 delegated path only (see
+   * the module header's "V1 delegated runs keep the resolution cache" note).
+   * Populated by the turn driver before the turn starts; read by tool
+   * materialization, the MCP rule gate, and the resource-dimension gates.
+   * Cached HERE — on the run context object — deliberately: runs are
+   * concurrent, so module-global state is forbidden.
+   *
+   * A V2 governed run carries `authorization` + `liveCache` instead and never
+   * populates this slot; nothing reads it as the allow/deny gate for a V2 run.
+   */
+  resolution?: AgentRunIAMResolution;
+  /**
    * The PINNED admission binding. Absent only for legacy V1 runs that were
    * admitted before snapshots existed — those resolve live-only, which is
    * strictly narrower than a ceiling they never had.
@@ -567,6 +614,94 @@ export function ceilingHumanPrincipal(
 /** Fresh, empty live cache for a run context. */
 export function createAgentRunLiveCache(): AgentRunLiveAuthorizationCache {
   return new Map<string, AgentRunLiveDecision>();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// V1 delegated runs — the retained resolution cache
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// See the module header: this is the pre-run-evidence resolution object, kept
+// for the LEGACY V1 delegated path (Agent RBAC Phase 2b/4a/4b) and for the
+// run-constant `resourceScope` dimensions — MCP rules, skills, subagent refs —
+// that the pinned/live model does not carry. It is a memoizing wrapper over
+// `resolveAgentEffectivePermissions`, the same pure resolver the pinned and
+// live sides use, so the two models share one policy engine.
+
+/**
+ * The once-per-run resolution object. `snapshot` is the raw authz data;
+ * `byCapability` memoizes the per-capability delegation-ceiling result so a
+ * second read of the same capability in the same run is a Map lookup.
+ */
+export interface AgentRunIAMResolution {
+  readonly snapshot: AgentAuthzSnapshot;
+  /** Memoized per-capability effective permissions (agent ∩ human, deny-wins). */
+  readonly byCapability: Map<string, EffectivePermissions>;
+  /** When the snapshot was fetched — a V1 run's resolution is never refreshed. */
+  readonly resolvedAt: Date;
+}
+
+/** Wrap a fetched snapshot into a fresh, empty-memo resolution object. */
+export function createAgentRunResolution(
+  snapshot: AgentAuthzSnapshot,
+): AgentRunIAMResolution {
+  return {
+    snapshot,
+    byCapability: new Map<string, EffectivePermissions>(),
+    resolvedAt: new Date(),
+  };
+}
+
+export interface ResolveAgentRunCapabilityArgs {
+  capability: string;
+  scope: ResolveScope;
+  defaultEffect: CapabilityEffect;
+  now?: Date;
+  clientIp?: string | null;
+}
+
+/**
+ * Resolve one capability for a V1 delegated run against the run's cached
+ * snapshot, memoized per capability on `resolution.byCapability`.
+ *
+ * Memoization is keyed by capability name alone — sound because everything
+ * else is run-constant: the scope (a run is pinned to one org+workspace), the
+ * defaultEffect (a property of the capability's contract), and the snapshot
+ * itself (fetched once per run, never refreshed). `now`/`clientIp` feed
+ * grant-condition evaluation on the FIRST resolution of each capability.
+ *
+ * NOTE the asymmetry with the V2 path deliberately: a V2 governed run's
+ * allow/deny gate is `evaluatePinnedAndLiveAuthorization` below, whose live
+ * side is re-keyed by the deny-generation vector on every operation. This
+ * never-refreshed memo is the V1 contract (spec §3.5) and stays scoped to it.
+ */
+export function resolveAgentRunCapability(
+  runCtx: AgentRunIAMContext,
+  resolution: AgentRunIAMResolution,
+  args: ResolveAgentRunCapabilityArgs,
+): EffectivePermissions {
+  const cached = resolution.byCapability.get(args.capability);
+  if (cached !== undefined) return cached;
+
+  const permissions = resolveAgentEffectivePermissions({
+    agentPrincipal: runCtx.agentPrincipal,
+    humanPrincipal: ceilingHumanPrincipal(runCtx),
+    capability: args.capability,
+    scope: args.scope,
+    grants: resolution.snapshot.grants,
+    roles: resolution.snapshot.roles,
+    roleGrants: resolution.snapshot.roleGrants,
+    policies: resolution.snapshot.policies,
+    defaultEffect: args.defaultEffect,
+    now: args.now,
+    clientIp: args.clientIp,
+    // Subagent/A2A narrowing (spec §2.7): the parent run's effective scope is
+    // an additional ceiling — intersected dimension-wise by the resolver, so
+    // this child resolution can only narrow, never widen, the parent's scope.
+    parentEffectiveScope: runCtx.parentEffectiveScope,
+  });
+
+  resolution.byCapability.set(args.capability, permissions);
+  return permissions;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -628,6 +763,9 @@ export function evaluatePinnedAndLiveAuthorization(
     defaultEffect: args.defaultEffect,
     now: args.now,
     clientIp: args.clientIp,
+    // Subagent/A2A narrowing (spec §2.7): the parent run's effective scope is
+    // an additional ceiling — intersected dimension-wise by the resolver, so
+    // this child resolution can only narrow, never widen, the parent's scope.
     parentEffectiveScope: args.parentEffectiveScope,
   };
 

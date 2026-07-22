@@ -55,7 +55,10 @@ const INSERTED_ROW = {
 };
 
 /** Build the Drizzle chain mock for resolveActorRole called within withTenantDb. */
-function makeRoleResolutionTx(principalId: string | null, roleName: string | null) {
+function makeRoleResolutionTx(
+  principalId: string | null,
+  roleName: string | null,
+) {
   // Two sequential select chains are used inside resolveActorRole:
   //   1. select principal id
   //   2. select role name (innerJoin)
@@ -105,17 +108,22 @@ function makeInsertTx(rows: unknown[]) {
  *   call 1 → resolveActorRole (principal + role selects)
  *   call 2 → api_keys insert
  */
-function setupHappyPath(roleName = "Owner", insertedRows: unknown[] = [INSERTED_ROW]) {
+function setupHappyPath(
+  roleName = "Owner",
+  insertedRows: unknown[] = [INSERTED_ROW],
+) {
   let callCount = 0;
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-    callCount++;
-    if (callCount === 1) {
-      // resolveActorRole
-      return fn(makeRoleResolutionTx("principal-uuid-1", roleName));
-    }
-    // api_keys insert
-    return fn(makeInsertTx(insertedRows));
-  });
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) => {
+      callCount++;
+      if (callCount === 1) {
+        // resolveActorRole
+        return fn(makeRoleResolutionTx("principal-uuid-1", roleName));
+      }
+      // api_keys insert
+      return fn(makeInsertTx(insertedRows));
+    },
+  );
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -127,7 +135,10 @@ describe("api.key.create handler — auth + scope guards", () => {
   });
 
   it("throws CapabilityError authz_denied when both userId and apiKeyId are null", async () => {
-    const anonCtx: CapabilityContext = makeCTX({ userId: null, apiKeyId: null });
+    const anonCtx: CapabilityContext = makeCTX({
+      userId: null,
+      apiKeyId: null,
+    });
     await expect(apiKeyCreateHandler(BASE_INPUT, anonCtx)).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof CapabilityError &&
@@ -138,7 +149,10 @@ describe("api.key.create handler — auth + scope guards", () => {
 
   it("throws CapabilityError authz_denied when orgId is missing", async () => {
     // orgId is string in CapabilityContext, but we force-null to exercise the guard
-    const noOrgCtx = { ...TEST_CTX, orgId: null } as unknown as CapabilityContext;
+    const noOrgCtx = {
+      ...TEST_CTX,
+      orgId: null,
+    } as unknown as CapabilityContext;
     await expect(apiKeyCreateHandler(BASE_INPUT, noOrgCtx)).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof CapabilityError &&
@@ -149,7 +163,10 @@ describe("api.key.create handler — auth + scope guards", () => {
 
   it("throws CapabilityError authz_denied when workspaceId is missing (role check passes but no workspace)", async () => {
     // workspaceId is string in CapabilityContext, but we force-null to exercise the guard
-    const noWsCtx = { ...TEST_CTX, workspaceId: null } as unknown as CapabilityContext;
+    const noWsCtx = {
+      ...TEST_CTX,
+      workspaceId: null,
+    } as unknown as CapabilityContext;
     await expect(apiKeyCreateHandler(BASE_INPUT, noWsCtx)).rejects.toSatisfy(
       (e: unknown) =>
         e instanceof CapabilityError &&
@@ -164,13 +181,15 @@ describe("api.key.create handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when no principal row is found (resolveActorRole returns null)", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) {
-        return fn(makeRoleResolutionTx(null, null)); // no principal
-      }
-      return fn(makeInsertTx([INSERTED_ROW]));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx(null, null)); // no principal
+        }
+        return fn(makeInsertTx([INSERTED_ROW]));
+      },
+    );
 
     await expect(apiKeyCreateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -182,13 +201,15 @@ describe("api.key.create handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when actor has Member role (insufficient)", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) {
-        return fn(makeRoleResolutionTx("principal-uuid-1", "Member")); // Member is not Owner/Admin
-      }
-      return fn(makeInsertTx([INSERTED_ROW]));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Member")); // Member is not Owner/Admin
+        }
+        return fn(makeInsertTx([INSERTED_ROW]));
+      },
+    );
 
     await expect(apiKeyCreateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -200,13 +221,15 @@ describe("api.key.create handler — role gate", () => {
 
   it("throws CapabilityError authz_denied when actor has Viewer role (insufficient)", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) {
-        return fn(makeRoleResolutionTx("principal-uuid-1", "Viewer"));
-      }
-      return fn(makeInsertTx([INSERTED_ROW]));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1) {
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Viewer"));
+        }
+        return fn(makeInsertTx([INSERTED_ROW]));
+      },
+    );
 
     await expect(apiKeyCreateHandler(BASE_INPUT, TEST_CTX)).rejects.toSatisfy(
       (e: unknown) =>
@@ -266,7 +289,10 @@ describe("api.key.create handler — happy path", () => {
   });
 
   it("returns null expiresAt when no expiry is provided", async () => {
-    const result = await apiKeyCreateHandler({ name: "No Expiry", scope: {} }, TEST_CTX);
+    const result = await apiKeyCreateHandler(
+      { name: "No Expiry", scope: {} },
+      TEST_CTX,
+    );
     expect(result.expiresAt).toBeNull();
   });
 
@@ -276,14 +302,21 @@ describe("api.key.create handler — happy path", () => {
     const rowWithExpiry = { ...INSERTED_ROW, expiresAt: expiryDate };
 
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
-      return fn(makeInsertTx([rowWithExpiry]));
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(makeInsertTx([rowWithExpiry]));
+      },
+    );
 
     const result = await apiKeyCreateHandler(
-      { name: "Expiring Key", scope: {}, expiresAt: "2025-12-31T23:59:59.000Z" },
+      {
+        name: "Expiring Key",
+        scope: {},
+        expiresAt: "2025-12-31T23:59:59.000Z",
+      },
       TEST_CTX,
     );
     expect(result.expiresAt).toBe("2025-12-31T23:59:59.000Z");
@@ -291,11 +324,14 @@ describe("api.key.create handler — happy path", () => {
 
   it("throws internal Error when insert returns no row", async () => {
     let callCount = 0;
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => {
-      callCount++;
-      if (callCount === 1) return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
-      return fn(makeInsertTx([])); // empty → should throw
-    });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => {
+        callCount++;
+        if (callCount === 1)
+          return fn(makeRoleResolutionTx("principal-uuid-1", "Owner"));
+        return fn(makeInsertTx([])); // empty → should throw
+      },
+    );
 
     await expect(apiKeyCreateHandler(BASE_INPUT, TEST_CTX)).rejects.toThrow(
       "Internal error: failed to create API key row",
@@ -339,8 +375,48 @@ describe("api.key.create handler — apiKeyId as actor", () => {
   it("succeeds when userId is null but apiKeyId is set (machine-to-machine auth)", async () => {
     vi.clearAllMocks();
     setupHappyPath("Admin");
-    const machineCtx: CapabilityContext = makeCTX({ userId: null, apiKeyId: "aky_machine123" });
+    const machineCtx: CapabilityContext = makeCTX({
+      userId: null,
+      apiKeyId: "aky_machine123",
+    });
     const result = await apiKeyCreateHandler(BASE_INPUT, machineCtx);
     expect(result.keyId).toBe(INSERTED_ROW.id);
+  });
+});
+
+describe("api.key.create handler — protected Stella telemetry scope", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupHappyPath("Owner");
+  });
+
+  it("rejects attempts to mint the reserved Stella telemetry purpose", async () => {
+    await expect(
+      apiKeyCreateHandler(
+        {
+          name: "Unauthorized Stella enrollment",
+          scope: {
+            purpose: "stella_operational_telemetry_v1",
+            enrollment_id: "enrollment-1",
+          },
+        },
+        TEST_CTX,
+      ),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("continues to allow unrelated arbitrary scope", async () => {
+    const result = await apiKeyCreateHandler(
+      {
+        name: "Deployment key",
+        scope: { environment: "production", repository: "acme/widgets" },
+      },
+      TEST_CTX,
+    );
+
+    expect(result.keyId).toBe(INSERTED_ROW.id);
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledTimes(1);
   });
 });

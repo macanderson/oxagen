@@ -7,9 +7,11 @@
 // rather than re-mirrored. Both are security types whose whole value is that
 // the kernel — and only the kernel — can mint them: `DeployedAgentInvocationContext`
 // carries a module-private unique-symbol brand plus a kernel registry entry, so
-// a hand-copied structural twin would be a forgery surface, not a mirror. The
-// import is `import type`, which erases at compile time, so it adds no runtime
-// edge back to @oxagen/oxagen and the no-cycle property above still holds.
+// a hand-copied structural twin would be a forgery surface, not a mirror. Both
+// imports are `import type`, fully erased at emit, so they add NO runtime module
+// edge back to @oxagen/oxagen (the cycle this mirror exists to avoid is a runtime
+// import cycle; @oxagen/oxagen/iam is the pure, dep-light resolver layer and other
+// modules in this package already import @oxagen/oxagen/kernel statically).
 import type { DeployedAgentInvocationContext } from "@oxagen/oxagen";
 import type { AgentRunIAMContext } from "@oxagen/oxagen/iam";
 
@@ -34,15 +36,18 @@ export interface CapabilityContext {
    */
   clientIp?: string | null;
   /**
-   * Present when this capability call originates from a GOVERNED AGENT RUN.
-   * Carries the two principals of the delegation ceiling (agent ∩ initiating
-   * human), the run/attempt lineage for audit rows, the pinned admission
-   * binding, and the per-run live-evaluation cache.
+   * Present when this capability call originates from a GOVERNED AGENT RUN
+   * (Agent RBAC Phase 2, docs/specs/agent-rbac/spec.md §3.4/§3.5): the two
+   * principals of the delegation ceiling (agent ∩ initiating human), the
+   * run/attempt lineage for audit rows, the pinned admission binding, and the
+   * mutable per-run resolution/live-evaluation cache the kernel IAM check and
+   * tool materialization BOTH read (one resolution per run — §3.5).
    *
-   * The durable-run worker populates it from a claimed v2 run's TYPED columns
-   * (see `hydrateAgentRunContext` in ./runtime/turn-driver.ts) — never from
-   * the spec JSON alone, and never for a legacy v1 run, which has no
-   * principals to bind.
+   * Attached by the turn driver for delegated durable runs; absent on every
+   * human / API-key / service invocation. The durable-run worker populates it
+   * from a claimed v2 run's TYPED columns (see `hydrateAgentRunContext` in
+   * ./runtime/turn-driver.ts) — never from the spec JSON alone, and never for
+   * a legacy v1 run, which has no principals to bind.
    */
   agentRun?: AgentRunIAMContext;
   /**

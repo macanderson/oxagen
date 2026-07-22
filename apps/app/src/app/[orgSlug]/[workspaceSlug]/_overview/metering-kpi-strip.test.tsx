@@ -57,7 +57,9 @@ function breakdown(
       outputTokens: 0,
       cachedTokens: 0,
       costMicros: 0,
+      messages: 0,
       executions: 0,
+      messages: 0,
     },
     series: [],
     byModel: [],
@@ -65,6 +67,7 @@ function breakdown(
     byWorkspace: [],
     byCapability: [],
     byPrincipal: [],
+    byUser: [],
     ...overrides,
   };
 }
@@ -131,7 +134,9 @@ describe("MeteringKpiStrip", () => {
               outputTokens: 500,
               cachedTokens: 0,
               costMicros: 1_250_000,
+              messages: 0,
               executions: 4,
+              messages: 4,
             },
             series: [
               {
@@ -140,7 +145,9 @@ describe("MeteringKpiStrip", () => {
                 outputTokens: 250,
                 cachedTokens: 0,
                 costMicros: 600_000,
+                messages: 0,
                 executions: 2,
+                messages: 2,
               },
               {
                 day: "2026-07-11",
@@ -148,7 +155,9 @@ describe("MeteringKpiStrip", () => {
                 outputTokens: 250,
                 cachedTokens: 0,
                 costMicros: 650_000,
+                messages: 0,
                 executions: 2,
+                messages: 2,
               },
             ],
           }),

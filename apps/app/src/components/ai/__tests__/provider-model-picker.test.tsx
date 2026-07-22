@@ -17,6 +17,9 @@
  *   - selecting a provider populates that provider's models
  *   - selecting a model calls onChange with the model id
  *   - selecting the default option calls onChange(null)
+ *   - selecting a provider surfaces its real @oxagen/ai/posture badges
+ *     (catalog and posture themselves are left UNMOCKED — real registry
+ *     data, same convention this file already uses for model names)
  */
 
 import * as React from "react";
@@ -39,6 +42,53 @@ vi.mock("@/lib/utils", () => ({
 vi.mock("@/components/ui/label", () => ({
   Label: ({ children, ...props }: { children: React.ReactNode }) => (
     <label {...props}>{children}</label>
+  ),
+}));
+
+// Badge and Tooltip are mocked the same way every other test file in this
+// repo mocks them (jsdom cannot lay out Base UI's floating-ui popups) — see
+// model-picker.test.tsx / prompt-cache-bar.test.tsx for the same shim.
+vi.mock("@/components/ui/badge", () => ({
+  Badge: ({
+    children,
+    variant,
+    size,
+    className,
+    title,
+    ...rest
+  }: {
+    children?: React.ReactNode;
+    variant?: string;
+    size?: string;
+    className?: string;
+    title?: string;
+  }) => (
+    <span
+      data-variant={variant}
+      data-size={size}
+      title={title}
+      className={className}
+      {...rest}
+    >
+      {children}
+    </span>
+  ),
+}));
+
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({
+    render: trigger,
+    children,
+  }: {
+    render: React.ReactElement;
+    children: React.ReactNode;
+  }) =>
+    React.isValidElement(trigger)
+      ? React.cloneElement(trigger, {}, children)
+      : null,
+  TooltipPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
 }));
 
@@ -259,5 +309,61 @@ describe("ProviderModelPicker", () => {
     const selects = screen.getAllByTestId("select");
     const modelSelect = selects[selects.length - 1]!;
     expect(modelSelect).toHaveAttribute("data-disabled", "true");
+  });
+
+  // ── Provider capability posture badges (@oxagen/ai/posture) ────────────────
+  //
+  // Unlike model-picker.test.tsx, this file does not mock @oxagen/ai/catalog,
+  // @oxagen/ai/posture, @/components/ui/badge, or @/components/ui/tooltip —
+  // it exercises the real registry against the real catalog, same as it
+  // already does for model names ("Claude Opus 4.8" etc). The badge styling
+  // contract itself (requiresAction distinguishability, unknown-vendor
+  // fallback) is proven once in model-picker.test.tsx, which owns
+  // <PostureBadgeGroup>'s only other caller — these tests just prove the
+  // wiring: picking a provider surfaces that vendor's real posture.
+  it("shows no posture group before a provider is chosen", async () => {
+    const ProviderModelPicker = await importPicker();
+    render(<ProviderModelPicker value={null} onChange={vi.fn()} />);
+    expect(
+      screen.queryByRole("group", { name: /capability posture/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the chosen vendor's capability posture once a provider is picked", async () => {
+    const ProviderModelPicker = await importPicker();
+    render(<ProviderModelPicker value={null} onChange={vi.fn()} />);
+
+    await userEvent.click(providerOption("anthropic"));
+
+    const postureGroup = screen.getByRole("group", {
+      name: /Anthropic capability posture/i,
+    });
+    // Anthropic's cache axis is the requiresAction row this registry exists
+    // to guard (explicit opt-in cache) — it renders inline, unprompted.
+    expect(within(postureGroup).getByText("Cache: opt-in")).toBeInTheDocument();
+  });
+
+  it("swaps posture content when the chosen provider changes", async () => {
+    const ProviderModelPicker = await importPicker();
+    render(<ProviderModelPicker value={null} onChange={vi.fn()} />);
+
+    await userEvent.click(providerOption("anthropic"));
+    expect(
+      screen.getByRole("group", { name: /Anthropic capability posture/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(providerOption("mistral"));
+
+    const mistralPosture = screen.getByRole("group", {
+      name: /Mistral capability posture/i,
+    });
+    // Mistral has no explicit cache control and fixed-off reasoning — its
+    // one requiresAction axis is emulated structured output.
+    expect(
+      within(mistralPosture).getByText("Structured output: emulated"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: /^Anthropic capability posture/i }),
+    ).not.toBeInTheDocument();
   });
 });
