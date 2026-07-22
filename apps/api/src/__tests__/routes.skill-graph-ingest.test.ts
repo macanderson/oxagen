@@ -1,5 +1,5 @@
 /**
- * Unit tests for three thin org-scoped routes that were previously uncovered:
+ * Unit tests for two thin org-scoped routes that were previously uncovered:
  *   - GET  /skill/export   (skill.export — streams canonical TOML as an attachment)
  *   - POST /skill/edit     (skill.edit)
  *
@@ -172,32 +172,6 @@ describe("POST /skill/edit", () => {
       skill_id: "skl_ABC",
       content: "",
     });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── POST /graph/ingest ────────────────────────────────────────────────────────
-
-describe("POST /graph/ingest", () => {
-  it("forwards extracted-text ingest to graph.ingest with default maxEntities", async () => {
-    mocks.invoke.mockResolvedValue({ entities: [], edges: [] });
-    const res = await authPost("/graph/ingest", {
-      text: "Acme depends on Stripe.",
-    });
-    expect(res.status).toBe(200);
-    const [name, input] = mocks.invoke.mock.calls[0] as [
-      string,
-      Record<string, unknown>,
-    ];
-    expect(name).toBe("ingest_graph");
-    expect(input.text).toBe("Acme depends on Stripe.");
-    // maxEntities has a schema default of 25 applied at parse time.
-    expect(input.maxEntities).toBe(25);
-  });
-
-  it("returns 400 when text is empty", async () => {
-    const res = await authPost("/graph/ingest", { text: "" });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

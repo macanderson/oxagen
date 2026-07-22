@@ -39,18 +39,31 @@ test("usage dashboard: renders KPIs, breakdown panels, and range picker for a fr
 
   // KPI cards — the four headline measures always render (zeros for a fresh org).
   // Exact match: "Cached tokens" would otherwise also match descriptive copy.
-  await expect(page.getByText("Total cost", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Total cost", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByText("Total tokens", { exact: true })).toBeVisible();
   await expect(page.getByText("Cached tokens", { exact: true })).toBeVisible();
   await expect(page.getByText("LLM calls", { exact: true })).toBeVisible();
+
+  // Cache-economics row (#1076) — cache hit % and net savings must be surfaced.
+  await expect(page.getByText("Cache hit rate", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cache writes", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cache savings", { exact: true })).toBeVisible();
 
   // Range picker present with all four presets.
   const rangePicker = page.getByRole("group", { name: /usage date range/i });
   await expect(rangePicker).toBeVisible();
   await expect(rangePicker.getByRole("link", { name: "7 days" })).toBeVisible();
-  await expect(rangePicker.getByRole("link", { name: "30 days" })).toBeVisible();
-  await expect(rangePicker.getByRole("link", { name: "90 days" })).toBeVisible();
-  await expect(rangePicker.getByRole("link", { name: "Month to date" })).toBeVisible();
+  await expect(
+    rangePicker.getByRole("link", { name: "30 days" }),
+  ).toBeVisible();
+  await expect(
+    rangePicker.getByRole("link", { name: "90 days" }),
+  ).toBeVisible();
+  await expect(
+    rangePicker.getByRole("link", { name: "Month to date" }),
+  ).toBeVisible();
 
   // Breakdown panels render (empty-state copy for a fresh org).
   await expect(page.getByText("By model")).toBeVisible();
@@ -58,8 +71,12 @@ test("usage dashboard: renders KPIs, breakdown panels, and range picker for a fr
   await expect(page.getByText("By workspace")).toBeVisible();
 
   // Chart metric toggle (Cost / Tokens segmented control).
-  await expect(page.getByRole("button", { name: /^Cost$/ }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Tokens$/ }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Cost$/ }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Tokens$/ }).first(),
+  ).toBeVisible();
 
   await page.screenshot({
     path: `${SCREENSHOT_DIR}/usage-dashboard-default.png`,
@@ -83,7 +100,9 @@ test("usage dashboard: switching the chart metric to Tokens keeps the page live"
 }) => {
   test.setTimeout(60_000);
 
-  const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "usage-toggle" });
+  const { orgSlug } = await signUpFreshUser(page, {
+    orgPrefix: "usage-toggle",
+  });
   await page.goto(`/${orgSlug}/billing/usage`);
   await page.waitForLoadState("domcontentloaded");
 

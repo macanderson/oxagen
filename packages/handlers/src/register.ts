@@ -349,6 +349,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .budgetPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_spend_budget",
+    async () =>
+      (await import("./billing.budget.get"))
+        .billingBudgetGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_spend_budget",
+    async () =>
+      (await import("./billing.budget.set"))
+        .billingBudgetSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_model_settings",
     async () =>
       (await import("./workspace.model_settings.read"))
@@ -1469,5 +1481,17 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./router.decision.preview"))
         .routerDecisionPreviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_model_capabilities",
+    async () =>
+      (await import("./model.capability.list"))
+        .modelCapabilityListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "query_lineage",
+    async () =>
+      (await import("./lineage.query"))
+        .lineageQueryHandler as CapabilityHandlerFn,
   );
 });

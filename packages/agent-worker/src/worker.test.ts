@@ -12,12 +12,27 @@
  * kept to single-digit-ms intervals so they stay fast and non-flaky.
  */
 import { describe, it, expect, vi } from "vitest";
+import { RunLeaseFencedError } from "@oxagen/agent-runner/run-errors";
 import { computeBackoffDelayMs } from "./backoff";
 import { firstSeqForRun, SeqCounter } from "./seq";
-import { decideTerminalAction } from "./terminal";
-import { defaultWorkerId } from "./worker";
+import { decideAttemptTerminalAction, decideTerminalAction } from "./terminal";
+import {
+  buildTerminalEventPayload,
+  defaultWorkerId,
+  TERMINAL_EVENT_TYPE,
+} from "./worker";
 import { createAgentWorker } from "./index";
-import type { ClaimedRun, RunEventRecord, RunStore, TurnDriver } from "./types";
+import type {
+  AppendAttemptBatchResult,
+  AttemptRunStore,
+  AttemptTurnDriver,
+  ClaimedRun,
+  ClaimedRunV2,
+  RunEventRecord,
+  RunStore,
+  SealedAttemptHandle,
+  TurnDriver,
+} from "./types";
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
@@ -71,6 +86,129 @@ function makeStore(overrides: Partial<RunStore> = {}): RunStore {
     ...overrides,
   };
 }
+
+// ── V2 fenced-attempt helpers ────────────────────────────────────────────────
+
+const ENGINE = {
+  name: "oxagen-ts",
+  version: "2.1.1",
+  buildDigest: `sha256:${"b".repeat(64)}`,
+};
+
+let attemptCounter = 0;
+function makeClaimedRunV2(overrides: Partial<ClaimedRunV2> = {}): ClaimedRunV2 {
+  attemptCounter += 1;
+  const runId = `run-v2-${attemptCounter}`;
+  const attemptId = `attempt-${attemptCounter}`;
+  return {
+    runId,
+    publicId: `arun_${attemptCounter.toString(16).padStart(22, "0")}`,
+    orgId: "org-1",
+    workspaceId: "ws-1",
+    surface: "chat",
+    spec: {},
+    attempts: 1,
+    checkpoint: null,
+    checkpointSeq: 0,
+    specVersion: 2,
+    lease: {
+      runId,
+      attemptId,
+      attemptPublicId: `arat_${attemptCounter.toString(16).padStart(22, "0")}`,
+      leaseToken: `token-${attemptCounter}`,
+      leaseEpoch: 1,
+    },
+    v2: {
+      runKind: "general",
+      specDigest: `sha256:${"a".repeat(64)}`,
+      initiatingPrincipalId: "principal-human",
+      agentPrincipalId: "principal-agent",
+      agentId: "agent-1",
+      agentVersionId: "agent-version-1",
+      agentVersionChecksum: `sha256:${"c".repeat(64)}`,
+      authorizationSnapshotId: "snapshot-1",
+      parentRunId: null,
+      repositoryBindingId: null,
+      repositoryBindingPublicId: null,
+      repositoryProvider: null,
+      providerRepositoryId: null,
+      repositoryConnectionId: null,
+      configuredDefaultRef: null,
+      baseCommitSha: null,
+      baseTreeSha: null,
+      retentionPolicyId: "retention-1",
+      retentionPolicyPublicId: "rpv_0000000000000000000001",
+      retentionPolicyDigest: `sha256:${"d".repeat(64)}`,
+      maxAttempts: 3,
+      attemptNumber: 1,
+      engine: ENGINE,
+      restore: null,
+    },
+    ...overrides,
+  };
+}
+
+function makeSealedHandle(
+  overrides: Partial<SealedAttemptHandle> = {},
+): SealedAttemptHandle {
+  const grantPublicId = "afg_00000000000000000000ff";
+  return {
+    runId: "run-v2-1",
+    attemptId: "attempt-1",
+    attemptPublicId: "arat_0000000000000000000001",
+    sealId: "seal-1",
+    terminalStatus: "completed",
+    grantId: "grant-1",
+    grantPublicId,
+    submissionId: grantPublicId,
+    obligationId: "obligation-1",
+    eventCount: 1,
+    finalEventDigest: `sha256:${"e".repeat(64)}`,
+    eventStreamDigest: `sha256:${"f".repeat(64)}`,
+    alreadySealed: false,
+    ...overrides,
+  };
+}
+
+/** Mirrors the store's own pointer arithmetic closely enough to drive the worker. */
+function fakeAppendResult(
+  events: readonly { attemptSeq: number }[],
+): AppendAttemptBatchResult {
+  const last = events[events.length - 1];
+  return {
+    events: events.map((e) => ({
+      attemptSeq: e.attemptSeq,
+      runSeq: String(e.attemptSeq),
+      eventId: `event-${e.attemptSeq}`,
+      eventDigest: `sha256:${String(e.attemptSeq).padStart(64, "0")}`,
+      idempotent: false,
+    })),
+    lastAttemptSeq: last ? last.attemptSeq : 0,
+    lastRunSeq: last ? String(last.attemptSeq) : "0",
+    eventCount: events.length,
+    eventStreamDigest: `sha256:${"f".repeat(64)}`,
+    finalEventDigest: last
+      ? `sha256:${String(last.attemptSeq).padStart(64, "0")}`
+      : null,
+    checkpointId: null,
+  };
+}
+
+function makeAttemptStore(
+  overrides: Partial<AttemptRunStore> = {},
+): AttemptRunStore {
+  return {
+    claimNextRunV2: vi.fn(async (): Promise<ClaimedRunV2 | null> => null),
+    renewAttemptLease: vi.fn(async () => ({ expiresAt: new Date() })),
+    isAttemptCancelRequested: vi.fn(async (): Promise<boolean> => false),
+    appendAttemptBatch: vi.fn(async (input) => fakeAppendResult(input.events)),
+    sealAttempt: vi.fn(async () => makeSealedHandle()),
+    ...overrides,
+  };
+}
+
+const fenceError = (attemptId = "attempt-1"): RunLeaseFencedError =>
+  new RunLeaseFencedError(attemptId, "fenced");
 
 // ── Pure functions ────────────────────────────────────────────────────────────
 
@@ -969,5 +1107,963 @@ describe("createAgentWorker — crash-then-resume seq stability", () => {
     const seqs = allAppended.map((e) => e.seq);
     expect(seqs).toEqual([1, 2, 3, 4]);
     expect(new Set(seqs).size).toBe(seqs.length); // no client-side duplicates
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V2 — fenced immutable attempts
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("decideAttemptTerminalAction", () => {
+  it("a fence suppresses every store mutation, beating cancel and driver error", () => {
+    expect(
+      decideAttemptTerminalAction({
+        fenced: true,
+        cancelled: true,
+        driverError: { error: new Error("x") },
+        outcome: null,
+      }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("a cancel request beats a driver error and seals as cancelled", () => {
+    expect(
+      decideAttemptTerminalAction({
+        fenced: false,
+        cancelled: true,
+        driverError: { error: new Error("x") },
+        outcome: null,
+      }),
+    ).toEqual({
+      kind: "seal",
+      status: "cancelled",
+      reasonCode: "cancel_requested",
+    });
+  });
+
+  it("a driver throw seals as failed with the message on the run row", () => {
+    expect(
+      decideAttemptTerminalAction({
+        fenced: false,
+        cancelled: false,
+        driverError: { error: new Error("boom") },
+        outcome: null,
+      }),
+    ).toEqual({
+      kind: "seal",
+      status: "failed",
+      reasonCode: "driver_error",
+      error: "boom",
+    });
+  });
+
+  it("a deliberate denial seals as denied, not failed", () => {
+    expect(
+      decideAttemptTerminalAction({
+        fenced: false,
+        cancelled: false,
+        driverError: null,
+        outcome: {
+          result: null,
+          terminalStatus: "denied",
+          reasonCode: "tool_denied",
+        },
+      }),
+    ).toEqual({
+      kind: "seal",
+      status: "denied",
+      reasonCode: "tool_denied",
+      result: null,
+    });
+  });
+
+  it("a clean settle with no explicit status seals as completed", () => {
+    expect(
+      decideAttemptTerminalAction({
+        fenced: false,
+        cancelled: false,
+        driverError: null,
+        outcome: { result: { ok: true } },
+      }),
+    ).toEqual({
+      kind: "seal",
+      status: "completed",
+      reasonCode: undefined,
+      result: { ok: true },
+    });
+  });
+});
+
+describe("buildTerminalEventPayload", () => {
+  it("carries the terminal status and a well-formed reason code", () => {
+    expect(buildTerminalEventPayload("cancelled", "cancel_requested")).toEqual({
+      terminal_status: "cancelled",
+      reason_code: "cancel_requested",
+    });
+  });
+
+  it("drops a malformed reason code rather than letting it reject the seal", () => {
+    expect(buildTerminalEventPayload("failed", "Driver Blew Up!")).toEqual({
+      terminal_status: "failed",
+    });
+    expect(buildTerminalEventPayload("failed", "a".repeat(65))).toEqual({
+      terminal_status: "failed",
+    });
+  });
+
+  it("never carries a raw error or result body", () => {
+    const payload = buildTerminalEventPayload("failed", "driver_error");
+    expect(Object.keys(payload).sort()).toEqual([
+      "reason_code",
+      "terminal_status",
+    ]);
+  });
+});
+
+describe("createAgentWorker — V2 claims are off unless configured", () => {
+  it("never issues a V2 claim when `attempts` is omitted", async () => {
+    const attemptStore = makeAttemptStore();
+    const done = deferred();
+    const store = makeStore({
+      claimNextRun: vi
+        .fn()
+        .mockResolvedValueOnce(makeClaimedRun())
+        .mockResolvedValue(null),
+      completeRun: vi.fn(async () => {
+        done.resolve();
+        return true;
+      }),
+    });
+    const driveTurn: TurnDriver = async () => ({ result: "v1" });
+
+    const worker = createAgentWorker({ store, driveTurn, concurrency: 1 });
+    worker.start();
+    await done.promise;
+    await worker.stop();
+
+    expect(attemptStore.claimNextRunV2).not.toHaveBeenCalled();
+    expect(store.claimNextRun).toHaveBeenCalledWith(expect.any(String));
+    // One argument only: the compatibility dispatcher claims V2 only when it is
+    // handed a resolved engine identity, so V1-only wiring cannot claim V2.
+    expect(
+      (store.claimNextRun as unknown as { mock: { calls: unknown[][] } }).mock
+        .calls[0],
+    ).toHaveLength(1);
+  });
+
+  it("falls back to the draining V1 queue when the V2 queue is empty", async () => {
+    const done = deferred();
+    const attemptStore = makeAttemptStore();
+    const store = makeStore({
+      claimNextRun: vi
+        .fn()
+        .mockResolvedValueOnce(makeClaimedRun())
+        .mockResolvedValue(null),
+      completeRun: vi.fn(async () => {
+        done.resolve();
+        return true;
+      }),
+    });
+    const worker = createAgentWorker({
+      store,
+      driveTurn: async () => ({ result: "v1" }),
+      concurrency: 1,
+      attempts: {
+        store: attemptStore,
+        driveTurn: async () => ({ result: "unused" }),
+        engine: ENGINE,
+      },
+    });
+    worker.start();
+    await done.promise;
+    await worker.stop();
+
+    expect(attemptStore.claimNextRunV2).toHaveBeenCalled();
+    expect(store.completeRun).toHaveBeenCalled();
+  });
+
+  it("reports a V2 claim error and still drains V1 on the same tick", async () => {
+    const claimErr = new Error("v2 claim blew up");
+    const onError = vi.fn();
+    const done = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi.fn(async () => {
+        throw claimErr;
+      }),
+    });
+    const store = makeStore({
+      claimNextRun: vi
+        .fn()
+        .mockResolvedValueOnce(makeClaimedRun())
+        .mockResolvedValue(null),
+      completeRun: vi.fn(async () => {
+        done.resolve();
+        return true;
+      }),
+    });
+    const worker = createAgentWorker({
+      store,
+      driveTurn: async () => ({ result: "v1" }),
+      concurrency: 1,
+      onError,
+      attempts: {
+        store: attemptStore,
+        driveTurn: async () => ({ result: "unused" }),
+        engine: ENGINE,
+      },
+    });
+    worker.start();
+    await done.promise;
+    await worker.stop();
+
+    expect(onError).toHaveBeenCalledWith(claimErr, { phase: "attempt-claim" });
+    expect(store.completeRun).toHaveBeenCalled();
+  });
+});
+
+describe("createAgentWorker — V2 attempt happy path", () => {
+  it("commits events and their checkpoint in ONE batch, then seals with a terminal event", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred<SealedAttemptHandle>();
+    const handle = makeSealedHandle();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => handle),
+    });
+    const observed: SealedAttemptHandle[] = [];
+
+    const driveTurn: AttemptTurnDriver = async (run, io) => {
+      expect(run.lease.attemptPublicId).toBe(claimed.lease.attemptPublicId);
+      io.onEvent({
+        eventType: "context.frames_selected",
+        payload: { frame_count: 2 },
+      });
+      io.onEvent({
+        eventType: "model.call_completed",
+        encryptedPayloadRef: "evb_0000000000000000000009",
+        payloadDigest: `sha256:${"1".repeat(64)}`,
+      });
+      await io.checkpoint({
+        engineStateSchema: "engine-state/v1",
+        checkpointDigest: `sha256:${"2".repeat(64)}`,
+        encryptedStateRef: "evb_000000000000000000000a",
+      });
+      return { result: { text: "done" } };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: {
+        store: attemptStore,
+        driveTurn,
+        engine: ENGINE,
+        onSealed: (h) => {
+          observed.push(h);
+          sealed.resolve(h);
+        },
+      },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    // ONE append: both events AND the checkpoint travelled in the same
+    // transaction, so they cannot tear apart.
+    expect(attemptStore.appendAttemptBatch).toHaveBeenCalledTimes(1);
+    const batch = (
+      attemptStore.appendAttemptBatch as unknown as {
+        mock: {
+          calls: [
+            { lease: unknown; events: unknown[]; checkpoint?: unknown },
+          ][];
+        };
+      }
+    ).mock.calls[0]![0];
+    expect(batch.lease).toEqual(claimed.lease);
+    expect(batch.checkpoint).toEqual({
+      engineStateSchema: "engine-state/v1",
+      checkpointDigest: `sha256:${"2".repeat(64)}`,
+      encryptedStateRef: "evb_000000000000000000000a",
+    });
+    expect(
+      (batch.events as { attemptSeq: number; eventType: string }[]).map((e) => [
+        e.attemptSeq,
+        e.eventType,
+      ]),
+    ).toEqual([
+      [1, "context.frames_selected"],
+      [2, "model.call_completed"],
+    ]);
+    for (const event of batch.events as { observedAt: string }[]) {
+      expect(event.observedAt).toMatch(/T.*Z$/);
+    }
+
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: {
+          calls: [
+            {
+              lease: unknown;
+              terminalStatus: string;
+              terminalEvent: {
+                attemptSeq: number;
+                eventType: string;
+                payload: unknown;
+              };
+              sealerWorkerId: string;
+              result: unknown;
+            },
+          ][];
+        };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.lease).toEqual(claimed.lease);
+    expect(seal.terminalStatus).toBe("completed");
+    expect(seal.terminalEvent.eventType).toBe(TERMINAL_EVENT_TYPE);
+    // Continues from what the store ACCEPTED (2), never from a local guess.
+    expect(seal.terminalEvent.attemptSeq).toBe(3);
+    expect(seal.terminalEvent.payload).toEqual({
+      terminal_status: "completed",
+    });
+    expect(seal.result).toEqual({ text: "done" });
+    expect(typeof seal.sealerWorkerId).toBe("string");
+
+    // The seal's own handle carries the stable submission id of the obligation
+    // the seal transaction already made durable.
+    expect(observed).toEqual([handle]);
+    expect(handle.submissionId).toBe(handle.grantPublicId);
+  });
+
+  it("starts attempt_seq at 1 for a successor that restored a prior attempt's checkpoint", async () => {
+    const claimed = makeClaimedRunV2();
+    claimed.v2 = {
+      ...claimed.v2,
+      attemptNumber: 2,
+      restore: {
+        attemptId: "attempt-prior",
+        attemptPublicId: "arat_00000000000000000000aa",
+        checkpointId: "checkpoint-prior",
+        checkpointDigest: `sha256:${"3".repeat(64)}`,
+        streamDigest: `sha256:${"4".repeat(64)}`,
+        engineStateSchema: "engine-state/v1",
+        encryptedStateRef: "evb_00000000000000000000bb",
+        attemptSeq: 17,
+        runSeq: 42,
+      },
+    };
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle();
+      }),
+    });
+
+    let sawRestore: unknown;
+    const driveTurn: AttemptTurnDriver = async (run, io) => {
+      sawRestore = run.v2.restore;
+      io.onEvent({ eventType: "change.recorded", payload: { n: 1 } });
+      return { result: null };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(sawRestore).toMatchObject({ attemptSeq: 17, runSeq: 42 });
+    const batch = (
+      attemptStore.appendAttemptBatch as unknown as {
+        mock: { calls: [{ events: { attemptSeq: number }[] }][] };
+      }
+    ).mock.calls[0]![0];
+    // The restored position travels on `restore`, NOT as a sequence offset:
+    // attempt_seq identifies a position within THIS attempt.
+    expect(batch.events.map((e) => e.attemptSeq)).toEqual([1]);
+  });
+});
+
+describe("createAgentWorker — V2 event/checkpoint rollback", () => {
+  it("replays a rolled-back batch byte-identically, sequences and observedAt untouched", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const batches: { attemptSeq: number; observedAt: string }[][] = [];
+    let call = 0;
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      appendAttemptBatch: vi.fn(async (input) => {
+        call += 1;
+        if (call === 1) throw new Error("checkpoint insert failed");
+        batches.push(
+          input.events.map((e: { attemptSeq: number; observedAt: string }) => ({
+            attemptSeq: e.attemptSeq,
+            observedAt: e.observedAt,
+          })),
+        );
+        return fakeAppendResult(input.events);
+      }),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle();
+      }),
+    });
+
+    let firstFailed = false;
+    const driveTurn: AttemptTurnDriver = async (_run, io) => {
+      io.onEvent({ eventType: "tool.call_completed", payload: { a: 1 } });
+      try {
+        await io.checkpoint({
+          engineStateSchema: "engine-state/v1",
+          checkpointDigest: `sha256:${"5".repeat(64)}`,
+          encryptedStateRef: "evb_00000000000000000000cc",
+        });
+      } catch {
+        firstFailed = true;
+      }
+      io.onEvent({ eventType: "tool.call_completed", payload: { a: 2 } });
+      return { result: null };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(firstFailed).toBe(true);
+    // The rolled-back event came back with its ORIGINAL sequence, alongside the
+    // event buffered after the failure. Nothing was lost and nothing was
+    // renumbered.
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.map((e) => e.attemptSeq)).toEqual([1, 2]);
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: { calls: [{ terminalEvent: { attemptSeq: number } }][] };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.terminalEvent.attemptSeq).toBe(3);
+  });
+
+  it("refuses a checkpoint with nothing buffered instead of writing an unbound one", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle();
+      }),
+    });
+
+    let refused: unknown;
+    const driveTurn: AttemptTurnDriver = async (_run, io) => {
+      try {
+        await io.checkpoint({
+          engineStateSchema: "engine-state/v1",
+          checkpointDigest: `sha256:${"6".repeat(64)}`,
+          encryptedStateRef: "evb_00000000000000000000dd",
+        });
+      } catch (err) {
+        refused = err;
+      }
+      return { result: null };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(refused).toBeInstanceOf(RangeError);
+    expect(attemptStore.appendAttemptBatch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an emission that is neither inline nor an encrypted reference", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle();
+      }),
+    });
+
+    const seen: unknown[] = [];
+    const driveTurn: AttemptTurnDriver = async (_run, io) => {
+      try {
+        io.onEvent({ eventType: "change.recorded" });
+      } catch (err) {
+        seen.push(err);
+      }
+      try {
+        io.onEvent({
+          eventType: "change.recorded",
+          payload: { a: 1 },
+          encryptedPayloadRef: "evb_00000000000000000000ee",
+        });
+      } catch (err) {
+        seen.push(err);
+      }
+      try {
+        io.onEvent({
+          eventType: "change.recorded",
+          encryptedPayloadRef: "evb_00000000000000000000ee",
+        });
+      } catch (err) {
+        seen.push(err);
+      }
+      return { result: null };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(seen).toHaveLength(3);
+    for (const err of seen) expect(err).toBeInstanceOf(RangeError);
+    expect(attemptStore.appendAttemptBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("createAgentWorker — V2 fencing", () => {
+  it("stops dead on a fenced lease renewal: no append, no checkpoint, and NO seal", async () => {
+    const claimed = makeClaimedRunV2();
+    const onError = vi.fn();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      renewAttemptLease: vi.fn(async () => {
+        throw fenceError(claimed.lease.attemptId);
+      }),
+    });
+
+    const driveTurn: AttemptTurnDriver = (_run, io) =>
+      new Promise((resolve) => {
+        io.onEvent({ eventType: "model.call_completed", payload: { n: 1 } });
+        io.signal.addEventListener("abort", () => {
+          // Buffered after the fence: dropped, never appended.
+          io.onEvent({ eventType: "model.call_completed", payload: { n: 2 } });
+          resolve({ result: "ignored" });
+        });
+      });
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      leaseRenewIntervalMs: 10,
+      onError,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await new Promise((r) => setTimeout(r, 80));
+    await worker.stop();
+
+    expect(attemptStore.appendAttemptBatch).not.toHaveBeenCalled();
+    expect(attemptStore.sealAttempt).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(RunLeaseFencedError), {
+      runId: claimed.runId,
+      phase: "attempt-lease-renew",
+    });
+  });
+
+  it("stops dead when the append itself reports a fence, without sealing", async () => {
+    const claimed = makeClaimedRunV2();
+    const onError = vi.fn();
+    const settled = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      appendAttemptBatch: vi.fn(async () => {
+        throw fenceError(claimed.lease.attemptId);
+      }),
+    });
+
+    const driveTurn: AttemptTurnDriver = async (_run, io) => {
+      io.onEvent({ eventType: "tool.call_completed", payload: { n: 1 } });
+      try {
+        await io.checkpoint({
+          engineStateSchema: "engine-state/v1",
+          checkpointDigest: `sha256:${"7".repeat(64)}`,
+          encryptedStateRef: "evb_00000000000000000000ff",
+        });
+      } finally {
+        settled.resolve();
+      }
+      return { result: "unreachable" };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      onError,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await settled.promise;
+    await settle();
+    await worker.stop();
+
+    expect(attemptStore.sealAttempt).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(RunLeaseFencedError), {
+      runId: claimed.runId,
+      phase: "attempt-append",
+    });
+  });
+
+  it("stops dead when the live cancellation check reports a fence", async () => {
+    const claimed = makeClaimedRunV2();
+    const onError = vi.fn();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      isAttemptCancelRequested: vi.fn(async () => {
+        throw fenceError(claimed.lease.attemptId);
+      }),
+    });
+
+    const driveTurn: AttemptTurnDriver = (_run, io) =>
+      new Promise((resolve) => {
+        io.signal.addEventListener("abort", () => resolve({ result: null }));
+      });
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      cancelPollIntervalMs: 10,
+      onError,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await new Promise((r) => setTimeout(r, 80));
+    await worker.stop();
+
+    expect(attemptStore.sealAttempt).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.any(RunLeaseFencedError), {
+      runId: claimed.runId,
+      phase: "attempt-cancel-poll",
+    });
+  });
+});
+
+describe("createAgentWorker — V2 cancellation and denial", () => {
+  it("seals a cancelled attempt as cancelled, flushing what it had first", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      isAttemptCancelRequested: vi.fn(async () => true),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle({ terminalStatus: "cancelled" });
+      }),
+    });
+
+    const driveTurn: AttemptTurnDriver = (_run, io) =>
+      new Promise((resolve) => {
+        io.onEvent({ eventType: "tool.call_completed", payload: { n: 1 } });
+        io.signal.addEventListener("abort", () =>
+          resolve({ result: "ignored" }),
+        );
+      });
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      cancelPollIntervalMs: 10,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(attemptStore.appendAttemptBatch).toHaveBeenCalledTimes(1);
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: {
+          calls: [
+            {
+              terminalStatus: string;
+              reasonCode?: string;
+              terminalEvent: { attemptSeq: number; payload: unknown };
+            },
+          ][];
+        };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.terminalStatus).toBe("cancelled");
+    expect(seal.reasonCode).toBe("cancel_requested");
+    expect(seal.terminalEvent.attemptSeq).toBe(2);
+    expect(seal.terminalEvent.payload).toEqual({
+      terminal_status: "cancelled",
+      reason_code: "cancel_requested",
+    });
+  });
+
+  it("seals a driver throw as failed with the message on the run row, not the event", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle({ terminalStatus: "failed" });
+      }),
+    });
+    const driveTurn: AttemptTurnDriver = async () => {
+      throw new Error("engine crashed on /etc/secret");
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: {
+          calls: [
+            {
+              terminalStatus: string;
+              error?: string;
+              terminalEvent: { attemptSeq: number; payload: unknown };
+            },
+          ][];
+        };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.terminalStatus).toBe("failed");
+    expect(seal.error).toBe("engine crashed on /etc/secret");
+    // The message never travels on the event — it can carry paths or source.
+    expect(seal.terminalEvent.payload).toEqual({
+      terminal_status: "failed",
+      reason_code: "driver_error",
+    });
+    // Nothing was accepted, so the terminal event is the attempt's first.
+    expect(seal.terminalEvent.attemptSeq).toBe(1);
+  });
+
+  it("seals a deliberate denial as denied", async () => {
+    const claimed = makeClaimedRunV2();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle({ terminalStatus: "denied" });
+      }),
+    });
+    const driveTurn: AttemptTurnDriver = async () => ({
+      result: null,
+      terminalStatus: "denied" as const,
+      reasonCode: "capability_denied",
+    });
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: { calls: [{ terminalStatus: string; reasonCode?: string }][] };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.terminalStatus).toBe("denied");
+    expect(seal.reasonCode).toBe("capability_denied");
+  });
+});
+
+describe("createAgentWorker — V2 terminal failures", () => {
+  it("treats a failed final commit as a driver error and still seals the attempt", async () => {
+    const claimed = makeClaimedRunV2();
+    const onError = vi.fn();
+    const sealed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      appendAttemptBatch: vi.fn(async () => {
+        throw new Error("append down at completion");
+      }),
+      sealAttempt: vi.fn(async () => {
+        sealed.resolve();
+        return makeSealedHandle({ terminalStatus: "failed" });
+      }),
+    });
+    const driveTurn: AttemptTurnDriver = async (_run, io) => {
+      io.onEvent({ eventType: "verification.completed", payload: { ok: 1 } });
+      return { result: "would have completed" };
+    };
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      onError,
+      attempts: { store: attemptStore, driveTurn, engine: ENGINE },
+    });
+    worker.start();
+    await sealed.promise;
+    await worker.stop();
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      runId: claimed.runId,
+      phase: "attempt-final-commit",
+    });
+    const seal = (
+      attemptStore.sealAttempt as unknown as {
+        mock: {
+          calls: [
+            { terminalStatus: string; terminalEvent: { attemptSeq: number } },
+          ][];
+        };
+      }
+    ).mock.calls[0]![0];
+    expect(seal.terminalStatus).toBe("failed");
+    // The dropped batch never became durable, so the terminal event takes the
+    // next sequence the STORE would accept — numbering past it would be a gap.
+    expect(seal.terminalEvent.attemptSeq).toBe(1);
+  });
+
+  it("reports a failed seal via onError and leaves the attempt for the reclaimer", async () => {
+    const claimed = makeClaimedRunV2();
+    const boom = new Error("db down at seal");
+    const reported = deferred<unknown>();
+    const onError = vi.fn((err: unknown, ctx: { phase: string }) => {
+      if (ctx.phase === "attempt-seal") reported.resolve(err);
+    });
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+      sealAttempt: vi.fn(async () => {
+        throw boom;
+      }),
+    });
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      onError,
+      attempts: {
+        store: attemptStore,
+        driveTurn: async () => ({ result: "ok" }),
+        engine: ENGINE,
+      },
+    });
+    worker.start();
+    const err = await reported.promise;
+    await worker.stop();
+
+    expect(err).toBe(boom);
+  });
+
+  it("swallows a throwing onSealed observer — it is telemetry, never the finalization path", async () => {
+    const claimed = makeClaimedRunV2();
+    const observed = deferred();
+    const attemptStore = makeAttemptStore({
+      claimNextRunV2: vi
+        .fn()
+        .mockResolvedValueOnce(claimed)
+        .mockResolvedValue(null),
+    });
+    const onError = vi.fn();
+
+    const worker = createAgentWorker({
+      store: makeStore(),
+      driveTurn: async () => ({ result: null }),
+      concurrency: 1,
+      onError,
+      attempts: {
+        store: attemptStore,
+        driveTurn: async () => ({ result: "ok" }),
+        engine: ENGINE,
+        onSealed: () => {
+          observed.resolve();
+          throw new Error("observer is broken");
+        },
+      },
+    });
+    worker.start();
+    await observed.promise;
+    await settle();
+    await worker.stop();
+
+    expect(
+      onError.mock.calls.filter(
+        (c) => (c[1] as { phase: string }).phase === "attempt-seal",
+      ),
+    ).toHaveLength(0);
   });
 });

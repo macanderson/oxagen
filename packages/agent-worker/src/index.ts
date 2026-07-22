@@ -8,7 +8,12 @@
  * (`createPostgresRunStore`) wires the real store and `executeTurn` — see
  * `src/main.ts` for the (currently TODO) process entrypoint.
  */
-export { createAgentWorker } from "./worker";
+export { createAgentWorker, TERMINAL_EVENT_TYPE } from "./worker";
+export {
+  CANCEL_REASON_CODE,
+  DRIVER_ERROR_REASON_CODE,
+  decideAttemptTerminalAction,
+} from "./terminal";
 export type {
   AgentWorker,
   ClaimedRun,
@@ -18,3 +23,26 @@ export type {
   WorkerErrorHandler,
   WorkerOptions,
 } from "./types";
+// Fenced V2 attempt execution (docs/specs/run-evidence-ingress/spec.md).
+export type {
+  AttemptCheckpointRecord,
+  AttemptEventEmission,
+  AttemptEventRecord,
+  AttemptRunStore,
+  AttemptTerminalStatus,
+  AttemptTurnDriver,
+  AttemptTurnIo,
+  AttemptTurnOutcome,
+  AttemptWorkerOptions,
+  ClaimedRunV2,
+  ClaimedRunV2Detail,
+  ResolvedEngineIdentity,
+  RestoredCheckpointRef,
+  RunLeaseRef,
+  SealedAttemptHandle,
+} from "./types";
+export type {
+  AttemptTerminalDecision,
+  AttemptTerminalInput,
+  WorkerSealStatus,
+} from "./terminal";

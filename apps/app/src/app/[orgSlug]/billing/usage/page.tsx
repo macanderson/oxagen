@@ -18,7 +18,11 @@ import type { BillingUsageBreakdownOutput } from "@oxagen/oxagen/contracts/billi
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq } from "drizzle-orm";
-import { resolveOrg, assertOrgMember, assertBillingManager } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  assertBillingManager,
+} from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { Stat, StatGroup } from "@/components/ui/stat";
 import { logger } from "@oxagen/handlers/logger";
@@ -41,15 +45,19 @@ const EMPTY: BillingUsageBreakdownOutput = {
     inputTokens: 0,
     outputTokens: 0,
     cachedTokens: 0,
+    cacheWriteTokens: 0,
     costMicros: 0,
     executions: 0,
+    messages: 0,
   },
+  cacheSavingsMicros: 0,
   series: [],
   byModel: [],
   bySurface: [],
   byWorkspace: [],
   byCapability: [],
   byPrincipal: [],
+  byUser: [],
 };
 
 export default async function BillingUsagePage({
@@ -90,7 +98,10 @@ export default async function BillingUsagePage({
         );
         for (const w of wsRows) workspaceNames[w.id] = w.name;
       } catch (err) {
-        logger.warn({ err, orgId: org.id }, "billing/usage: workspace name resolve failed");
+        logger.warn(
+          { err, orgId: org.id },
+          "billing/usage: workspace name resolve failed",
+        );
       }
 
       try {
@@ -111,7 +122,10 @@ export default async function BillingUsagePage({
         )) as BillingUsageBreakdownOutput;
         return { breakdown: result, queryFailed: false };
       } catch (err) {
-        logger.error({ err, orgId: org.id }, "billing/usage: breakdown invoke failed");
+        logger.error(
+          { err, orgId: org.id },
+          "billing/usage: breakdown invoke failed",
+        );
         return { breakdown: EMPTY, queryFailed: true };
       }
     },
@@ -119,6 +133,12 @@ export default async function BillingUsagePage({
 
   const { totals } = breakdown;
   const totalTokens = totals.inputTokens + totals.outputTokens;
+  // Cache hit rate: share of input tokens served from the prompt cache (reads).
+  // inputTokens is the inclusive total (fresh + reads + writes), so this reads as
+  // "% of input we didn't pay full rate for". Guard the empty window (0/0).
+  const cacheHitPct =
+    totals.inputTokens > 0 ? totals.cachedTokens / totals.inputTokens : 0;
+  const cacheSavings = formatUsdFromMicros(breakdown.cacheSavingsMicros);
 
   return (
     <div className="flex flex-col gap-6">
@@ -137,7 +157,8 @@ export default async function BillingUsagePage({
 
       {queryFailed ? (
         <p className="text-xs text-destructive">
-          Usage data is temporarily unavailable — the analytics query failed. Showing zeros.
+          Usage data is temporarily unavailable — the analytics query failed.
+          Showing zeros.
         </p>
       ) : null}
 
@@ -162,6 +183,31 @@ export default async function BillingUsagePage({
           label="LLM calls"
           value={totals.executions.toLocaleString()}
           hint="metered token_usage rows"
+        />
+      </StatGroup>
+
+      {/* Cache economics — the discount a cache-friendly agent earns (#1076). */}
+      <StatGroup columns={4}>
+        <Stat
+          label="Cache hit rate"
+          value={`${(cacheHitPct * 100).toFixed(1)}%`}
+          hint="of input tokens served from cache"
+        />
+        <Stat
+          label="Cache reads"
+          value={formatTokens(totals.cachedTokens)}
+          hint="billed at the cheaper cached rate"
+        />
+        <Stat
+          label="Cache writes"
+          value={formatTokens(totals.cacheWriteTokens)}
+          hint="cache creation, billed at a premium"
+        />
+        <Stat
+          label="Cache savings"
+          value={cacheSavings}
+          intent={breakdown.cacheSavingsMicros >= 0 ? "positive" : "neutral"}
+          hint="net of the write premium, this window"
         />
       </StatGroup>
 

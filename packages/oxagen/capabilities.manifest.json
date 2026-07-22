@@ -1459,6 +1459,36 @@
       }
     },
     {
+      "name": "get_spend_budget",
+      "file": "billing.budget.get.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_spend_budget",
+      "file": "billing.budget.set.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "purchase_credits",
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
@@ -2824,6 +2854,21 @@
       }
     },
     {
+      "name": "query_lineage",
+      "file": "lineage.query.ts",
+      "domain": "lineage",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent", "cli"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true,
+        "app": true
+      }
+    },
+    {
       "name": "generate_markdown",
       "file": "markdown.generate.ts",
       "domain": "document",
@@ -2845,6 +2890,19 @@
       "surfaces": ["api", "mcp", "agent"],
       "layers": {
         "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_model_capabilities",
+      "file": "model.capability.list.ts",
+      "domain": "model",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
         "api": true,
         "mcp": true,
         "unit": true,
@@ -4236,7 +4294,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -4448,6 +4506,19 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "ingest_stella_operational_telemetry",
+      "file": "telemetry.stella.ingest.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": ["api"],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }

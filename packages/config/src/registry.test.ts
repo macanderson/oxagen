@@ -18,13 +18,18 @@ const SCHEMA_KEYS = Object.keys(baseEnvSchema.shape);
 describe("ENV_REGISTRY ↔ baseEnvSchema coverage", () => {
   it("every schema key has a registry entry (schema ⊆ registry)", () => {
     const missing = SCHEMA_KEYS.filter((k) => !(k in ENV_REGISTRY));
-    expect(missing, `schema keys absent from ENV_REGISTRY: ${missing.join(", ")}`).toEqual([]);
+    expect(
+      missing,
+      `schema keys absent from ENV_REGISTRY: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("isValidated() is true for exactly the schema keys", () => {
-    for (const k of SCHEMA_KEYS) expect(isValidated(k), `${k} should be validated`).toBe(true);
+    for (const k of SCHEMA_KEYS)
+      expect(isValidated(k), `${k} should be validated`).toBe(true);
     const extra = registryKeys().filter((k) => !SCHEMA_KEYS.includes(k));
-    for (const k of extra) expect(isValidated(k), `${k} should NOT be validated`).toBe(false);
+    for (const k of extra)
+      expect(isValidated(k), `${k} should NOT be validated`).toBe(false);
   });
 
   it("the registry is a superset (it documents schema keys plus tooling/unvalidated vars)", () => {
@@ -38,26 +43,40 @@ describe("registry entry shape", () => {
     for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
       expect(meta.group.length, `${key}.group`).toBeGreaterThan(0);
       expect(meta.description.length, `${key}.description`).toBeGreaterThan(0);
-      for (const s of meta.services) expect(SERVICE_NAMES, `${key}.services`).toContain(s);
-      for (const e of meta.requiredIn) expect(ENV_NAMES, `${key}.requiredIn`).toContain(e);
+      for (const s of meta.services)
+        expect(SERVICE_NAMES, `${key}.services`).toContain(s);
+      for (const e of meta.requiredIn)
+        expect(ENV_NAMES, `${key}.requiredIn`).toContain(e);
     }
   });
 
   it("client-exposed vars use the NEXT_PUBLIC_ prefix and vice versa", () => {
     for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
-      if (meta.clientExposed) expect(key.startsWith("NEXT_PUBLIC_"), `${key} clientExposed`).toBe(true);
-      if (key.startsWith("NEXT_PUBLIC_")) expect(meta.clientExposed, `${key} prefix`).toBe(true);
+      if (meta.clientExposed)
+        expect(key.startsWith("NEXT_PUBLIC_"), `${key} clientExposed`).toBe(
+          true,
+        );
+      if (key.startsWith("NEXT_PUBLIC_"))
+        expect(meta.clientExposed, `${key} prefix`).toBe(true);
     }
   });
 
   it("static vars define a value (per-env or shared); non-static do not", () => {
     for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
       if (meta.valueOrigin === "static") {
-        expect(meta.staticValue, `${key} static needs staticValue`).toBeDefined();
-        const someEnv = ENV_NAMES.some((e) => staticValueFor(key, e) !== undefined);
+        expect(
+          meta.staticValue,
+          `${key} static needs staticValue`,
+        ).toBeDefined();
+        const someEnv = ENV_NAMES.some(
+          (e) => staticValueFor(key, e) !== undefined,
+        );
         expect(someEnv, `${key} resolves a static value`).toBe(true);
       } else {
-        expect(meta.staticValue, `${key} non-static must not bake a value`).toBeUndefined();
+        expect(
+          meta.staticValue,
+          `${key} non-static must not bake a value`,
+        ).toBeUndefined();
       }
     }
   });
@@ -65,7 +84,10 @@ describe("registry entry shape", () => {
   it("a required var is required only on surfaces that actually consume it", () => {
     for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
       if (meta.requiredIn.length > 0) {
-        expect(meta.services.length, `${key} is required but no service consumes it`).toBeGreaterThan(0);
+        expect(
+          meta.services.length,
+          `${key} is required but no service consumes it`,
+        ).toBeGreaterThan(0);
       }
     }
   });
@@ -78,13 +100,21 @@ describe("derivation helpers", () => {
     expect(apiProd).toContain("BETTER_AUTH_SECRET");
     // INNGEST is required in preview/production but not development.
     expect(apiProd).toContain("INNGEST_SIGNING_KEY");
-    expect(requiredKeysFor("api", "development")).not.toContain("INNGEST_SIGNING_KEY");
+    expect(requiredKeysFor("api", "development")).not.toContain(
+      "INNGEST_SIGNING_KEY",
+    );
     // website has no required runtime secrets.
-    expect(requiredKeysFor("website", "production")).not.toContain("DATABASE_URL");
+    expect(requiredKeysFor("website", "production")).not.toContain(
+      "DATABASE_URL",
+    );
   });
 
   it("clientKeys are exactly the NEXT_PUBLIC_ vars", () => {
-    expect(clientKeys().sort()).toEqual(registryKeys().filter((k) => k.startsWith("NEXT_PUBLIC_")).sort());
+    expect(clientKeys().sort()).toEqual(
+      registryKeys()
+        .filter((k) => k.startsWith("NEXT_PUBLIC_"))
+        .sort(),
+    );
   });
 
   it("secretKeys includes credentials and excludes plain config", () => {
@@ -119,7 +149,41 @@ describe("staticValueFor — extended cases", () => {
   });
 
   it("unknown key → returns undefined", () => {
-    expect(staticValueFor("__TOTALLY_UNKNOWN_KEY__", "development")).toBeUndefined();
+    expect(
+      staticValueFor("__TOTALLY_UNKNOWN_KEY__", "development"),
+    ).toBeUndefined();
+  });
+});
+
+// The DEFAULT is the whole point of these three flags, so it is asserted
+// rather than left to a reviewer's memory: shipping the wrong one either
+// strands the durable-run queue or mints finalization obligations no deployed
+// worker can satisfy (docs/specs/run-evidence-ingress/
+// 02-run-attempt-foundation-plan.md, PR 1A/1B split).
+describe("durable-run gate defaults", () => {
+  it("OXAGEN_DURABLE_RUNS defaults OFF — the router stays unmounted", () => {
+    for (const env of ["development", "preview", "production"] as const) {
+      expect(staticValueFor("OXAGEN_DURABLE_RUNS", env)).toBe("false");
+    }
+  });
+
+  it("OXAGEN_V1_RUN_ADMISSION_ENABLED defaults ON — PR 1A must not close the v1 queue", () => {
+    // Closing legacy admission is PR 1B's cutover, and it may only happen
+    // after already-enqueued v1 work has drained.
+    for (const env of ["development", "preview", "production"] as const) {
+      expect(staticValueFor("OXAGEN_V1_RUN_ADMISSION_ENABLED", env)).toBe(
+        "true",
+      );
+    }
+  });
+
+  it("OXAGEN_RUN_V2_CLAIMS_ENABLED defaults OFF — v2 execution waits for PR 2B", () => {
+    // Every v2 seal mints a one-shot finalization grant and a durable
+    // obligation. Until PR 2B deploys the consumer, each one would be an
+    // obligation nothing can discharge.
+    for (const env of ["development", "preview", "production"] as const) {
+      expect(staticValueFor("OXAGEN_RUN_V2_CLAIMS_ENABLED", env)).toBe("false");
+    }
   });
 });
 
@@ -173,7 +237,9 @@ describe("renderEnvExample", () => {
 
   it("emits a KEY= line for every registry var", () => {
     for (const key of registryKeys()) {
-      expect(example, `${key} missing from generated .env.example`).toContain(`\n${key}=`);
+      expect(example, `${key} missing from generated .env.example`).toContain(
+        `\n${key}=`,
+      );
     }
   });
 

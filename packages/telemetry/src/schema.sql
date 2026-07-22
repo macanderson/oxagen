@@ -55,7 +55,16 @@ CREATE TABLE IF NOT EXISTS token_usage (
   provider LowCardinality(String) DEFAULT '',
   input_tokens UInt64 CODEC(T64, ZSTD(1)),
   output_tokens UInt64 CODEC(T64, ZSTD(1)),
+  -- Prompt-cache READ tokens (cache hits), billed by the provider at ~0.1x base
+  -- input. A subset of input_tokens, not additive — the @oxagen/ai gateway
+  -- normalizes input_tokens to the inclusive total (fresh + cache reads + cache
+  -- writes), so fresh = input_tokens - cached_tokens - cache_write_tokens.
   cached_tokens UInt64 CODEC(T64, ZSTD(1)),
+  -- Prompt-cache WRITE tokens (cache creation), billed by the provider at ~1.25x
+  -- base input (5-min TTL). Also a subset of input_tokens (see cached_tokens).
+  -- Migration 0026: pre-0026 rows default to 0 (their true split is unknowable),
+  -- which the cost formula treats as "no cache writes" — an honest lower bound.
+  cache_write_tokens UInt64 CODEC(T64, ZSTD(1)),
   cost_usd_micros UInt64 CODEC(T64, ZSTD(1)),
   duration_ms UInt32 DEFAULT 0,
   surface LowCardinality(String) DEFAULT '',

@@ -3,10 +3,10 @@
 // Surfaces (apps/api, apps/mcp) import bootstrapIAMRuntime() and call it ONCE
 // at process start to wire the real IAM enforcement into kernel.invoke().
 //
-// WHY AN ADAPTER: checkIAM() returns { result: ResolveResult, principal } but
-// KernelIAMCheckFn expects { outcome, reason?, principal }. The adapter
-// flattens ResolveResult into those fields so the two packages remain
-// independently typed.
+// WHY AN ADAPTER: checkIAM() returns { result: ResolveResult, principal,
+// decision } but KernelIAMCheckFn expects { outcome, reason?, principal,
+// decision }. The adapter flattens ResolveResult into those fields so the two
+// packages remain independently typed.
 //
 // GRACEFUL DEGRADATION IS PRESERVED: fetchAuthz() (inside checkIAM) already
 // catches Postgres 42P01 (relation does not exist) and returns empty AuthzData,
@@ -41,7 +41,7 @@ import { createAccessRequest } from "./access-request";
  */
 export function bootstrapIAMRuntime(): void {
   const kernelIAMAdapter: KernelIAMCheckFn = async (args) => {
-    const { result, principal } = await checkIAM({
+    const { result, principal, decision } = await checkIAM({
       ...args,
       // Agent RBAC spec §3.4: the discriminator that keeps the non-enterprise
       // tier fast-path human-only. Derived from the run context the kernel
@@ -51,7 +51,11 @@ export function bootstrapIAMRuntime(): void {
     });
     const outcome = result.outcome;
     const reason = result.outcome === "deny" ? result.reason : undefined;
-    return { outcome, reason, principal };
+    // The platform-created azd_ reference travels back to the kernel, which
+    // attaches it to the CheckedContext on an allow and to the thrown
+    // CapabilityError otherwise. Agent-run execution fails closed when it is
+    // null — an unrecorded decision is not an allowed one.
+    return { outcome, reason, principal, decision: decision ?? null };
   };
 
   setKernelIAMRuntime(kernelIAMAdapter, /* enforced */ true);

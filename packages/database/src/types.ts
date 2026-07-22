@@ -28,6 +28,12 @@ import type {
   modelTierEnum,
   agentRuns,
   agentRunEvents,
+  agentRunAttempts,
+  agentRunAttemptLeases,
+  agentRunCheckpoints,
+  agentRunAttemptSeals,
+  agentRunFinalizationGrants,
+  agentRunFinalizationObligations,
 } from "./schema/index";
 
 // ── Billing row types ────────────────────────────────────────────────────────
@@ -153,3 +159,67 @@ export type AgentRunEventRow = InferSelectModel<typeof agentRunEvents>;
 
 /** INSERT shape for `agent.agent_run_events` (id/created_at optional). */
 export type NewAgentRunEventRow = InferInsertModel<typeof agentRunEvents>;
+
+// ── Fenced attempt foundation row types ──────────────────────────────────────
+// docs/specs/run-evidence-ingress — the immutable attempt identity, its mutable
+// fenced lease, and the seal → grant → obligation chain every terminal outcome
+// writes in one transaction.
+
+/** Full SELECT row from `agent.agent_run_attempts` (immutable). */
+export type AgentRunAttemptRow = InferSelectModel<typeof agentRunAttempts>;
+
+/** INSERT shape for `agent.agent_run_attempts`. */
+export type NewAgentRunAttemptRow = InferInsertModel<typeof agentRunAttempts>;
+
+/**
+ * Full SELECT row from `agent.agent_run_attempt_leases` — the one mutable row
+ * in the foundation (renew/append/seal update it; DELETE stays revoked).
+ */
+export type AgentRunAttemptLeaseRow = InferSelectModel<
+  typeof agentRunAttemptLeases
+>;
+
+/** INSERT shape for `agent.agent_run_attempt_leases`. */
+export type NewAgentRunAttemptLeaseRow = InferInsertModel<
+  typeof agentRunAttemptLeases
+>;
+
+/** Full SELECT row from `agent.agent_run_checkpoints` (immutable). */
+export type AgentRunCheckpointRow = InferSelectModel<
+  typeof agentRunCheckpoints
+>;
+
+/** INSERT shape for `agent.agent_run_checkpoints`. */
+export type NewAgentRunCheckpointRow = InferInsertModel<
+  typeof agentRunCheckpoints
+>;
+
+/** Full SELECT row from `agent.agent_run_attempt_seals` (immutable). */
+export type AgentRunAttemptSealRow = InferSelectModel<
+  typeof agentRunAttemptSeals
+>;
+
+/** INSERT shape for `agent.agent_run_attempt_seals`. */
+export type NewAgentRunAttemptSealRow = InferInsertModel<
+  typeof agentRunAttemptSeals
+>;
+
+/** Full SELECT row from `agent.agent_run_finalization_grants` (immutable). */
+export type AgentRunFinalizationGrantRow = InferSelectModel<
+  typeof agentRunFinalizationGrants
+>;
+
+/** INSERT shape for `agent.agent_run_finalization_grants`. */
+export type NewAgentRunFinalizationGrantRow = InferInsertModel<
+  typeof agentRunFinalizationGrants
+>;
+
+/** Full SELECT row from `agent.agent_run_finalization_obligations`. */
+export type AgentRunFinalizationObligationRow = InferSelectModel<
+  typeof agentRunFinalizationObligations
+>;
+
+/** INSERT shape for `agent.agent_run_finalization_obligations`. */
+export type NewAgentRunFinalizationObligationRow = InferInsertModel<
+  typeof agentRunFinalizationObligations
+>;

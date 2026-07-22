@@ -4,6 +4,7 @@ import { eq, and, count, inArray, sql } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation, insertEvents } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { projectSubagentFanoutLineage } from "@oxagen/agent";
 import {
   claimNextSubagentRun,
   renewSubagentRunLease,
@@ -447,6 +448,27 @@ export const [agentExecuteSubagent] = createFunction(
         logger.warn(
           { err: telErr, fanoutId },
           "insertEvents failed — fanout completion telemetry loss",
+        );
+      }
+    });
+
+    // Fleet lineage graph projection (issue #1078): idempotent MERGE of the
+    // dispatch tree (agent.subagent_fanouts/subagent_runs, the authoritative
+    // Postgres rows) into Neo4j as :SubagentFanout/:SubagentRun nodes — see
+    // packages/agent/src/dispatch/lineage-projection.ts for the full
+    // architecture note. Gated on didFinalize above so only the worker that
+    // WON the finalize race projects (the !didFinalize branch above returns
+    // early and never reaches here) — otherwise two workers racing the
+    // all-terminal observation would double-project. Best-effort and
+    // non-blocking, mirroring emit-completion-telemetry immediately above: a
+    // graph failure must never fail or slow this fanout.
+    await step.run("project-lineage-graph", async () => {
+      try {
+        await projectSubagentFanoutLineage({ fanoutId, orgId, workspaceId });
+      } catch (err) {
+        logger.warn(
+          { err, fanoutId, orgId },
+          "agent.execute-subagent: lineage graph projection failed — fanout still completes",
         );
       }
     });

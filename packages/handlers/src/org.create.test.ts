@@ -248,7 +248,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       {
         name: "Acme Corp",
         slug: "acme",
-        planSlug: "pro",
+        planSlug: "free",
         type: "business" as const,
       },
       CTX,

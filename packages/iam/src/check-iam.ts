@@ -21,16 +21,17 @@ import {
 } from "@oxagen/oxagen";
 import {
   resolve,
-  createAgentRunResolution,
-  resolveAgentRunCapability,
   type AgentRunIAMContext,
-  type AgentRunIAMResolution,
-  type EffectivePermissions,
+  type AuthorizationDecisionRef,
   type ResolveResult,
   type TraceStep,
 } from "@oxagen/oxagen/iam";
+import { digestOfCanonicalJson } from "@oxagen/agent-runner/run-spec-v2";
 import { fetchAuthz } from "./fetch-authz";
-import { fetchAgentRunAuthz } from "./fetch-agent-authz";
+import {
+  evaluateAgentRunAuthorization,
+  type AgentRunAuthorizationResult,
+} from "./live-agent-run-authorization";
 import { emitAudit } from "./emit-audit";
 import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
 import { captureError } from "@oxagen/telemetry";
@@ -89,6 +90,14 @@ export interface CheckIAMArgs {
 export interface CheckIAMResult {
   result: ResolveResult;
   principal: ResolvedPrincipal | null;
+  /**
+   * The platform-created `azd_…` reference to the immutable
+   * `iam.authorization_decisions` row this check persisted. Present for every
+   * agent-run outcome; null on the human/service paths, which record their
+   * decision in the ClickHouse audit stream rather than the governed-run
+   * decision ledger.
+   */
+  decision?: AuthorizationDecisionRef | null;
 }
 
 /**
@@ -215,105 +224,107 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Agent-run branch (Agent RBAC Phase 2 — spec §3.4/§3.5)
+// Agent-run branch — pinned ceiling ∩ live authority
+// (Agent RBAC spec §3.4/§3.5 + run-evidence spec §"Security and retention")
 // ═════════════════════════════════════════════════════════════════════════════
+//
+// The once-per-run resolution cache that used to live here is gone (launch
+// change #7). Every agent-run check now:
+//
+//   - re-reads live principal/agent status, emergency denies, and the
+//     deny-generation vector under one MVCC snapshot;
+//   - re-evaluates the PINNED ceiling against its ORIGINAL expiries and
+//     conditions, and intersects it with freshly resolved live authority;
+//   - persists one immutable authorization_decisions row and returns its
+//     reference.
+//
+// The only caching left is the run's LIVE cache, keyed by the generation vector
+// it was computed under (see agentRunLiveCacheKey) — so it can never serve a
+// decision that a suspension, revocation, or emergency deny has already
+// invalidated.
 
 /**
- * In-flight snapshot fetches, keyed BY THE RUN CONTEXT OBJECT so two
- * concurrent invoke()s of the same run share one fetch instead of racing two.
- * A WeakMap keyed on the per-run object is not module-global caching: entries
- * are scoped to (and garbage-collected with) their run — one run's grants can
- * never bleed into another's. The durable cache itself lives on
- * `agentRun.resolution` so tool materialization reads the SAME object.
+ * Digest this invocation's input for the decision row.
+ *
+ * Digests the raw JSON STRING rather than a canonicalized object graph on
+ * purpose: real capability inputs contain floats (temperatures, thresholds),
+ * and the canonical-JSON writer refuses non-integer numbers rather than risk a
+ * platform-dependent float serialization inside a digest. The kernel produces
+ * `rawInputJson` deterministically from the already-validated input, so
+ * digesting the string is stable for identical inputs — which is the property
+ * the decision row needs.
  */
-const inflightResolutions = new WeakMap<
-  AgentRunIAMContext,
-  Promise<AgentRunIAMResolution>
->();
-
-/**
- * Get (or compute exactly once) the run's authz resolution. First caller
- * fetches the snapshot and writes `agentRun.resolution`; every later caller —
- * a second invoke() in the same run, or tool materialization — reuses it.
- * A failed fetch clears the in-flight slot so a transient DB error does not
- * poison the rest of the run with a permanently-rejected promise.
- */
-async function resolutionForAgentRun(
-  agentRun: AgentRunIAMContext,
-  ctx: CapabilityContext,
-): Promise<AgentRunIAMResolution> {
-  if (agentRun.resolution !== undefined) return agentRun.resolution;
-  let pending = inflightResolutions.get(agentRun);
-  if (pending === undefined) {
-    pending = fetchAgentRunAuthz({
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId,
-      agentPrincipalId: agentRun.agentPrincipal.id,
-      humanPrincipalId: agentRun.humanPrincipal?.id ?? null,
-    }).then(createAgentRunResolution);
-    inflightResolutions.set(agentRun, pending);
-  }
-  try {
-    const resolution = await pending;
-    agentRun.resolution = resolution;
-    return resolution;
-  } catch (err) {
-    inflightResolutions.delete(agentRun);
-    throw err;
-  }
+function inputDigestOf(rawInputJson: string): string {
+  return digestOfCanonicalJson(rawInputJson);
 }
 
 /**
- * Flatten an EffectivePermissions (the deny-wins merge of the agent's and the
- * invoking human's independent resolutions) into one ResolveResult for the
- * kernel and the audit row. decision_reason becomes
- * `agent_delegation:<outcome>` — a stable rule id disjoint from every human
- * resolver rule, so agent denials/escalations are directly meterable in the
- * audit stream (spec §5: "denials and approval escalations are meterable
- * events") on top of acting_principal_kind='agent'.
+ * Flatten a live authorization result into one ResolveResult for the kernel
+ * and the audit row. `decision_reason` becomes `agent_ceiling:<outcome>` — a
+ * stable rule id disjoint from every human resolver rule, so agent denials and
+ * escalations stay directly meterable in the audit stream (spec §5) on top of
+ * acting_principal_kind='agent'.
  */
-function agentResolveResult(perms: EffectivePermissions): ResolveResult {
-  const agentDecided = perms.agentResolution.trace.decidedBy;
-  const humanDecided = perms.humanResolution.trace.decidedBy;
+function agentResolveResult(
+  evaluation: AgentRunAuthorizationResult,
+): ResolveResult {
   const step: TraceStep = {
-    rule: `agent_delegation:${perms.outcome}`,
+    rule: `agent_ceiling:${evaluation.outcome}`,
     description:
-      `agent ∩ invoking-human deny-wins merge — ` +
-      `agent=${perms.agentResolution.outcome} (${agentDecided.rule}), ` +
-      `human=${perms.humanResolution.outcome} (${humanDecided.rule})`,
+      `pinned ceiling ∩ live authority (deny-wins) — ` +
+      `reason=${evaluation.reason ?? "none"}, ` +
+      `generation=${evaluation.denyGeneration.org}.${evaluation.denyGeneration.workspace}` +
+      (evaluation.cached ? ", served from the run's live cache" : ""),
     decided: true,
-    outcome: perms.outcome,
+    outcome: evaluation.outcome,
   };
   const trace = { steps: [step], decidedBy: step };
-  if (perms.outcome === "allow") return { outcome: "allow", trace };
-  if (perms.outcome === "pending_approval") {
-    // The kernel routes this through the SAME approval path human
-    // require_approval outcomes take today: enforced pending_approval →
-    // JIT access-request creation (setKernelAccessRequestCreator) → a
-    // pollable CapabilityError(code="pending_approval", accessRequestId).
+  if (evaluation.outcome === "allow") return { outcome: "allow", trace };
+  if (evaluation.outcome === "pending_approval") {
+    // Routed through the SAME approval path human require_approval outcomes
+    // take: enforced pending_approval → JIT access-request creation
+    // (setKernelAccessRequestCreator) → a pollable
+    // CapabilityError(code="pending_approval", accessRequestId).
     return { outcome: "pending_approval", trace };
   }
-  // Deny — surface the machine-readable reason from whichever side of the
-  // ceiling denied (deny-wins guarantees at least one side did).
-  const reason =
-    perms.agentResolution.outcome === "deny"
-      ? perms.agentResolution.reason
-      : perms.humanResolution.outcome === "deny"
-        ? perms.humanResolution.reason
-        : "no_grant";
-  return { outcome: "deny", reason, trace };
+  return { outcome: "deny", reason: denialReasonOf(evaluation), trace };
+}
+
+/**
+ * Map a live deny reason onto the resolver's machine-readable denial reason.
+ * Everything that is not a recognised grant-level denial reports `no_grant` —
+ * the narrowest, least informative answer, which is the right default for a
+ * value that crosses a trust boundary into an error message.
+ */
+function denialReasonOf(
+  evaluation: AgentRunAuthorizationResult,
+): "no_grant" | "expired" | "condition_failed" {
+  switch (evaluation.reason) {
+    case "pinned_expired":
+      return "expired";
+    case "emergency_deny":
+    case "principal_suspended":
+    case "principal_deleted":
+    case "agent_disabled":
+      // The authority existed; a live condition removed it. `condition_failed`
+      // is the resolver's existing vocabulary for exactly that, so surfaces
+      // need no new denial shape.
+      return "condition_failed";
+    default:
+      return "no_grant";
+  }
 }
 
 /**
  * Fail-closed result for an invocation that DECLARES principalKind='agent'
- * but carries no AgentRunIAMContext: without the two principals the
- * delegation ceiling cannot be resolved, and resolving as a human instead
- * would check the wrong principal entirely.
+ * but carries no AgentRunIAMContext: without the two principals the delegation
+ * ceiling cannot be resolved, and resolving as a human instead would check the
+ * wrong principal entirely.
  */
 function denyMissingAgentContext(args: CheckIAMArgs): CheckIAMResult {
   const { capability, ctx, rawInputJson, target } = args;
   const step: TraceStep = {
-    rule: "agent_delegation:missing_context",
+    rule: "agent_ceiling:missing_context",
     description:
       "principalKind='agent' but ctx.agentRun is absent — the delegation " +
       "ceiling cannot be resolved; failing closed",
@@ -334,18 +345,17 @@ function denyMissingAgentContext(args: CheckIAMArgs): CheckIAMResult {
     rawInputJson,
     target: target ?? null,
   }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
-  return { result, principal: null };
+  return { result, principal: null, decision: null };
 }
 
 /**
- * The agent-run IAM check: resolve the delegation ceiling (agent ∩ invoking
- * human, deny-wins) against the run's cached snapshot — computed once per run
- * on first use — then audit with principal_kind='agent' and full run lineage.
+ * The agent-run IAM check.
  *
- * Unlike the human path this MAY throw (snapshot fetch failure, incl. missing
- * IAM tables): the kernel's IAM seam treats a check-fn throw as an evaluation
- * failure and fails closed unconditionally (OXA-2056), which is exactly the
- * posture an unattended automation requires.
+ * MAY throw only if the evaluator itself throws unexpectedly — every EXPECTED
+ * failure (unreadable authority, unwritable decision row) is already converted
+ * to a deny inside `evaluateAgentRunAuthorization`. The kernel treats a throw as
+ * an evaluation failure and fails closed unconditionally (OXA-2056), so both
+ * paths land in the same place.
  */
 async function checkAgentRunIAM(
   args: CheckIAMArgs & { agentRun: AgentRunIAMContext },
@@ -353,9 +363,8 @@ async function checkAgentRunIAM(
   const { capability, ctx, defaultEffect, rawInputJson, target, agentRun } =
     args;
 
-  const resolution = await resolutionForAgentRun(agentRun, ctx);
-
-  const perms = resolveAgentRunCapability(agentRun, resolution, {
+  const evaluation = await evaluateAgentRunAuthorization({
+    agentRun,
     capability,
     scope: {
       kind: (ctx.workspaceId ? "workspace" : "org") as "org" | "workspace",
@@ -363,14 +372,15 @@ async function checkAgentRunIAM(
       workspaceId: ctx.workspaceId,
     },
     defaultEffect,
-    now: new Date(),
+    requestId: ctx.requestId,
+    inputDigest: inputDigestOf(rawInputJson),
     clientIp: ctx.clientIp ?? null,
   });
 
-  const result = agentResolveResult(perms);
+  const result = agentResolveResult(evaluation);
 
   // Audit — fire-and-forget, same OXA-2058 contract as the human path — with
-  // the AGENT as acting principal (principal_kind='agent'), the delegating
+  // the AGENT as acting principal (principal_kind='agent'), the initiating
   // human's principal id, and run lineage (agentId/runId/parentRunId, §5).
   emitAudit({
     capability,
@@ -388,5 +398,9 @@ async function checkAgentRunIAM(
     },
   }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
 
-  return { result, principal: agentRun.agentPrincipal };
+  return {
+    result,
+    principal: agentRun.agentPrincipal,
+    decision: evaluation.decision,
+  };
 }
