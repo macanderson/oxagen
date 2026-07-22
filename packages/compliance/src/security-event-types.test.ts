@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -79,29 +80,52 @@ describe("security event taxonomy invariants", () => {
 });
 
 describe("migration drift — the DB CHECK must match the taxonomy", () => {
-  // The newest security_events CHECK migration is generated FROM this module
-  // (see db-check.ts). If someone adds an event type without the paired
-  // additive migration, inserts of that type fail at runtime with a constraint
-  // violation — silently, because the TS union already admits it. This test is
-  // the thing that fails first.
-  const MIGRATION = fileURLToPath(
-    new URL(
-      "../../database/atlas/migrations/" +
-        "20260813120000_agent_run_authorization_security_events.sql",
-      import.meta.url,
-    ),
+  // The security_events event_type CHECK is generated FROM this module (see
+  // db-check.ts). Adding an event type without the paired additive migration
+  // fails SILENTLY at review time and LOUDLY in production: the TS union already
+  // admits the value, so the insert compiles and then dies on a constraint
+  // violation. This test is the thing that fails first.
+  //
+  // The migration is DISCOVERED, not hard-coded: whoever adds the next event
+  // type writes a new migration, and this guard must move to it automatically
+  // rather than demand an unrelated edit here.
+  const MIGRATIONS_DIR = fileURLToPath(
+    new URL("../../database/atlas/migrations/", import.meta.url),
   );
 
+  /** The most recent migration that redefines the event_type CHECK. */
+  function latestEventTypeMigration(): { file: string; sql: string } {
+    const candidates = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .reverse();
+    for (const file of candidates) {
+      const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+      if (sql.includes("security_events_event_type_check")) {
+        return { file, sql };
+      }
+    }
+    throw new Error(
+      "No migration defines security_events_event_type_check — the taxonomy " +
+        "has no enforcing constraint.",
+    );
+  }
+
   it("the latest event_type migration contains every value in SECURITY_EVENT_TYPES", () => {
-    const sql = readFileSync(MIGRATION, "utf8");
+    const { file, sql } = latestEventTypeMigration();
     for (const type of SECURITY_EVENT_TYPES) {
-      expect(sql).toContain(`'${type}'`);
+      // The failure message names the migration so the fix is obvious: either
+      // add a new additive migration, or the type was added without one.
+      expect(sql, `${type} is missing from ${file}`).toContain(`'${type}'`);
     }
   });
 
   it("the migration's CHECK body is byte-identical to the generated clause", () => {
-    const sql = readFileSync(MIGRATION, "utf8");
-    expect(sql).toContain(generateEventTypeCheckClause("event_type"));
+    const { file, sql } = latestEventTypeMigration();
+    expect(
+      sql,
+      `${file} drifted from generateEventTypeCheckClause()`,
+    ).toContain(generateEventTypeCheckClause("event_type"));
   });
 });
 
