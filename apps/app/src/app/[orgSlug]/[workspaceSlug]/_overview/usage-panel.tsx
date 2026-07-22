@@ -41,8 +41,8 @@ const EMPTY_BREAKDOWN: BillingUsageBreakdownOutput = {
     inputTokens: 0,
     outputTokens: 0,
     cachedTokens: 0,
+    cacheWriteTokens: 0,
     costMicros: 0,
-    messages: 0,
     executions: 0,
     messages: 0,
   },
@@ -53,6 +53,7 @@ const EMPTY_BREAKDOWN: BillingUsageBreakdownOutput = {
   byCapability: [],
   byPrincipal: [],
   byUser: [],
+  cacheSavingsMicros: 0,
 };
 
 export async function UsagePanel({

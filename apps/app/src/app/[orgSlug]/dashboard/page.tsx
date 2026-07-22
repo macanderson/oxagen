@@ -63,6 +63,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
     inputTokens: 0,
     outputTokens: 0,
     cachedTokens: 0,
+    cacheWriteTokens: 0,
     costMicros: 0,
     executions: 0,
     messages: 0,
@@ -74,6 +75,7 @@ const EMPTY: BillingUsageBreakdownOutput = {
   byCapability: [],
   byPrincipal: [],
   byUser: [],
+  cacheSavingsMicros: 0,
 };
 
 /** Period-over-period change for a Stat tile. `goodUp` sets the sentiment. */
