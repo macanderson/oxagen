@@ -46,6 +46,19 @@ export class ConsentRequiredError extends Error {
 
 export type ConsentStatus = "granted" | "denied";
 
+/**
+ * Consent subject discriminator (Agent RBAC Phase 4a, spec §3.7).
+ * - "user": the original OXA-816 semantics — the subject id is a human user
+ *   id and the consent gates that user's own first use of a tool.
+ * - "agent": an agent-scoped consent created when a role's resourceScope.mcp
+ *   rule resolves "ask" for an agent run — the subject id is the AGENT
+ *   PRINCIPAL id (iam principals uuid), so agent consents are labeled
+ *   distinctly and never satisfy (or are satisfied by) user lookups.
+ * Every read/write below filters on this kind; the default "user" keeps all
+ * pre-existing call sites byte-identical.
+ */
+export type ConsentSubjectKind = "user" | "agent";
+
 export interface ConsentDecision {
   status: ConsentStatus;
   /** True when the row is an unexpired wildcard or per-tool grant. */
@@ -53,7 +66,7 @@ export interface ConsentDecision {
 }
 
 /**
- * Resolve the effective consent for (workspace, user, server, tool).
+ * Resolve the effective consent for (workspace, subject, server, tool).
  *
  * Lookup order (most specific wins):
  *   1. A per-tool row for `toolName`.
@@ -63,12 +76,17 @@ export interface ConsentDecision {
  * A denied row is returned as { status:'denied', active:true } so the caller
  * can short-circuit without re-prompting. Returns null when no row matches —
  * the caller must solicit consent.
+ *
+ * `subjectId` is a human user id for subjectKind "user" (the default — every
+ * pre-existing call site) and an agent principal id for subjectKind "agent";
+ * the kind filter keeps the two consent populations fully separate.
  */
 export async function checkConsent(
   ctx: CapabilityContext,
-  userId: string,
+  subjectId: string,
   serverId: string,
   toolName: string,
+  subjectKind: ConsentSubjectKind = "user",
 ): Promise<ConsentDecision | null> {
   const rows = await withTenantDb((tx) =>
     tx
@@ -82,7 +100,8 @@ export async function checkConsent(
         and(
           eq(schema.mcpConsents.orgId, ctx.orgId),
           eq(schema.mcpConsents.workspaceId, ctx.workspaceId),
-          eq(schema.mcpConsents.userId, userId),
+          eq(schema.mcpConsents.userId, subjectId),
+          eq(schema.mcpConsents.subjectKind, subjectKind),
           eq(schema.mcpConsents.mcpServerId, serverId),
           or(
             eq(schema.mcpConsents.toolName, toolName),
@@ -109,10 +128,14 @@ export async function checkConsent(
 export interface RecordConsentArgs {
   orgId: string;
   workspaceId: string;
+  /** Consent subject id — a human user id for subjectKind "user" (default),
+   *  the agent principal id for subjectKind "agent". */
   userId: string;
   serverId: string;
   toolName: string;
   status: ConsentStatus;
+  /** Consent subject discriminator; defaults to "user" (pre-Phase-4a rows). */
+  subjectKind?: ConsentSubjectKind;
   /** Override the default TTL. Pass null for a non-expiring grant (pre-grant). */
   ttlMs?: number | null;
 }
@@ -120,9 +143,13 @@ export interface RecordConsentArgs {
 /**
  * Persist (upsert) a durable consent decision so subsequent calls run inline.
  * Upserts on the (workspace, user, server, tool) unique key — a later decision
- * overrides an earlier one (e.g. a user re-grants after a denial).
+ * overrides an earlier one (e.g. a user re-grants after a denial). The key
+ * needs no subject_kind component: user ids and agent principal ids live in
+ * disjoint uuid spaces, so the two subject kinds can never collide on it.
  */
-export async function recordConsent(args: RecordConsentArgs): Promise<{ consentId: string }> {
+export async function recordConsent(
+  args: RecordConsentArgs,
+): Promise<{ consentId: string }> {
   const now = new Date();
   const expiresAt =
     args.ttlMs === null
@@ -135,6 +162,7 @@ export async function recordConsent(args: RecordConsentArgs): Promise<{ consentI
         orgId: args.orgId,
         workspaceId: args.workspaceId,
         userId: args.userId,
+        subjectKind: args.subjectKind ?? "user",
         mcpServerId: args.serverId,
         toolName: args.toolName,
         status: args.status,
@@ -171,7 +199,10 @@ export interface ListConsentsArgs {
 
 export interface ConsentRow {
   publicId: string;
+  /** Subject id — user id ("user" rows) or agent principal id ("agent" rows). */
   userId: string;
+  /** Distinct labeling for the two consent populations (Phase 4a). */
+  subjectKind: ConsentSubjectKind;
   mcpServerId: string;
   toolName: string;
   status: ConsentStatus;
@@ -181,7 +212,9 @@ export interface ConsentRow {
 }
 
 /** List consent grants in the active workspace (optionally filtered by user). */
-export async function listConsents(args: ListConsentsArgs): Promise<ConsentRow[]> {
+export async function listConsents(
+  args: ListConsentsArgs,
+): Promise<ConsentRow[]> {
   const conds = [
     eq(schema.mcpConsents.orgId, args.orgId),
     eq(schema.mcpConsents.workspaceId, args.workspaceId),
@@ -192,6 +225,7 @@ export async function listConsents(args: ListConsentsArgs): Promise<ConsentRow[]
       .select({
         publicId: schema.mcpConsents.publicId,
         userId: schema.mcpConsents.userId,
+        subjectKind: schema.mcpConsents.subjectKind,
         mcpServerId: schema.mcpConsents.mcpServerId,
         toolName: schema.mcpConsents.toolName,
         status: schema.mcpConsents.status,
@@ -206,6 +240,7 @@ export async function listConsents(args: ListConsentsArgs): Promise<ConsentRow[]
   return rows.map((r) => ({
     publicId: r.publicId,
     userId: r.userId,
+    subjectKind: (r.subjectKind ?? "user") as ConsentSubjectKind,
     mcpServerId: r.mcpServerId,
     toolName: r.toolName,
     status: r.status as ConsentStatus,

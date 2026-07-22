@@ -20,9 +20,12 @@
 // rest of @oxagen/oxagen/iam.
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
+// Type-only — erased at compile time, so no runtime cycle with agent-schema.
+import type { GraphAccess } from "../agent-schema";
 import {
   resolveAgentEffectivePermissions,
   type EffectivePermissions,
+  type EffectiveResourceScope,
   type Grant,
   type Policy,
   type ResolveScope,
@@ -88,6 +91,26 @@ export interface AgentRunIAMContext {
   readonly runId: string;
   /** Parent run for subagent dispatches; null/absent for top-level runs. */
   readonly parentRunId?: string | null;
+  /**
+   * The parent run's already-resolved effective resourceScope, set by the
+   * dispatch/bridge path that created this child context (subagent executor,
+   * A2A inbound). When present it is an ADDITIONAL ceiling on every
+   * resolution — the resolver intersects it dimension-wise, so a child can
+   * only narrow, never widen, its parent's scope (spec §0/§3.3). Absent for
+   * top-level runs.
+   */
+  readonly parentEffectiveScope?: EffectiveResourceScope;
+  /**
+   * The agent DEFINITION's `graphAccess` declaration (agent-schema.ts),
+   * populated by the run driver from the deployed definition version when the
+   * run context is constructed. Phase 3 (spec §3.6) intersects this — the
+   * *request* — with the role ceiling (`resolution`'s resourceScope.graph) to
+   * produce the effective GraphScope every ontology / semantic graph query
+   * runs under. Absent ⇒ the declaration contributes no restriction (the role
+   * ceiling alone applies); a missing declaration can never widen access
+   * because the ceiling still binds.
+   */
+  readonly graphAccess?: GraphAccess;
   /**
    * Per-run resolution cache. Written by the first kernel IAM check of the
    * run (packages/iam/src/check-iam.ts); read by every subsequent invoke()
@@ -165,6 +188,10 @@ export function resolveAgentRunCapability(
     defaultEffect: args.defaultEffect,
     now: args.now,
     clientIp: args.clientIp,
+    // Subagent/A2A narrowing (spec §2.7): the parent run's effective scope is
+    // an additional ceiling — intersected dimension-wise by the resolver, so
+    // this child resolution can only narrow, never widen, the parent's scope.
+    parentEffectiveScope: runCtx.parentEffectiveScope,
   });
 
   resolution.byCapability.set(args.capability, permissions);

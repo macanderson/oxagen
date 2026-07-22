@@ -47,6 +47,19 @@ export interface ResolveAgentRunAuthzContextArgs {
   workspaceId: string;
   /** Agent public id (agt_…) or UUID. */
   agentId: string;
+  /**
+   * The user id of the human who actually ENQUEUED/INVOKED this run, when the
+   * enqueue surface captured one (Agent RBAC Phase 2b — threaded via RunSpec
+   * `delegation.userId`). When present (non-null), the human side of the
+   * delegation ceiling is resolved from THIS user, not from the agent
+   * principal's `parentUserId` (the agent's creator): the ceiling is the
+   * human the run acts on behalf of. There is deliberately NO fallback to the
+   * creator when the invoking user has no principal — humanPrincipal resolves
+   * to null and the resolver's unprivileged sentinel applies (fail-closed; a
+   * missing delegator never widens access). Absent/null preserves the Phase 1
+   * behavior: the creator recorded at provisioning time is the delegator.
+   */
+  invokingUserId?: string | null;
 }
 
 /**
@@ -60,7 +73,7 @@ export interface ResolveAgentRunAuthzContextArgs {
 export async function resolveAgentRunAuthzContext(
   args: ResolveAgentRunAuthzContextArgs,
 ): Promise<AgentRunAuthzContext | null> {
-  const { orgId, workspaceId, agentId } = args;
+  const { orgId, workspaceId, agentId, invokingUserId } = args;
   return withTenantDb(async (tx) => {
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -112,8 +125,13 @@ export async function resolveAgentRunAuthzContext(
       workspaceId: agentPrincipalRow.workspaceId,
     };
 
+    // Delegating human: the run's INVOKING user when the enqueue surface
+    // captured one (invokingUserId — see the args doc), otherwise the agent's
+    // creator recorded on the agent principal at provisioning time.
+    const delegatorUserId = invokingUserId ?? agentPrincipalRow.parentUserId;
+
     let humanPrincipal: ResolvedPrincipal | null = null;
-    if (agentPrincipalRow.parentUserId) {
+    if (delegatorUserId) {
       const [humanRow] = await tx
         .select({
           id: schema.principals.id,
@@ -125,7 +143,7 @@ export async function resolveAgentRunAuthzContext(
         .where(
           and(
             eq(schema.principals.orgId, orgId),
-            eq(schema.principals.parentUserId, agentPrincipalRow.parentUserId),
+            eq(schema.principals.parentUserId, delegatorUserId),
             eq(schema.principals.kind, "human"),
           ),
         )
