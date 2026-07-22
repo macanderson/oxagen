@@ -42,6 +42,7 @@ import {
   AuthorizationSnapshotError,
   createAgentRunAuthorizationSnapshot,
   createChildRunAuthorizationSnapshot,
+  loadAuthorizationSnapshot,
   parseStoredCeiling,
 } from "./authorization-snapshot";
 import { canonicalGrantCeiling } from "@oxagen/oxagen/iam";
@@ -730,5 +731,81 @@ describe("parseStoredCeiling()", () => {
     expect(parsed.assignments).toEqual([]);
     expect(parsed.roleGrants).toEqual([]);
     expect(parsed.initiatingPrincipalId).toBe("");
+  });
+});
+
+// ── Loading a persisted binding back ────────────────────────────────────────
+
+describe("loadAuthorizationSnapshot()", () => {
+  // The worker hydrating a claimed run reads its ceiling back from the ROW —
+  // it never rebuilds one from current grants, which is what stops a run from
+  // silently re-acquiring authority it was not admitted with.
+
+  it("rehydrates the immutable binding from a persisted row", async () => {
+    primeDb([[parentRow()]]);
+
+    const binding = await loadAuthorizationSnapshot("ras_parent");
+
+    expect(binding).not.toBeNull();
+    expect(binding?.snapshotId).toBe("uuid-parent");
+    expect(binding?.snapshotPublicId).toBe("ras_parent");
+    expect(binding?.denyGenerationAtAdmission).toEqual({
+      org: 4,
+      workspace: 9,
+    });
+    expect(binding?.nextValidityBoundaryAt).toBe(LATER.toISOString());
+    // The ceiling comes back as the domain shape, with binding identity intact.
+    expect(binding?.ceiling.assignments.map((a) => a.assignmentId)).toEqual([
+      "pra_agent",
+      "pra_human",
+    ]);
+    expect(binding?.ceiling.roleGrants.map((g) => g.grantId)).toEqual([
+      "rlg_a_read",
+      "rlg_a_mutate",
+    ]);
+  });
+
+  it("accepts an internal UUID as well as a ras_ public id", async () => {
+    primeDb([[parentRow()]]);
+    const binding = await loadAuthorizationSnapshot("uuid-parent");
+    expect(binding?.snapshotPublicId).toBe("ras_parent");
+  });
+
+  it("returns null for an unknown snapshot rather than inventing a ceiling", async () => {
+    primeDb([[]]);
+    expect(await loadAuthorizationSnapshot("ras_missing")).toBeNull();
+  });
+
+  it("reads under one repeatable-read snapshot", async () => {
+    primeDb([[parentRow()]]);
+    await loadAuthorizationSnapshot("ras_parent");
+    expect(mocks.repeatableReadCalls).toBe(1);
+  });
+
+  it("round-trips a ceiling this module itself persisted", async () => {
+    primeDb(rootResultSets());
+    const created = await createAgentRunAuthorizationSnapshot(ROOT_ARGS);
+
+    primeDb([
+      [
+        {
+          id: "uuid-snapshot",
+          publicId: created.snapshotPublicId,
+          orgId: ORG,
+          workspaceId: WS,
+          snapshotDigest: created.snapshotDigest,
+          grantCeilingDigest: created.grantCeilingDigest,
+          orgDenyGeneration: 4,
+          workspaceDenyGeneration: 9,
+          nextValidityBoundaryAt: SOON,
+          resolvedAt: NOW,
+          grantCeiling: canonicalGrantCeiling(created.ceiling),
+        },
+      ],
+    ]);
+
+    const loaded = await loadAuthorizationSnapshot(created.snapshotPublicId);
+    expect(loaded?.ceiling).toEqual(created.ceiling);
+    expect(loaded?.grantCeilingDigest).toBe(created.grantCeilingDigest);
   });
 });
