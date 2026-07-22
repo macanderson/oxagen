@@ -26,8 +26,8 @@ import {
 } from "./spend-budget";
 import {
   claimBudgetThreshold,
-  getAllScopeBudgets,
   getScopeBudgets,
+  listSpendBudgets,
   type SpendBudgetRow,
 } from "./spend-budget-store";
 import { logger } from "./logger";
@@ -340,7 +340,7 @@ export interface SpendBudgetStatus {
  * failure yields a status with spentMicros = 0 and state 'ok' so the panel still
  * renders the configured ceiling.
  *
- * Loads DISABLED ceilings too (getAllScopeBudgets, not the enforcement path's
+ * Loads DISABLED ceilings too (listSpendBudgets, not the enforcement path's
  * enabled-only getScopeBudgets) — the panel is the only surface that can re-enable
  * one, so hiding it there would strand the row.
  */
@@ -349,7 +349,7 @@ export async function getSpendBudgetStatuses(
     Pick<SpendGateDeps, "loadBudgets" | "readSpend" | "now">
   > = {},
 ): Promise<SpendBudgetStatus[]> {
-  const loadBudgets = overrides.loadBudgets ?? getAllScopeBudgets;
+  const loadBudgets = overrides.loadBudgets ?? listSpendBudgets;
   const readSpend = overrides.readSpend ?? sumSpendMicros;
   const now = new Date((overrides.now ?? (() => Date.now()))());
 
