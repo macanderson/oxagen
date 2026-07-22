@@ -26,7 +26,13 @@ import { clickhouse } from "./clickhouse";
 export interface UsageTotals {
   inputTokens: number;
   outputTokens: number;
+  /** Prompt-cache READ tokens (cache hits) — a subset of inputTokens. */
   cachedTokens: number;
+  /**
+   * Prompt-cache WRITE tokens (cache creation) — a subset of inputTokens billed
+   * at the provider premium (#1076). Pre-migration-0026 rows carry 0.
+   */
+  cacheWriteTokens: number;
   /** Sum of cost_usd_micros (micro-USD; 1 USD = 1_000_000). */
   costMicros: number;
   /** Number of token_usage rows (LLM calls) in scope. */
@@ -99,6 +105,7 @@ interface RawAgg {
   input_tokens: string;
   output_tokens: string;
   cached_tokens: string;
+  cache_write_tokens: string;
   cost_micros: string;
   executions: string;
   messages: string;
@@ -108,6 +115,7 @@ const EMPTY_TOTALS: UsageTotals = {
   inputTokens: 0,
   outputTokens: 0,
   cachedTokens: 0,
+  cacheWriteTokens: 0,
   costMicros: 0,
   executions: 0,
   messages: 0,
@@ -118,6 +126,7 @@ function toTotals(r: RawAgg): UsageTotals {
     inputTokens: Number(r.input_tokens),
     outputTokens: Number(r.output_tokens),
     cachedTokens: Number(r.cached_tokens),
+    cacheWriteTokens: Number(r.cache_write_tokens),
     costMicros: Number(r.cost_micros),
     executions: Number(r.executions),
     messages: Number(r.messages),
@@ -136,6 +145,7 @@ const AGG_SELECT = `
   sum(input_tokens)                        AS input_tokens,
   sum(output_tokens)                       AS output_tokens,
   sum(cached_tokens)                       AS cached_tokens,
+  sum(cache_write_tokens)                  AS cache_write_tokens,
   sum(cost_usd_micros)                     AS cost_micros,
   count()                                  AS executions,
   count(DISTINCT execution_step_id)        AS messages`;
@@ -274,6 +284,7 @@ export async function readUsageBreakdown(args: {
       inputTokens: acc.inputTokens + r.inputTokens,
       outputTokens: acc.outputTokens + r.outputTokens,
       cachedTokens: acc.cachedTokens + r.cachedTokens,
+      cacheWriteTokens: acc.cacheWriteTokens + r.cacheWriteTokens,
       costMicros: acc.costMicros + r.costMicros,
       executions: acc.executions + r.executions,
       // `messages` is a DISTINCT count, not additive: summing per-model rows

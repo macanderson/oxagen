@@ -26,6 +26,7 @@ import {
 } from "./spend-budget";
 import {
   claimBudgetThreshold,
+  getAllScopeBudgets,
   getScopeBudgets,
   type SpendBudgetRow,
 } from "./spend-budget-store";
@@ -102,6 +103,28 @@ const spendCache = new Map<string, CacheEntry<bigint>>();
 export function clearSpendBudgetCaches(): void {
   configCache.clear();
   spendCache.clear();
+}
+
+/**
+ * Drop the cached config + spend for one org's scope so a just-written ceiling
+ * takes effect immediately in THIS process rather than after the short TTL.
+ * Called by set_spend_budget's handler: raising a ceiling is the override that
+ * clears a denial, and an admin must not watch a stale cache keep denying for up
+ * to 30s. Best-effort and per-process — cross-process caches still converge on
+ * the TTL — so it never needs to succeed for correctness, only for freshness.
+ * Clears EVERY config and spend entry under the org: setting the org-level
+ * ceiling invalidates every workspace's cached view of it (each workspace's
+ * config entry is keyed by its own id yet cached the same org-default row), and
+ * we may not know the period/windowDays a spend entry was cached under.
+ */
+export function invalidateSpendBudgetScope(args: { orgId: string }): void {
+  const prefix = `${args.orgId}:`;
+  for (const key of configCache.keys()) {
+    if (key.startsWith(prefix)) configCache.delete(key);
+  }
+  for (const key of spendCache.keys()) {
+    if (key.startsWith(prefix)) spendCache.delete(key);
+  }
 }
 
 function scopeKey(orgId: string, workspaceId: string): string {
@@ -316,13 +339,17 @@ export interface SpendBudgetStatus {
  * so the panel is accurate, not up-to-15s stale. Never throws: a spend-read
  * failure yields a status with spentMicros = 0 and state 'ok' so the panel still
  * renders the configured ceiling.
+ *
+ * Loads DISABLED ceilings too (getAllScopeBudgets, not the enforcement path's
+ * enabled-only getScopeBudgets) — the panel is the only surface that can re-enable
+ * one, so hiding it there would strand the row.
  */
 export async function getSpendBudgetStatuses(
   overrides: Partial<
     Pick<SpendGateDeps, "loadBudgets" | "readSpend" | "now">
   > = {},
 ): Promise<SpendBudgetStatus[]> {
-  const loadBudgets = overrides.loadBudgets ?? getScopeBudgets;
+  const loadBudgets = overrides.loadBudgets ?? getAllScopeBudgets;
   const readSpend = overrides.readSpend ?? sumSpendMicros;
   const now = new Date((overrides.now ?? (() => Date.now()))());
 

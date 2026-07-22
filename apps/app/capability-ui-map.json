@@ -298,6 +298,24 @@
       "verifiedAt": null,
       "verifiedBy": "web-app-2.0-phase-2"
     },
+    "get_spend_budget": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/page.tsx",
+      "entry": "Spend Budgets page load → getSpendBudgetsAction fetches both org + workspace ceiling status, rendered by SpendBudgetsPanel",
+      "testid": "spend-budgets-panel",
+      "proof": "apps/app/e2e/spend-budgets.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "OXA-1079"
+    },
+    "set_spend_budget": {
+      "route": "/[orgSlug]/[workspaceSlug]/settings/spend-budgets",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/spend-budgets/scope-budget-card.tsx",
+      "entry": "Spend Budgets → per-scope card \"Set a ceiling\" / \"Edit ceiling\" form \"Save ceiling\" submit → setSpendBudgetAction",
+      "testid": "spend-budget-workspace-save",
+      "proof": "apps/app/e2e/spend-budgets.spec.ts",
+      "verifiedAt": null,
+      "verifiedBy": "OXA-1079"
+    },
     "get_workspace_user_preferences": {
       "route": "/[orgSlug]/[workspaceSlug]/settings/agent-defaults",
       "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/agent-defaults/coding-agent-preferences-form.tsx",

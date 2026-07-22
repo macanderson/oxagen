@@ -1,0 +1,13 @@
+export const MAX_ENVELOPE_JCS_BYTES = 1_048_576;
+export const MAX_CONTEXT_FRAMES = 256;
+export const MAX_MODEL_CALLS = 512;
+export const MAX_CHANGES = 5_000;
+export const MAX_TOOL_CALLS = 2_000;
+export const MAX_APPROVALS = 256;
+export const MAX_VERIFICATIONS = 512;
+export const MAX_COMMITS = 1_000;
+export const MAX_PULL_REQUESTS = 64;
+export const MAX_ARTIFACTS = 1_000;
+export const MAX_ORDINARY_STRING_UTF8_BYTES = 4_096;
+export const MAX_TERMINAL_SUMMARY_UTF8_BYTES = 16_384;
+export const RUN_STAGE_COUNT = 9;

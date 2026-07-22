@@ -3,6 +3,7 @@ import {
   assertWithinSpendBudget,
   clearSpendBudgetCaches,
   getSpendBudgetStatuses,
+  invalidateSpendBudgetScope,
   type SpendGateDeps,
 } from "./spend-budget-gate";
 import { BudgetExceededError } from "./spend-budget";
@@ -185,14 +186,72 @@ describe("assertWithinSpendBudget — <5ms cached path (AC: guard adds <5ms p50)
     });
 
     await assertWithinSpendBudget(args, d); // cold — warms caches (~80ms)
-    const start = performance.now();
-    await assertWithinSpendBudget(args, d); // warm — cache hits only
-    const elapsedMs = performance.now() - start;
 
-    expect(elapsedMs).toBeLessThan(5);
-    // Readers were each hit exactly once (the warm call touched neither).
+    // Median of N warm calls, not a single wall-clock sample: one sample flakes
+    // on a shared CI runner (a GC pause or scheduler hiccup on the one call
+    // fails the assert). The median is robust to an occasional outlier while
+    // still proving the steady-state guard is a sub-millisecond cache read.
+    const samples: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const start = performance.now();
+      await assertWithinSpendBudget(args, d); // warm — cache hits only
+      samples.push(performance.now() - start);
+    }
+    samples.sort((a, b) => a - b);
+    const medianMs = samples[Math.floor(samples.length / 2)]!;
+
+    expect(medianMs).toBeLessThan(5);
+    // Readers were each hit exactly once (every warm call touched neither).
     expect(d.loadBudgets).toHaveBeenCalledTimes(1);
     expect(d.readSpend).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("invalidateSpendBudgetScope", () => {
+  it("forces the next gate call to re-read config + spend for the org", async () => {
+    const loadBudgets = vi.fn(async () => [
+      budgetRow({ limitMicros: 100_000_000n }),
+    ]);
+    const readSpend = vi.fn(async () => 1_000_000n);
+    const d = deps({
+      loadBudgets,
+      readSpend,
+      now: () => Date.now(),
+      ttlConfigMs: 60_000,
+      ttlSpendMs: 60_000,
+    });
+
+    await assertWithinSpendBudget(args, d); // warms both caches
+    await assertWithinSpendBudget(args, d); // served from cache
+    expect(loadBudgets).toHaveBeenCalledTimes(1);
+    expect(readSpend).toHaveBeenCalledTimes(1);
+
+    invalidateSpendBudgetScope({ orgId: "org-1" });
+
+    await assertWithinSpendBudget(args, d); // caches dropped → re-reads
+    expect(loadBudgets).toHaveBeenCalledTimes(2);
+    expect(readSpend).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not clear another org's cached entries", async () => {
+    const loadBudgets = vi.fn(async () => [
+      budgetRow({ limitMicros: 100_000_000n }),
+    ]);
+    const readSpend = vi.fn(async () => 1_000_000n);
+    const d = deps({
+      loadBudgets,
+      readSpend,
+      now: () => Date.now(),
+      ttlConfigMs: 60_000,
+      ttlSpendMs: 60_000,
+    });
+
+    await assertWithinSpendBudget(args, d); // warms org-1's caches
+    invalidateSpendBudgetScope({ orgId: "other-org" }); // unrelated org
+    await assertWithinSpendBudget(args, d); // still cached
+
+    expect(loadBudgets).toHaveBeenCalledTimes(1);
+    expect(readSpend).toHaveBeenCalledTimes(1);
   });
 });
 
