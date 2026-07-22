@@ -158,6 +158,8 @@ const ACTIONS = new Set([
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind",
   "unbind",
+  // Agent RBAC role-assignment verb (docs/specs/agent-rbac/spec.md Phase 1).
+  "assign",
   // imperative verbs used by shipped capabilities that predate this list
   // (draft_skill, save_memory, post_conversation_message, debug_execution,
   // revise_agent_def, revise_skill) — renaming a shipped capability requires

@@ -10,6 +10,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
 - [agent.compose](agent.compose.md) — Plan and execute a chain of capabilities to accomplish a goal, threading each step's output into dependent inputs, then synthesize a summary
 - [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
+- [agent.role.assign](agent.role.assign.md) — Assign an IAM role to an agent's principal, replacing any existing assignment; enforces a delegation ceiling and enterprise-only custom-role tier gating
+- [agent.role.revoke](agent.role.revoke.md) — Revoke (soft-delete) an agent's role assignment
+- [agent.role.list](agent.role.list.md) — List an agent's active role assignments
+- [agent.role.get](agent.role.get.md) — Read one role assignment for an agent by (agentId, roleId); returns null rather than 404
 - [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
 - [agent.definition.list](agent.definition.list.md) — List the agent definitions in the current workspace with identity, lifecycle status, deployment posture, and latest version number
 - [agent.definition.publish](agent.definition.publish.md) — Publish an agent version — marks it published, checksums its canonical config, and sets it as the active version (immutable thereafter)

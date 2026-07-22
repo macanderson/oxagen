@@ -852,6 +852,66 @@
       }
     },
     {
+      "name": "assign_agent_role",
+      "file": "agent.role.assign.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_agent_role",
+      "file": "agent.role.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_agent_roles",
+      "file": "agent.role.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "revoke_agent_role",
+      "file": "agent.role.revoke.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": ["api", "mcp", "agent"],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "run_sandbox_command",
       "file": "agent.sandbox.exec.ts",
       "domain": "agent",

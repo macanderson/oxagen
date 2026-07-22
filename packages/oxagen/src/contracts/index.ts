@@ -36,6 +36,10 @@ import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentRoleAssign } from "./agent.role.assign";
+import { agentRoleRevoke } from "./agent.role.revoke";
+import { agentRoleList } from "./agent.role.list";
+import { agentRoleGet } from "./agent.role.get";
 import { agentDefinitionSuggest } from "./agent.definition.suggest";
 import { agentDefinitionRevise } from "./agent.definition.revise";
 import { agentDefinitionSummarize } from "./agent.definition.summarize";
@@ -555,6 +559,10 @@ export {
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentRoleAssign,
+  agentRoleRevoke,
+  agentRoleList,
+  agentRoleGet,
   agentDefinitionSuggest,
   agentDefinitionRevise,
   agentDefinitionSummarize,
@@ -912,6 +920,10 @@ export const contracts = [
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentRoleAssign,
+  agentRoleRevoke,
+  agentRoleList,
+  agentRoleGet,
   agentDefinitionSuggest,
   agentDefinitionRevise,
   agentDefinitionSummarize,

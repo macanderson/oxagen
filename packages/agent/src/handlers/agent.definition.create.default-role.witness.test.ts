@@ -6,6 +6,7 @@ const inserts = vi.hoisted(
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  const roleRows = [{ id: "role-contributor", name: "Agent Contributor" }];
 
   const tx = {
     select() {
@@ -17,7 +18,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           return builder;
         },
         limit() {
-          return Promise.resolve([{ id: "role-contributor" }]);
+          return Promise.resolve(roleRows);
+        },
+        then(resolve: (rows: typeof roleRows) => unknown) {
+          return Promise.resolve(roleRows).then(resolve);
         },
       };
       return builder;
@@ -36,7 +40,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           if (insertedValues.version === 1)
             return Promise.resolve([{ version: 1 }]);
           return Promise.resolve([
-            { id: "agent-1", publicId: "agt_1", slug: "rbac-agent" },
+            { id: "agent-1", publicId: "agt_1", slug: "default-role-agent" },
           ]);
         },
       };
@@ -56,12 +60,12 @@ import { TEST_CTX } from "../test-utils/fixtures";
 
 beforeEach(() => inserts.splice(0));
 
-describe("agent principal provisioning", () => {
-  it("creates exactly one agent principal delegated by the creating user", async () => {
+describe("agent default role assignment", () => {
+  it("assigns Agent Contributor to the newly provisioned principal", async () => {
     await agentDefinitionCreateHandler(
       {
-        slug: "rbac-agent",
-        name: "RBAC Agent",
+        slug: "default-role-agent",
+        name: "Default Role Agent",
         agentType: "custom",
         config: {
           graph: {
@@ -78,24 +82,16 @@ describe("agent principal provisioning", () => {
       TEST_CTX,
     );
 
-    const principalInserts = inserts.filter(
-      ({ table }) => table === schema.principals,
+    const assignments = inserts.filter(
+      ({ table }) => table === schema.principalRoleAssignments,
     );
-    expect(principalInserts).toHaveLength(1);
-    expect(principalInserts[0]?.values).toMatchObject({
-      kind: "agent",
-      parentUserId: TEST_CTX.userId,
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]?.values).toMatchObject({
+      principalId: "principal-1",
+      roleId: "role-contributor",
       orgId: TEST_CTX.orgId,
       workspaceId: TEST_CTX.workspaceId,
-    });
-
-    // The principal id returned by that insert must be persisted onto the
-    // agent row in the SAME transaction — the two are created together and
-    // must never drift (docs/specs/agent-rbac/spec.md §3.1).
-    const agentInserts = inserts.filter(({ table }) => table === schema.agents);
-    expect(agentInserts).toHaveLength(1);
-    expect(agentInserts[0]?.values).toMatchObject({
-      principalId: "principal-1",
+      assignedBy: TEST_CTX.userId,
     });
   });
 });

@@ -40,6 +40,8 @@ describe("agent.definition.create handler", () => {
   it("inserts the agent row and v1 version, returning identity", async () => {
     fake.enqueue(
       [{ id: "prn-1" }], // principals insert returning
+      [{ id: "role-contributor" }], // default role lookup (select)
+      [], // principalRoleAssignments insert (awaited, no returning)
       [{ id: "uuid-1", publicId: "agt_1", slug: "my-agent" }], // agents insert returning
       [{ version: 1 }], // agent_versions insert returning
     );
@@ -63,7 +65,7 @@ describe("agent.definition.create handler", () => {
   });
 
   it("throws when the agents insert returns no row", async () => {
-    fake.enqueue([{ id: "prn-1" }], []); // principals ok, agents insert returns nothing
+    fake.enqueue([{ id: "prn-1" }], [{ id: "role-contributor" }], [], []); // principals ok, role lookup ok, PRA insert ok, agents insert returns nothing
     await expect(agentDefinitionCreateHandler(INPUT, CTX)).rejects.toThrow(
       /agents insert failed/,
     );
