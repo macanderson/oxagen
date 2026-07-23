@@ -140,7 +140,7 @@ describe("Context Graph fixture drift lock", () => {
       "https://github.com/macanderson/context-graph-protocol",
     );
     expect(manifest.upstream_commit).toBe(
-      "36a64488f0fe300597ab494e1c4f9e94778175a0",
+      "9fb559aa4d3ec4cf062e59dab113eae4e175c5fa",
     );
     expect(manifest.upstream_manifest_sha256).toBe(
       "sha256:bae644ace4444881450af4f69b3a89e4d2178cc60f4c3a5b7adb3350327d437a",

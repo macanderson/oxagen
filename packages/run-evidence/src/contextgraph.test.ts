@@ -1,9 +1,18 @@
 import { readdirSync, readFileSync } from "node:fs";
+import {
+  budgetTokens,
+  PROTOCOL_VERSION as SDK_PROTOCOL_VERSION,
+} from "@contextgraphprotocol/typescript-sdk";
 import { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
 import {
   CONTEXTGRAPH_FIXTURE_PROFILE_VERSION,
   CONTEXTGRAPH_PROTOCOL_VERSION,
+  declaresHonestTokenCostV1,
+  expectedInlineTokenCostV1,
+  hasValidTemporalFieldsV1,
+  invalidTemporalFieldsV1,
+  isProtocolTimestampV1,
   normalizeContextFrameV1,
   normalizeContextQueryV1,
 } from "./contextgraph.js";
@@ -119,7 +128,7 @@ describe("locked Context Graph fixtures", () => {
       "https://github.com/macanderson/context-graph-protocol",
     );
     expect(manifest.upstream_commit).toBe(
-      "36a64488f0fe300597ab494e1c4f9e94778175a0",
+      "9fb559aa4d3ec4cf062e59dab113eae4e175c5fa",
     );
     expect(manifest.upstream_manifest_sha256).toBe(
       "sha256:bae644ace4444881450af4f69b3a89e4d2178cc60f4c3a5b7adb3350327d437a",
@@ -889,6 +898,324 @@ describe("JSON-wire normalization boundary", () => {
 
     expect(() => normalizeContextQueryV1(query)).toThrow(TypeError);
     expect(trapCalls).toBe(0);
+  });
+});
+
+function referenceFrame(overrides: Record<string, unknown> = {}) {
+  const base = minimalFrame({
+    representation: "reference",
+    content_ref: {
+      provider_id: "provider:test",
+      uri: "contextgraph://content/1",
+    },
+    canonical_content_hash: `sha256:${"a".repeat(64)}`,
+    token_cost: 0,
+  });
+  delete (base as Partial<typeof base>).content;
+  return { ...base, ...overrides };
+}
+
+function compactFrame(overrides: Record<string, unknown> = {}) {
+  return minimalFrame({
+    representation: "compact",
+    content: "Summarized evidence",
+    content_digest: `sha256:${"b".repeat(64)}`,
+    canonical_content_hash: `sha256:${"c".repeat(64)}`,
+    transform: {
+      method: "summary",
+      implementation: "test-summarizer",
+      version: "1.0.0",
+    },
+    content_ref: {
+      provider_id: "provider:test",
+      uri: "contextgraph://content/2",
+    },
+    token_cost: 5,
+    ...overrides,
+  });
+}
+
+describe("#33 frame representations", () => {
+  it("accepts a reference frame and keeps content absent", () => {
+    const normalized = normalizeContextFrameV1(referenceFrame());
+
+    expect(normalized.representation).toBe("reference");
+    expect("content" in normalized).toBe(false);
+    expect(normalized.content_ref).toEqual({
+      provider_id: "provider:test",
+      uri: "contextgraph://content/1",
+    });
+  });
+
+  it("accepts a fully populated compact frame", () => {
+    const normalized = normalizeContextFrameV1(compactFrame());
+
+    expect(normalized.representation).toBe("compact");
+    expect(normalized.transform?.method).toBe("summary");
+  });
+
+  it("accepts an explicit full representation without materializing a default", () => {
+    expect(
+      normalizeContextFrameV1(minimalFrame({ representation: "full" }))
+        .representation,
+    ).toBe("full");
+    expect("representation" in normalizeContextFrameV1(minimalFrame())).toBe(
+      false,
+    );
+  });
+
+  it("treats a frame without representation as full: content is required", () => {
+    const frame = minimalFrame();
+    delete (frame as Partial<typeof frame>).content;
+
+    expect(() => normalizeContextFrameV1(frame)).toThrow(
+      /full frame requires inline content/,
+    );
+  });
+
+  it.each([
+    ["inline content", { content: "" }],
+    ["an inline content hash", { content_digest: `sha256:${"d".repeat(64)}` }],
+    [
+      "a transform",
+      {
+        transform: {
+          method: "summary",
+          implementation: "test-summarizer",
+          version: "1.0.0",
+        },
+      },
+    ],
+  ])("rejects a reference frame carrying %s", (_label, overrides) => {
+    expect(() => normalizeContextFrameV1(referenceFrame(overrides))).toThrow(
+      ZodError,
+    );
+  });
+
+  it.each(["content_ref", "canonical_content_hash"])(
+    "rejects a reference frame missing %s",
+    (field) => {
+      const frame = referenceFrame();
+      delete (frame as Record<string, unknown>)[field];
+      expect(() => normalizeContextFrameV1(frame)).toThrow(ZodError);
+    },
+  );
+
+  it.each([
+    "content",
+    "content_digest",
+    "canonical_content_hash",
+    "transform",
+    "content_ref",
+  ])("rejects a compact frame missing %s", (field) => {
+    const frame = compactFrame();
+    delete (frame as Record<string, unknown>)[field];
+    expect(() => normalizeContextFrameV1(frame)).toThrow(ZodError);
+  });
+
+  it.each([
+    ["representation", "Full"],
+    ["representation", "unknown"],
+    ["representation", ""],
+    ["content_fidelity", "Exact"],
+    ["minimum_content_fidelity", "verbatim"],
+    ["inline_content_requirement", "maybe"],
+  ])("rejects unsupported %s value %j", (field, value) => {
+    expect(() =>
+      normalizeContextFrameV1(minimalFrame({ [field]: value })),
+    ).toThrow(ZodError);
+  });
+
+  it.each([
+    "content",
+    "content_digest",
+    "representation",
+    "content_fidelity",
+    "canonical_content_hash",
+    "content_ref",
+    "transform",
+    "minimum_content_fidelity",
+    "inline_content_requirement",
+    "canonical_token_cost",
+    "tokenizer_ref",
+  ])("rejects explicit null for %s", (field) => {
+    expect(() =>
+      normalizeContextFrameV1(minimalFrame({ [field]: null })),
+    ).toThrow(ZodError);
+  });
+
+  it.each([
+    ["content_ref", { provider_id: "provider:test" }],
+    ["content_ref", { uri: "contextgraph://content/1" }],
+    ["transform", { method: "summary", implementation: "test-summarizer" }],
+    ["transform", { method: "summary", version: "1.0.0" }],
+  ])("rejects %s missing a required field: %j", (field, value) => {
+    expect(() =>
+      normalizeContextFrameV1(referenceFrame({ [field]: value })),
+    ).toThrow(ZodError);
+  });
+
+  it.each([
+    [
+      "content_ref",
+      {
+        provider_id: "provider:test",
+        uri: "contextgraph://content/1",
+        extra: true,
+      },
+    ],
+    [
+      "transform",
+      {
+        method: "summary",
+        implementation: "test-summarizer",
+        version: "1.0.0",
+        extra: true,
+      },
+    ],
+  ])("rejects unknown keys nested in %s", (field, value) => {
+    expect(() =>
+      normalizeContextFrameV1(compactFrame({ [field]: value })),
+    ).toThrow(ZodError);
+  });
+
+  it("enforces u32 bounds for canonical_token_cost", () => {
+    for (const value of [-1, 1.5, 4_294_967_296]) {
+      expect(() =>
+        normalizeContextFrameV1(minimalFrame({ canonical_token_cost: value })),
+      ).toThrow(ZodError);
+    }
+    expect(
+      normalizeContextFrameV1(
+        minimalFrame({ canonical_token_cost: 4_294_967_295 }),
+      ).canonical_token_cost,
+    ).toBe(4_294_967_295);
+  });
+
+  it("round-trips the fidelity and tokenizer surface", () => {
+    const normalized = normalizeContextFrameV1(
+      minimalFrame({
+        content_fidelity: "summarized",
+        minimum_content_fidelity: "exact",
+        inline_content_requirement: "resolvable_reference_allowed",
+        canonical_token_cost: 128,
+        tokenizer_ref: "tokenizer:test/1",
+      }),
+    );
+
+    expect(normalized.content_fidelity).toBe("summarized");
+    expect(normalized.minimum_content_fidelity).toBe("exact");
+    expect(normalized.inline_content_requirement).toBe(
+      "resolvable_reference_allowed",
+    );
+    expect(normalized.canonical_token_cost).toBe(128);
+    expect(normalized.tokenizer_ref).toBe("tokenizer:test/1");
+  });
+
+  it("round-trips query representation preferences in order", () => {
+    const normalized = normalizeContextQueryV1(
+      minimalQuery({ representation_preferences: ["reference", "full"] }),
+    );
+
+    expect(normalized.representation_preferences).toEqual([
+      "reference",
+      "full",
+    ]);
+    expect(
+      "representation_preferences" in normalizeContextQueryV1(minimalQuery()),
+    ).toBe(false);
+  });
+
+  it.each([null, ["Full"], ["unknown"]])(
+    "rejects invalid query representation preferences %j",
+    (value) => {
+      expect(() =>
+        normalizeContextQueryV1(
+          minimalQuery({ representation_preferences: value }),
+        ),
+      ).toThrow(ZodError);
+    },
+  );
+});
+
+describe("canonical token accounting (§B3)", () => {
+  it("derives the expected cost from the canonical SDK arithmetic", () => {
+    expect(expectedInlineTokenCostV1({ content: "Evidence content" })).toBe(4);
+    expect(expectedInlineTokenCostV1({ content: "Evidence content" })).toBe(
+      budgetTokens("Evidence content"),
+    );
+    // Multi-byte UTF-8 counts bytes, not characters: "café" is 5 bytes.
+    expect(expectedInlineTokenCostV1({ content: "café" })).toBe(2);
+    expect(expectedInlineTokenCostV1({ content: undefined })).toBe(0);
+  });
+
+  it("judges token-cost honesty against the frame's inline content", () => {
+    expect(
+      declaresHonestTokenCostV1({ content: "Evidence content", token_cost: 4 }),
+    ).toBe(true);
+    expect(
+      declaresHonestTokenCostV1({ content: "Evidence content", token_cost: 1 }),
+    ).toBe(false);
+    expect(
+      declaresHonestTokenCostV1({ content: undefined, token_cost: 0 }),
+    ).toBe(true);
+  });
+
+  it("keeps honesty a conformance predicate, not a parse gate", () => {
+    // The pinned golden fixtures predate #33's honesty rule, so a dishonest
+    // cost still parses — and is caught by the predicate.
+    const normalized = normalizeContextFrameV1(
+      minimalFrame({ token_cost: 999 }),
+    );
+    expect(declaresHonestTokenCostV1(normalized)).toBe(false);
+  });
+});
+
+describe("temporal profile (§F4)", () => {
+  it.each([
+    "2026-07-20T18:00:00Z",
+    "2026-07-20T18:00:00.123Z",
+    "2026-07-20T18:00:60Z",
+    "2024-02-29T00:00:00Z",
+  ])("accepts protocol timestamp %s", (value) => {
+    expect(isProtocolTimestampV1(value)).toBe(true);
+  });
+
+  it.each([
+    "2026-07-20T18:00:00+02:00",
+    "last tuesday",
+    "2026-02-29T00:00:00Z",
+    "2026-07-20T18:00:00.Z",
+    "2026-07-20T18:00:00",
+    "2026-13-01T00:00:00Z",
+    "2026-07-20T18:00:00z",
+    "2026-07-20t18:00:00Z",
+  ])("rejects non-protocol timestamp %j", (value) => {
+    expect(isProtocolTimestampV1(value)).toBe(false);
+  });
+
+  it("names the temporal fields outside the profile", () => {
+    const frame = normalizeContextFrameV1(
+      minimalFrame({
+        valid_from: "2026-07-20T18:00:00+02:00",
+        recorded_at: "2026-07-20T18:00:00Z",
+      }),
+    );
+
+    expect(invalidTemporalFieldsV1(frame)).toEqual(["valid_from"]);
+    expect(hasValidTemporalFieldsV1(frame)).toBe(false);
+    expect(
+      hasValidTemporalFieldsV1(normalizeContextFrameV1(minimalFrame())),
+    ).toBe(true);
+  });
+});
+
+describe("SDK anchoring", () => {
+  it("pins the fixture protocol version to the SDK's protocol version", () => {
+    const manifest = readFixture<FixtureManifest>("manifest.json");
+
+    expect(CONTEXTGRAPH_PROTOCOL_VERSION).toBe(SDK_PROTOCOL_VERSION);
+    expect(manifest.protocol_version).toBe(SDK_PROTOCOL_VERSION);
   });
 });
 

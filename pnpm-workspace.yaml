@@ -70,6 +70,8 @@ allowBuilds:
   unrs-resolver: true
 
 minimumReleaseAgeExclude:
+  # First-party: our own CGP SDK, consumed the day it is published.
+  - '@contextgraphprotocol/typescript-sdk@0.1.0'
   - inngest-cli@1.30.0
   - '@ai-sdk/anthropic@4.0.7'
   - '@ai-sdk/devtools@1.0.2'

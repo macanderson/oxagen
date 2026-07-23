@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@contextgraphprotocol/typescript-sdk": "0.1.0",
     "canonicalize": "1.0.8",
     "zod": "3.25.76"
   },
