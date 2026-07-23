@@ -265,28 +265,6 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(result.warnings.some((w) => w.includes("ghost-agent"))).toBe(true);
   });
 
-  it("forces every suggested trigger to enabled:false and drops structurally-invalid ones", async () => {
-    setupWorld();
-    const synth = baseSynthesis();
-    synth.triggers = [
-      { type: "schedule", schedule: "0 9 * * 1" },
-      { type: "event", eventSource: "github_repo", eventType: "push" },
-      { type: "event" }, // invalid: missing source/type → dropped
-      { type: "schedule" }, // invalid: missing cron → dropped
-    ];
-    mocks.generateObjectFor.mockResolvedValue({ object: synth });
-
-    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
-
-    expect(result.suggestion.config.triggers).toHaveLength(2);
-    for (const t of result.suggestion.config.triggers) {
-      expect(t.enabled).toBe(false);
-    }
-    expect(
-      result.warnings.filter((w) => w.toLowerCase().includes("trigger")),
-    ).toHaveLength(2);
-  });
-
   it("substitutes an out-of-workspace ontologyId with the first candidate and warns", async () => {
     setupWorld();
     const synth = baseSynthesis();
@@ -712,7 +690,14 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(result.suggestedRole?.roleName).toBe("Agent Contributor");
   });
 
-  it("escalates to Agent Operator for an unattended high-risk draft", async () => {
+  it("computes the role from tools alone — stray trigger data never changes it (triggers removed, #1010)", async () => {
+    // Agent definitions are trigger-free as of #1010: triggering moved to the
+    // automations subsystem, so the definition no longer carries an
+    // attended/unattended signal. A high-risk destructive capability under the
+    // attended default lands at Contributor (a human is assumed present to
+    // answer its approval prompts). Any stray `triggers` field left in the raw
+    // synthesis must NOT feed the suggestion — this guards against config.triggers
+    // sneaking back into the role computation.
     setupWorld();
     mocks.listCapabilities.mockReturnValue([
       {
@@ -724,8 +709,8 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     mocks.generateObjectFor.mockResolvedValue({
       object: {
         ...baseSynthesis(),
-        // repairSynthesis forces enabled:false on this trigger — the suggestion
-        // must key off the trigger TYPE, not its enabled flag.
+        // A schedule trigger would once have escalated this to Operator; it must
+        // now be ignored entirely.
         triggers: [
           { type: "schedule", schedule: "0 * * * *" },
         ] as TriggerFixture[],
@@ -734,8 +719,8 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
     const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
-    expect(result.suggestedRole?.roleName).toBe("Agent Operator");
-    expect(result.suggestedRole?.reason).toMatch(/unattended/i);
+    expect(result.suggestedRole?.roleName).toBe("Agent Contributor");
+    expect(result.suggestedRole?.reason).not.toMatch(/unattended/i);
   });
 
   it("computes the role from the REPAIRED tools — a dropped hallucinated ref never escalates it", async () => {

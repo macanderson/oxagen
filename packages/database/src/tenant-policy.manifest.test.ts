@@ -220,7 +220,11 @@ describe("tenant policy manifest", () => {
     //        iam.authorization_snapshots                         → standard
     //        iam.authorization_deny_generations, iam.emergency_denies,
     //        iam.authorization_decisions                → workspace_nullable
-    expect(POLICY_MANIFEST.length).toBe(109);
+    // 108 = 109 − agent.agent_triggers (the agent.trigger.* subsystem is removed,
+    //      #1010: triggers belong to automations/playbooks; the table is dropped
+    //      in 20260813130000_drop_agent_triggers.sql). Lowering the pin for a
+    //      REMOVED table is the legitimate direction (see above).
+    expect(POLICY_MANIFEST.length).toBe(108);
   });
 
   it("covers the run/attempt/authorization foundation (run-evidence-ingress)", () => {

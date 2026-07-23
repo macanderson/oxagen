@@ -52,11 +52,6 @@ export interface BuilderPrefill {
   strategy: "semantic" | "lexical" | "hybrid" | "explicit";
   maxHops: number;
   maxNodes: number;
-  manualEnabled: boolean;
-  scheduleCron: string;
-  eventSource: string;
-  eventType: string;
-  eventConnection: string;
   /**
    * The Access step's role pre-selection (Agent RBAC Phase 5b). Always a
    * concrete name — the suggested role when the contract returned one, else
@@ -73,10 +68,6 @@ export interface BuilderPrefill {
  * starting point the user can override in the normal steps — this function only
  * decides the pre-filled defaults, never persists anything.
  *
- * Trigger handling mirrors the builder's own initial-state logic: a suggestion
- * with no triggers defaults to manual-enabled (the safe default), and the first
- * schedule/event trigger populates the single cron / event row the UI exposes.
- *
  * `suggestedRole` is the sibling output field, not part of `suggestion` — it is
  * passed separately and is optional, so a caller (or a contract build) without
  * it falls back to "Agent Contributor" rather than leaving the role unset.
@@ -86,10 +77,6 @@ export function mapSuggestionToPrefill(
   suggestedRole?: AgentSuggestedRole,
 ): BuilderPrefill {
   const config = suggestion.config;
-  const triggers = config.triggers ?? [];
-  const schedule = triggers.find((t) => t.type === "schedule");
-  const event = triggers.find((t) => t.type === "event");
-  const hasManual = triggers.some((t) => t.type === "manual");
 
   return {
     name: suggestion.name,
@@ -103,12 +90,6 @@ export function mapSuggestionToPrefill(
     strategy: config.graph?.retrieval?.strategy ?? "hybrid",
     maxHops: config.graph?.budget?.maxHops ?? 2,
     maxNodes: config.graph?.budget?.maxNodes ?? 40,
-    // No explicit triggers → manual (the builder's own default for a blank agent).
-    manualEnabled: triggers.length === 0 ? true : hasManual,
-    scheduleCron: schedule?.schedule ?? "",
-    eventSource: event?.eventSource ?? "",
-    eventType: event?.eventType ?? "",
-    eventConnection: event?.connectionId ?? "",
     roleName: suggestedRole?.roleName ?? DEFAULT_AGENT_ROLE_NAME,
   };
 }

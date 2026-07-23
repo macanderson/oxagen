@@ -15,7 +15,6 @@ import {
   isUuid,
   resolveAgent,
   resolveAgentForA2A,
-  resolveTrigger,
   AgentManagedReadOnlyError,
   assertAgentMutable,
 } from "./_agent-definition";
@@ -48,7 +47,13 @@ describe("resolveAgent (no-tx path)", () => {
   });
 
   it("resolves by UUID identifier", async () => {
-    fake.enqueue([{ id: "018f1a2b-3c4d-7e6f-8a9b-0c1d2e3f4a5b", publicId: "agt_1", slug: "s" }]);
+    fake.enqueue([
+      {
+        id: "018f1a2b-3c4d-7e6f-8a9b-0c1d2e3f4a5b",
+        publicId: "agt_1",
+        slug: "s",
+      },
+    ]);
     const row = await resolveAgent(
       "018f1a2b-3c4d-7e6f-8a9b-0c1d2e3f4a5b",
       "ws_1",
@@ -76,7 +81,10 @@ describe("resolveAgentForA2A (no-tx path)", () => {
     ]);
     const agent = await resolveAgentForA2A("ws_1", "qa-chat");
     expect(agent?.publicId).toBe("agt_1");
-    expect(agent?.activeVersion).toEqual({ id: "ver-1", instructions: "Be terse." });
+    expect(agent?.activeVersion).toEqual({
+      id: "ver-1",
+      instructions: "Be terse.",
+    });
   });
 
   it("returns null for an unknown slug (no throw)", async () => {
@@ -103,36 +111,6 @@ describe("resolveAgentForA2A (no-tx path)", () => {
     ]);
     const agent = await resolveAgentForA2A("ws_1", "draftless");
     expect(agent?.activeVersion).toBeNull();
-  });
-});
-
-describe("resolveTrigger (no-tx path)", () => {
-  it("resolves by public id and includes agentType from the joined agent row", async () => {
-    fake.enqueue([
-      { id: "t-uuid", publicId: "atr_1", agentId: "uuid-1", agentType: "custom" },
-    ]);
-    const row = await resolveTrigger("atr_1", "ws_1");
-    expect(row?.publicId).toBe("atr_1");
-    expect(row?.agentType).toBe("custom");
-  });
-
-  it("surfaces agentType for a managed (interactive_chat) parent", async () => {
-    fake.enqueue([
-      {
-        id: "t-uuid",
-        publicId: "atr_1",
-        agentId: "uuid-1",
-        agentType: "interactive_chat",
-      },
-    ]);
-    const row = await resolveTrigger("atr_1", "ws_1");
-    expect(row?.agentType).toBe("interactive_chat");
-  });
-
-  it("returns null when nothing matches", async () => {
-    fake.enqueue([]);
-    const row = await resolveTrigger("atr_x", "ws_1");
-    expect(row).toBeNull();
   });
 });
 

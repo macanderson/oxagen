@@ -262,10 +262,6 @@ import { routerPolicySetRoute } from "./routes/v1/router.policy.set";
 import { routerStatsListRoute } from "./routes/v1/router.stats.list";
 import { routerDecisionPreviewRoute } from "./routes/v1/router.decision.preview";
 import { agentDeployRoute } from "./routes/v1/agent.deploy";
-import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
-import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
-import { agentTriggerDeleteRoute } from "./routes/v1/agent.trigger.delete";
-import { agentTriggerListRoute } from "./routes/v1/agent.trigger.list";
 import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
@@ -622,10 +618,6 @@ orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
 orgScoped.route("/agent/deploy", agentDeployRoute);
-orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
-orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
-orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
-orgScoped.route("/agent/triggers", agentTriggerListRoute);
 // Eval datasets/runs: from-traces/get/items sub-paths mounted before the base
 // path so they aren't swallowed by the create/list routes' GET/POST on "/".
 orgScoped.route("/eval/datasets/from-traces", evalDatasetFromTracesRoute);

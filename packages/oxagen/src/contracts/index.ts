@@ -49,10 +49,6 @@ import { agentRoleList } from "./agent.role.list";
 import { agentRoleGet } from "./agent.role.get";
 import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
-import { agentTriggerCreate } from "./agent.trigger.create";
-import { agentTriggerUpdate } from "./agent.trigger.update";
-import { agentTriggerDelete } from "./agent.trigger.delete";
-import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionList } from "./agent.execution.list";
 import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
@@ -562,10 +558,6 @@ export {
   agentRoleGet,
   a2aCardGet,
   agentDeploy,
-  agentTriggerCreate,
-  agentTriggerUpdate,
-  agentTriggerDelete,
-  agentTriggerList,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
@@ -912,10 +904,6 @@ export const contracts = [
   agentRoleList,
   agentRoleGet,
   agentDeploy,
-  agentTriggerCreate,
-  agentTriggerUpdate,
-  agentTriggerDelete,
-  agentTriggerList,
   agentUiRender,
   documentsGenerate,
   documentsPdfCreate,

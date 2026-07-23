@@ -115,10 +115,6 @@ const LOADERS: Record<string, LoaderEntry> = {
   list_agent_defs: () => import("./agent.definition.list"),
   get_a2a_card: () => import("./a2a.card.get"),
   deploy_agent: () => import("./agent.deploy"),
-  create_trigger: () => import("./agent.trigger.create"),
-  update_trigger: () => import("./agent.trigger.update"),
-  delete_trigger: () => import("./agent.trigger.delete"),
-  list_triggers: () => import("./agent.trigger.list"),
   // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
   // detach/inspect IAM roles on an agent's delegated principal.
   assign_agent_role: () => import("./agent.role.assign"),

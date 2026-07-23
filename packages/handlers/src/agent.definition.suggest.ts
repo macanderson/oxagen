@@ -127,14 +127,18 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   // the live capability registry's agent metadata — the same category/riskLevel
   // pairs AGENT_ROLE_SPECS computes its grants from. Purely deterministic: no
   // model output feeds this decision.
+  //
+  // Attendance: agent definitions are trigger-free as of #1010 (what starts a
+  // run now lives in the automations subsystem, not the definition), so the
+  // definition no longer carries an attended/unattended signal. Pass no trigger
+  // types — the suggestion defaults to the attended reading; the human-reviewed
+  // role picker and `assign_agent_role` remain the sole authority on the ceiling
+  // actually attached.
   const suggestedRole = suggestNarrowestAgentRole(
     {
       agentTools: config.agentTools,
       graphMode: config.graph.mode,
-      // Trigger TYPES, not their enabled flag — repairSynthesis forces every
-      // suggested trigger disabled, so the declared type is the only signal of
-      // whether a human is meant to be present when the agent runs.
-      triggerTypes: config.triggers.map((t) => t.type),
+      triggerTypes: [],
     },
     selectAgentCapabilities(listCapabilities()),
   );
@@ -146,7 +150,6 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       slug,
       agentType,
       tools: config.agentTools.length,
-      triggers: config.triggers.length,
       recommendations: recommendations.length,
       warnings: warnings.length,
       suggestedRole: suggestedRole.roleName,
@@ -166,7 +169,6 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       config: {
         graph: config.graph,
         agentTools: config.agentTools,
-        triggers: config.triggers,
         instructions: object.instructions,
       },
     },

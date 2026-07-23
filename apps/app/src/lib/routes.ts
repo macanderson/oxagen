@@ -179,14 +179,12 @@ export const workspace = {
   },
 
   // Automations (web-app-2.0) — human-gated agent automation: the automations
-  // list + editor, the workspace-wide trigger board, and parallel workflow/swarm
-  // runs. The biggest previously-headless section (automation.* + workflow.*).
+  // list + editor and parallel workflow/swarm runs. The biggest
+  // previously-headless section (automation.* + workflow.*).
   automations: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automations`,
     automation: (ctx: Required<ScopeContext>, automationId: string): string =>
       `${wsBase(ctx)}/automations/${encodeURIComponent(automationId)}`,
-    triggers: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automations/triggers`,
     workflows: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/automations/workflows`,
     // Fleet lineage explorer (issue #1078) — the dispatch tree for one

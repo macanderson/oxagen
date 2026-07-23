@@ -5,7 +5,7 @@
  *
  * A useState-driven wizard (there is no Stepper primitive) that walks the
  * builder through the stages of defining an interactive agent. Create mode
- * leads with an AI-assisted "Describe" step (8 steps); edit mode omits it (7):
+ * leads with an AI-assisted "Describe" step (7 steps); edit mode omits it (6):
  *
  *   0. Describe  — (create only) plain-language description → agent.definition
  *                  .suggest generates a complete config, pre-filled into the
@@ -19,9 +19,11 @@
  *                  the configuration is intersected with. Persisted separately
  *                  via assign_agent_role on save; new agents default to
  *                  "Agent Contributor" (auto-assigned by the backend).
- *   6. Triggers  — manual (default) plus optional schedule / event triggers.
- *   7. Review    — summary + effective scope (role ∩ config) + Save draft /
+ *   6. Review    — summary + effective scope (role ∩ config) + Save draft /
  *                  Publish / Publish & Deploy.
+ *
+ * Triggers belong to automations/playbooks, not agent definitions (#1010) —
+ * the agent is a pure, portable definition with no trigger fields.
  *
  * All persistence flows through the server actions in ./actions.ts, which gate
  * every mutation on workspace Owner/Admin. A `readOnly` builder (managed agent
@@ -45,14 +47,12 @@ import {
 import type {
   AgentDefinitionConfig,
   AgentTool,
-  AgentTrigger,
   GraphAccess,
   GraphAccessMode,
   GraphRetrievalStrategy,
 } from "@oxagen/oxagen/agent-schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -196,7 +196,6 @@ const CORE_STEPS = [
   { key: "equip", label: "Equip" },
   { key: "ground", label: "Ground" },
   { key: "access", label: "Access" },
-  { key: "triggers", label: "Triggers" },
   { key: "review", label: "Review" },
 ] as const;
 
@@ -204,7 +203,7 @@ const DESCRIBE_STEP = { key: "describe", label: "Describe" } as const;
 
 type BuilderStep = { key: string; label: string };
 
-/** 8 steps in create mode (Describe first), 7 in edit mode (Describe omitted). */
+/** 7 steps in create mode (Describe first), 6 in edit mode (Describe omitted). */
 function stepsFor(mode: "create" | "edit"): BuilderStep[] {
   return mode === "create" ? [DESCRIBE_STEP, ...CORE_STEPS] : [...CORE_STEPS];
 }
@@ -238,9 +237,6 @@ export function AgentBuilder({
   const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
   const initialGraph = initialAgent?.config.graph;
-  const initialTriggers = initialAgent?.config.triggers ?? [];
-  const initialSchedule = initialTriggers.find((t) => t.type === "schedule");
-  const initialEvent = initialTriggers.find((t) => t.type === "event");
 
   // Identity
   const [name, setName] = React.useState(initialAgent?.name ?? "");
@@ -306,25 +302,6 @@ export function AgentBuilder({
   const [roleSuggestionReason, setRoleSuggestionReason] = React.useState<
     string | null
   >(null);
-
-  // Triggers
-  const [manualEnabled, setManualEnabled] = React.useState(
-    initialTriggers.length === 0
-      ? true
-      : initialTriggers.some((t) => t.type === "manual"),
-  );
-  const [scheduleCron, setScheduleCron] = React.useState(
-    initialSchedule?.schedule ?? "",
-  );
-  const [eventSource, setEventSource] = React.useState(
-    initialEvent?.eventSource ?? "",
-  );
-  const [eventType, setEventType] = React.useState(
-    initialEvent?.eventType ?? "",
-  );
-  const [eventConnection, setEventConnection] = React.useState(
-    initialEvent?.connectionId ?? "",
-  );
 
   // Steps: create mode leads with the AI-assisted "Describe" step.
   const steps = React.useMemo(() => stepsFor(mode), [mode]);
@@ -403,11 +380,6 @@ export function AgentBuilder({
     setStrategy(p.strategy);
     setMaxHops(p.maxHops);
     setMaxNodes(p.maxNodes);
-    setManualEnabled(p.manualEnabled);
-    setScheduleCron(p.scheduleCron);
-    setEventSource(p.eventSource);
-    setEventType(p.eventType);
-    setEventConnection(p.eventConnection);
     // Access step: the role is a prefill field like any other — pre-selected,
     // then reviewed on the Access step and re-checked on the Review step's
     // effective-scope panel (role ceiling ∩ this config) before anything saves.
@@ -460,24 +432,6 @@ export function AgentBuilder({
   }
 
   function buildConfig(): AgentDefinitionConfig {
-    const triggers: AgentTrigger[] = [];
-    if (manualEnabled) triggers.push({ type: "manual", enabled: true });
-    if (scheduleCron.trim()) {
-      triggers.push({
-        type: "schedule",
-        schedule: scheduleCron.trim(),
-        enabled: true,
-      });
-    }
-    if (eventSource.trim() && eventType.trim()) {
-      triggers.push({
-        type: "event",
-        eventSource: eventSource.trim(),
-        eventType: eventType.trim(),
-        connectionId: eventConnection.trim() || undefined,
-        enabled: true,
-      });
-    }
     // scopeToTypes / minRelevance / maxTraversalMs are not (yet) editable in
     // the wizard — preserve them from the loaded config instead of silently
     // dropping them on save (they are real dimensions of the effective scope).
@@ -504,7 +458,6 @@ export function AgentBuilder({
     return {
       graph,
       agentTools,
-      triggers,
       instructions: instructions.trim() || undefined,
     };
   }
@@ -685,7 +638,7 @@ export function AgentBuilder({
       setDeployed(true);
       add({
         title: "Published & deployed",
-        description: "Triggers are live. Launch it from the Ask surface.",
+        description: "Deployed. Launch it from the Ask surface.",
         type: "success",
       });
     } finally {
@@ -716,12 +669,6 @@ export function AgentBuilder({
         // fills once the selection is persisted on the agent.
         return (
           assignedRoleName !== null && assignedRoleName === selectedRoleName
-        );
-      case "triggers":
-        return (
-          manualEnabled ||
-          scheduleCron.trim().length > 0 ||
-          (eventSource.trim().length > 0 && eventType.trim().length > 0)
         );
       default:
         return false;
@@ -914,9 +861,9 @@ export function AgentBuilder({
                 />
                 <p className="text-xs text-muted-foreground">
                   Oxagen drafts a complete configuration — identity, prompt,
-                  tools, graph access, and triggers — grounded in this
-                  workspace&rsquo;s real skills and ontologies. You review and
-                  edit every field before anything is saved.
+                  tools, and graph access — grounded in this workspace&rsquo;s
+                  real skills and ontologies. You review and edit every field
+                  before anything is saved.
                 </p>
               </div>
 
@@ -1281,89 +1228,6 @@ export function AgentBuilder({
             </div>
           ) : null}
 
-          {/* ── Triggers ─────────────────────────────────────────────────── */}
-          {step.key === "triggers" ? (
-            <div className="flex flex-col gap-5" data-testid="step-triggers">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="agent-trigger-manual"
-                  checked={manualEnabled}
-                  disabled={disabled}
-                  onCheckedChange={(v) => setManualEnabled(v === true)}
-                  data-testid="agent-trigger-manual"
-                />
-                <div>
-                  <Label htmlFor="agent-trigger-manual">Manual</Label>
-                  <p className="text-xs text-muted-foreground">
-                    A person runs the agent on demand. Recommended default.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1 border-t pt-4">
-                <Label htmlFor="agent-trigger-cron">Schedule (cron)</Label>
-                <Input
-                  id="agent-trigger-cron"
-                  value={scheduleCron}
-                  disabled={disabled}
-                  placeholder="0 9 * * 1  (optional — leave blank for none)"
-                  onChange={(e) => setScheduleCron(e.target.value)}
-                  className="font-mono"
-                  data-testid="agent-trigger-cron-input"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Runs the agent on a recurring cadence when deployed.
-                </p>
-              </div>
-
-              <fieldset className="space-y-3 border-t pt-4" disabled={disabled}>
-                <legend className="text-sm font-medium">Event trigger</legend>
-                <p className="text-xs text-muted-foreground">
-                  Fires when something happens in a connected source. Both
-                  source and type are required, or the event trigger is dropped.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="agent-event-source">Event source</Label>
-                    <Input
-                      id="agent-event-source"
-                      value={eventSource}
-                      disabled={disabled}
-                      placeholder="github_repo"
-                      onChange={(e) => setEventSource(e.target.value)}
-                      data-testid="agent-event-source-input"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="agent-event-type">Event type</Label>
-                    <Input
-                      id="agent-event-type"
-                      value={eventType}
-                      disabled={disabled}
-                      placeholder="push"
-                      onChange={(e) => setEventType(e.target.value)}
-                      data-testid="agent-event-type-input"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="agent-event-connection">
-                    Connection id (optional)
-                  </Label>
-                  <Input
-                    id="agent-event-connection"
-                    value={eventConnection}
-                    disabled={disabled}
-                    placeholder="conn_…"
-                    onChange={(e) => setEventConnection(e.target.value)}
-                    className="font-mono"
-                    data-testid="agent-event-connection-input"
-                  />
-                </div>
-              </fieldset>
-            </div>
-          ) : null}
-
           {/* ── Review ───────────────────────────────────────────────────── */}
           {step.key === "review" ? (
             <div className="flex flex-col gap-5" data-testid="step-review">
@@ -1398,18 +1262,6 @@ export function AgentBuilder({
                     (assignedRoleName !== selectedRoleName
                       ? " (applied on save)"
                       : "")
-                  }
-                />
-                <SummaryItem
-                  label="Triggers"
-                  value={
-                    [
-                      manualEnabled ? "manual" : null,
-                      scheduleCron.trim() ? "schedule" : null,
-                      eventSource.trim() && eventType.trim() ? "event" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(", ") || "none"
                   }
                 />
               </dl>

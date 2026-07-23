@@ -522,17 +522,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "create_trigger",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "workspace",
       "name": "create_workspace",
       "reads": [],
@@ -708,17 +697,6 @@
     {
       "domain": "secret",
       "name": "delete_secret_key",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "delete_trigger",
       "reads": [],
       "surfaces": [
         "agent",
@@ -2303,17 +2281,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "list_triggers",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "workspace",
       "name": "list_workspace_members",
       "reads": [],
@@ -3538,17 +3505,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "update_trigger",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "user",
       "name": "update_user_budget",
       "reads": [],
@@ -3716,7 +3672,7 @@
       "writes": []
     }
   ],
-  "contentHash": "31d59ec827ccadb52fb451f1068ab8a01348f1ee0942f550723b9cc4ca946672",
+  "contentHash": "ad10962d3c2518731d4481efd87231b0288ddd3236dd7d6dfc6281e3e9effa87",
   "domains": [
     {
       "name": "agent",
@@ -3755,7 +3711,6 @@
         "postgres:agent.agent_run_finalization_obligations",
         "postgres:agent.agent_runs",
         "postgres:agent.agent_tool_calls",
-        "postgres:agent.agent_triggers",
         "postgres:agent.agent_versions",
         "postgres:agent.agents",
         "postgres:agent.approval_requests",
@@ -4126,7 +4081,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 134
+      "tableCount": 133
     },
     {
       "domains": [
@@ -7706,125 +7661,6 @@
       "domain": "agent",
       "id": "postgres:agent.agent_tool_calls",
       "name": "agent_tool_calls",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "public_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "citext"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "created_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "updated_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "deleted_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "deleted_by_user_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "agent_id",
-          "nullable": false,
-          "primaryKey": false,
-          "references": "postgres:agent.agents",
-          "type": "uuid"
-        },
-        {
-          "name": "trigger_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "event_source",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "event_type",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "connection_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "filter",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "jsonb"
-        },
-        {
-          "name": "schedule",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "enabled",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        }
-      ],
-      "domain": "agent",
-      "id": "postgres:agent.agent_triggers",
-      "name": "agent_triggers",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

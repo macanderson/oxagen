@@ -19,7 +19,6 @@ import { revalidatePath } from "next/cache";
 import {
   graphAccessSchema,
   agentToolSchema,
-  agentTriggerSchema,
 } from "@oxagen/oxagen/agent-schema";
 import { logger } from "@oxagen/handlers/logger";
 import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
@@ -51,12 +50,11 @@ const scopeShape = {
   workspaceSlug: z.string().min(1),
 };
 
-// The versioned config body. Mirrors agentDefinitionConfigSchema; agentTools /
-// triggers default to [] so a minimal agent (identity + graph) is valid.
+// The versioned config body. Mirrors agentDefinitionConfigSchema; agentTools
+// defaults to [] so a minimal agent (identity + graph) is valid.
 const configSchema = z.object({
   graph: graphAccessSchema,
   agentTools: z.array(agentToolSchema).default([]),
-  triggers: z.array(agentTriggerSchema).default([]),
   instructions: z.string().optional(),
 });
 

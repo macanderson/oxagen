@@ -21,7 +21,6 @@ Create a new agent definition. Inserts the agent identity row as a draft in the 
 | `config` | `object` | Versioned body — see below. |
 | `config.graph` | `GraphAccess` | Ontology binding, retrieval strategy, and traversal budget. |
 | `config.agentTools` | `AgentTool[]` | Loaded functions, MCP servers, skills, subagents. Default `[]`. |
-| `config.triggers` | `AgentTrigger[]` | Manual/schedule/event bindings. Default `[]`. |
 | `config.instructions` | `string?` | Optional system prompt baked into the definition. |
 
 ## Output

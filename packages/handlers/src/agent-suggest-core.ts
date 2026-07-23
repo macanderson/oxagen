@@ -5,8 +5,8 @@
  * `agent.definition.revise` (AI-edit) have in common: loading the create-agent
  * skill as the system prompt, assembling the workspace grounding candidates,
  * the synthesis schema the model is forced to, and the deterministic repair
- * pass that drops hallucinated refs, disables triggers, substitutes an
- * out-of-workspace ontology, and validates the final AgentDefinitionConfig.
+ * pass that drops hallucinated refs, substitutes an out-of-workspace ontology,
+ * and validates the final AgentDefinitionConfig.
  *
  * The ONLY thing the two callers own separately is the slug: `suggest` derives
  * and de-conflicts a fresh slug for a brand-new agent, whereas `revise` keeps
@@ -43,7 +43,9 @@ export class AgentSuggestError extends Error {
  * embedded module data (not a filesystem read), so this fallback is always
  * available in any bundle — it is what makes the create-agent path un-brickable.
  */
-export async function loadCreateAgentSkillBody(ctx: CapabilityContext): Promise<string> {
+export async function loadCreateAgentSkillBody(
+  ctx: CapabilityContext,
+): Promise<string> {
   try {
     const loaded = (await invoke(
       "load_skill",
@@ -92,7 +94,11 @@ export interface Candidates {
    */
   /** Catalog MCP servers not registered in the workspace — refs are registry
    *  names (e.g. "github/github-mcp-server"). */
-  connectableMcpServers: Array<{ ref: string; name: string; description: string }>;
+  connectableMcpServers: Array<{
+    ref: string;
+    name: string;
+    description: string;
+  }>;
   /** Workspace skills that exist but are disabled — refs are slugs. */
   disabledSkills: Array<{ ref: string; name: string; description: string }>;
 }
@@ -113,47 +119,64 @@ async function invokeSafe<T>(
   }
 }
 
-export async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
-  const [schemaOut, skillOut, mcpOut, agentOut, catalogOut, wsSkillOut] = await Promise.all([
-    invokeSafe<{ schemas: Array<{ schemaName: string; displayName: string; enabled: boolean }> }>(
-      "list_schemas",
-      ctx,
-      { schemas: [] },
-    ),
-    invokeSafe<{ skills: Array<{ slug: string; name?: string; description: string }> }>(
-      "list_agent_skills",
-      ctx,
-      { skills: [] },
-    ),
-    invokeSafe<{ servers: Array<{ publicId: string; name: string }> }>(
-      "list_mcp_servers",
-      ctx,
-      { servers: [] },
-    ),
-    invokeSafe<{
-      agents: Array<{ slug: string; description: string | null; status: string }>;
-    }>("list_agent_defs", ctx, { agents: [] }),
-    // Catalog MCP servers not yet installed in this workspace — recommendation
-    // candidates. Ask for the not-installed slice directly; belt-and-suspenders
-    // dedup against agent.mcp.list below handles registries lagging the flag.
-    invokeSafe<{
-      servers: Array<{
-        name: string;
-        title: string | null;
-        description: string;
-        installed: boolean;
-      }>;
-    }>("browse_plugin_catalog", ctx, { servers: [] }, {
-      pluginType: "mcp_server",
-      installed: false,
-      limit: 50,
-    }),
-    // Every workspace skill WITH its enabled flag — the only source that exposes
-    // disabled skills. Carries a publicId, not a slug; joined by name below.
-    invokeSafe<{
-      skills: Array<{ id: string; name: string; description: string; enabled: boolean }>;
-    }>("list_workspace_skills", ctx, { skills: [] }),
-  ]);
+export async function assembleCandidates(
+  ctx: CapabilityContext,
+): Promise<Candidates> {
+  const [schemaOut, skillOut, mcpOut, agentOut, catalogOut, wsSkillOut] =
+    await Promise.all([
+      invokeSafe<{
+        schemas: Array<{
+          schemaName: string;
+          displayName: string;
+          enabled: boolean;
+        }>;
+      }>("list_schemas", ctx, { schemas: [] }),
+      invokeSafe<{
+        skills: Array<{ slug: string; name?: string; description: string }>;
+      }>("list_agent_skills", ctx, { skills: [] }),
+      invokeSafe<{ servers: Array<{ publicId: string; name: string }> }>(
+        "list_mcp_servers",
+        ctx,
+        { servers: [] },
+      ),
+      invokeSafe<{
+        agents: Array<{
+          slug: string;
+          description: string | null;
+          status: string;
+        }>;
+      }>("list_agent_defs", ctx, { agents: [] }),
+      // Catalog MCP servers not yet installed in this workspace — recommendation
+      // candidates. Ask for the not-installed slice directly; belt-and-suspenders
+      // dedup against agent.mcp.list below handles registries lagging the flag.
+      invokeSafe<{
+        servers: Array<{
+          name: string;
+          title: string | null;
+          description: string;
+          installed: boolean;
+        }>;
+      }>(
+        "browse_plugin_catalog",
+        ctx,
+        { servers: [] },
+        {
+          pluginType: "mcp_server",
+          installed: false,
+          limit: 50,
+        },
+      ),
+      // Every workspace skill WITH its enabled flag — the only source that exposes
+      // disabled skills. Carries a publicId, not a slug; joined by name below.
+      invokeSafe<{
+        skills: Array<{
+          id: string;
+          name: string;
+          description: string;
+          enabled: boolean;
+        }>;
+      }>("list_workspace_skills", ctx, { skills: [] }),
+    ]);
 
   const functions = listCapabilities()
     .filter((c) => getSurfaces(c).includes("agent"))
@@ -166,29 +189,43 @@ export async function assembleCandidates(ctx: CapabilityContext): Promise<Candid
   // needs a real slug ref the caller can enable.
   const slugByName = new Map(
     skillOut.skills
-      .filter((s): s is { slug: string; name: string; description: string } => Boolean(s.name))
+      .filter((s): s is { slug: string; name: string; description: string } =>
+        Boolean(s.name),
+      )
       .map((s) => [s.name.toLowerCase(), s.slug]),
   );
   const disabledSkills = wsSkillOut.skills
     .filter((s) => !s.enabled)
     .map((s) => {
       const slug = slugByName.get(s.name.toLowerCase());
-      return slug ? { ref: slug, name: s.name, description: s.description } : null;
+      return slug
+        ? { ref: slug, name: s.name, description: s.description }
+        : null;
     })
-    .filter((s): s is { ref: string; name: string; description: string } => s !== null);
+    .filter(
+      (s): s is { ref: string; name: string; description: string } =>
+        s !== null,
+    );
   const disabledSlugs = new Set(disabledSkills.map((s) => s.ref));
 
   // Catalog servers the workspace already has — matched by the catalog's canonical
   // registry NAME against installed server names/publicIds (never the display
   // title, which is an unreliable label and would over-exclude).
   const installedMcpIdentity = new Set(
-    mcpOut.servers.flatMap((s) => [s.publicId.toLowerCase(), s.name.toLowerCase()]),
+    mcpOut.servers.flatMap((s) => [
+      s.publicId.toLowerCase(),
+      s.name.toLowerCase(),
+    ]),
   );
   const connectableMcpServers = catalogOut.servers
     .filter((s) => !s.installed)
     .filter((s) => !installedMcpIdentity.has(s.name.toLowerCase()))
     .slice(0, 50)
-    .map((s) => ({ ref: s.name, name: s.title ?? s.name, description: s.description }));
+    .map((s) => ({
+      ref: s.name,
+      name: s.title ?? s.name,
+      description: s.description,
+    }));
 
   return {
     ontologies: schemaOut.schemas
@@ -211,7 +248,9 @@ export async function assembleCandidates(ctx: CapabilityContext): Promise<Candid
 
 export function formatCandidates(c: Candidates): string {
   const section = (title: string, lines: string[]): string =>
-    lines.length ? `${title}:\n${lines.join("\n")}` : `${title}:\n(none available)`;
+    lines.length
+      ? `${title}:\n${lines.join("\n")}`
+      : `${title}:\n(none available)`;
 
   return [
     section(
@@ -244,7 +283,9 @@ export function formatCandidates(c: Candidates): string {
     ].join("\n"),
     section(
       "CATALOG MCP SERVERS (recommend with kind 'mcp_server'; ref = the registry name shown)",
-      c.connectableMcpServers.map((s) => `- ${s.ref} — ${s.name}: ${s.description}`),
+      c.connectableMcpServers.map(
+        (s) => `- ${s.ref} — ${s.name}: ${s.description}`,
+      ),
     ),
     section(
       "DISABLED WORKSPACE SKILLS (recommend with kind 'skill'; ref = the slug shown; enable before equipping)",
@@ -256,7 +297,10 @@ export function formatCandidates(c: Candidates): string {
 /** Assemble the shared system prompt: create-agent skill body + strictly-fenced
  *  workspace candidates. Identical for suggest and revise — only the user prompt
  *  differs between the two. */
-export function buildAgentSystemPrompt(skillBody: string, candidates: Candidates): string {
+export function buildAgentSystemPrompt(
+  skillBody: string,
+  candidates: Candidates,
+): string {
   return [
     skillBody,
     "",
@@ -273,15 +317,21 @@ export function buildAgentSystemPrompt(skillBody: string, candidates: Candidates
 export const synthesisSchema = z.object({
   slug: z
     .string()
-    .describe("Lowercase kebab-case slug derived from the agent's job, e.g. 'docs-drift-watcher'."),
+    .describe(
+      "Lowercase kebab-case slug derived from the agent's job, e.g. 'docs-drift-watcher'.",
+    ),
   name: z.string().min(1).describe("Short human-readable name — a few words."),
   description: z
     .string()
     .min(1)
-    .describe("ONE sentence stating the agent's job; drives routing and subagent selection."),
+    .describe(
+      "ONE sentence stating the agent's job; drives routing and subagent selection.",
+    ),
   agentType: z
     .enum(["custom", "code"])
-    .describe("'code' ONLY when the agent must work over a repository; otherwise 'custom'."),
+    .describe(
+      "'code' ONLY when the agent must work over a repository; otherwise 'custom'.",
+    ),
   instructions: z
     .string()
     .min(1)
@@ -292,10 +342,14 @@ export const synthesisSchema = z.object({
     .object({
       ontologyId: z
         .string()
-        .describe("MUST be one of the ONTOLOGY CANDIDATE ids, or an empty string if none fit."),
+        .describe(
+          "MUST be one of the ONTOLOGY CANDIDATE ids, or an empty string if none fit.",
+        ),
       mode: z
         .enum(["read", "extend"])
-        .describe("'read' by default; 'extend' only when the agent must propose new nodes/edges."),
+        .describe(
+          "'read' by default; 'extend' only when the agent must propose new nodes/edges.",
+        ),
       retrieval: z.object({
         strategy: z
           .enum(["semantic", "lexical", "hybrid", "explicit"])
@@ -303,15 +357,23 @@ export const synthesisSchema = z.object({
         scopeToTypes: z
           .array(z.string())
           .optional()
-          .describe("Node/edge types that keep the agent in its lane; omit only if it needs all types."),
+          .describe(
+            "Node/edge types that keep the agent in its lane; omit only if it needs all types.",
+          ),
       }),
       budget: z.object({
-        maxHops: z.number().int().nonnegative().describe("Max hops from an entry node; 2–3 typical."),
+        maxHops: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Max hops from an entry node; 2–3 typical."),
         maxNodes: z
           .number()
           .int()
           .positive()
-          .describe("Max nodes pulled into context; a bounded cap (tens, not thousands)."),
+          .describe(
+            "Max nodes pulled into context; a bounded cap (tens, not thousands).",
+          ),
         minRelevance: z
           .number()
           .min(0)
@@ -320,7 +382,9 @@ export const synthesisSchema = z.object({
           .describe("Minimum relevance (0–1) for semantic/hybrid strategies."),
       }),
     })
-    .describe("Graph access: ontology binding, write posture, retrieval, and budget."),
+    .describe(
+      "Graph access: ontology binding, write posture, retrieval, and budget.",
+    ),
   agentTools: z
     .array(
       z.object({
@@ -334,33 +398,9 @@ export const synthesisSchema = z.object({
           ),
       }),
     )
-    .describe("The narrowest uniform tool list that does the job. ONLY refs from the candidate lists."),
-  triggers: z
-    .array(
-      z.object({
-        type: z.enum(["manual", "schedule", "event"]).describe("What starts a run."),
-        eventSource: z
-          .string()
-          .optional()
-          .describe("Event source system (required for event triggers)."),
-        eventType: z
-          .string()
-          .optional()
-          .describe("Event type within the source (required for event triggers)."),
-        schedule: z
-          .string()
-          .optional()
-          .describe("Cron expression (required for schedule triggers)."),
-        filter: z
-          .object({
-            branches: z.array(z.string()).optional(),
-            pathGlobs: z.array(z.string()).optional(),
-          })
-          .optional()
-          .describe("Precise event filter — branches and path globs."),
-      }),
-    )
-    .describe("What starts the agent. Prefer 'manual'. Every trigger is suggested disabled."),
+    .describe(
+      "The narrowest uniform tool list that does the job. ONLY refs from the candidate lists.",
+    ),
   recommendations: z
     .array(
       z.object({
@@ -374,7 +414,11 @@ export const synthesisSchema = z.object({
           .describe(
             "The EXACT ref from a CONNECTABLE list — the registry name for an mcp_server, the slug for a skill. Never invent one; never a ref from the equipable candidate lists.",
           ),
-        name: z.string().describe("The human-readable name shown for it in the CONNECTABLE list."),
+        name: z
+          .string()
+          .describe(
+            "The human-readable name shown for it in the CONNECTABLE list.",
+          ),
         reason: z
           .string()
           .describe(
@@ -389,7 +433,9 @@ export const synthesisSchema = z.object({
   rationale: z
     .string()
     .min(1)
-    .describe("Why this configuration — instructions framing, tool selection, graph scoping, trigger choice."),
+    .describe(
+      "Why this configuration — instructions framing, tool selection, and graph scoping.",
+    ),
 });
 
 export type Synthesis = z.infer<typeof synthesisSchema>;
@@ -428,7 +474,11 @@ export function clampSlug(slug: string, max = SLUG_MAX): string {
  * keeping the result within the `max` budget: the base is re-truncated to leave
  * room for the `-N` suffix, so `super-long-name` + `-2` never blows past 18.
  */
-export function deconflictSlug(slug: string, existing: Set<string>, max = SLUG_MAX): string {
+export function deconflictSlug(
+  slug: string,
+  existing: Set<string>,
+  max = SLUG_MAX,
+): string {
   if (!existing.has(slug)) return slug;
   for (let n = 2; ; n++) {
     const suffix = `-${n}`;
@@ -450,12 +500,11 @@ export interface RepairResult {
 /**
  * Deterministic validation + repair of a raw model synthesis, shared by suggest
  * and revise. Drops tool/recommendation refs that don't exist in the workspace,
- * forces every trigger disabled, substitutes an out-of-workspace ontology, and
- * finally parses the result as a real AgentDefinitionConfig (throws
- * AgentSuggestError if it still fails). Appends any adjustments it made to
- * `warnings` (mutated in place). Slug handling is intentionally NOT here — each
- * caller owns its slug policy (create de-conflicts a new slug; revise keeps the
- * agent's immutable one).
+ * substitutes an out-of-workspace ontology, and finally parses the result as a
+ * real AgentDefinitionConfig (throws AgentSuggestError if it still fails).
+ * Appends any adjustments it made to `warnings` (mutated in place). Slug
+ * handling is intentionally NOT here — each caller owns its slug policy
+ * (create de-conflicts a new slug; revise keeps the agent's immutable one).
  */
 export function repairSynthesis(
   object: Synthesis,
@@ -471,7 +520,10 @@ export function repairSynthesis(
   const agentType = object.agentType === "code" ? "code" : "custom";
 
   // Tools: drop any ref not present in the candidate list for its type.
-  const agentTools: Array<{ type: Synthesis["agentTools"][number]["type"]; ref: string }> = [];
+  const agentTools: Array<{
+    type: Synthesis["agentTools"][number]["type"];
+    ref: string;
+  }> = [];
   for (const tool of object.agentTools) {
     const known =
       tool.type === "function"
@@ -497,7 +549,9 @@ export function repairSynthesis(
   const connectableMcpByRef = new Map(
     candidates.connectableMcpServers.map((s) => [s.ref, s]),
   );
-  const disabledSkillByRef = new Map(candidates.disabledSkills.map((s) => [s.ref, s]));
+  const disabledSkillByRef = new Map(
+    candidates.disabledSkills.map((s) => [s.ref, s]),
+  );
   const equippedMcp = new Set(
     agentTools.filter((t) => t.type === "mcp_server").map((t) => t.ref),
   );
@@ -516,7 +570,12 @@ export function repairSynthesis(
     if (rec.kind === "mcp_server") {
       const cand = connectableMcpByRef.get(rec.ref);
       if (cand) {
-        recommendations.push({ kind: "mcp_server", ref: rec.ref, name: cand.name, reason: rec.reason });
+        recommendations.push({
+          kind: "mcp_server",
+          ref: rec.ref,
+          name: cand.name,
+          reason: rec.reason,
+        });
       } else if (mcpRefs.has(rec.ref)) {
         // Already registered → it is equipable, not a recommendation. Move it.
         if (!equippedMcp.has(rec.ref)) {
@@ -534,7 +593,12 @@ export function repairSynthesis(
     } else {
       const cand = disabledSkillByRef.get(rec.ref);
       if (cand) {
-        recommendations.push({ kind: "skill", ref: rec.ref, name: cand.name, reason: rec.reason });
+        recommendations.push({
+          kind: "skill",
+          ref: rec.ref,
+          name: cand.name,
+          reason: rec.reason,
+        });
       } else if (skillRefs.has(rec.ref)) {
         // Enabled skill → equipable, not a recommendation. Move it.
         if (!equippedSkills.has(rec.ref)) {
@@ -550,20 +614,6 @@ export function repairSynthesis(
         );
       }
     }
-  }
-
-  // Triggers: drop structurally-invalid ones, force every remaining one disabled.
-  const triggers: Array<Record<string, unknown>> = [];
-  for (const trigger of object.triggers) {
-    if (trigger.type === "event" && (!trigger.eventSource || !trigger.eventType)) {
-      warnings.push("Removed an event trigger that was missing its eventSource/eventType.");
-      continue;
-    }
-    if (trigger.type === "schedule" && !trigger.schedule) {
-      warnings.push("Removed a schedule trigger that was missing its cron schedule.");
-      continue;
-    }
-    triggers.push({ ...trigger, enabled: false });
   }
 
   // Ontology: substitute an out-of-workspace id, or leave unbound when none exist.
@@ -602,7 +652,6 @@ export function repairSynthesis(
       },
     },
     agentTools,
-    triggers,
     instructions: object.instructions,
   };
 
@@ -612,7 +661,10 @@ export function repairSynthesis(
   try {
     config = agentDefinitionConfigSchema.parse(draftConfig);
   } catch (err) {
-    logger.error({ err }, "agent-suggest-core: synthesised config failed final validation");
+    logger.error(
+      { err },
+      "agent-suggest-core: synthesised config failed final validation",
+    );
     throw new AgentSuggestError(
       `Synthesised configuration failed validation: ${err instanceof Error ? err.message : String(err)}`,
     );

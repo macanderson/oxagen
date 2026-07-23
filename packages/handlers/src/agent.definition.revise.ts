@@ -44,7 +44,7 @@ const reviseSynthesisSchema = synthesisSchema.extend({
   changeSummary: z
     .array(z.string())
     .describe(
-      "Short bullets stating exactly what you changed versus the CURRENT AGENT configuration shown — one bullet per change (e.g. 'Bound graph to the billing ontology', 'Equipped the github MCP server', 'Removed the daily schedule trigger').",
+      "Short bullets stating exactly what you changed versus the CURRENT AGENT configuration shown — one bullet per change (e.g. 'Bound graph to the billing ontology', 'Equipped the github MCP server', 'Rewrote the system prompt for a terser tone').",
     ),
 });
 type ReviseSynthesis = z.infer<typeof reviseSynthesisSchema>;
@@ -119,7 +119,12 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
     object = result.object;
   } catch (err) {
     logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId: input.agentId },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        agentId: input.agentId,
+      },
       "agent.definition.revise: generateObjectFor failed",
     );
     throw new AgentSuggestError(
@@ -129,7 +134,11 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
 
   // ── Deterministic validation + repair (slug is fixed — not derived here) ─────
   const warnings: string[] = [];
-  const { config, agentType, recommendations } = repairSynthesis(object, candidates, warnings);
+  const { config, agentType, recommendations } = repairSynthesis(
+    object,
+    candidates,
+    warnings,
+  );
 
   // ── Persist as a new unpublished version via the existing update path ────────
   const updated = (await invoke(
@@ -137,7 +146,8 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
     {
       agentId: input.agentId,
       name: object.name.trim() || current.name,
-      description: object.description.trim() || current.description || undefined,
+      description:
+        object.description.trim() || current.description || undefined,
       agentType,
       config,
     },
@@ -152,7 +162,6 @@ export const agentDefinitionReviseHandler: CapabilityHandler<
       version: updated.version,
       agentType,
       tools: config.agentTools.length,
-      triggers: config.triggers.length,
       changes: object.changeSummary.length,
       warnings: warnings.length,
     },

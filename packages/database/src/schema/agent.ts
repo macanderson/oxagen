@@ -96,44 +96,6 @@ export const agents = agentSchema.table(
   }),
 );
 
-// Agent triggers: how a deployed agent is invoked — manual, scheduled (cron),
-// or by an external event. connectionId references a connected source
-// (app-enforced; no cross-schema FK per CLAUDE.md storage rules).
-export const agentTriggers = agentSchema.table(
-  "agent_triggers",
-  {
-    ...idMixin("atr"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    agentId: uuid("agent_id")
-      .notNull()
-      .references(() => agents.id),
-    triggerType: text("trigger_type").notNull(),
-    // eventSource/eventType are null for manual/schedule triggers.
-    eventSource: text("event_source"),
-    eventType: text("event_type"),
-    connectionId: uuid("connection_id"),
-    // filter scopes event triggers, e.g. { branches: [...], pathGlobs: [...] }.
-    filter: jsonb("filter").notNull().default(sql`'{}'::jsonb`),
-    // schedule is a cron expression; null unless triggerType = 'schedule'.
-    schedule: text("schedule"),
-    enabled: boolean("enabled").notNull().default(false),
-  },
-  (t) => ({
-    agentIdx: index("agent_triggers_agent_idx").on(t.agentId),
-    orgIdx: index("agent_triggers_org_idx").on(t.orgId, t.workspaceId),
-    typeEnabledIdx: index("agent_triggers_type_enabled_idx").on(
-      t.triggerType,
-      t.enabled,
-    ),
-    triggerTypeCheck: check(
-      "agent_triggers_trigger_type_check",
-      sql`${t.triggerType} IN ('manual', 'schedule', 'event')`,
-    ),
-  }),
-);
-
 // Immutable version snapshots. INSERT-only once published; no updatedAt by design.
 export const agentVersions = agentSchema.table(
   "agent_versions",

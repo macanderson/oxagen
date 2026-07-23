@@ -11,7 +11,7 @@
  * The `ctx.surface` is "app" for attribution/metering. invoke() is called with
  * NO opts.surface override: the kernel's surface allowlist gate only fires when
  * opts.surface is explicitly set (kernel.ts:578), so omitting it keeps the
- * automation.* / agent.trigger.* / workflow.* / research.swarm.* contracts (which
+ * automation.* / workflow.* / research.swarm.* contracts (which
  * list "agent" but not "app" in surfaces[]) reachable from this trusted
  * first-party surface, with honest "app" attribution.
  *
@@ -23,7 +23,11 @@ import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 /**
  * The invoke() context every Automations capability call needs. surface:"app"
