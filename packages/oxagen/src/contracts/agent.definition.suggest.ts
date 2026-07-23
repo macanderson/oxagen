@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import {
-  graphAccessSchema,
-  agentToolSchema,
-  agentTriggerSchema,
-} from "../agent-schema";
+import { graphAccessSchema, agentToolSchema } from "../agent-schema";
 
 // The suggested versioned body. Mirrors agentDefinitionConfigSchema (and the
 // agent.definition.create input) so a suggestion can be fed straight into
@@ -13,7 +9,6 @@ import {
 const suggestedConfigSchema = z.object({
   graph: graphAccessSchema,
   agentTools: z.array(agentToolSchema).default([]),
-  triggers: z.array(agentTriggerSchema).default([]),
   instructions: z.string().min(1),
 });
 
@@ -35,7 +30,7 @@ export const agentDefinitionSuggest = registerCapability({
   name: "suggest_agent_def",
   domain: "agent",
   description:
-    "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools, triggers), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
+    "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -53,7 +48,7 @@ export const agentDefinitionSuggest = registerCapability({
       .min(10)
       .max(4000)
       .describe(
-        "Plain-language description of what the agent should do — its job, what should start it, and what it may touch. At least 10 characters.",
+        "Plain-language description of what the agent should do — its job and what it may touch. At least 10 characters.",
       ),
     nameHint: z
       .string()
@@ -93,7 +88,7 @@ export const agentDefinitionSuggest = registerCapability({
     rationale: z
       .string()
       .describe(
-        "Why the model chose this configuration — instructions framing, tool selection, graph scoping, and trigger choice.",
+        "Why the model chose this configuration — instructions framing, tool selection, and graph scoping.",
       ),
     warnings: z
       .array(z.string())

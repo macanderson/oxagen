@@ -59,7 +59,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.background_tasks", policyClass: "standard" },
   { table: "agent.subagent_fanouts", policyClass: "standard" },
   { table: "agent.subagent_runs", policyClass: "standard" },
-  { table: "agent.agent_triggers", policyClass: "standard" },
   // Durable code-agent sandbox session registry (orgScopeMixin + tenant_isolation
   // RLS in 20260628120000_agent_sandbox_sessions.sql).
   { table: "agent.sandbox_sessions", policyClass: "standard" },

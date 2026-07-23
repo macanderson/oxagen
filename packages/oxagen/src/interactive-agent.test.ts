@@ -32,16 +32,11 @@ describe("interactive-agent config builder", () => {
     }
   });
 
-  it("seeds a manual trigger that is enabled", () => {
-    const config = buildInteractiveAgentConfig("ws_1");
-    expect(config.triggers).toHaveLength(1);
-    expect(config.triggers[0]!.type).toBe("manual");
-    expect(config.triggers[0]!.enabled).toBe(true);
-  });
-
   it("includes non-empty instructions", () => {
     const config = buildInteractiveAgentConfig("ws_1");
-    expect(config.instructions && config.instructions.length).toBeGreaterThan(0);
+    expect(config.instructions && config.instructions.length).toBeGreaterThan(
+      0,
+    );
   });
 });
 

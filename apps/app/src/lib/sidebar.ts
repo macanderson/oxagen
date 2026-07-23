@@ -564,11 +564,6 @@ export function enumerateNavTargets(
       parent: "automations",
     });
     targets.push({
-      label: "Automations · Triggers",
-      href: workspace.automations.triggers(wsCtx),
-      parent: "automations",
-    });
-    targets.push({
       label: "Automations · Workflows",
       href: workspace.automations.workflows(wsCtx),
       parent: "automations",

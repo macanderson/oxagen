@@ -75,7 +75,6 @@ import {
 
 import {
   agents,
-  agentTriggers,
   agentVersions,
   skills,
   skillVersions,
@@ -799,22 +798,6 @@ describe("agent.agents", () => {
     const sql = flattenCheckSql(deployCheck!);
     expect(sql).toContain("inactive");
     expect(sql).toContain("active");
-  });
-});
-
-describe("agent.agent_triggers", () => {
-  smokeTable(agentTriggers, ["id", "agent_id", "trigger_type", "enabled"]);
-
-  it("trigger_type CHECK includes manual, schedule, event", () => {
-    const checks = getChecks(agentTriggers);
-    const typeCheck = checks.find(
-      (c) => c.name === "agent_triggers_trigger_type_check",
-    );
-    expect(typeCheck).toBeDefined();
-    const sql = flattenCheckSql(typeCheck!);
-    for (const v of ["manual", "schedule", "event"]) {
-      expect(sql).toContain(v);
-    }
   });
 });
 

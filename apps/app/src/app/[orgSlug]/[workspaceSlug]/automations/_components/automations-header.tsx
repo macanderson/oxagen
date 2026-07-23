@@ -1,9 +1,9 @@
 /**
  * automations-header.tsx — shared page header + tab strip for the Automations
- * cluster (Automations · Triggers · Workflows).
+ * cluster (Automations · Workflows).
  *
  * Server-safe: composes the client `PageHeader` + `PageTabs` primitives but
- * holds no state itself, so both the list/triggers/workflows server pages can
+ * holds no state itself, so both the list/workflows server pages can
  * render it. The single-automation editor (`[automationId]`) renders its own
  * header instead — it is a detail view below the tab strip, not one of the tabs.
  *
@@ -32,7 +32,6 @@ export function AutomationsHeader({
 }: AutomationsHeaderProps) {
   const tabs = [
     { label: "Automations", href: workspace.automations.root(ctx) },
-    { label: "Triggers", href: workspace.automations.triggers(ctx) },
     { label: "Workflows", href: workspace.automations.workflows(ctx) },
     { label: "Lineage", href: workspace.automations.lineage(ctx) },
   ];

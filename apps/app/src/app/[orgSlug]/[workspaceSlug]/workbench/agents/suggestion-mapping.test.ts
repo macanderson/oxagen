@@ -56,42 +56,6 @@ describe("mapSuggestionToPrefill", () => {
     ).toBe(true);
   });
 
-  it("fans schedule and event triggers into the single-row UI fields", () => {
-    const p = mapSuggestionToPrefill(
-      suggestion({
-        config: {
-          ...suggestion().config,
-          triggers: [
-            { type: "schedule", schedule: "0 9 * * 1", enabled: true },
-            {
-              type: "event",
-              eventSource: "github_repo",
-              eventType: "push",
-              connectionId: "conn_1",
-              enabled: true,
-            },
-          ],
-        },
-      }),
-    );
-    expect(p.manualEnabled).toBe(false);
-    expect(p.scheduleCron).toBe("0 9 * * 1");
-    expect(p.eventSource).toBe("github_repo");
-    expect(p.eventType).toBe("push");
-    expect(p.eventConnection).toBe("conn_1");
-  });
-
-  it("defaults to manual when the suggestion has no triggers", () => {
-    const p = mapSuggestionToPrefill(
-      suggestion({
-        config: { ...suggestion().config, triggers: [] },
-      }),
-    );
-    expect(p.manualEnabled).toBe(true);
-    expect(p.scheduleCron).toBe("");
-    expect(p.eventSource).toBe("");
-  });
-
   it("never carries recommendations into the wizard's persisted prefill state", () => {
     // Recommendations are catalog "connect this next" hints, not agent config —
     // the builder holds them in component state and renders them as a panel,

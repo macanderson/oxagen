@@ -29,10 +29,10 @@ export const INTERACTIVE_AGENT_DESCRIPTION =
  * True when an agent's `agentType` marks it as a product-managed (built-in)
  * agent — currently the interactive `qa-chat` agent. Product-managed agents are
  * bootstrapped into every workspace and are READ-ONLY to customers: they may be
- * viewed but never edited, published, deployed, archived, or have their triggers
- * changed. Enforced at the capability-handler layer (so the API, MCP, and app
- * surfaces all honor it) and surfaced as `managed` on agent list/get outputs so
- * the UI can render them clearly as non-configurable.
+ * viewed but never edited, published, deployed, or archived. Enforced at the
+ * capability-handler layer (so the API, MCP, and app surfaces all honor it) and
+ * surfaced as `managed` on agent list/get outputs so the UI can render them
+ * clearly as non-configurable.
  */
 export function isManagedAgentType(agentType: string): boolean {
   return agentType === INTERACTIVE_AGENT_TYPE;
@@ -73,7 +73,6 @@ export function buildInteractiveAgentConfig(
       type: "skill",
       ref: slug,
     })),
-    triggers: [{ type: "manual", enabled: true }],
     instructions:
       "You are the workspace Q&A agent. Answer questions grounded strictly in " +
       "the workspace knowledge graph. Cite the nodes you used. When you lack " +
@@ -89,9 +88,7 @@ export function buildInteractiveAgentConfig(
  * so logically-equal configs hash identically regardless of property order.
  */
 export function computeConfigChecksum(config: unknown): string {
-  return createHash("sha256")
-    .update(canonicalJson(config))
-    .digest("hex");
+  return createHash("sha256").update(canonicalJson(config)).digest("hex");
 }
 
 /** Deterministic JSON: object keys sorted recursively. */

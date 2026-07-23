@@ -34,7 +34,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -58,7 +57,11 @@ describe("agent.approval.resolve handler", () => {
 
   it("calls buildContext then invoke with correct contract name and args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
-    const args = { approvalId: "apr_1", decision: "approved" as const, note: undefined };
+    const args = {
+      approvalId: "apr_1",
+      decision: "approved" as const,
+      note: undefined,
+    };
     const result = await handler_agentApprovalResolve(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
@@ -69,13 +72,20 @@ describe("agent.approval.resolve handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ approvalId: "apr_1", resolution: "approved" });
+    expect(result).toMatchObject({
+      approvalId: "apr_1",
+      resolution: "approved",
+    });
   });
 
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("invoke failed"));
     await expect(
-      handler_agentApprovalResolve({ approvalId: "x", decision: "denied", note: undefined }),
+      handler_agentApprovalResolve({
+        approvalId: "x",
+        decision: "denied",
+        note: undefined,
+      }),
     ).rejects.toThrow("invoke failed");
   });
 });
@@ -100,12 +110,9 @@ describe("agent.mcp.list handler", () => {
     const result = await handler_agentMcpList({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "list_mcp_servers",
-      {},
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("list_mcp_servers", {}, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result).toMatchObject({ servers: [] });
   });
 });
@@ -146,7 +153,10 @@ describe("agent.mcp.register handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ mcpServerId: "srv_1", healthStatus: "healthy" });
+    expect(result).toMatchObject({
+      mcpServerId: "srv_1",
+      healthStatus: "healthy",
+    });
   });
 });
 
@@ -178,12 +188,9 @@ describe("agent.memory.recall handler", () => {
     };
     await handler_agentMemoryRecall(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "recall_memory",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("recall_memory", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -195,7 +202,11 @@ import handler_agentMemoryWrite, {
 } from "./agent.memory.write";
 
 describe("agent.memory.write handler", () => {
-  const validOutput = { memoryId: "mem_1", nodeRef: "node-abc", edgesCreated: 0 };
+  const validOutput = {
+    memoryId: "mem_1",
+    nodeRef: "node-abc",
+    edgesCreated: 0,
+  };
 
   it("exports schema and metadata", () => {
     expect(agentMemoryWriteSchema).toBeDefined();
@@ -215,12 +226,9 @@ describe("agent.memory.write handler", () => {
     };
     const result = await handler_agentMemoryWrite(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "write_memory",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("write_memory", args, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result).toMatchObject({ memoryId: "mem_1" });
   });
 });
@@ -242,15 +250,17 @@ describe("agent.plan.approve handler", () => {
 
   it("calls invoke with plan approval args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
-    const args = { planId: "plan_1", decision: "approve" as const, amendedSteps: undefined, note: undefined };
+    const args = {
+      planId: "plan_1",
+      decision: "approve" as const,
+      amendedSteps: undefined,
+      note: undefined,
+    };
     await handler_agentPlanApprove(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "approve_plan",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("approve_plan", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -301,7 +311,9 @@ describe("agent.task.background.cancel handler", () => {
 
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundCancelSchema).toBeDefined();
-    expect(agentTaskBackgroundCancelMetadata.name).toBe("cancel_background_task");
+    expect(agentTaskBackgroundCancelMetadata.name).toBe(
+      "cancel_background_task",
+    );
   });
 
   it("calls invoke with cancel args", async () => {
@@ -384,7 +396,10 @@ describe("agent.task.background.start handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ taskId: "task_1", inngestRunId: "inngest_run_1" });
+    expect(result).toMatchObject({
+      taskId: "task_1",
+      inngestRunId: "inngest_run_1",
+    });
   });
 });
 
@@ -424,7 +439,12 @@ import handler_agentDefinitionCreate, {
 } from "./agent.definition.create";
 
 describe("agent.definition.create handler", () => {
-  const validOutput = { agentId: "agt_1", publicId: "agt_1", slug: "a", version: 1 };
+  const validOutput = {
+    agentId: "agt_1",
+    publicId: "agt_1",
+    slug: "a",
+    version: 1,
+  };
 
   it("exports metadata with the contract name", () => {
     expect(agentDefinitionCreateMetadata.name).toBe("create_agent_def");
@@ -437,14 +457,23 @@ describe("agent.definition.create handler", () => {
       name: "A",
       agentType: "custom",
       config: {
-        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        graph: {
+          ontologyId: "o",
+          mode: "read",
+          retrieval: { strategy: "hybrid" },
+          budget: { maxHops: 1, maxNodes: 1 },
+        },
         agentTools: [],
-        triggers: [],
       },
     };
     const result = await handler_agentDefinitionCreate(args as never);
     expect(mocks.buildContext).toHaveBeenCalled();
-    expect(mocks.invoke).toHaveBeenCalledWith("create_agent_def", args, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "create_agent_def",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
     expect(result).toMatchObject(validOutput);
   });
 });
@@ -458,17 +487,30 @@ import handler_agentDefinitionUpdate, {
 describe("agent.definition.update handler", () => {
   it("exports metadata and forwards to invoke", async () => {
     expect(agentDefinitionUpdateMetadata.name).toBe("update_agent_def");
-    mocks.invoke.mockResolvedValue({ agentId: "agt_1", version: 2, isPublished: false });
+    mocks.invoke.mockResolvedValue({
+      agentId: "agt_1",
+      version: 2,
+      isPublished: false,
+    });
     const args = {
       agentId: "agt_1",
       config: {
-        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        graph: {
+          ontologyId: "o",
+          mode: "read",
+          retrieval: { strategy: "hybrid" },
+          budget: { maxHops: 1, maxNodes: 1 },
+        },
         agentTools: [],
-        triggers: [],
       },
     };
     const result = await handler_agentDefinitionUpdate(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("update_agent_def", args, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "update_agent_def",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
     expect(result.version).toBe(2);
   });
 });
@@ -482,10 +524,20 @@ import handler_agentDefinitionPublish, {
 describe("agent.definition.publish handler", () => {
   it("exports metadata and forwards to invoke", async () => {
     expect(agentDefinitionPublishMetadata.name).toBe("publish_agent_def");
-    mocks.invoke.mockResolvedValue({ agentId: "agt_1", version: 1, checksum: "x", activeVersionId: "v" });
+    mocks.invoke.mockResolvedValue({
+      agentId: "agt_1",
+      version: 1,
+      checksum: "x",
+      activeVersionId: "v",
+    });
     const args = { agentId: "agt_1" };
     const result = await handler_agentDefinitionPublish(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("publish_agent_def", args, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "publish_agent_def",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
     expect(result.checksum).toBe("x");
   });
 });
@@ -515,14 +567,20 @@ describe("agent.definition.get handler", () => {
       avatarUrl: null,
       summary: null,
       config: {
-        graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
+        graph: {
+          ontologyId: "o",
+          mode: "read",
+          retrieval: { strategy: "hybrid" },
+          budget: { maxHops: 1, maxNodes: 1 },
+        },
         agentTools: [],
-        triggers: [],
       },
     });
     const args = { agentId: "agt_1" };
     const result = await handler_agentDefinitionGet(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("get_agent_def", args, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith("get_agent_def", args, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result.slug).toBe("a");
   });
 });
@@ -538,91 +596,32 @@ describe("agent.definition.list handler", () => {
     expect(agentDefinitionListMetadata.name).toBe("list_agent_defs");
     mocks.invoke.mockResolvedValue({ agents: [] });
     const result = await handler_agentDefinitionList({} as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("list_agent_defs", {}, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith("list_agent_defs", {}, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result.agents).toEqual([]);
   });
 });
 
 // ── agent.deploy ──────────────────────────────────────────────────────────────
 
-import handler_agentDeploy, { metadata as agentDeployMetadata } from "./agent.deploy";
+import handler_agentDeploy, {
+  metadata as agentDeployMetadata,
+} from "./agent.deploy";
 
 describe("agent.deploy handler", () => {
   it("exports metadata and forwards to invoke", async () => {
     expect(agentDeployMetadata.name).toBe("deploy_agent");
-    mocks.invoke.mockResolvedValue({ agentId: "agt_1", deploymentStatus: "active" });
+    mocks.invoke.mockResolvedValue({
+      agentId: "agt_1",
+      deploymentStatus: "active",
+    });
     const args = { agentId: "agt_1", deploymentStatus: "active" as const };
     const result = await handler_agentDeploy(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("deploy_agent", args, fakeCtx, { surface: "mcp" });
+    expect(mocks.invoke).toHaveBeenCalledWith("deploy_agent", args, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result.deploymentStatus).toBe("active");
-  });
-});
-
-// ── agent.trigger.create ──────────────────────────────────────────────────────
-
-import handler_agentTriggerCreate, {
-  metadata as agentTriggerCreateMetadata,
-} from "./agent.trigger.create";
-
-describe("agent.trigger.create handler", () => {
-  it("exports metadata and forwards to invoke", async () => {
-    expect(agentTriggerCreateMetadata.name).toBe("create_trigger");
-    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", publicId: "atr_1", triggerType: "manual", enabled: true });
-    const args = { agentId: "agt_1", trigger: { type: "manual" as const, enabled: true } };
-    const result = await handler_agentTriggerCreate(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("create_trigger", args, fakeCtx, { surface: "mcp" });
-    expect(result.triggerType).toBe("manual");
-  });
-});
-
-// ── agent.trigger.update ──────────────────────────────────────────────────────
-
-import handler_agentTriggerUpdate, {
-  metadata as agentTriggerUpdateMetadata,
-} from "./agent.trigger.update";
-
-describe("agent.trigger.update handler", () => {
-  it("exports metadata and forwards to invoke", async () => {
-    expect(agentTriggerUpdateMetadata.name).toBe("update_trigger");
-    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", triggerType: "manual", enabled: false });
-    const args = { triggerId: "atr_1", trigger: { type: "manual" as const, enabled: false } };
-    const result = await handler_agentTriggerUpdate(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("update_trigger", args, fakeCtx, { surface: "mcp" });
-    expect(result.enabled).toBe(false);
-  });
-});
-
-// ── agent.trigger.delete ──────────────────────────────────────────────────────
-
-import handler_agentTriggerDelete, {
-  metadata as agentTriggerDeleteMetadata,
-} from "./agent.trigger.delete";
-
-describe("agent.trigger.delete handler", () => {
-  it("exports metadata and forwards to invoke", async () => {
-    expect(agentTriggerDeleteMetadata.name).toBe("delete_trigger");
-    mocks.invoke.mockResolvedValue({ triggerId: "atr_1", deleted: true });
-    const args = { triggerId: "atr_1" };
-    const result = await handler_agentTriggerDelete(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("delete_trigger", args, fakeCtx, { surface: "mcp" });
-    expect(result.deleted).toBe(true);
-  });
-});
-
-// ── agent.trigger.list ────────────────────────────────────────────────────────
-
-import handler_agentTriggerList, {
-  metadata as agentTriggerListMetadata,
-} from "./agent.trigger.list";
-
-describe("agent.trigger.list handler", () => {
-  it("exports metadata and forwards to invoke", async () => {
-    expect(agentTriggerListMetadata.name).toBe("list_triggers");
-    mocks.invoke.mockResolvedValue({ triggers: [] });
-    const args = { agentId: "agt_1" };
-    const result = await handler_agentTriggerList(args as never);
-    expect(mocks.invoke).toHaveBeenCalledWith("list_triggers", args, fakeCtx, { surface: "mcp" });
-    expect(result.triggers).toEqual([]);
   });
 });
 
@@ -637,7 +636,9 @@ describe("agent.subagent.fanout.list handler", () => {
   it("exports schema and metadata", () => {
     expect(agentSubagentFanoutListSchema).toBeDefined();
     expect(agentSubagentFanoutListMetadata.name).toBe("list_subagent_fanouts");
-    expect(agentSubagentFanoutListMetadata.annotations?.readOnlyHint).toBe(true);
+    expect(agentSubagentFanoutListMetadata.annotations?.readOnlyHint).toBe(
+      true,
+    );
   });
 
   it("forwards to invoke and parses the output", async () => {

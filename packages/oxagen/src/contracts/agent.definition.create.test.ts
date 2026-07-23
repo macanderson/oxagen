@@ -9,7 +9,6 @@ const VALID_CONFIG = {
     budget: { maxHops: 2, maxNodes: 20 },
   },
   agentTools: [{ type: "skill", ref: "coding" }],
-  triggers: [{ type: "manual", enabled: true }],
   instructions: "Be helpful.",
 };
 

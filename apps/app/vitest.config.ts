@@ -32,8 +32,8 @@ export default defineConfig({
         // span-tree, activity-list, format — ARE unit-tested.)
         "src/app/**/activity/**/*-section.tsx",
         // Automations RSC data-fetch sections + Server Actions drive the real
-        // kernel invoke() → Postgres path (automation.* / agent.trigger.* /
-        // workflow.* / research.swarm.*); they are exercised by the
+        // kernel invoke() → Postgres path (automation.* / workflow.* /
+        // research.swarm.*); they are exercised by the
         // automations*.spec.ts e2e suites against the real DB, not unit-tested
         // in isolation. Same rationale as route.ts and the activity sections.
         "src/app/**/automations/**/*-section.tsx",
@@ -74,7 +74,8 @@ export default defineConfig({
       // server-only throws when imported outside a Server Component; unit tests
       // have no RSC boundary, so stub it to a no-op (otherwise any test that
       // imports a server-only module fails to even collect).
-      "server-only": new URL("./src/test/server-only-stub.ts", import.meta.url).pathname,
+      "server-only": new URL("./src/test/server-only-stub.ts", import.meta.url)
+        .pathname,
     },
   },
 });

@@ -77,7 +77,6 @@ it("provisions one delegated agent principal and links it to the agent identity"
           budget: { maxHops: 2, maxNodes: 20 },
         },
         agentTools: [{ type: "skill", ref: "coding" }],
-        triggers: [{ type: "manual", enabled: true }],
         instructions: "hi",
       },
     },

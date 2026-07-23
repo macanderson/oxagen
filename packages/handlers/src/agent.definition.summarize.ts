@@ -84,15 +84,6 @@ function buildPrompt(
     lines.push("Equipped tools: none");
   }
 
-  if (config.triggers.length > 0) {
-    const triggers = config.triggers
-      .map((t) => (t.enabled ? t.type : `${t.type} (disabled)`))
-      .join(", ");
-    lines.push(`Triggers: ${triggers}`);
-  } else {
-    lines.push("Triggers: none");
-  }
-
   if (config.graph?.ontologyId) {
     lines.push(`Knowledge-graph ontology: ${config.graph.ontologyId}`);
   }
@@ -104,7 +95,9 @@ export const agentDefinitionSummarizeHandler: CapabilityHandler<
   typeof agentDefinitionSummarize
 > = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    throw new AgentSummarizeError("workspaceId is required (scoped capability).");
+    throw new AgentSummarizeError(
+      "workspaceId is required (scoped capability).",
+    );
   }
 
   // ── Load the agent + its latest version config (one tenant transaction) ──────
@@ -171,7 +164,12 @@ export const agentDefinitionSummarizeHandler: CapabilityHandler<
     raw = object.summary;
   } catch (err) {
     logger.error(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, agentId: input.agentId },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        agentId: input.agentId,
+      },
       "agent.definition.summarize: generateObjectFor failed",
     );
     throw new AgentSummarizeError(

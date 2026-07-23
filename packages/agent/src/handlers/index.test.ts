@@ -7,7 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 // derived name too, aliased to the module's readable export.
 vi.mock("./agent.tool.list", () => {
   const agentToolListHandler = vi.fn(async () => ({ tools: [] }));
-  return { agentToolListHandler, list_agent_toolsHandler: agentToolListHandler };
+  return {
+    agentToolListHandler,
+    list_agent_toolsHandler: agentToolListHandler,
+  };
 });
 
 import { resolveHandler, invokeCapability } from "./index";
@@ -21,11 +24,17 @@ describe("handler registry", () => {
   });
 
   it("resolveHandler throws for an unknown capability", async () => {
-    await expect(resolveHandler("does.not.exist")).rejects.toThrow(/No handler registered/);
+    await expect(resolveHandler("does.not.exist")).rejects.toThrow(
+      /No handler registered/,
+    );
   });
 
   it("invokeCapability dispatches through the resolved handler", async () => {
-    const res = await invokeCapability("list_agent_tools", { includeExternal: false }, CTX);
+    const res = await invokeCapability(
+      "list_agent_tools",
+      { includeExternal: false },
+      CTX,
+    );
     expect(res).toEqual({ tools: [] });
   });
 
@@ -58,10 +67,6 @@ describe("handler registry", () => {
     "get_agent_def",
     "list_agent_defs",
     "deploy_agent",
-    "create_trigger",
-    "update_trigger",
-    "delete_trigger",
-    "list_triggers",
   ])(
     "resolves a handler function for %s",
     async (cap) => {

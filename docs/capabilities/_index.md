@@ -86,10 +86,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
-- [agent.trigger.create](agent.trigger.create.md) — Create a manual, scheduled (cron), or event trigger for an agent, validated against the trigger schema
-- [agent.trigger.delete](agent.trigger.delete.md) — Soft-delete an agent trigger so the binding stops firing while preserving the audit record
-- [agent.trigger.list](agent.trigger.list.md) — List the non-deleted triggers configured for an agent in the current workspace
-- [agent.trigger.update](agent.trigger.update.md) — Update an agent trigger in place, replacing its type-specific binding and enabled flag
 - [agent.ui.render](agent.ui.render.md) — Render a structured UI component from an agent response; the client maps the component type to a React renderer
 
 ## A2A (1)

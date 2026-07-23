@@ -1,4 +1,4 @@
-// Shared row-resolution helpers for the agent-definition / trigger handlers.
+// Shared row-resolution helpers for the agent-definition handlers.
 // Every lookup is workspace-scoped: an identifier never resolves a row from a
 // different workspace, even if the caller guesses another workspace's id.
 
@@ -19,9 +19,7 @@ import {
 export class AgentManagedReadOnlyError extends Error {
   readonly code = MANAGED_AGENT_READONLY_CODE;
   constructor(identifier: string) {
-    super(
-      `Agent "${identifier}" is managed by Oxagen and cannot be modified.`,
-    );
+    super(`Agent "${identifier}" is managed by Oxagen and cannot be modified.`);
     this.name = "AgentManagedReadOnlyError";
   }
 }
@@ -235,60 +233,12 @@ export async function resolveAgentForA2A(
       summary: row.summary,
       summaryChecksum: row.summaryChecksum,
       activeVersion: row.activeVersionId2
-        ? { id: row.activeVersionId2, instructions: config?.instructions ?? null }
+        ? {
+            id: row.activeVersionId2,
+            instructions: config?.instructions ?? null,
+          }
         : null,
     };
-  };
-  return tx ? run(tx) : withTenantDb(run);
-}
-
-export interface TriggerRow {
-  id: string;
-  publicId: string;
-  agentId: string;
-  /** The `agentType` of the parent agent — used to enforce managed-agent guards. */
-  agentType: string;
-}
-
-/**
- * Resolve a trigger by public id (atr_…) or UUID — workspace-scoped, live only.
- * Joins the parent `agents` row to surface `agentType` so mutating handlers can
- * call the managed-agent guard without an extra round-trip.
- */
-export async function resolveTrigger(
-  identifier: string,
-  workspaceId: string,
-  tx?: Tx,
-): Promise<TriggerRow | null> {
-  const run = async (d: Tx): Promise<TriggerRow | null> => {
-    const matchColumn = isUuid(identifier)
-      ? eq(schema.agentTriggers.id, identifier)
-      : eq(schema.agentTriggers.publicId, identifier);
-
-    const [row] = await d
-      .select({
-        id: schema.agentTriggers.id,
-        publicId: schema.agentTriggers.publicId,
-        agentId: schema.agentTriggers.agentId,
-        agentType: schema.agents.agentType,
-      })
-      .from(schema.agentTriggers)
-      .innerJoin(
-        schema.agents,
-        and(
-          eq(schema.agentTriggers.agentId, schema.agents.id),
-          isNull(schema.agents.deletedAt),
-        ),
-      )
-      .where(
-        and(
-          eq(schema.agentTriggers.workspaceId, workspaceId),
-          matchColumn,
-          isNull(schema.agentTriggers.deletedAt),
-        ),
-      )
-      .limit(1);
-    return (row as TriggerRow | undefined) ?? null;
   };
   return tx ? run(tx) : withTenantDb(run);
 }

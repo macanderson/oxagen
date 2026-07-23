@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlSchema } from "../avatar";
-import {
-  graphAccessSchema,
-  agentToolSchema,
-  agentTriggerSchema,
-} from "../agent-schema";
+import { graphAccessSchema, agentToolSchema } from "../agent-schema";
 
 // The versioned body persisted into agent_versions.config. Mirrors
 // agentDefinitionConfigSchema from agent-schema.ts so the contract input and
@@ -13,7 +9,6 @@ import {
 const definitionConfigInput = z.object({
   graph: graphAccessSchema,
   agentTools: z.array(agentToolSchema).default([]),
-  triggers: z.array(agentTriggerSchema).default([]),
   instructions: z.string().optional(),
 });
 
@@ -21,7 +16,7 @@ export const agentDefinitionCreate = registerCapability({
   name: "create_agent_def",
   domain: "agent",
   description:
-    "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, triggers, instructions)",
+    "Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config (graph access, tools, instructions)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
