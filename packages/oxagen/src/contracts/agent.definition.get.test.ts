@@ -32,7 +32,6 @@ describe("agent.definition.get capability", () => {
           budget: { maxHops: 2, maxNodes: 20 },
         },
         agentTools: [],
-        triggers: [],
       },
     });
     expect(out.status).toBe("active");
@@ -62,7 +61,6 @@ describe("agent.definition.get capability", () => {
             budget: { maxHops: 1, maxNodes: 1 },
           },
           agentTools: [],
-          triggers: [],
         },
       }),
     ).toThrow();
@@ -89,7 +87,6 @@ describe("agent.definition.get capability", () => {
             budget: { maxHops: 1, maxNodes: 1 },
           },
           agentTools: [],
-          triggers: [],
         },
       }),
     ).toThrow();

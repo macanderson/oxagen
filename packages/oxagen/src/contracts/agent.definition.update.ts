@@ -1,16 +1,11 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlSchema } from "../avatar";
-import {
-  graphAccessSchema,
-  agentToolSchema,
-  agentTriggerSchema,
-} from "../agent-schema";
+import { graphAccessSchema, agentToolSchema } from "../agent-schema";
 
 const definitionConfigInput = z.object({
   graph: graphAccessSchema,
   agentTools: z.array(agentToolSchema).default([]),
-  triggers: z.array(agentTriggerSchema).default([]),
   instructions: z.string().optional(),
 });
 

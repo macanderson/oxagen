@@ -9,7 +9,6 @@ const VALID_CONFIG = {
     budget: { maxHops: 2, maxNodes: 20 },
   },
   agentTools: [{ type: "skill", ref: "summarization" }],
-  triggers: [{ type: "manual" }],
   instructions: "Scan deals and flag risk.",
 };
 
@@ -56,10 +55,9 @@ describe("agent.definition.suggest capability", () => {
       },
       rationale: "A read-only scanner needs graph access and a summariser.",
     });
-    // agentType defaults to "custom"; graph.mode defaults to "read"; warnings to [].
+    // agentType defaults to "custom"; graph.mode defaults to "read".
     expect(out.suggestion.agentType).toBe("custom");
     expect(out.suggestion.config.graph.mode).toBe("read");
-    expect(out.suggestion.config.triggers[0]!.enabled).toBe(false);
     expect(out.warnings).toEqual([]);
   });
 

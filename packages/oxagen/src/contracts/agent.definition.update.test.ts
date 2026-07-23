@@ -9,7 +9,6 @@ const VALID_CONFIG = {
     budget: { maxHops: 1, maxNodes: 10 },
   },
   agentTools: [],
-  triggers: [],
 };
 
 describe("agent.definition.update capability", () => {

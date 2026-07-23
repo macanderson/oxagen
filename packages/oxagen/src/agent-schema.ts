@@ -5,10 +5,12 @@ import { z } from "zod";
 // ─────────────────────────────────────────────────────────────────────────────
 // This module is the executable implementation of docs/reference/agent-schema.ts.
 // An agent DEFINITION is the versioned, declarative source of truth (what the
-// agent is, what it loads, how it reaches the graph, what starts it, and whether
-// it is deployed). An agent INSTANCE is one running execution of a definition
-// with live state and a debug posture. An agent LOG is the append-only, typed
-// traceability record for a run (persisted to ClickHouse).
+// agent is, what it loads, how it reaches the graph, and whether it is
+// deployed). Triggers belong to automations/playbooks, not the agent — a
+// definition is a pure, portable unit with no trigger fields. An agent
+// INSTANCE is one running execution of a definition with live state and a
+// debug posture. An agent LOG is the append-only, typed traceability record
+// for a run (persisted to ClickHouse).
 //
 // Naming aligns with the Vercel AI SDK and MCP: "tool" is the umbrella, and the
 // plain inline-callable kind is "function". A subagent is just an AgentTool of
@@ -105,70 +107,14 @@ export const agentToolSchema = z.object({
 export type AgentTool = z.infer<typeof agentToolSchema>;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TRIGGERS — what starts a run (extends the reference for deployable agents)
-// ═════════════════════════════════════════════════════════════════════════════
-
-/** `manual` = a person runs it; `schedule` = recurring cadence; `event` = fires
- *  when something happens in a connected source. */
-export const agentTriggerTypeSchema = z.enum(["manual", "schedule", "event"]);
-export type AgentTriggerType = z.infer<typeof agentTriggerTypeSchema>;
-
-/** Match conditions for an event trigger. An empty filter matches every event
- *  of the configured type — a precise filter fires only when intended. */
-export const agentEventFilterSchema = z.object({
-  /** Branch refs the event must touch (e.g. ["main"]). Empty = any branch. */
-  branches: z.array(z.string()).optional(),
-  /** Glob patterns the changed paths must match (e.g. ["src/**", "docs/**"]). */
-  pathGlobs: z.array(z.string()).optional(),
-  /** Free-form additional predicates evaluated by the source adapter. */
-  conditions: z.record(z.string(), z.unknown()).optional(),
-});
-export type AgentEventFilter = z.infer<typeof agentEventFilterSchema>;
-
-export const agentTriggerSchema = z
-  .object({
-    type: agentTriggerTypeSchema,
-    /** Source system for an event trigger (e.g. "github_repo"). */
-    eventSource: z.string().optional(),
-    /** Event type within the source (e.g. "push"). */
-    eventType: z.string().optional(),
-    /** The connected source this trigger binds to (a connection id). */
-    connectionId: z.string().optional(),
-    /** Conditions an event must satisfy to fire a run. */
-    filter: agentEventFilterSchema.optional(),
-    /** Cron expression for a schedule trigger. */
-    schedule: z.string().optional(),
-    /** A trigger is live only when enabled AND the agent is deployed active. */
-    enabled: z.boolean().default(false),
-  })
-  .superRefine((t, ctx) => {
-    // The trigger kind dictates which fields are meaningful; reject combinations
-    // that would silently never fire (e.g. an event trigger with no source).
-    if (t.type === "event" && (!t.eventSource || !t.eventType)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "event triggers require eventSource and eventType",
-      });
-    }
-    if (t.type === "schedule" && !t.schedule) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "schedule triggers require a cron schedule",
-      });
-    }
-  });
-export type AgentTrigger = z.infer<typeof agentTriggerSchema>;
-
-// ═════════════════════════════════════════════════════════════════════════════
 // AGENT DEFINITION — the versioned, declarative source of truth
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** Deploy posture, distinct from the draft/active/archived lifecycle. A new
- *  agent is always created `inactive`; activation makes its triggers live. */
+ *  agent is always created `inactive`; activation makes it eligible to be
+ *  triggered by an automation/playbook. */
 export const agentDeploymentStatusSchema = z.enum(["inactive", "active"]);
-export type AgentDeploymentStatus = z.infer<
-  typeof agentDeploymentStatusSchema
->;
+export type AgentDeploymentStatus = z.infer<typeof agentDeploymentStatusSchema>;
 
 /**
  * The canonical `agentType` value that marks an agent as a CODE agent — one
@@ -203,8 +149,6 @@ export const agentDefinitionSchema = z.object({
   /** Everything the agent loads: functions, MCP servers, skills, and subagents.
    *  One uniform list so a subagent loads the same way as an MCP server. */
   agentTools: z.array(agentToolSchema),
-  /** What starts a run. An empty list means manual invocation only. */
-  triggers: z.array(agentTriggerSchema).default([]),
   /** Optional system prompt / instructions baked into the definition. */
   instructions: z.string().optional(),
   /** Deploy posture. New definitions seed `inactive`. */
@@ -222,12 +166,9 @@ export type AgentDefinition = z.infer<typeof agentDefinitionSchema>;
 export const agentDefinitionConfigSchema = agentDefinitionSchema.pick({
   graph: true,
   agentTools: true,
-  triggers: true,
   instructions: true,
 });
-export type AgentDefinitionConfig = z.infer<
-  typeof agentDefinitionConfigSchema
->;
+export type AgentDefinitionConfig = z.infer<typeof agentDefinitionConfigSchema>;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DEBUG — a per-run verbosity setting, not a property of the definition

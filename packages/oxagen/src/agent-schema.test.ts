@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   agentDefinitionSchema,
   agentDefinitionConfigSchema,
-  agentTriggerSchema,
   agentInstanceSchema,
   agentLogSchema,
   debugOptionsSchema,
@@ -44,15 +43,16 @@ describe("graphAccessSchema", () => {
   });
 
   it("requires a positive maxNodes", () => {
-    expect(() => graphBudgetSchema.parse({ maxHops: 1, maxNodes: 0 })).toThrow();
+    expect(() =>
+      graphBudgetSchema.parse({ maxHops: 1, maxNodes: 0 }),
+    ).toThrow();
   });
 });
 
 describe("agentDefinitionSchema", () => {
-  it("applies deploy + trigger defaults", () => {
+  it("applies the deploy default", () => {
     const parsed = agentDefinitionSchema.parse(baseDefinition);
     expect(parsed.deploymentStatus).toBe("inactive");
-    expect(parsed.triggers).toEqual([]);
     expect(parsed.graph.mode).toBe("read");
   });
 
@@ -66,35 +66,8 @@ describe("agentDefinitionSchema", () => {
     const parsed = parseAgentDefinition({
       ...baseDefinition,
       deploymentStatus: "active",
-      triggers: [{ type: "manual" }],
     });
     expect(parsed.deploymentStatus).toBe("active");
-    expect(parsed.triggers[0]?.enabled).toBe(false);
-  });
-});
-
-describe("agentTriggerSchema", () => {
-  it("defaults enabled to false (deploy inactive by default)", () => {
-    expect(agentTriggerSchema.parse({ type: "manual" }).enabled).toBe(false);
-  });
-
-  it("requires eventSource + eventType for an event trigger", () => {
-    expect(() => agentTriggerSchema.parse({ type: "event" })).toThrow();
-    const ok = agentTriggerSchema.parse({
-      type: "event",
-      eventSource: "github_repo",
-      eventType: "push",
-      filter: { branches: ["main"], pathGlobs: ["src/**", "docs/**"] },
-    });
-    expect(ok.eventSource).toBe("github_repo");
-  });
-
-  it("requires a cron schedule for a schedule trigger", () => {
-    expect(() => agentTriggerSchema.parse({ type: "schedule" })).toThrow();
-    expect(
-      agentTriggerSchema.parse({ type: "schedule", schedule: "0 * * * *" })
-        .schedule,
-    ).toBe("0 * * * *");
   });
 });
 
@@ -103,7 +76,6 @@ describe("agentDefinitionConfigSchema", () => {
     const config = agentDefinitionConfigSchema.parse({
       graph,
       agentTools: [{ type: "function", ref: "code.read" }],
-      triggers: [],
       instructions: "Be helpful.",
     });
     expect(config).not.toHaveProperty("id");
