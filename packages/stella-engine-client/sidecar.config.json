@@ -1,0 +1,7 @@
+{
+  "$comment": "Pin for oxagen's Stella sidecar transport (oxagen #1072). The smoke test in src/stella-serve.smoke.test.ts boots exactly this stella version's `serve` surface (stella#258). Bump stellaVersion deliberately, in its own commit, when upgrading — stella releases daily and this file is the only place oxagen records which release it has verified the wire contract against.",
+  "stellaVersion": "0.5.0",
+  "binaryEnvVar": "STELLA_BIN",
+  "servePortEnvVar": "STELLA_SERVE_PORT",
+  "readinessTimeoutMs": 10000
+}
