@@ -21,6 +21,7 @@ import {
   loadMarkdownRegistry,
   readMarkdownFile,
 } from "../lib/markdown-registry.js";
+import { oxagenProjectDir } from "../lib/oxagen-project-paths.js";
 import type { AgentDefinition } from "./types.js";
 
 export { parseFrontmatter } from "../lib/markdown-registry.js";
@@ -82,7 +83,7 @@ export function loadAgents(
   const userDir =
     opts.userAgentsDir ?? join(homedir(), ".config", "oxagen", "agents");
   const registry = loadMarkdownRegistry(
-    [userDir, join(cwd, ".claude", "agents"), join(cwd, ".oxagen", "agents")],
+    [userDir, join(cwd, ".claude", "agents"), oxagenProjectDir("agents", cwd)],
     agentFromMarkdown,
   );
 

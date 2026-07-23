@@ -15,6 +15,7 @@ import {
   loadMarkdownRegistry,
   readMarkdownFile,
 } from "../lib/markdown-registry.js";
+import { oxagenProjectDir } from "../lib/oxagen-project-paths.js";
 import type { SlashCommand } from "./types.js";
 
 export interface LoadCommandsOptions {
@@ -56,7 +57,7 @@ export function loadCommands(
     [
       userDir,
       join(cwd, ".claude", "commands"),
-      join(cwd, ".oxagen", "commands"),
+      oxagenProjectDir("commands", cwd),
     ],
     defFromFile,
   );

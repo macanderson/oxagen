@@ -1,8 +1,8 @@
 /**
  * write.ts — Scaffold a new slash command for `oxagen command new`.
  */
-import { join } from "node:path";
 import { scaffoldMarkdownFile } from "../lib/markdown-registry.js";
+import { oxagenProjectDir } from "../lib/oxagen-project-paths.js";
 
 const TEMPLATE = (name: string) => `---
 description: Describe what /${name} does.
@@ -24,7 +24,6 @@ export function scaffoldCommand(opts: {
   path: string;
   created: boolean;
 } {
-  const dir =
-    opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "commands");
+  const dir = opts.dir ?? oxagenProjectDir("commands", opts.cwd);
   return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
 }

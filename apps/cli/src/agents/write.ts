@@ -1,8 +1,8 @@
 /**
  * write.ts — Scaffold a new agent definition file for `oxagen agent new`.
  */
-import { join } from "node:path";
 import { scaffoldMarkdownFile } from "../lib/markdown-registry.js";
+import { oxagenProjectDir } from "../lib/oxagen-project-paths.js";
 import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
 
 const TEMPLATE = (name: string) => `---
@@ -29,6 +29,6 @@ export function scaffoldAgent(opts: {
   path: string;
   created: boolean;
 } {
-  const dir = opts.dir ?? join(opts.cwd ?? process.cwd(), ".oxagen", "agents");
+  const dir = opts.dir ?? oxagenProjectDir("agents", opts.cwd);
   return scaffoldMarkdownFile({ dir, name: opts.name, template: TEMPLATE });
 }
