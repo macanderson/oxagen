@@ -15,7 +15,10 @@ function filesUnder(directory: string): string[] {
 test("ships a real stella serve round-trip smoke test and both CI entry points", () => {
   const clientRoot = join(root, "packages/stella-engine-client");
   const smoke = filesUnder(clientRoot).find((path) => {
-    if (!/\.(test|spec)\.ts$/.test(path)) return false;
+    // The live round-trip lives in a *.smoke.test.ts file; scope discovery to
+    // it so sibling unit tests that merely mention `stella serve` / `tool_result`
+    // (e.g. error-path coverage) can't shadow the real smoke test.
+    if (!/\.smoke\.(test|spec)\.ts$/.test(path)) return false;
     const source = readFileSync(path, "utf8");
     return /stella\s+serve/i.test(source) && /tool[_-]result/i.test(source);
   });
