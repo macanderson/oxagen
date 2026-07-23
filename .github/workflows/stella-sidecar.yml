@@ -1,0 +1,61 @@
+name: stella-sidecar
+
+# Integration smoke test for oxagen #1081: proves the sidecar transport
+# (oxagen #1072) still speaks the wire contract of a real `stella serve`
+# (stella#258) at the version this repo has pinned
+# (packages/stella-engine-client/sidecar.config.json). Path-filtered to the
+# sidecar package so it only runs when that surface (or its pin) changes —
+# the daily-drift case against whatever stella ships today is covered
+# separately by stella-sidecar-nightly.yml.
+
+on:
+  pull_request:
+    paths:
+      - "packages/stella-engine-client/**"
+  push:
+    branches: [main]
+    paths:
+      - "packages/stella-engine-client/**"
+  workflow_dispatch:
+
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Resolve pinned stella version
+        id: pin
+        run: |
+          VERSION="$(jq -r '.stellaVersion' packages/stella-engine-client/sidecar.config.json)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Pinned stella version: $VERSION"
+
+      # Installs the pinned release from stella's own GitHub releases.
+      # stella ships prebuilt linux-x64 binaries per release (see stella's
+      # own release workflow) — no cargo build needed here.
+      - name: Install stella (pinned version)
+        env:
+          STELLA_VERSION: ${{ steps.pin.outputs.version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/macanderson/stella/releases/download/v${STELLA_VERSION}/stella-x86_64-unknown-linux-gnu.tar.gz" \
+            -o /tmp/stella.tar.gz || {
+              echo "::warning::could not download stella v${STELLA_VERSION} release asset — smoke test will SKIP, not fail";
+              exit 0;
+            }
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf /tmp/stella.tar.gz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sidecar transport smoke test
+        working-directory: packages/stella-engine-client
+        run: pnpm vitest run src/stella-serve.smoke.test.ts
