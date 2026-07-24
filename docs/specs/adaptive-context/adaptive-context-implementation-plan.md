@@ -1,13 +1,21 @@
 # Adaptive Context Implementation Plan
 
+> **Vendored mirror — not the source of truth.** This file is a reference copy of
+> an upstream document (`macanderson/stella` for the Stella specs;
+> `macanderson/context-graph-protocol` for the build prompt), kept here while
+> Oxagen builds its provider. Do not treat it as authoritative or edit it as a
+> spec — the canonical version lives upstream. Naming and the protocol/product
+> boundary follow CGP `docs/adr/0007-protocol-product-boundary.md`: the protocol
+> is **Context Graph Protocol (CGP)** / `contextgraph/*`; the "CGEP" rename is
+> rejected. See the reconciliation delta table
+> ([context-graph-protocol#27](https://github.com/macanderson/context-graph-protocol/issues/27)).
+
 Status: implementation draft  
 Primary repository: `macanderson/stella`  
 Companion specification: `stella-adaptive-context-lifecycle.md`
 
 This plan turns the adaptive-context specification into a staged Stella
-implementation. It is intentionally repository-specific. Context Graph
-Exchange Protocol (CGEP; proposed public name, current repository
-`context-graph-protocol`) changes are a later interoperability layer, not a
+implementation. It is intentionally repository-specific. Context Graph Protocol (CGP; repository `context-graph-protocol`) changes are a later interoperability layer, not a
 prerequisite for local learning.
 
 Complete one releasable phase per branch or change set and run its gate before
@@ -31,7 +39,7 @@ Stella should be able to:
 9. remain local-first and fully functional without a server or protocol
    lifecycle provider; and
 10. exchange portable lifecycle records when a provider advertises the
-    relevant Context Graph Exchange Protocol capabilities.
+    relevant Context Graph Protocol capabilities.
 
 ## 2. Decisions to freeze before implementation
 
@@ -283,7 +291,7 @@ Stella owns:
 - efficacy attribution, staleness, and pruning;
 - local SQLite schema and Git publication.
 
-Context Graph Exchange Protocol owns only portable exchange mechanisms:
+Context Graph Protocol owns only portable exchange mechanisms:
 
 - typed lifecycle records and links;
 - scope, sharing, provenance, and temporal semantics;
@@ -329,7 +337,7 @@ widening requires a new decision.
 
 Call this portable behavior export and provider retrieval in v1. The current
 append/get/query/resolve surface is not a complete synchronization protocol.
-Oxagen may provide product-specific encrypted sync, but CGEP must not claim
+Oxagen may provide product-specific encrypted sync, but CGP must not claim
 portable sync until a capability defines cursors, ordered change feeds,
 acknowledgements, tombstones, conflict rules, deletion propagation, and offline
 replay.
@@ -377,7 +385,7 @@ Preserve the existing Cargo dependency graph:
 - do not make `stella-protocol` depend on `stella-context`;
 - use stable IDs and small protocol-local payloads when importing a core type
   would create a cycle;
-- do not make external Context Graph Exchange Protocol structs Stella's internal domain
+- do not make external Context Graph Protocol structs Stella's internal domain
   model;
 - keep every new behavior behind settings until its phase gates pass;
 - make event replay idempotent before enabling automated learning.
@@ -496,7 +504,7 @@ Examples:
 
 ### `stella-protocol`
 
-Add internal, replay-safe events without changing public Context Graph Exchange Protocol
+Add internal, replay-safe events without changing public Context Graph Protocol
 wire semantics yet:
 
 ```text
@@ -1415,7 +1423,7 @@ Add views for:
 - Suppressed records are excluded from automatic retrieval.
 - Safety and blocking directives are never withheld for experiments.
 
-## 14. Phase 10 — Context Graph Exchange Protocol interoperability
+## 14. Phase 10 — Context Graph Protocol interoperability
 
 Do this only after the local schema passes replay evaluation and a second
 provider use case validates portability.

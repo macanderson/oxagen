@@ -2,7 +2,7 @@
 # Fleet plan: adaptive-context — Oxagen Context Exchange Provider
 #
 # Source spec: docs/specs/adaptive-context/spec.md (platform-side; §1 gives
-# the authority order over the canonical bundle in this directory — the CGEP
+# the authority order over the canonical bundle in this directory — the CGP
 # build prompt is normative for wire semantics, the lifecycle spec for record
 # meaning; directive-schema.md and context-frame-spec.md are superseded
 # drafts). This plan builds ONLY oxagen-platform; the Stella and
@@ -188,7 +188,7 @@ Deliver:
    file if the database package has that convention.
 
 Commit via repo_commit: "feat(database): context_exchange schema with RLS
-for the CGEP provider". Reconcile with already-landed work.
+for the CGP provider". Reconcile with already-landed work.
 '''
 depends_on = []
 claims = [
@@ -330,7 +330,7 @@ capability-doc.ts:
    behaviors, minimum idempotency receipt-retention, whether provider
    known_at reconstruction is supported and from when, required consent
    class, and unknown-field round-trip behavior. Namespace: use the
-   protocol's current published namespace and document cgep/lifecycle/
+   protocol's current published namespace and document contextgraph/lifecycle/
    1.0-draft as the target identifier — never emit both as interchangeable
    aliases (spec.md §6).
 4. Tests: resolve.test.ts + query.test.ts (single-file runs) incl. hash
@@ -386,7 +386,7 @@ claims = [
 
 [[tasks]]
 id = "x06-capabilities"
-title = "Kernel capabilities: contracts + handlers for the CGEP operations"
+title = "Kernel capabilities: contracts + handlers for the CGP operations"
 prompt = '''
 You are one task in a fleet building the Oxagen Context Exchange Provider.
 Read first: spec.md §7 (the capability list and the IAM/audit requirements
@@ -428,14 +428,14 @@ claims = [
 
 [[tasks]]
 id = "x07-http-wire"
-title = "HTTP wire surface: /cgep routes + well-known discovery + flag"
+title = "HTTP wire surface: /contextgraph routes + well-known discovery + flag"
 prompt = '''
 You are one task in a fleet building the Oxagen Context Exchange Provider.
 Read first: spec.md §4 and §6; the A2A bridge (apps/api/src/routes/a2a/ —
 protocol.ts, rpc.ts, well-known.ts) as the structural model for an
 external-protocol surface; the capability contracts from x06.
 
-Deliver, in apps/api/src/routes/cgep/:
+Deliver, in apps/api/src/routes/contextgraph/:
 
 1. POST endpoints for context/query, context/records/append,
    context/records/get, context/resolve plus GET capability-document and a
@@ -456,12 +456,12 @@ Deliver, in apps/api/src/routes/cgep/:
    receipts; unauthenticated = 401; an idempotent replay returns the
    duplicate receipt byte-identically.
 
-Commit via repo_commit: "feat(api): CGEP wire surface behind
+Commit via repo_commit: "feat(api): CGP wire surface behind
 CONTEXT_EXCHANGE_ENABLED". Reconcile with already-landed work.
 '''
 depends_on = ["x06-capabilities"]
 claims = [
-  "apps/api/src/routes/cgep",
+  "apps/api/src/routes/contextgraph",
   "apps/api/src/app.ts",
   "packages/config/src/registry.ts",
 ]
@@ -536,7 +536,7 @@ Deliver:
    x06 pattern; audit against the manifest hash; check:contracts +
    check:manifest green). Expose through the x07 wire as a POST (guard: if
    the routes file is frozen by another task re-run, add the route in a
-   separate file under apps/api/src/routes/cgep/ following its structure).
+   separate file under apps/api/src/routes/contextgraph/ following its structure).
 3. Tests: exports.test.ts (single-file run) — happy path; manifest/item
    hash mismatch rejected; missing actor+consent rejected; destination
    identity mismatch rejected; per-item receipts referenced.
