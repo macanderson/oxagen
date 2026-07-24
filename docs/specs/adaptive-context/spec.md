@@ -1,5 +1,17 @@
 # Oxagen Context Exchange Provider (adaptive context, platform side)
 
+> **Normative home: Context Graph Protocol (CGP).** This is Oxagen's *provider*
+> spec. The wire contract — record/frame semantics, capabilities, temporal and
+> provenance semantics, and the operation/error vocabulary — is owned normatively
+> by the Context Graph Protocol (`macanderson/context-graph-protocol`), not by
+> this directory. Oxagen implements the open provider contract; nothing
+> Oxagen-specific leaks into wire semantics (§2). See CGP
+> `docs/adr/0007-protocol-product-boundary.md` and
+> `docs/adaptive-context-reconciliation.md`
+> ([context-graph-protocol#27](https://github.com/macanderson/context-graph-protocol/issues/27)).
+> The protocol is **Context Graph Protocol (CGP)** / `contextgraph/*`; the "CGEP"
+> / `cgep/*` naming once proposed here is rejected (CGP ADR 0007 §5).
+
 Status: implementation draft
 Target: oxagen-platform (this repository)
 Fleet plan: `docs/specs/adaptive-context/fleet.toml`
@@ -10,7 +22,7 @@ This directory holds the canonical adaptive-context bundle (2026-07-20 Codex
 outputs) plus this platform-side spec. Authority order for the platform work:
 
 1. **Normative for wire semantics**: `context-graph-protocol-build-prompt.md`
-   — the CGEP operations, record envelope, receipt/idempotency/retention
+   — the CGP operations, record envelope, receipt/idempotency/retention
    semantics, capability advertisement, and the typed error vocabulary the
    provider must serve.
 2. **Normative for record meaning**: `stella-adaptive-context-lifecycle.md` —
@@ -29,7 +41,7 @@ outputs) plus this platform-side spec. Authority order for the platform work:
 ## 2. Position in the deployment model
 
 Per lifecycle spec §5.3: Stella is a complete local/BYOK learning system;
-CGEP is the neutral exchange protocol; Oxagen is **one optional commercial
+CGP is the neutral exchange protocol; Oxagen is **one optional commercial
 provider and control plane** implementing the same open provider contract —
 durable workspace identity and membership, RBAC, organization policy
 inheritance, audit, retention, and enterprise integrations.
@@ -45,11 +57,11 @@ Binding consequences:
   Stella's promotion, confidence, mining, or governance policy.
 - No portable "sync" claims: v1 is export (append) and provider retrieval
   (get/query/resolve) only. Cursors, ordered change feeds, tombstones, and
-  offline replay are explicitly out of scope until CGEP defines them.
+  offline replay are explicitly out of scope until CGP defines them.
 
 ## 3. v1 scope
 
-**In**: the four CGEP operations as kernel capabilities + an HTTP wire
+**In**: the four CGP operations as kernel capabilities + an HTTP wire
 surface; the multi-tenant canonical record store; the ingestion and
 idempotency ledgers with receipt replay; retention negotiation and
 enforcement; workspace publication with RBAC approval, attestation, audit,
@@ -60,7 +72,7 @@ attestations; a wire-level conformance test suite.
 filtered/temporal listing (engram bridge follow-up; see §9); running the Rust
 `contextgraph-conformance` suite against the HTTP endpoint (gated on the
 protocol repo shipping the lifecycle capability); Neo4j provenance graph
-projection; encrypted multi-device sync (product-specific, outside CGEP);
+projection; encrypted multi-device sync (product-specific, outside CGP);
 any Stella-side work (its own fleet plan, stella PR #257).
 
 ## 4. Architecture mapping
@@ -70,7 +82,7 @@ any Stella-side work (its own fleet plan, stella PR #257).
 | Domain logic (validation, hashing, append/receipt semantics, retention, attestation) | new package `packages/context-exchange` |
 | Canonical record + ledger tables | `packages/database/src/schema/context-exchange.ts` (new `context_exchange` pgSchema) + one Atlas migration |
 | Capabilities (IAM/audit/tenancy for free) | contracts in `packages/oxagen/src/contracts/`, handlers registered via `packages/handlers/src/register.ts`, all invocation through `kernel.invoke()` |
-| HTTP wire surface | `apps/api/src/routes/cgep/` modeled on the A2A bridge (`apps/api/src/routes/a2a/`), incl. well-known discovery + capability document |
+| HTTP wire surface | `apps/api/src/routes/contextgraph/` modeled on the A2A bridge (`apps/api/src/routes/a2a/`), incl. well-known discovery + capability document |
 | Retention/expiry enforcement | scheduled function in `packages/inngest-functions` |
 | Audit | automatic ClickHouse audit event per capability invocation via the kernel; contract `audit` fields set on every capability |
 | Config/flags | `packages/config/src/registry.ts` (e.g. `CONTEXT_EXCHANGE_ENABLED`, default off) |
@@ -117,7 +129,7 @@ concurrent migration authoring a conflict):
   active window); private material via the platform's secret handling, never
   a plaintext column.
 
-## 6. Wire contract (summary; the CGEP build prompt is normative)
+## 6. Wire contract (summary; the CGP build prompt is normative)
 
 Operations: `context/query`, `context/records/append`, `context/records/get`,
 `context/resolve`. Append is batched; each item carries `idempotency_key` and
@@ -132,7 +144,7 @@ Resolve verifies canonical content hash before returning content. The
 capability document advertises representations, lifecycle kinds, ops, batch
 limits/atomicity, retention classes and bounds, receipt-retention minimum,
 consent class, and unknown-field behavior — under the current protocol
-namespace with `cgep/lifecycle/1.0-draft` documented as the target
+namespace with `contextgraph/lifecycle/1.0-draft` documented as the target
 identifier. The full typed error vocabulary (24 codes, from
 `unsupported_capability` through `partial_failure`) is required; errors carry
 safe diagnostics only.

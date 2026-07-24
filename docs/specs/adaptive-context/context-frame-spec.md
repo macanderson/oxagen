@@ -1,5 +1,14 @@
 # Context Frame Specification
 
+> **Superseded draft (informative).** Per this directory's `spec.md` §1, these
+> early drafts are superseded by `stella-adaptive-context-lifecycle.md`: where
+> they conflict — `memory`/`fact` as directive kinds, a portable `project_id` —
+> the lifecycle spec wins (the live model is four directive kinds:
+> `preference`/`rule`/`constraint`/`procedure`). Frame + wire semantics are owned
+> by the **Context Graph Protocol (CGP)**; see CGP
+> `docs/adaptive-context-reconciliation.md`
+> ([context-graph-protocol#27](https://github.com/macanderson/context-graph-protocol/issues/27)).
+
 ## 1. Purpose
 
 A **Context Frame** is the bounded, task-specific package of trusted information

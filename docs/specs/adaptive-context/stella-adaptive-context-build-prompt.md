@@ -1,5 +1,15 @@
 # Stella Adaptive Context Build Prompt
 
+> **Vendored mirror — not the source of truth.** This file is a reference copy of
+> an upstream document (`macanderson/stella` for the Stella specs;
+> `macanderson/context-graph-protocol` for the build prompt), kept here while
+> Oxagen builds its provider. Do not treat it as authoritative or edit it as a
+> spec — the canonical version lives upstream. Naming and the protocol/product
+> boundary follow CGP `docs/adr/0007-protocol-product-boundary.md`: the protocol
+> is **Context Graph Protocol (CGP)** / `contextgraph/*`; the "CGEP" rename is
+> rejected. See the reconciliation delta table
+> ([context-graph-protocol#27](https://github.com/macanderson/context-graph-protocol/issues/27)).
+
 Use the following as the system/developer handoff prompt for the agent working
 in `macanderson/stella`.
 
@@ -432,7 +442,7 @@ class, retention, or provider as a new decision.
 The draft protocol adapter supports export and provider retrieval, not portable
 continuous synchronization. If Oxagen provides multi-device sync through a
 product-specific service, keep that adapter outside the open protocol core. Do
-not call it portable CGEP sync until a capability defines cursors, ordered
+not call it portable CGP sync until a capability defines cursors, ordered
 changes, acknowledgements, tombstones, conflicts, deletion, and offline replay.
 
 When lifecycle append is available, place `requested_retention` on the command,
@@ -622,7 +632,7 @@ separate privacy/retention workflow.
 8. Artifact contracts and completion gating.
 9. Markdown publication and solo-to-team transition.
 10. Context-use efficacy, staleness, pruning, and Observatory.
-11. Optional Context Graph Exchange Protocol adapter after the protocol capability
+11. Optional Context Graph Protocol adapter after the protocol capability
     exists and local replay evaluation passes.
 
 Do not skip dependency gates to produce UI first.
