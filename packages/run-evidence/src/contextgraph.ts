@@ -1,7 +1,15 @@
+import {
+  budgetTokens,
+  PROTOCOL_VERSION as SDK_PROTOCOL_VERSION,
+  type ContextFrame as SdkContextFrame,
+  type ContextQuery as SdkContextQuery,
+} from "@contextgraphprotocol/typescript-sdk";
 import { z } from "zod";
 import { snapshotJsonWire } from "./json-wire.js";
 
-export const CONTEXTGRAPH_PROTOCOL_VERSION = "contextgraph/1.0-draft" as const;
+// The canonical SDK is the single source of the protocol version string; a
+// divergence between this package and the SDK cannot compile.
+export const CONTEXTGRAPH_PROTOCOL_VERSION = SDK_PROTOCOL_VERSION;
 export const CONTEXTGRAPH_FIXTURE_PROFILE_VERSION = "1.1.0" as const;
 
 const intrinsicMathFround = Math.fround;
@@ -228,15 +236,60 @@ const contextRelationV1Schema = z
   })
   .strict();
 
-const contextFrameV1Schema = z
+const contextRepresentationV1Schema = z.enum(["full", "compact", "reference"]);
+
+const contextContentFidelityV1Schema = z.enum([
+  "exact",
+  "normalized",
+  "summarized",
+  "omitted",
+]);
+
+const contextInlineContentRequirementV1Schema = z.enum([
+  "required",
+  "resolvable_reference_allowed",
+]);
+
+const contextContentRefV1Schema = z
+  .object({
+    provider_id: z.string(),
+    uri: z.string(),
+    expires_at: z.string().optional(),
+  })
+  .strict();
+
+const contextTransformV1Schema = z
+  .object({
+    method: z.string(),
+    implementation: z.string(),
+    version: z.string(),
+  })
+  .strict();
+
+// Every #33 field is optional with no materialized default: a `.default()`
+// here would change the normalized bytes of every pinned golden fixture. A
+// frame with no `representation` is a `full` frame — the default is semantic
+// (applied by the invariants below), not written into the output.
+const contextFrameObjectV1Schema = z
   .object({
     id: z.string(),
     kind: contextFrameKindV1Schema,
     title: z.string(),
-    content: z.string(),
+    content: z.string().optional(),
+    content_digest: z.string().optional(),
     uri: z.string().optional(),
+    representation: contextRepresentationV1Schema.optional(),
+    content_fidelity: contextContentFidelityV1Schema.optional(),
+    canonical_content_hash: z.string().optional(),
+    content_ref: contextContentRefV1Schema.optional(),
+    transform: contextTransformV1Schema.optional(),
+    minimum_content_fidelity: contextContentFidelityV1Schema.optional(),
+    inline_content_requirement:
+      contextInlineContentRequirementV1Schema.optional(),
     score: finiteNumberSchema.min(0).max(1),
     token_cost: u32Schema,
+    canonical_token_cost: u32Schema.optional(),
+    tokenizer_ref: z.string().optional(),
     valid_from: z.string().optional(),
     valid_to: z.string().optional(),
     recorded_at: z.string().optional(),
@@ -249,6 +302,71 @@ const contextFrameV1Schema = z
   })
   .strict();
 
+// Representation invariants, mirrored from `contextgraph-types`'
+// `ContextFrame::representation_invariants` (messages kept byte-identical so
+// evidence reads the same on both sides of the protocol).
+const contextFrameV1Schema = contextFrameObjectV1Schema.superRefine(
+  (frame, ctx) => {
+    const addIssue = (path: string, message: string): void => {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [path] });
+    };
+    const representation = frame.representation ?? "full";
+    if (representation === "full") {
+      if (frame.content === undefined) {
+        addIssue("content", "full frame requires inline content");
+      }
+      return;
+    }
+    if (representation === "compact") {
+      if (frame.content === undefined) {
+        addIssue("content", "compact frame requires inline content");
+      }
+      if (frame.content_digest === undefined) {
+        addIssue(
+          "content_digest",
+          "compact frame requires an inline content hash (content_digest)",
+        );
+      }
+      if (frame.canonical_content_hash === undefined) {
+        addIssue(
+          "canonical_content_hash",
+          "compact frame requires canonical_content_hash",
+        );
+      }
+      if (frame.transform === undefined) {
+        addIssue("transform", "compact frame requires a transform identity");
+      }
+      if (frame.content_ref === undefined) {
+        addIssue("content_ref", "compact frame requires content_ref");
+      }
+      return;
+    }
+    // "Never encode a reference as content: ''" — any inline content, empty
+    // or not, is a violation.
+    if (frame.content !== undefined) {
+      addIssue("content", "reference frame must not carry inline content");
+    }
+    if (frame.content_ref === undefined) {
+      addIssue("content_ref", "reference frame requires content_ref");
+    }
+    if (frame.canonical_content_hash === undefined) {
+      addIssue(
+        "canonical_content_hash",
+        "reference frame requires canonical_content_hash",
+      );
+    }
+    if (frame.content_digest !== undefined) {
+      addIssue(
+        "content_digest",
+        "reference frame must omit the inline content hash (content_digest)",
+      );
+    }
+    if (frame.transform !== undefined) {
+      addIssue("transform", "reference frame must omit transform");
+    }
+  },
+);
+
 const contextQueryV1Schema = z
   .object({
     goal: z.string(),
@@ -259,6 +377,9 @@ const contextQueryV1Schema = z
     max_frames: u32Schema,
     max_tokens: u32Schema,
     as_of: z.string().optional(),
+    representation_preferences: z
+      .array(contextRepresentationV1Schema)
+      .optional(),
   })
   .strict();
 
@@ -268,8 +389,42 @@ export type ContextFrameEmbeddingV1 = z.infer<
   typeof contextFrameEmbeddingV1Schema
 >;
 export type ContextRelationV1 = z.infer<typeof contextRelationV1Schema>;
+export type ContextRepresentationV1 = z.infer<
+  typeof contextRepresentationV1Schema
+>;
+export type ContextContentFidelityV1 = z.infer<
+  typeof contextContentFidelityV1Schema
+>;
+export type ContextInlineContentRequirementV1 = z.infer<
+  typeof contextInlineContentRequirementV1Schema
+>;
+export type ContextContentRefV1 = z.infer<typeof contextContentRefV1Schema>;
+export type ContextTransformV1 = z.infer<typeof contextTransformV1Schema>;
 export type ContextFrameV1 = z.infer<typeof contextFrameV1Schema>;
 export type ContextQueryV1 = z.infer<typeof contextQueryV1Schema>;
+
+// ─── Compile-time drift checks against the canonical SDK wire types ─────────
+// `@contextgraphprotocol/typescript-sdk` is the canonical source of the CGP
+// wire contract (ADR-036). If the SDK adds a wire field this schema does not
+// model, or a modeled field's type diverges, this package fails to typecheck —
+// schema drift is a build error, not a latent runtime gap.
+type AssertNever<T extends never> = T;
+type AssertAssignable<T extends Target, Target> = T;
+
+export type FrameSchemaCoversEverySdkField = AssertNever<
+  Exclude<keyof SdkContextFrame, keyof ContextFrameV1>
+>;
+export type QuerySchemaCoversEverySdkField = AssertNever<
+  Exclude<keyof SdkContextQuery, keyof ContextQueryV1>
+>;
+export type FrameSchemaProducesSdkFrames = AssertAssignable<
+  ContextFrameV1,
+  SdkContextFrame
+>;
+export type QuerySchemaProducesSdkQueries = AssertAssignable<
+  ContextQueryV1,
+  SdkContextQuery
+>;
 
 export function normalizeContextFrameV1(input: unknown): ContextFrameV1 {
   assertIntrinsicIntegrity();
@@ -279,4 +434,169 @@ export function normalizeContextFrameV1(input: unknown): ContextFrameV1 {
 export function normalizeContextQueryV1(input: unknown): ContextQueryV1 {
   assertIntrinsicIntegrity();
   return contextQueryV1Schema.parse(snapshotJsonWire(input));
+}
+
+// ─── Canonical token accounting (`SPEC.md` §B3) ─────────────────────────────
+// The cost arithmetic comes from the canonical SDK (`budgetTokens`), not a
+// local re-derivation: `ceil(utf8_byte_length(content) / 4)`, and a frame
+// with no inline content costs 0. Separate from `normalizeContextFrameV1` by
+// design — the pinned golden fixtures predate #33's honesty rule, so honesty
+// is a conformance predicate (as in `contextgraph-types`), not a parse gate.
+
+/** The canonical budget-token cost of this frame's inline content. */
+export function expectedInlineTokenCostV1(
+  frame: Pick<ContextFrameV1, "content">,
+): number {
+  assertIntrinsicIntegrity();
+  return budgetTokens(frame.content);
+}
+
+/** Whether `token_cost` matches the canonical count for this frame's content. */
+export function declaresHonestTokenCostV1(
+  frame: Pick<ContextFrameV1, "content" | "token_cost">,
+): boolean {
+  assertIntrinsicIntegrity();
+  return frame.token_cost === budgetTokens(frame.content);
+}
+
+// ─── Temporal profile (`SPEC.md` §F4) ───────────────────────────────────────
+// One spelling per instant: RFC 3339, UTC only (`Z` suffix), optional
+// non-empty fractional seconds, leap second 60 permitted, real calendar days.
+// Mirrored from `contextgraph-types`' `is_protocol_timestamp`.
+
+export const CONTEXTGRAPH_TEMPORAL_FIELDS = [
+  "valid_from",
+  "valid_to",
+  "recorded_at",
+] as const;
+export type ContextTemporalFieldV1 =
+  (typeof CONTEXTGRAPH_TEMPORAL_FIELDS)[number];
+
+function digitAt(value: string, index: number): number | undefined {
+  const code = value.charCodeAt(index);
+  return code >= 48 && code <= 57 ? code - 48 : undefined;
+}
+
+function twoDigitsAt(value: string, index: number): number | undefined {
+  const tens = digitAt(value, index);
+  const ones = digitAt(value, index + 1);
+  if (tens === undefined || ones === undefined) {
+    return undefined;
+  }
+  return tens * 10 + ones;
+}
+
+function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function daysInMonth(year: number, month: number): number {
+  switch (month) {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 8:
+    case 10:
+    case 12:
+      return 31;
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+      return 30;
+    case 2:
+      return isLeapYear(year) ? 29 : 28;
+    default:
+      return 0;
+  }
+}
+
+/** Whether `value` is in the protocol's timestamp profile (`SPEC.md` §F4). */
+export function isProtocolTimestampV1(value: string): boolean {
+  assertIntrinsicIntegrity();
+  // Shortest legal form is "YYYY-MM-DDTHH:MM:SSZ" = 20 characters.
+  if (value.length < 20) {
+    return false;
+  }
+  if (
+    value[4] !== "-" ||
+    value[7] !== "-" ||
+    value[10] !== "T" ||
+    value[13] !== ":" ||
+    value[16] !== ":"
+  ) {
+    return false;
+  }
+  const yearDigits = [
+    digitAt(value, 0),
+    digitAt(value, 1),
+    digitAt(value, 2),
+    digitAt(value, 3),
+  ];
+  if (yearDigits.some((digit) => digit === undefined)) {
+    return false;
+  }
+  const year =
+    (yearDigits[0] as number) * 1000 +
+    (yearDigits[1] as number) * 100 +
+    (yearDigits[2] as number) * 10 +
+    (yearDigits[3] as number);
+  const month = twoDigitsAt(value, 5);
+  const day = twoDigitsAt(value, 8);
+  const hour = twoDigitsAt(value, 11);
+  const minute = twoDigitsAt(value, 14);
+  const second = twoDigitsAt(value, 17);
+  if (
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined
+  ) {
+    return false;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+    return false;
+  }
+  // RFC 3339 permits second 60 to represent a leap second.
+  if (hour > 23 || minute > 59 || second > 60) {
+    return false;
+  }
+  const rest = value.slice(19);
+  if (rest === "Z") {
+    return true;
+  }
+  // Fractional seconds: a dot, at least one digit, then Z.
+  if (rest[0] !== "." || rest[rest.length - 1] !== "Z" || rest.length < 3) {
+    return false;
+  }
+  for (let index = 1; index < rest.length - 1; index += 1) {
+    if (digitAt(rest, index) === undefined) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** The names of any temporal fields outside the protocol's timestamp profile. */
+export function invalidTemporalFieldsV1(
+  frame: Pick<ContextFrameV1, ContextTemporalFieldV1>,
+): ContextTemporalFieldV1[] {
+  assertIntrinsicIntegrity();
+  const invalid: ContextTemporalFieldV1[] = [];
+  for (const field of CONTEXTGRAPH_TEMPORAL_FIELDS) {
+    const value = frame[field];
+    if (value !== undefined && !isProtocolTimestampV1(value)) {
+      invalid.push(field);
+    }
+  }
+  return invalid;
+}
+
+/** Whether every temporal field present on this frame is well-formed. */
+export function hasValidTemporalFieldsV1(
+  frame: Pick<ContextFrameV1, ContextTemporalFieldV1>,
+): boolean {
+  return invalidTemporalFieldsV1(frame).length === 0;
 }

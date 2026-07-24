@@ -21,7 +21,7 @@ const EXPECTED_GENERATION_COMMAND =
   "cargo test -p contextgraph-conformance --test golden_fixtures";
 const EXPECTED_UPSTREAM_REPOSITORY =
   "https://github.com/macanderson/context-graph-protocol";
-const EXPECTED_UPSTREAM_COMMIT = "36a64488f0fe300597ab494e1c4f9e94778175a0";
+const EXPECTED_UPSTREAM_COMMIT = "9fb559aa4d3ec4cf062e59dab113eae4e175c5fa";
 const EXPECTED_UPSTREAM_MANIFEST_SHA256 =
   "sha256:bae644ace4444881450af4f69b3a89e4d2178cc60f4c3a5b7adb3350327d437a";
 

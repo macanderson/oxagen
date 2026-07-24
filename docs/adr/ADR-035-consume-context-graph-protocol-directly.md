@@ -1,6 +1,7 @@
 # ADR-035: Consume the Context Graph Protocol directly via pinned conformance fixtures
 
-- **Status:** Accepted
+- **Status:** Accepted — amended by ADR-036 (the official CGP TypeScript SDK
+  now anchors the type surface; the "not a dependency" rationale is superseded)
 - **Date:** 2026-07-22
 - **Owners:** agent platform / run-evidence
 - **Related:** #1082 (this decision), #1069 (pruned the vendored `ocp-*`
