@@ -8,16 +8,30 @@ import { illustrationClassName } from "./hex-utils";
 
 export function IllustrationMcp({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>Two connectors meeting at a single point, representing an MCP handshake</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        Two connectors meeting at a single point, representing an MCP handshake
+      </title>
       <defs>
         <linearGradient id="ill-mcp-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
         <radialGradient id="ill-mcp-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.75} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0.75}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 
@@ -32,8 +46,24 @@ export function IllustrationMcp({ className }: { className?: string }) {
         strokeWidth={1}
         opacity={0.32}
       />
-      <line x1={176} y1={92} x2={200} y2={92} stroke="currentColor" strokeWidth={1} opacity={0.32} />
-      <line x1={176} y1={108} x2={200} y2={108} stroke="currentColor" strokeWidth={1} opacity={0.32} />
+      <line
+        x1={176}
+        y1={92}
+        x2={200}
+        y2={92}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.32}
+      />
+      <line
+        x1={176}
+        y1={108}
+        x2={200}
+        y2={108}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.32}
+      />
 
       <rect
         x={384}
@@ -46,8 +76,24 @@ export function IllustrationMcp({ className }: { className?: string }) {
         strokeWidth={1}
         opacity={0.32}
       />
-      <line x1={384} y1={92} x2={360} y2={92} stroke="currentColor" strokeWidth={1} opacity={0.22} />
-      <line x1={384} y1={108} x2={360} y2={108} stroke="currentColor" strokeWidth={1} opacity={0.22} />
+      <line
+        x1={384}
+        y1={92}
+        x2={360}
+        y2={92}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.22}
+      />
+      <line
+        x1={384}
+        y1={108}
+        x2={360}
+        y2={108}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.22}
+      />
 
       <path
         d="M200,100 L360,100"

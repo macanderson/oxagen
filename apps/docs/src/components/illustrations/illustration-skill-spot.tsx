@@ -7,16 +7,30 @@ import { illustrationClassName } from "./hex-utils";
 
 export function IllustrationSkillSpot({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 120" className={illustrationClassName(className)}>
-      <title>A pen nib synthesising a skill definition, marked by a single spark</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 120"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A pen nib synthesising a skill definition, marked by a single spark
+      </title>
       <defs>
         <linearGradient id="ill-skill-spot-g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
         <radialGradient id="ill-skill-spot-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.8} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0.8}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 

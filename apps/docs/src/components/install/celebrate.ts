@@ -7,7 +7,7 @@
  * reduced-motion users; the button's copied state is the feedback).
  */
 
-const EMBER = ["#fd9a4b", "#f07650", "#eb5c5e", "#38d39f", "#f8f6f1"];
+const EMBER = ["#F9D423", "#FF7E5F", "#C2185B", "#38d39f", "#f8f6f1"];
 
 interface Particle {
   x: number;
@@ -22,7 +22,11 @@ interface Particle {
   drag: number;
 }
 
-function spawnBurst(originX: number, originY: number, towardRight: boolean): Particle[] {
+function spawnBurst(
+  originX: number,
+  originY: number,
+  towardRight: boolean,
+): Particle[] {
   const particles: Particle[] = [];
   for (let i = 0; i < 90; i++) {
     // aim the cannon up and toward the centre of the screen
@@ -64,10 +68,16 @@ export function celebrate(): void {
 
   const h = window.innerHeight;
   const w = window.innerWidth;
-  let particles = [...spawnBurst(-10, h + 10, true), ...spawnBurst(w + 10, h + 10, false)];
+  let particles = [
+    ...spawnBurst(-10, h + 10, true),
+    ...spawnBurst(w + 10, h + 10, false),
+  ];
   // a second volley shortly after the first, for a fuller sky
   const volley = setTimeout(() => {
-    particles.push(...spawnBurst(-10, h + 10, true), ...spawnBurst(w + 10, h + 10, false));
+    particles.push(
+      ...spawnBurst(-10, h + 10, true),
+      ...spawnBurst(w + 10, h + 10, false),
+    );
   }, 260);
 
   const started = performance.now();

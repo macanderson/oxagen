@@ -35,7 +35,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Oxagen Docs",
     description: "Documentation for the Oxagen agent platform.",
-    images: [{ url: "/social/og-image-dark-1200x630.png", width: 1200, height: 630, alt: "Oxagen Docs" }],
+    images: [
+      {
+        url: "/social/og-image-dark-1200x630.png",
+        width: 1200,
+        height: 630,
+        alt: "Oxagen Docs",
+      },
+    ],
     type: "website",
   },
   twitter: {
@@ -51,7 +58,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0B0D16" },
-    { media: "(prefers-color-scheme: light)", color: "#F8F6F1" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF7F2" },
   ],
 };
 

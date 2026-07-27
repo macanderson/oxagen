@@ -5,18 +5,42 @@ import { hexVertices, illustrationClassName } from "./hex-utils";
  * an open hex — the single ember thread marks the moment the binary lands.
  */
 
-export function IllustrationCliInstallSpot({ className }: { className?: string }) {
+export function IllustrationCliInstallSpot({
+  className,
+}: {
+  className?: string;
+}) {
   return (
-    <svg role="img" viewBox="0 0 560 120" className={illustrationClassName(className)}>
-      <title>An arrow settling into an open hex, representing the CLI install landing</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 120"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        An arrow settling into an open hex, representing the CLI install landing
+      </title>
       <defs>
-        <linearGradient id="ill-cli-install-spot-g1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+        <linearGradient
+          id="ill-cli-install-spot-g1"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
         <radialGradient id="ill-cli-install-spot-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.75} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0.75}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 

@@ -5,7 +5,7 @@
 // is "repeat loads of static assets feel instant," not "work with no
 // network." Never intercepts /api/* (the Orama search route) or non-GET
 // requests.
-const CACHE_NAME = "oxagen-docs-shell-v1";
+const CACHE_NAME = "oxagen-docs-shell-v2";
 const SHELL_ASSETS = [
   "/manifest.webmanifest",
   "/favicon/favicon.svg",
@@ -27,9 +27,15 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
-    ),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      ),
   );
   self.clients.claim();
 });

@@ -10,16 +10,30 @@ const ENDPOINTS = ["/v1/agent", "/v1/workflow", "/v1/knowledge"];
 
 export function IllustrationApi({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>REST braces framing versioned endpoints with a request in flight</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        REST braces framing versioned endpoints with a request in flight
+      </title>
       <defs>
         <linearGradient id="ill-api-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
         <radialGradient id="ill-api-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.8} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0.8}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 
