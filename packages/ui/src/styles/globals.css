@@ -429,6 +429,7 @@
     --brand: var(--ox-violet-bright);
     --brand-foreground: var(--ox-ink);
     --tab-border-active: var(--ox-violet-bright);
+    --button-primary-bg: var(--primary);
     --button-primary-fg: var(--ox-ink);
     --button-primary-ring: var(--ring);
     --button-default-ring: var(--ring);
@@ -558,6 +559,7 @@
       --brand: var(--ox-violet-bright);
       --brand-foreground: var(--ox-ink);
       --tab-border-active: var(--ox-violet-bright);
+      --button-primary-bg: var(--primary);
       --button-primary-fg: var(--ox-ink);
       --button-primary-ring: var(--ring);
       --button-default-ring: var(--ring);
