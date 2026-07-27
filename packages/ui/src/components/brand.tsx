@@ -71,9 +71,9 @@ export function OxagenLogomark({
             x2="1"
             y2="0"
           >
-            <stop offset="0" stopColor="#FD9A4B" />
-            <stop offset=".5" stopColor="#F07650" />
-            <stop offset="1" stopColor="#EB5C5E" />
+            <stop offset="0" stopColor="#F9D423" />
+            <stop offset=".5" stopColor="#FF7E5F" />
+            <stop offset="1" stopColor="#C2185B" />
           </linearGradient>
           <linearGradient
             id={EMBER_ID_2}
@@ -84,9 +84,9 @@ export function OxagenLogomark({
             x2="1"
             y2="0"
           >
-            <stop offset="0" stopColor="#FD9A4B" />
-            <stop offset=".5" stopColor="#F07650" />
-            <stop offset="1" stopColor="#EB5C5E" />
+            <stop offset="0" stopColor="#F9D423" />
+            <stop offset=".5" stopColor="#FF7E5F" />
+            <stop offset="1" stopColor="#C2185B" />
           </linearGradient>
         </defs>
       )}
@@ -98,8 +98,15 @@ export function OxagenLogomark({
         <path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" />
       </g>
       {/* Ember cells — the gradient accent, canonical in both modes */}
-      <path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill={ember1} />
-      <path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill={ember2} opacity=".55" />
+      <path
+        d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z"
+        fill={ember1}
+      />
+      <path
+        d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z"
+        fill={ember2}
+        opacity=".55"
+      />
     </svg>
   );
 }
@@ -162,7 +169,11 @@ export function OxagenLogo({
 
   if (variant === "mark") {
     return (
-      <span className={cn("inline-flex", className)} style={ringStyle} aria-label="Oxagen">
+      <span
+        className={cn("inline-flex", className)}
+        style={ringStyle}
+        aria-label="Oxagen"
+      >
         <OxagenLogomark tone={tone} className="size-full" />
       </span>
     );
@@ -177,24 +188,46 @@ export function OxagenLogo({
   }
   if (variant === "vertical") {
     return (
-      <span className={cn("inline-flex flex-col items-center", className)} style={{ gap: size * 0.34 }} aria-label="Oxagen">
+      <span
+        className={cn("inline-flex flex-col items-center", className)}
+        style={{ gap: size * 0.34 }}
+        aria-label="Oxagen"
+      >
         <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
-        <OxagenWordmark tone={tone} style={{ fontSize: size * 0.92 }} className="text-foreground" />
+        <OxagenWordmark
+          tone={tone}
+          style={{ fontSize: size * 0.92 }}
+          className="text-foreground"
+        />
       </span>
     );
   }
   // horizontal (default)
   return (
-    <span className={cn("inline-flex items-center", className)} style={{ gap: size * 0.42 }} aria-label="Oxagen">
+    <span
+      className={cn("inline-flex items-center", className)}
+      style={{ gap: size * 0.42 }}
+      aria-label="Oxagen"
+    >
       <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
-      <OxagenWordmark tone={tone} style={{ fontSize: size * 1.02 }} className="text-foreground" />
+      <OxagenWordmark
+        tone={tone}
+        style={{ fontSize: size * 1.02 }}
+        className="text-foreground"
+      />
     </span>
   );
 }
 
 /* ── Knowledge-graph brand primitives ──────────────────────────────────────── */
 
-export type NodeKind = "user" | "document" | "service" | "policy" | "resource" | "default";
+export type NodeKind =
+  | "user"
+  | "document"
+  | "service"
+  | "policy"
+  | "resource"
+  | "default";
 
 // Categorical node palette — the knowledge-graph entity classes read the
 // theme's data-viz ramp (--chart-1..5) so they re-skin with the rest of the
@@ -276,7 +309,11 @@ export function ConfidenceBar({
       >
         <span
           className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${s * 100}%`, background: track, boxShadow: `0 0 8px ${track}` }}
+          style={{
+            width: `${s * 100}%`,
+            background: track,
+            boxShadow: `0 0 8px ${track}`,
+          }}
         />
       </span>
       {showValue && (
