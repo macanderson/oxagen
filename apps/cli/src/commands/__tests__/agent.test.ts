@@ -8,7 +8,13 @@
  * an unknown agent exits 1. A fake CommandWriter captures stdout/stderr.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentList, agentShow, agentNew, type AgentCmdCtx } from "../agent.js";
@@ -19,7 +25,7 @@ let dir: string;
 let ctx: AgentCmdCtx;
 
 function writeAgent(name: string, body: string): void {
-  const p = join(dir, ".oxagen", "agents", `${name}.md`);
+  const p = join(dir, ".oxagen", "agents", `${name}.toml`);
   mkdirSync(join(p, ".."), { recursive: true });
   writeFileSync(p, body, "utf8");
 }
@@ -29,7 +35,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -62,21 +71,21 @@ describe("agent command handlers — pretty mode", () => {
   it("lists agents with description, tools and model", () => {
     writeAgent(
       "reviewer",
-      "---\nname: reviewer\ndescription: Reviews code\ntools: Read, Grep\nmodel: a/b\n---\nYou review code.",
+      'schema_version = 1\nkind = "agent"\nname = "reviewer"\ndescription = "Reviews code"\nmodel = "a/b"\ndeveloper_instructions = "You review code."\ntools = ["read_file", "grep"]\n',
     );
     const { writer, out } = makeWriter();
     agentList(ctx, writer);
     const text = out.join("\n");
     expect(text).toContain("reviewer");
     expect(text).toContain("Reviews code");
-    expect(text).toContain("Read, Grep");
+    expect(text).toContain("read_file, grep");
     expect(text).toContain("a/b");
   });
 
   it("shows an agent's full definition", () => {
     writeAgent(
       "reviewer",
-      "---\nname: reviewer\ndescription: Reviews code\n---\nYou review code carefully.",
+      'schema_version = 1\nkind = "agent"\nname = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "You review code carefully."\n',
     );
     const { writer, out } = makeWriter();
     agentShow("reviewer", ctx, writer);
@@ -100,7 +109,9 @@ describe("agent command handlers — pretty mode", () => {
     const first = makeWriter();
     agentNew("builder", ctx, first.writer);
     expect(first.out.join("\n")).toContain("Created agent");
-    expect(existsSync(join(dir, ".oxagen", "agents", "builder.md"))).toBe(true);
+    expect(existsSync(join(dir, ".oxagen", "agents", "builder.toml"))).toBe(
+      true,
+    );
     const second = makeWriter();
     agentNew("builder", ctx, second.writer);
     expect(second.out.join("\n")).toContain("already exists");
@@ -127,7 +138,7 @@ describe("agent command handlers — --json mode", () => {
   it("list emits one single-line JSON array preserving the summary shape", () => {
     writeAgent(
       "reviewer",
-      "---\nname: reviewer\ndescription: Reviews code\ntools: Read, Grep\nmodel: a/b\n---\nYou review code.",
+      'schema_version = 1\nkind = "agent"\nname = "reviewer"\ndescription = "Reviews code"\nmodel = "a/b"\ndeveloper_instructions = "You review code."\ntools = ["read_file", "grep"]\n',
     );
     const { writer, out, err } = makeWriter();
     agentList({ ...ctx, json: true }, writer);
@@ -139,7 +150,7 @@ describe("agent command handlers — --json mode", () => {
       name: "reviewer",
       description: "Reviews code",
       source: expect.any(String),
-      tools: ["Read", "Grep"],
+      tools: ["read_file", "grep"],
       model: "a/b",
     });
     expect(err).toEqual([]);
@@ -154,7 +165,7 @@ describe("agent command handlers — --json mode", () => {
   it("show emits one single-line JSON object round-tripping the definition", () => {
     writeAgent(
       "reviewer",
-      "---\nname: reviewer\ndescription: Reviews code\n---\nYou review code carefully.",
+      'schema_version = 1\nkind = "agent"\nname = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "You review code carefully."\n',
     );
     const { writer, out } = makeWriter();
     agentShow("reviewer", { ...ctx, json: true }, writer);
