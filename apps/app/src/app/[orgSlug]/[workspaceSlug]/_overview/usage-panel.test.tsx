@@ -75,7 +75,6 @@ function breakdown(
     byCapability: [],
     byPrincipal: [],
     byUser: [],
-    cacheSavingsMicros: 0,
     ...overrides,
   };
 }
