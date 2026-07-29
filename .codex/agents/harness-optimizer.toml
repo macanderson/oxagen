@@ -39,4 +39,5 @@ The harness is exactly: `.Codex/settings.json`, the agent definitions in `.Codex
 - baseline scorecard
 - applied changes
 - measured improvements
-- remaining risks"""
+- remaining risks
+"""
