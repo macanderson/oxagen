@@ -5,7 +5,7 @@
 // billing/usage data), so serving stale API responses while "offline" would
 // actively mislead the user. Scope is narrow on purpose — see
 // apps/app/src/components/pwa/sw-register.tsx for the registration side.
-const CACHE_NAME = "oxagen-app-shell-v1";
+const CACHE_NAME = "oxagen-app-shell-v2";
 const SHELL_ASSETS = [
   "/manifest.webmanifest",
   "/favicon/favicon.svg",
@@ -27,9 +27,15 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
-    ),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      ),
   );
   self.clients.claim();
 });

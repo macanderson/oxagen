@@ -8,12 +8,19 @@ import { illustrationClassName } from "./hex-utils";
 
 export function IllustrationByokSpot({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 120" className={illustrationClassName(className)}>
-      <title>A key reaching toward a gateway node, representing bring-your-own-key model access</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 120"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A key reaching toward a gateway node, representing bring-your-own-key
+        model access
+      </title>
       <defs>
         <linearGradient id="ill-byok-spot-g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
       </defs>
 
@@ -26,9 +33,33 @@ export function IllustrationByokSpot({ className }: { className?: string }) {
         strokeWidth={1.25}
         opacity={0.75}
       />
-      <line x1={164} y1={60} x2={230} y2={60} stroke="currentColor" strokeWidth={1.25} opacity={0.32} />
-      <line x1={210} y1={60} x2={210} y2={68} stroke="currentColor" strokeWidth={1.25} opacity={0.32} />
-      <line x1={222} y1={60} x2={222} y2={72} stroke="currentColor" strokeWidth={1.25} opacity={0.32} />
+      <line
+        x1={164}
+        y1={60}
+        x2={230}
+        y2={60}
+        stroke="currentColor"
+        strokeWidth={1.25}
+        opacity={0.32}
+      />
+      <line
+        x1={210}
+        y1={60}
+        x2={210}
+        y2={68}
+        stroke="currentColor"
+        strokeWidth={1.25}
+        opacity={0.32}
+      />
+      <line
+        x1={222}
+        y1={60}
+        x2={222}
+        y2={72}
+        stroke="currentColor"
+        strokeWidth={1.25}
+        opacity={0.32}
+      />
 
       <path
         d="M240,60 L400,60"

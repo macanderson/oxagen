@@ -26,16 +26,30 @@ const ANCHOR = { cx: 280, cy: 74, r: 25 };
 
 export function IllustrationOverview({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>A faint knowledge-graph lattice settling into one governed node</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A faint knowledge-graph lattice settling into one governed node
+      </title>
       <defs>
         <linearGradient id="ill-overview-g1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
+          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
         </linearGradient>
         <radialGradient id="ill-overview-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.85} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0.85}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopOpacity={0}
+          />
         </radialGradient>
         <linearGradient id="ill-overview-fade" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#000" />
@@ -44,7 +58,13 @@ export function IllustrationOverview({ className }: { className?: string }) {
           <stop offset="1" stopColor="#000" />
         </linearGradient>
         <mask id="ill-overview-mask">
-          <rect x={0} y={0} width={560} height={200} fill="url(#ill-overview-fade)" />
+          <rect
+            x={0}
+            y={0}
+            width={560}
+            height={200}
+            fill="url(#ill-overview-fade)"
+          />
         </mask>
       </defs>
 
@@ -76,8 +96,18 @@ export function IllustrationOverview({ className }: { className?: string }) {
         strokeLinecap="round"
         opacity={0.75}
       />
-      <circle cx={ANCHOR.cx} cy={ANCHOR.cy + 62} r={16} fill="url(#ill-overview-glow)" />
-      <circle cx={ANCHOR.cx} cy={ANCHOR.cy + 62} r={3} fill="url(#ill-overview-g1)" />
+      <circle
+        cx={ANCHOR.cx}
+        cy={ANCHOR.cy + 62}
+        r={16}
+        fill="url(#ill-overview-glow)"
+      />
+      <circle
+        cx={ANCHOR.cx}
+        cy={ANCHOR.cy + 62}
+        r={3}
+        fill="url(#ill-overview-g1)"
+      />
     </svg>
   );
 }

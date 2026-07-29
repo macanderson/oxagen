@@ -7,6 +7,7 @@ hexagon logo the way a self-drawing brain would tie to a brain mark.
 ## Files
 - `oxagen-spinner-assemble.svg` — light-ink, self-contained SMIL. Works as
   `<img src>`, CSS `background-image`, or inline.
+- `oxagen-spinner-assemble-dark.svg` — light ink for dark grounds.
 - `oxagen-spinner-assemble-light/dark.gif` — raster fallback (128px) for
   surfaces that strip SVG animation.
 
@@ -15,7 +16,7 @@ The ember gradient on the two filled hexagons is fixed — never recolor it.
 ## Inline
 ```html
 <span role="status" aria-label="Loading" style="display:inline-block;width:48px;height:48px">
-  <!-- paste oxagen-spinner-assemble.svg -->
+  <!-- paste oxagen-spinner-assemble.svg (or -dark for dark UI) -->
 </span>
 ```
 

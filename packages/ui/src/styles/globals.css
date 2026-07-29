@@ -34,16 +34,16 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Oxagen Terracotta" — warm-neutral throughout: ivory paper
- * (#FAF9F5) + crisp white panels in light, warm charcoal (#1E1D1B) page +
- * stepped warm-gray panels in dark (no blue cast anywhere). Card and table
- * HEADERS are flat — they sit on the surface with hairline borders, never
- * shaded bars. Colour is concentrated in ONE muted terracotta accent
- * (#D97757 — CTAs, focus rings, the active-tab underline, links via a deeper
- * rust) — never smeared across every surface; secondary fills are quiet
- * warm neutrals. Errors use a true red so they never read as the terracotta
- * primary. Brand mark gradient stays tangerine → flame (#F07650) → rose
- * (theme-independent; never recolor the mark).
+ * CURRENT SKIN: "Nocturne Violet" (docs/brand) — warm paper (#FAF7F2) + crisp
+ * white panels in light, deep nocturne navy-violet (#0B0D16 page, #15131F
+ * panels) in dark. Card and table HEADERS are flat — they sit on the surface
+ * with hairline borders, never shaded bars. Colour is concentrated in ONE
+ * violet accent (#6E48CE light / #A78BFA dark — CTAs, focus rings, the
+ * active-tab underline, links) — never smeared across every surface;
+ * secondary fills are quiet violet-leaning neutrals. Errors reuse the ember
+ * crimson, which never clashes with the violet primary. Brand mark gradient
+ * is the ember sweep — gold (#F9D423) → flame (#FF7E5F) → crimson (#C2185B) —
+ * theme-independent; never recolor the mark. Warm logo, cool ground.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
@@ -62,82 +62,86 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Tangerine":
-     * warm off-white in light / cool narwhal near-black in dark, tangerine
-     * primary + rose secondary + teak accent. Warmth lives in the accent, not
-     * smeared across surfaces (design system stays flat — see THEME.md §7).
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Nocturne Violet":
+     * warm paper in light / deep nocturne navy-violet in dark, violet primary
+     * accent opposite the fixed warm ember mark. Warm logo, cool ground —
+     * colour lives in the accent, not smeared across surfaces (design system
+     * stays flat — see THEME.md §7 and docs/brand/tokens.css).
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — warm ivory paper, warm near-black slate ink, warm soft
-       white. Chroma on the paper is 0.004 — felt as warmth, never seen as a
-       cast — so neutrals stay honest and colour is introduced intentionally
-       via the terracotta accent + brand mark instead. */
-    --_paper: oklch(0.982 0.004 95);     /* #FAF9F5 — warm ivory paper */
-    --_ink: oklch(0.24 0.004 75);        /* #1F1E1D — warm near-black slate ink */
-    --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
+    /* Brand anchors — warm paper, cool near-black navy ink, soft warm white.
+       The paper keeps a whisper of warmth so the cool violet accent and the
+       warm ember mark both read cleanly against it. */
+    --_paper: oklch(0.977 0.007 80.7);   /* #FAF7F2 — warm paper */
+    --_ink: oklch(0.209 0.010 268.2);    /* #16181D — near-black navy ink */
+    --_ink-white: oklch(0.967 0.003 84.6); /* #F5F4F2 — soft warm white */
 
-    /* Named brand swatches. Tangerine is the primary accent; rose the secondary;
-       ox-indigo* the cool link accent. --ox-rust is retained (name stability) and
-       re-pointed at tangerine; the legacy warm/sand swatches are unused. */
+    /* Named brand swatches. Violet is the primary accent (bright variant for
+       dark grounds); ox-indigo* the cool chart accent. --ox-rust is retained as
+       a deprecated alias of the accent knob (name stability); the legacy
+       warm/sand swatches are unused. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(0.985 0.003 84.6);   /* warm near-white */
+    --ox-surface: oklch(1 0 0);   /* crisp white */
     --ox-ink: var(--_ink);
-    --ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine (primary) */
-    --ox-rose: oklch(0.661 0.177 22.5);   /* #EB5C5E — rose (secondary) */
-    --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (accent, dark) */
+    --ox-violet: oklch(0.519 0.196 291.0);   /* #6E48CE — THE accent knob (light): drives --primary, --ring, tabs, chart-1 */
+    --ox-violet-bright: oklch(0.709 0.159 293.5);   /* #A78BFA — accent on dark grounds */
+    --ox-tangerine: oklch(0.876 0.174 95.6);   /* #F9D423 — ember gold (legacy name) */
+    --ox-rose: oklch(0.531 0.202 5.6);   /* #C2185B — ember crimson (legacy name) */
+    --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (legacy, unused) */
     --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
     --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
-    --ox-rust: oklch(0.66 0.115 40);   /* #D97757 — muted terracotta. THE accent knob: drives --primary, --ring, tabs, chart-1 */
+    --ox-rust: var(--ox-violet);   /* deprecated alias — kept for name stability */
     --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
     --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
 
     --ox-indigo: oklch(0.45 0.055 278);   /* muted indigo — chart categorical accent (light) */
     --ox-indigo-bright: oklch(0.74 0.06 279);   /* muted indigo — chart categorical accent (dark) */
 
-    /* Neutral ramp — warm-neutral throughout (hue ~75–95° at very low chroma):
-       light steps read as ivory, dark steps as warm charcoal. Stepped elevation
-       in dark (950 page → 900 card → 850 popover → 800 accent) is preserved. */
-    --_stone-50: oklch(0.99 0.002 95);      /* warm near-white */
-    --_stone-100: oklch(0.965 0.006 92);    /* #F0EEE6 — muted / card-header */
-    --_stone-150: oklch(0.949 0.007 92);    /* surface-alt */
-    --_stone-200: oklch(0.925 0.008 90);    /* secondary surface */
-    --_stone-300: oklch(0.885 0.009 88);    /* input border (light) — a touch darker for contrast */
-    --_stone-400: oklch(0.77 0.012 80);     /* muted-foreground (dark) */
-    --_stone-500: oklch(0.55 0.012 80);     /* warm tertiary text */
-    --_stone-600: oklch(0.47 0.014 78);     /* warm secondary text (light) — darker for contrast */
-    --_stone-700: oklch(0.35 0.012 75);     /* warm graphite */
-    --_stone-800: oklch(0.320 0.005 78);    /* #393836 — charcoal accent surface (dark) */
-    --_stone-850: oklch(0.285 0.004 78);    /* #2E2D2B — charcoal popover / muted (dark) */
-    --_stone-900: oklch(0.253 0.004 78);    /* #262624 — charcoal card / sidebar (dark) */
-    --_stone-950: oklch(0.220 0.004 78);    /* #1E1D1B — warm charcoal background (dark) */
+    /* Neutral ramp — violet-leaning cool neutrals (hue ~290–306° at low
+       chroma): light steps read as faintly violet-tinted paper fills, dark
+       steps as nocturne navy-violet. Stepped elevation in dark (950 page →
+       900 card → 850 popover → 800 accent) is preserved. */
+    --_stone-50: oklch(0.985 0.005 300);    /* violet-tinged near-white */
+    --_stone-100: oklch(0.955 0.013 306);   /* #F2EEF7 — muted / card-header (brand surface-alt) */
+    --_stone-150: oklch(0.938 0.016 303);   /* surface-alt */
+    --_stone-200: oklch(0.915 0.019 302);   /* secondary surface */
+    --_stone-300: oklch(0.875 0.022 300);   /* input border (light) — a touch darker for contrast */
+    --_stone-400: oklch(0.768 0.037 297.8); /* #B6AFC9 — muted-foreground (dark) */
+    --_stone-500: oklch(0.600 0.034 299.9); /* #837C92 — tertiary text */
+    --_stone-600: oklch(0.401 0.034 298.6); /* #4A4458 — secondary text (light) */
+    --_stone-700: oklch(0.33 0.030 296);    /* violet graphite */
+    --_stone-800: oklch(0.28 0.045 292);    /* raised violet accent surface (dark) */
+    --_stone-850: oklch(0.233 0.038 292.3); /* #1E1A2E — violet popover / muted (dark) */
+    --_stone-900: oklch(0.195 0.024 291.7); /* #15131F — violet-black card / sidebar (dark) */
+    --_stone-950: oklch(0.162 0.019 274.4); /* #0B0D16 — near-black navy background (dark) */
 
-    /* Terracotta accent ramp (the theme accent — drives accent-subtle backgrounds).
-       Keeps the --_violet-* NAMES for zero-churn; the VALUES are terracotta. */
-    --_violet-50: oklch(0.965 0.015 45);   /* terracotta 95% tint */
-    --_violet-100: oklch(0.925 0.030 45);
-    --_violet-200: oklch(0.865 0.055 43);
-    --_violet-300: oklch(0.775 0.085 41);
-    --_violet-400: oklch(0.66 0.115 40);   /* #D97757 — terracotta (matches --ox-rust) */
-    --_violet-500: oklch(0.60 0.115 38);
-    --_violet-600: oklch(0.53 0.105 36);
-    --_violet-700: oklch(0.46 0.090 35);
-    --_violet-800: oklch(0.38 0.070 34);
-    --_violet-900: oklch(0.31 0.050 33);
+    /* Violet accent ramp (the theme accent — drives accent-subtle backgrounds).
+       The --_violet-* names carry true violet values again (docs/brand). */
+    --_violet-50: oklch(0.951 0.021 301.1);   /* #F1ECFB */
+    --_violet-100: oklch(0.883 0.048 300.2);  /* #DDD2F4 */
+    --_violet-200: oklch(0.791 0.087 298.7);  /* #C2AFEC */
+    --_violet-300: oklch(0.709 0.159 293.5);  /* #A78BFA — accent on dark */
+    --_violet-400: oklch(0.612 0.167 293.8);  /* #8B6BDD */
+    --_violet-500: oklch(0.519 0.196 291.0);  /* #6E48CE — primary accent (matches --ox-violet) */
+    --_violet-600: oklch(0.443 0.186 289.8);  /* #5733B0 */
+    --_violet-700: oklch(0.383 0.161 289.6);
+    --_violet-800: oklch(0.324 0.137 289.4);  /* #361E73 */
+    --_violet-900: oklch(0.243 0.098 293.3);  /* #241149 */
 
-    /* Brand mark primitives (tangerine → flame → rose gradient). */
-    --_ember-gold: oklch(0.775 0.150 56.4);    /* #FD9A4B — tangerine (gradient start) */
-    --_ember-flame: oklch(0.701 0.160 37.9);   /* #F07650 — flame (gradient midpoint) */
-    --_ember-crimson: oklch(0.661 0.177 22.5); /* #EB5C5E — rose (gradient end) */
-    --_ember-navy: oklch(0.151 0.012 266.5);   /* #0B0D16 — narwhal */
+    /* Brand mark primitives (ember: gold → flame → crimson — never recolor). */
+    --_ember-gold: oklch(0.876 0.174 95.6);    /* #F9D423 — gold (gradient start) */
+    --_ember-flame: oklch(0.736 0.164 34.7);   /* #FF7E5F — flame (gradient midpoint) */
+    --_ember-crimson: oklch(0.531 0.202 5.6);  /* #C2185B — crimson (gradient end) */
+    --_ember-navy: oklch(0.162 0.019 274.4);   /* #0B0D16 — nocturne navy */
 
-    /* Status hues (desaturated to fit the palette). Error is a true red so it
-       never reads as the tangerine primary. */
-    --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
-    --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
-    --_moss: oklch(0.60 0.12 160);             /* success — #1D9E75 adjacent */
-    --_moss-light: oklch(0.72 0.12 160);
-    --_ochre: oklch(0.667 0.124 73.1);         /* warning */
-    --_ochre-light: oklch(0.747 0.13 78.8);
+    /* Status hues (kept warm-neutral so they don't clash — docs/brand). Error
+       reuses the ember crimson; distinct from the violet primary by design. */
+    --_clay: oklch(0.531 0.202 5.6);           /* error — ember crimson #C2185B */
+    --_clay-light: oklch(0.63 0.185 5.6);      /* error (dark grounds) */
+    --_moss: oklch(0.623 0.123 165.5);         /* success — #1D9E75 */
+    --_moss-light: oklch(0.72 0.12 165);
+    --_ochre: oklch(0.622 0.130 67.2);         /* warning — #BA7517 */
+    --_ochre-light: oklch(0.74 0.13 72);
     --_slate: oklch(0.508 0.042 233.7);        /* info */
     --_slate-light: oklch(0.618 0.04 233.3);
     --_terracotta: oklch(0.583 0.121 44.5);
@@ -146,43 +150,44 @@
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
-    --ui-shadow: 0 1px 2px oklch(0.25 0.015 75 / 0.06); /* subtle warm-neutral shadow — hairline borders do the real work. */
+    --ui-radius: 0.5rem; /* moderate rounding — Nocturne is confident, not brutal. */
+    --ui-shadow: 0 1px 2px oklch(0.24 0.048 293 / 0.06); /* subtle cool-violet shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
     --ink-light: var(--_ink-white);
     --ink-dark: var(--_ink);
 
-    /* The brand hue — ember accent drives links, focus, CTAs. */
-    --brand: var(--ox-rust);
-    --brand-foreground: var(--ox-ink);
+    /* The theme hue — violet accent drives links, focus, CTAs. */
+    --brand: var(--ox-violet);
+    --brand-foreground: oklch(1 0 0);
 
     /* ════════════════════════════════════════════════════════════════════════
-     * CORE SEMANTIC — LIGHT. Graphite: off-white page, crisp white panels,
-     * neutral graphite grays. Warmth lives only in the ember accent + ring.
+     * CORE SEMANTIC — LIGHT. Nocturne Violet: warm paper page, crisp white
+     * panels, violet-leaning cool neutrals. Colour lives in the violet accent
+     * + ring; the warm ember mark stays the focal point.
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
-    --card: oklch(1 0 0);              /* crisp white card (dramatic on off-white) */
+    --card: oklch(1 0 0);              /* crisp white card (dramatic on warm paper) */
     --card-foreground: var(--_ink);
     --popover: oklch(1 0 0);
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-rust);         /* tangerine */
-    --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.925 0.012 83);   /* quiet warm-neutral fill (secondary buttons, badges) */
-    --secondary-foreground: oklch(0.30 0.012 75);
+    --primary: var(--ox-violet);       /* violet #6E48CE */
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.925 0.016 300);   /* quiet violet-neutral fill (secondary buttons, badges) */
+    --secondary-foreground: oklch(0.32 0.030 296);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.945 0.018 45);   /* barely-there terracotta-tinted hover/selected wash */
-    --accent-foreground: oklch(0.32 0.050 40);   /* deep rust ink on the tint */
-    --destructive: var(--_clay);         /* true red */
+    --accent: oklch(0.951 0.021 301.1);   /* barely-there violet-tinted hover/selected wash (#F1ECFB) */
+    --accent-foreground: var(--_violet-800);   /* deep violet ink on the tint */
+    --destructive: var(--_clay);         /* ember crimson */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.885 0.008 85 / 0.9);   /* warm hairline — slightly darker for definition/contrast */
+    --border: oklch(0.324 0.137 289.4 / 0.14);   /* violet hairline — rgba(54,30,115,.14) per docs/brand */
     --input: var(--_stone-300);
-    --ring: var(--ox-rust);
-    --link: oklch(0.49 0.10 40);   /* deep rust — the text-safe (≥4.5:1) shade of the terracotta accent */
-    --link-hover: oklch(0.42 0.10 38);
+    --ring: var(--ox-violet);
+    --link: var(--_violet-500);   /* #6E48CE — the brand link violet (≥4.5:1 on paper) */
+    --link-hover: var(--_violet-600);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -197,9 +202,11 @@
     /* Ember mark gradient (theme-independent — never recolor the mark). */
     --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
 
-    /* Charts — distinct categorical ramp (ember · indigo · moss · ochre · slate). */
-    --chart-1: var(--ox-rust);
-    --chart-2: var(--ox-indigo);
+    /* Charts — distinct categorical ramp (violet · ember flame · moss · ochre · slate).
+       Chart-2 is the warm ember flame — the old indigo sat too close to the
+       violet primary to survive as a categorical neighbour. */
+    --chart-1: var(--ox-violet);
+    --chart-2: var(--_ember-flame);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
     --chart-5: var(--_slate);
@@ -210,11 +217,11 @@
     /* Core sidebar surface — crisp white. */
     --sidebar: var(--surface);
     --sidebar-foreground: var(--surface-foreground);
-    --sidebar-primary: var(--ox-rust);
-    --sidebar-primary-foreground: var(--ox-ink);
+    --sidebar-primary: var(--ox-violet);
+    --sidebar-primary-foreground: oklch(1 0 0);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.885 0.008 85 / 0.5);
+    --sidebar-border: oklch(0.324 0.137 289.4 / 0.10);
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -267,13 +274,13 @@
     --tab-fg-active: var(--foreground);
     --tab-border: transparent;
     --tab-border-hover: var(--border);
-    --tab-border-active: var(--ox-rust);
+    --tab-border-active: var(--ox-violet);
     --tab-border-width: 2px;
 
     /* ── Buttons (two variants). Hover/active adapt via color-mix toward the
      *    background, so they flip correctly in dark with no re-declaration. ── */
     --button-primary-bg: var(--primary);
-    --button-primary-fg: var(--ox-ink);
+    --button-primary-fg: oklch(1 0 0);
     --button-primary-border: transparent;
     --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
     --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
@@ -328,7 +335,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.20 0.010 70 / 0.45);
+    --overlay-scrim: oklch(0.213 0.048 292.9 / 0.45);   /* rgba(26,20,45,.45) per docs/brand */
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -351,9 +358,10 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — Graphite. Neutral near-black page, stepped charcoal panels, ember
-   * accent. Re-declares core tokens + the two header bgs (which point at fixed
-   * primitives); the rest of the component-token surface inherits the flip.
+   * DARK — Nocturne. Near-black navy page, stepped violet-black panels,
+   * bright violet accent. Re-declares core tokens + the two header bgs (which
+   * point at fixed primitives); the rest of the component-token surface
+   * inherits the flip.
    * ════════════════════════════════════════════════════════════════════════ */
   .dark {
     color-scheme: dark;
@@ -364,22 +372,22 @@
     --card-foreground: var(--_ink-white);
     --popover: var(--_stone-850);
     --popover-foreground: var(--_ink-white);
-    --primary: var(--ox-rust);
+    --primary: var(--ox-violet-bright);
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+    --secondary: oklch(0.28 0.045 292);   /* calm violet chip fill */
     --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
-    /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
+    /* Brighter secondary ink in dark for legibility on the nocturne surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected */
+    --accent: oklch(0.30 0.062 292);   /* deep violet-tinted hover/selected */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
-    --input: oklch(0.360 0.008 80 / 0.6);
-    --ring: var(--ox-rust);
-    --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
-    --link-hover: oklch(0.84 0.075 45);
+    --border: oklch(0.709 0.159 293.5 / 0.16);   /* violet hairline — rgba(167,139,250,.16) per docs/brand */
+    --input: oklch(0.709 0.159 293.5 / 0.22);
+    --ring: var(--ox-violet-bright);
+    --link: var(--_violet-300);   /* #A78BFA — text-safe violet for dark */
+    --link-hover: var(--_violet-200);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -390,8 +398,8 @@
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
 
-    --chart-1: var(--ox-rust);
-    --chart-2: var(--ox-indigo-bright);
+    --chart-1: var(--ox-violet-bright);
+    --chart-2: var(--_ember-flame);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
     --chart-5: var(--_slate-light);
@@ -401,11 +409,11 @@
 
     --sidebar: var(--_stone-900);
     --sidebar-foreground: var(--_ink-white);
-    --sidebar-primary: var(--ox-rust);
+    --sidebar-primary: var(--ox-violet-bright);
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.42 0.006 75 / 0.4);
+    --sidebar-border: oklch(0.709 0.159 293.5 / 0.12);
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -414,6 +422,25 @@
     --card-header-fg: var(--foreground);
 
     --overlay-scrim: oklch(0 0 0 / 0.6);
+
+    /* The accent differs between modes (#6E48CE → #A78BFA), so every token
+     * that freezes an accent-bearing var() at :root (see the freeze note
+     * below) must recompute here: the bright violet with dark navy ink. */
+    --brand: var(--ox-violet-bright);
+    --brand-foreground: var(--ox-ink);
+    --tab-border-active: var(--ox-violet-bright);
+    --button-primary-bg: var(--primary);
+    --button-primary-fg: var(--ox-ink);
+    --button-primary-ring: var(--ring);
+    --button-default-ring: var(--ring);
+    --input-border-focus: var(--ring);
+    --input-ring: var(--ring);
+    --input-invalid-border: var(--error);
+    --input-invalid-ring: var(--error);
+    --control-track-bg-checked: var(--primary);
+    --control-indicator: var(--primary-foreground);
+    --control-ring: var(--ring);
+    --app-link-active-fg: var(--primary);
 
     /* ── Component tokens that indirect through theme-flipping core tokens must
      *    be re-declared in the dark context. A token declared ONLY on :root has
@@ -477,22 +504,22 @@
       --card-foreground: var(--_ink-white);
       --popover: var(--_stone-850);
       --popover-foreground: var(--_ink-white);
-      --primary: var(--ox-rust);
+      --primary: var(--ox-violet-bright);
       --primary-foreground: var(--ox-ink);
-      --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+      --secondary: oklch(0.28 0.045 292);   /* calm violet chip fill */
       --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected (was drifted from .dark; now identical) */
+      --accent: oklch(0.30 0.062 292);   /* deep violet-tinted hover/selected (matches .dark) */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
-      --input: oklch(0.360 0.008 80 / 0.6);
-      --ring: var(--ox-rust);
-      --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
-      --link-hover: oklch(0.84 0.075 45);
+      --border: oklch(0.709 0.159 293.5 / 0.16);   /* violet hairline — rgba(167,139,250,.16) per docs/brand */
+      --input: oklch(0.709 0.159 293.5 / 0.22);
+      --ring: var(--ox-violet-bright);
+      --link: var(--_violet-300);   /* #A78BFA — text-safe violet for dark */
+      --link-hover: var(--_violet-200);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -503,8 +530,8 @@
       --info: var(--_slate-light);
       --info-foreground: oklch(0.18 0.01 230);
 
-      --chart-1: var(--ox-rust);
-      --chart-2: var(--ox-indigo-bright);
+      --chart-1: var(--ox-violet-bright);
+      --chart-2: var(--_ember-flame);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
       --chart-5: var(--_slate-light);
@@ -514,11 +541,11 @@
 
       --sidebar: var(--_stone-900);
       --sidebar-foreground: var(--_ink-white);
-      --sidebar-primary: var(--ox-rust);
+      --sidebar-primary: var(--ox-violet-bright);
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.42 0.006 75 / 0.4);
+      --sidebar-border: oklch(0.709 0.159 293.5 / 0.12);
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -527,6 +554,23 @@
       --card-header-fg: var(--foreground);
 
       --overlay-scrim: oklch(0 0 0 / 0.6);
+
+      /* Accent-mode flip — keep in sync with the .dark block above. */
+      --brand: var(--ox-violet-bright);
+      --brand-foreground: var(--ox-ink);
+      --tab-border-active: var(--ox-violet-bright);
+      --button-primary-bg: var(--primary);
+      --button-primary-fg: var(--ox-ink);
+      --button-primary-ring: var(--ring);
+      --button-default-ring: var(--ring);
+      --input-border-focus: var(--ring);
+      --input-ring: var(--ring);
+      --input-invalid-border: var(--error);
+      --input-invalid-ring: var(--error);
+      --control-track-bg-checked: var(--primary);
+      --control-indicator: var(--primary-foreground);
+      --control-ring: var(--ring);
+      --app-link-active-fg: var(--primary);
 
       /* Re-declare component tokens against the dark core (see .dark above for
        * why a :root-only declaration freezes to the light value). */
@@ -626,8 +670,8 @@
   --color-ember-flame: var(--_ember-flame);
   --color-ember-crimson: var(--_ember-crimson);
 
-  /* Accent ramp — exposed for rare direct-access. NOTE: the --*-violet-* NAMES
-     are retained for API stability; the VALUES are ember flame, not violet. */
+  /* Accent ramp — exposed for rare direct-access. The --*-violet-* names carry
+     true violet values (Nocturne Violet, docs/brand/tokens.css). */
   --color-violet-50: var(--_violet-50);
   --color-violet-100: var(--_violet-100);
   --color-violet-200: var(--_violet-200);
@@ -811,8 +855,8 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* Native form controls (checkbox/radio/range/progress) tint ember, not the
-       OS blue. Inherits to the whole tree. */
+    /* Native form controls (checkbox/radio/range/progress) tint brand violet,
+       not the OS blue. Inherits to the whole tree. */
     accent-color: var(--primary);
   }
 
@@ -864,12 +908,12 @@
   }
 
   /*
-   * Focus ring — brand ember everywhere, NEVER the browser's blue/violet
-   * default. Native <select>/<input>/<textarea> that ship no focus styling
-   * (e.g. the agent-editor selects) get an ember outline + border on
+   * Focus ring — brand violet everywhere, NEVER the browser's default blue.
+   * Native <select>/<input>/<textarea> that ship no focus styling
+   * (e.g. the agent-editor selects) get a violet outline + border on
    * :focus-visible. coss Input/Select/Button opt out via
    * focus-visible:outline-none (a utility with higher specificity) and keep
-   * their own ember ring, so this never doubles up on them.
+   * their own brand ring, so this never doubles up on them.
    */
   :where(input, select, textarea):focus-visible {
     outline: 2px solid var(--ring);
@@ -972,9 +1016,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold, #FD9A4B) 0%,
-      var(--_ember-flame, #F07650) 46%,
-      var(--_ember-crimson, #EB5C5E) 100%
+      var(--_ember-gold, #F9D423) 0%,
+      var(--_ember-flame, #FF7E5F) 46%,
+      var(--_ember-crimson, #C2185B) 100%
     );
   }
 
@@ -1018,16 +1062,17 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
   }
 
-  /* Vibrant code/terminal surface — a warm charcoal fill with the ember brand
-     gradient painted into a 1px border (padding-box fill + border-box gradient),
-     identical in light and dark so a code block reads as a high-contrast, bold
-     terminal on the light page. A real transparent `border` keeps a system line
-     in forced-colors mode where the gradient background is stripped. */
+  /* Vibrant code/terminal surface — a nocturne violet-black fill with the ember
+     brand gradient painted into a 1px border (padding-box fill + border-box
+     gradient), identical in light and dark so a code block reads as a
+     high-contrast, bold terminal on the light page. A real transparent `border`
+     keeps a system line in forced-colors mode where the gradient background is
+     stripped. */
   .ox-code-frame {
     --code-fg: var(--_ink-white);
     color: var(--code-fg);
     background:
-      linear-gradient(180deg in oklab, oklch(0.26 0.005 78), oklch(0.22 0.004 78)) padding-box,
+      linear-gradient(180deg in oklab, oklch(0.22 0.030 292), oklch(0.17 0.022 280)) padding-box,
       var(--brand-gradient) border-box;
     border: 1px solid transparent;
   }

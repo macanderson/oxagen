@@ -41,7 +41,7 @@ export const tuiChrome = {
   trafficRed: "#ff5f57",
   trafficAmber: "#febc2e",
   trafficGreen: "#28c840",
-  shadowColor: "#eb5c5e",
+  shadowColor: "#C2185B",
 } as const;
 
 /** The CLI version string shown in the banner (apps/cli/package.json). */

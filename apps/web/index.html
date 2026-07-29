@@ -6,7 +6,7 @@
 <title>Oxagen — AI coding agents with your context. Governed, metered, on the record.</title>
 <meta name="description" content="Oxagen is an AI coding agent for your terminal and a control plane for your whole fleet. It turns your code and business data into one connected map, so agents get the right answer the first time — and every action is approved, measured, and on the record.">
 <link rel="canonical" href="https://oxagen.sh/">
-<meta name="theme-color" content="#090B11">
+<meta name="theme-color" content="#0B0D16">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/">
@@ -53,22 +53,22 @@
 <style>
 /* ============ tokens ============ */
 :root{
-  --bg:#090B11;
-  --bg-raise:#0C0F17;
-  --surface:#0F121A;
-  --card:#10141D;
-  --line:#292E37;
-  --line-strong:#323A48;
-  --ink:#F1EDEA;
-  --ink-soft:#D8D2CB;
-  --muted:#BCB2A9;
-  --faint:#6F7785;
-  --ember-a:#EB5C5E;
-  --ember-b:#F07650;
-  --ember-c:#FD9A4C;
+  --bg:#0B0D16;
+  --bg-raise:#13101E;
+  --surface:#15131F;
+  --card:#171424;
+  --line:#2B2640;
+  --line-strong:#363050;
+  --ink:#F5F4F2;
+  --ink-soft:#D9D4E3;
+  --muted:#B6AFC9;
+  --faint:#7E7791;
+  --ember-a:#C2185B;
+  --ember-b:#FF7E5F;
+  --ember-c:#F9D423;
   --ember-soft:#261507;
-  --indigo:#9CA3E8;
-  --indigo-soft:#151A30;
+  --indigo:#A78BFA;
+  --indigo-soft:#1E1A2E;
   --ok:#7BC98A;
   --grad-ember:linear-gradient(92deg,var(--ember-a) 0%,var(--ember-b) 46%,var(--ember-c) 100%);
   --radius:14px;
@@ -392,7 +392,7 @@ button,input,textarea{font:inherit;color:inherit}
 .book-scene{perspective:1200px;display:grid;place-items:center;padding:16px 0}
 .book{
   width:min(320px,78%);aspect-ratio:10/15;border-radius:10px;position:relative;
-  background:linear-gradient(160deg,#0D1018 0%,#090B11 60%,#0E0A0C 100%);
+  background:linear-gradient(160deg,#110F1A 0%,#0B0D16 60%,#140E17 100%);
   border:1px solid var(--line-strong);
   box-shadow:24px 34px 70px -30px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.03) inset;
   transform:rotateY(-9deg) rotateX(2deg);
@@ -532,16 +532,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="emberStroke" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#EB5C5E"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#FD9A4C"/>
+      <stop offset="0" stop-color="#C2185B"/><stop offset=".5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#F9D423"/>
     </linearGradient>
     <linearGradient id="emberFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#FD9A4C"/><stop offset="1" stop-color="#EB5C5E"/>
+      <stop offset="0" stop-color="#F9D423"/><stop offset="1" stop-color="#C2185B"/>
     </linearGradient>
     <linearGradient id="emberStrokeB" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#EB5C5E"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#FD9A4C"/>
+      <stop offset="0" stop-color="#C2185B"/><stop offset=".5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#F9D423"/>
     </linearGradient>
     <linearGradient id="emberFillB" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#FD9A4C"/><stop offset="1" stop-color="#EB5C5E"/>
+      <stop offset="0" stop-color="#F9D423"/><stop offset="1" stop-color="#C2185B"/>
     </linearGradient>
   </defs>
 </svg>
@@ -549,7 +549,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 <header class="nav" id="nav">
   <div class="nav-in">
     <a class="brand" href="#top" aria-label="Oxagen home">
-      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F1EEEA" stroke-width="1"/></svg>
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F5F4F2" stroke-width="1"/></svg>
       oxagen
     </a>
     <nav class="nav-links" aria-label="Sections">
@@ -993,7 +993,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="#top" aria-label="Oxagen home">
-          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgC" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgD" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgC)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgD)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F1EEEA" stroke-width="1"/></svg>
+          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgC" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgD" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgC)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgD)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F5F4F2" stroke-width="1"/></svg>
           oxagen
         </a>
         <p>Everyone has the same models.<br>Your edge is context.</p>

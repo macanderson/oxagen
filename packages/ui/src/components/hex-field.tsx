@@ -34,7 +34,9 @@ function hexPoints(cx: number, cy: number, r: number): string {
   const pts: string[] = [];
   for (let k = 0; k < 6; k++) {
     const a = ((60 * k - 90) * Math.PI) / 180;
-    pts.push(`${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`);
+    pts.push(
+      `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`,
+    );
   }
   return pts.join(" ");
 }
@@ -80,9 +82,9 @@ export function HexField({
     >
       <defs>
         <linearGradient id="oxHexEmber" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#FD9A4B" />
-          <stop offset="0.5" stopColor="#F07650" />
-          <stop offset="1" stopColor="#EB5C5E" />
+          <stop offset="0" stopColor="#F9D423" />
+          <stop offset="0.5" stopColor="#FF7E5F" />
+          <stop offset="1" stopColor="#C2185B" />
         </linearGradient>
       </defs>
       {FIELD.map((c, i) => {
@@ -99,7 +101,10 @@ export function HexField({
             />
           );
         }
-        const fill = c.variant === "lit" ? "url(#oxHexEmber)" : "var(--ox-indigo-bright, #9CA3E8)";
+        const fill =
+          c.variant === "lit"
+            ? "url(#oxHexEmber)"
+            : "var(--ox-indigo-bright, #9CA3E8)";
         return (
           <polygon
             key={i}
