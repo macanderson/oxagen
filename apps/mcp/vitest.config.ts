@@ -93,4 +93,17 @@ export default defineConfig({
       },
     },
   },
+  resolve: {
+    alias: {
+      // The @oxagen/auth barrel eagerly re-exports ./auth, which calls
+      // requireEnv(BETTER_AUTH_SECRET, BETTER_AUTH_URL, GOOGLE_LOGIN_*,
+      // GITHUB_LOGIN_*, ...) at module top-level. With those env vars unset the
+      // import throws before any test collects. mcp only uses resolveApiKey
+      // (context.ts), invoked inside handlers — never at import time or in the
+      // schema/registry tests — so stub the package to a no-op. Mirrors the
+      // server-only alias in apps/app/vitest.config.ts.
+      "@oxagen/auth": new URL("./src/test/auth-stub.ts", import.meta.url)
+        .pathname,
+    },
+  },
 });
