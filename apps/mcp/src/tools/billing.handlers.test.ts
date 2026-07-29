@@ -29,7 +29,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -50,7 +49,12 @@ describe("billing.credits.purchase handler", () => {
   });
 
   it("calls buildContext then invoke with correct args", async () => {
-    const fakeOutput = { url: "https://checkout.stripe.com/pay/cs_test", grantCents: 5000, priceCents: 4250, percent: 15 };
+    const fakeOutput = {
+      url: "https://checkout.stripe.com/pay/cs_test",
+      grantCents: 5000,
+      priceCents: 4250,
+      percent: 15,
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { amountUsd: 50, successUrl: undefined, cancelUrl: undefined };
@@ -63,13 +67,20 @@ describe("billing.credits.purchase handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ url: "https://checkout.stripe.com/pay/cs_test", grantCents: 5000 });
+    expect(result).toMatchObject({
+      url: "https://checkout.stripe.com/pay/cs_test",
+      grantCents: 5000,
+    });
   });
 
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("payment failed"));
     await expect(
-      handler_billingCreditsPurchase({ amountUsd: 10, successUrl: undefined, cancelUrl: undefined }),
+      handler_billingCreditsPurchase({
+        amountUsd: 10,
+        successUrl: undefined,
+        cancelUrl: undefined,
+      }),
     ).rejects.toThrow("payment failed");
   });
 });
@@ -88,18 +99,19 @@ describe("billing.subscription.read handler", () => {
   });
 
   it("calls invoke with empty args for read", async () => {
-    const fakeOutput = { subscription: null, creditBalanceCents: 0, periodUsage: null };
+    const fakeOutput = {
+      subscription: null,
+      creditBalanceCents: 0,
+      periodUsage: null,
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     await handler_billingSubscriptionRead({});
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_subscription",
-      {},
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("get_subscription", {}, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -113,7 +125,9 @@ import handler_billingSubscriptionUpgradeStart, {
 describe("billing.subscription.upgrade.start handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionUpgradeStartSchema).toBeDefined();
-    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("start_subscription_upgrade");
+    expect(billingSubscriptionUpgradeStartMetadata.name).toBe(
+      "start_subscription_upgrade",
+    );
   });
 
   it("calls invoke with upgrade args", async () => {
@@ -138,7 +152,9 @@ describe("billing.subscription.upgrade.start handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
-    expect(result).toMatchObject({ checkoutUrl: "https://checkout.stripe.com/pay/cs_test" });
+    expect(result).toMatchObject({
+      checkoutUrl: "https://checkout.stripe.com/pay/cs_test",
+    });
   });
 });
 
@@ -170,12 +186,9 @@ describe("api.key.create handler", () => {
     const args = { name: "My Key", scope: {}, expiresAt: undefined };
     await handler_apiKeyCreate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_api_key",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("create_api_key", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -193,18 +206,19 @@ describe("api.key.revoke handler", () => {
   });
 
   it("calls invoke with revoke args", async () => {
-    const fakeOutput = { revoked: true, keyPublicId: "aky_test123", revokedAt: "2026-01-01T00:00:00.000Z" };
+    const fakeOutput = {
+      revoked: true,
+      keyPublicId: "aky_test123",
+      revokedAt: "2026-01-01T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { keyPublicId: "aky_test123" };
     await handler_apiKeyRevoke(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "revoke_api_key",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("revoke_api_key", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -224,14 +238,27 @@ describe("billing.usage.breakdown handler", () => {
 
   it("calls buildContext then invoke with the window args", async () => {
     const fakeOutput = {
-      range: { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" },
-      totals: { inputTokens: 0, outputTokens: 0, cachedTokens: 0, costMicros: 0, executions: 0 },
+      range: {
+        start: "2026-06-01T00:00:00.000Z",
+        end: "2026-07-01T00:00:00.000Z",
+      },
+      totals: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedTokens: 0,
+        cacheWriteTokens: 0,
+        costMicros: 0,
+        executions: 0,
+        messages: 0,
+      },
+      cacheSavingsMicros: 0,
       series: [],
       byModel: [],
       bySurface: [],
       byWorkspace: [],
       byCapability: [],
       byPrincipal: [],
+      byUser: [],
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
