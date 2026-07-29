@@ -1,167 +1,327 @@
 /**
- * Integration smoke test — oxagen #1081.
+ * Integration smoke test (oxagen #1081, made real by #1132): boot a real
+ * `stella-serve` binary and drive a **complete multi-step agentic turn**
+ * through it, with this test acting as the host — it owns the model and it owns
+ * the tools, exactly as oxagen's kernel will.
  *
- * Boots a real `stella serve` process (stella#258's headless serve surface)
- * at the version pinned in sidecar.config.json, and drives ONE round trip
- * through the sidecar transport (oxagen #1072): session open -> one turn ->
- * event stream -> close. Asserts the wire contract's field shapes strongly
- * enough that renaming an event field (e.g. `call_id` -> `callId`, or
- * `tool_result` -> `toolResult`) turns this test RED.
+ * This is the test #1132 exists for. Its predecessor asserted a
+ * session-oriented HTTP surface that `stella-serve` has never served, and had
+ * no way to answer a reverse-RPC request, so it could not have driven a turn
+ * even against the right routes — and because its capability probe looked for a
+ * nonexistent `stella serve` subcommand, it skipped in every environment and
+ * that was never discovered. See wire-types.ts for the drift table.
  *
- * Requirements to actually EXERCISE the round trip (see skip gate below):
- *   - `stella` on PATH or `$STELLA_BIN` pointing at a binary
- *   - that binary must support `stella serve` (stella#258) and report the
- *     version pinned in sidecar.config.json (`stellaVersion`)
- * Neither stella's daily-release cadence nor this environment guarantees
- * either — when unmet, every test below is SKIPPED (not failed) with a
- * message naming exactly what is missing, per oxagen #1081's requirement
- * that the pinned binary's absence never fails the suite hard.
+ * ## Why this needs no API key and no network
  *
- * Nightly drift check: .github/workflows/stella-sidecar-nightly.yml runs
- * this same file against stella's `latest` release on a schedule, so a
- * silent upstream rename is caught within a day even though the PR-path job
- * (.github/workflows/stella-sidecar.yml) only runs on the pinned version.
+ * `stella-serve` depends on `stella-protocol` + `stella-core` only — no HTTP
+ * client, no TLS, no provider adapters. It is *structurally incapable* of
+ * calling a model. Every model call and every tool call is a reverse-RPC
+ * request the host answers. So this test is fully deterministic and offline:
+ * the "model" below is a two-element script, and the engine's orchestration is
+ * the only thing under test.
+ *
+ * ## What turns this red
+ *
+ * A rename or restructure anywhere on the wire: the frame tag (`type`), the
+ * frame variant names, `request_id`, the flattened `status` on a provider
+ * result, `ToolOutput`'s external tagging, `TurnOutcomeWire`'s `status` tag, or
+ * the `role`/`tool_calls`/`tool_results` shape of the conversation the engine
+ * assembles. It also goes red if the engine stops threading tool output back
+ * into the next model call — the property that makes it an agent loop at all.
  */
 import { type ChildProcess, spawn } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+
 import { StellaSidecarClient } from "./sidecar-transport.js";
 import { readSidecarConfig, resolveStellaBinary } from "./stella-binary.js";
-import {
-  isCompleteEvent,
-  isToolCallEvent,
-  isToolResultEvent,
+import type {
+  CompletionRequest,
+  CompletionResult,
+  ToolOutput,
+  TurnRequest,
 } from "./wire-types.js";
+
+/** 32+ chars so the server does not warn about a guessable token. */
+const TOKEN = "oxagen-smoke-test-bearer-token-0123456789";
 
 const config = readSidecarConfig();
 const resolution = await resolveStellaBinary(config);
-const serveSupported = resolution
-  ? await supportsServeSubcommand(resolution.path)
-  : false;
 
-const skipReason = !resolution
-  ? `stella binary not found (checked $${config.binaryEnvVar} and PATH) — ` +
-    `install stella ${config.stellaVersion} or set ${config.binaryEnvVar} to run this smoke test`
-  : !serveSupported
-    ? `installed stella (${resolution.reportedVersion ?? "unknown"}) does not recognize ` +
-      `\`stella serve\` (ENOENT-equivalent: unrecognized subcommand) — this smoke test needs ` +
-      `stella#258's headless serve surface, pinned at ${config.stellaVersion}, not installed here`
-    : !resolution.matchesPin
-      ? `installed stella ${resolution.reportedVersion} does not match the pinned ` +
-        `${config.stellaVersion} — skipping rather than exercising an unpinned wire contract`
-      : undefined;
+// The ONLY skip condition is an absent binary (oxagen #1081: a missing Stella
+// must never fail the suite hard). A version mismatch deliberately does NOT
+// skip — the assertions below are the drift detector, and skipping on mismatch
+// is what made the nightly `latest` job permanently skip-green.
+const skipReason = resolution
+  ? undefined
+  : `no stella-serve binary found (checked $${config.binaryEnvVar}, ` +
+    `$${config.legacyBinaryEnvVar}, and \`${config.binaryName}\` on PATH) — ` +
+    `build one with \`cargo build -p stella-serve --bin stella-serve\` in the ` +
+    `stella checkout and point $${config.binaryEnvVar} at it`;
 
 if (skipReason) {
   // Explicit, named skip: shows up in the run summary as SKIPPED with the
   // exact missing-requirement reason, not a silent pass.
-  test.skip(`stella serve <-> sidecar transport round trip (SKIPPED: ${skipReason})`, () => {});
+  test.skip(`stella-serve <-> sidecar host round trip (SKIPPED: ${skipReason})`, () => {});
 } else {
-  describe("stella serve <-> sidecar transport round trip", () => {
+  const binary = resolution!;
+
+  describe("stella-serve <-> sidecar host round trip", () => {
     let child: ChildProcess;
-    let baseUrl: string;
     let client: StellaSidecarClient;
 
     beforeAll(async () => {
-      const port = 40000 + Math.floor(Math.random() * 10000);
-      baseUrl = `http://127.0.0.1:${port}`;
-      child = spawn(resolution!.path, ["serve", "--port", String(port)], {
+      // Bind port 0 and read the port back off the server's own startup line.
+      // Picking a random port and hoping it is free is the classic source of
+      // flake in a test like this; the kernel already knows a free one.
+      child = spawn(binary.path, [], {
         stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          STELLA_SERVE_BIND: "127.0.0.1:0",
+          STELLA_SERVE_TOKEN: TOKEN,
+          STELLA_SERVE_TOOLS: "remote",
+        },
       });
-      await waitForReady(baseUrl, config.readinessTimeoutMs);
-      client = new StellaSidecarClient({ baseUrl });
+      const baseUrl = await readBoundAddress(child, config.readinessTimeoutMs);
+      client = new StellaSidecarClient({ baseUrl, token: TOKEN });
+      expect(
+        await client.health(),
+        "GET /healthz must answer 200 once the server has bound",
+      ).toBe(true);
+      if (!binary.matchesPin) {
+        console.warn(
+          `[stella-sidecar] running against stella-serve ` +
+            `${binary.reportedVersion ?? "unknown"}, pinned ` +
+            `${config.stellaVersion} — asserting the contract anyway`,
+        );
+      }
     });
 
     afterAll(() => {
       child?.kill("SIGTERM");
     });
 
-    test("session open -> one turn -> event stream -> close", async () => {
-      const { sessionId } = await client.createSession();
-      expect(
-        sessionId,
-        "createSession must return a non-empty session id",
-      ).toBeTruthy();
+    test("the host drives a two-step tool-using turn to completion", async () => {
+      // The host's "model": call the tool, then answer from its result.
+      const modelReplies: CompletionResult[] = [
+        {
+          text: "",
+          tool_calls: [
+            {
+              call_id: "call-weather-1",
+              name: "get_weather",
+              input: { city: "Paris" },
+            },
+          ],
+          usage: { reported: true, input_tokens: 42, output_tokens: 17 },
+          model: "oxagen-host-scripted",
+          cost_usd: 0.0002,
+          // `tool_calls`, never `tool_use` — the latter is Anthropic's spelling
+          // and stella rejects it with a 400 naming the valid variants.
+          finish_reason: "tool_calls",
+        },
+        {
+          text: "It is 18C and clear in Paris.",
+          usage: { reported: true, input_tokens: 96, output_tokens: 12 },
+          model: "oxagen-host-scripted",
+          cost_usd: 0.0003,
+          finish_reason: "stop",
+        },
+      ];
 
-      const stream = await client.openEventStream(sessionId);
-      await client.driveTurn(
-        sessionId,
-        "echo hello via the sidecar transport smoke test",
-      );
+      const conversations: CompletionRequest[] = [];
+      const toolInvocations: { name: string; input: unknown }[] = [];
 
-      const events: import("./wire-types.js").StellaEventEnvelope[] = [];
-      for await (const event of stream) {
-        events.push(event);
-        if (isCompleteEvent(event)) break;
-      }
+      const request: TurnRequest = {
+        provider_id: "oxagen-host",
+        tools: [
+          {
+            name: "get_weather",
+            description: "Look up the current weather for a city.",
+            input_schema: {
+              type: "object",
+              properties: { city: { type: "string" } },
+              required: ["city"],
+            },
+            read_only: true,
+          },
+        ],
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "What is the weather in Paris?" },
+        ],
+        budget: { mode: "off" },
+        max_steps: 10,
+        reverse_request_timeout_ms: 20_000,
+      };
 
-      // seq: every event on the stream must carry a monotonically
-      // increasing sequence number — the resumable-subscription invariant.
-      for (const event of events) {
-        expect(event.seq, "every event must carry a numeric seq").toBeTypeOf(
-          "number",
-        );
-      }
-      const seqs = events.map((e) => e.seq);
-      expect(seqs, "seq must be strictly increasing").toEqual(
-        [...seqs].sort((a, b) => a - b),
-      );
-
-      // tool_call / tool_result wire shape: call_id, name, input.
-      const toolCalls = events.filter(isToolCallEvent);
-      expect(
-        toolCalls.length,
-        "expected at least one tool_call event",
-      ).toBeGreaterThan(0);
-      const firstToolCall = toolCalls[0]!;
-      expect(firstToolCall).toMatchObject({
-        type: "tool_call",
-        call_id: expect.any(String),
-        name: expect.any(String),
-        input: expect.any(Object),
+      const run = await client.runTurn(request, {
+        onProviderRequest: async (completion) => {
+          conversations.push(completion);
+          const reply = modelReplies[conversations.length - 1];
+          if (!reply) {
+            throw new Error(
+              `engine asked for model call #${conversations.length}; the ` +
+                `script has ${modelReplies.length}`,
+            );
+          }
+          return reply;
+        },
+        onToolRequest: async (name, input): Promise<ToolOutput> => {
+          toolInvocations.push({ name, input });
+          const city = (input as { city?: string }).city ?? "nowhere";
+          return { ok: { content: `18C, clear skies in ${city}.` } };
+        },
       });
 
-      const toolResults = events.filter(isToolResultEvent);
-      if (toolResults.length > 0) {
-        expect(toolResults[0]).toHaveProperty("call_id", firstToolCall.call_id);
-      }
-
-      // Exactly one terminal completion event per turn.
-      const completeEvents = events.filter(isCompleteEvent);
+      // --- the loop actually looped ---
       expect(
-        completeEvents,
-        "exactly one complete event terminates the turn",
-      ).toHaveLength(1);
+        run.providerCalls,
+        "the engine must make a second model call after the tool result",
+      ).toBe(2);
+      expect(run.toolCalls, "the engine must dispatch the tool call").toBe(1);
+      expect(toolInvocations).toEqual([
+        { name: "get_weather", input: { city: "Paris" } },
+      ]);
 
-      await client.deleteSession(sessionId);
+      // --- the terminal frame ---
+      expect(run.outcome.status).toBe("completed");
+      if (run.outcome.status !== "completed") throw new Error("unreachable");
+      expect(run.outcome.text).toBe("It is 18C and clear in Paris.");
+      // Cost is settled by the engine from what the HOST reported on each call,
+      // which is what makes oxagen the metering authority rather than a
+      // consumer of stella's estimate.
+      expect(run.outcome.cost_usd).toBeCloseTo(0.0005, 10);
+
+      // --- the load-bearing assertion: this is what makes it an agent loop ---
+      // Model call #2 must contain the tool result the host produced, threaded
+      // in by the engine as a proper `tool` message. If this breaks, stella is
+      // no longer functioning as an agent engine, whatever else still passes.
+      const second = conversations[1];
+      expect(
+        second,
+        "a second CompletionRequest must have been raised",
+      ).toBeDefined();
+      expect(second!.messages.map((m) => m.role)).toEqual([
+        "system",
+        "user",
+        "assistant",
+        "tool",
+      ]);
+      const assistant = second!.messages[2]!;
+      expect(assistant.tool_calls).toEqual([
+        {
+          call_id: "call-weather-1",
+          name: "get_weather",
+          input: { city: "Paris" },
+        },
+      ]);
+      const toolMessage = second!.messages[3]!;
+      expect(toolMessage.tool_results).toEqual([
+        {
+          call_id: "call-weather-1",
+          // Externally tagged: `{ok: {...}}`, NOT `{status: "ok", ...}` and
+          // NOT an `is_error` boolean.
+          output: { ok: { content: "18C, clear skies in Paris." } },
+        },
+      ]);
+
+      // The engine advertises the host's tool set back on the model call, so a
+      // host that forwards to a real provider has the schemas it needs.
+      expect(second!.tools?.map((t) => t.name)).toEqual(["get_weather"]);
+
+      // --- the AgentEvent stream reached the host ---
+      const eventTypes = new Set(run.events.map((e) => e.type));
+      for (const expected of [
+        "tool_start",
+        "tool_result",
+        "text",
+        "complete",
+      ]) {
+        expect(
+          eventTypes.has(expected),
+          `expected a \`${expected}\` AgentEvent; saw ${[...eventTypes].join(", ")}`,
+        ).toBe(true);
+      }
+    });
+
+    test("every route except /healthz refuses an absent bearer token", async () => {
+      const url = client.baseUrl;
+      const res = await fetch(`${url}/v1/turns`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider_id: "x", messages: [] }),
+      });
+      expect(res.status).toBe(401);
+      // The auth gate runs BEFORE routing, so even a nonexistent path is 401
+      // rather than 404 when unauthenticated. Worth pinning: it means a 401 is
+      // not evidence that the token is wrong.
+      const bogus = await fetch(`${url}/v1/definitely-not-a-route`);
+      expect(bogus.status).toBe(401);
+    });
+
+    test("a turn can be cancelled, and cancellation is idempotent", async () => {
+      // Never answer the model call, so the turn stays parked and we can cancel
+      // it. `cancel` is the only teardown route — there is no DELETE.
+      const { turnId } = await client.createTurn({
+        provider_id: "oxagen-host",
+        messages: [{ role: "user", content: "hang" }],
+        reverse_request_timeout_ms: 60_000,
+      });
+      await client.cancelTurn(turnId);
+      // The id leaves the registry immediately, so a second cancel is a 404 —
+      // which the client tolerates rather than throwing.
+      await expect(client.cancelTurn(turnId)).resolves.toBeUndefined();
     });
   });
 }
 
-async function supportsServeSubcommand(binaryPath: string): Promise<boolean> {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execFileAsync = promisify(execFile);
-  try {
-    await execFileAsync(binaryPath, ["serve", "--help"]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function waitForReady(baseUrl: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${baseUrl}/health`);
-      if (res.ok) return;
-    } catch {
-      // Connection refused while the process boots — retry.
-    }
-    await sleep(100);
-  }
-  throw new Error(
-    `stella serve did not become ready within ${timeoutMs}ms at ${baseUrl}`,
-  );
+/**
+ * Reads the port the server actually bound from its `listening on <addr>`
+ * startup line, and returns the base URL.
+ *
+ * Also fails fast and loudly if the child exits during startup — a
+ * misconfigured server (no token, unparseable bind) exits non-zero within
+ * milliseconds, and without this the test would instead sit through the whole
+ * readiness timeout and report a confusing "never became ready".
+ */
+function readBoundAddress(
+  child: ChildProcess,
+  timeoutMs: number,
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `stella-serve did not report a bound address within ${timeoutMs}ms\n` +
+            `stdout: ${stdout}\nstderr: ${stderr}`,
+        ),
+      );
+    }, timeoutMs);
+    const finish = (fn: () => void) => {
+      clearTimeout(timer);
+      fn();
+    };
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      const match = /listening on (\S+)/.exec(stdout);
+      if (match) finish(() => resolve(`http://${match[1]}`));
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("exit", (code) => {
+      finish(() =>
+        reject(
+          new Error(
+            `stella-serve exited with code ${code} during startup\n` +
+              `stdout: ${stdout}\nstderr: ${stderr}`,
+          ),
+        ),
+      );
+    });
+    child.on("error", (err) => finish(() => reject(err)));
+  });
 }

@@ -1,15 +1,26 @@
 /**
- * Locates the `stella` binary the sidecar transport should boot, and checks
- * it against the version pinned in sidecar.config.json.
+ * Locates the `stella-serve` binary the sidecar transport should boot, and
+ * checks it against the version pinned in sidecar.config.json.
  *
- * Resolution order (documented for anyone wiring this into a new
- * environment):
- *   1. `STELLA_BIN` env var — absolute path to a stella binary, highest
- *      precedence (mirrors stella's own credential-chain convention of env
- *      over auto-discovery).
- *   2. `stella` on PATH.
+ * ## Why this is `stella-serve` and not `stella serve` (oxagen #1132)
  *
- * If neither resolves, callers should skip rather than fail — see
+ * The previous revision looked for a `stella` binary and probed it with
+ * `stella serve --help`. There is no such subcommand and there never was:
+ * upstream, `stella-serve` is a **separate crate with its own binary**, and
+ * `stella-cli` does not link it (stella's `stella-serve/README.md` says so
+ * explicitly — "a change here never reaches a `stella` user"). So the old
+ * capability probe could only ever fail, which is the mechanical reason
+ * #1132's live round trip had never run: every environment, including one
+ * with a perfectly good serve binary installed, took the skip branch.
+ *
+ * Resolution order:
+ *   1. `STELLA_SERVE_BIN` — absolute path to a `stella-serve` binary, highest
+ *      precedence (mirrors stella's own convention of env over discovery).
+ *   2. `STELLA_BIN` — accepted for continuity with the previous revision's
+ *      variable name, so an existing environment keeps working.
+ *   3. `stella-serve` on PATH.
+ *
+ * If none resolves, callers should skip rather than fail — see
  * `resolveStellaBinary`'s doc comment and stella-serve.smoke.test.ts.
  */
 import { execFile } from "node:child_process";
@@ -23,9 +34,14 @@ const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 
 export interface SidecarConfig {
+  /** The release whose wire contract wire-types.ts has been verified against. */
   stellaVersion: string;
+  /** Highest-precedence env var naming the serve binary. */
   binaryEnvVar: string;
-  servePortEnvVar: string;
+  /** Legacy env var, still honoured. */
+  legacyBinaryEnvVar: string;
+  /** Command name looked up on PATH when no env var is set. */
+  binaryName: string;
   readinessTimeoutMs: number;
 }
 
@@ -37,48 +53,89 @@ export function readSidecarConfig(): SidecarConfig {
 export interface StellaBinaryResolution {
   /** Absolute (or PATH-relative) path/command to invoke. */
   readonly path: string;
-  /** `stella --version` stdout, trimmed, or undefined if it could not be run. */
+  /** `stella-serve --version` stdout, trimmed, or undefined if unreportable. */
   readonly reportedVersion?: string;
   /** True iff reportedVersion exactly matches the pin. */
   readonly matchesPin: boolean;
 }
 
 /**
- * Resolves a runnable `stella` binary using the env var named by
- * sidecar.config.json's `binaryEnvVar`, falling back to PATH. Returns
- * `undefined` if no candidate can be executed at all (not installed in this
- * environment) — this is the SKIP signal callers must gate on, per oxagen
- * #1081: absence of the pinned Stella binary must never fail the suite hard.
+ * Resolves a runnable `stella-serve` binary. Returns `undefined` if no
+ * candidate can be executed at all (not installed in this environment) — this
+ * is the SKIP signal callers must gate on, per oxagen #1081: absence of the
+ * Stella binary must never fail the suite hard.
+ *
+ * A binary that runs but cannot report a version resolves successfully with
+ * `reportedVersion: undefined`. Releases before stella 0.6.2 had no
+ * `--version` on this binary at all, and refusing to test them would make the
+ * gate depend on the very upgrade it is meant to verify.
  */
 export async function resolveStellaBinary(
   config: SidecarConfig = readSidecarConfig(),
 ): Promise<StellaBinaryResolution | undefined> {
-  const envPath = process.env[config.binaryEnvVar];
-  const candidates = envPath ? [envPath] : ["stella"];
-
-  for (const candidate of candidates) {
-    if (envPath && !existsSync(envPath) && envPath !== "stella") {
-      continue;
-    }
-    try {
-      const { stdout } = await execFileAsync(candidate, ["--version"]);
-      const reportedVersion = parseVersion(stdout.trim());
-      return {
-        path: candidate,
-        reportedVersion,
-        matchesPin: reportedVersion === config.stellaVersion,
-      };
-    } catch {
-      // ENOENT (not installed) or non-zero exit — try the next candidate,
-      // and ultimately report "not available" rather than throwing.
-      continue;
-    }
+  for (const candidate of candidatePaths(config)) {
+    // An env var pointing at a path that does not exist is a misconfiguration
+    // worth skipping past rather than a reason to abandon resolution.
+    if (candidate.mustExist && !existsSync(candidate.path)) continue;
+    if (!(await isRunnable(candidate.path))) continue;
+    const reportedVersion = await reportVersion(candidate.path);
+    return {
+      path: candidate.path,
+      reportedVersion,
+      matchesPin: reportedVersion === config.stellaVersion,
+    };
   }
   return undefined;
 }
 
-/** `stella --version` prints e.g. "stella 0.4.47"; extract the bare semver. */
-function parseVersion(versionOutput: string): string {
+function candidatePaths(
+  config: SidecarConfig,
+): { path: string; mustExist: boolean }[] {
+  const candidates: { path: string; mustExist: boolean }[] = [];
+  for (const envVar of [config.binaryEnvVar, config.legacyBinaryEnvVar]) {
+    const value = process.env[envVar];
+    if (value) candidates.push({ path: value, mustExist: true });
+  }
+  candidates.push({ path: config.binaryName, mustExist: false });
+  return candidates;
+}
+
+/**
+ * Whether this path is the serve binary at all.
+ *
+ * `--help` is the probe because it is the one invocation that is free of side
+ * effects, exits 0, and is answered only by a binary that understands this
+ * argument vocabulary. Booting the server to find out would bind a port; using
+ * `--version` would conflate "not the right program" with "an older build of
+ * the right program", which is exactly the distinction the caller needs.
+ *
+ * Older builds predate `--help` and exit non-zero with "unknown argument" on
+ * stderr. That output still identifies the program, so we accept it — the
+ * alternative is refusing to test any release older than the one that added
+ * the flag.
+ */
+async function isRunnable(path: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(path, ["--help"]);
+    return stdout.includes("stella-serve");
+  } catch (err) {
+    const stderr = (err as { stderr?: string }).stderr ?? "";
+    return stderr.includes("stella-serve");
+  }
+}
+
+async function reportVersion(path: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync(path, ["--version"]);
+    return parseVersion(stdout.trim());
+  } catch {
+    // Pre-0.6.2 builds reject `--version`; the binary is still usable.
+    return undefined;
+  }
+}
+
+/** `stella-serve --version` prints e.g. "stella-serve 0.6.2"; take the semver. */
+function parseVersion(versionOutput: string): string | undefined {
   const match = /(\d+\.\d+\.\d+)/.exec(versionOutput);
-  return match?.[1] ?? versionOutput;
+  return match?.[1];
 }
