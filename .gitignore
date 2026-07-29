@@ -164,3 +164,7 @@ __pycache__/
 *.tmp.*
 *.tmp
 Icon
+
+# Local backup of the pre-reorg brand assets (kept on disk as a safety copy;
+# the reorganized layout lives in docs/brand/). Never commit the duplicate.
+docs/brand_old/
