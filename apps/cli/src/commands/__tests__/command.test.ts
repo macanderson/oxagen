@@ -8,17 +8,29 @@
  * an unknown command exits 1. A fake CommandWriter captures stdout/stderr.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { commandList, commandShow, commandNew, commandRun, type CommandCmdCtx } from "../command.js";
+import {
+  commandList,
+  commandShow,
+  commandNew,
+  commandRun,
+  type CommandCmdCtx,
+} from "../command.js";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 let dir: string;
 let ctx: CommandCmdCtx;
 
 function writeCmd(name: string, body: string): void {
-  const p = join(dir, ".oxagen", "commands", `${name}.md`);
+  const p = join(dir, ".oxagen", "commands", `${name}.toml`);
   mkdirSync(join(p, ".."), { recursive: true });
   writeFileSync(p, body, "utf8");
 }
@@ -28,7 +40,10 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
-    writer: { write: (l) => void out.push(l), writeErr: (l) => void err.push(l) },
+    writer: {
+      write: (l) => void out.push(l),
+      writeErr: (l) => void err.push(l),
+    },
     out,
     err,
   };
@@ -53,7 +68,10 @@ describe("command handlers — pretty mode", () => {
   });
 
   it("lists commands with hint and description", () => {
-    writeCmd("review", "---\ndescription: Review code\nargument-hint: <file>\n---\nReview $ARGUMENTS.");
+    writeCmd(
+      "review",
+      'schema_version = 1\nkind = "command"\nname = "review"\ndescription = "Review code"\nargument_hint = "<file>"\nprompt = "Review $ARGUMENTS."\n',
+    );
     const { writer, out } = makeWriter();
     commandList(ctx, writer);
     const text = out.join("\n");
@@ -62,7 +80,10 @@ describe("command handlers — pretty mode", () => {
   });
 
   it("shows a command's template", () => {
-    writeCmd("review", "---\ndescription: Review code\n---\nReview $ARGUMENTS carefully.");
+    writeCmd(
+      "review",
+      'schema_version = 1\nkind = "command"\nname = "review"\ndescription = "Review code"\nprompt = "Review $ARGUMENTS carefully."\n',
+    );
     const { writer, out } = makeWriter();
     commandShow("review", ctx, writer);
     const text = out.join("\n");
@@ -85,7 +106,9 @@ describe("command handlers — pretty mode", () => {
     const first = makeWriter();
     commandNew("deploy", ctx, first.writer);
     expect(first.out.join("\n")).toContain("Created command");
-    expect(existsSync(join(dir, ".oxagen", "commands", "deploy.md"))).toBe(true);
+    expect(existsSync(join(dir, ".oxagen", "commands", "deploy.toml"))).toBe(
+      true,
+    );
     const second = makeWriter();
     commandNew("deploy", ctx, second.writer);
     expect(second.out.join("\n")).toContain("already exists");
@@ -120,7 +143,10 @@ describe("command handlers — pretty mode", () => {
 
 describe("command handlers — --json mode", () => {
   it("list emits one single-line JSON array preserving the summary shape", () => {
-    writeCmd("review", "---\ndescription: Review code\nargument-hint: <file>\nmodel: a/b\n---\nReview $ARGUMENTS.");
+    writeCmd(
+      "review",
+      'schema_version = 1\nkind = "command"\nname = "review"\ndescription = "Review code"\nargument_hint = "<file>"\nmodel = "a/b"\nprompt = "Review $ARGUMENTS."\n',
+    );
     const { writer, out, err } = makeWriter();
     commandList({ ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);
@@ -144,7 +170,10 @@ describe("command handlers — --json mode", () => {
   });
 
   it("show emits one single-line JSON object round-tripping the template", () => {
-    writeCmd("review", "---\ndescription: Review code\n---\nReview $ARGUMENTS carefully.");
+    writeCmd(
+      "review",
+      'schema_version = 1\nkind = "command"\nname = "review"\ndescription = "Review code"\nprompt = "Review $ARGUMENTS carefully."\n',
+    );
     const { writer, out } = makeWriter();
     commandShow("review", { ...ctx, json: true }, writer);
     expect(out).toHaveLength(1);

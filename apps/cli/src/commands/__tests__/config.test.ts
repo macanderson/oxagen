@@ -13,8 +13,23 @@
  * answers land on stdout, advisories/errors on stderr, and errors set the right
  * non-zero exit code without ever calling `process.exit`.
  */
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -35,7 +50,10 @@ import {
   type WorkspaceConfigCtx,
 } from "../config.js";
 import { userApiPostOrThrow } from "../../lib/api.js";
-import { getConfigScopePaths, clearWorkspaceConfigCache } from "../../config/index.js";
+import {
+  getConfigScopePaths,
+  clearWorkspaceConfigCache,
+} from "../../config/index.js";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 const mockUserApiPostOrThrow = userApiPostOrThrow as unknown as Mock;
@@ -102,7 +120,9 @@ describe("configInit", () => {
     write(".oxagen/workspace.json", JSON.stringify({ orgSlug: "acme" }));
     configInit(undefined, ctx, writer);
     expect(text()).toContain("already exists");
-    const doc = JSON.parse(readFileSync(getConfigScopePaths(cwd, ctx).workspace, "utf8"));
+    const doc = JSON.parse(
+      readFileSync(getConfigScopePaths(cwd, ctx).workspace, "utf8"),
+    );
     expect(doc.orgSlug).toBe("acme");
   });
 
@@ -154,7 +174,9 @@ describe("configGet", () => {
       process.env["OXAGEN_MODEL"] = "vendor/from-shell";
       try {
         configGet("model", ctx, writer);
-        expect(text()).toContain("shell/session env OXAGEN_MODEL:  vendor/from-shell");
+        expect(text()).toContain(
+          "shell/session env OXAGEN_MODEL:  vendor/from-shell",
+        );
         expect(text()).toContain("→ effective at runtime:  vendor/from-shell");
       } finally {
         if (saved === undefined) delete process.env["OXAGEN_MODEL"];
@@ -171,7 +193,11 @@ describe("configGet", () => {
     it("does not print a settings.json row for effort (no settings.json equivalent)", () => {
       configGet("effort", ctx, writer);
       expect(text()).toContain("effort — resolved from EACH store");
-      expect(text().split("\n").some((l) => l.includes("settings.json"))).toBe(false);
+      expect(
+        text()
+          .split("\n")
+          .some((l) => l.includes("settings.json")),
+      ).toBe(false);
     });
   });
 });
@@ -195,7 +221,11 @@ describe("configSet", () => {
   });
 
   it("warns (on stderr) when the write would be overridden by a more-authoritative locked scope", () => {
-    write("managed.json", JSON.stringify({ packageManagers: { primary: "npm" } }), homeDir);
+    write(
+      "managed.json",
+      JSON.stringify({ packageManagers: { primary: "npm" } }),
+      homeDir,
+    );
     configSet("packageManagers.primary", "pnpm", "workspace", ctx, writer);
     // The advisory Note is decoration → stderr; the ✓ confirmation is the answer → stdout.
     expect(errText()).toContain("Note:");
@@ -269,7 +299,14 @@ describe("configAdd", () => {
   });
 
   it("honors an explicit --id", () => {
-    configAdd("typescript", "rule", "No any.", { id: "custom-id" }, ctx, writer);
+    configAdd(
+      "typescript",
+      "rule",
+      "No any.",
+      { id: "custom-id" },
+      ctx,
+      writer,
+    );
     expect(text()).toContain('"custom-id"');
   });
 
@@ -319,7 +356,10 @@ describe("configExplain", () => {
 
 describe("configBuild", () => {
   it("scans sources and writes the consolidated index into workspace.json (pretty summary → stdout)", async () => {
-    write(".claude/agents/reviewer.md", "---\nname: reviewer\n---\n\nBody.\n");
+    write(
+      ".oxagen/agents/reviewer.toml",
+      'schema_version = 1\nkind = "agent"\nname = "reviewer"\ndescription = "Reviews code."\ndeveloper_instructions = "Body."\n',
+    );
     await configBuild({}, ctx, writer);
     expect(text()).toContain("✓ Built consolidated index");
     expect(text()).toContain("agents: 1");
@@ -356,7 +396,10 @@ describe("configLint", () => {
   });
 
   it("reports schema errors on stderr for a malformed scope file", async () => {
-    write(".oxagen/workspace.json", JSON.stringify({ version: "not-a-number" }));
+    write(
+      ".oxagen/workspace.json",
+      JSON.stringify({ version: "not-a-number" }),
+    );
     await configLint(ctx, writer);
     expect(errText()).toContain("✗ workspace");
     expect(process.exitCode).toBe(1);
@@ -365,7 +408,10 @@ describe("configLint", () => {
   it("detects consolidated drift when sources changed since the last build", async () => {
     await configBuild({}, ctx, writer);
     out = [];
-    write(".claude/agents/new-agent.md", "---\nname: new-agent\n---\n\nBody.\n");
+    write(
+      ".oxagen/agents/new-agent.toml",
+      'schema_version = 1\nkind = "agent"\nname = "new-agent"\ndescription = "New agent."\ndeveloper_instructions = "Body."\n',
+    );
     await configLint(ctx, writer);
     expect(text()).toContain("drift detected");
     expect(text()).toContain("agents: +new-agent");
@@ -389,7 +435,9 @@ describe("configPull", () => {
   });
 
   it("writes userConfig to the user scope path when the platform returns one", async () => {
-    mockUserApiPostOrThrow.mockResolvedValueOnce({ userConfig: { orgSlug: "acme" } });
+    mockUserApiPostOrThrow.mockResolvedValueOnce({
+      userConfig: { orgSlug: "acme" },
+    });
     await configPull(ctx, writer);
     expect(text()).toContain("✓ Pulled user config");
     expect(existsSync(getConfigScopePaths(cwd, ctx).user)).toBe(true);
