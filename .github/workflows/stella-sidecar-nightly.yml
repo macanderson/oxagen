@@ -2,16 +2,31 @@ name: stella-sidecar-nightly
 
 # Nightly drift check for oxagen #1081: runs the exact same sidecar-transport
 # smoke test (packages/stella-engine-client/src/stella-serve.smoke.test.ts)
-# against stella's `latest` GitHub release instead of the pinned version in
+# against stella's DEFAULT BRANCH instead of the pinned version in
 # sidecar.config.json. Stella releases daily (docs/adr/ADR-033-stella-engine-core.md);
 # the pinned-version job in stella-sidecar.yml only runs on PRs that touch the
 # sidecar package, so it cannot see a wire-contract rename that ships in an
-# unrelated stella release between oxagen changes. This job closes that gap
-# by catching upstream drift within a day, independent of oxagen activity.
+# unrelated stella release between oxagen changes. This job closes that gap by
+# catching upstream drift within a day, independent of oxagen activity.
 #
-# A red run here means: stella changed something the sidecar transport
-# depends on. It does NOT mean oxagen's pinned integration is broken — that
-# is exactly the point of keeping the pin and the drift check separate.
+# A red run here means: stella changed something the sidecar transport depends
+# on. It does NOT mean oxagen's pinned integration is broken — that is exactly
+# the point of keeping the pin and the drift check separate.
+#
+# ## Two defects oxagen #1132 fixed here
+#
+# 1. **It was structurally incapable of detecting drift.** The smoke test used
+#    to skip when the binary's version did not equal the pin — and this job
+#    installs `latest` *by design*, which almost never equals the pin. So the
+#    one job whose entire purpose is running against an unpinned build skipped
+#    on essentially every run and reported green. The pin-mismatch skip is now
+#    gone: a mismatch logs a warning and asserts the contract anyway. Only a
+#    missing binary skips.
+# 2. **It downloaded a binary that cannot serve.** Stella's release workflow
+#    builds `--package stella-cli` only, so no release asset contains
+#    `stella-serve`; and the asset name it requested omitted the version, so the
+#    download 404'd anyway. It now builds the crate from stella's main branch,
+#    which is also a stronger drift signal than the last tagged release.
 
 on:
   schedule: [{ cron: "0 9 * * *" }]
@@ -25,29 +40,43 @@ env:
 jobs:
   drift-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
       - uses: ./.github/actions/pnpm-install
 
-      - name: Install stella (latest release)
-        run: |
-          set -euo pipefail
-          LATEST="$(curl -fsSL https://api.github.com/repos/macanderson/stella/releases/latest \
-            | jq -r '.tag_name' | sed 's/^v//')"
-          echo "Latest stella release: $LATEST"
-          curl -fsSL "https://github.com/macanderson/stella/releases/download/v${LATEST}/stella-x86_64-unknown-linux-gnu.tar.gz" \
-            -o /tmp/stella.tar.gz || {
-              echo "::warning::could not download stella latest (v${LATEST}) release asset — smoke test will SKIP, not fail";
-              exit 0;
-            }
-          mkdir -p "$HOME/.local/bin"
-          tar -xzf /tmp/stella.tar.gz -C "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check out stella (latest main)
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/stella
+          ref: main
+          path: .stella-src
 
-      - name: Sidecar transport smoke test (against stella latest)
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Keyed on the stella commit so a new upstream commit always rebuilds,
+      # while a quiet day reuses the cache.
+      - name: Record the stella commit under test
+        id: upstream
+        working-directory: .stella-src
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Testing against stella $(git rev-parse --short HEAD)"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .stella-src
+          key: stella-serve-${{ steps.upstream.outputs.sha }}
+
+      - name: Build stella-serve
+        working-directory: .stella-src
+        run: cargo build --release -p stella-serve --bin stella-serve
+
+      - name: Sidecar transport smoke test (against stella main)
         working-directory: packages/stella-engine-client
+        env:
+          STELLA_SERVE_BIN: ${{ github.workspace }}/.stella-src/target/release/stella-serve
         run: pnpm vitest run src/stella-serve.smoke.test.ts
 
       - name: File a Linear ticket on drift
@@ -58,5 +87,6 @@ jobs:
           LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_SHA: ${{ github.sha }}
+          STELLA_SHA: ${{ steps.upstream.outputs.sha }}
         run: |
-          echo "stella latest drift detected — see run $GITHUB_RUN_ID. Wire manual ticket filing here if/when a scripted filer exists for this workflow (see tools/scripts/oxagen-run-wrapup-reminder.sh for the pattern used elsewhere)."
+          echo "stella drift detected at stella@$STELLA_SHA — see run $GITHUB_RUN_ID. Wire manual ticket filing here if/when a scripted filer exists for this workflow (see tools/scripts/oxagen-run-wrapup-reminder.sh for the pattern used elsewhere)."

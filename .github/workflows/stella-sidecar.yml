@@ -1,12 +1,25 @@
 name: stella-sidecar
 
 # Integration smoke test for oxagen #1081: proves the sidecar transport
-# (oxagen #1072) still speaks the wire contract of a real `stella serve`
-# (stella#258) at the version this repo has pinned
+# (oxagen #1072) still speaks the wire contract of a real `stella-serve` at the
+# version this repo has pinned
 # (packages/stella-engine-client/sidecar.config.json). Path-filtered to the
 # sidecar package so it only runs when that surface (or its pin) changes —
 # the daily-drift case against whatever stella ships today is covered
 # separately by stella-sidecar-nightly.yml.
+#
+# oxagen #1132 rewrote how the binary is obtained. This job used to download a
+# release tarball, which could never work for three independent reasons:
+#   1. Stella's release workflow builds `--package stella-cli` only, so no
+#      release asset contains `stella-serve` at all.
+#   2. `stella serve` is not a subcommand — the server is a separate binary from
+#      a separate crate that `stella-cli` does not link.
+#   3. The asset name is `stella-<version>-<target>.tar.gz`; the URL omitted the
+#      version, so the download 404'd and the step soft-warned into a skip.
+# Building the crate from the pinned tag is the only way to get a serve-capable
+# binary today. It is cheap: `stella-serve` depends on `stella-protocol` +
+# `stella-core` only (the engine core is I/O-free by construction), so this is a
+# small fraction of a full workspace build.
 
 on:
   pull_request:
@@ -26,7 +39,7 @@ env:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -39,23 +52,28 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Pinned stella version: $VERSION"
 
-      # Installs the pinned release from stella's own GitHub releases.
-      # stella ships prebuilt linux-x64 binaries per release (see stella's
-      # own release workflow) — no cargo build needed here.
-      - name: Install stella (pinned version)
-        env:
-          STELLA_VERSION: ${{ steps.pin.outputs.version }}
-        run: |
-          set -euo pipefail
-          curl -fsSL "https://github.com/macanderson/stella/releases/download/v${STELLA_VERSION}/stella-x86_64-unknown-linux-gnu.tar.gz" \
-            -o /tmp/stella.tar.gz || {
-              echo "::warning::could not download stella v${STELLA_VERSION} release asset — smoke test will SKIP, not fail";
-              exit 0;
-            }
-          mkdir -p "$HOME/.local/bin"
-          tar -xzf /tmp/stella.tar.gz -C "$HOME/.local/bin"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check out stella at the pinned tag
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/stella
+          ref: v${{ steps.pin.outputs.version }}
+          path: .stella-src
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .stella-src
+          key: stella-serve-${{ steps.pin.outputs.version }}
+
+      - name: Build stella-serve
+        working-directory: .stella-src
+        run: cargo build --release -p stella-serve --bin stella-serve
 
       - name: Sidecar transport smoke test
         working-directory: packages/stella-engine-client
+        env:
+          STELLA_SERVE_BIN: ${{ github.workspace }}/.stella-src/target/release/stella-serve
+        # No `|| true`, no soft-warn: by this point the binary provably exists,
+        # so a skip here would mean the resolver is broken and must be a failure.
         run: pnpm vitest run src/stella-serve.smoke.test.ts
