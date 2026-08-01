@@ -1,0 +1,55 @@
+{
+  "name": "dispatch_schema_reconcile",
+  "domain": "schema",
+  "description": "Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "destructive",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "versionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "prune": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "versionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "description": "aex_… agent_executions public_id"
+      }
+    },
+    "required": [
+      "executionId"
+    ],
+    "additionalProperties": false
+  }
+}

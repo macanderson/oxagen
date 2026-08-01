@@ -1,0 +1,90 @@
+{
+  "name": "list_memory_promotions",
+  "domain": "agent",
+  "description": "List the top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 25,
+        "default": 3
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "candidates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "lesson": {
+              "type": "string"
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "influenceCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "confidenceScore": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "publicId",
+            "lesson",
+            "memoryKind",
+            "citationCount",
+            "influenceCount",
+            "confidenceScore"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "candidates"
+    ],
+    "additionalProperties": false
+  }
+}

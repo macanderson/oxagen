@@ -1,0 +1,82 @@
+{
+  "name": "edit_skill",
+  "domain": "skill",
+  "description": "Save an edited skill body as a new immutable version. Thin wrapper over the shared createNewSkillVersion helper — equivalent to skill.version.upload but accepts a skill_id and body directly from an inline editor.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the skill to edit (skl_…) or its slug"
+      },
+      "content": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Full updated canonical skill.toml content"
+      },
+      "change_summary": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "activate": {
+        "type": "boolean",
+        "default": true
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "skill_id",
+      "content"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version_id": {
+        "type": "string",
+        "description": "Public ID of the new skill version (slv_…)"
+      },
+      "version_number": {
+        "type": "integer",
+        "description": "Monotonically increasing version number"
+      },
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the parent skill"
+      },
+      "activated": {
+        "type": "boolean",
+        "description": "Whether this version is now the active version"
+      }
+    },
+    "required": [
+      "version_id",
+      "version_number",
+      "skill_id",
+      "activated"
+    ],
+    "additionalProperties": false
+  }
+}

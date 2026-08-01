@@ -1,0 +1,60 @@
+{
+  "name": "delete_schema",
+  "domain": "schema",
+  "description": "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
+  "mode": "sync",
+  "surfaces": [
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemaName": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "schemaName"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean"
+      },
+      "schemaName": {
+        "type": "string"
+      },
+      "labelsRemoved": {
+        "type": "number"
+      },
+      "relationshipTypesRemoved": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "deleted",
+      "schemaName",
+      "labelsRemoved",
+      "relationshipTypesRemoved"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "name": "list_iam_roles",
+  "domain": "iam",
+  "description": "List the org's IAM roles with their capability grants (allow/deny/require_approval) and the number of principals assigned to each. Read-only — the human-readable face of the permitted-action link of the accountability chain.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scopeKind": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ]
+      },
+      "includeGrants": {
+        "type": "boolean",
+        "default": true
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 100
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "roles": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public role id (rol_…)"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scopeKind": {
+              "type": "string",
+              "enum": [
+                "org",
+                "workspace"
+              ]
+            },
+            "isSystemDefault": {
+              "type": "boolean",
+              "description": "True for system-seeded roles (Owner, Admin, …) — not user-deletable"
+            },
+            "version": {
+              "type": "string"
+            },
+            "memberCount": {
+              "type": "integer",
+              "description": "Active (non-deleted, non-expired) principal assignments holding this role"
+            },
+            "grants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "capability": {
+                    "type": "string",
+                    "description": "Capability name the grant applies to"
+                  },
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "deny",
+                      "require_approval"
+                    ]
+                  }
+                },
+                "required": [
+                  "capability",
+                  "effect"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Capability grants carried by the role (empty when includeGrants=false)"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "description",
+            "scopeKind",
+            "isSystemDefault",
+            "version",
+            "memberCount",
+            "grants"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Roles sorted system-defaults-first, then by name"
+      },
+      "total": {
+        "type": "integer",
+        "description": "Total roles matching the filter before pagination"
+      },
+      "hasMore": {
+        "type": "boolean"
+      },
+      "limit": {
+        "type": "integer"
+      },
+      "offset": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "roles",
+      "total",
+      "hasMore",
+      "limit",
+      "offset"
+    ],
+    "additionalProperties": false
+  }
+}

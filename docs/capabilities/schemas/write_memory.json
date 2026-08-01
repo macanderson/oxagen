@@ -1,0 +1,101 @@
+{
+  "name": "write_memory",
+  "domain": "agent",
+  "description": "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeRef": {
+        "type": "string"
+      },
+      "memoryClass": {
+        "type": "string",
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ],
+        "default": "OBSERVATION"
+      },
+      "memoryKind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Content domain of the memory"
+      },
+      "enforcementScore": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "lesson": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "fix",
+          "exception-watcher",
+          "bug-report"
+        ]
+      },
+      "relatedNodeIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "nodeRef",
+      "memoryKind",
+      "lesson",
+      "source"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string"
+      },
+      "nodeRef": {
+        "type": "string"
+      },
+      "edgesCreated": {
+        "type": "number",
+        "description": "Count of :ABOUT edges created to KnowledgeNode entities"
+      }
+    },
+    "required": [
+      "memoryId",
+      "nodeRef",
+      "edgesCreated"
+    ],
+    "additionalProperties": false
+  }
+}

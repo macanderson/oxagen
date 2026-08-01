@@ -1,0 +1,77 @@
+{
+  "name": "install_skill",
+  "domain": "skill",
+  "description": "Install a skill into a workspace — copies a builtin template (by slug) or a custom upload into a workspace-owned agent.skills row with skill_versions v1 (is_latest=true). Idempotent on slug.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "slug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "custom": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Canonical skill.toml content"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "activeVersion": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "installed": {
+        "type": "boolean",
+        "description": "false when the skill already existed (idempotent)"
+      }
+    },
+    "required": [
+      "publicId",
+      "slug",
+      "activeVersion",
+      "installed"
+    ],
+    "additionalProperties": false
+  }
+}

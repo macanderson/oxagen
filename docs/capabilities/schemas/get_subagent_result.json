@@ -1,0 +1,121 @@
+{
+  "name": "get_subagent_result",
+  "domain": "agent",
+  "description": "Fetch ONE subagent child run's full input + output payloads by runId (from agent.subagent.aggregate children[] or timeline[]). Use only when a child's summary is insufficient — do not fetch every child; summaries plus conflicts are usually enough.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string",
+        "description": "Public ID of the child run to fetch (sar_… from aggregate children[].runId)"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "fanoutId": {
+        "type": "string",
+        "description": "Public ID of the fanout this run belongs to"
+      },
+      "capabilityName": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "summary": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "input": {
+        "description": "Full input payload the child was dispatched with"
+      },
+      "output": {
+        "description": "Full output payload, null until the run completes"
+      },
+      "errorReason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "startedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "completedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "runId",
+      "fanoutId",
+      "capabilityName",
+      "status",
+      "summary",
+      "input",
+      "output",
+      "errorReason",
+      "startedAt",
+      "completedAt"
+    ],
+    "additionalProperties": false
+  }
+}

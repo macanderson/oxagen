@@ -1,0 +1,264 @@
+{
+  "name": "list_sandbox_templates",
+  "domain": "sandbox",
+  "description": "List sandbox templates in the active workspace, optionally filtered to one environment.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "environmentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "templates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "environmentId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isDefault": {
+              "type": "boolean"
+            },
+            "isActive": {
+              "type": "boolean"
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "modal",
+                "vercel",
+                "docker"
+              ]
+            },
+            "runtime": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "resources": {
+              "type": "object",
+              "properties": {
+                "vcpu": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4
+                },
+                "memoryMb": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 8192
+                },
+                "timeoutMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 300000
+                },
+                "diskMb": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 20480
+                }
+              },
+              "additionalProperties": false
+            },
+            "network": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "public",
+                    "static_egress",
+                    "aws_privatelink",
+                    "gcp_psc",
+                    "reverse_tunnel",
+                    "ssh_bastion"
+                  ]
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "additionalProperties": false
+            },
+            "secretSelection": {
+              "anyOf": [
+                {
+                  "const": "all"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "keyPublicIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "keyPublicIds"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "literalEnv": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "manager": {
+                    "type": "string",
+                    "enum": [
+                      "apt",
+                      "cargo",
+                      "gem",
+                      "go",
+                      "npm",
+                      "pnpm",
+                      "yarn",
+                      "pip",
+                      "poetry",
+                      "uv"
+                    ]
+                  },
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "default": []
+                  }
+                },
+                "required": [
+                  "manager"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "capability",
+                      "mcp_server",
+                      "agent_skill",
+                      "tool"
+                    ]
+                  },
+                  "ref": {
+                    "type": "string"
+                  },
+                  "config": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "ref",
+                  "config"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "environmentId",
+            "name",
+            "slug",
+            "description",
+            "isDefault",
+            "isActive",
+            "provider",
+            "runtime",
+            "resources",
+            "network",
+            "secretSelection",
+            "literalEnv",
+            "packages",
+            "tools"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "templates"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "name": "list_plans",
+  "domain": "agent",
+  "description": "List a workspace's execution plans, newest first, optionally filtered by status; cursor-paginated",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "planning"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 20
+      },
+      "cursor": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "plans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "planId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "goals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "approvalRequired": {
+              "type": "boolean"
+            },
+            "approvedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "taskCount": {
+              "type": "number"
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "planId",
+            "status",
+            "goals",
+            "approvalRequired",
+            "approvedAt",
+            "taskCount",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "plans",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

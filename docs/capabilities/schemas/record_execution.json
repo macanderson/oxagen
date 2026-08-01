@@ -1,0 +1,211 @@
+{
+  "name": "record_execution",
+  "domain": "agent",
+  "description": "Persist a complete agent execution record including steps and tool calls for observability, billing, and audit",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "agentVersionId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "originType": {
+        "type": "string",
+        "enum": [
+          "chat",
+          "event_trigger",
+          "scheduled_job",
+          "mcp_request",
+          "workflow_run",
+          "fanout"
+        ]
+      },
+      "originId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "planning",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "inputPayload": {},
+      "outputPayload": {},
+      "failureReason": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "completedAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "latencyMs": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "inputTokens": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "outputTokens": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "estimatedCostUsd": {
+        "type": "number",
+        "minimum": 0
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "stepNumber": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "stepType": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "planning",
+                "running",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            },
+            "inputPayload": {},
+            "outputPayload": {},
+            "failureReason": {
+              "type": "string"
+            },
+            "latencyMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolCalls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "toolName": {
+                    "type": "string"
+                  },
+                  "toolType": {
+                    "type": "string"
+                  },
+                  "requestPayload": {},
+                  "responsePayload": {},
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "running",
+                      "completed",
+                      "failed"
+                    ]
+                  },
+                  "latencyMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "inputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "outputTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "toolName",
+                  "toolType",
+                  "requestPayload",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "stepNumber",
+            "stepType",
+            "status",
+            "inputPayload"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "agentId",
+      "agentVersionId",
+      "originType",
+      "originId",
+      "status",
+      "inputPayload"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "status": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "executionId",
+      "status",
+      "createdAt"
+    ],
+    "additionalProperties": false
+  }
+}

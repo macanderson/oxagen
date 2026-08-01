@@ -1,0 +1,137 @@
+{
+  "name": "search_references",
+  "domain": "reference",
+  "description": "Tenant-scoped autocomplete search across every referenceable platform object — connected repositories and branches, code-graph files/directories, agents, skills, agent tools, MCP servers, capabilities, and knowledge-graph nodes/edges. Returns typed rows (type, slug, location, label, description, properties) ready to become @-mention tokens; pass `slug` for exact-id resolution of an existing mention.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 0,
+        "maxLength": 500,
+        "default": ""
+      },
+      "types": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "repository",
+            "branch",
+            "file",
+            "directory",
+            "agent",
+            "skill",
+            "tool",
+            "mcp_server",
+            "capability",
+            "node",
+            "edge"
+          ]
+        }
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25,
+        "default": 10
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "branch",
+                "file",
+                "directory",
+                "agent",
+                "skill",
+                "tool",
+                "mcp_server",
+                "capability",
+                "node",
+                "edge"
+              ],
+              "description": "Reference kind"
+            },
+            "slug": {
+              "type": "string",
+              "description": "Stable public identifier (publicId, capability name, path, …)"
+            },
+            "location": {
+              "type": "string",
+              "description": "Path / URL / graph address locating the referent; may be empty"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable display name — what chips render"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "Property bag revealed when a mention chip is inspected"
+            }
+          },
+          "required": [
+            "type",
+            "slug",
+            "location",
+            "label",
+            "description",
+            "properties"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "results"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "name": "update_connection",
+  "domain": "connection",
+  "description": "Update a data source connection: rename it (displayName) and/or adjust its delivery configuration (sync schedule, scope). Partial update — omit a field to keep it. Pausing/resuming is connection.pause.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "connection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public ID or internal UUID of the connection"
+      },
+      "displayName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "deliveryConfig": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "connectionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string"
+      },
+      "displayName": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "deliveryConfig": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "connectionId",
+      "displayName",
+      "status",
+      "deliveryConfig"
+    ],
+    "additionalProperties": false
+  }
+}

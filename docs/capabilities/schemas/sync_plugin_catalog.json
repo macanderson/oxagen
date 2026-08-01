@@ -1,0 +1,58 @@
+{
+  "name": "sync_plugin_catalog",
+  "domain": "plugin",
+  "description": "Trigger an immediate sync of the MCP registry catalog for the workspace. Refreshes the locally-cached server listings from the upstream registry.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fullSync": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "total": {
+        "type": "number"
+      },
+      "succeeded": {
+        "type": "number"
+      },
+      "failed": {
+        "type": "number"
+      },
+      "totalEntries": {
+        "type": "number"
+      },
+      "durationMs": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "total",
+      "succeeded",
+      "failed",
+      "totalEntries",
+      "durationMs"
+    ],
+    "additionalProperties": false
+  }
+}

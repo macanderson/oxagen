@@ -1,0 +1,176 @@
+{
+  "name": "get_subagent_fanout",
+  "domain": "agent",
+  "description": "Get one subagent fan-out with its child runs — each child's capability, status, timings, error reason, and input/output size + preview.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string",
+        "description": "Public ID of the fan-out to fetch"
+      }
+    },
+    "required": [
+      "fanoutId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string"
+      },
+      "parentMessageId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "partial",
+          "timed_out"
+        ]
+      },
+      "totalChildren": {
+        "type": "integer"
+      },
+      "completedChildren": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "updatedAt": {
+        "type": "string"
+      },
+      "runs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string"
+            },
+            "capabilityName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed"
+              ]
+            },
+            "errorReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "startedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "completedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "inputBytes": {
+              "type": "integer",
+              "description": "Serialized size of the input payload"
+            },
+            "outputBytes": {
+              "type": "integer",
+              "description": "Serialized size of the output payload, 0 when none"
+            },
+            "outputPreview": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "runId",
+            "capabilityName",
+            "status",
+            "errorReason",
+            "startedAt",
+            "completedAt",
+            "durationMs",
+            "inputBytes",
+            "outputBytes",
+            "outputPreview"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "fanoutId",
+      "parentMessageId",
+      "status",
+      "totalChildren",
+      "completedChildren",
+      "createdAt",
+      "updatedAt",
+      "runs"
+    ],
+    "additionalProperties": false
+  }
+}

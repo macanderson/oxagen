@@ -1,0 +1,95 @@
+{
+  "name": "dispatch_subagent",
+  "domain": "agent",
+  "description": "Fan out a set of tasks to multiple subagents running in parallel. Creates a dispatch fanout record and queues each task as an Inngest job. Returns a dispatchId the caller can poll via agent.subagent.aggregate. Budgets: max 100 tasks per dispatch, nesting depth 3, and 250 total descendant tasks per root fanout tree - a dispatch that would exceed the descendant cap is rejected; decompose less aggressively or return a summary instead.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "background"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "parentMessageId": {
+        "type": "string",
+        "description": "Message ID that triggered the fanout"
+      },
+      "tasks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "capabilityName": {
+              "type": "string",
+              "description": "Capability to invoke for this subtask"
+            },
+            "input": {
+              "description": "Input payload for the capability"
+            }
+          },
+          "required": [
+            "capabilityName",
+            "input"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "maxParallel": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 5
+      },
+      "timeoutSeconds": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3600
+      }
+    },
+    "required": [
+      "parentMessageId",
+      "tasks"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "dispatchId": {
+        "type": "string",
+        "description": "Fanout record ID — pass to agent.subagent.aggregate"
+      },
+      "totalTasks": {
+        "type": "number"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running"
+        ]
+      }
+    },
+    "required": [
+      "dispatchId",
+      "totalTasks",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "name": "resolve_mcp_servers",
+  "domain": "agent",
+  "description": "Resolve the active workspace's installed MCP servers with connection details and per-workspace credentials for first-party client use",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "transportType": {
+              "type": "string",
+              "enum": [
+                "streamable-http",
+                "stdio"
+              ]
+            },
+            "endpointUrl": {
+              "type": "string"
+            },
+            "authStrategy": {
+              "type": "string",
+              "enum": [
+                "none",
+                "bearer",
+                "header"
+              ]
+            },
+            "authKind": {
+              "type": "string",
+              "enum": [
+                "oauth",
+                "secret",
+                "none"
+              ]
+            },
+            "token": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "headers": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "needsReauth": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "publicId",
+            "name",
+            "transportType",
+            "endpointUrl",
+            "authStrategy",
+            "authKind",
+            "token",
+            "headers",
+            "needsReauth"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "servers"
+    ],
+    "additionalProperties": false
+  }
+}

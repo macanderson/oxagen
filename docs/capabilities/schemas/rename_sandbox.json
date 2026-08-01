@@ -1,0 +1,65 @@
+{
+  "name": "rename_sandbox",
+  "domain": "agent",
+  "description": "Rename a durable sandbox session — set its human-friendly display label (shown in the sandbox list). Display-only; does not affect reuse or the running container.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) returned by agent.sandbox.start."
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80,
+        "description": "New human-friendly display name for the sandbox (1-80 chars, trimmed)."
+      }
+    },
+    "required": [
+      "sessionId",
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "description": "The renamed session's opaque id (sbx_…)."
+      },
+      "label": {
+        "type": "string",
+        "description": "The label now stored on the session."
+      }
+    },
+    "required": [
+      "sessionId",
+      "label"
+    ],
+    "additionalProperties": false
+  }
+}

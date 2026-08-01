@@ -1,0 +1,107 @@
+{
+  "name": "get_plan",
+  "domain": "agent",
+  "description": "Fetch a single execution plan by id, including its status, tasks, and approval state",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "planning"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "planId": {
+        "type": "string",
+        "description": "The plan's public id (apl_…)"
+      }
+    },
+    "required": [
+      "planId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "planId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "goals": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "constraints": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tasks": {
+        "type": "array",
+        "items": {}
+      },
+      "approvalRequired": {
+        "type": "boolean"
+      },
+      "approvedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "approvedByUserId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "taskCount": {
+        "type": "number"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "planId",
+      "status",
+      "goals",
+      "constraints",
+      "tasks",
+      "approvalRequired",
+      "approvedAt",
+      "approvedByUserId",
+      "taskCount",
+      "createdAt"
+    ],
+    "additionalProperties": false
+  }
+}

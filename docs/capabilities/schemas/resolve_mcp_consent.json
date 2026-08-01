@@ -1,0 +1,69 @@
+{
+  "name": "resolve_mcp_consent",
+  "domain": "agent",
+  "description": "Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      },
+      "decision": {
+        "type": "string",
+        "enum": [
+          "granted",
+          "denied"
+        ]
+      },
+      "grantAllTools": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "approvalId",
+      "decision"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      },
+      "resolution": {
+        "type": "string",
+        "enum": [
+          "granted",
+          "denied",
+          "expired"
+        ]
+      }
+    },
+    "required": [
+      "approvalId",
+      "resolution"
+    ],
+    "additionalProperties": false
+  }
+}

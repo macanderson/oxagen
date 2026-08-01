@@ -1,0 +1,331 @@
+{
+  "name": "list_capability_registry",
+  "domain": "capability",
+  "description": "List the platform's typed capability contracts from the live in-process registry — name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, and audit binding for each. Read-only platform metadata; powers the org governance catalog.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "domain": {
+        "type": "string"
+      },
+      "q": {
+        "type": "string"
+      },
+      "surface": {
+        "type": "string",
+        "enum": [
+          "api",
+          "mcp",
+          "agent",
+          "cli"
+        ]
+      },
+      "missingLayer": {
+        "type": "string",
+        "enum": [
+          "schema",
+          "api",
+          "mcp",
+          "unit",
+          "e2e",
+          "docs",
+          "app"
+        ]
+      },
+      "sensitivity": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "destructive"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 500
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "capabilities": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Capability name (ADR-025 verb-first snake_case)"
+            },
+            "domain": {
+              "type": "string",
+              "description": "Capability domain (e.g. billing, agent, iam)"
+            },
+            "description": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "sync",
+                "async",
+                "batch"
+              ]
+            },
+            "surfaces": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "api",
+                  "mcp",
+                  "agent",
+                  "cli"
+                ]
+              },
+              "description": "Surfaces the capability is exposed on"
+            },
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "schema",
+                  "api",
+                  "mcp",
+                  "unit",
+                  "e2e",
+                  "docs",
+                  "app"
+                ]
+              },
+              "description": "Layers the contract declares (parity promises)"
+            },
+            "sensitivity": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "destructive"
+              ]
+            },
+            "defaultEffect": {
+              "type": "string",
+              "enum": [
+                "allow",
+                "deny",
+                "require_approval"
+              ],
+              "description": "IAM rule-8 fallback when no explicit grant matches"
+            },
+            "scoped": {
+              "type": "boolean",
+              "description": "Whether invocations are tenant-scope enforced"
+            },
+            "noBillingGate": {
+              "type": "boolean",
+              "description": "True when the billing admission gate is skipped (management reads)"
+            },
+            "agent": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "requiresApproval": {
+                      "type": "boolean"
+                    },
+                    "riskLevel": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    },
+                    "category": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "requiresApproval",
+                    "riskLevel",
+                    "category"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "auditTargetKind": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "plugin": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Capability-pack plugin id (e.g. oxagen/media-svg)"
+                    },
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "free",
+                        "premium"
+                      ]
+                    },
+                    "minPlanTier": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "build",
+                            "scale",
+                            "enterprise"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tier",
+                    "minPlanTier"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "orgRoles": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "deny",
+                  "require_approval"
+                ]
+              },
+              "description": "Default org-role grants (role name → effect)"
+            },
+            "workspaceRoles": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "deny",
+                  "require_approval"
+                ]
+              },
+              "description": "Default workspace-role grants (role name → effect)"
+            }
+          },
+          "required": [
+            "name",
+            "domain",
+            "description",
+            "mode",
+            "surfaces",
+            "layers",
+            "sensitivity",
+            "defaultEffect",
+            "scoped",
+            "noBillingGate",
+            "agent",
+            "auditTargetKind",
+            "plugin",
+            "orgRoles",
+            "workspaceRoles"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Matching contracts, sorted by name"
+      },
+      "total": {
+        "type": "integer",
+        "description": "Total matches before pagination"
+      },
+      "hasMore": {
+        "type": "boolean"
+      },
+      "limit": {
+        "type": "integer"
+      },
+      "offset": {
+        "type": "integer"
+      },
+      "domains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "All distinct domains in the registry (unfiltered), sorted"
+      }
+    },
+    "required": [
+      "capabilities",
+      "total",
+      "hasMore",
+      "limit",
+      "offset",
+      "domains"
+    ],
+    "additionalProperties": false
+  }
+}

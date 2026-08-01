@@ -1,0 +1,123 @@
+{
+  "name": "search_web",
+  "domain": "web",
+  "description": "Search the web using the Tavily API and return ranked results with title, URL, and content snippets.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "search"
+  },
+  "chain": {
+    "produces": [
+      "search.results"
+    ],
+    "consumes": [
+      "query",
+      "topic"
+    ],
+    "chainHints": [
+      "generate_document"
+    ]
+  },
+  "render": {
+    "componentId": "web-search-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "maxResults": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10,
+        "default": 5
+      },
+      "searchDepth": {
+        "type": "string",
+        "enum": [
+          "basic",
+          "advanced"
+        ],
+        "default": "basic"
+      },
+      "includeDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "excludeDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "content": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "publishedDate": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "url",
+            "content",
+            "score"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "totalResults": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "searchId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "results",
+      "totalResults",
+      "searchId"
+    ],
+    "additionalProperties": false
+  }
+}

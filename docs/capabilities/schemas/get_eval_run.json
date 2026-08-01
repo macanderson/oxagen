@@ -1,0 +1,256 @@
+{
+  "name": "get_eval_run",
+  "domain": "eval",
+  "description": "Fetch an eval run's summary (from Postgres) together with its per-item results (from the ClickHouse metering pipe): each item's output, judge scores, pass/fail, tokens, latency, and cost.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runPublicId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "runPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "run": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "datasetId": {
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "model"
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "systemPrompt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "agent"
+                  },
+                  "agentSlug": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "agentSlug"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "judgeModel": {
+            "type": "string"
+          },
+          "passThreshold": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completedCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "avgScore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scoreBreakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "datasetId",
+          "name",
+          "target",
+          "judgeModel",
+          "passThreshold",
+          "status",
+          "itemCount",
+          "completedCount",
+          "failedCount",
+          "avgScore",
+          "scoreBreakdown",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "itemId": {
+              "type": "string"
+            },
+            "targetKind": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "judgeModel": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "correctness": {
+              "type": "number"
+            },
+            "faithfulness": {
+              "type": "number"
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "latencyMs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "inputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "costUsdMicros": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "failed"
+              ]
+            },
+            "errorClass": {
+              "type": "string"
+            },
+            "output": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "itemId",
+            "targetKind",
+            "model",
+            "judgeModel",
+            "score",
+            "correctness",
+            "faithfulness",
+            "passed",
+            "latencyMs",
+            "inputTokens",
+            "outputTokens",
+            "costUsdMicros",
+            "status",
+            "errorClass",
+            "output",
+            "rationale"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "run",
+      "results"
+    ],
+    "additionalProperties": false
+  }
+}

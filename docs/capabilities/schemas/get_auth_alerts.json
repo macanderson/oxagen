@@ -1,0 +1,62 @@
+{
+  "name": "get_auth_alerts",
+  "domain": "plugin",
+  "description": "Read the org MCP auth-alert notification setting — which org roles receive alerts and whether email is sent. Returns the default (email on, Owner + Admin) when unset.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sendEmail": {
+        "type": "boolean",
+        "description": "Whether email is sent in addition to in-app notification"
+      },
+      "roles": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "Owner",
+            "Admin",
+            "Compliance",
+            "Billing"
+          ]
+        },
+        "description": "Org roles that receive MCP auth alerts"
+      },
+      "isDefault": {
+        "type": "boolean",
+        "description": "True when the org has never customised the setting"
+      }
+    },
+    "required": [
+      "sendEmail",
+      "roles",
+      "isDefault"
+    ],
+    "additionalProperties": false
+  }
+}

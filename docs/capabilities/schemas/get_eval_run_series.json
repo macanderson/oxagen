@@ -1,0 +1,156 @@
+{
+  "name": "get_eval_run_series",
+  "domain": "eval",
+  "description": "Bucketed score-over-time series for eval runs (optionally scoped to one dataset), plus a per-model breakdown (avg score, pass rate, and a time series) — the read that backs score-trend and model-comparison charts. Score only; no cost metric in v1.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasetPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "since": {
+        "type": "string"
+      },
+      "until": {
+        "type": "string"
+      },
+      "bucket": {
+        "type": "string",
+        "enum": [
+          "day",
+          "week"
+        ],
+        "default": "day"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "overall": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "bucketStart": {
+              "type": "string"
+            },
+            "avgScore": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "bucketStart",
+            "avgScore",
+            "runCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "byModel": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "vendor": {
+              "type": "string"
+            },
+            "avgScore": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "passRate": {
+              "type": "number"
+            },
+            "runCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "bucketStart": {
+                    "type": "string"
+                  },
+                  "avgScore": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "bucketStart",
+                  "avgScore"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "model",
+            "vendor",
+            "avgScore",
+            "passRate",
+            "runCount",
+            "points"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "overall",
+      "byModel"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "name": "update_org_settings",
+  "domain": "org",
+  "description": "Update the active organization's profile settings (partial): name, slug, avatar, website, industry, and employee size. Routes the settings page edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "website": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "industry": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 120
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "employeeSize": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "1",
+              "2-10",
+              "11-50",
+              "51-200",
+              "201-500",
+              "501-1000",
+              "1001-5000",
+              "5001-10000",
+              "10000+"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "website": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "industry": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "employeeSize": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "1",
+              "2-10",
+              "11-50",
+              "51-200",
+              "201-500",
+              "501-1000",
+              "1001-5000",
+              "5001-10000",
+              "10000+"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "business"
+        ]
+      }
+    },
+    "required": [
+      "name",
+      "slug",
+      "avatarUrl",
+      "website",
+      "industry",
+      "employeeSize",
+      "type"
+    ],
+    "additionalProperties": false
+  }
+}

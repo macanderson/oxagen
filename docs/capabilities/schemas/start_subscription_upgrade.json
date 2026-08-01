@@ -1,0 +1,81 @@
+{
+  "name": "start_subscription_upgrade",
+  "domain": "billing",
+  "description": "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "planSlug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "interval": {
+        "type": "string",
+        "enum": [
+          "month",
+          "year"
+        ]
+      },
+      "successUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "cancelUrl": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "required": [
+      "planSlug",
+      "interval",
+      "successUrl",
+      "cancelUrl"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "checkoutUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "planSlug": {
+        "type": "string"
+      },
+      "interval": {
+        "type": "string",
+        "enum": [
+          "month",
+          "year"
+        ]
+      }
+    },
+    "required": [
+      "checkoutUrl",
+      "planSlug",
+      "interval"
+    ],
+    "additionalProperties": false
+  }
+}

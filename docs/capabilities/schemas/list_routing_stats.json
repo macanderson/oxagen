@@ -1,0 +1,182 @@
+{
+  "name": "list_routing_stats",
+  "domain": "router",
+  "description": "List observed market-router outcomes per (task class, model) — samples, verified-success rate, average cost and latency — over a window, plus a derived per-class summary of the cheapest model currently clearing the verified-success bar. The Pareto-curve read.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "taskClass": {
+        "type": "string"
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minSamples": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "taskClass": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "tier": {
+              "type": "string"
+            },
+            "samples": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "verifiedCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "verifiedRate": {
+              "type": "number"
+            },
+            "avgCostUsdMicros": {
+              "type": "number"
+            },
+            "avgLatencyMs": {
+              "type": "number"
+            },
+            "lastSeen": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "taskClass",
+            "model",
+            "tier",
+            "samples",
+            "verifiedCount",
+            "verifiedRate",
+            "avgCostUsdMicros",
+            "avgLatencyMs",
+            "lastSeen"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "summary": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "taskClass": {
+              "type": "string"
+            },
+            "cheapestEligibleModel": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "verifiedRate": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "avgCostUsdMicros": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "candidateCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligibleCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "taskClass",
+            "cheapestEligibleModel",
+            "verifiedRate",
+            "avgCostUsdMicros",
+            "candidateCount",
+            "eligibleCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "window": {
+        "type": "object",
+        "properties": {
+          "windowDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minSamples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "successThreshold": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "windowDays",
+          "minSamples",
+          "successThreshold"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "rows",
+      "summary",
+      "window"
+    ],
+    "additionalProperties": false
+  }
+}

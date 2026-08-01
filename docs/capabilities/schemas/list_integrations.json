@@ -1,0 +1,139 @@
+{
+  "name": "list_integrations",
+  "domain": "integration",
+  "description": "Browse installed plugin instances with status, config summary, and sync metrics.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "paused",
+          "failed",
+          "pending_setup"
+        ]
+      },
+      "pluginId": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 250,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "integrations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "pluginId": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "paused",
+                "failed",
+                "pending_setup"
+              ]
+            },
+            "version": {
+              "type": "string"
+            },
+            "lastSyncAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entityCount": {
+              "type": "number"
+            },
+            "errorMessage": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "pluginId",
+            "displayName",
+            "status",
+            "version",
+            "lastSyncAt",
+            "entityCount",
+            "errorMessage",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "number"
+      },
+      "hasMore": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "integrations",
+      "total",
+      "hasMore"
+    ],
+    "additionalProperties": false
+  }
+}

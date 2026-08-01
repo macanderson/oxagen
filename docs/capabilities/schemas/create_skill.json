@@ -1,0 +1,122 @@
+{
+  "name": "create_skill",
+  "domain": "skill",
+  "description": "Create a new tenant-authored skill in the workspace. Inserts a skills row with source='tenant' and an initial version (v1). Returns the skill public ID, slug, and version. Idempotent on slug — if a skill with the same slug already exists, returns it unchanged.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "content": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32000,
+        "description": "Canonical skill.toml content"
+      },
+      "activate": {
+        "type": "boolean",
+        "default": true
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "content"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "description": "Public ID of the skill (skl_...)"
+      },
+      "slug": {
+        "type": "string",
+        "description": "Kebab-case slug"
+      },
+      "activeVersion": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Active version number (1 for new)"
+      },
+      "created": {
+        "type": "boolean",
+        "description": "true if newly created, false if slug already existed (idempotent)"
+      },
+      "artifact": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "kind": {
+            "const": "skill"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "instructions": {
+            "type": "string",
+            "minLength": 1
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "default": []
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "kind",
+          "name",
+          "description",
+          "instructions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "publicId",
+      "slug",
+      "activeVersion",
+      "created",
+      "artifact"
+    ],
+    "additionalProperties": false
+  }
+}

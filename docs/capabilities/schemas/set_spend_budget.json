@@ -1,0 +1,172 @@
+{
+  "name": "set_spend_budget",
+  "domain": "billing",
+  "description": "Set (create or replace) the hard period-to-date spend ceiling for one scope — the org-level ceiling that covers every workspace, or this workspace's own ceiling. Choose the window (monthly = calendar month to date; rolling = a trailing N-day window), the USD limit, and whether it is enforced. Over-ceiling agent runs are denied at invoke() before any provider call; RAISING a ceiling here is the org-admin override that clears a denial (IAM-gated and audited). Owner / Admin / Billing only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ]
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "monthly",
+          "rolling"
+        ]
+      },
+      "windowDays": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "limitUsd": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "scope",
+      "enabled",
+      "period",
+      "limitUsd"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ]
+      },
+      "publicId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "period": {
+        "type": "string",
+        "enum": [
+          "monthly",
+          "rolling"
+        ]
+      },
+      "windowDays": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "limitUsd": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "spentUsd": {
+        "type": "number",
+        "minimum": 0
+      },
+      "projectedUsd": {
+        "type": "number",
+        "minimum": 0
+      },
+      "ratio": {
+        "type": "number",
+        "minimum": 0
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "threshold_50",
+          "threshold_80",
+          "threshold_95",
+          "exceeded"
+        ]
+      },
+      "reachedThreshold": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "windowStart": {
+        "type": "string"
+      },
+      "windowEnd": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "scope",
+      "publicId",
+      "enabled",
+      "period",
+      "windowDays",
+      "limitUsd",
+      "spentUsd",
+      "projectedUsd",
+      "ratio",
+      "state",
+      "reachedThreshold",
+      "windowStart",
+      "windowEnd"
+    ],
+    "additionalProperties": false
+  }
+}

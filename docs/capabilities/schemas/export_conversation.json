@@ -1,0 +1,91 @@
+{
+  "name": "export_conversation",
+  "domain": "conversation",
+  "description": "Export an entire conversation (active branch) as a Markdown document or a formatted PDF",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string"
+      },
+      "format": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "pdf"
+        ]
+      }
+    },
+    "required": [
+      "conversationId",
+      "format"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "format": {
+        "type": "string",
+        "enum": [
+          "markdown",
+          "pdf"
+        ]
+      },
+      "filename": {
+        "type": "string"
+      },
+      "content": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "url": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "messageCount": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "format",
+      "filename",
+      "content",
+      "url",
+      "messageCount"
+    ],
+    "additionalProperties": false
+  }
+}

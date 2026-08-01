@@ -1,0 +1,90 @@
+{
+  "name": "list_datasets",
+  "domain": "eval",
+  "description": "List the workspace's eval datasets with their item counts, source (manual or traces), and timestamps.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasets": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "datasetId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "traces"
+              ]
+            },
+            "itemCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "datasetId",
+            "name",
+            "slug",
+            "description",
+            "source",
+            "itemCount",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "datasets"
+    ],
+    "additionalProperties": false
+  }
+}

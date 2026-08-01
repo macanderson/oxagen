@@ -1,0 +1,96 @@
+{
+  "name": "list_reseller_attribution_rules",
+  "domain": "billing",
+  "description": "List the org's usage-attribution rules in evaluation order (priority ascending), each resolved to its customer name.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "customerId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "matchKind": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "principal",
+                "capability"
+              ]
+            },
+            "matchValue": {
+              "type": "string"
+            },
+            "matchLabel": {
+              "type": "string"
+            },
+            "customerId": {
+              "type": "string"
+            },
+            "customerName": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "integer"
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "matchKind",
+            "matchValue",
+            "matchLabel",
+            "customerId",
+            "customerName",
+            "priority",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "rules"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "name": "pause_connection",
+  "domain": "connection",
+  "description": "Pause or resume syncing for a data source connection. Pausing stops ingestion while keeping the connection and its data intact; resuming returns it to connected.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "connection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public ID or internal UUID of the connection"
+      },
+      "paused": {
+        "type": "boolean",
+        "description": "true = pause syncing; false = resume syncing"
+      }
+    },
+    "required": [
+      "connectionId",
+      "paused"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "connected",
+          "paused"
+        ],
+        "description": "Resulting connection status"
+      }
+    },
+    "required": [
+      "connectionId",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

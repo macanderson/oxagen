@@ -1,0 +1,41 @@
+{
+  "name": "get_execution_trace",
+  "domain": "agent",
+  "description": "Get one agent execution as a collapsible span tree — the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "description": "Public ID (aex_…) or UUID of the execution to fetch"
+      }
+    },
+    "required": [
+      "executionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "x-zod-type": "ZodLazy"
+  }
+}

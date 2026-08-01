@@ -1,0 +1,135 @@
+{
+  "name": "get_catalog_plugin",
+  "domain": "plugin",
+  "description": "Get full detail for one catalog server by name+version, fetched live from the workspace's enabled registries.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string",
+        "default": "latest"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "title": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "description": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string"
+      },
+      "repository": {
+        "anyOf": [
+          {},
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "websiteUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "icons": {
+        "type": "array",
+        "items": {}
+      },
+      "packages": {
+        "type": "array",
+        "items": {}
+      },
+      "remotes": {
+        "type": "array",
+        "items": {}
+      },
+      "transportTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "authKind": {
+        "type": "string"
+      },
+      "categories": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "readmeHtml": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "name",
+      "title",
+      "description",
+      "version",
+      "repository",
+      "websiteUrl",
+      "icons",
+      "packages",
+      "remotes",
+      "transportTypes",
+      "authKind",
+      "categories"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "name": "search_nodes",
+  "domain": "graph",
+  "description": "Fuzzy search customer-context graph nodes by displayName and description, optionally filtered by label.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [
+      "graph.nodeId"
+    ],
+    "consumes": [
+      "query"
+    ],
+    "chainHints": [
+      "get_node"
+    ]
+  },
+  "render": {
+    "componentId": "graph-node-list-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "description": "Text to search for in displayName or description"
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 10
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "score": {
+              "type": "number",
+              "description": "Relevance score — 1.0 when displayName matches, 0.5 when only description matches"
+            }
+          },
+          "required": [
+            "nodeId",
+            "label",
+            "displayName",
+            "description",
+            "score"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "nodes"
+    ],
+    "additionalProperties": false
+  }
+}

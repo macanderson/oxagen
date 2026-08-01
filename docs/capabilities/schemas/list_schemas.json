@@ -1,0 +1,82 @@
+{
+  "name": "list_schemas",
+  "domain": "schema",
+  "description": "List the workspace's schemas with per-schema enabled state.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemas": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "user",
+                "connector",
+                "recommended"
+              ]
+            },
+            "connectorId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "schemaName",
+            "displayName",
+            "source",
+            "enabled"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "schemas"
+    ],
+    "additionalProperties": false
+  }
+}

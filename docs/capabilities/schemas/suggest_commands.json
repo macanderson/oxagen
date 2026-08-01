@@ -1,0 +1,155 @@
+{
+  "name": "suggest_commands",
+  "domain": "command",
+  "description": "Generate 3–5 context-aware 'Suggested for this page' prompts for the Command Menu using a fast/cheap LLM tier. Accepts SuggestionContext (route, page entity summary, recent entities, effective capabilities). Returns [] when the org has opted out of LLM suggestions. Privacy: only entity.summary is sent to the model.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "route": {
+        "type": "string",
+        "maxLength": 2000
+      },
+      "routeParams": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {}
+      },
+      "queryParams": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {}
+      },
+      "pageEntity": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "publicId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "recentEntities": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "default": []
+      },
+      "capabilities": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "locale": {
+        "type": "string",
+        "maxLength": 20,
+        "default": "en"
+      }
+    },
+    "required": [
+      "route"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "suggestions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 200
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "create",
+                "investigate",
+                "configure",
+                "communicate",
+                "analyze"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "text",
+            "category",
+            "confidence"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "suggestions"
+    ],
+    "additionalProperties": false
+  }
+}

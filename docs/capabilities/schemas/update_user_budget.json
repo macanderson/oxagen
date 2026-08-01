@@ -1,0 +1,94 @@
+{
+  "name": "update_user_budget",
+  "domain": "user",
+  "description": "Update the calling user's saved per-turn budget (partial update — only provided fields change). Turn the per-turn dollar ceiling on/off, set the limit in USD, choose the enforcement mode (grace = allow overage within a grace window, then stop; prompt = pause and ask to continue; enforce = hard stop the instant the limit is crossed), and set the grace-window cushion.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "user"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "limitUsd": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
+      },
+      "graceOveragePct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "limitUsd": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
+      },
+      "graceOveragePct": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "enabled",
+      "limitUsd",
+      "mode",
+      "graceOveragePct"
+    ],
+    "additionalProperties": false
+  }
+}

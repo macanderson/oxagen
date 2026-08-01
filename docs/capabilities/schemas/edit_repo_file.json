@@ -1,0 +1,150 @@
+{
+  "name": "edit_repo_file",
+  "domain": "agent",
+  "description": "Use the coding agent to edit files in a connected GitHub repository and open a pull request with the changes.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "GitHub organisation or user that owns the repository"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name (without the owner prefix)"
+      },
+      "instruction": {
+        "type": "string",
+        "minLength": 10,
+        "description": "Natural-language coding instruction for the agent (min 10 chars)"
+      },
+      "baseBranch": {
+        "type": "string"
+      },
+      "branchName": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "maxSteps": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 40,
+        "default": 12
+      },
+      "environmentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "owner",
+      "repo",
+      "instruction"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "prNumber": {
+        "type": "number",
+        "description": "Pull request number opened by the agent"
+      },
+      "prUrl": {
+        "type": "string",
+        "description": "HTML URL of the pull request"
+      },
+      "branch": {
+        "type": "string",
+        "description": "Branch the agent's changes were pushed to"
+      },
+      "changedFiles": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Relative paths of every file changed by the agent"
+      },
+      "summary": {
+        "type": "string",
+        "description": "Final response text from the coding agent"
+      },
+      "execBackend": {
+        "type": "string",
+        "enum": [
+          "sandbox",
+          "github-api"
+        ],
+        "description": "Which workspace backed the run: 'sandbox' (real exec, builds/tests ran) or 'github-api' (no execution — files edited via the GitHub Contents API)."
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "diffs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Repo-relative file path (matches an entry in changedFiles)"
+            },
+            "patch": {
+              "type": "string",
+              "description": "Unified-diff patch body for this file"
+            },
+            "additions": {
+              "type": "integer",
+              "description": "Added-line count for this file"
+            },
+            "deletions": {
+              "type": "integer",
+              "description": "Removed-line count for this file"
+            }
+          },
+          "required": [
+            "path",
+            "patch",
+            "additions",
+            "deletions"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "prNumber",
+      "prUrl",
+      "branch",
+      "changedFiles",
+      "summary",
+      "execBackend"
+    ],
+    "additionalProperties": false
+  }
+}

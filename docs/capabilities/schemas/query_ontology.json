@@ -1,0 +1,247 @@
+{
+  "name": "query_ontology",
+  "domain": "ontology",
+  "description": "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); returns the reachable customer-context subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. Prefer over ontology.neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or keyword (use graph.search for semantic lookup or graph.node.search for name/label lookup first).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "startNodeId": {
+        "type": "string",
+        "description": "publicId of the node to start the traversal from"
+      },
+      "edgeTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "direction": {
+        "type": "string",
+        "enum": [
+          "out",
+          "in",
+          "both"
+        ],
+        "description": "Direction to traverse relative to each node: 'out' follows outgoing edges, 'in' incoming, 'both' either.",
+        "default": "out"
+      },
+      "maxDepth": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5,
+        "default": 2
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "asOf": {
+        "type": "string"
+      },
+      "asKnownAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "startNodeId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "startNode": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "description": "publicId of the node"
+              },
+              "label": {
+                "type": "string",
+                "description": "Domain label (e.g. Issue, Topic)"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "depth": {
+                "type": "integer",
+                "description": "Hop distance from the start node (0 = start node)"
+              }
+            },
+            "required": [
+              "nodeId",
+              "label",
+              "displayName",
+              "description",
+              "depth"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "nodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string",
+              "description": "publicId of the node"
+            },
+            "label": {
+              "type": "string",
+              "description": "Domain label (e.g. Issue, Topic)"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "depth": {
+              "type": "integer",
+              "description": "Hop distance from the start node (0 = start node)"
+            }
+          },
+          "required": [
+            "nodeId",
+            "label",
+            "displayName",
+            "description",
+            "depth"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Reachable nodes including the start node (depth 0), deduplicated by nodeId"
+      },
+      "edges": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fromNodeId": {
+              "type": "string",
+              "description": "publicId of the source node"
+            },
+            "toNodeId": {
+              "type": "string",
+              "description": "publicId of the target node"
+            },
+            "edgeType": {
+              "type": "string",
+              "description": "Relationship type of this edge"
+            },
+            "validFrom": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "validTo": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recordedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invalidatedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "fromNodeId",
+            "toNodeId",
+            "edgeType",
+            "validFrom",
+            "validTo",
+            "recordedAt",
+            "invalidatedAt"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Edges traversed between the returned nodes"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True when the result was capped by `limit` and more nodes were reachable"
+      }
+    },
+    "required": [
+      "startNode",
+      "nodes",
+      "edges",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}

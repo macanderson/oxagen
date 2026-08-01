@@ -1,0 +1,214 @@
+{
+  "name": "list_plugins",
+  "domain": "plugin",
+  "description": "List installed plugins for this workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pluginType": {
+        "type": "string",
+        "enum": [
+          "mcp_server",
+          "integration",
+          "agent_skill",
+          "agent_capability",
+          "knowledge_source"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "listings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "createdByUserId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "updatedByUserId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deletedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deletedByUserId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "orgId": {
+              "type": "string"
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "pluginType": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "iconUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "endpointUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "transport": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authKind": {
+              "type": "string"
+            },
+            "authConfig": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "id",
+            "publicId",
+            "createdAt",
+            "updatedAt",
+            "createdByUserId",
+            "updatedByUserId",
+            "deletedAt",
+            "deletedByUserId",
+            "orgId",
+            "workspaceId",
+            "pluginType",
+            "source",
+            "name",
+            "title",
+            "description",
+            "iconUrl",
+            "endpointUrl",
+            "transport",
+            "authKind",
+            "authConfig",
+            "enabled",
+            "config"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "listings"
+    ],
+    "additionalProperties": false
+  }
+}

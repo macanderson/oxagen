@@ -1,0 +1,121 @@
+{
+  "name": "cite_reference",
+  "domain": "reference",
+  "description": "Record @-mention citations of knowledge-graph nodes within a chat execution — creates :Citation lineage and increments the node's citation_count (plus influence_count for AgentMemory nodes), identical to automatic citations.",
+  "mode": "sync",
+  "surfaces": [
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionRef": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Execution id (chat turn messageId) to attach citations to; MERGEd if absent"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "taskSummary": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "references": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "publicId of the mentioned :GraphNode"
+            }
+          },
+          "required": [
+            "nodeId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "executionRef",
+      "references"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string"
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "citationId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "nodeId",
+            "ok",
+            "citationId",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "recorded": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "executionId",
+      "results",
+      "recorded"
+    ],
+    "additionalProperties": false
+  }
+}

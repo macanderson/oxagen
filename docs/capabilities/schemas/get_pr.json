@@ -1,0 +1,418 @@
+{
+  "name": "get_pr",
+  "domain": "repo",
+  "description": "Read a GitHub pull request's summary, diff stats, comments, and CI status.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "number": {
+        "type": "integer",
+        "description": "Pull request number"
+      }
+    },
+    "required": [
+      "owner",
+      "repo",
+      "number"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "description": "Pull request number"
+      },
+      "title": {
+        "type": "string",
+        "description": "Pull request title"
+      },
+      "url": {
+        "type": "string",
+        "description": "HTML URL of the pull request"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "merged"
+        ],
+        "description": "Effective state (merged distinguished from closed)"
+      },
+      "draft": {
+        "type": "boolean",
+        "description": "Whether the PR is a draft"
+      },
+      "author": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "authorAvatarUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "createdAt": {
+        "type": "string",
+        "description": "ISO 8601 creation timestamp"
+      },
+      "updatedAt": {
+        "type": "string",
+        "description": "ISO 8601 last-updated timestamp"
+      },
+      "body": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "baseRef": {
+        "type": "string",
+        "description": "Base branch the PR targets"
+      },
+      "headRef": {
+        "type": "string",
+        "description": "Head branch containing the changes"
+      },
+      "headSha": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "additions": {
+        "type": "integer",
+        "description": "Total added lines"
+      },
+      "deletions": {
+        "type": "integer",
+        "description": "Total deleted lines"
+      },
+      "changedFiles": {
+        "type": "integer",
+        "description": "Number of changed files"
+      },
+      "commits": {
+        "type": "integer",
+        "description": "Number of commits"
+      },
+      "commentCount": {
+        "type": "integer",
+        "description": "Total issue comments (true count from GitHub)"
+      },
+      "reviewCommentCount": {
+        "type": "integer",
+        "description": "Total inline review comments (true count from GitHub)"
+      },
+      "comments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Comment id (stringified GitHub id)"
+            },
+            "author": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authorAvatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "body": {
+              "type": "string",
+              "description": "Comment body (Markdown)"
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "ISO 8601 creation timestamp"
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "review"
+              ],
+              "description": "issue = conversation comment, review = inline code comment"
+            },
+            "path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "author",
+            "authorAvatarUrl",
+            "body",
+            "createdAt",
+            "url",
+            "kind",
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Capped list actually fetched (<= 50), newest first"
+      },
+      "ci": {
+        "type": "object",
+        "properties": {
+          "overall": {
+            "type": "string",
+            "enum": [
+              "passing",
+              "failing",
+              "pending",
+              "neutral",
+              "unknown"
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "passed": {
+                "type": "integer"
+              },
+              "failed": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "skipped": {
+                "type": "integer"
+              },
+              "neutral": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "passed",
+              "failed",
+              "pending",
+              "skipped",
+              "neutral"
+            ],
+            "additionalProperties": false
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Check run or status context name"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "in_progress",
+                    "completed"
+                  ],
+                  "description": "Lifecycle status of the check"
+                },
+                "conclusion": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "success",
+                        "failure",
+                        "neutral",
+                        "cancelled",
+                        "timed_out",
+                        "action_required",
+                        "skipped",
+                        "stale"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "startedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "completedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "durationMs": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "app": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "status",
+                "conclusion",
+                "url",
+                "startedAt",
+                "completedAt",
+                "durationMs",
+                "app"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "overall",
+          "counts",
+          "runs"
+        ],
+        "additionalProperties": false,
+        "description": "CI status for the PR head (CiStatus without ref/sha)"
+      }
+    },
+    "required": [
+      "number",
+      "title",
+      "url",
+      "state",
+      "draft",
+      "author",
+      "authorAvatarUrl",
+      "createdAt",
+      "updatedAt",
+      "body",
+      "baseRef",
+      "headRef",
+      "headSha",
+      "additions",
+      "deletions",
+      "changedFiles",
+      "commits",
+      "commentCount",
+      "reviewCommentCount",
+      "comments",
+      "ci"
+    ],
+    "additionalProperties": false
+  }
+}

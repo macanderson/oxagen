@@ -1,0 +1,90 @@
+{
+  "name": "register_mcp_server",
+  "domain": "agent",
+  "description": "Register an external MCP server with the workspace; its tools become available to the agent after health check",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "transportType": {
+        "type": "string",
+        "enum": [
+          "streamable-http",
+          "stdio"
+        ]
+      },
+      "endpointUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "authStrategy": {
+        "type": "string",
+        "enum": [
+          "none",
+          "bearer",
+          "header"
+        ],
+        "default": "none"
+      },
+      "authConfig": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "name",
+      "transportType",
+      "endpointUrl"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string"
+      },
+      "healthStatus": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "degraded",
+          "unreachable"
+        ]
+      },
+      "discoveredTools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "mcpServerId",
+      "healthStatus",
+      "discoveredTools"
+    ],
+    "additionalProperties": false
+  }
+}

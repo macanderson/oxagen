@@ -1,0 +1,104 @@
+{
+  "name": "get_install_instructions",
+  "domain": "system",
+  "description": "Return step-by-step MCP/CLI installation instructions for a given AI client (claude-code, cursor, claude-desktop, codex, vscode). Uses the production Vercel app domains from CLAUDE.md. Returns a structured steps list and a render directive for the install-instructions chat component. This is the end-to-end proof of the component registry pipeline.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "system"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "client": {
+        "type": "string",
+        "enum": [
+          "claude-code",
+          "cursor",
+          "claude-desktop",
+          "codex",
+          "vscode"
+        ]
+      },
+      "workspaceSlug": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "client"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "client": {
+        "type": "string",
+        "enum": [
+          "claude-code",
+          "cursor",
+          "claude-desktop",
+          "codex",
+          "vscode"
+        ]
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "command": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "props": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "client",
+      "steps",
+      "render"
+    ],
+    "additionalProperties": false
+  }
+}

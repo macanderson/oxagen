@@ -1,0 +1,110 @@
+{
+  "name": "put_repo_file",
+  "domain": "repo",
+  "description": "Commit a file (create or update) to a GitHub repository.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "path": {
+        "type": "string",
+        "description": "File path within the repository (e.g. src/index.ts)"
+      },
+      "content": {
+        "type": "string",
+        "description": "Raw UTF-8 file content — base64 encoding is handled internally"
+      },
+      "message": {
+        "type": "string",
+        "description": "Commit message"
+      },
+      "branch": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "owner",
+      "repo",
+      "path",
+      "content",
+      "message"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "commitSha": {
+        "type": "string",
+        "description": "SHA of the commit that created or updated the file"
+      },
+      "htmlUrl": {
+        "type": "string",
+        "description": "HTML URL of the committed file"
+      },
+      "diffs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Repo-relative file path (equal to the input `path`)"
+            },
+            "patch": {
+              "type": "string",
+              "description": "Unified-diff patch body for this file"
+            },
+            "additions": {
+              "type": "integer",
+              "description": "Added-line count for this file"
+            },
+            "deletions": {
+              "type": "integer",
+              "description": "Removed-line count for this file"
+            }
+          },
+          "required": [
+            "path",
+            "patch",
+            "additions",
+            "deletions"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "commitSha",
+      "htmlUrl"
+    ],
+    "additionalProperties": false
+  }
+}

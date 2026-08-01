@@ -1,0 +1,85 @@
+{
+  "name": "diff_code",
+  "domain": "code",
+  "description": "Produce a unified diff between two file blobs (before vs after), with added/removed line counts. Pure text computation — no sandbox required.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "code"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "before": {
+        "type": "string",
+        "maxLength": 1048576,
+        "description": "Original file contents (the 'a' side of the diff)"
+      },
+      "after": {
+        "type": "string",
+        "maxLength": 1048576,
+        "description": "New file contents (the 'b' side of the diff)"
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "default": "file"
+      },
+      "contextLines": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100,
+        "default": 3
+      }
+    },
+    "required": [
+      "before",
+      "after"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "diff": {
+        "type": "string",
+        "description": "Unified diff text; empty string when before === after"
+      },
+      "changed": {
+        "type": "boolean",
+        "description": "True when the two blobs differ"
+      },
+      "additions": {
+        "type": "integer",
+        "description": "Count of added lines"
+      },
+      "deletions": {
+        "type": "integer",
+        "description": "Count of removed lines"
+      }
+    },
+    "required": [
+      "diff",
+      "changed",
+      "additions",
+      "deletions"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "cancel_subagent",
+  "domain": "agent",
+  "description": "Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status so no further work is performed.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "write"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string",
+        "description": "Public ID of the fan-out to cancel"
+      }
+    },
+    "required": [
+      "fanoutId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "description": "Terminal status the fanout was transitioned to"
+      },
+      "cancelledChildren": {
+        "type": "integer",
+        "description": "Number of child runs that were transitioned to a terminal status"
+      }
+    },
+    "required": [
+      "fanoutId",
+      "status",
+      "cancelledChildren"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "name": "suggest_agent_def",
+  "domain": "agent",
+  "description": "AI-assisted agent setup: turn a plain-language description of what an agent should do into a complete draft agent configuration (identity, instructions, graph access, tools), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities via the create-agent skill. Returns a suggestion shaped exactly like agent.definition.create input, plus a rationale and any warnings — nothing is persisted; the caller reviews, edits, and saves the draft explicitly.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 4000,
+        "description": "Plain-language description of what the agent should do — its job and what it may touch. At least 10 characters."
+      },
+      "nameHint": {
+        "type": "string"
+      },
+      "agentTypeHint": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "description"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "suggestion": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "maxLength": 18
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agentType": {
+            "type": "string",
+            "default": "custom"
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "graph": {
+                "type": "object",
+                "properties": {
+                  "ontologyId": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "extend"
+                    ],
+                    "default": "read"
+                  },
+                  "retrieval": {
+                    "type": "object",
+                    "properties": {
+                      "strategy": {
+                        "type": "string",
+                        "enum": [
+                          "semantic",
+                          "lexical",
+                          "hybrid",
+                          "explicit"
+                        ]
+                      },
+                      "scopeToTypes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "strategy"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "budget": {
+                    "type": "object",
+                    "properties": {
+                      "maxHops": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "maxNodes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "minRelevance": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "maxTraversalMs": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "maxHops",
+                      "maxNodes"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "ontologyId",
+                  "retrieval",
+                  "budget"
+                ],
+                "additionalProperties": false
+              },
+              "agentTools": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "function",
+                        "mcp_server",
+                        "skill",
+                        "agent"
+                      ]
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "config": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                },
+                "default": []
+              },
+              "instructions": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "graph",
+              "instructions"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "description",
+          "config"
+        ],
+        "additionalProperties": false,
+        "description": "A complete agent configuration, shaped exactly like agent.definition.create input. Every field is a reviewable suggestion — the caller may edit anything before saving."
+      },
+      "rationale": {
+        "type": "string",
+        "description": "Why the model chose this configuration — instructions framing, tool selection, and graph scoping."
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "recommendations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "mcp_server",
+                "skill"
+              ],
+              "description": "What kind of thing to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled."
+            },
+            "ref": {
+              "type": "string",
+              "description": "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill."
+            },
+            "name": {
+              "type": "string",
+              "description": "Human-readable display name."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why this agent needs it, phrased against the user's description (e.g. 'watches PRs for schema changes — needs GitHub access')."
+            }
+          },
+          "required": [
+            "kind",
+            "ref",
+            "name",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "default": []
+      },
+      "suggestedRole": {
+        "type": "object",
+        "properties": {
+          "roleName": {
+            "type": "string",
+            "enum": [
+              "Agent Observer",
+              "Agent Contributor",
+              "Agent Operator"
+            ],
+            "description": "The narrowest system agent role that can still run this draft."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this role and not a narrower one — cites the equipped capabilities, MCP servers, or graph-write request that a smaller ceiling would block."
+          }
+        },
+        "required": [
+          "roleName",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "suggestion",
+      "rationale"
+    ],
+    "additionalProperties": false
+  }
+}

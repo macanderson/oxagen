@@ -1,0 +1,61 @@
+{
+  "name": "enable_automation",
+  "domain": "automation",
+  "description": "Enable an automation trigger so it fires live. Requires explicit human confirmation — AI agents must never enable an automation without the user approving. Returns the new enabled state.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "automation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Trigger public ID returned by automation.create / automation.list"
+      }
+    },
+    "required": [
+      "automation_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "status": {
+        "type": "string",
+        "description": "'active' once enabled"
+      }
+    },
+    "required": [
+      "automation_id",
+      "enabled",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

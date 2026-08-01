@@ -1,0 +1,116 @@
+{
+  "name": "set_connection_mappings",
+  "domain": "connection",
+  "description": "Save entity type mappings for a data source connection. Activates the connection and starts ingestion once mappings are confirmed.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "write"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public ID or internal UUID of the connection"
+      },
+      "mappings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sourceRecordType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oxagenEntityType": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Target entity type string (snake_case)"
+            },
+            "propertyMappings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            }
+          },
+          "required": [
+            "sourceRecordType",
+            "oxagenEntityType"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Confirmed entity type mappings to save"
+      },
+      "activateConnection": {
+        "type": "boolean",
+        "default": true
+      },
+      "installationId": {
+        "type": "string"
+      },
+      "selectedRepos": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "syncDepthDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "owner": {
+        "type": "string"
+      },
+      "repo": {
+        "type": "string"
+      },
+      "defaultBranch": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "connectionId",
+      "mappings"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mappingsCreated": {
+        "type": "number"
+      },
+      "mappingsUpdated": {
+        "type": "number"
+      },
+      "connectionStatus": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "mappingsCreated",
+      "mappingsUpdated",
+      "connectionStatus"
+    ],
+    "additionalProperties": false
+  }
+}

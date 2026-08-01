@@ -1,0 +1,293 @@
+{
+  "name": "save_memory",
+  "domain": "agent",
+  "description": "Capture a free-text memory: infer its kind + weight (unless pinned), embed it, and write it to the workspace AgentMemory graph. Backs the CLI /remember command.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The lesson to remember, in the user's own words"
+      },
+      "nodeRef": {
+        "type": "string"
+      },
+      "memoryClass": {
+        "type": "string",
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
+      },
+      "memoryKind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+      },
+      "enforcementScore": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "user",
+          "feature",
+          "fix",
+          "exception-watcher",
+          "bug-report"
+        ],
+        "default": "user"
+      },
+      "relatedNodeIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "text"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "publicId": {
+            "type": "string"
+          },
+          "nodeRef": {
+            "type": "string"
+          },
+          "memoryClass": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION",
+              "RULE",
+              "FACT"
+            ]
+          },
+          "memoryKind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+          },
+          "lesson": {
+            "type": "string",
+            "description": "The memory body, human readable"
+          },
+          "source": {
+            "type": "string"
+          },
+          "confidenceScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "enforcementScore": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED",
+              "RETRACTED",
+              "ARCHIVED"
+            ]
+          },
+          "subjectHint": {
+            "type": "string"
+          },
+          "halfLifeDays": {
+            "type": "number"
+          },
+          "decayFloor": {
+            "type": "number"
+          },
+          "lastEvidenceAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "influenceCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "violationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdByKind": {
+            "type": "string",
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
+          },
+          "createdById": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmedByKind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "AGENT",
+                  "USER",
+                  "SYSTEM"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmedById": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "lastReinforcedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "publicId",
+          "nodeRef",
+          "memoryClass",
+          "memoryKind",
+          "lesson",
+          "source",
+          "confidenceScore",
+          "enforcementScore",
+          "status",
+          "subjectHint",
+          "halfLifeDays",
+          "decayFloor",
+          "lastEvidenceAt",
+          "citationCount",
+          "influenceCount",
+          "violationCount",
+          "createdByKind",
+          "createdById",
+          "confirmedByKind",
+          "confirmedById",
+          "createdAt",
+          "lastReinforcedAt"
+        ],
+        "additionalProperties": false
+      },
+      "inferred": {
+        "type": "object",
+        "properties": {
+          "memoryClass": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION",
+              "RULE",
+              "FACT"
+            ]
+          },
+          "memoryKind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+          },
+          "classified": {
+            "type": "boolean",
+            "description": "true when class/kind were inferred by the model rather than supplied or defaulted"
+          }
+        },
+        "required": [
+          "memoryClass",
+          "memoryKind",
+          "classified"
+        ],
+        "additionalProperties": false,
+        "description": "The class + kind actually used, and whether the model inferred them"
+      }
+    },
+    "required": [
+      "memory",
+      "inferred"
+    ],
+    "additionalProperties": false
+  }
+}

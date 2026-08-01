@@ -1,0 +1,194 @@
+{
+  "name": "get_skill_version",
+  "domain": "skill",
+  "description": "Fetch a specific immutable workspace skill version with canonical TOML and its parsed artifact projection",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public skill ID (skl_…) or its slug"
+      },
+      "version_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "skill_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Public version ID (slv_…)"
+      },
+      "skill_id": {
+        "type": "string"
+      },
+      "skill_slug": {
+        "type": "string",
+        "description": "Workspace-unique skill slug"
+      },
+      "skill_name": {
+        "type": "string"
+      },
+      "skill_description": {
+        "type": "string",
+        "description": "Skill description (empty string when unset)"
+      },
+      "skill_source": {
+        "type": "string",
+        "description": "\"builtin\" | \"tenant\" (+ future provenance)"
+      },
+      "installedFromSlug": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "versionNumber": {
+        "type": "integer"
+      },
+      "isLatest": {
+        "type": "boolean"
+      },
+      "isActive": {
+        "type": "boolean",
+        "description": "True when this version matches the skill's active_version_id"
+      },
+      "content": {
+        "type": "string",
+        "description": "Canonical skill.toml content"
+      },
+      "artifact": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "kind": {
+            "const": "skill"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "instructions": {
+            "type": "string",
+            "minLength": 1
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "default": []
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "kind",
+          "name",
+          "description",
+          "instructions"
+        ],
+        "additionalProperties": false
+      },
+      "referencesPayload": {
+        "type": "array",
+        "items": {},
+        "description": "Graph node + file references projected from the artifact"
+      },
+      "changeSummary": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "checksum": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "createdBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "id",
+      "skill_id",
+      "skill_slug",
+      "skill_name",
+      "skill_description",
+      "skill_source",
+      "installedFromSlug",
+      "versionNumber",
+      "isLatest",
+      "isActive",
+      "content",
+      "artifact",
+      "referencesPayload",
+      "changeSummary",
+      "checksum",
+      "createdAt",
+      "createdBy"
+    ],
+    "additionalProperties": false
+  }
+}

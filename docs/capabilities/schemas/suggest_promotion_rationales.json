@@ -1,0 +1,73 @@
+{
+  "name": "suggest_promotion_rationales",
+  "domain": "agent",
+  "description": "Suggest short, context-grounded rationales for promoting or demoting a memory, drafted by a low-cost model from the memory's lesson and citation signals.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The AgentMemory node id (not publicId) being promoted or demoted"
+      },
+      "toClass": {
+        "type": "string",
+        "enum": [
+          "RULE",
+          "FACT",
+          "OBSERVATION"
+        ],
+        "description": "The class change being considered (promotion or demotion target)"
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 6,
+        "default": 4
+      }
+    },
+    "required": [
+      "memoryId",
+      "toClass"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rationales": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "description": "Candidate rationales, most fitting first"
+      }
+    },
+    "required": [
+      "rationales"
+    ],
+    "additionalProperties": false
+  }
+}

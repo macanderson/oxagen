@@ -1,0 +1,69 @@
+{
+  "name": "resolve_approval",
+  "domain": "agent",
+  "description": "Approve or deny a pending tool-call approval request; resolution resumes the paused agent stream",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      },
+      "decision": {
+        "type": "string",
+        "enum": [
+          "approved",
+          "denied"
+        ]
+      },
+      "note": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "approvalId",
+      "decision"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "approvalId": {
+        "type": "string"
+      },
+      "resolution": {
+        "type": "string",
+        "enum": [
+          "approved",
+          "denied",
+          "expired"
+        ]
+      }
+    },
+    "required": [
+      "approvalId",
+      "resolution"
+    ],
+    "additionalProperties": false
+  }
+}

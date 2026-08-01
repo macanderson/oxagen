@@ -1,0 +1,69 @@
+{
+  "name": "navigate_page",
+  "domain": "browser",
+  "description": "Navigate the durable sandbox's browser to a URL and wait for load. Use to prove a feature renders (e.g. http://localhost:3000/...).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) from agent.sandbox.start."
+      },
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Absolute URL to navigate to."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      }
+    },
+    "required": [
+      "sessionId",
+      "url"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "The final URL after any redirects."
+      },
+      "title": {
+        "type": "string",
+        "description": "The document title after load."
+      }
+    },
+    "required": [
+      "url",
+      "title"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "fill_page",
+  "domain": "browser",
+  "description": "Fill a form field (by CSS selector) on the durable sandbox browser's current page. Playwright auto-waits for the element.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1,
+        "description": "CSS selector for the input/textarea/select."
+      },
+      "value": {
+        "type": "string",
+        "description": "Value to set (empty string clears the field)."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 60000,
+        "default": 30000
+      }
+    },
+    "required": [
+      "sessionId",
+      "selector",
+      "value"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ok"
+    ],
+    "additionalProperties": false
+  }
+}

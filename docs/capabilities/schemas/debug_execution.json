@@ -1,0 +1,529 @@
+{
+  "name": "debug_execution",
+  "domain": "agent",
+  "description": "Diagnose why an agent execution failed as a structured frame: the failing step, error class + message, parsed top stack frames, related spans, and suspect files ranked deterministically. Prefer this over reading raw logs or the full trace when an execution has failed and you need the fix site. Not for successful runs (use agent.trace.get) or for listing runs (use agent.execution.list). Set summarize:true to also get an LLM root-cause diagnosis.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "description": "Public ID (aex_…) or UUID of the failed execution to diagnose"
+      },
+      "depth": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10
+      },
+      "summarize": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "executionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "description": "Resolved public id (aex_…) of the inspected execution"
+      },
+      "status": {
+        "type": "string",
+        "description": "Root execution status"
+      },
+      "failingStep": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "stepId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "stepNumber": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "stepType": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolName": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolCallId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "failureReason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "latencyMs": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "stepId",
+              "stepNumber",
+              "stepType",
+              "toolName",
+              "toolCallId",
+              "status",
+              "failureReason",
+              "latencyMs"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "errorClass": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "message": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "topFrames": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "functionName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "file": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "line": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "column": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "internal": {
+              "type": "boolean",
+              "description": "node-internal frame (node:…) — de-prioritised as a suspect"
+            },
+            "raw": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "functionName",
+            "file",
+            "line",
+            "column",
+            "internal",
+            "raw"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Parsed top stack frames (deterministic, capped)"
+      },
+      "relatedSpans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "execution",
+                "step",
+                "toolCall"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "description": "Public id (aex_/aes_/atc_…), never a bare UUID"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human label: step type, tool name, or origin"
+            },
+            "status": {
+              "type": "string"
+            },
+            "failureReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "latencyMs": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "label",
+            "status",
+            "failureReason",
+            "latencyMs"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Flattened span subtree, failed-first, bounded"
+      },
+      "suspectFiles": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number",
+              "description": "Deterministic weighted score; higher = more likely the fix site"
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Why it scored, e.g. 'stack-frame ×3', 'tool-arg'"
+            }
+          },
+          "required": [
+            "path",
+            "score",
+            "reasons"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Files ranked deterministically as likely fix sites"
+      },
+      "errorEvents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "type": "string",
+              "enum": [
+                "fatal",
+                "error",
+                "warn"
+              ]
+            },
+            "source": {
+              "type": "string"
+            },
+            "errorClass": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "fingerprint": {
+              "type": "string"
+            },
+            "stepId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "severity",
+            "source",
+            "errorClass",
+            "message",
+            "fingerprint",
+            "stepId",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Bounded sample of errors captured for this execution"
+      },
+      "logsSample": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": [
+                "debug",
+                "info",
+                "warn",
+                "error",
+                "fatal"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "stepId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "level",
+            "message",
+            "stepId",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Bounded tail of warn/error/fatal execution logs"
+      },
+      "diagnosis": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "problem": {
+                "type": "string"
+              },
+              "expectedBehavior": {
+                "type": "string"
+              },
+              "rootCauseHypotheses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "statement": {
+                      "type": "string"
+                    },
+                    "evidence": {
+                      "type": "string"
+                    },
+                    "probeResult": {
+                      "type": "string",
+                      "enum": [
+                        "survived",
+                        "falsified"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "statement",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "blastRadius": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "diffBudget": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "problem",
+              "expectedBehavior",
+              "rootCauseHypotheses",
+              "blastRadius",
+              "diffBudget"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "truncated": {
+        "type": "object",
+        "properties": {
+          "spans": {
+            "type": "boolean"
+          },
+          "frames": {
+            "type": "boolean"
+          },
+          "suspectFiles": {
+            "type": "boolean"
+          },
+          "errorEvents": {
+            "type": "boolean"
+          },
+          "logs": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "spans",
+          "frames",
+          "suspectFiles",
+          "errorEvents",
+          "logs"
+        ],
+        "additionalProperties": false,
+        "description": "Which lists the deterministic compressor clipped to their caps"
+      }
+    },
+    "required": [
+      "executionId",
+      "status",
+      "failingStep",
+      "errorClass",
+      "message",
+      "topFrames",
+      "relatedSpans",
+      "suspectFiles",
+      "errorEvents",
+      "logsSample",
+      "diagnosis",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}

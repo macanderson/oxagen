@@ -1,0 +1,81 @@
+{
+  "name": "run_schema_chat",
+  "domain": "schema",
+  "description": "AI iterative builder turn: takes conversation + current draft; returns assistant message + proposed mutation tool calls.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "message": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 10000
+      },
+      "conversationId": {
+        "type": "string"
+      },
+      "draftVersionId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "message"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assistantMessage": {
+        "type": "string"
+      },
+      "proposedMutations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "capability": {
+              "type": "string",
+              "description": "Contract name, e.g. schema.label.upsert"
+            },
+            "input": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "capability",
+            "input"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "conversationId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assistantMessage",
+      "conversationId"
+    ],
+    "additionalProperties": false
+  }
+}

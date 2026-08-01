@@ -1,0 +1,60 @@
+{
+  "name": "remove_plugin_registry",
+  "domain": "plugin",
+  "description": "Remove a workspace MCP registry source (including the default — removes the default and promotes the most-recently-created remaining registry, if any).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "destructive",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "registryId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "registryId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "promotedId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "ok",
+      "promotedId"
+    ],
+    "additionalProperties": false
+  }
+}

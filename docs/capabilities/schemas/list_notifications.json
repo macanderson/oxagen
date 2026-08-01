@@ -1,0 +1,119 @@
+{
+  "name": "list_notifications",
+  "domain": "notification",
+  "description": "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "unreadOnly": {
+        "type": "boolean",
+        "default": false
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "notifications": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "system",
+                "approval",
+                "run",
+                "member",
+                "security"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deepLink": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unread": {
+              "type": "boolean"
+            },
+            "archived": {
+              "type": "boolean"
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "publicId",
+            "kind",
+            "title",
+            "body",
+            "deepLink",
+            "unread",
+            "archived",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "unreadCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "notifications",
+      "unreadCount"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "name": "get_routing_policy",
+  "domain": "router",
+  "description": "Read the effective market-router policy for the current scope (mode, verified-success threshold, min samples, window, tier-escalation) plus its provenance (workspace / org / default).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
+      },
+      "successThreshold": {
+        "type": "number"
+      },
+      "minSamples": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "escalateOnRejection": {
+        "type": "boolean"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "org",
+          "default"
+        ]
+      }
+    },
+    "required": [
+      "mode",
+      "successThreshold",
+      "minSamples",
+      "windowDays",
+      "escalateOnRejection",
+      "source"
+    ],
+    "additionalProperties": false
+  }
+}

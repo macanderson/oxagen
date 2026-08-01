@@ -1,0 +1,132 @@
+{
+  "name": "get_skill_metrics",
+  "domain": "skill",
+  "description": "Read aggregated skill usage and cost metrics for the workspace. Returns load counts, last-used timestamps, approximate token cost (best-effort via join to token_usage on execution_step_id — multi-skill attribution is partial), and per-version load breakdown. Omit skillId for workspace-wide aggregation.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skillId": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skills": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "skillId": {
+              "type": "string",
+              "description": "Public ID of the skill"
+            },
+            "slug": {
+              "type": "string",
+              "description": "Slug identifier for the skill"
+            },
+            "activeVersion": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "usageCount": {
+              "type": "number",
+              "description": "Total recorded invocations from Postgres (fast-path denormalized column)"
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "approxTokenCost": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "perVersionLoads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "number"
+                  },
+                  "loads": {
+                    "type": "number"
+                  },
+                  "lastUsed": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "loads",
+                  "lastUsed"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "skillId",
+            "slug",
+            "activeVersion",
+            "usageCount",
+            "lastUsedAt",
+            "approxTokenCost",
+            "perVersionLoads"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "skills"
+    ],
+    "additionalProperties": false
+  }
+}

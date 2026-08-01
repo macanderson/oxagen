@@ -1,0 +1,207 @@
+{
+  "name": "get_a2a_card",
+  "domain": "a2a",
+  "description": "Read the current workspace's A2A (Agent2Agent) protocol Agent Card — the discovery document advertising the workspace's exposed agents as A2A skills, its JSON-RPC transport endpoint, and its authentication scheme",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "protocolVersion": {
+        "const": "1.0"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "preferredTransport": {
+        "const": "JSONRPC"
+      },
+      "version": {
+        "type": "string"
+      },
+      "provider": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "organization",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": {
+        "type": "object",
+        "properties": {
+          "streaming": {
+            "type": "boolean"
+          },
+          "pushNotifications": {
+            "type": "boolean"
+          },
+          "stateTransitionHistory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "streaming",
+          "pushNotifications",
+          "stateTransitionHistory"
+        ],
+        "additionalProperties": false
+      },
+      "defaultInputModes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "defaultOutputModes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "skills": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "examples": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inputModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "outputModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "description",
+            "tags"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "securitySchemes": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "http"
+            },
+            "scheme": {
+              "const": "bearer"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "scheme"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "security": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "supportsAuthenticatedExtendedCard": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "protocolVersion",
+      "name",
+      "description",
+      "url",
+      "preferredTransport",
+      "version",
+      "capabilities",
+      "defaultInputModes",
+      "defaultOutputModes",
+      "skills",
+      "securitySchemes",
+      "security",
+      "supportsAuthenticatedExtendedCard"
+    ],
+    "additionalProperties": false
+  }
+}

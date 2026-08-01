@@ -1,0 +1,62 @@
+{
+  "name": "accept_member_invite",
+  "domain": "org",
+  "description": "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "invitationPublicId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "invitationPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgUserId": {
+        "type": "string"
+      },
+      "orgId": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "joinedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "orgUserId",
+      "orgId",
+      "role",
+      "joinedAt"
+    ],
+    "additionalProperties": false
+  }
+}

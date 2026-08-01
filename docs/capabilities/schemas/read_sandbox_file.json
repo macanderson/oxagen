@@ -1,0 +1,84 @@
+{
+  "name": "read_sandbox_file",
+  "domain": "agent",
+  "description": "Read one file's contents from a durable sandbox session's workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) returned by agent.sandbox.start."
+      },
+      "path": {
+        "type": "string",
+        "maxLength": 1024
+      },
+      "maxBytes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1048576,
+        "default": 262144
+      }
+    },
+    "required": [
+      "sessionId",
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      },
+      "encoding": {
+        "type": "string",
+        "enum": [
+          "utf8",
+          "base64"
+        ]
+      },
+      "sizeBytes": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "truncated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "path",
+      "content",
+      "encoding",
+      "sizeBytes",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}

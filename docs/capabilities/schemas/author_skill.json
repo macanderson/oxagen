@@ -1,0 +1,87 @@
+{
+  "name": "author_skill",
+  "domain": "skill",
+  "description": "Author a new skill from a natural-language prompt, serialize canonical TOML, validate it, and install it into the workspace",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 4000,
+        "description": "Natural-language description of what the skill should teach the agent. At least 10 characters."
+      },
+      "nameHint": {
+        "type": "string"
+      },
+      "category": {
+        "type": "string"
+      },
+      "activate": {
+        "type": "boolean",
+        "default": true
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "prompt"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "description": "Public ID of the installed skill (skl_…)"
+      },
+      "slug": {
+        "type": "string",
+        "description": "Kebab-case slug of the installed skill"
+      },
+      "content": {
+        "type": "string",
+        "description": "The generated canonical skill.toml content"
+      },
+      "activeVersion": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Active version number after installation"
+      },
+      "installed": {
+        "type": "boolean",
+        "description": "true if a new skill was created, false if an identically-slugged skill already existed (idempotent)"
+      }
+    },
+    "required": [
+      "publicId",
+      "slug",
+      "content",
+      "activeVersion",
+      "installed"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,229 @@
+{
+  "name": "query_audit_log",
+  "domain": "audit",
+  "description": "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string",
+        "enum": [
+          "all",
+          "security",
+          "playbook"
+        ],
+        "default": "all"
+      },
+      "eventType": {
+        "type": "string"
+      },
+      "actorUserId": {
+        "type": "string"
+      },
+      "capability": {
+        "type": "string"
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny",
+          "error",
+          "success"
+        ]
+      },
+      "playbookRunId": {
+        "type": "string"
+      },
+      "workspaceId": {
+        "type": "string"
+      },
+      "from": {
+        "type": "string"
+      },
+      "to": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "security",
+                "playbook"
+              ],
+              "description": "Which audit spine the event came from"
+            },
+            "eventType": {
+              "type": "string",
+              "description": "Event classification (e.g. capability.invoked, run_completed)"
+            },
+            "occurredAt": {
+              "type": "string",
+              "description": "ISO-8601 timestamp of when the event occurred"
+            },
+            "actorUserId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "capability": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requestId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "playbookRunId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sequence": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eventData": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "source",
+            "eventType",
+            "occurredAt",
+            "actorUserId",
+            "workspaceId",
+            "capability",
+            "outcome",
+            "requestId",
+            "playbookRunId",
+            "sequence",
+            "eventData"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Matching events, newest first"
+      },
+      "total": {
+        "type": "integer",
+        "description": "Number of events in this page"
+      },
+      "hasMore": {
+        "type": "boolean",
+        "description": "Whether more events exist beyond this page"
+      },
+      "limit": {
+        "type": "integer"
+      },
+      "offset": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "events",
+      "total",
+      "hasMore",
+      "limit",
+      "offset"
+    ],
+    "additionalProperties": false
+  }
+}

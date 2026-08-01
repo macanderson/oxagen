@@ -1,0 +1,69 @@
+{
+  "name": "get_prompt_settings",
+  "domain": "workspace",
+  "description": "Read the workspace prompt configuration: appended instructions, content-prompt overrides, and the auto-improve-prompts toggle.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "additionalInstructions": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "overrides": {
+        "type": "object",
+        "properties": {
+          "conversation.title": {
+            "type": "string"
+          },
+          "svg.generate": {
+            "type": "string"
+          },
+          "image.analyze": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "autoImprovePrompts": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "additionalInstructions",
+      "overrides",
+      "autoImprovePrompts"
+    ],
+    "additionalProperties": false
+  }
+}

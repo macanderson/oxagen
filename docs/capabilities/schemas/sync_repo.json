@@ -1,0 +1,83 @@
+{
+  "name": "sync_repo",
+  "domain": "repo",
+  "description": "Trigger incremental or full re-index of a repository connection.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "ingestion"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repoId": {
+        "type": "string",
+        "description": "Repository connection ID"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "incremental",
+          "full"
+        ],
+        "default": "incremental"
+      },
+      "recordTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "repoId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "jobId": {
+        "type": "string",
+        "description": "Background sync job ID"
+      },
+      "status": {
+        "const": "queued"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "incremental",
+          "full"
+        ]
+      },
+      "estimatedRecords": {
+        "type": "number",
+        "description": "Estimated number of records to process"
+      }
+    },
+    "required": [
+      "jobId",
+      "status",
+      "mode",
+      "estimatedRecords"
+    ],
+    "additionalProperties": false
+  }
+}

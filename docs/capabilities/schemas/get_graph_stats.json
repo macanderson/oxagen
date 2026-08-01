@@ -1,0 +1,156 @@
+{
+  "name": "get_graph_stats",
+  "domain": "graph",
+  "description": "Customer-context workspace graph statistics: node count, edge count, inferred edge count, and breakdown by type.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "includeByType": {
+        "type": "boolean",
+        "default": false
+      },
+      "includeGrowth": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeCount": {
+        "type": "number",
+        "description": "Total number of nodes in the graph"
+      },
+      "edgeCount": {
+        "type": "number",
+        "description": "Total number of edges (all types)"
+      },
+      "inferredEdgeCount": {
+        "type": "number",
+        "description": "Number of edges created by inference"
+      },
+      "sourceCount": {
+        "type": "number",
+        "description": "Number of unique source connectors"
+      },
+      "nodesByLabel": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "edgesByType": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "lastModifiedAt": {
+        "type": "string",
+        "description": "ISO timestamp of last graph modification"
+      },
+      "growth": {
+        "type": "object",
+        "properties": {
+          "nodesToday": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created since the start of today (UTC)"
+          },
+          "nodesYesterday": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created during the prior UTC day"
+          },
+          "nodesThisWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created in the last 7 days (rolling, incl today)"
+          },
+          "nodesLastWeek": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Nodes created in the 7 days before this week"
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "day": {
+                  "type": "string",
+                  "description": "UTC calendar day, YYYY-MM-DD"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "day",
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Last 14 UTC days of node-creation counts, ascending, zero-filled"
+          }
+        },
+        "required": [
+          "nodesToday",
+          "nodesYesterday",
+          "nodesThisWeek",
+          "nodesLastWeek",
+          "daily"
+        ],
+        "additionalProperties": false
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "props": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "nodeCount",
+      "edgeCount",
+      "inferredEdgeCount",
+      "sourceCount",
+      "lastModifiedAt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "name": "get_workspace_user_preferences",
+  "domain": "user",
+  "description": "Read the calling user's per-workspace coding-agent defaults: preferred default repository connection and its owner/repo slug, default environment, default agent, and whether the one-time repo-default prompt has been shown. Readable by all members so the app can pre-select the user's default repo/environment/agent and decide whether to offer the first-time prompt.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "user"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "defaultRepoConnectionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultRepoSlug": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultEnvironmentId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultAgentId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "repoDefaultPrompted": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "defaultRepoConnectionId",
+      "defaultRepoSlug",
+      "defaultEnvironmentId",
+      "defaultAgentId",
+      "repoDefaultPrompted"
+    ],
+    "additionalProperties": false
+  }
+}

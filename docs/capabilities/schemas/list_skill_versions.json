@@ -1,0 +1,132 @@
+{
+  "name": "list_skill_versions",
+  "domain": "skill",
+  "description": "List the time-ordered version history for a workspace skill, including version number, active status, latest flag, author, and timestamp",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public skill ID (skl_…) or its slug"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100,
+        "default": 20
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "required": [
+      "skill_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string"
+      },
+      "versions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Public version ID (slv_…)"
+            },
+            "versionNumber": {
+              "type": "integer"
+            },
+            "isLatest": {
+              "type": "boolean"
+            },
+            "isActive": {
+              "type": "boolean",
+              "description": "True when this version matches the skill's active_version_id"
+            },
+            "changeSummary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "createdBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdByEmail": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "versionNumber",
+            "isLatest",
+            "isActive",
+            "changeSummary",
+            "createdAt",
+            "createdBy",
+            "createdByEmail"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "description": "Total number of versions for this skill"
+      }
+    },
+    "required": [
+      "skill_id",
+      "versions",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

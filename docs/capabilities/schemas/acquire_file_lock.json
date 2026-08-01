@@ -1,0 +1,112 @@
+{
+  "name": "acquire_file_lock",
+  "domain": "agent",
+  "description": "Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently. Fails with granted:false when a DIFFERENT agent already holds a live lock.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "write"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "File path (or naturalKey) to lock."
+      },
+      "owner": {
+        "type": "string"
+      },
+      "repo": {
+        "type": "string"
+      },
+      "action": {
+        "type": "string",
+        "enum": [
+          "read",
+          "write"
+        ]
+      },
+      "ttlMs": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 3600000
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "executionId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "granted": {
+        "type": "boolean"
+      },
+      "lockId": {
+        "type": "string",
+        "description": "Empty string when not granted."
+      },
+      "heldBy": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "blockedUntil": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "fencingToken": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "granted",
+      "lockId",
+      "heldBy",
+      "blockedUntil",
+      "fencingToken"
+    ],
+    "additionalProperties": false
+  }
+}

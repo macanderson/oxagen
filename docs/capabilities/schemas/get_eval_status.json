@@ -1,0 +1,99 @@
+{
+  "name": "get_eval_status",
+  "domain": "eval",
+  "description": "Poll an eval run's lifecycle: status, progress counts, and mean score once available. Cheap header read — use eval.run.get for per-item detail.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runPublicId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "runPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "queued",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "itemCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "completedCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "failedCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "avgScore": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "failureReason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "runId",
+      "status",
+      "itemCount",
+      "completedCount",
+      "failedCount",
+      "avgScore",
+      "failureReason"
+    ],
+    "additionalProperties": false
+  }
+}

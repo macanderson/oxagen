@@ -1,0 +1,67 @@
+{
+  "name": "delete_schema_property",
+  "domain": "schema",
+  "description": "Remove a property from the draft.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ownerKind": {
+        "type": "string",
+        "enum": [
+          "node",
+          "relationship"
+        ]
+      },
+      "ownerName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "key": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "ownerKind",
+      "ownerName",
+      "key"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean"
+      },
+      "propertyKey": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "deleted",
+      "propertyKey"
+    ],
+    "additionalProperties": false
+  }
+}

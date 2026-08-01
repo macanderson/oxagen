@@ -1,0 +1,161 @@
+{
+  "name": "cite_memory",
+  "domain": "agent",
+  "description": "Record citations of memories within an agent execution — influence and rule-compliance — and update citation/influence/violation counters.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionRef": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Execution id to attach citations to; created (MERGE) if absent"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "runId": {
+        "type": "string"
+      },
+      "taskSummary": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "citations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memoryId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "influence": {
+              "type": "string",
+              "enum": [
+                "DECISIVE",
+                "CONTRIBUTING",
+                "CONSIDERED",
+                "IGNORED"
+              ]
+            },
+            "deviated": {
+              "type": "boolean",
+              "default": false
+            },
+            "expectedValue": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "observedValue": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "agentRationale": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "memoryId",
+            "influence"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "executionRef",
+      "citations"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string"
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memoryId": {
+              "type": "string"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "citationId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "compliance": {
+              "type": "string",
+              "enum": [
+                "COMPLIED",
+                "DISCRETION",
+                "VIOLATION",
+                "NA"
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "memoryId",
+            "ok",
+            "citationId",
+            "compliance",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "recorded": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "executionId",
+      "results",
+      "recorded"
+    ],
+    "additionalProperties": false
+  }
+}

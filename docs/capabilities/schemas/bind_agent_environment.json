@@ -1,0 +1,120 @@
+{
+  "name": "bind_agent_environment",
+  "domain": "agent",
+  "description": "Bind an agent to an environment (and optionally a specific sandbox template within it). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "configuration"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "environmentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sandboxTemplateId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "isPrimary": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "agentId",
+      "environmentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "binding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentName": {
+            "type": "string"
+          },
+          "environmentSlug": {
+            "type": "string"
+          },
+          "sandboxTemplateId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sandboxTemplateName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isPrimary": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "agentId",
+          "environmentId",
+          "environmentName",
+          "environmentSlug",
+          "sandboxTemplateId",
+          "sandboxTemplateName",
+          "isPrimary"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "binding"
+    ],
+    "additionalProperties": false
+  }
+}

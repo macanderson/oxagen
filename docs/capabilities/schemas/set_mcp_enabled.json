@@ -1,0 +1,57 @@
+{
+  "name": "set_mcp_enabled",
+  "domain": "agent",
+  "description": "Enable or disable a registered external MCP server. Disabling stops its tools from registering but keeps tool-descriptor snapshots for replay; re-enabling re-captures snapshots. The change is audited.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "mcpServerId",
+      "enabled"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "snapshotCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "mcpServerId",
+      "enabled",
+      "snapshotCount"
+    ],
+    "additionalProperties": false
+  }
+}

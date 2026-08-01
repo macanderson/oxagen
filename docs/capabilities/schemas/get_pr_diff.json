@@ -1,0 +1,144 @@
+{
+  "name": "get_pr_diff",
+  "domain": "repo",
+  "description": "Read the per-file unified-diff patches for a GitHub pull request.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "number": {
+        "type": "integer",
+        "description": "Pull request number"
+      }
+    },
+    "required": [
+      "owner",
+      "repo",
+      "number"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "summary": {
+        "type": "string",
+        "description": "Human summary, e.g. \"12 files, +340 -58\""
+      },
+      "additions": {
+        "type": "integer",
+        "description": "Total added lines"
+      },
+      "deletions": {
+        "type": "integer",
+        "description": "Total deleted lines"
+      },
+      "changedFiles": {
+        "type": "integer",
+        "description": "Number of changed files"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Current file path"
+            },
+            "previousPath": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "added",
+                "modified",
+                "removed",
+                "renamed",
+                "copied",
+                "changed"
+              ],
+              "description": "Change status for the file"
+            },
+            "additions": {
+              "type": "integer",
+              "description": "Added lines in this file"
+            },
+            "deletions": {
+              "type": "integer",
+              "description": "Deleted lines in this file"
+            },
+            "patch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "binary": {
+              "type": "boolean",
+              "description": "Whether the file is binary"
+            }
+          },
+          "required": [
+            "path",
+            "previousPath",
+            "status",
+            "additions",
+            "deletions",
+            "patch",
+            "binary"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Per-file diff entries"
+      }
+    },
+    "required": [
+      "summary",
+      "additions",
+      "deletions",
+      "changedFiles",
+      "files"
+    ],
+    "additionalProperties": false
+  }
+}

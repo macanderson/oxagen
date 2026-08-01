@@ -1,0 +1,125 @@
+{
+  "name": "get_user_preferences",
+  "domain": "user",
+  "description": "Read the calling user's UI and model preferences",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "user"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fontSize": {
+        "type": "string",
+        "enum": [
+          "small",
+          "medium",
+          "large"
+        ]
+      },
+      "density": {
+        "type": "string",
+        "enum": [
+          "compact",
+          "comfortable",
+          "spacious"
+        ]
+      },
+      "enterToSubmit": {
+        "type": "boolean"
+      },
+      "pendingPromptBehavior": {
+        "type": "string",
+        "enum": [
+          "queue",
+          "interrupt"
+        ]
+      },
+      "defaultTextTier": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultTextModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultImageModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultVideoModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timezone": {
+        "type": "string"
+      },
+      "language": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "fontSize",
+      "density",
+      "enterToSubmit",
+      "pendingPromptBehavior",
+      "defaultTextTier",
+      "defaultTextModel",
+      "defaultImageModel",
+      "defaultVideoModel",
+      "timezone",
+      "language"
+    ],
+    "additionalProperties": false
+  }
+}

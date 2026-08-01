@@ -1,0 +1,129 @@
+{
+  "name": "get_node",
+  "domain": "graph",
+  "description": "Retrieve a customer-context graph node by its publicId.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [
+      "graph.node"
+    ],
+    "consumes": [
+      "graph.nodeId"
+    ],
+    "chainHints": [
+      "list_nodes"
+    ]
+  },
+  "render": {
+    "componentId": "graph-node-card",
+    "recordLinks": [
+      {
+        "field": "node.nodeId",
+        "recordType": "graph.node",
+        "labelField": "node.displayName"
+      }
+    ],
+    "titleField": "node.displayName"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeId": {
+        "type": "string",
+        "description": "publicId of the KnowledgeNode to retrieve"
+      }
+    },
+    "required": [
+      "nodeId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "node": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "nodeId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "properties": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "nodeId",
+              "label",
+              "displayName",
+              "description",
+              "properties",
+              "createdAt",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "node"
+    ],
+    "additionalProperties": false
+  }
+}

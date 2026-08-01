@@ -1,0 +1,160 @@
+{
+  "name": "parse_memory_import",
+  "domain": "agent",
+  "description": "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "documents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Original filename, used as provenance on each draft"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000,
+              "description": "Raw markdown content of the document"
+            }
+          },
+          "required": [
+            "filename",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "description": "The uploaded documents to extract memories from (max 25 per call)"
+      },
+      "defaultNodeRef": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "required": [
+      "documents"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "drafts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lesson": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "description": "The atomic lesson/rule to remember, in one or two sentences"
+            },
+            "memoryClass": {
+              "type": "string",
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ],
+              "default": "OBSERVATION"
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The content domain the parser classified this as"
+            },
+            "enforcementScore": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "default": "user"
+            },
+            "nodeRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "default": "user-memory"
+            },
+            "sourceDocument": {
+              "type": "string",
+              "maxLength": 256,
+              "default": ""
+            },
+            "classified": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "lesson",
+            "memoryKind"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Extracted, classified, editable draft memories across all documents"
+      },
+      "documentCount": {
+        "type": "number",
+        "description": "Number of documents that yielded at least one draft"
+      },
+      "skipped": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "filename",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Documents that produced no drafts (empty, unparseable, or model error)"
+      }
+    },
+    "required": [
+      "drafts",
+      "documentCount",
+      "skipped"
+    ],
+    "additionalProperties": false
+  }
+}

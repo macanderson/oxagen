@@ -1,0 +1,102 @@
+{
+  "name": "start_research_swarm",
+  "domain": "research",
+  "description": "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via research.swarm.status.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "research"
+  },
+  "chain": {
+    "produces": [
+      "swarm.id"
+    ],
+    "consumes": [
+      "topic"
+    ],
+    "chainHints": [
+      "get_research_status"
+    ]
+  },
+  "render": {
+    "componentId": "research-swarm-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "topic": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500,
+        "description": "The research topic to investigate"
+      },
+      "depth": {
+        "type": "string",
+        "enum": [
+          "shallow",
+          "medium",
+          "deep"
+        ],
+        "default": "medium"
+      },
+      "maxParallel": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20,
+        "default": 5
+      },
+      "targetLabel": {
+        "type": "string",
+        "default": "Topic"
+      },
+      "searchDepth": {
+        "type": "string",
+        "enum": [
+          "basic",
+          "advanced"
+        ],
+        "default": "basic"
+      }
+    },
+    "required": [
+      "topic"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "swarmId": {
+        "type": "string",
+        "description": "Unique ID for this research swarm — pass to research.swarm.status"
+      },
+      "dispatchId": {
+        "type": "string",
+        "description": "Subagent fanout dispatch ID from agent.subagent.dispatch"
+      },
+      "status": {
+        "const": "running"
+      },
+      "estimatedTasks": {
+        "type": "number",
+        "description": "Number of search tasks dispatched"
+      }
+    },
+    "required": [
+      "swarmId",
+      "dispatchId",
+      "status",
+      "estimatedTasks"
+    ],
+    "additionalProperties": false
+  }
+}

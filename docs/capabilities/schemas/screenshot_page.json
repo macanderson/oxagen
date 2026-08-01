@@ -1,0 +1,84 @@
+{
+  "name": "screenshot_page",
+  "domain": "browser",
+  "description": "Screenshot the durable sandbox browser's current page (or a CSS-selected element) and store it as a private workspace asset. Returns the asset key/url for the cross-LLM judge.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "fullPage": {
+        "type": "boolean",
+        "default": false
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string",
+        "description": "Private storage key — pass to agent.feature.verify."
+      },
+      "url": {
+        "type": "string",
+        "description": "Storage URL (private; bytes served via authenticated read)."
+      },
+      "width": {
+        "type": "integer"
+      },
+      "height": {
+        "type": "integer"
+      },
+      "bytes": {
+        "type": "integer",
+        "description": "PNG byte length."
+      }
+    },
+    "required": [
+      "key",
+      "url",
+      "width",
+      "height",
+      "bytes"
+    ],
+    "additionalProperties": false
+  }
+}

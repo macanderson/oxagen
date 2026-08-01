@@ -1,0 +1,238 @@
+{
+  "name": "promote_memory",
+  "domain": "agent",
+  "description": "Promote a memory to RULE or FACT, recording an auditable promotion event. FACT requires human confirmation and forces enforcement 100.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The AgentMemory node id (not publicId) to promote"
+      },
+      "toClass": {
+        "type": "string",
+        "enum": [
+          "RULE",
+          "FACT"
+        ],
+        "description": "Target class; OBSERVATION cannot be a promotion target"
+      },
+      "enforcementScore": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "basedOnEvidenceIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "memoryId",
+      "toClass"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "publicId": {
+        "type": "string"
+      },
+      "nodeRef": {
+        "type": "string"
+      },
+      "memoryClass": {
+        "type": "string",
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
+      },
+      "memoryKind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+      },
+      "lesson": {
+        "type": "string",
+        "description": "The memory body, human readable"
+      },
+      "source": {
+        "type": "string"
+      },
+      "confidenceScore": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "enforcementScore": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "SUPERSEDED",
+          "RETRACTED",
+          "ARCHIVED"
+        ]
+      },
+      "subjectHint": {
+        "type": "string"
+      },
+      "halfLifeDays": {
+        "type": "number"
+      },
+      "decayFloor": {
+        "type": "number"
+      },
+      "lastEvidenceAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "citationCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "influenceCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "violationCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "createdByKind": {
+        "type": "string",
+        "enum": [
+          "AGENT",
+          "USER",
+          "SYSTEM"
+        ]
+      },
+      "createdById": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "confirmedByKind": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "AGENT",
+              "USER",
+              "SYSTEM"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "confirmedById": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "lastReinforcedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "id",
+      "publicId",
+      "nodeRef",
+      "memoryClass",
+      "memoryKind",
+      "lesson",
+      "source",
+      "confidenceScore",
+      "enforcementScore",
+      "status",
+      "subjectHint",
+      "halfLifeDays",
+      "decayFloor",
+      "lastEvidenceAt",
+      "citationCount",
+      "influenceCount",
+      "violationCount",
+      "createdByKind",
+      "createdById",
+      "confirmedByKind",
+      "confirmedById",
+      "createdAt",
+      "lastReinforcedAt"
+    ],
+    "additionalProperties": false
+  }
+}
