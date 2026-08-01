@@ -1,0 +1,74 @@
+{
+  "name": "purchase_credits",
+  "domain": "billing",
+  "description": "Start a Stripe Checkout session for a dynamic usage-credit purchase; returns a URL the customer opens to complete payment",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "amountUsd": {
+        "type": "number",
+        "minimum": 5
+      },
+      "successUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "cancelUrl": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "required": [
+      "amountUsd"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "grantCents": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "priceCents": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "percent": {
+        "type": "number",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "url",
+      "grantCents",
+      "priceCents",
+      "percent"
+    ],
+    "additionalProperties": false
+  }
+}

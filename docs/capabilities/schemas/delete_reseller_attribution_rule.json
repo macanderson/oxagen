@@ -1,0 +1,53 @@
+{
+  "name": "delete_reseller_attribution_rule",
+  "domain": "billing",
+  "description": "Delete a reseller attribution rule. Usage it matched becomes unattributed until another rule covers it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "deleted": {
+        "const": true
+      }
+    },
+    "required": [
+      "id",
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "create_document",
+  "domain": "document",
+  "description": "Create a new document in the workspace",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "document"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "content": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "document_id": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "created_at": {
+        "type": "string"
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "document_id",
+      "title",
+      "created_at",
+      "workspace_id"
+    ],
+    "additionalProperties": false
+  }
+}

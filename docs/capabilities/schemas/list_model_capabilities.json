@@ -1,0 +1,370 @@
+{
+  "name": "list_model_capabilities",
+  "domain": "model",
+  "description": "List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts. Query before routing work to a BYOK-configured provider.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "vendor": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "vendors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "vendor": {
+              "type": "string",
+              "description": "Gateway creator prefix, e.g. 'anthropic' in 'anthropic/claude-sonnet-5'"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable vendor name, e.g. 'Anthropic'"
+            },
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Catalog gateway model ids this vendor ships, e.g. ['anthropic/claude-sonnet-5']"
+            },
+            "cache": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "opt-in"
+                    },
+                    "mechanism": {
+                      "type": "string",
+                      "description": "The wire mechanism that must be SENT or the provider caches nothing"
+                    },
+                    "witness": {
+                      "type": "string",
+                      "description": "Title of the test proving the opt-in marker reaches the request"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mechanism",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "implicit"
+                    },
+                    "telemetry": {
+                      "type": "string",
+                      "description": "Where the provider reports cache hits on its usage envelope"
+                    },
+                    "witness": {
+                      "type": "string",
+                      "description": "Title of the test proving the hit telemetry is parsed and metered"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "telemetry",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "not-applicable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "controllable"
+                    },
+                    "mechanism": {
+                      "type": "string"
+                    },
+                    "witness": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mechanism",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "fixed-on"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "fixed-off"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "unsupported"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "not-applicable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "structuredOutput": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "native"
+                    },
+                    "mechanism": {
+                      "type": "string"
+                    },
+                    "witness": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mechanism",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "emulated"
+                    },
+                    "mechanism": {
+                      "type": "string"
+                    },
+                    "witness": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "mechanism",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "not-applicable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "attachments": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "supported"
+                    },
+                    "kinds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "image",
+                          "video",
+                          "audio"
+                        ]
+                      }
+                    },
+                    "mechanism": {
+                      "type": "string"
+                    },
+                    "witness": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "kinds",
+                    "mechanism",
+                    "witness"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "text-only"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "not-applicable"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "vendor",
+            "label",
+            "models",
+            "cache",
+            "reasoning",
+            "structuredOutput",
+            "attachments"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "unknownFilter": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "vendors",
+      "unknownFilter"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "name": "run_sandbox_command",
+  "domain": "agent",
+  "description": "Run a shell command inside a durable sandbox session. Filesystem/process state persists across calls. Returns stdout, stderr, exit code.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) returned by agent.sandbox.start."
+      },
+      "command": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100000,
+        "description": "Shell command line, run via `sh -c` in the session workspace."
+      },
+      "cwd": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 600000,
+        "default": 120000
+      },
+      "env": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "stdin": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "sessionId",
+      "command"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "exitCode": {
+        "type": "integer"
+      },
+      "stdout": {
+        "type": "string"
+      },
+      "stderr": {
+        "type": "string"
+      },
+      "executionMs": {
+        "type": "integer"
+      },
+      "timedOut": {
+        "type": "boolean"
+      },
+      "restored": {
+        "type": "boolean",
+        "description": "True when the session had been reaped and was restored from a snapshot before running."
+      },
+      "cwd": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "exitCode",
+      "stdout",
+      "stderr",
+      "executionMs",
+      "timedOut",
+      "restored",
+      "cwd"
+    ],
+    "additionalProperties": false
+  }
+}

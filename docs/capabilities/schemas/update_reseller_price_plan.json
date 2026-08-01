@@ -1,0 +1,142 @@
+{
+  "name": "update_reseller_price_plan",
+  "domain": "billing",
+  "description": "Update a reseller price plan (name, mode, markup basis points, per-unit price, or currency). Only supplied fields change.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "pricingMode": {
+        "type": "string",
+        "enum": [
+          "markup",
+          "per_unit"
+        ]
+      },
+      "markupBps": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "unitPriceCents": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "currency": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pricePlan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pricingMode": {
+            "type": "string",
+            "enum": [
+              "markup",
+              "per_unit"
+            ]
+          },
+          "markupBps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unitPriceCents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "pricingMode",
+          "markupBps",
+          "unitPriceCents",
+          "currency",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "pricePlan"
+    ],
+    "additionalProperties": false
+  }
+}

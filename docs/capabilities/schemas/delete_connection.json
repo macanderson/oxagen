@@ -1,0 +1,74 @@
+{
+  "name": "delete_connection",
+  "domain": "connection",
+  "description": "Delete a data source connection. Supports three modes: connection_only (revoke auth, keep data), data_only (delete Neo4j data, keep config), or full (delete everything).",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "destructive"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public ID or internal UUID of the connection"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "connection_only",
+          "data_only",
+          "full"
+        ],
+        "default": "full"
+      }
+    },
+    "required": [
+      "connectionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deletionJobId": {
+        "type": "string",
+        "description": "Public ID of the deletion_jobs row tracking async progress"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "connection_only",
+          "data_only",
+          "full"
+        ]
+      },
+      "status": {
+        "const": "running"
+      }
+    },
+    "required": [
+      "deletionJobId",
+      "mode",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

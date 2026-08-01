@@ -1,0 +1,108 @@
+{
+  "name": "add_conversation_attachment",
+  "domain": "conversation",
+  "description": "Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "assetPublicId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "conversationId",
+      "assetPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video",
+          "document",
+          "spreadsheet",
+          "presentation",
+          "pdf",
+          "archive"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "mimeType": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status": {
+        "type": "string"
+      },
+      "accessPolicy": {
+        "type": "string",
+        "enum": [
+          "user",
+          "org",
+          "public"
+        ]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "publicId",
+      "kind",
+      "name",
+      "mimeType",
+      "sizeBytes",
+      "status",
+      "accessPolicy",
+      "createdAt",
+      "url"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "name": "generate_mermaid",
+  "domain": "mermaid",
+  "description": "Produce a Mermaid diagram from validated diagram source text. The source is validated (non-empty, within length cap) and returned with a render directive so the chat UI renders it inline as an SVG via the 'mermaid-diagram' client component — no server-side rendering involved. The diagram source is also persisted as a .mmd conversation file (generated_assets row + blob storage) so it appears in the Conversation Files panel; persistence failures never fail the generation. Supports flowcharts, sequence diagrams, class diagrams, Gantt charts, and all other diagram types supported by Mermaid v11.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "generation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "diagram": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 50000
+      },
+      "theme": {
+        "type": "string",
+        "enum": [
+          "default",
+          "dark",
+          "neutral",
+          "forest"
+        ]
+      }
+    },
+    "required": [
+      "title",
+      "diagram"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1
+      },
+      "assetPublicId": {
+        "type": "string"
+      },
+      "serveUrl": {
+        "type": "string"
+      },
+      "persistWarning": {
+        "type": "string"
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "type": "string"
+          },
+          "props": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "title",
+      "source",
+      "render"
+    ],
+    "additionalProperties": false
+  }
+}

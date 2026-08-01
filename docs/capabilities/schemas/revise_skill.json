@@ -1,0 +1,93 @@
+{
+  "name": "revise_skill",
+  "domain": "skill",
+  "description": "AI-driven edit of an existing skill that emits canonical TOML and saves a new immutable version while preserving the slug",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the skill to revise (skl_…)."
+      },
+      "prompt": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 4000,
+        "description": "Plain-language description of the change to make — e.g. 'tighten the incident-response steps to five bullets and add a rollback section'. At least 10 characters."
+      },
+      "activate": {
+        "type": "boolean",
+        "default": true
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "skill_id",
+      "prompt"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the parent skill (skl_…)."
+      },
+      "version_id": {
+        "type": "string",
+        "description": "Public ID of the new skill version (slv_…)."
+      },
+      "version_number": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "The newly-created (bumped) version number."
+      },
+      "activated": {
+        "type": "boolean",
+        "description": "Whether this version is now the skill's active version."
+      },
+      "content": {
+        "type": "string",
+        "description": "The revised canonical skill.toml content."
+      },
+      "changeSummary": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      }
+    },
+    "required": [
+      "skill_id",
+      "version_id",
+      "version_number",
+      "activated",
+      "content"
+    ],
+    "additionalProperties": false
+  }
+}

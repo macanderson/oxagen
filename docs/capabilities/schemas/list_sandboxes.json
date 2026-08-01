@@ -1,0 +1,234 @@
+{
+  "name": "list_sandboxes",
+  "domain": "agent",
+  "description": "List the durable sandbox sessions in the current workspace (id, key, image, status, driver, last-used/expiry timestamps), most-recently-used first.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "running",
+          "idle",
+          "stopped",
+          "gone"
+        ]
+      },
+      "activeOnly": {
+        "type": "boolean",
+        "default": false
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sandboxes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Opaque durable-session id (sbx_…) — the public id column."
+            },
+            "sessionKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "image": {
+              "type": "string",
+              "enum": [
+                "node",
+                "python",
+                "shell",
+                "agent"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "running",
+                "idle",
+                "stopped",
+                "gone"
+              ]
+            },
+            "driver": {
+              "type": "string",
+              "description": "Sandbox driver identifier (e.g. modal)."
+            },
+            "repos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "owner": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "owner",
+                  "repo"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "ISO timestamp the session was created."
+            },
+            "recoveryStatus": {
+              "type": "string"
+            },
+            "recoveryBranch": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recoveryCommit": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "graceDeadlineAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "dirty": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "flushedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recoveredAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "sessionId",
+            "sessionKey",
+            "image",
+            "status",
+            "driver",
+            "lastUsedAt",
+            "expiresAt",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "sandboxes"
+    ],
+    "additionalProperties": false
+  }
+}

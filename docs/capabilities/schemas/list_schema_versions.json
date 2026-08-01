@@ -1,0 +1,119 @@
+{
+  "name": "list_schema_versions",
+  "domain": "schema",
+  "description": "List versions (number, label, status, published_at, change_summary).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 20
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "versions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "versionId": {
+              "type": "string"
+            },
+            "versionNumber": {
+              "type": "number"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "published"
+              ]
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "changeSummary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "publishedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isPinned": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "versionId",
+            "versionNumber",
+            "status",
+            "label",
+            "changeSummary",
+            "publishedAt",
+            "isPinned"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "versions",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

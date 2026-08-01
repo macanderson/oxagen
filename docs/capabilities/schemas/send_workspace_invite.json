@@ -1,0 +1,69 @@
+{
+  "name": "send_workspace_invite",
+  "domain": "workspace",
+  "description": "Send a workspace invitation to an email address",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "member",
+          "admin",
+          "owner"
+        ],
+        "default": "member"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "email"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "expires_at": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "status",
+      "expires_at"
+    ],
+    "additionalProperties": false
+  }
+}

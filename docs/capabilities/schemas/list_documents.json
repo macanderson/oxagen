@@ -1,0 +1,73 @@
+{
+  "name": "list_documents",
+  "domain": "document",
+  "description": "List documents in the workspace",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "document"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "documents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            },
+            "author": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "created_at",
+            "updated_at",
+            "author"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "documents"
+    ],
+    "additionalProperties": false
+  }
+}

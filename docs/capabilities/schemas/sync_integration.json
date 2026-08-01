@@ -1,0 +1,76 @@
+{
+  "name": "sync_integration",
+  "domain": "integration",
+  "description": "Trigger synchronization of a plugin instance.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "integrationId": {
+        "type": "string",
+        "description": "Plugin instance ID"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "incremental",
+          "full"
+        ],
+        "default": "incremental"
+      }
+    },
+    "required": [
+      "integrationId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "jobId": {
+        "type": "string",
+        "description": "Background sync job ID"
+      },
+      "status": {
+        "const": "queued"
+      },
+      "integrationId": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "incremental",
+          "full"
+        ]
+      }
+    },
+    "required": [
+      "jobId",
+      "status",
+      "integrationId",
+      "mode"
+    ],
+    "additionalProperties": false
+  }
+}

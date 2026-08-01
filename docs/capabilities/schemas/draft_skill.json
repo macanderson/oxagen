@@ -1,0 +1,148 @@
+{
+  "name": "draft_skill",
+  "domain": "skill",
+  "description": "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the instruction body — and returns it for human review, along with the assembled canonical skill.toml content. Feed the confirmed draft to skill.create (or skill.workspace.install with custom.content) to save it. This is the AI-assisted first step of the skill setup flow.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 4000,
+        "description": "Natural-language description of what the skill should teach the agent. At least 10 characters."
+      },
+      "nameHint": {
+        "type": "string"
+      },
+      "category": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "prompt"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "draft": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable skill title (e.g. 'Incident Response')"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Kebab-case slug derived by the model"
+          },
+          "description": {
+            "type": "string",
+            "description": "One-sentence matcher description used to decide when to load the skill"
+          },
+          "weight": {
+            "type": "string",
+            "enum": [
+              "low",
+              "high",
+              "critical"
+            ],
+            "description": "Influence weight for the skill's guidance"
+          },
+          "category": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The instruction text embedded in the canonical TOML artifact"
+          }
+        },
+        "required": [
+          "displayName",
+          "slug",
+          "description",
+          "weight",
+          "body"
+        ],
+        "additionalProperties": false,
+        "description": "The synthesised skill configuration, ready to prefill a review form"
+      },
+      "content": {
+        "type": "string",
+        "description": "Canonical skill.toml content ready for create_skill"
+      },
+      "artifact": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "kind": {
+            "const": "skill"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "instructions": {
+            "type": "string",
+            "minLength": 1
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "default": []
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "kind",
+          "name",
+          "description",
+          "instructions"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "draft",
+      "content",
+      "artifact"
+    ],
+    "additionalProperties": false
+  }
+}

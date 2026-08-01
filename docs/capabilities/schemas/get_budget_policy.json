@@ -1,0 +1,74 @@
+{
+  "name": "get_budget_policy",
+  "domain": "workspace",
+  "description": "Read the workspace's governed per-turn dollar budget: whether the org/workspace enforces a budget on each agent turn in this workspace, the limit in USD, the enforcement mode (grace/prompt/enforce), the grace cushion, and whether it is a soft default (seeds members) or a hard ceiling (members cannot exceed it). Readable by all members so the composer can show an enforced ceiling.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "limitUsd": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "grace",
+          "prompt",
+          "enforce"
+        ]
+      },
+      "graceOveragePct": {
+        "type": "number"
+      },
+      "enforcement": {
+        "type": "string",
+        "enum": [
+          "default",
+          "ceiling"
+        ]
+      }
+    },
+    "required": [
+      "enabled",
+      "limitUsd",
+      "mode",
+      "graceOveragePct",
+      "enforcement"
+    ],
+    "additionalProperties": false
+  }
+}

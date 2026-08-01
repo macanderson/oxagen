@@ -1,0 +1,165 @@
+{
+  "name": "ingest_stella_operational_telemetry",
+  "domain": "telemetry",
+  "description": "Ingest an authenticated, content-free batch of Stella operational execution rollups.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "telemetry"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schema": {
+        "const": "stella.operational.batch.v1"
+      },
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "stella.operational.v1"
+            },
+            "event_class": {
+              "const": "execution_rollup"
+            },
+            "event_id": {
+              "type": "string"
+            },
+            "enrollment_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "organization_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "workspace_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "error",
+                "failed",
+                "aborted",
+                "cancelled",
+                "indeterminate",
+                "verification_failed",
+                "goal_met",
+                "goal_unmet"
+              ]
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "input_tokens": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cost_microusd": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "tool_call_count": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "changed_file_count": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "produced_output": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "schema",
+            "event_class",
+            "event_id",
+            "enrollment_id",
+            "organization_id",
+            "workspace_id",
+            "provider",
+            "model",
+            "outcome",
+            "duration_ms",
+            "input_tokens",
+            "output_tokens",
+            "cost_microusd",
+            "tool_call_count",
+            "changed_file_count",
+            "produced_output"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "schema",
+      "events"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "accepted": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50
+      },
+      "event_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "accepted",
+      "event_ids"
+    ],
+    "additionalProperties": false
+  }
+}

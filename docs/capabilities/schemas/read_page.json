@@ -1,0 +1,62 @@
+{
+  "name": "read_page",
+  "domain": "browser",
+  "description": "Read visible text from the durable sandbox browser's current page (whole page, or a CSS-selected element) for assertions.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 60000,
+        "default": 30000
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Visible inner text (truncated to ~20k chars)."
+      }
+    },
+    "required": [
+      "text"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "dismiss_memory_promotion",
+  "domain": "agent",
+  "description": "Dismiss a memory from the promotion candidate queue (or restore it), freeing the slot for the next candidate without archiving the memory.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The AgentMemory node id (not publicId) to dismiss"
+      },
+      "restore": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "memoryId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string"
+      },
+      "dismissed": {
+        "type": "boolean",
+        "description": "True when the memory is now excluded from promotion candidates"
+      }
+    },
+    "required": [
+      "memoryId",
+      "dismissed"
+    ],
+    "additionalProperties": false
+  }
+}

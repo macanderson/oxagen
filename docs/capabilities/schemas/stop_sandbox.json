@@ -1,0 +1,51 @@
+{
+  "name": "stop_sandbox",
+  "domain": "agent",
+  "description": "Terminate a durable sandbox session and release its resources. Call when the work is finished.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) returned by agent.sandbox.start."
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "stopped": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "stopped"
+    ],
+    "additionalProperties": false
+  }
+}

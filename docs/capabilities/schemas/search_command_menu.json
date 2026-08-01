@@ -1,0 +1,126 @@
+{
+  "name": "search_command_menu",
+  "domain": "command",
+  "description": "Full-text entity search for the Command Menu. Accepts an optional entity-kind filter and a query string, returns up to 8 typed rows (label, scope, contextLine, href) composed from the ontology graph and operational Postgres tables, filtered to the caller's tenant grants.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "enum": [
+          "run",
+          "principal",
+          "playbook",
+          "trigger",
+          "event",
+          "agent"
+        ]
+      },
+      "query": {
+        "type": "string",
+        "minLength": 0,
+        "maxLength": 500,
+        "description": "Free-text search string"
+      },
+      "orgSlug": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Organization slug for href construction"
+      },
+      "workspaceSlug": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Workspace slug for href construction"
+      }
+    },
+    "required": [
+      "query",
+      "orgSlug",
+      "workspaceSlug"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "run",
+                "principal",
+                "playbook",
+                "trigger",
+                "event",
+                "agent"
+              ],
+              "description": "Entity kind"
+            },
+            "id": {
+              "type": "string",
+              "description": "Stable internal id (publicId or db id)"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable display name"
+            },
+            "scope": {
+              "type": "string",
+              "description": "Scope hint shown beneath the label"
+            },
+            "contextLine": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "href": {
+              "type": "string",
+              "description": "Route the menu pushes when this item is selected"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "label",
+            "scope",
+            "contextLine",
+            "href"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "rows"
+    ],
+    "additionalProperties": false
+  }
+}

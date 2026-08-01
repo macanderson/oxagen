@@ -1,0 +1,79 @@
+{
+  "name": "add_org_member",
+  "domain": "org",
+  "description": "Invite a user to join the org by email. Enforces seat/license limits; fails with a typed error when no seat is available.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email"
+      },
+      "role": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "email",
+      "role"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "invitationId": {
+        "type": "string"
+      },
+      "email": {
+        "type": "string",
+        "format": "email"
+      },
+      "role": {
+        "type": "string"
+      },
+      "status": {
+        "const": "pending"
+      },
+      "expiresAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "invitationId",
+      "email",
+      "role",
+      "status",
+      "expiresAt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "name": "list_mcp_servers",
+  "domain": "agent",
+  "description": "List registered external MCP servers in the active workspace with their current health",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "transportType": {
+              "type": "string",
+              "enum": [
+                "streamable-http",
+                "stdio"
+              ]
+            },
+            "endpointUrl": {
+              "type": "string"
+            },
+            "healthStatus": {
+              "type": "string",
+              "enum": [
+                "healthy",
+                "degraded",
+                "unreachable"
+              ]
+            },
+            "lastHealthcheckAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "toolCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "publicId",
+            "name",
+            "transportType",
+            "endpointUrl",
+            "healthStatus",
+            "lastHealthcheckAt",
+            "toolCount"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "servers"
+    ],
+    "additionalProperties": false
+  }
+}

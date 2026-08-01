@@ -1,0 +1,53 @@
+{
+  "name": "archive_reseller_customer",
+  "domain": "billing",
+  "description": "Archive (soft-delete) a reseller end-customer account. Historical re-bill runs are preserved; the account no longer appears in lists or pushes.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "archived": {
+        "const": true
+      }
+    },
+    "required": [
+      "id",
+      "archived"
+    ],
+    "additionalProperties": false
+  }
+}

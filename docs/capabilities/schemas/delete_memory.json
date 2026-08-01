@@ -1,0 +1,56 @@
+{
+  "name": "delete_memory",
+  "domain": "agent",
+  "description": "Permanently delete an AgentMemory node (and its edges) by id. Destructive — prefer agent.memory.update to lower salience when you only want it to stop surfacing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The AgentMemory node id (not publicId) to delete"
+      }
+    },
+    "required": [
+      "memoryId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean",
+        "description": "true when a memory matched and was deleted; false when none matched in this workspace"
+      },
+      "memoryId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "deleted",
+      "memoryId"
+    ],
+    "additionalProperties": false
+  }
+}

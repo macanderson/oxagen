@@ -1,0 +1,105 @@
+{
+  "name": "set_routing_policy",
+  "domain": "router",
+  "description": "Set the market-router policy for this org or workspace (partial update). Choose the mode (off = deterministic routing; shadow = compute + record the market decision but keep today's routing; enforce = route to the cheapest model clearing the verified-success bar and escalate tiers on judge rejection), the verified-success threshold, min samples, window days, and tier-escalation. Changes model spend behavior — Owner/Admin only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "settings"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
+      },
+      "successThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minSamples": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "escalateOnRejection": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": [
+          "org",
+          "workspace"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
+      },
+      "successThreshold": {
+        "type": "number"
+      },
+      "minSamples": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "escalateOnRejection": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "scope",
+      "mode",
+      "successThreshold",
+      "minSamples",
+      "windowDays",
+      "escalateOnRejection"
+    ],
+    "additionalProperties": false
+  }
+}

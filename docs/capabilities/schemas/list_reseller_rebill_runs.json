@@ -1,0 +1,203 @@
+{
+  "name": "list_reseller_rebill_runs",
+  "domain": "billing",
+  "description": "List past reseller re-bill runs (period, subtotal, billed total, Stripe invoice, status), most recent first. Optionally filter to one customer.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "customerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "customerId": {
+              "type": "string"
+            },
+            "customerName": {
+              "type": "string"
+            },
+            "periodStart": {
+              "type": "string"
+            },
+            "periodEnd": {
+              "type": "string"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "subtotalCents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "totalCents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "providerInvoiceId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hostedInvoiceUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "pushed",
+                "failed"
+              ]
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "lineItems": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "matchKind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "workspace",
+                          "principal",
+                          "capability"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rawCostCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unitPriceCents": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "label",
+                  "matchKind",
+                  "rawCostCents",
+                  "quantity",
+                  "unitPriceCents",
+                  "amountCents"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "customerId",
+            "customerName",
+            "periodStart",
+            "periodEnd",
+            "currency",
+            "subtotalCents",
+            "totalCents",
+            "providerInvoiceId",
+            "hostedInvoiceUrl",
+            "status",
+            "error",
+            "createdAt",
+            "updatedAt",
+            "lineItems"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "runs"
+    ],
+    "additionalProperties": false
+  }
+}

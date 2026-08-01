@@ -1,0 +1,109 @@
+{
+  "name": "get_org_settings",
+  "domain": "org",
+  "description": "Read the active organization's profile settings: name, slug, avatar, website, industry, employee size, and type.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "website": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "industry": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "employeeSize": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "1",
+              "2-10",
+              "11-50",
+              "51-200",
+              "201-500",
+              "501-1000",
+              "1001-5000",
+              "5001-10000",
+              "10000+"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "business"
+        ]
+      }
+    },
+    "required": [
+      "name",
+      "slug",
+      "avatarUrl",
+      "website",
+      "industry",
+      "employeeSize",
+      "type"
+    ],
+    "additionalProperties": false
+  }
+}

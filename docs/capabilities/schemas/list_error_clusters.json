@@ -1,0 +1,146 @@
+{
+  "name": "list_error_clusters",
+  "domain": "telemetry",
+  "description": "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use agent.debug.trace; this is the fleet-wide histogram, not a single-run frame.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sinceHours": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 720
+      },
+      "severity": {
+        "type": "string",
+        "enum": [
+          "fatal",
+          "error",
+          "warn"
+        ]
+      },
+      "source": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "clusters": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fingerprint": {
+              "type": "string",
+              "description": "Stable grouping key (SHA-256 of error_class + normalized message)"
+            },
+            "errorClass": {
+              "type": "string",
+              "description": "Error constructor name (e.g. 'TypeError', 'CapabilityError')"
+            },
+            "sampleMessage": {
+              "type": "string",
+              "description": "Bounded sample message from the most recent occurrence"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "fatal",
+                "error",
+                "warn"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "description": "Server runtime that captured the error (api|app|mcp|inngest|runner)"
+            },
+            "count": {
+              "type": "integer",
+              "description": "Occurrences of this fingerprint within the window"
+            },
+            "firstSeen": {
+              "type": "string",
+              "description": "Earliest occurrence timestamp within the window"
+            },
+            "lastSeen": {
+              "type": "string",
+              "description": "Latest occurrence timestamp within the window"
+            }
+          },
+          "required": [
+            "fingerprint",
+            "errorClass",
+            "sampleMessage",
+            "severity",
+            "source",
+            "count",
+            "firstSeen",
+            "lastSeen"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Error classes ranked by occurrence count, highest first"
+      },
+      "totalErrors": {
+        "type": "integer",
+        "description": "Total error occurrences in the window (across all clusters, not just the returned page)"
+      },
+      "distinctClusters": {
+        "type": "integer",
+        "description": "Total distinct fingerprints in the window (may exceed `clusters.length` when truncated)"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True when distinctClusters exceeds the returned `limit`"
+      },
+      "window": {
+        "type": "object",
+        "properties": {
+          "sinceHours": {
+            "type": "integer",
+            "description": "Effective lookback window in hours actually applied"
+          }
+        },
+        "required": [
+          "sinceHours"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "clusters",
+      "totalErrors",
+      "distinctClusters",
+      "truncated",
+      "window"
+    ],
+    "additionalProperties": false
+  }
+}

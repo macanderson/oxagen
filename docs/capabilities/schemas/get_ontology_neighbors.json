@@ -1,0 +1,186 @@
+{
+  "name": "get_ontology_neighbors",
+  "domain": "ontology",
+  "description": "Return the one-hop neighborhood of a node — directly connected nodes, optionally filtered by relationship type and direction. Customer-context only, org + workspace scoped. Read-only; no Cypher required.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeId": {
+        "type": "string",
+        "description": "publicId of the node whose neighbors to fetch"
+      },
+      "edgeTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "direction": {
+        "type": "string",
+        "enum": [
+          "out",
+          "in",
+          "both"
+        ],
+        "description": "Direction of neighbors to return relative to the node: 'out' for targets of outgoing edges, 'in' for sources of incoming edges, 'both' for either.",
+        "default": "both"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "asOf": {
+        "type": "string"
+      },
+      "asKnownAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "nodeId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeId": {
+        "type": "string",
+        "description": "publicId echoed back from the request"
+      },
+      "found": {
+        "type": "boolean",
+        "description": "True if the node exists in this org + workspace"
+      },
+      "neighbors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string",
+              "description": "publicId of the neighbor node"
+            },
+            "label": {
+              "type": "string",
+              "description": "Domain label of the neighbor"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "edgeType": {
+              "type": "string",
+              "description": "Relationship type connecting the node to this neighbor"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "out",
+                "in"
+              ],
+              "description": "'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"
+            },
+            "validFrom": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "validTo": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recordedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invalidatedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "nodeId",
+            "label",
+            "displayName",
+            "description",
+            "edgeType",
+            "direction",
+            "validFrom",
+            "validTo",
+            "recordedAt",
+            "invalidatedAt"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Directly connected nodes"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True when the result was capped by `limit` and more neighbors exist"
+      }
+    },
+    "required": [
+      "nodeId",
+      "found",
+      "neighbors",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}

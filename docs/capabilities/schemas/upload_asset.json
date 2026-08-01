@@ -1,0 +1,102 @@
+{
+  "name": "upload_asset",
+  "domain": "asset",
+  "description": "Ingest a binary asset from a source URL into object storage and return its stored URL and key.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "generation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sourceUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "avatar",
+          "image",
+          "document",
+          "video"
+        ]
+      },
+      "filename": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "user_upload"
+        ]
+      },
+      "conversationId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "sourceUrl",
+      "kind"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "minLength": 1
+      },
+      "key": {
+        "type": "string",
+        "minLength": 1
+      },
+      "contentType": {
+        "type": "string",
+        "minLength": 1
+      },
+      "bytes": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "publicId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "url",
+      "key",
+      "contentType",
+      "bytes",
+      "publicId"
+    ],
+    "additionalProperties": false
+  }
+}

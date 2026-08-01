@@ -1,0 +1,205 @@
+{
+  "name": "browse_plugin_catalog",
+  "domain": "plugin",
+  "description": "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pluginType": {
+        "type": "string",
+        "enum": [
+          "mcp_server",
+          "agent_capability",
+          "agent_skill",
+          "knowledge_source",
+          "integration"
+        ]
+      },
+      "search": {
+        "type": "string"
+      },
+      "categories": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "transportTypes": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "authKind": {
+        "type": "string",
+        "enum": [
+          "oauth",
+          "secret",
+          "none"
+        ]
+      },
+      "installed": {
+        "type": "boolean"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 30
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
+            "icons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "src": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "src"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "transportTypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "authKind": {
+              "type": "string"
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "version": {
+              "type": "string"
+            },
+            "pluginType": {
+              "type": "string",
+              "enum": [
+                "mcp_server",
+                "agent_capability",
+                "agent_skill",
+                "knowledge_source",
+                "integration"
+              ]
+            },
+            "tier": {
+              "type": "string",
+              "enum": [
+                "free",
+                "premium"
+              ]
+            },
+            "installed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "title",
+            "description",
+            "icons",
+            "transportTypes",
+            "authKind",
+            "categories",
+            "version",
+            "pluginType",
+            "installed"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextOffset": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "total": {
+        "type": "number"
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "servers",
+      "nextOffset",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

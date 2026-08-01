@@ -1,0 +1,100 @@
+{
+  "name": "validate_plugin_schema",
+  "domain": "plugin",
+  "description": "Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pluginId": {
+        "type": "string",
+        "description": "Connector plugin identifier (e.g. 'github', 'google-drive')"
+      },
+      "authSchemeId": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "Config values keyed by field key. Nested sections use dot-path or nested objects."
+      }
+    },
+    "required": [
+      "pluginId",
+      "config"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "valid": {
+        "type": "boolean",
+        "description": "True when all fields pass validation"
+      },
+      "errors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string",
+              "description": "Dot-path to the invalid field (e.g. 'config.organizations')"
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable validation error message"
+            },
+            "code": {
+              "type": "string",
+              "enum": [
+                "required",
+                "min",
+                "max",
+                "minItems",
+                "maxItems",
+                "pattern",
+                "itemPattern",
+                "oneOf",
+                "type",
+                "unknown"
+              ],
+              "description": "Machine-readable validation rule that failed"
+            }
+          },
+          "required": [
+            "field",
+            "message",
+            "code"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Field-level validation errors. Empty when valid is true."
+      }
+    },
+    "required": [
+      "valid",
+      "errors"
+    ],
+    "additionalProperties": false
+  }
+}

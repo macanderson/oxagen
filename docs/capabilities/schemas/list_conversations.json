@@ -1,0 +1,129 @@
+{
+  "name": "list_conversations",
+  "domain": "conversation",
+  "description": "List a user's conversations in a workspace, filtered by active or archived state, newest first, keyset-paginated",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [
+      "conversation.id"
+    ],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": {
+    "componentId": "conversation-list-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "filter": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived"
+        ],
+        "default": "active"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "archivedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "publicId",
+            "title",
+            "status",
+            "archivedAt",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "conversations",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

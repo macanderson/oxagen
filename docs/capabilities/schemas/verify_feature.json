@@ -1,0 +1,120 @@
+{
+  "name": "verify_feature",
+  "domain": "agent",
+  "description": "Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "verification"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "requirement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8000,
+        "description": "What the feature is supposed to do / show — the spec the judge holds the screenshots against."
+      },
+      "screenshotKeys": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": "Private asset keys from browser.screenshot — the images the judge reads."
+      },
+      "builderModel": {
+        "type": "string"
+      },
+      "checklist": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "required": [
+      "requirement",
+      "screenshotKeys"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "verdict": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "fail",
+          "inconclusive"
+        ],
+        "description": "'pass' only when the screenshots clearly satisfy the requirement."
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "judgeModel": {
+        "type": "string",
+        "description": "The independent model that rendered the verdict."
+      },
+      "builderModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "observations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "What the judge actually saw in the screenshots."
+      },
+      "issues": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Missing/broken elements blocking a pass."
+      },
+      "reasoning": {
+        "type": "string",
+        "description": "The judge's justification for the verdict."
+      }
+    },
+    "required": [
+      "verdict",
+      "confidence",
+      "judgeModel",
+      "builderModel",
+      "observations",
+      "issues",
+      "reasoning"
+    ],
+    "additionalProperties": false
+  }
+}

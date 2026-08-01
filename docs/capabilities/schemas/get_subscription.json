@@ -1,0 +1,136 @@
+{
+  "name": "get_subscription",
+  "domain": "billing",
+  "description": "Read the current subscription, plan, and period bounds for the active tenant",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "subscription": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "publicId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "planSlug": {
+                "type": "string"
+              },
+              "billingInterval": {
+                "type": "string",
+                "enum": [
+                  "month",
+                  "year"
+                ]
+              },
+              "currentPeriodStart": {
+                "type": "string"
+              },
+              "currentPeriodEnd": {
+                "type": "string"
+              },
+              "cancelAtPeriodEnd": {
+                "type": "boolean"
+              },
+              "seatCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "publicId",
+              "status",
+              "planSlug",
+              "billingInterval",
+              "currentPeriodStart",
+              "currentPeriodEnd",
+              "cancelAtPeriodEnd",
+              "seatCount"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "creditBalanceCents": {
+        "type": "integer"
+      },
+      "periodUsage": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cachedTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "costMicros": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "executions": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cachedTokens",
+              "costMicros",
+              "executions"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "subscription",
+      "creditBalanceCents",
+      "periodUsage"
+    ],
+    "additionalProperties": false
+  }
+}

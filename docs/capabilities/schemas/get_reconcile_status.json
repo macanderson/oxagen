@@ -1,0 +1,90 @@
+{
+  "name": "get_reconcile_status",
+  "domain": "schema",
+  "description": "Poll the status of a schema reconciliation job.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "executionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "aex_… agent_executions public_id"
+      }
+    },
+    "required": [
+      "executionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "planning",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "totalNodes": {
+        "type": "number"
+      },
+      "processedNodes": {
+        "type": "number"
+      },
+      "updatedNodes": {
+        "type": "number"
+      },
+      "totalRelationships": {
+        "type": "number"
+      },
+      "processedRelationships": {
+        "type": "number"
+      },
+      "updatedRelationships": {
+        "type": "number"
+      },
+      "prunedNodes": {
+        "type": "number"
+      },
+      "prunedRelationships": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "status",
+      "totalNodes",
+      "processedNodes",
+      "updatedNodes",
+      "totalRelationships",
+      "processedRelationships",
+      "updatedRelationships",
+      "prunedNodes",
+      "prunedRelationships"
+    ],
+    "additionalProperties": false
+  }
+}

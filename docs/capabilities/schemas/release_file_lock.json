@@ -1,0 +1,51 @@
+{
+  "name": "release_file_lock",
+  "domain": "agent",
+  "description": "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind. Does not require the original holder's agentId.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "write"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "lockId": {
+        "type": "string",
+        "description": "The lockId returned by agent.file.lock.acquire or agent.file.lock.list."
+      }
+    },
+    "required": [
+      "lockId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "released": {
+        "type": "boolean",
+        "description": "false when no matching lock existed (idempotent, not an error)."
+      }
+    },
+    "required": [
+      "released"
+    ],
+    "additionalProperties": false
+  }
+}

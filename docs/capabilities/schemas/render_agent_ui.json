@@ -1,0 +1,70 @@
+{
+  "name": "render_agent_ui",
+  "domain": "agent",
+  "description": "Render a UI component from an agent response",
+  "mode": "sync",
+  "surfaces": [
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "ui"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "componentId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "UI component identifier"
+      },
+      "props": {
+        "type": "object",
+        "additionalProperties": {},
+        "default": {}
+      }
+    },
+    "required": [
+      "componentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "type": "string",
+            "description": "UI component identifier"
+          },
+          "props": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Component props"
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "render"
+    ],
+    "additionalProperties": false
+  }
+}

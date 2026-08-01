@@ -1,0 +1,62 @@
+{
+  "name": "refresh_page",
+  "domain": "browser",
+  "description": "Reload the durable sandbox browser's current page and wait for load. Useful after a rebuild/HMR to re-check a feature.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "url": {
+        "type": "string",
+        "description": "The page URL after reload."
+      }
+    },
+    "required": [
+      "ok",
+      "url"
+    ],
+    "additionalProperties": false
+  }
+}

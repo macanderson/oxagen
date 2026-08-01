@@ -1,0 +1,61 @@
+{
+  "name": "read_document",
+  "domain": "document",
+  "description": "Read a document by ID — returns title, content, and metadata",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "document"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "document_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "document_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "content": {
+        "type": "string"
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "created_at": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "title",
+      "content",
+      "metadata",
+      "created_at"
+    ],
+    "additionalProperties": false
+  }
+}

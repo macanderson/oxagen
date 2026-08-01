@@ -1,0 +1,153 @@
+{
+  "name": "start_sandbox",
+  "domain": "agent",
+  "description": "Provision or reconnect to a durable code-agent sandbox that persists across turns (clone a repo, build a feature, open a PR). Pass a stable sessionKey to reuse one warm sandbox. Requires SANDBOX_ENABLED=true and a session-capable driver (Modal).",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "image": {
+        "type": "string",
+        "enum": [
+          "node",
+          "python",
+          "shell",
+          "agent"
+        ],
+        "default": "agent"
+      },
+      "sessionKey": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "memoryMb": {
+        "type": "integer",
+        "minimum": 256,
+        "maximum": 8192,
+        "default": 2048
+      },
+      "ttlSeconds": {
+        "type": "integer",
+        "minimum": 300,
+        "maximum": 86400,
+        "default": 86400
+      },
+      "idleTimeoutSeconds": {
+        "type": "integer",
+        "minimum": 60,
+        "maximum": 86400,
+        "default": 1200
+      },
+      "network": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny"
+        ],
+        "default": "allow"
+      },
+      "setupCmd": {
+        "type": "string",
+        "maxLength": 8192
+      },
+      "repos": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "repo": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "owner",
+            "repo"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "environmentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sandboxTemplateId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "description": "Opaque durable-session id (sbx_…); pass to agent.sandbox.exec."
+      },
+      "status": {
+        "type": "string"
+      },
+      "image": {
+        "type": "string",
+        "enum": [
+          "node",
+          "python",
+          "shell",
+          "agent"
+        ]
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "reused": {
+        "type": "boolean",
+        "description": "True when an existing warm (or snapshot-restored) session was returned."
+      }
+    },
+    "required": [
+      "sessionId",
+      "status",
+      "image",
+      "createdAt",
+      "reused"
+    ],
+    "additionalProperties": false
+  }
+}

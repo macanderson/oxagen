@@ -1,0 +1,85 @@
+{
+  "name": "add_dataset_item",
+  "domain": "eval",
+  "description": "Bulk-add cases to an eval dataset. Batch by design — one call inserts many items as a set and bumps the dataset's item count.",
+  "mode": "batch",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasetPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expectedOutput": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {},
+              "default": {}
+            }
+          },
+          "required": [
+            "input"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "datasetPublicId",
+      "items"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasetId": {
+        "type": "string"
+      },
+      "added": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "itemCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "datasetId",
+      "added",
+      "itemCount"
+    ],
+    "additionalProperties": false
+  }
+}

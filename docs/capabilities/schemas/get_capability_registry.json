@@ -1,0 +1,379 @@
+{
+  "name": "get_capability_registry",
+  "domain": "capability",
+  "description": "Read one typed capability contract from the live registry as the full enforced object — identity grants, tenancy scope, permitted action with input/output field specs, commercial terms (billing gate + entitlement pack), and chaining metadata. Read-only platform metadata.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Capability name to look up (ADR-025 snake_case, e.g. 'query_audit_log')"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "capability": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Capability name (ADR-025 verb-first snake_case)"
+              },
+              "domain": {
+                "type": "string",
+                "description": "Capability domain (e.g. billing, agent, iam)"
+              },
+              "description": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "async",
+                  "batch"
+                ]
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "api",
+                    "mcp",
+                    "agent",
+                    "cli"
+                  ]
+                },
+                "description": "Surfaces the capability is exposed on"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "schema",
+                    "api",
+                    "mcp",
+                    "unit",
+                    "e2e",
+                    "docs",
+                    "app"
+                  ]
+                },
+                "description": "Layers the contract declares (parity promises)"
+              },
+              "sensitivity": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "destructive"
+                ]
+              },
+              "defaultEffect": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "deny",
+                  "require_approval"
+                ],
+                "description": "IAM rule-8 fallback when no explicit grant matches"
+              },
+              "scoped": {
+                "type": "boolean",
+                "description": "Whether invocations are tenant-scope enforced"
+              },
+              "noBillingGate": {
+                "type": "boolean",
+                "description": "True when the billing admission gate is skipped (management reads)"
+              },
+              "agent": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "requiresApproval": {
+                        "type": "boolean"
+                      },
+                      "riskLevel": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      "category": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "requiresApproval",
+                      "riskLevel",
+                      "category"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "auditTargetKind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "plugin": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "Capability-pack plugin id (e.g. oxagen/media-svg)"
+                      },
+                      "tier": {
+                        "type": "string",
+                        "enum": [
+                          "free",
+                          "premium"
+                        ]
+                      },
+                      "minPlanTier": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "free",
+                              "build",
+                              "scale",
+                              "enterprise"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "tier",
+                      "minPlanTier"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "orgRoles": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "deny",
+                    "require_approval"
+                  ]
+                },
+                "description": "Default org-role grants (role name → effect)"
+              },
+              "workspaceRoles": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "deny",
+                    "require_approval"
+                  ]
+                },
+                "description": "Default workspace-role grants (role name → effect)"
+              },
+              "inputFields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "description": "Human-readable type (e.g. string, number, enum(a|b))"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "required",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Top-level input fields derived from the contract's zod schema"
+              },
+              "outputFields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "description": "Human-readable type (e.g. string, number, enum(a|b))"
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "required",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Top-level output fields derived from the contract's zod schema"
+              },
+              "auditTargetIdField": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "produces": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Semantic data tags this capability yields"
+              },
+              "consumes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Semantic data tags this capability requires"
+              },
+              "chainHints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Capability names that commonly run after this one"
+              }
+            },
+            "required": [
+              "name",
+              "domain",
+              "description",
+              "mode",
+              "surfaces",
+              "layers",
+              "sensitivity",
+              "defaultEffect",
+              "scoped",
+              "noBillingGate",
+              "agent",
+              "auditTargetKind",
+              "plugin",
+              "orgRoles",
+              "workspaceRoles",
+              "inputFields",
+              "outputFields",
+              "auditTargetIdField",
+              "produces",
+              "consumes",
+              "chainHints"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "capability"
+    ],
+    "additionalProperties": false
+  }
+}

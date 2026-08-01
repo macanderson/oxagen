@@ -1,0 +1,147 @@
+{
+  "name": "create_archive",
+  "domain": "document",
+  "description": "Bundle one or more items — existing generated assets, inline base64 blobs, or plain text — into a ZIP archive. The archive is built in-process with fflate, uploaded to blob storage, and served through the access-controlled /api/v1/assets/<publicId> route.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "documents"
+  },
+  "chain": {
+    "produces": [
+      "asset.id"
+    ],
+    "consumes": [
+      "asset.id",
+      "document.text"
+    ],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "archiveName": {
+        "type": "string",
+        "minLength": 1,
+        "default": "archive"
+      },
+      "entries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "assetId": {
+              "type": "string"
+            },
+            "contentBase64": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "entries"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assetId": {
+        "type": "string"
+      },
+      "publicId": {
+        "type": "string"
+      },
+      "kind": {
+        "const": "archive"
+      },
+      "mimeType": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "number"
+      },
+      "url": {
+        "type": "string"
+      },
+      "serveUrl": {
+        "type": "string"
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "const": "file-attachment"
+          },
+          "props": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "archive"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "sizeBytes": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "url",
+              "name",
+              "kind",
+              "mimeType",
+              "sizeBytes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "assetId",
+      "publicId",
+      "kind",
+      "mimeType",
+      "sizeBytes",
+      "url",
+      "serveUrl",
+      "render"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "unbind_agent_environment",
+  "domain": "agent",
+  "description": "Remove an agent's binding to an environment. When the removed binding was primary, resolution falls back to the workspace default environment and its default template.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "configuration"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "environmentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "agentId",
+      "environmentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ok"
+    ],
+    "additionalProperties": false
+  }
+}

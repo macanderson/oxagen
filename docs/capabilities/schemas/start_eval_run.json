@@ -1,0 +1,118 @@
+{
+  "name": "start_eval_run",
+  "domain": "eval",
+  "description": "Start an eval run: enqueue a background job that runs every dataset item through the target (a model+prompt or an agent) and scores each output with an LLM judge. Target and judge calls flow through @oxagen/ai, so tokens, latency, and cost land in the metering pipe. Poll eval.run.status / eval.run.get for results.",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasetPublicId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "target": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "model"
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "systemPrompt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "agent"
+              },
+              "agentSlug": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "agentSlug"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "judgeModel": {
+        "type": "string",
+        "minLength": 1
+      },
+      "name": {
+        "type": "string"
+      },
+      "passThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.7
+      },
+      "maxItems": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 500
+      }
+    },
+    "required": [
+      "datasetPublicId",
+      "target"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "status": {
+        "const": "pending"
+      },
+      "itemCount": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "runId",
+      "status",
+      "itemCount"
+    ],
+    "additionalProperties": false
+  }
+}

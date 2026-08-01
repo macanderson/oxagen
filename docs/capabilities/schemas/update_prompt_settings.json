@@ -1,0 +1,118 @@
+{
+  "name": "update_prompt_settings",
+  "domain": "workspace",
+  "description": "Update the workspace prompt configuration (partial). `additionalInstructions` and `autoImprovePrompts` are available on all plans; `overrides` (full prompt replacement) is enterprise-only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "additionalInstructions": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 8000
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "overrides": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "conversation.title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "svg.generate": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "image.analyze": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "autoImprovePrompts": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "additionalInstructions": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "overrides": {
+        "type": "object",
+        "properties": {
+          "conversation.title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "svg.generate": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "image.analyze": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "additionalProperties": false
+      },
+      "autoImprovePrompts": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "additionalInstructions",
+      "overrides",
+      "autoImprovePrompts"
+    ],
+    "additionalProperties": false
+  }
+}

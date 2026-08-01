@@ -1,0 +1,59 @@
+{
+  "name": "delete_schema_label",
+  "domain": "schema",
+  "description": "Remove a node label and its properties from the draft.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemaName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "schemaName",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "boolean"
+      },
+      "labelName": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "deleted",
+      "labelName"
+    ],
+    "additionalProperties": false
+  }
+}

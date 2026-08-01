@@ -1,0 +1,89 @@
+{
+  "name": "create_connection",
+  "domain": "connection",
+  "description": "Create a new data source connection for a workspace. Credentials are encrypted before storage.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "write"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectorId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Connector type slug (e.g. 'github', 'google-drive')"
+      },
+      "displayName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "description": "Human-readable name for this connection"
+      },
+      "connectionConfig": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "authCredential": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "Auth credential object — encrypted before storage"
+      },
+      "deliveryMethod": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "connectorId",
+      "displayName",
+      "authCredential"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "description": "Internal UUID of the source_connections row"
+      },
+      "publicId": {
+        "type": "string",
+        "description": "con_* prefixed public ID"
+      },
+      "status": {
+        "const": "pending_setup"
+      },
+      "connectorId": {
+        "type": "string"
+      },
+      "displayName": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "connectionId",
+      "publicId",
+      "status",
+      "connectorId",
+      "displayName"
+    ],
+    "additionalProperties": false
+  }
+}

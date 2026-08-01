@@ -1,0 +1,140 @@
+{
+  "name": "generate_markdown",
+  "domain": "document",
+  "description": "Persist a Markdown document as a first-class generated asset. Raw Markdown source is encoded to UTF-8 bytes, uploaded to blob storage, and served through the access-controlled /api/v1/assets/<publicId> route. No cloud OAuth required — the operation is fully in-process.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "documents"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "markdown": {
+        "type": "string"
+      },
+      "sections": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "heading": {
+              "type": "string"
+            },
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "paragraphs"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assetId": {
+        "type": "string"
+      },
+      "publicId": {
+        "type": "string"
+      },
+      "kind": {
+        "const": "markdown"
+      },
+      "mimeType": {
+        "type": "string"
+      },
+      "sizeBytes": {
+        "type": "number"
+      },
+      "url": {
+        "type": "string"
+      },
+      "serveUrl": {
+        "type": "string"
+      },
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "const": "file-attachment"
+          },
+          "props": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "markdown"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "sizeBytes": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "url",
+              "name",
+              "kind",
+              "mimeType",
+              "sizeBytes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "assetId",
+      "publicId",
+      "kind",
+      "mimeType",
+      "sizeBytes",
+      "url",
+      "serveUrl",
+      "render"
+    ],
+    "additionalProperties": false
+  }
+}

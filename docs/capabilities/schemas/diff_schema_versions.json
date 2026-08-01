@@ -1,0 +1,266 @@
+{
+  "name": "diff_schema_versions",
+  "domain": "schema",
+  "description": "Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fromVersionId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "toVersionId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "fromVersionId",
+      "toVersionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemasAdded": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "schemasRemoved": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "labelsAdded": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "labelName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schemaName",
+            "labelName"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "labelsRemoved": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "labelName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schemaName",
+            "labelName"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "labelsChanged": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "labelName": {
+              "type": "string"
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "schemaName",
+            "labelName",
+            "changes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "relationshipTypesAdded": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "relationshipTypeName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schemaName",
+            "relationshipTypeName"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "relationshipTypesRemoved": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "relationshipTypeName": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schemaName",
+            "relationshipTypeName"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "relationshipTypesChanged": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "schemaName": {
+              "type": "string"
+            },
+            "relationshipTypeName": {
+              "type": "string"
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "schemaName",
+            "relationshipTypeName",
+            "changes"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "propertiesAdded": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "ownerName": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ownerName",
+            "key"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "propertiesRemoved": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "ownerName": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ownerName",
+            "key"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "propertiesChanged": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "ownerName": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "ownerName",
+            "key",
+            "changes"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "schemasAdded",
+      "schemasRemoved",
+      "labelsAdded",
+      "labelsRemoved",
+      "labelsChanged",
+      "relationshipTypesAdded",
+      "relationshipTypesRemoved",
+      "relationshipTypesChanged",
+      "propertiesAdded",
+      "propertiesRemoved",
+      "propertiesChanged"
+    ],
+    "additionalProperties": false
+  }
+}

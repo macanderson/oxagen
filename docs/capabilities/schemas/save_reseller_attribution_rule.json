@@ -1,0 +1,126 @@
+{
+  "name": "save_reseller_attribution_rule",
+  "domain": "billing",
+  "description": "Create or update an attribution rule mapping observed usage (by workspace, principal, or capability) to a reseller customer, with a priority for tie-breaking.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "matchKind": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "principal",
+          "capability"
+        ]
+      },
+      "matchValue": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "matchLabel": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "customerId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "priority": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100000,
+        "default": 100
+      }
+    },
+    "required": [
+      "matchKind",
+      "matchValue",
+      "matchLabel",
+      "customerId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "rule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "matchKind": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "principal",
+              "capability"
+            ]
+          },
+          "matchValue": {
+            "type": "string"
+          },
+          "matchLabel": {
+            "type": "string"
+          },
+          "customerId": {
+            "type": "string"
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "matchKind",
+          "matchValue",
+          "matchLabel",
+          "customerId",
+          "customerName",
+          "priority",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "rule"
+    ],
+    "additionalProperties": false
+  }
+}

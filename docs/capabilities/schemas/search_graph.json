@@ -1,0 +1,97 @@
+{
+  "name": "search_graph",
+  "domain": "graph",
+  "description": "Natural-language semantic (vector) search across customer-context entities in the shared workspace graph, ranked by embedding similarity. Product-owned runtime data is read through its typed memory, execution, trace, and asset capabilities.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "graph"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000,
+        "description": "Natural-language query to embed and search by vector similarity"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 10
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "nodeId": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "entity"
+            },
+            "snippet": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "nodeId",
+            "label",
+            "displayName",
+            "kind",
+            "snippet",
+            "score"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "results"
+    ],
+    "additionalProperties": false
+  }
+}

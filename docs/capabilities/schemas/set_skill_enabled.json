@@ -1,0 +1,69 @@
+{
+  "name": "set_skill_enabled",
+  "domain": "skill",
+  "description": "Enable or disable a skill in the workspace. Disabled skills are hidden from the agent and excluded from tool materialization, but their versions and data are preserved.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the skill (skl_...) or its slug"
+      },
+      "enabled": {
+        "type": "boolean",
+        "description": "true to enable, false to disable"
+      },
+      "workspace_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "skill_id",
+      "enabled"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skill_id": {
+        "type": "string",
+        "description": "Public ID of the skill"
+      },
+      "slug": {
+        "type": "string",
+        "description": "Skill slug"
+      },
+      "enabled": {
+        "type": "boolean",
+        "description": "New enabled state"
+      }
+    },
+    "required": [
+      "skill_id",
+      "slug",
+      "enabled"
+    ],
+    "additionalProperties": false
+  }
+}

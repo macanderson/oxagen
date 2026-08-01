@@ -1,0 +1,104 @@
+{
+  "name": "list_agent_environments",
+  "domain": "agent",
+  "description": "List an agent's environment bindings, with each binding's resolved template name.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "environmentId": {
+              "type": "string"
+            },
+            "environmentName": {
+              "type": "string"
+            },
+            "environmentSlug": {
+              "type": "string"
+            },
+            "sandboxTemplateId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sandboxTemplateName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isPrimary": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "agentId",
+            "environmentId",
+            "environmentName",
+            "environmentSlug",
+            "sandboxTemplateId",
+            "sandboxTemplateName",
+            "isPrimary"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "bindings"
+    ],
+    "additionalProperties": false
+  }
+}

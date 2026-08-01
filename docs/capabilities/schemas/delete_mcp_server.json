@@ -1,0 +1,48 @@
+{
+  "name": "delete_mcp_server",
+  "domain": "agent",
+  "description": "Soft-delete a registered external MCP server. Its tools stop registering immediately, but tool-descriptor snapshots are retained >= 365 days for replay durability before a retention job purges them. The change is audited.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "mcpServerId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mcpServerId": {
+        "type": "string"
+      },
+      "deleted": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "mcpServerId",
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

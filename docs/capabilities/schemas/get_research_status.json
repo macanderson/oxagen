@@ -1,0 +1,125 @@
+{
+  "name": "get_research_status",
+  "domain": "research",
+  "description": "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to agent.subagent.aggregate internally.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "research"
+  },
+  "chain": {
+    "produces": [
+      "search.results"
+    ],
+    "consumes": [
+      "swarm.id"
+    ],
+    "chainHints": [
+      "generate_document"
+    ]
+  },
+  "render": {
+    "componentId": "research-swarm-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "swarmId": {
+        "type": "string",
+        "description": "Swarm ID returned by research.swarm.start"
+      }
+    },
+    "required": [
+      "swarmId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "swarmId": {
+        "type": "string"
+      },
+      "dispatchId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "running",
+          "complete",
+          "failed"
+        ]
+      },
+      "completedTasks": {
+        "type": "number"
+      },
+      "totalTasks": {
+        "type": "number"
+      },
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "resultCount": {
+              "type": "number"
+            },
+            "hits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "snippet": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "title",
+                  "url",
+                  "snippet"
+                ],
+                "additionalProperties": false
+              },
+              "default": []
+            }
+          },
+          "required": [
+            "query",
+            "resultCount"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "swarmId",
+      "dispatchId",
+      "status",
+      "completedTasks",
+      "totalTasks"
+    ],
+    "additionalProperties": false
+  }
+}

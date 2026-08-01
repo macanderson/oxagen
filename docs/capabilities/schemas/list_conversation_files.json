@@ -1,0 +1,154 @@
+{
+  "name": "list_conversation_files",
+  "domain": "conversation",
+  "description": "List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video",
+          "document",
+          "spreadsheet",
+          "presentation",
+          "pdf",
+          "archive"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "conversationId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "image",
+                "video",
+                "document",
+                "spreadsheet",
+                "presentation",
+                "pdf",
+                "archive"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "sizeBytes": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "accessPolicy": {
+              "type": "string",
+              "enum": [
+                "user",
+                "org",
+                "public"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "publicId",
+            "kind",
+            "name",
+            "mimeType",
+            "sizeBytes",
+            "status",
+            "accessPolicy",
+            "createdAt",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "files",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

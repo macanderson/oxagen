@@ -1,0 +1,76 @@
+{
+  "name": "configure_reseller_stripe",
+  "domain": "billing",
+  "description": "Store the reseller's own Stripe secret key (encrypted at rest) so re-bill pushes invoice from their account. Returns only a last-4 fingerprint, never the key.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "secretKey": {
+        "type": "string",
+        "minLength": 12,
+        "maxLength": 200
+      },
+      "accountLabel": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "secretKey"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connected": {
+        "const": true
+      },
+      "accountLabel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "keyLast4": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "connected",
+      "accountLabel",
+      "keyLast4"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "name": "configure_integration",
+  "domain": "integration",
+  "description": "Update plugin instance configuration: credentials, filters, and sync cadence.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "integrationId": {
+        "type": "string",
+        "description": "Plugin instance ID"
+      },
+      "displayName": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "syncCadence": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
+      }
+    },
+    "required": [
+      "integrationId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "integrationId": {
+        "type": "string"
+      },
+      "displayName": {
+        "type": "string"
+      },
+      "syncCadence": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "polling",
+          "webhook"
+        ]
+      },
+      "updatedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "integrationId",
+      "displayName",
+      "syncCadence",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  }
+}

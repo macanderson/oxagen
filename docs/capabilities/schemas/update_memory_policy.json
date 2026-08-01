@@ -1,0 +1,93 @@
+{
+  "name": "update_memory_policy",
+  "domain": "agent",
+  "description": "Update the workspace memory decay policy: half-lives by weight and recall confidence threshold",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "halfLifeLowDays": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 30
+      },
+      "halfLifeHighDays": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 90
+      },
+      "recallThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.1
+      },
+      "complianceThreshold": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 70
+      },
+      "defaultDecayFloor": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "default": 5
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "halfLifeLowDays": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 30
+      },
+      "halfLifeHighDays": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 90
+      },
+      "recallThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.1
+      },
+      "complianceThreshold": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 70
+      },
+      "defaultDecayFloor": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "default": 5
+      }
+    },
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "name": "assign_agent_role",
+  "domain": "agent",
+  "description": "Assign an IAM role to an agent's delegated principal. System agent roles (Agent Observer/Contributor/Operator) are assignable at every tier; custom roles are enterprise-only. Rejected when the role's grants exceed the assigning user's own effective grants (delegation ceiling). Audited with principal_kind='agent'.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Agent public id (agt_…), UUID, or slug — workspace-scoped"
+      },
+      "roleName": {
+        "type": "string",
+        "minLength": 1,
+        "description": "IAM role name to attach (e.g. 'Agent Contributor' or a custom role name)"
+      }
+    },
+    "required": [
+      "agentId",
+      "roleName"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assigned": {
+        "type": "boolean",
+        "description": "True when the role is now attached"
+      },
+      "alreadyAssigned": {
+        "type": "boolean",
+        "description": "True when the agent already held an active assignment"
+      },
+      "agentId": {
+        "type": "string",
+        "description": "Agent public id (agt_…)"
+      },
+      "roleId": {
+        "type": "string",
+        "description": "Public role id (rol_…)"
+      },
+      "roleName": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "assigned",
+      "alreadyAssigned",
+      "agentId",
+      "roleId",
+      "roleName"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "name": "submit_page",
+  "domain": "browser",
+  "description": "Submit a form on the durable sandbox browser's current page (click the given selector, or press Enter) and wait for the result to settle.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "url": {
+        "type": "string",
+        "description": "The page URL after submission settles."
+      }
+    },
+    "required": [
+      "ok",
+      "url"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "name": "list_subagent_siblings",
+  "domain": "agent",
+  "description": "Given a running fanout child's runId, return its sibling runs as compact rows (capability, status, summary, attempts) so the caller can see what siblings already covered before burning tokens — NEVER full payloads; a sibling's full output is one agent.subagent.result.get away.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string",
+        "description": "Public ID of the calling child run (sar_…) whose siblings to list"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string",
+        "description": "The calling run's public ID, echoed back"
+      },
+      "fanoutId": {
+        "type": "string",
+        "description": "Public ID of the fanout these runs belong to"
+      },
+      "siblings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string"
+            },
+            "capabilityName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed"
+              ]
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attempts": {
+              "type": "integer",
+              "description": "How many times this run has been attempted/leased"
+            },
+            "errorReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "runId",
+            "capabilityName",
+            "status",
+            "summary",
+            "attempts",
+            "errorReason"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Fanout siblings, EXCLUDING the calling run itself — compact rows, never payloads"
+      }
+    },
+    "required": [
+      "runId",
+      "fanoutId",
+      "siblings"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "name": "create_repo",
+  "domain": "repo",
+  "description": "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "org": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "description": {
+        "type": "string"
+      },
+      "private": {
+        "type": "boolean"
+      },
+      "autoInit": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fullName": {
+        "type": "string",
+        "description": "Owner/repo full name (e.g. myorg/myrepo)"
+      },
+      "htmlUrl": {
+        "type": "string",
+        "description": "HTML URL of the new repository"
+      },
+      "defaultBranch": {
+        "type": "string",
+        "description": "Default branch name"
+      }
+    },
+    "required": [
+      "fullName",
+      "htmlUrl",
+      "defaultBranch"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "name": "toggle_schema",
+  "domain": "schema",
+  "description": "Enable/disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemaName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "enabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schemaName",
+      "enabled"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemaName": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "publishedVersionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pinnedVersionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "isDowngrade": {
+        "type": "boolean"
+      },
+      "reconcileRecommended": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schemaName",
+      "enabled",
+      "publishedVersionId",
+      "pinnedVersionId",
+      "isDowngrade",
+      "reconcileRecommended"
+    ],
+    "additionalProperties": false
+  }
+}

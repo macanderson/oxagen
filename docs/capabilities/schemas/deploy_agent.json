@@ -1,0 +1,66 @@
+{
+  "name": "deploy_agent",
+  "domain": "agent",
+  "description": "Set an agent's deployment posture. Activating requires a published active version (else a typed error); deactivating is always allowed and makes the agent's triggers dormant",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "description": "Agent public id (agt_…) or UUID"
+      },
+      "deploymentStatus": {
+        "type": "string",
+        "enum": [
+          "inactive",
+          "active"
+        ]
+      }
+    },
+    "required": [
+      "agentId",
+      "deploymentStatus"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "deploymentStatus": {
+        "type": "string",
+        "enum": [
+          "inactive",
+          "active"
+        ]
+      }
+    },
+    "required": [
+      "agentId",
+      "deploymentStatus"
+    ],
+    "additionalProperties": false
+  }
+}

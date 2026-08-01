@@ -1,0 +1,65 @@
+{
+  "name": "export_skill",
+  "domain": "skill",
+  "description": "Export the active or specified immutable skill version as canonical TOML",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "skill"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "skillId": {
+        "type": "string",
+        "description": "Public ID of the skill (skl_…) or its slug"
+      },
+      "versionNumber": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "skillId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "Suggested filename for the download (e.g. my-skill.toml)"
+      },
+      "content": {
+        "type": "string",
+        "description": "Canonical skill.toml content"
+      },
+      "versionNumber": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Version number that was exported"
+      }
+    },
+    "required": [
+      "filename",
+      "content",
+      "versionNumber"
+    ],
+    "additionalProperties": false
+  }
+}

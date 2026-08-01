@@ -1,0 +1,61 @@
+{
+  "name": "disable_automation",
+  "domain": "automation",
+  "description": "Disable an automation trigger so it stops firing. Safe to call without confirmation. Returns the new enabled state.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "automation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Trigger public ID returned by automation.create / automation.list"
+      }
+    },
+    "required": [
+      "automation_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "automation_id": {
+        "type": "string"
+      },
+      "enabled": {
+        "type": "boolean"
+      },
+      "status": {
+        "type": "string",
+        "description": "'paused' once disabled"
+      }
+    },
+    "required": [
+      "automation_id",
+      "enabled",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

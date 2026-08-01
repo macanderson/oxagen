@@ -1,0 +1,68 @@
+{
+  "name": "click_page",
+  "domain": "browser",
+  "description": "Click an element (by CSS selector) on the durable sandbox browser's current page. Playwright auto-waits for the element to be actionable.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "browser"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…)."
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1,
+        "description": "CSS selector of the element to click."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "default": 60000
+      }
+    },
+    "required": [
+      "sessionId",
+      "selector"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "url": {
+        "type": "string",
+        "description": "The page URL after the click settles."
+      }
+    },
+    "required": [
+      "ok",
+      "url"
+    ],
+    "additionalProperties": false
+  }
+}

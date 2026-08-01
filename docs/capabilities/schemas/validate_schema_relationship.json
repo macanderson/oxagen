@@ -1,0 +1,126 @@
+{
+  "name": "validate_schema_relationship",
+  "domain": "schema",
+  "description": "Validate a relationship's type and properties against the workspace schema. Returns conformance score and field-level errors.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "minLength": 1
+      },
+      "startLabel": {
+        "type": "string",
+        "minLength": 1
+      },
+      "endLabel": {
+        "type": "string",
+        "minLength": 1
+      },
+      "properties": {
+        "type": "object",
+        "additionalProperties": {}
+      },
+      "versionId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "type",
+      "startLabel",
+      "endLabel",
+      "properties"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "valid": {
+        "type": "boolean"
+      },
+      "conformanceScore": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "errors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "code": {
+              "type": "string",
+              "enum": [
+                "required",
+                "min",
+                "max",
+                "minItems",
+                "maxItems",
+                "pattern",
+                "type",
+                "oneOf",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "field",
+            "message",
+            "code"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "missingRequired": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "rejected",
+          "written_below_floor"
+        ]
+      }
+    },
+    "required": [
+      "valid",
+      "conformanceScore",
+      "errors",
+      "missingRequired",
+      "outcome"
+    ],
+    "additionalProperties": false
+  }
+}

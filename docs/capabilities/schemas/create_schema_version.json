@@ -1,0 +1,59 @@
+{
+  "name": "create_schema_version",
+  "domain": "schema",
+  "description": "Freeze the current draft into an immutable published version and open a fresh draft.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "label": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "changeSummary": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "versionId": {
+        "type": "string"
+      },
+      "versionNumber": {
+        "type": "integer"
+      },
+      "publishedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "versionId",
+      "versionNumber",
+      "publishedAt"
+    ],
+    "additionalProperties": false
+  }
+}

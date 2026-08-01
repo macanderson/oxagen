@@ -1,0 +1,90 @@
+{
+  "name": "list_sandbox_files",
+  "domain": "agent",
+  "description": "List files and directories inside a durable sandbox session's workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "execution"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Durable-session id (sbx_…) returned by agent.sandbox.start."
+      },
+      "path": {
+        "type": "string",
+        "maxLength": 1024
+      },
+      "depth": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5,
+        "default": 2
+      }
+    },
+    "required": [
+      "sessionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "entries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "file",
+                "dir"
+              ]
+            },
+            "sizeBytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "gitignored": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "kind",
+            "sizeBytes"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "entries"
+    ],
+    "additionalProperties": false
+  }
+}

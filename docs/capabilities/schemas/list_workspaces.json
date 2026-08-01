@@ -1,0 +1,119 @@
+{
+  "name": "list_workspaces",
+  "domain": "workspace",
+  "description": "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgSlug": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Slug of the organization whose workspaces to list"
+      }
+    },
+    "required": [
+      "orgSlug"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "organization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "publicId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "publicId",
+          "slug",
+          "namespace",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "workspaces": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "namespace": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "role": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "publicId",
+            "slug",
+            "namespace",
+            "name",
+            "role"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "organization",
+      "workspaces"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "name": "upsert_schema_property",
+  "domain": "schema",
+  "description": "Create/update a property on a node label or relationship type in the draft.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ownerKind": {
+        "type": "string",
+        "enum": [
+          "node",
+          "relationship"
+        ],
+        "description": "Whether the property belongs to a node label or relationship type"
+      },
+      "ownerName": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The label or relationship type name"
+      },
+      "key": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "Property name"
+      },
+      "dataType": {
+        "type": "string",
+        "enum": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "date",
+          "datetime",
+          "url",
+          "email",
+          "enum",
+          "json",
+          "array"
+        ]
+      },
+      "required": {
+        "type": "boolean",
+        "default": false
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 2000
+      },
+      "enumValues": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "itemType": {
+        "type": "string"
+      },
+      "constraints": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "minLength": {
+            "type": "integer"
+          },
+          "maxLength": {
+            "type": "integer"
+          },
+          "pattern": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Validation constraints mirroring the connector FieldValidation shape"
+      },
+      "example": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "ownerKind",
+      "ownerName",
+      "key",
+      "dataType"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "propertyId": {
+        "type": "string"
+      },
+      "created": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "propertyId",
+      "created"
+    ],
+    "additionalProperties": false
+  }
+}

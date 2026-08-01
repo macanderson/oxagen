@@ -1,0 +1,102 @@
+{
+  "name": "send_message",
+  "domain": "chat",
+  "description": "Append a user message to a conversation and stream the assistant reply",
+  "mode": "async",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "parentMessageId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "branchReason": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "edit",
+              "regenerate",
+              "tool_retry",
+              "manual_fork"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "content": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32768
+      },
+      "contentBlocks": {
+        "type": "array",
+        "items": {},
+        "default": []
+      }
+    },
+    "required": [
+      "conversationId",
+      "parentMessageId",
+      "branchReason",
+      "content"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "conversationId": {
+        "type": "string"
+      },
+      "userMessageId": {
+        "type": "string"
+      },
+      "assistantMessageId": {
+        "type": "string"
+      },
+      "activeLeafMessageId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "conversationId",
+      "userMessageId",
+      "assistantMessageId",
+      "activeLeafMessageId"
+    ],
+    "additionalProperties": false
+  }
+}

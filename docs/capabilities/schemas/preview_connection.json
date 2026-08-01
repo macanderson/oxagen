@@ -1,0 +1,92 @@
+{
+  "name": "preview_connection",
+  "domain": "connection",
+  "description": "Preview sample records from a data source connection. Used in the setup wizard to show what data will be ingested.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Public ID or internal UUID of the connection"
+      }
+    },
+    "required": [
+      "connectionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recordTypes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sourceRecordType": {
+              "type": "string",
+              "description": "Raw record type from the connector"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sampleCount": {
+              "type": "number"
+            },
+            "sampleFields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Key field names seen in sample records"
+            },
+            "sampleRecords": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "description": "Up to 3 sample records for display"
+            }
+          },
+          "required": [
+            "sourceRecordType",
+            "displayName",
+            "sampleCount",
+            "sampleFields",
+            "sampleRecords"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "recordTypes"
+    ],
+    "additionalProperties": false
+  }
+}

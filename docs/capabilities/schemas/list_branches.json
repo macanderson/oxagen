@@ -1,0 +1,95 @@
+{
+  "name": "list_branches",
+  "domain": "repo",
+  "description": "List branches in a GitHub repository, including each branch's SHA, protection status, and which one is the repository's default branch.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      }
+    },
+    "required": [
+      "owner",
+      "repo"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "branches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Branch name"
+            },
+            "sha": {
+              "type": "string",
+              "description": "SHA that the branch currently points to"
+            },
+            "isDefault": {
+              "type": "boolean",
+              "description": "Whether this is the repository's default branch"
+            },
+            "protected": {
+              "type": "boolean",
+              "description": "Whether the branch has protection rules enabled"
+            }
+          },
+          "required": [
+            "name",
+            "sha",
+            "isDefault",
+            "protected"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Branches returned by GitHub, up to 300 (3 pages of 100), in GitHub's default order"
+      },
+      "defaultBranch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "branches",
+      "defaultBranch"
+    ],
+    "additionalProperties": false
+  }
+}

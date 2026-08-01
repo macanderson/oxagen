@@ -1,0 +1,82 @@
+{
+  "name": "format_code",
+  "domain": "code",
+  "description": "Run a language-aware formatter on source inside the sandbox and return the formatted text. Supports json (re-indent) and python (canonical ast normalization). Requires SANDBOX_ENABLED=true.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "code"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "language": {
+        "type": "string",
+        "enum": [
+          "json",
+          "python"
+        ],
+        "description": "Language to format"
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1048576,
+        "description": "Source code to format"
+      },
+      "indent": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 8,
+        "default": 2
+      }
+    },
+    "required": [
+      "language",
+      "source"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "formatted": {
+        "type": "string",
+        "description": "The formatted source"
+      },
+      "changed": {
+        "type": "boolean",
+        "description": "True when the formatted output differs from the input"
+      },
+      "language": {
+        "type": "string",
+        "enum": [
+          "json",
+          "python"
+        ],
+        "description": "Language to format"
+      }
+    },
+    "required": [
+      "formatted",
+      "changed",
+      "language"
+    ],
+    "additionalProperties": false
+  }
+}

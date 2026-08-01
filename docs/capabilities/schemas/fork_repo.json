@@ -1,0 +1,69 @@
+{
+  "name": "fork_repo",
+  "domain": "repo",
+  "description": "Fork a GitHub repository into the authenticated user's account or a specified organization.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "intoOrg": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "owner",
+      "repo"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fullName": {
+        "type": "string",
+        "description": "Owner/repo full name of the fork"
+      },
+      "htmlUrl": {
+        "type": "string",
+        "description": "HTML URL of the fork"
+      },
+      "defaultBranch": {
+        "type": "string",
+        "description": "Default branch name of the fork"
+      }
+    },
+    "required": [
+      "fullName",
+      "htmlUrl",
+      "defaultBranch"
+    ],
+    "additionalProperties": false
+  }
+}

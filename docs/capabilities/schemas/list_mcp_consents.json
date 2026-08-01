@@ -1,0 +1,111 @@
+{
+  "name": "list_mcp_consents",
+  "domain": "agent",
+  "description": "List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "mineOnly": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "consents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "publicId": {
+              "type": "string"
+            },
+            "userId": {
+              "type": "string"
+            },
+            "mcpServerId": {
+              "type": "string"
+            },
+            "toolName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "granted",
+                "denied"
+              ]
+            },
+            "grantedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "deniedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "publicId",
+            "userId",
+            "mcpServerId",
+            "toolName",
+            "status",
+            "grantedAt",
+            "deniedAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "consents"
+    ],
+    "additionalProperties": false
+  }
+}

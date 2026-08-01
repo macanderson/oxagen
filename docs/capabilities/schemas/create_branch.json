@@ -1,0 +1,69 @@
+{
+  "name": "create_branch",
+  "domain": "repo",
+  "description": "Create a new branch in a GitHub repository, optionally from another branch.",
+  "mode": "sync",
+  "surfaces": [
+    "agent",
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "vcs"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "description": "Repository owner (user or organisation)"
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name"
+      },
+      "branch": {
+        "type": "string",
+        "description": "Name of the new branch to create. Must not be the repository's default branch name (rejected with 403)."
+      },
+      "fromBranch": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "owner",
+      "repo",
+      "branch"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ref": {
+        "type": "string",
+        "description": "Full Git ref of the newly created branch (e.g. refs/heads/my-feature)"
+      },
+      "sha": {
+        "type": "string",
+        "description": "SHA that the new branch points to"
+      }
+    },
+    "required": [
+      "ref",
+      "sha"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "delete_agent_def",
+  "domain": "agent",
+  "description": "Soft-delete an agent definition and its delegated IAM principal together — the row is retained for audit but the agent stops appearing in every list and can no longer run",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "destructive",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "description": "Agent public id (agt_…) or UUID"
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "deleted": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "agentId",
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "purge_conversations",
+  "domain": "conversation",
+  "description": "Permanently delete every archived conversation the caller owns in this workspace (soft-delete: sets deleted_at; rows retained for audit)",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "destructive",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "deleted": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

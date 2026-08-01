@@ -1,0 +1,68 @@
+{
+  "name": "create_image",
+  "domain": "image",
+  "description": "Generate an image from a prompt and persist it as a workspace asset",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "generation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "minLength": 1
+      },
+      "model": {
+        "type": "string",
+        "enum": [
+          "gpt-image-1",
+          "flux-2-max"
+        ],
+        "default": "gpt-image-1"
+      },
+      "size": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "prompt"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "image_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "created_at": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "image_id",
+      "url",
+      "created_at"
+    ],
+    "additionalProperties": false
+  }
+}

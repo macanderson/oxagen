@@ -1,0 +1,262 @@
+{
+  "name": "aggregate_subagents",
+  "domain": "agent",
+  "description": "Return the status, per-child summaries, conflict list, and execution timeline for a subagent fanout. Compact by default: each child carries a ≤280-char summary plus its runId — fetch ONE child's full output with agent.subagent.result.get only when its summary is insufficient; do not fetch every child. While the fanout is still running the response is counts + recheckAfterMs only — wait that long before checking again instead of polling in a tight loop. Non-blocking: durable waiting is handled by the agent.aggregate-fanout Inngest function.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "background"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string",
+        "description": "Public ID of the subagent fanout to aggregate"
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1800000,
+        "default": 300000
+      },
+      "includeOutputs": {
+        "type": "boolean",
+        "default": false
+      },
+      "includeMerged": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "fanoutId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fanoutId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "partial",
+          "failed",
+          "timed_out"
+        ],
+        "description": "running/pending = children still executing (aggregatedData null); completed = all succeeded; partial = some succeeded, some failed/incomplete (merged data of the successful subset); failed = none succeeded; timed_out = still unfinished past the snapshot window"
+      },
+      "totalChildren": {
+        "type": "integer"
+      },
+      "completedChildren": {
+        "type": "integer"
+      },
+      "aggregatedData": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "aggregatedDataTruncated": {
+        "type": "boolean",
+        "description": "True when includeMerged was requested but the merge exceeded 16384 serialized bytes — fetch per-child outputs via agent.subagent.result.get instead."
+      },
+      "conflicts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "values": {
+              "type": "array",
+              "items": {}
+            },
+            "runIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "key",
+            "values",
+            "runIds"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Keys where two or more runs produced different values"
+      },
+      "timeline": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string"
+            },
+            "capabilityName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "startedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "completedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "errorReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "runId",
+            "capabilityName",
+            "status",
+            "startedAt",
+            "completedAt",
+            "errorReason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "children": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Ref for agent.subagent.result.get"
+            },
+            "capabilityName": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string",
+              "description": "≤280-char structural digest of the child's output (or error)"
+            },
+            "outputBytes": {
+              "type": "integer",
+              "description": "Serialized size of the full output payload, 0 when none"
+            },
+            "errorReason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "input": {},
+            "output": {},
+            "outputTruncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "runId",
+            "capabilityName",
+            "status",
+            "summary",
+            "outputBytes",
+            "errorReason"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Per-child compact results: runId + summary + size, NOT full payloads. Empty while the fanout is still running (compact mode) — use timeline for live per-child status. Fetch a specific child's full output via agent.subagent.result.get. With includeOutputs (deprecated) each entry also carries its full input/output, preserving each child's distinct result unlike aggregatedData's deep-merge."
+      },
+      "recheckAfterMs": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "firstError": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "fanoutId",
+      "status",
+      "totalChildren",
+      "completedChildren",
+      "aggregatedData",
+      "aggregatedDataTruncated",
+      "conflicts",
+      "timeline",
+      "children",
+      "recheckAfterMs",
+      "firstError"
+    ],
+    "additionalProperties": false
+  }
+}

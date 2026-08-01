@@ -1,0 +1,69 @@
+{
+  "name": "pin_schema_version",
+  "domain": "schema",
+  "description": "Point the workspace at a published version; returns whether a pin downgrade occurred.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "versionId": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "versionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pinnedVersionId": {
+        "type": "string"
+      },
+      "previousVersionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "isDowngrade": {
+        "type": "boolean"
+      },
+      "reconcileRecommended": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "pinnedVersionId",
+      "previousVersionId",
+      "isDowngrade",
+      "reconcileRecommended"
+    ],
+    "additionalProperties": false
+  }
+}

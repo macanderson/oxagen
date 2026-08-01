@@ -1,0 +1,402 @@
+{
+  "name": "get_citation_stats",
+  "domain": "agent",
+  "description": "Workspace citation analytics: totals and influence/compliance breakdowns, daily citation series, most-cited and least-useful memories, most-cited graph nodes, and most-violated rules.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 365,
+        "default": 30
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 10
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "totals": {
+        "type": "object",
+        "properties": {
+          "citations": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "executions": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Distinct executions that cited anything in the window"
+          },
+          "memoriesCited": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodesCited": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Distinct non-memory graph nodes cited"
+          }
+        },
+        "required": [
+          "citations",
+          "executions",
+          "memoriesCited",
+          "nodesCited"
+        ],
+        "additionalProperties": false
+      },
+      "byInfluence": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        },
+        "description": "Citation count per influence level (DECISIVE/CONTRIBUTING/CONSIDERED/IGNORED)"
+      },
+      "byCompliance": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        },
+        "description": "Citation count per compliance outcome (COMPLIED/DISCRETION/VIOLATION/NA)"
+      },
+      "daily": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            },
+            "citations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violations": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "date",
+            "citations",
+            "violations"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Per-day citation and violation counts across the window"
+      },
+      "topMemories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memoryId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "lesson": {
+              "type": "string"
+            },
+            "memoryClass": {
+              "type": "string",
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decisiveCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contributingCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "consideredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignoredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violationCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "memoryId",
+            "publicId",
+            "lesson",
+            "memoryClass",
+            "memoryKind",
+            "citationCount",
+            "decisiveCount",
+            "contributingCount",
+            "consideredCount",
+            "ignoredCount",
+            "violationCount"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Most-cited memories in the window, with influence breakdown"
+      },
+      "leastUsefulMemories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memoryId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "lesson": {
+              "type": "string"
+            },
+            "memoryClass": {
+              "type": "string",
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decisiveCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contributingCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "consideredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignoredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violationCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "memoryId",
+            "publicId",
+            "lesson",
+            "memoryClass",
+            "memoryKind",
+            "citationCount",
+            "decisiveCount",
+            "contributingCount",
+            "consideredCount",
+            "ignoredCount",
+            "violationCount"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Memories repeatedly recalled but never influential (no DECISIVE/CONTRIBUTING citations)"
+      },
+      "mostViolatedRules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memoryId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "lesson": {
+              "type": "string"
+            },
+            "memoryClass": {
+              "type": "string",
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decisiveCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "contributingCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "consideredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignoredCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violationCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "memoryId",
+            "publicId",
+            "lesson",
+            "memoryClass",
+            "memoryKind",
+            "citationCount",
+            "decisiveCount",
+            "contributingCount",
+            "consideredCount",
+            "ignoredCount",
+            "violationCount"
+          ],
+          "additionalProperties": false
+        },
+        "description": "RULE/FACT memories ranked by violation citations"
+      },
+      "topNodes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "description": "Domain label or type"
+                },
+                "displayName": {
+                  "type": "string",
+                  "description": "Human-readable name"
+                },
+                "properties": {
+                  "type": "object",
+                  "additionalProperties": {},
+                  "default": {}
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "displayName"
+              ],
+              "additionalProperties": false
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "decisiveCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ignoredCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "node",
+            "citationCount",
+            "decisiveCount",
+            "ignoredCount"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Most-cited non-memory graph nodes, resolved to human-label refs"
+      }
+    },
+    "required": [
+      "totals",
+      "byInfluence",
+      "byCompliance",
+      "daily",
+      "topMemories",
+      "leastUsefulMemories",
+      "mostViolatedRules",
+      "topNodes"
+    ],
+    "additionalProperties": false
+  }
+}

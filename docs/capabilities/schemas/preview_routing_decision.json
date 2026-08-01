@@ -1,0 +1,179 @@
+{
+  "name": "preview_routing_decision",
+  "domain": "router",
+  "description": "Dry-run the market router for a prompt: derive its task class, read observed outcomes, and return the full decision (chosen model + tier, rationale, source, and the ranked candidate audit trail) under the effective policy plus any overrides. Changes nothing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "prompt": {
+        "type": "string",
+        "minLength": 1
+      },
+      "fileCount": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "crossPackage": {
+        "type": "boolean"
+      },
+      "taskClass": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "shadow",
+          "enforce"
+        ]
+      },
+      "successThreshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minSamples": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "windowDays": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "escalateOnRejection": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "prompt"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "tier": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "rationale": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "market",
+          "deterministic-fallback"
+        ]
+      },
+      "taskClass": {
+        "type": "string"
+      },
+      "candidates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "verifiedRate": {
+              "type": "number"
+            },
+            "samples": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "avgCostUsdMicros": {
+              "type": "number"
+            },
+            "eligible": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "verifiedRate",
+            "samples",
+            "avgCostUsdMicros",
+            "eligible",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "policySnapshot": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "shadow",
+              "enforce"
+            ]
+          },
+          "successThreshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minSamples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "windowDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "escalateOnRejection": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "successThreshold",
+          "minSamples",
+          "windowDays",
+          "escalateOnRejection"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "tier",
+      "model",
+      "rationale",
+      "source",
+      "taskClass",
+      "candidates",
+      "policySnapshot"
+    ],
+    "additionalProperties": false
+  }
+}

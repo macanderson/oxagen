@@ -1,0 +1,264 @@
+{
+  "name": "get_agent_def",
+  "domain": "agent",
+  "description": "Fetch an agent definition with its active (or latest) version config, parsed and validated via parseAgentDefinitionConfig",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "description": "Agent public id (agt_…), UUID, or slug"
+      }
+    },
+    "required": [
+      "agentId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "publicId": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "agentKey": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "avatarUrl": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "summary": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "agentType": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ]
+      },
+      "deploymentStatus": {
+        "type": "string",
+        "enum": [
+          "inactive",
+          "active"
+        ]
+      },
+      "version": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "isPublished": {
+        "type": "boolean"
+      },
+      "managed": {
+        "type": "boolean",
+        "description": "True for product-managed (built-in) agents that are read-only to customers — viewable but not editable, publishable, deployable, or trigger-configurable"
+      },
+      "config": {
+        "type": "object",
+        "properties": {
+          "graph": {
+            "type": "object",
+            "properties": {
+              "ontologyId": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "extend"
+                ],
+                "default": "read"
+              },
+              "retrieval": {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "semantic",
+                      "lexical",
+                      "hybrid",
+                      "explicit"
+                    ]
+                  },
+                  "scopeToTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "strategy"
+                ],
+                "additionalProperties": false
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "maxHops": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "maxNodes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "minRelevance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "maxTraversalMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "maxHops",
+                  "maxNodes"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "ontologyId",
+              "retrieval",
+              "budget"
+            ],
+            "additionalProperties": false
+          },
+          "agentTools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "function",
+                    "mcp_server",
+                    "skill",
+                    "agent"
+                  ]
+                },
+                "ref": {
+                  "type": "string"
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "type",
+                "ref"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "instructions": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "graph",
+          "agentTools"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "agentId",
+      "publicId",
+      "slug",
+      "agentKey",
+      "name",
+      "description",
+      "avatarUrl",
+      "summary",
+      "agentType",
+      "status",
+      "deploymentStatus",
+      "version",
+      "isPublished",
+      "managed",
+      "config"
+    ],
+    "additionalProperties": false
+  }
+}

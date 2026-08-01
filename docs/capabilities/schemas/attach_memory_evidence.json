@@ -1,0 +1,80 @@
+{
+  "name": "attach_memory_evidence",
+  "domain": "agent",
+  "description": "Attach supporting or refuting evidence to a memory, adjusting its confidence and refreshing the decay clock.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memoryId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sourceKind": {
+        "type": "string",
+        "enum": [
+          "CITATION",
+          "HUMAN_CONFIRM",
+          "CODE_SCAN",
+          "AGENT_JUDGE",
+          "REPEAT_OBSERVATION"
+        ]
+      },
+      "strength": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "0-1 contribution; confidence moves by strength*100"
+      },
+      "detail": {
+        "type": "string",
+        "maxLength": 1000
+      },
+      "refutes": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "memoryId",
+      "sourceKind",
+      "strength"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "evidenceId": {
+        "type": "string"
+      },
+      "confidenceScore": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "evidenceId",
+      "confidenceScore"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "export_schema",
+  "domain": "schema",
+  "description": "Build a ZIP of a version (grouped by schema) via the archive.create plumbing; returns access-controlled serveUrl.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "versionId": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "assetId": {
+        "type": "string"
+      },
+      "serveUrl": {
+        "type": "string",
+        "description": "Access-controlled URL to download the ZIP"
+      },
+      "versionId": {
+        "type": "string"
+      },
+      "versionNumber": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "assetId",
+      "serveUrl",
+      "versionId",
+      "versionNumber"
+    ],
+    "additionalProperties": false
+  }
+}

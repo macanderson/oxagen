@@ -1,0 +1,184 @@
+{
+  "name": "list_agent_defs",
+  "domain": "agent",
+  "description": "List the agent definitions in the current workspace with their identity, lifecycle status, deployment posture, and latest version number",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": {
+    "componentId": "agent-definition-list-card"
+  },
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "archived"
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agentType": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "archived"
+              ]
+            },
+            "deploymentStatus": {
+              "type": "string",
+              "enum": [
+                "inactive",
+                "active"
+              ]
+            },
+            "latestVersion": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "managed": {
+              "type": "boolean",
+              "description": "True for product-managed (built-in) agents that are read-only to customers — viewable but not editable, publishable, deployable, or trigger-configurable"
+            },
+            "toolRefs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "function",
+                      "mcp_server",
+                      "skill",
+                      "agent"
+                    ]
+                  },
+                  "ref": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              "default": []
+            }
+          },
+          "required": [
+            "agentId",
+            "publicId",
+            "slug",
+            "agentKey",
+            "name",
+            "description",
+            "avatarUrl",
+            "summary",
+            "agentType",
+            "status",
+            "deploymentStatus",
+            "latestVersion",
+            "managed"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "agents"
+    ],
+    "additionalProperties": false
+  }
+}

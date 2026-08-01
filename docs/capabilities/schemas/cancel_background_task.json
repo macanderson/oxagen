@@ -1,0 +1,61 @@
+{
+  "name": "cancel_background_task",
+  "domain": "agent",
+  "description": "Cancel a running background task; downstream Inngest steps stop on next checkpoint",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "background"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "cancelled",
+          "already_completed",
+          "already_cancelled"
+        ]
+      }
+    },
+    "required": [
+      "taskId",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

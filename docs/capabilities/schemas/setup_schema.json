@@ -1,0 +1,83 @@
+{
+  "name": "setup_schema",
+  "domain": "schema",
+  "description": "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (schema.chat) → apply → activate.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "schema"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sampleLimit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5000,
+        "default": 200
+      },
+      "enforcement": {
+        "type": "string",
+        "enum": [
+          "strict",
+          "lenient",
+          "off"
+        ]
+      },
+      "noInteractive": {
+        "type": "boolean"
+      },
+      "json": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "schemasCreated": {
+        "type": "number"
+      },
+      "labelsCreated": {
+        "type": "number"
+      },
+      "relationshipTypesCreated": {
+        "type": "number"
+      },
+      "pinnedVersionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schemasCreated",
+      "labelsCreated",
+      "relationshipTypesCreated",
+      "pinnedVersionId"
+    ],
+    "additionalProperties": false
+  }
+}

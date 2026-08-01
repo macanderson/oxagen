@@ -1,0 +1,101 @@
+{
+  "name": "rotate_api_key",
+  "domain": "api_key",
+  "description": "Atomically issue a replacement API key and revoke the old one. The replacement inherits the old key's scope/workspace/expiry and is returned once — never recoverable after this call. Audited as api_key.created + api_key.revoked.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "keyPublicId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "The aky_* public ID of the API key to rotate"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "required": [
+      "keyPublicId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "keyId": {
+        "type": "string",
+        "description": "Internal UUID of the new key"
+      },
+      "publicId": {
+        "type": "string",
+        "description": "Prefixed public identifier of the new key (aky_ prefix)"
+      },
+      "name": {
+        "type": "string"
+      },
+      "keyPrefix": {
+        "type": "string",
+        "description": "Short prefix of the new key, stored for index lookup"
+      },
+      "rawKey": {
+        "type": "string",
+        "description": "The full replacement API key — shown ONCE, never again"
+      },
+      "expiresAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "createdAt": {
+        "type": "string",
+        "description": "ISO-8601 creation timestamp of the new key"
+      },
+      "revokedKeyPublicId": {
+        "type": "string",
+        "description": "Public ID of the now-revoked old key"
+      },
+      "revokedAt": {
+        "type": "string",
+        "description": "ISO-8601 timestamp the old key was revoked"
+      }
+    },
+    "required": [
+      "keyId",
+      "publicId",
+      "name",
+      "keyPrefix",
+      "rawKey",
+      "expiresAt",
+      "createdAt",
+      "revokedKeyPublicId",
+      "revokedAt"
+    ],
+    "additionalProperties": false
+  }
+}

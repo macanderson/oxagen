@@ -1,0 +1,133 @@
+{
+  "name": "create_org",
+  "domain": "org",
+  "description": "Create a new organization with a globally-unique slug",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "organization"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 40
+      },
+      "planSlug": {
+        "const": "free",
+        "default": "free"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "business"
+        ],
+        "default": "business"
+      },
+      "website": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 2048
+      },
+      "industry": {
+        "type": "string",
+        "enum": [
+          "software-it",
+          "financial-services",
+          "healthcare",
+          "retail-ecommerce",
+          "manufacturing",
+          "education",
+          "media-entertainment",
+          "real-estate",
+          "professional-services",
+          "marketing-advertising",
+          "telecommunications",
+          "energy-utilities",
+          "transportation-logistics",
+          "travel-hospitality",
+          "construction",
+          "agriculture",
+          "government",
+          "nonprofit",
+          "legal",
+          "insurance",
+          "automotive",
+          "food-beverage",
+          "pharmaceuticals",
+          "other"
+        ]
+      },
+      "employeeSize": {
+        "type": "string",
+        "enum": [
+          "1",
+          "2-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "501-1000",
+          "1001-5000",
+          "5001-10000",
+          "10000+"
+        ]
+      }
+    },
+    "required": [
+      "name",
+      "slug"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "publicId",
+      "name",
+      "slug",
+      "type",
+      "createdAt"
+    ],
+    "additionalProperties": false
+  }
+}

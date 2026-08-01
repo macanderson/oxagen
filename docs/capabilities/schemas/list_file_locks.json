@@ -1,0 +1,93 @@
+{
+  "name": "list_file_locks",
+  "domain": "agent",
+  "description": "List every currently-live file lock in the workspace, optionally filtered to one file.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string"
+      },
+      "owner": {
+        "type": "string"
+      },
+      "repo": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "locks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lockId": {
+              "type": "string"
+            },
+            "naturalKey": {
+              "type": "string"
+            },
+            "agentId": {
+              "type": "string",
+              "description": "Identity currently holding the lock."
+            },
+            "acquiredAt": {
+              "type": "integer"
+            },
+            "expiresAt": {
+              "type": "integer"
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "action": {
+              "type": "string"
+            },
+            "executionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "lockId",
+            "naturalKey",
+            "agentId",
+            "acquiredAt",
+            "expiresAt",
+            "workspaceId",
+            "action",
+            "executionId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "locks"
+    ],
+    "additionalProperties": false
+  }
+}

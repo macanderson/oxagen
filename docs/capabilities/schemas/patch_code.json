@@ -1,0 +1,98 @@
+{
+  "name": "patch_code",
+  "domain": "code",
+  "description": "Apply a unified diff to an in-memory, path-confined workspace (path → contents) and return only the changed files. Rejects diffs that target paths outside the workspace or fail to apply cleanly.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "code"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "files": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "diff": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2097152,
+        "description": "Unified diff to apply (may span multiple files)"
+      }
+    },
+    "required": [
+      "files",
+      "diff"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "applied": {
+        "type": "boolean",
+        "description": "True when every hunk applied cleanly"
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Workspace-relative path of the changed file"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "added",
+                "modified",
+                "deleted"
+              ],
+              "description": "How the patch changed this file"
+            },
+            "content": {
+              "type": "string",
+              "description": "New file contents after the patch (empty string for a deletion)"
+            }
+          },
+          "required": [
+            "path",
+            "status",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Only the files the diff changed (added, modified, or deleted)"
+      },
+      "changedCount": {
+        "type": "integer",
+        "description": "Number of changed files"
+      }
+    },
+    "required": [
+      "applied",
+      "files",
+      "changedCount"
+    ],
+    "additionalProperties": false
+  }
+}

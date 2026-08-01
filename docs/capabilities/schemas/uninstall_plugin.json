@@ -1,0 +1,49 @@
+{
+  "name": "uninstall_plugin",
+  "domain": "plugin",
+  "description": "Soft-delete a plugin listing from this workspace and remove all dependent MCP server rows.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "destructive",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "plugin"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgListingId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "orgListingId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "ok"
+    ],
+    "additionalProperties": false
+  }
+}

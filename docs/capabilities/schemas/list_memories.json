@@ -1,0 +1,276 @@
+{
+  "name": "list_memories",
+  "domain": "agent",
+  "description": "List the workspace's AgentMemory nodes with optional weight/kind/node/citation filters and sort by recency or citation count; non-semantic browse counterpart to agent.memory.recall",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "nodeRef": {
+        "type": "string"
+      },
+      "memoryClass": {
+        "type": "string",
+        "enum": [
+          "OBSERVATION",
+          "RULE",
+          "FACT"
+        ]
+      },
+      "memoryKind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+      },
+      "minEnforcement": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "minCitations": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "sort": {
+        "type": "string",
+        "enum": [
+          "createdAt",
+          "citationCount"
+        ],
+        "default": "createdAt"
+      },
+      "sortDir": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ],
+        "default": "desc"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 200,
+        "default": 100
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "publicId": {
+              "type": "string"
+            },
+            "nodeRef": {
+              "type": "string"
+            },
+            "memoryClass": {
+              "type": "string",
+              "enum": [
+                "OBSERVATION",
+                "RULE",
+                "FACT"
+              ]
+            },
+            "memoryKind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Content domain the memory is about. Extensible; canonical values: FEEDBACK, PERFORMANCE, STYLE, PREFERENCE, VOICE, PROSE, routine-change, constraint, bug-root-cause, convention-deviation, gotcha"
+            },
+            "lesson": {
+              "type": "string",
+              "description": "The memory body, human readable"
+            },
+            "source": {
+              "type": "string"
+            },
+            "confidenceScore": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "enforcementScore": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "SUPERSEDED",
+                "RETRACTED",
+                "ARCHIVED"
+              ]
+            },
+            "subjectHint": {
+              "type": "string"
+            },
+            "halfLifeDays": {
+              "type": "number"
+            },
+            "decayFloor": {
+              "type": "number"
+            },
+            "lastEvidenceAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "citationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "influenceCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "violationCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "createdByKind": {
+              "type": "string",
+              "enum": [
+                "AGENT",
+                "USER",
+                "SYSTEM"
+              ]
+            },
+            "createdById": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "confirmedByKind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "AGENT",
+                    "USER",
+                    "SYSTEM"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "confirmedById": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "lastReinforcedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "publicId",
+            "nodeRef",
+            "memoryClass",
+            "memoryKind",
+            "lesson",
+            "source",
+            "confidenceScore",
+            "enforcementScore",
+            "status",
+            "subjectHint",
+            "halfLifeDays",
+            "decayFloor",
+            "lastEvidenceAt",
+            "citationCount",
+            "influenceCount",
+            "violationCount",
+            "createdByKind",
+            "createdById",
+            "confirmedByKind",
+            "confirmedById",
+            "createdAt",
+            "lastReinforcedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Total matching memories for the tenant, ignoring limit/offset"
+      }
+    },
+    "required": [
+      "memories",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

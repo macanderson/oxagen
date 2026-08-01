@@ -1,0 +1,136 @@
+{
+  "name": "update_model_settings",
+  "domain": "workspace",
+  "description": "Update the workspace-level model defaults (partial update — only provided fields are changed)",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "defaultTextTier": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultTextModel": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultImageModel": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultVideoModel": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "defaultTextTier": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "fast",
+              "balanced",
+              "precise"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultTextModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultImageModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultVideoModel": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "defaultTextTier",
+      "defaultTextModel",
+      "defaultImageModel",
+      "defaultVideoModel"
+    ],
+    "additionalProperties": false
+  }
+}

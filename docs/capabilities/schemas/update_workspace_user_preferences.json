@@ -1,0 +1,132 @@
+{
+  "name": "update_workspace_user_preferences",
+  "domain": "user",
+  "description": "Update the calling user's per-workspace coding-agent defaults (partial update): default repository connection + its owner/repo slug, default environment, default agent, and whether the one-time repo-default prompt has been answered. App-only surface for setting a preferred/default repo, environment, and agent for coding tasks.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "user"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "defaultRepoConnectionId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultRepoSlug": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultEnvironmentId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultAgentId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "markRepoPrompted": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "defaultRepoConnectionId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultRepoSlug": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultEnvironmentId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultAgentId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "repoDefaultPrompted": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "defaultRepoConnectionId",
+      "defaultRepoSlug",
+      "defaultEnvironmentId",
+      "defaultAgentId",
+      "repoDefaultPrompted"
+    ],
+    "additionalProperties": false
+  }
+}

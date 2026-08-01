@@ -1,0 +1,67 @@
+{
+  "name": "revoke_agent_role",
+  "domain": "agent",
+  "description": "Revoke an IAM role from an agent's delegated principal — soft-deletes the principal_role_assignments row (audit trail preserved). Idempotent: returns revoked=false when the agent did not hold the role. Audited with principal_kind='agent'.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Agent public id (agt_…), UUID, or slug — workspace-scoped"
+      },
+      "roleName": {
+        "type": "string",
+        "minLength": 1,
+        "description": "IAM role name to detach"
+      }
+    },
+    "required": [
+      "agentId",
+      "roleName"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "revoked": {
+        "type": "boolean",
+        "description": "True when an active assignment was revoked; false when none existed"
+      },
+      "agentId": {
+        "type": "string",
+        "description": "Agent public id (agt_…)"
+      },
+      "roleName": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "revoked",
+      "agentId",
+      "roleName"
+    ],
+    "additionalProperties": false
+  }
+}

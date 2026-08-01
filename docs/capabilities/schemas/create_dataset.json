@@ -1,0 +1,64 @@
+{
+  "name": "create_dataset",
+  "domain": "eval",
+  "description": "Create an eval dataset — a named, workspace-scoped collection of cases to score a target against. Items are added separately via eval.dataset.item.add or captured from metered traces via eval.dataset.from_traces.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "mutation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "slug": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "datasetId": {
+        "type": "string"
+      },
+      "publicId": {
+        "type": "string"
+      },
+      "slug": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "datasetId",
+      "publicId",
+      "slug"
+    ],
+    "additionalProperties": false
+  }
+}
