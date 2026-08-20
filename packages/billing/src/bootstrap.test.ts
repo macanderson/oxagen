@@ -25,6 +25,11 @@ vi.mock("./metering", () => ({
   assertCanStartTurn: assertCanStartTurnMock,
 }));
 
+const assertWithinSpendBudgetMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("./spend-budget-gate", () => ({
+  assertWithinSpendBudget: assertWithinSpendBudgetMock,
+}));
+
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
