@@ -1,3 +1,4 @@
+// audit-exempt: read-only — returns the active scope's spend-budget configuration and live burn (getSpendBudgetStatuses reads fresh, bypassing the gate cache); mutates nothing. The kernel capability.invoke_* audit covers access.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
 import {
