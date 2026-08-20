@@ -280,6 +280,7 @@ describe("security_events event_type CHECK constraint — billing.* types presen
       "billing.seats_changed",
       "billing.subscription_canceled",
       "billing.subscription_reactivated",
+      "billing.budget_updated",
       "billing.reseller_customer_changed",
       "billing.reseller_price_plan_changed",
       "billing.reseller_attribution_rule_changed",

@@ -20,6 +20,7 @@ const EXPECTED_PG_SCHEMAS = [
   "content",
   "environments",
   "eval",
+  "evidence",
   "iam",
   "ingestion",
   "mcp",
