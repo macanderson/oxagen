@@ -34,26 +34,32 @@ process.env.CLICKHOUSE_USERNAME ??= "default";
 process.env.CLICKHOUSE_PASSWORD ??= "";
 process.env.CLICKHOUSE_DATABASE ??= "oxagen";
 
-let chUp = false;
+// Short reachability probe, run at collection time so the suite can skip
+// BEFORE any hook touches the network. The ClickHouse client's own transport
+// timeout is ~30s, so probing via the client (or inside beforeAll) burns the
+// full 60s hook timeout when no server is listening — a raw HTTP GET with a
+// 500ms abort answers "unreachable" fast instead.
+async function clickhouseReachable(): Promise<boolean> {
+  try {
+    const url = new URL("/ping", process.env.CLICKHOUSE_URL);
+    const res = await fetch(url, { signal: AbortSignal.timeout(500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+const chUp = await clickhouseReachable();
 
 beforeAll(async () => {
-  try {
-    const { migrate } = await import("./migrate");
-    // Applies schema.sql + every file in migrations/ (idempotent), including
-    // 0021_schema_conformance_events_idempotency.sql — the actual DDL under
-    // test here, run against a real server rather than asserted as a string.
-    await migrate();
-    chUp = true;
-  } catch (err) {
-    console.error(
-      "schema-conformance-idempotency.integration: local ClickHouse unreachable — skipping:",
-      err instanceof Error ? err.message : err,
-    );
-    chUp = false;
-  }
+  if (!chUp) return;
+  const { migrate } = await import("./migrate");
+  // Applies schema.sql + every file in migrations/ (idempotent), including
+  // 0021_schema_conformance_events_idempotency.sql — the actual DDL under
+  // test here, run against a real server rather than asserted as a string.
+  await migrate();
   // 60s: migrate() replays the full migration chain; under a whole-monorepo
-  // turbo run it can exceed vitest's 10s default hook timeout, which fails
-  // the hook instead of reaching the unreachable→skip path above.
+  // turbo run it can exceed vitest's 10s default hook timeout.
 }, 60_000);
 
 afterAll(async () => {
@@ -113,99 +119,100 @@ async function cleanup(eventIds: string[]): Promise<void> {
   });
 }
 
-describe("schema_conformance_events — ReplacingMergeTree idempotency (OXA-1932, integration)", () => {
-  it("collapses two inserts sharing the same deterministic event_id into ONE row after merge", async (ctx) => {
-    if (!chUp) return ctx.skip();
-    const { clickhouse } = await import("./clickhouse");
-    const { deterministicEventId } = await import("./idempotency");
-    const ch = clickhouse();
+describe.skipIf(!chUp)(
+  "schema_conformance_events — ReplacingMergeTree idempotency (OXA-1932, integration) [skipped: local ClickHouse unreachable at :8123]",
+  () => {
+    it("collapses two inserts sharing the same deterministic event_id into ONE row after merge", async () => {
+      const { clickhouse } = await import("./clickhouse");
+      const { deterministicEventId } = await import("./idempotency");
+      const ch = clickhouse();
 
-    // The exact identity emitConformanceEvent now derives: runId + naturalKey
-    // + versionId + outcome + role. Two inserts with this SAME id simulate an
-    // Inngest step retry re-executing the whole insert.
-    const eventId = deterministicEventId(
-      "run-oxa-1932-retry-sim",
-      "github:conn-it:42",
-      VERSION_ID,
-      "accepted",
-      "result",
-    );
+      // The exact identity emitConformanceEvent now derives: runId + naturalKey
+      // + versionId + outcome + role. Two inserts with this SAME id simulate an
+      // Inngest step retry re-executing the whole insert.
+      const eventId = deterministicEventId(
+        "run-oxa-1932-retry-sim",
+        "github:conn-it:42",
+        VERSION_ID,
+        "accepted",
+        "result",
+      );
 
-    await ch.insert({
-      table: "schema_conformance_events",
-      values: [baseRow({ event_id: eventId })],
-      format: "JSONEachRow",
-    });
-    // Second "attempt" a moment later — same event_id, later occurred_at (the
-    // ReplacingMergeTree version column), exactly what a retried step.run
-    // produces today.
-    await ch.insert({
-      table: "schema_conformance_events",
-      values: [
-        baseRow({
-          event_id: eventId,
-          occurred_at: new Date(Date.now() + 1_000).toISOString(),
-        }),
-      ],
-      format: "JSONEachRow",
-    });
+      await ch.insert({
+        table: "schema_conformance_events",
+        values: [baseRow({ event_id: eventId })],
+        format: "JSONEachRow",
+      });
+      // Second "attempt" a moment later — same event_id, later occurred_at (the
+      // ReplacingMergeTree version column), exactly what a retried step.run
+      // produces today.
+      await ch.insert({
+        table: "schema_conformance_events",
+        values: [
+          baseRow({
+            event_id: eventId,
+            occurred_at: new Date(Date.now() + 1_000).toISOString(),
+          }),
+        ],
+        format: "JSONEachRow",
+      });
 
-    // Force the background merge synchronously so dedup is guaranteed to have
-    // applied before we query (production reads use FINAL and tolerate
-    // eventual consistency; the test forces it for a deterministic assertion).
-    await ch.command({
-      query: "OPTIMIZE TABLE schema_conformance_events FINAL",
-    });
+      // Force the background merge synchronously so dedup is guaranteed to have
+      // applied before we query (production reads use FINAL and tolerate
+      // eventual consistency; the test forces it for a deterministic assertion).
+      await ch.command({
+        query: "OPTIMIZE TABLE schema_conformance_events FINAL",
+      });
 
-    try {
-      expect(await countByEventId(eventId)).toBe(1);
-    } finally {
-      await cleanup([eventId]);
-    }
-  }, 30_000);
+      try {
+        expect(await countByEventId(eventId)).toBe(1);
+      } finally {
+        await cleanup([eventId]);
+      }
+    }, 30_000);
 
-  it("does NOT collapse two DIFFERENT deterministic event_ids (genuinely separate ingestion runs, not a retry)", async (ctx) => {
-    if (!chUp) return ctx.skip();
-    const { clickhouse } = await import("./clickhouse");
-    const { deterministicEventId } = await import("./idempotency");
-    const ch = clickhouse();
+    it("does NOT collapse two DIFFERENT deterministic event_ids (genuinely separate ingestion runs, not a retry)", async () => {
+      const { clickhouse } = await import("./clickhouse");
+      const { deterministicEventId } = await import("./idempotency");
+      const ch = clickhouse();
 
-    // Same naturalKey/versionId/outcome, but a DIFFERENT Inngest runId — the
-    // scenario of the same entity being re-ingested on a later sync cycle,
-    // which must NOT be treated as a retry of the earlier run.
-    const eventIdRun1 = deterministicEventId(
-      "run-oxa-1932-day-1",
-      "github:conn-it:99",
-      VERSION_ID,
-      "accepted",
-      "result",
-    );
-    const eventIdRun2 = deterministicEventId(
-      "run-oxa-1932-day-2",
-      "github:conn-it:99",
-      VERSION_ID,
-      "accepted",
-      "result",
-    );
-    expect(eventIdRun1).not.toBe(eventIdRun2);
+      // Same naturalKey/versionId/outcome, but a DIFFERENT Inngest runId — the
+      // scenario of the same entity being re-ingested on a later sync cycle,
+      // which must NOT be treated as a retry of the earlier run.
+      const eventIdRun1 = deterministicEventId(
+        "run-oxa-1932-day-1",
+        "github:conn-it:99",
+        VERSION_ID,
+        "accepted",
+        "result",
+      );
+      const eventIdRun2 = deterministicEventId(
+        "run-oxa-1932-day-2",
+        "github:conn-it:99",
+        VERSION_ID,
+        "accepted",
+        "result",
+      );
+      expect(eventIdRun1).not.toBe(eventIdRun2);
 
-    await ch.insert({
-      table: "schema_conformance_events",
-      values: [
-        baseRow({ event_id: eventIdRun1, node_id: "node-day-1" }),
-        baseRow({ event_id: eventIdRun2, node_id: "node-day-2" }),
-      ],
-      format: "JSONEachRow",
-    });
-    await ch.command({
-      query: "OPTIMIZE TABLE schema_conformance_events FINAL",
-    });
+      await ch.insert({
+        table: "schema_conformance_events",
+        values: [
+          baseRow({ event_id: eventIdRun1, node_id: "node-day-1" }),
+          baseRow({ event_id: eventIdRun2, node_id: "node-day-2" }),
+        ],
+        format: "JSONEachRow",
+      });
+      await ch.command({
+        query: "OPTIMIZE TABLE schema_conformance_events FINAL",
+      });
 
-    try {
-      expect(await countByEventId(eventIdRun1)).toBe(1);
-      expect(await countByEventId(eventIdRun2)).toBe(1);
-    } finally {
-      await cleanup([eventIdRun1, eventIdRun2]);
-    }
-  }, 30_000);
-});
+      try {
+        expect(await countByEventId(eventIdRun1)).toBe(1);
+        expect(await countByEventId(eventIdRun2)).toBe(1);
+      } finally {
+        await cleanup([eventIdRun1, eventIdRun2]);
+      }
+    }, 30_000);
+  },
+);
