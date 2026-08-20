@@ -14,8 +14,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Top-level mocks are hoisted by vitest — they apply to all dynamic imports.
 const setBillingAdmissionGateMock = vi.fn();
+const setBudgetAdmissionGateMock = vi.fn();
 vi.mock("@oxagen/oxagen/kernel", () => ({
   setBillingAdmissionGate: setBillingAdmissionGateMock,
+  setBudgetAdmissionGate: setBudgetAdmissionGateMock,
 }));
 
 const assertCanStartTurnMock = vi.fn().mockResolvedValue(undefined);
