@@ -18,7 +18,16 @@ const mocks = vi.hoisted(() => ({
 function makeTx(queue: unknown[]) {
   const chain: Record<string, unknown> = {};
   const passthrough = () => chain;
-  for (const m of ["select", "from", "where", "orderBy", "limit", "update", "set", "insert"]) {
+  for (const m of [
+    "select",
+    "from",
+    "where",
+    "orderBy",
+    "limit",
+    "update",
+    "set",
+    "insert",
+  ]) {
     chain[m] = passthrough;
   }
   chain.values = (...args: unknown[]) => {
@@ -30,11 +39,14 @@ function makeTx(queue: unknown[]) {
     return Promise.resolve(undefined);
   };
   // Make the chain awaitable — resolves to the next queued result.
-  chain.then = (resolve: (v: unknown) => unknown) => resolve(queue.shift() ?? []);
+  chain.then = (resolve: (v: unknown) => unknown) =>
+    resolve(queue.shift() ?? []);
   return chain;
 }
 
-mocks.runInTenantScope.mockImplementation(async (_scope: unknown, fn: () => unknown) => fn());
+mocks.runInTenantScope.mockImplementation(
+  async (_scope: unknown, fn: () => unknown) => fn(),
+);
 mocks.getScope.mockReturnValue(undefined);
 mocks.insertEvents.mockResolvedValue(undefined);
 
@@ -76,7 +88,9 @@ vi.mock("drizzle-orm", () => ({
   gt: (...a: unknown[]) => ({ gt: a }),
   isNull: (...a: unknown[]) => ({ isNull: a }),
   desc: (...a: unknown[]) => ({ desc: a }),
-  sql: Object.assign((..._a: unknown[]) => ({ sql: true }), { raw: () => ({}) }),
+  sql: Object.assign((..._a: unknown[]) => ({ sql: true }), {
+    raw: () => ({}),
+  }),
 }));
 
 import {
@@ -87,6 +101,7 @@ import {
   writeCache,
   type CacheContext,
   type CacheOptions,
+  type CachedUsage,
 } from "./cache";
 
 const CTX: CacheContext = {
@@ -102,12 +117,16 @@ const CTX: CacheContext = {
 function queueTx(...batches: unknown[][]) {
   // Every withTenantDb() call shares one queue so DB ops consume in order.
   const q: unknown[] = batches.slice();
-  mocks.withTenantDb.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(makeTx(q)));
+  mocks.withTenantDb.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+    cb(makeTx(q)),
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.runInTenantScope.mockImplementation(async (_s: unknown, fn: () => unknown) => fn());
+  mocks.runInTenantScope.mockImplementation(
+    async (_s: unknown, fn: () => unknown) => fn(),
+  );
   mocks.getScope.mockReturnValue(undefined);
   mocks.insertEvents.mockResolvedValue(undefined);
 });
@@ -120,12 +139,52 @@ describe("pure helpers", () => {
   });
 
   it("buildCacheKey changes when any field changes", () => {
-    const base = buildCacheKey({ promptHash: "p", model: "m", surface: "s", shapeHash: "h" });
-    expect(buildCacheKey({ promptHash: "p", model: "m", surface: "s", shapeHash: "h" })).toBe(base);
-    expect(buildCacheKey({ promptHash: "X", model: "m", surface: "s", shapeHash: "h" })).not.toBe(base);
-    expect(buildCacheKey({ promptHash: "p", model: "X", surface: "s", shapeHash: "h" })).not.toBe(base);
-    expect(buildCacheKey({ promptHash: "p", model: "m", surface: "X", shapeHash: "h" })).not.toBe(base);
-    expect(buildCacheKey({ promptHash: "p", model: "m", surface: "s", shapeHash: "X" })).not.toBe(base);
+    const base = buildCacheKey({
+      promptHash: "p",
+      model: "m",
+      surface: "s",
+      shapeHash: "h",
+    });
+    expect(
+      buildCacheKey({
+        promptHash: "p",
+        model: "m",
+        surface: "s",
+        shapeHash: "h",
+      }),
+    ).toBe(base);
+    expect(
+      buildCacheKey({
+        promptHash: "X",
+        model: "m",
+        surface: "s",
+        shapeHash: "h",
+      }),
+    ).not.toBe(base);
+    expect(
+      buildCacheKey({
+        promptHash: "p",
+        model: "X",
+        surface: "s",
+        shapeHash: "h",
+      }),
+    ).not.toBe(base);
+    expect(
+      buildCacheKey({
+        promptHash: "p",
+        model: "m",
+        surface: "X",
+        shapeHash: "h",
+      }),
+    ).not.toBe(base);
+    expect(
+      buildCacheKey({
+        promptHash: "p",
+        model: "m",
+        surface: "s",
+        shapeHash: "X",
+      }),
+    ).not.toBe(base);
   });
 
   it("cosineSimilarity: identical=1, orthogonal=0, length-mismatch=0, zero=0", () => {
@@ -142,7 +201,15 @@ describe("readCache", () => {
 
   it("returns an exact hit and emits ai.cache.hit", async () => {
     queueTx(
-      [{ id: "row1", response: { title: "Cached" }, usage: { inputTokens: 10, outputTokens: 5, costUsdMicros: 42 }, responseKind: "object", embedding: null }],
+      [
+        {
+          id: "row1",
+          response: { title: "Cached" },
+          usage: { inputTokens: 10, outputTokens: 5, costUsdMicros: 42 },
+          responseKind: "object",
+          embedding: null,
+        },
+      ],
       [], // bumpHit update
     );
     const res = await readCache<{ title: string }>(CTX, OPTS);
@@ -151,7 +218,10 @@ describe("readCache", () => {
     expect(res.hit?.semantic).toBe(false);
     expect(res.hit?.similarity).toBe(1);
     expect(res.hit?.usage.costUsdMicros).toBe(42);
-    const evt = mocks.insertEvents.mock.calls[0]![0][0] as Record<string, unknown>;
+    const evt = mocks.insertEvents.mock.calls[0]![0][0] as Record<
+      string,
+      unknown
+    >;
     expect(evt.event_type).toBe("ai.cache.hit");
     expect(evt.org_id).toBe(CTX.orgId);
     expect(mocks.embedText).not.toHaveBeenCalled();
@@ -161,7 +231,10 @@ describe("readCache", () => {
     queueTx([]);
     const res = await readCache(CTX, OPTS);
     expect(res.hit).toBeNull();
-    expect((mocks.insertEvents.mock.calls[0]![0][0] as Record<string, unknown>).event_type).toBe("ai.cache.miss");
+    expect(
+      (mocks.insertEvents.mock.calls[0]![0][0] as Record<string, unknown>)
+        .event_type,
+    ).toBe("ai.cache.miss");
     expect(mocks.embedText).not.toHaveBeenCalled();
   });
 
@@ -169,26 +242,61 @@ describe("readCache", () => {
     mocks.embedText.mockResolvedValue([1, 0, 0]);
     queueTx(
       [], // exact miss
-      [{ id: "row2", response: { title: "Near" }, usage: {}, responseKind: "object", embedding: [1, 0, 0] }],
+      [
+        {
+          id: "row2",
+          response: { title: "Near" },
+          usage: {},
+          responseKind: "object",
+          embedding: [1, 0, 0],
+        },
+      ],
       [], // bumpHit
     );
-    const res = await readCache<{ title: string }>(CTX, { ttlSeconds: 3600, semantic: true });
+    const res = await readCache<{ title: string }>(CTX, {
+      ttlSeconds: 3600,
+      semantic: true,
+    });
     expect(res.hit?.value).toEqual({ title: "Near" });
     expect(res.hit?.semantic).toBe(true);
     expect(res.hit?.similarity).toBeCloseTo(1, 6);
-    expect((mocks.insertEvents.mock.calls.at(-1)?.[0][0] as Record<string, unknown> | undefined)?.event_type).toBe("ai.cache.hit");
+    expect(
+      (
+        mocks.insertEvents.mock.calls.at(-1)?.[0][0] as
+          | Record<string, unknown>
+          | undefined
+      )?.event_type,
+    ).toBe("ai.cache.hit");
   });
 
   it("semantic miss below threshold returns the query embedding for reuse", async () => {
     mocks.embedText.mockResolvedValue([1, 0, 0]);
     queueTx(
       [], // exact miss
-      [{ id: "row3", response: {}, usage: {}, responseKind: "object", embedding: [0, 1, 0] }],
+      [
+        {
+          id: "row3",
+          response: {},
+          usage: {},
+          responseKind: "object",
+          embedding: [0, 1, 0],
+        },
+      ],
     );
-    const res = await readCache(CTX, { ttlSeconds: 3600, semantic: true, similarityThreshold: 0.9 });
+    const res = await readCache(CTX, {
+      ttlSeconds: 3600,
+      semantic: true,
+      similarityThreshold: 0.9,
+    });
     expect(res.hit).toBeNull();
     expect(res.queryEmbedding).toEqual([1, 0, 0]);
-    expect((mocks.insertEvents.mock.calls.at(-1)?.[0][0] as Record<string, unknown> | undefined)?.event_type).toBe("ai.cache.miss");
+    expect(
+      (
+        mocks.insertEvents.mock.calls.at(-1)?.[0][0] as
+          | Record<string, unknown>
+          | undefined
+      )?.event_type,
+    ).toBe("ai.cache.miss");
   });
 
   it("swallows DB errors and reports a miss", async () => {
@@ -208,9 +316,26 @@ describe("readCache", () => {
 });
 
 describe("writeCache", () => {
+  // Fixture factory: CachedUsage gained cacheWriteTokens (#1076) after these
+  // tests were written; one factory keeps a future field addition a one-line fix.
+  const makeUsage = (overrides: Partial<CachedUsage> = {}): CachedUsage => ({
+    model: "m",
+    inputTokens: 1,
+    outputTokens: 1,
+    cachedTokens: 0,
+    cacheWriteTokens: 0,
+    costUsdMicros: 1,
+    ...overrides,
+  });
+
   it("inserts with a null embedding when semantic is off", async () => {
     queueTx([]); // insert resolves
-    await writeCache(CTX, { ttlSeconds: 60 }, { title: "X" }, { model: "m", inputTokens: 1, outputTokens: 1, cachedTokens: 0, costUsdMicros: 1 });
+    await writeCache(
+      CTX,
+      { ttlSeconds: 60 },
+      { title: "X" },
+      makeUsage({ cacheWriteTokens: 2 }),
+    );
     expect(mocks.embedText).not.toHaveBeenCalled();
     const values = mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>;
     expect(values.embedding).toBeNull();
@@ -221,22 +346,43 @@ describe("writeCache", () => {
   it("embeds and stores a vector when semantic is on and none was precomputed", async () => {
     mocks.embedText.mockResolvedValue([0.1, 0.2]);
     queueTx([]);
-    await writeCache(CTX, { ttlSeconds: 60, semantic: true }, { title: "X" }, { model: "m", inputTokens: 1, outputTokens: 1, cachedTokens: 0, costUsdMicros: 1 });
+    await writeCache(
+      CTX,
+      { ttlSeconds: 60, semantic: true },
+      { title: "X" },
+      makeUsage(),
+    );
     expect(mocks.embedText).toHaveBeenCalledTimes(1);
-    expect((mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>).embedding).toEqual([0.1, 0.2]);
+    expect(
+      (mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>).embedding,
+    ).toEqual([0.1, 0.2]);
   });
 
   it("reuses a precomputed embedding instead of embedding again", async () => {
     queueTx([]);
-    await writeCache(CTX, { ttlSeconds: 60, semantic: true }, { title: "X" }, { model: "m", inputTokens: 1, outputTokens: 1, cachedTokens: 0, costUsdMicros: 1 }, "object", [9, 9]);
+    await writeCache(
+      CTX,
+      { ttlSeconds: 60, semantic: true },
+      { title: "X" },
+      makeUsage(),
+      "object",
+      [9, 9],
+    );
     expect(mocks.embedText).not.toHaveBeenCalled();
-    expect((mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>).embedding).toEqual([9, 9]);
+    expect(
+      (mocks.valuesSpy.mock.calls[0]![0] as Record<string, unknown>).embedding,
+    ).toEqual([9, 9]);
   });
 
   it("swallows write failures", async () => {
     mocks.withTenantDb.mockRejectedValue(new Error("boom"));
     await expect(
-      writeCache(CTX, { ttlSeconds: 60 }, {}, { model: "m", inputTokens: 0, outputTokens: 0, cachedTokens: 0, costUsdMicros: 0 }),
+      writeCache(
+        CTX,
+        { ttlSeconds: 60 },
+        {},
+        makeUsage({ inputTokens: 0, outputTokens: 0, costUsdMicros: 0 }),
+      ),
     ).resolves.toBeUndefined();
   });
 });
