@@ -1,11 +1,14 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import {
+  getSpendBudget,
   getSpendBudgetStatuses,
   invalidateSpendBudgetScope,
   setSpendBudget,
   type SpendBudgetStatus,
 } from "@oxagen/billing";
+import { emitSecurityEvent } from "@oxagen/database/security";
+import { logger } from "./logger";
 
 /** USD → micro-USD (1 USD = 1_000_000), integer math on a dollar ceiling. */
 function usdToMicros(usd: number): bigint {
@@ -63,6 +66,9 @@ export const billingBudgetSetHandler: CapabilityHandler<
 > = async (input, ctx) => {
   const workspaceId = input.scope === "workspace" ? ctx.workspaceId : null;
 
+  // Read the current ceiling first so the audit row can carry previous → new.
+  const previous = await getSpendBudget({ workspaceId });
+
   await setSpendBudget({
     orgId: ctx.orgId,
     workspaceId,
@@ -72,6 +78,40 @@ export const billingBudgetSetHandler: CapabilityHandler<
     limitMicros: usdToMicros(input.limitUsd),
     actorUserId: ctx.userId,
   });
+
+  // ── Emit audit event (fire-and-forget; must not fail the capability) ──────
+  // SOC2 CC6.3/CC6.8: setting a spending limit is exactly the privileged state
+  // change audit trails exist for. The structured log carries previous → new
+  // so an auditor can reconstruct the change; the security_events row is the
+  // tamper-evident marker that it happened, by whom, and where.
+  emitSecurityEvent({
+    eventType: "billing.budget_updated",
+    actorUserId: ctx.userId ?? null,
+    orgId: ctx.orgId,
+    workspaceId,
+    capability: "set_spend_budget",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+  });
+
+  logger.info(
+    {
+      orgId: ctx.orgId,
+      actorUserId: ctx.userId,
+      scope: input.scope,
+      workspaceId,
+      previousLimitUsd: previous ? microsToUsd(previous.limitMicros) : null,
+      newLimitUsd: input.limitUsd,
+      previousEnabled: previous?.enabled ?? null,
+      newEnabled: input.enabled,
+      previousPeriod: previous?.period ?? null,
+      newPeriod: input.period,
+      surface: ctx.surface,
+    },
+    "billing.budget.set: spend ceiling updated",
+  );
 
   // Clear the (short-TTL) gate cache so the new ceiling is live at once.
   invalidateSpendBudgetScope({ orgId: ctx.orgId });

@@ -2,14 +2,22 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   setSpendBudget: vi.fn(),
+  getSpendBudget: vi.fn(),
   invalidateSpendBudgetScope: vi.fn(),
   getSpendBudgetStatuses: vi.fn(),
+  emitSecurityEvent: vi.fn(),
 }));
 
 vi.mock("@oxagen/billing", () => ({
   setSpendBudget: mocks.setSpendBudget,
+  getSpendBudget: mocks.getSpendBudget,
   invalidateSpendBudgetScope: mocks.invalidateSpendBudgetScope,
   getSpendBudgetStatuses: mocks.getSpendBudgetStatuses,
+}));
+
+vi.mock("@oxagen/database/security", () => ({
+  emitSecurityEvent: mocks.emitSecurityEvent,
+  emitSecurityEventAsync: vi.fn(),
 }));
 
 import { billingBudgetSetHandler } from "./billing.budget.set";
@@ -48,8 +56,10 @@ function statusFor(scope: "org" | "workspace") {
 describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     mocks.setSpendBudget.mockReset();
+    mocks.getSpendBudget.mockReset().mockResolvedValue(null);
     mocks.invalidateSpendBudgetScope.mockReset();
     mocks.getSpendBudgetStatuses.mockReset();
+    mocks.emitSecurityEvent.mockReset();
   });
 
   it("org scope → workspaceId null, USD→micros, invalidates cache, returns saved status", async () => {
@@ -109,6 +119,27 @@ describe("billingBudgetSetHandler (@oxagen/handlers)", () => {
     );
     expect(mocks.setSpendBudget).toHaveBeenCalledWith(
       expect.objectContaining({ period: "rolling", windowDays: 7 }),
+    );
+  });
+
+  it("emits billing.budget_updated with actor, org, and scope", async () => {
+    mocks.setSpendBudget.mockResolvedValue({});
+    mocks.getSpendBudgetStatuses.mockResolvedValue([statusFor("org")]);
+
+    await billingBudgetSetHandler(
+      { scope: "org", enabled: true, period: "monthly", limitUsd: 500 },
+      CTX,
+    );
+
+    expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "billing.budget_updated",
+        actorUserId: "u_1",
+        orgId: "org_1",
+        workspaceId: null,
+        capability: "set_spend_budget",
+        outcome: "success",
+      }),
     );
   });
 
