@@ -1,13 +1,13 @@
 /**
- * Public types for the durable-run worker harness (agent-engine v2 Phase 2c —
+ * Public types for the durable-run worker harness (agent-engine v2 —
  * docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
  *
- * This package is deliberately dependency-free beyond dev tooling: two sibling
- * workstreams are building the Postgres schema and the concrete `RunStore`
- * (Phase 2a/2b) in parallel, so `RunStore` is declared here STRUCTURALLY —
- * matching the fixed contract exactly, field for field — rather than imported.
- * A later integration PR swaps in `createPostgresRunStore` + `executeTurn`
- * (the real `TurnDriver`) without touching this package's internals, because
+ * This package is deliberately dependency-free beyond dev tooling: `RunStore`
+ * is declared here STRUCTURALLY — matching the fixed contract exactly, field
+ * for field — rather than imported from `@oxagen/agent-runner`. That is a
+ * design decision, not scaffolding: the concrete store
+ * (`createPostgresRunStore`) and the real `TurnDriver` (`executeTurn`) are
+ * wired in `src/main.ts` without touching this package's internals, because
  * TypeScript's structural typing means any object shaped like `RunStore`
  * satisfies it, real or fake.
  */
@@ -35,9 +35,9 @@ export interface RunEventRecord {
 }
 
 /**
- * Structural port over the durable-run store (Postgres, Phase 2a/2b — built by
- * sibling workstreams). Implemented exactly by `createPostgresRunStore` in a
- * later integration PR; this package never imports that implementation.
+ * Structural port over the durable-run store (Postgres). Implemented exactly
+ * by `createPostgresRunStore` in `@oxagen/agent-runner`; this package never
+ * imports that implementation.
  *
  * `renewLease`, `saveCheckpoint`, `completeRun`, `failRun`, and `cancelRun` all
  * return `false` instead of throwing when the caller has lost ownership of the
