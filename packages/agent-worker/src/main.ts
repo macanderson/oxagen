@@ -1,11 +1,10 @@
 /**
- * Process entrypoint for the durable-run worker (agent-engine v2 Phase 2c —
+ * Process entrypoint for the durable-run worker (agent-engine v2 —
  * docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
  *
  * This file wires OS signals to `createAgentWorker(...).stop()`, reads
- * process configuration from the environment, AND — as of the integration PR
- * that follows Phase 2a (Postgres schema)/Phase 2b (`createPostgresRunStore`)
- * — wires the real `RunStore` (`@oxagen/agent-runner`) and `TurnDriver`
+ * process configuration from the environment, and wires the real `RunStore`
+ * (`@oxagen/agent-runner`'s `createPostgresRunStore`) and `TurnDriver`
  * (`@oxagen/agent`'s `createPlatformTurnDriver`, which reaches the engine via
  * `executeTurn`).
  *

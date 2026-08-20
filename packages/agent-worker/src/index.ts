@@ -1,12 +1,13 @@
 /**
- * @oxagen/agent-worker — the durable-run worker harness (agent-engine v2
- * Phase 2c; docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
+ * @oxagen/agent-worker — the durable-run worker harness (agent-engine v2;
+ * docs/specs/agent-engine-v2/plan.md "Phase 2 — Durable runs").
  *
  * Fully dependency-injected: this package consumes a structural `RunStore`
- * port and an injected `TurnDriver`, never a concrete implementation. The
- * integration PR that follows Phase 2a (Postgres schema) + Phase 2b
- * (`createPostgresRunStore`) wires the real store and `executeTurn` — see
- * `src/main.ts` for the (currently TODO) process entrypoint.
+ * port and an injected `TurnDriver`, never a concrete implementation.
+ * `src/main.ts` is the process entrypoint — it wires the real store
+ * (`createPostgresRunStore` from `@oxagen/agent-runner`) and the real driver
+ * (`createPlatformTurnDriver` from `@oxagen/agent`, which reaches the engine
+ * via `executeTurn`).
  */
 export { createAgentWorker, TERMINAL_EVENT_TYPE } from "./worker";
 export {
