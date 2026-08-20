@@ -74,7 +74,7 @@ beforeEach(() => {
 });
 
 describe("cache-write token telemetry", () => {
-  it("meters stream cacheCreationTokens to ClickHouse and OTEL", async () => {
+  it("meters stream cacheWriteTokens to ClickHouse and OTEL", async () => {
     mocks.streamText.mockImplementation((options) => ({
       _onFinish: options.onFinish,
     }));
@@ -91,7 +91,7 @@ describe("cache-write token telemetry", () => {
         inputTokens: 100,
         outputTokens: 5,
         totalTokens: 105,
-        inputTokenDetails: { cacheReadTokens: 40, cacheCreationTokens: 25 },
+        inputTokenDetails: { cacheReadTokens: 40, cacheWriteTokens: 25 },
       },
       finishReason: "stop",
     });
@@ -105,14 +105,14 @@ describe("cache-write token telemetry", () => {
     );
   });
 
-  it("meters generateObject cacheCreationTokens to ClickHouse", async () => {
+  it("meters generateObject cacheWriteTokens to ClickHouse", async () => {
     mocks.generateObject.mockResolvedValue({
       object: { answer: "ok" },
       usage: {
         inputTokens: 80,
         outputTokens: 4,
         totalTokens: 84,
-        inputTokenDetails: { cacheReadTokens: 30, cacheCreationTokens: 12 },
+        inputTokenDetails: { cacheReadTokens: 30, cacheWriteTokens: 12 },
       },
       finishReason: "stop",
     });
