@@ -6,6 +6,37 @@ const validInput = {
   end: "2026-07-01T00:00:00.000Z",
 };
 
+/**
+ * One fully-populated totals shape, shared by every breakdown row in the
+ * fixture below. The contract extends this shape into seven places (totals,
+ * series, byModel, bySurface, byWorkspace, byCapability, byPrincipal, byUser);
+ * keeping a single literal here means a new required field is added once
+ * instead of drifting across seven hand-written copies (#1172, #1178).
+ */
+function makeTotals(overrides: Record<string, number> = {}) {
+  return {
+    inputTokens: 100,
+    outputTokens: 40,
+    cachedTokens: 10,
+    cacheWriteTokens: 20,
+    costMicros: 5000,
+    executions: 3,
+    messages: 2,
+    ...overrides,
+  };
+}
+
+/** Smaller per-row totals used by the capability/principal/user breakdowns. */
+const smallTotals = makeTotals({
+  inputTokens: 60,
+  outputTokens: 20,
+  cachedTokens: 5,
+  cacheWriteTokens: 8,
+  costMicros: 3000,
+  executions: 2,
+  messages: 1,
+});
+
 describe("billing.usage.breakdown capability", () => {
   it("registers as a read-only, ungated, org-scoped billing capability", () => {
     expect(billingUsageBreakdown.name).toBe("get_usage_breakdown");
@@ -70,84 +101,25 @@ describe("billing.usage.breakdown capability", () => {
   it("parses a fully-populated output", () => {
     const parsed = billingUsageBreakdown.output.parse({
       range: validInput,
-      totals: {
-        inputTokens: 100,
-        outputTokens: 40,
-        cachedTokens: 10,
-        costMicros: 5000,
-        executions: 3,
-        messages: 2,
-      },
-      series: [
-        {
-          day: "2026-06-01",
-          inputTokens: 100,
-          outputTokens: 40,
-          cachedTokens: 10,
-          costMicros: 5000,
-          executions: 3,
-          messages: 2,
-        },
-      ],
+      totals: makeTotals(),
+      // Net of the cache-write premium; can be negative, here it is positive.
+      cacheSavingsMicros: 1200,
+      series: [{ day: "2026-06-01", ...makeTotals() }],
       byModel: [
-        {
-          key: "claude-sonnet-5",
-          provider: "anthropic",
-          inputTokens: 100,
-          outputTokens: 40,
-          cachedTokens: 10,
-          costMicros: 5000,
-          executions: 3,
-          messages: 2,
-        },
+        { key: "claude-sonnet-5", provider: "anthropic", ...makeTotals() },
       ],
-      bySurface: [
-        {
-          key: "api",
-          provider: "",
-          inputTokens: 100,
-          outputTokens: 40,
-          cachedTokens: 10,
-          costMicros: 5000,
-          executions: 3,
-          messages: 2,
-        },
-      ],
+      bySurface: [{ key: "api", provider: "", ...makeTotals() }],
       byWorkspace: [],
-      byCapability: [
-        {
-          key: "query_ontology",
-          provider: "",
-          inputTokens: 60,
-          outputTokens: 20,
-          cachedTokens: 5,
-          costMicros: 3000,
-          executions: 2,
-          messages: 1,
-        },
-      ],
+      byCapability: [{ key: "query_ontology", provider: "", ...smallTotals }],
       byPrincipal: [
         {
           principalId: "00000000-0000-0000-0000-0000000000e5",
           principalKind: "agent",
-          inputTokens: 60,
-          outputTokens: 20,
-          cachedTokens: 5,
-          costMicros: 3000,
-          executions: 2,
-          messages: 1,
+          ...smallTotals,
         },
       ],
       byUser: [
-        {
-          userId: "00000000-0000-0000-0000-0000000000e5",
-          inputTokens: 60,
-          outputTokens: 20,
-          cachedTokens: 5,
-          costMicros: 3000,
-          executions: 2,
-          messages: 1,
-        },
+        { userId: "00000000-0000-0000-0000-0000000000e5", ...smallTotals },
       ],
     });
     expect(parsed.byModel[0]?.provider).toBe("anthropic");
@@ -162,14 +134,8 @@ describe("billing.usage.breakdown capability", () => {
     expect(() =>
       billingUsageBreakdown.output.parse({
         range: validInput,
-        totals: {
-          inputTokens: -1,
-          outputTokens: 0,
-          cachedTokens: 0,
-          costMicros: 0,
-          executions: 0,
-          messages: 0,
-        },
+        totals: makeTotals({ inputTokens: -1 }),
+        cacheSavingsMicros: 0,
         series: [],
         byModel: [],
         bySurface: [],
@@ -185,13 +151,18 @@ describe("billing.usage.breakdown capability", () => {
     expect(() =>
       billingUsageBreakdown.output.parse({
         range: validInput,
-        totals: {
-          inputTokens: 0,
-          outputTokens: 0,
-          cachedTokens: 0,
-          costMicros: 0,
-          executions: 0,
-        },
+        totals: (() => {
+          const { messages: _omitted, ...rest } = makeTotals({
+            inputTokens: 0,
+            outputTokens: 0,
+            cachedTokens: 0,
+            cacheWriteTokens: 0,
+            costMicros: 0,
+            executions: 0,
+          });
+          return rest;
+        })(),
+        cacheSavingsMicros: 0,
         series: [],
         byModel: [],
         bySurface: [],
