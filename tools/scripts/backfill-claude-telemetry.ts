@@ -2,9 +2,9 @@
 /**
  * Backfill Claude Code session telemetry into internal.claude_sessions.
  *
- * Scans:
- *   ~/.claude/projects/-Users-macanderson-oxagen-monorepo/*.jsonl       → parent sessions
- *   ~/.claude/projects/-Users-macanderson-oxagen-monorepo/<uuid>/subagents/*.jsonl → subagents
+ * Scans (project dir derived from this repo's absolute path):
+ *   ~/.claude/projects/<project-slug>/*.jsonl       → parent sessions
+ *   ~/.claude/projects/<project-slug>/<uuid>/subagents/*.jsonl → subagents
  *
  * Usage:
  *   PRODUCTION_ANALYTICS_URL=https://... \
@@ -14,7 +14,9 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ── JSONL entry interfaces ────────────────────────────────────────────────────
 
@@ -23,7 +25,10 @@ interface UsageObject {
   output_tokens: number;
   cache_creation_input_tokens: number;
   cache_read_input_tokens: number;
-  server_tool_use?: { web_search_requests?: number; web_fetch_requests?: number };
+  server_tool_use?: {
+    web_search_requests?: number;
+    web_fetch_requests?: number;
+  };
   service_tier?: string | null;
   speed?: string | null;
   inference_geo?: string | null;
@@ -33,10 +38,22 @@ interface UsageObject {
   };
 }
 
-interface TextBlock     { type: "text";     text: string }
-interface ThinkingBlock { type: "thinking"; thinking: string }
-interface ToolUseBlock  { type: "tool_use"; name: string; id: string }
-interface OtherBlock    { type: string }
+interface TextBlock {
+  type: "text";
+  text: string;
+}
+interface ThinkingBlock {
+  type: "thinking";
+  thinking: string;
+}
+interface ToolUseBlock {
+  type: "tool_use";
+  name: string;
+  id: string;
+}
+interface OtherBlock {
+  type: string;
+}
 type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | OtherBlock;
 
 interface AssistantMessage {
@@ -105,15 +122,45 @@ interface ModelRates {
 
 // Verified against https://www.anthropic.com/pricing (2026-06-15)
 const MODEL_RATES: Record<string, ModelRates> = {
-  "claude-fable-5":            { inputPerMtok: 15.00, outputPerMtok: 75.00, cacheWritePerMtok: 18.75, cacheReadPerMtok: 1.50 },
-  "claude-opus-4-8":           { inputPerMtok: 15.00, outputPerMtok: 75.00, cacheWritePerMtok: 18.75, cacheReadPerMtok: 1.50 },
-  "claude-sonnet-5":           { inputPerMtok:  3.00, outputPerMtok: 15.00, cacheWritePerMtok:  3.75, cacheReadPerMtok: 0.30 },
-  "claude-sonnet-4-6":         { inputPerMtok:  3.00, outputPerMtok: 15.00, cacheWritePerMtok:  3.75, cacheReadPerMtok: 0.30 },
-  "claude-haiku-4-5-20251001": { inputPerMtok:  0.80, outputPerMtok:  4.00, cacheWritePerMtok:  1.00, cacheReadPerMtok: 0.08 },
+  "claude-fable-5": {
+    inputPerMtok: 15.0,
+    outputPerMtok: 75.0,
+    cacheWritePerMtok: 18.75,
+    cacheReadPerMtok: 1.5,
+  },
+  "claude-opus-4-8": {
+    inputPerMtok: 15.0,
+    outputPerMtok: 75.0,
+    cacheWritePerMtok: 18.75,
+    cacheReadPerMtok: 1.5,
+  },
+  "claude-sonnet-5": {
+    inputPerMtok: 3.0,
+    outputPerMtok: 15.0,
+    cacheWritePerMtok: 3.75,
+    cacheReadPerMtok: 0.3,
+  },
+  "claude-sonnet-4-6": {
+    inputPerMtok: 3.0,
+    outputPerMtok: 15.0,
+    cacheWritePerMtok: 3.75,
+    cacheReadPerMtok: 0.3,
+  },
+  "claude-haiku-4-5-20251001": {
+    inputPerMtok: 0.8,
+    outputPerMtok: 4.0,
+    cacheWritePerMtok: 1.0,
+    cacheReadPerMtok: 0.08,
+  },
 };
 
 // Sonnet-tier fallback for unknown models
-const FALLBACK_RATES: ModelRates = { inputPerMtok: 3.00, outputPerMtok: 15.00, cacheWritePerMtok: 3.75, cacheReadPerMtok: 0.30 };
+const FALLBACK_RATES: ModelRates = {
+  inputPerMtok: 3.0,
+  outputPerMtok: 15.0,
+  cacheWritePerMtok: 3.75,
+  cacheReadPerMtok: 0.3,
+};
 
 function resolveRates(model: string): ModelRates {
   const direct = MODEL_RATES[model];
@@ -137,11 +184,11 @@ function computeCostMicros(
   const r = resolveRates(model);
   const M = 1_000_000;
   return Math.round(
-    (tokensIn      / M * r.inputPerMtok      * 1_000_000) +
-    (tokensOut     / M * r.outputPerMtok     * 1_000_000) +
-    (cacheWrite5m  / M * r.cacheWritePerMtok * 1_000_000) +
-    (cacheWrite1h  / M * r.cacheWritePerMtok * 2 * 1_000_000) +
-    (cacheRead     / M * r.cacheReadPerMtok  * 1_000_000),
+    (tokensIn / M) * r.inputPerMtok * 1_000_000 +
+      (tokensOut / M) * r.outputPerMtok * 1_000_000 +
+      (cacheWrite5m / M) * r.cacheWritePerMtok * 1_000_000 +
+      (cacheWrite1h / M) * r.cacheWritePerMtok * 2 * 1_000_000 +
+      (cacheRead / M) * r.cacheReadPerMtok * 1_000_000,
   );
 }
 
@@ -186,7 +233,7 @@ interface ClaudeSessionRow {
 
 // ── File parsing ──────────────────────────────────────────────────────────────
 
-const NULL_UUID  = "00000000-0000-0000-0000-000000000000";
+const NULL_UUID = "00000000-0000-0000-0000-000000000000";
 const USER_EMAIL = process.env["USER_EMAIL"] ?? "mac@macanderson.com";
 
 function extractText(content: string | ContentBlock[]): string {
@@ -198,17 +245,24 @@ function extractText(content: string | ContentBlock[]): string {
     .slice(0, 1000);
 }
 
-async function parseFile(filePath: string, isSubagent: boolean): Promise<ClaudeSessionRow[]> {
+async function parseFile(
+  filePath: string,
+  isSubagent: boolean,
+): Promise<ClaudeSessionRow[]> {
   const raw = await readFile(filePath, "utf-8");
   const lines = raw.split("\n").filter((l) => l.trim().length > 0);
 
   // First pass: record the first user message and timestamp per session
   const sessionPrompt = new Map<string, string>();
-  const sessionStart  = new Map<string, string>();
+  const sessionStart = new Map<string, string>();
 
   for (const line of lines) {
     let parsed: unknown;
-    try { parsed = JSON.parse(line); } catch { continue; }
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
 
     const entry = toJournalEntry(parsed);
     if (!entry || entry.type !== "user") continue;
@@ -231,7 +285,11 @@ async function parseFile(filePath: string, isSubagent: boolean): Promise<ClaudeS
 
   for (const line of lines) {
     let parsed: unknown;
-    try { parsed = JSON.parse(line); } catch { continue; }
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
 
     const entry = toJournalEntry(parsed);
     if (!entry || entry.type !== "assistant") continue;
@@ -243,9 +301,9 @@ async function parseFile(filePath: string, isSubagent: boolean): Promise<ClaudeS
     if (usage.input_tokens === 0 && usage.output_tokens === 0) continue;
 
     const content = msg.content ?? [];
-    const toolCalls: string[]  = [];
-    let   assistantText        = "";
-    let   thinkingChars        = 0;
+    const toolCalls: string[] = [];
+    let assistantText = "";
+    let thinkingChars = 0;
 
     for (const block of content) {
       if (block.type === "tool_use") {
@@ -258,53 +316,61 @@ async function parseFile(filePath: string, isSubagent: boolean): Promise<ClaudeS
     }
 
     // Prefer the granular cache tiers; fall back to the summary field
-    const cacheWrite5m = usage.cache_creation?.ephemeral_5m_input_tokens
-      ?? usage.cache_creation_input_tokens;
+    const cacheWrite5m =
+      usage.cache_creation?.ephemeral_5m_input_tokens ??
+      usage.cache_creation_input_tokens;
     const cacheWrite1h = usage.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-    const cacheRead    = usage.cache_read_input_tokens;
+    const cacheRead = usage.cache_read_input_tokens;
 
-    const sid        = entry.sessionId ?? "";
-    const ts         = entry.timestamp ?? now;
-    const startTs    = sessionStart.get(sid);
+    const sid = entry.sessionId ?? "";
+    const ts = entry.timestamp ?? now;
+    const startTs = sessionStart.get(sid);
     const durationMs = startTs
       ? Math.max(0, new Date(ts).getTime() - new Date(startTs).getTime())
       : 0;
 
     rows.push({
-      timestamp:       ts,
-      entry_uuid:      entry.uuid      ?? NULL_UUID,
-      session_id:      sid             || NULL_UUID,
-      message_id:      msg.id          ?? "",
-      request_id:      entry.requestId ?? "",
-      parent_uuid:     entry.parentUuid ?? NULL_UUID,
-      user_email:      USER_EMAIL,
-      model:           msg.model,
-      version:         entry.version   ?? "",
-      entrypoint:      entry.entrypoint ?? "cli",
-      git_branch:      entry.gitBranch ?? "",
-      cwd:             entry.cwd       ?? "",
-      is_subagent:     isSubagent                    ? 1 : 0,
-      is_sidechain:    entry.isSidechain === true    ? 1 : 0,
-      stop_reason:     msg.stop_reason              ?? "",
-      service_tier:    usage.service_tier           ?? "standard",
-      inference_geo:   usage.inference_geo          ?? "",
-      speed:           usage.speed                  ?? "standard",
-      status:          entry.isApiErrorMessage === true ? "api_error" : "success",
-      error_type:      entry.error ?? "",
-      tokens_in:       usage.input_tokens,
-      tokens_out:      usage.output_tokens,
-      cache_write_5m:  cacheWrite5m,
-      cache_write_1h:  cacheWrite1h,
-      cache_read:      cacheRead,
-      web_searches:    usage.server_tool_use?.web_search_requests ?? 0,
-      web_fetches:     usage.server_tool_use?.web_fetch_requests  ?? 0,
+      timestamp: ts,
+      entry_uuid: entry.uuid ?? NULL_UUID,
+      session_id: sid || NULL_UUID,
+      message_id: msg.id ?? "",
+      request_id: entry.requestId ?? "",
+      parent_uuid: entry.parentUuid ?? NULL_UUID,
+      user_email: USER_EMAIL,
+      model: msg.model,
+      version: entry.version ?? "",
+      entrypoint: entry.entrypoint ?? "cli",
+      git_branch: entry.gitBranch ?? "",
+      cwd: entry.cwd ?? "",
+      is_subagent: isSubagent ? 1 : 0,
+      is_sidechain: entry.isSidechain === true ? 1 : 0,
+      stop_reason: msg.stop_reason ?? "",
+      service_tier: usage.service_tier ?? "standard",
+      inference_geo: usage.inference_geo ?? "",
+      speed: usage.speed ?? "standard",
+      status: entry.isApiErrorMessage === true ? "api_error" : "success",
+      error_type: entry.error ?? "",
+      tokens_in: usage.input_tokens,
+      tokens_out: usage.output_tokens,
+      cache_write_5m: cacheWrite5m,
+      cache_write_1h: cacheWrite1h,
+      cache_read: cacheRead,
+      web_searches: usage.server_tool_use?.web_search_requests ?? 0,
+      web_fetches: usage.server_tool_use?.web_fetch_requests ?? 0,
       thinking_tokens: Math.ceil(thinkingChars / 4),
-      cost_usd_micros: computeCostMicros(msg.model, usage.input_tokens, usage.output_tokens, cacheWrite5m, cacheWrite1h, cacheRead),
-      session_prompt:  sessionPrompt.get(sid) ?? "",
-      assistant_text:  assistantText.slice(0, 500),
-      tool_calls:      toolCalls,
-      duration_ms:     durationMs,
-      inserted_at:     now,
+      cost_usd_micros: computeCostMicros(
+        msg.model,
+        usage.input_tokens,
+        usage.output_tokens,
+        cacheWrite5m,
+        cacheWrite1h,
+        cacheRead,
+      ),
+      session_prompt: sessionPrompt.get(sid) ?? "",
+      assistant_text: assistantText.slice(0, 500),
+      tool_calls: toolCalls,
+      duration_ms: durationMs,
+      inserted_at: now,
     });
   }
 
@@ -313,7 +379,10 @@ async function parseFile(filePath: string, isSubagent: boolean): Promise<ClaudeS
 
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
-interface FileRef { path: string; isSubagent: boolean }
+interface FileRef {
+  path: string;
+  isSubagent: boolean;
+}
 
 async function discoverFiles(basePath: string): Promise<FileRef[]> {
   const refs: FileRef[] = [];
@@ -329,11 +398,19 @@ async function discoverFiles(basePath: string): Promise<FileRef[]> {
 
     // UUID subdirectory — check for a subagents/ folder inside
     let isDir = false;
-    try { isDir = (await stat(full)).isDirectory(); } catch { continue; }
+    try {
+      isDir = (await stat(full)).isDirectory();
+    } catch {
+      continue;
+    }
     if (!isDir) continue;
 
     let subs: string[] = [];
-    try { subs = await readdir(join(full, "subagents")); } catch { continue; }
+    try {
+      subs = await readdir(join(full, "subagents"));
+    } catch {
+      continue;
+    }
     for (const sub of subs) {
       if (sub.endsWith(".jsonl")) {
         refs.push({ path: join(full, "subagents", sub), isSubagent: true });
@@ -347,7 +424,7 @@ async function discoverFiles(basePath: string): Promise<FileRef[]> {
 // ── ClickHouse insert ─────────────────────────────────────────────────────────
 
 async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
-  const url  = process.env["PRODUCTION_ANALYTICS_URL"];
+  const url = process.env["PRODUCTION_ANALYTICS_URL"];
   const user = process.env["PRODUCTION_ANALYTICS_USER"];
   const pass = process.env["PRODUCTION_ANALYTICS_PASSWORD"];
 
@@ -357,17 +434,20 @@ async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
     );
   }
 
-  const auth  = btoa(`${user}:${pass}`);
+  const auth = btoa(`${user}:${pass}`);
   const CHUNK = 200;
 
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk  = rows.slice(i, i + CHUNK);
+    const chunk = rows.slice(i, i + CHUNK);
     const ndjson = chunk.map((r) => JSON.stringify(r)).join("\n");
-    const body   = `INSERT INTO internal.claude_sessions FORMAT JSONEachRow\n${ndjson}`;
+    const body = `INSERT INTO internal.claude_sessions FORMAT JSONEachRow\n${ndjson}`;
 
     const res = await fetch(url, {
-      method:  "POST",
-      headers: { "Content-Type": "application/x-ndjson", Authorization: `Basic ${auth}` },
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        Authorization: `Basic ${auth}`,
+      },
       body,
     });
 
@@ -376,24 +456,39 @@ async function insertRows(rows: ClaudeSessionRow[]): Promise<void> {
       throw new Error(`ClickHouse ${res.status}: ${text.slice(0, 400)}`);
     }
 
-    process.stdout.write(`  inserted ${Math.min(i + CHUNK, rows.length)}/${rows.length}\n`);
+    process.stdout.write(
+      `  inserted ${Math.min(i + CHUNK, rows.length)}/${rows.length}\n`,
+    );
   }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const basePath = join(
-    process.env["HOME"] ?? "/Users/macanderson",
-    ".claude/projects/-Users-macanderson-oxagen-monorepo",
-  );
+  const home = homedir();
+  if (!home) {
+    throw new Error(
+      "Cannot determine the current user's home directory (os.homedir() returned an empty value). " +
+        "Set HOME explicitly and re-run.",
+    );
+  }
+
+  // Claude Code names project dirs by replacing every "/" in the absolute
+  // project path with "-". Derive it from this script's location so the
+  // script works on any machine, not just the original author's laptop.
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  const projectSlug = repoRoot.replaceAll("/", "-");
+  const basePath = join(home, ".claude/projects", projectSlug);
 
   process.stdout.write(`Scanning ${basePath}\n`);
   const files = await discoverFiles(basePath);
-  process.stdout.write(`Found ${files.length} JSONL files (top-level + subagents)\n\n`);
+  process.stdout.write(
+    `Found ${files.length} JSONL files (top-level + subagents)\n\n`,
+  );
 
   const allRows: ClaudeSessionRow[] = [];
-  let ok = 0, fail = 0;
+  let ok = 0,
+    fail = 0;
 
   for (const { path, isSubagent } of files) {
     try {
@@ -421,10 +516,14 @@ async function main(): Promise<void> {
 
   process.stdout.write("\nInserting into ClickHouse...\n");
   await insertRows(allRows);
-  process.stdout.write(`\n✓ Inserted ${allRows.length} rows into internal.claude_sessions\n`);
+  process.stdout.write(
+    `\n✓ Inserted ${allRows.length} rows into internal.claude_sessions\n`,
+  );
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`Fatal: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(
+    `Fatal: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
   process.exit(1);
 });
