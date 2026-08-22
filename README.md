@@ -59,11 +59,41 @@ every routine site deploy computes a plan containing the database.
 takes as `parent_zone_id`. Everything else is independent.
 
 ```bash
-cd stacks/oxagen     && tofu init && tofu apply
-cd stacks/cgp        && tofu init && tofu apply
-cd stacks/stella     && tofu init && tofu apply   # needs parent_zone_id
+cd stacks/oxagen      && tofu init && tofu apply
+cd stacks/cgp         && tofu init && tofu apply
+cd stacks/stella      && tofu init && tofu apply   # needs parent_zone_id
 cd stacks/oxagen-data && tofu init && tofu apply
+cd stacks/ci-deploy   && tofu init && tofu apply   # who may deploy, and to what
 ```
+
+## Do not apply `oxagen` or `stella` untargeted
+
+**A plain `tofu apply` in `stacks/oxagen` takes `docs.oxagen.sh` down**, and the
+same trap is set in `stacks/stella` for `stella.oxagen.sh`. Check the plan
+before every apply in either.
+
+Both sites are built by the `nextjs-site` module, which creates an alias record
+pointing at a CloudFront distribution in front of a Lambda. That front door
+returns 403 for every request in this account (see "Serving from the node"
+below), so during the migration both records were repointed by hand at the
+instance's Elastic IP. Terraform still holds the alias in state and still wants
+it back:
+
+```text
+# module.docs.aws_route53_record.ipv4["docs.oxagen.sh"] will be updated in-place
+  ~ records = [ - "52.0.98.83" ]
+```
+
+Applying that reverts a working site to a 403. Until the module stops creating
+records for a node-served site, apply those two stacks with `-target`:
+
+```bash
+tofu -chdir=stacks/oxagen apply -target='aws_route53_record.node_service'
+```
+
+The three records in `stacks/oxagen/node-services.tf` — `app`, `api` and `mcp`
+— are unaffected: they are plain `A` records this repository owns outright, and
+nothing else proposes changes to them.
 
 ## The certificate ordering trap
 
@@ -87,13 +117,64 @@ migrated here authorised `pki.goog`, `sectigo.com` and `letsencrypt.org` and
 **not** `amazon.com`, which forbids ACM from issuing at all. There is no error
 that says so — the request just stays `PENDING_VALIDATION` forever.
 
-## Deploying site content
+## Deploying is automatic now
+
+Four repositories publish here on merge to `main`, and none of them holds an
+AWS key. Each assumes a role over GitHub's OIDC provider, trusted on the exact
+subject `repo:<owner>/<name>:environment:production` — an environment, not a
+branch, so entry is a repository setting that can be revoked without a code
+change, and a fork's pull request cannot mint an accepted token.
+
+| Repository | Publishes |
+| --- | --- |
+| `macanderson/stella` | `stella.oxagen.sh` (node) |
+| `macanderson/cgp-website` | `contextgraphprotocol.org` (S3 + CloudFront) |
+| `macanderson/context-graph-protocol` | that site's `/schema` and `/spec` prefixes |
+| `oxageninc/oxagen-platform` | `oxagen.sh` (S3 + CloudFront); `docs`, `app`, `api`, `mcp` (node) |
+
+`stacks/ci-deploy` holds the provider, the four roles and their policies. The
+roles are named in the workflows in plain text, which is fine — a role ARN is an
+identifier, and it is useless without a token whose subject the trust policy
+accepts.
+
+**No CI role has a shell on the node.** Each may write one S3 object per service
+it owns and send exactly one SSM document, `oxagen-deploy-service`, whose only
+argument is a service name constrained by `allowedPattern` at the API. That
+instance also runs Postgres, Neo4j and ClickHouse; `AWS-RunShellScript` on it is
+root, and no deploy needs root.
+
+## Serving from the node
+
+`stella.oxagen.sh`, `docs.oxagen.sh` and the platform's `app`, `api` and `mcp`
+are Node processes on the shared instance behind Caddy, not Lambda. **CloudFront
+in front of a Lambda Function URL returns 403 for every request in this
+account** — ruled out: the resource policy, `RESPONSE_STREAM` invoke mode, a
+stale URL, and org SCPs (the account is in no Organization). A brand-new
+Function URL with authorization disabled entirely still returned 403, which
+should serve. Both functions render correctly under direct `lambda invoke`. Do
+not spend hours on that path again.
+
+`tools/node/` holds what runs there and `tools/node/README.md` documents the
+`oxagen-run.json` contract an artifact must carry. `tools/caddy/Caddyfile` is
+the front door. Install both:
+
+```bash
+tools/install-node-scripts.sh   # validates the Caddyfile before reloading it
+```
+
+**The node is `arm64`** (a `t4g.medium`). An artifact built on an x86 runner
+installs and tests green, then fails to load a native module at first request.
+Build jobs that target it run on `ubuntu-24.04-arm`.
+
+## Deploying site content by hand
+
+The workflows above do this; these are the same steps for a one-off.
 
 ```bash
 # A site that is entirely files
 tools/deploy-static.sh <build-dir> <bucket> <distribution-id>
 
-# A site that runs code
+# A site that runs code, on Lambda (see the 403 above — currently unused)
 cd <app> && pnpm install --node-linker=hoisted && npx @opennextjs/aws build
 tools/package-nextjs.sh <app>          # prints bundle_path and bundle_hash
 cd stacks/<brand> && tofu apply
