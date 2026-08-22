@@ -337,7 +337,7 @@ A SQL connector's connection string is a **Vault secret** (`sql_descriptor.dsnSe
 6. **Set schedule + preview.** Pick a cron (or manual). **Dry-run** (`connector.preview`) executes the worker once against a small window, shows the produced `NormalizedRecord`s + conformance results, **writes nothing**.
 7. **Activate.** Customer adopts the schema (`schema.toggle` → enabled) and enables the connector. The pre-grant (§8.3) is recorded. First scheduled run materializes; `graph.node.search` now covers the data.
 
-### New contracts (capability-parity: contract → API route → MCP tool → CLI command → docs)
+### New contracts (capability-parity: contract → API route → MCP tool → docs)
 - `connector.define` — create/update a `connector_definitions` row (name, backing, bindings, schema_name, prompt, schedule).
 - `connector.list` / `connector.get` / `connector.delete`.
 - `connector.preview` — dry-run worker against a small window; returns sample records + conformance; persists nothing.
@@ -386,7 +386,7 @@ Per-label `fetchMode ∈ {materialized, live, hybrid}` (stored in the schema lab
 | B4 | Agentic ingestion worker + deterministic-recipe promotion | `packages/inngest-functions/src/functions/ingestion.connector-run.ts` |
 | B5 | **Cron scheduler executor** (scan defs/triggers → emit run) | `packages/inngest-functions/src/functions/ingestion.scheduler.ts` |
 | B6 | Cursor write path (un-stub polling checkpoint) | `mutations/upsert-entity.ts` (`upsertSourceConnectionMeta`) + worker |
-| B7 | `connector.*` contracts + handlers + API routes + MCP tools + CLI cmds | `contracts/connector.*`, `handlers/connector.*`, `apps/{api,mcp,cli}` |
+| B7 | `connector.*` contracts + handlers + API routes + MCP tools | `contracts/connector.*`, `handlers/connector.*`, `apps/{api,mcp}` |
 | B8 | `graph.node.enrich` (live-fetch) contract + handler + optional TTL cache | `contracts/graph.node.enrich.ts`, `handlers/`, `ingestion.external_cache` |
 | B9 | Background pre-grant wiring (wildcard consent for a connector service identity) | `connector.enable` handler + `consent.ts` |
 | B10 | Connector-builder UI (source pick → tool map → schema design → prompt → preview → activate) | `apps/app/src/.../connectors/` |

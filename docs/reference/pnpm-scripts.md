@@ -9,8 +9,6 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `preinstall` | Blocks any install that isn't `pnpm` (`npx only-allow pnpm`). | Runs automatically; never invoke directly. |
 | `prepare` | Installs the Lefthook git hooks (`lefthook install`). | Runs automatically after `pnpm i`. |
 | `dev` | Starts every app (`app`, `api`, `mcp`, `docs`, …) plus the Docker datastores (Postgres, ClickHouse, Neo4j), the Stripe webhook tunnel, and the Inngest dev server. | Day-to-day local development. Long-running — background it. |
-| `cli:dev` | Installs a launcher so the `oxagen` command on this machine always runs the monorepo's CLI straight from source (no build/watch). | Once, when setting up local CLI development. |
-| `cli:install` | Same as `cli:dev` but runs once and exits instead of watching. | One-shot CLI launcher (re)install, e.g. in CI or a fresh clone. |
 | `kill` | Stops all `pnpm dev` processes, the Stripe tunnel, the Inngest dev server, and (with `--volumes`) tears down Docker volumes. | Before restarting the stack, or when a port is stuck in use. |
 | `clean:cache` | Deletes every app's `.next/dev/cache` directory. | Clearing a corrupted/stale Next.js dev cache. |
 | `env:pull` | Pulls `.env.local` for every linked project from Vercel's Development environment. | After someone edits env vars in the Vercel dashboard. |
@@ -42,7 +40,7 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `db:backfill-capabilities` | Backfills the default first-party `agent_capability` packs into pre-existing workspaces. | One-time backfill after adding new default capability packs. |
 | `db:backfill-workspace-seeds` | Backfills the MCP registry, capability packs, and skill templates into pre-existing workspaces. | One-time backfill after wiring new workspace-creation seeders. |
 | `db:backfill-mcp-server-auth-config` | Encrypts legacy plaintext `mcp_servers.auth_config` rows in place. | One-time backfill after the auth-config encryption fix landed. |
-| `check:manifest` | Regenerates the capability manifest and warns (exit 0) on any declared layer missing a file on disk; `--strict` exits 1. | Verifying API/MCP/CLI capability parity; part of `pnpm gate`. |
+| `check:manifest` | Regenerates the capability manifest and warns (exit 0) on any declared layer missing a file on disk; `--strict` exits 1. | Verifying API/MCP capability parity; part of `pnpm gate`. |
 | `check:ui-parity` | Enforces the UI Capability Parity law — every `app`-layer capability must have a working, proven page. | Part of `pnpm gate`; run after wiring up new app UI. |
 | `check:mobile-parity` | Enforces the Mobile Feature Parity law (ADR-026) — no undeclared mobile-hidden features. | Part of `pnpm gate`; run after adding responsive-display utilities. |
 | `check:vision` | LLM-judges a PR diff against `docs/VISION.md` and posts an advisory verdict. | Runs in the Vision Gate CI workflow; can run locally against `origin/main`. |
@@ -54,7 +52,7 @@ are not listed here — run those via `pnpm --filter <pkg> <script>`.
 | `docs:schemas` | Generates per-capability input/output JSON Schema docs from Zod contracts. | After changing a contract's input/output shape. |
 | `env:check` | Reconciles env-var references in code against `ENV_REGISTRY` and verifies `.env.example` is current; `--write` regenerates it. | Part of `pnpm gate`; also the `pre-push` hook. Run `--write` after adding a new env var. |
 | `eval` | Runs the in-process engram context-quality eval suite and ingests results into ClickHouse. | Quick, free, no-Docker eval run. Pass a `.eval.json` path to ingest existing results instead. |
-| `eval:ingest` | Loads a normalized `*.eval.json` file into ClickHouse eval tables. | Landing results from the heavier Python eval harnesses (rag-eval, context-eval, terminal-bench). |
+| `eval:ingest` | Loads a normalized `*.eval.json` file into ClickHouse eval tables. | Landing results from the heavier Python eval harnesses (rag-eval, context-eval). |
 | `gate` | The full CI suite: affected lint/typecheck/test/coverage/build, plus manifest/UI-parity/mobile-parity/contracts/connector-schema/env/migration checks. | Pre-merge, once a body of work is finished — not per-commit (see CLAUDE.md). |
 | `release` | Runs the lockstep monorepo release (defaults to no bump — see `release:*`). | Rarely invoked directly; prefer `release:patch`/`minor`/`major`. |
 | `release:patch` / `release:minor` / `release:major` | Bumps every package's version in lockstep, regenerates AI release notes, tags, and propagates `PLATFORM_VERSION` to every Vercel project/environment. | Cutting a new platform release. |

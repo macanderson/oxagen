@@ -419,7 +419,7 @@ The existing `CapabilityContext` interface in `@oxagen/oxagen` is not changed. T
 
 ---
 
-## 11. stdio Transport — Local CLI / Desktop Clients
+## 11. stdio Transport — Local Desktop Clients
 
 xmcp builds **both** `dist/http.js` and `dist/stdio.js` from a single `xmcp build` invocation when both `http: true` and `stdio: { ... }` are set in `xmcp.config.ts`.
 
@@ -427,7 +427,7 @@ xmcp builds **both** `dist/http.js` and `dist/stdio.js` from a single `xmcp buil
 # HTTP (Vercel / remote MCP clients)
 node dist/http.js
 
-# stdio (Claude Desktop, MCP Inspector local mode, CLI agents)
+# stdio (Claude Desktop, MCP Inspector local mode, terminal agents)
 node dist/stdio.js
 ```
 

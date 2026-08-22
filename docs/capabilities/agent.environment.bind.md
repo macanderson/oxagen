@@ -56,15 +56,6 @@ Content-Type: application/json
 
 Tool name: `bind_agent_environment`
 
-
-## CLI
-
-```
-oxagen agent env bind <agent> --env <slug> [--template <slug>] [--primary]
-```
-
-`<agent>` is a `agt_…` id, slug, or agent-key. Omit `--template` to resolve the environment's default template at run time.
-
 ## Errors
 
 - `validation_error` — missing/empty `agentId`/`environmentId`.

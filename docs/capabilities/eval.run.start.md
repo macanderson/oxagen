@@ -3,7 +3,7 @@
 **Domain:** eval
 **Mode:** async
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** medium
 
 ## Intent

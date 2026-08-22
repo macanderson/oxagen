@@ -9,7 +9,6 @@ Point the workspace at a specific published schema version. Returns whether a do
 - API: `POST /v1/schema/versions/{versionId}/pin`
 - MCP: `schema.version.pin`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

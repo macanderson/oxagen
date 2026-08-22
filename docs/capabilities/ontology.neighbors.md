@@ -9,7 +9,6 @@ The one-hop neighborhood of a node — a focused, cheap traversal primitive (dep
 - API: `POST /v1/ontology/neighbors`
 - MCP: `ontology.neighbors`
 - Agent: callable (no approval required, risk: low)
-- CLI: `oxagen ontology neighbors`
 
 ## Input
 | Parameter | Type | Required | Description |

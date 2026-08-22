@@ -3,37 +3,28 @@
 - **Status:** Proposed
 - **Date:** 2026-07-18
 - **Owners:** agent-engine
-- **Related:** ADR-017 (unified agent engine), ADR-021 (inference doctrine —
-  deterministic-before-model), ADR-028 (time-travel replay), ADR-029 (mutation
-  verifier gate), ADR-030 (speculative tool execution), ADR-032 (unified chat
-  session state), `docs/specs/agent-engine-v2/` (full design),
-  `docs/specs/oxagen-rust-cli/` (superseded on the "build a Rust agent" point —
-  that agent now exists as [Stella](https://github.com/macanderson/stella))
+- **Related:** ADR-021 (inference doctrine — deterministic-before-model),
+  ADR-029 (mutation verifier gate), ADR-030 (speculative tool execution),
+  ADR-032 (unified chat session state), `docs/specs/agent-engine-v2/`
+  (full design)
 
 ## Context
 
-The platform runs two divergent agent implementations and ships the weaker one:
+The platform's own agent implementation falls short in three ways:
 
-1. The pipeline (`packages/agent-engine/src/pipeline/index.ts` — evaluate →
-   enhance → route → execute → judge → revise, 1,968 lines) runs **only** on the
-   CLI and the `agent.repo.edit` fleet capability. Every production surface —
-   `apps/app/.../chat/stream/route.ts:1579`, `apps/api/.../chat.stream.ts`, the
-   A2A bridge — calls bare `runCodingAgent`, so live traffic gets no judging, no
-   revision, no tiered routing, no mutation gate.
-2. The coding loop is **request-scoped and non-durable**: turn state is an
+1. The coding loop is **request-scoped and non-durable**: turn state is an
    in-memory `conversation` array inside a 1,856-line Next.js route stream. A
    disconnect or function timeout loses the turn. There is no checkpoint and no
    resume path (`rg 'resume|checkpoint'` over the loop code: zero hits).
-3. There is **no hook/event bus**. `packages/agent/src/hooks/runtime.ts` is
+2. There is **no hook/event bus**. `packages/agent/src/hooks/runtime.ts` is
    three hardcoded log-only functions; blocking policy exists only as the fixed
    kernel gate order. Plugins cannot register policy.
-4. Tool-call parallelism is inherited, not designed: the AI SDK fires every
+3. Tool-call parallelism is inherited, not designed: the AI SDK fires every
    tool call in a step without awaiting (`run-tools-transformation.ts`,
    "we don't await the tool execution here"), with **no concurrency cap and no
    mutating-call barrier** — parallel `write_file` + `bash` can interleave.
 
-Meanwhile Stella — the Rust terminal agent that grew out of this org's own
-`oxagen-rust-cli` spec and now lives at `macanderson/stella` (MIT OR
+Meanwhile Stella — the Rust terminal agent at `macanderson/stella` (MIT OR
 Apache-2.0) — has the engine we want: a pure, ports-everywhere core
 (`stella-protocol` → `stella-core` → `stella-pipeline`) with a
 deterministic-first verification ladder (flip oracle), witness authoring with
@@ -70,20 +61,19 @@ ports:
 
 Execution moves off the request path into a durable turn runner: one
 `executeTurn()` entrypoint for all surfaces, a persisted `AgentEvent` log as
-the canonical run record (converging with ADR-028 replay and ADR-032 session
+the canonical run record (converging with ADR-032 session
 state), per-step checkpoints, lease-based claims, and resume after crash or
 redeploy. SSE becomes a resumable subscription to the event log.
 
 Sequencing is two-track so the payoff is not gated on Rust: Track 1 (TS-only)
 lands the single entrypoint, durable runner, capped/partitioned tool dispatch,
 and `code_graph` speculation; Track 2 lands the embedded core behind a flag,
-gated on bench parity (arena/SWE-bench suite) in shadow mode. Full design and
+validated in shadow mode against live traffic. Full design and
 phases: `docs/specs/agent-engine-v2/`.
 
 ## Consequences
 
-- One engine for CLI and platform; fixes and bench wins flow both ways.
-  Licensing is clean (MIT OR Apache-2.0 consumed by proprietary code); pin by
+- One engine for every surface. Licensing is clean (MIT OR Apache-2.0 consumed by proprietary code); pin by
   git rev like the OCP crates.
 - The TS pipeline (1,968 lines), loop heuristics, and the route-inlined turn
   logic are retired after parity; ADR-029's mutation gate is absorbed by the

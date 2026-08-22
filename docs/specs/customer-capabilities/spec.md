@@ -21,18 +21,18 @@ handler, full surface parity — while Oxagen does all of the surfacing:
   manifest — that is portable, installable, and immutable per version.
 - Installed **per workspace**, gated by the existing kernel entitlement seam,
   IAM role grants, billing, and audit.
-- Surfaced automatically — REST endpoint, MCP tool, agent tool, app UI, CLI
-  command — **from configuration, with zero surface code written by the
+- Surfaced automatically — REST endpoint, MCP tool, agent tool, app UI —
+  **from configuration, with zero surface code written by the
   customer**. The customer decides *where* it surfaces (manifest flags);
   Oxagen's generic binders do *how*.
 
 **The running example** used throughout: Acme Corp wants AI agents (running on
 a non-Oxagen agent platform) to automate **returns & refunds processing**. Acme
 writes one contract + one handler, declares
-`surfaces: ["api", "mcp", "agent", "app", "cli"]`, and gets: a REST endpoint
+`surfaces: ["api", "mcp", "agent", "app"]`, and gets: a REST endpoint
 their systems call, an MCP tool any external agent runner can invoke against
-their workspace MCP endpoint, an in-app form + result card, and a CLI command —
-without writing a route, a tool file, a React page, or a commander block.
+their workspace MCP endpoint, and an in-app form + result card — without
+writing a route, a tool file, or a React page.
 
 ### Non-goals (v1)
 
@@ -75,10 +75,9 @@ Everything *around* that core is hand-written per capability:
 | REST | `apps/api/src/routes/v1/<name>.ts` (parse → `invoke()`) **plus** an import line and a `.route()` line hand-listed in `apps/api/src/app.ts` | 276 route files, 571 `.route()` calls |
 | MCP | `apps/mcp/src/tools/<name>.ts` — schema/name/description all re-exported *from the contract*, plus per-field `.describe()` overlays | 330 files |
 | App | Optional server action + `capability-ui-map.json` entry + form component (`generate_video` has one; svg/image ride the chat render registry) | per-`app`-layer capability |
-| CLI | Hand-wired commander blocks per domain (`apps/cli/src/commands/*.ts`), calling REST | per domain |
 | Agent | — (registry-driven) | 0 |
 
-Adding one capability costs **~7–10 files**, of which the REST wrapper, the
+Adding one capability costs **~6–9 files**, of which the REST wrapper, the
 `app.ts` lines, and the MCP tool file are purely mechanical projections of the
 contract. Parity is maintained by after-the-fact gates
 (`check:manifest`, `check:ui-parity`, `route-contract-parity.test.ts`,
@@ -104,7 +103,7 @@ that delete our own wrapper files).
 ```
  Customer Git repo                      Oxagen platform
 ┌───────────────────────┐
-│ capabilities/          │   oxagen cap build
+│ capabilities/          │   cap build
 │   process_refund.ts    │  ──────────────────►  acme-returns-1.2.0.cap
 │   process_refund.      │   (compile, validate,      │
 │     handler.ts         │    bundle, checksum)       │ upload / Git-connected
@@ -125,7 +124,7 @@ that delete our own wrapper files).
    Dynamic registry overlay              Surface binders (generic)      Capability runner
    static contracts ∪ workspace          API route table · MCP dynamic  sandbox drivers,
    installs → CapabilityDeclaration      tool list · agent tools · app  warm sessions,
-   (Zod materialized from JSON Schema)   runner page · CLI sync         digest-pinned image
+   (Zod materialized from JSON Schema)   runner page                    digest-pinned image
               │                                       │                          ▲
               └────────────► kernel.invoke() ─────────┴──── handler dispatch ────┘
                     (surfaces, IAM, billing,                 (host API callback:
@@ -239,7 +238,7 @@ sandbox-template manifest v1
       "displayName": "Process refund",
       "description": "Validate a return, compute the refund, execute it in the OMS, and notify the customer.",
       "mode": "sync",                         // "sync" | "async"  (§9.5)
-      "surfaces": ["api", "mcp", "agent", "app", "cli"],
+      "surfaces": ["api", "mcp", "agent", "app"],
       "contract": {
         "input": "contracts/process_refund.input.json",
         "output": "contracts/process_refund.output.json"
@@ -300,7 +299,7 @@ and first-party capabilities uniformly.
 ### 6.1 Repo scaffold and SDK
 
 ```bash
-oxagen cap init acme/returns          # scaffolds a Git-ready repo
+cap init acme/returns          # scaffolds a Git-ready repo
 ```
 
 ```
@@ -329,7 +328,7 @@ export const processRefund = defineCapability({
   displayName: "Process refund",
   description: "Validate a return, compute the refund, execute it, notify the customer.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent", "app", "cli"],
+  surfaces: ["api", "mcp", "agent", "app"],
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
@@ -392,12 +391,12 @@ on ambient tenant scope; customer handlers get **only** the brokered host API
 
 | Command | What it does |
 |---|---|
-| `oxagen cap init` | Scaffold repo (above). |
-| `oxagen cap dev` | Local dev loop: runs the handler in the local runner image (docker sandbox driver), serves a local surface emulator (REST + MCP + auto-form UI) against a local host broker with fixture and live-proxy modes (§6.3). |
-| `oxagen cap test` | Runs the author's tests inside the runner image + the platform conformance suite: contract portability (§7), manifest validity, handler I/O round-trips against the compiled schemas, permission-violation probes (undeclared capability/secret/host must fail). |
-| `oxagen cap build` | Compile contracts (Zod → JSON Schema, §7), bundle handlers/UI (esbuild, externals forbidden), emit manifest + integrity, produce `dist/<id>-<version>.cap`. |
-| `oxagen cap publish` | Upload the `.cap` to the org's package registry (§8.1). `--workspace` also installs. CI runs this on tag push. |
-| `oxagen cap doctor` | Static lint of an existing repo/package: naming, schema subset, permission hygiene, doc presence. |
+| `cap init` | Scaffold repo (above). |
+| `cap dev` | Local dev loop: runs the handler in the local runner image (docker sandbox driver), serves a local surface emulator (REST + MCP + auto-form UI) against a local host broker with fixture and live-proxy modes (§6.3). |
+| `cap test` | Runs the author's tests inside the runner image + the platform conformance suite: contract portability (§7), manifest validity, handler I/O round-trips against the compiled schemas, permission-violation probes (undeclared capability/secret/host must fail). |
+| `cap build` | Compile contracts (Zod → JSON Schema, §7), bundle handlers/UI (esbuild, externals forbidden), emit manifest + integrity, produce `dist/<id>-<version>.cap`. |
+| `cap publish` | Upload the `.cap` to the org's package registry (§8.1). `--workspace` also installs. CI runs this on tag push. |
+| `cap doctor` | Static lint of an existing repo/package: naming, schema subset, permission hygiene, doc presence. |
 
 **Git is the source of truth.** A published version records
 `{ gitRemote?, commitSha?, tag? }` when built via CI or Package Studio (§11.2),
@@ -410,7 +409,7 @@ only.
 The dev loop is make-or-break for adoption, so it is **beta-blocking**
 (plan Phase 2), not post-GA polish:
 
-- **`oxagen cap dev`** runs the bundle in the local runner image (docker
+- **`cap dev`** runs the bundle in the local runner image (docker
   driver) behind a local surface emulator — REST on localhost, an MCP
   endpoint any client can connect to, the auto-form page — with the host
   broker in one of two modes:
@@ -655,7 +654,7 @@ screen trustworthy.
      `succeeded` (output validated against the contract) or `failed`.
   3. Reads are uniform: new first-party contract `read_capability_run`
      surfaces run status on **every** surface (REST poll, MCP tool, app run
-     view, CLI `--wait`), replacing per-capability polling conventions.
+     view), replacing per-capability polling conventions.
   `capability_runs`: `id, public_id, org_id, workspace_id, capability_name,
   package_version_id?, status (pending|running|succeeded|failed|cancelled),
   input jsonb, output jsonb, error, progress jsonb, timings, cost_usd_micros,
@@ -780,7 +779,7 @@ Three layers, all riding existing render plumbing:
    a **human in the loop**, and a schema form is the wrong instrument for
    the moment of judgment — an airline's `assign_seat` capability wants a
    seating-chart picker, not fourteen text inputs. That need is real, it is
-   **app-surface-only** (REST/MCP/agent/CLI parity is unaffected by its
+   **app-surface-only** (REST/MCP/agent parity is unaffected by its
    absence), and it is explicitly **not v1**. What v1 fixes now so the lane
    exists later: the `ui/` package directory and the manifest `ui` block
    are **reserved** — validation warns and ignores them, and rendering
@@ -796,55 +795,13 @@ Discovery (all layers): installed capabilities appear in the workspace
 capability catalog, the sidebar's Installed section, and the command menu
 (indexed by `command.menu.search` alongside first-party rows).
 
-### 10.5 CLI (`apps/cli`) — and how "a CLI custom to a workspace" works
-
-The requirement: Acme's operators get a refund command that exists **only**
-in workspaces where the package is installed. Three ways to get there:
-
-| Option | How | Verdict |
-|---|---|---|
-| **A. Dynamic materialization in the standard CLI** | CLI syncs the workspace capability index; commands are generated at parse time from declarations | **Recommended — v1** |
-| B. npm-distributed CLI plugin packages (oclif-style) | `.cap` also emits an npm plugin; users install per machine | Deferred: supply-chain surface, per-machine drift, duplicate artifact; revisit for offline-heavy fleets |
-| C. Per-workspace compiled binaries | CI builds a branded binary per workspace | Rejected: distribution/signing/update churn; no capability the dynamic approach lacks |
-
-**Option A mechanics.** The CLI already resolves org/workspace from config
-and calls REST (`apps/cli/src/lib/api.ts`); it gains:
-
-- `oxagen sync` — fetch the workspace capability index (name, display, http
-  path, cli hints, compiled input schema, mode) → cache at
-  `.oxagen/capabilities.json` (TTL + `--refresh`; also refreshed on auth and
-  workspace switch). Everything below works offline-after-sync; invocation
-  requires network anyway.
-- **One form, deliberately:** `oxagen cap run <name> [--json | flags]` —
-  flags derived from the schema (kebab-cased fields, enums validated,
-  booleans as toggles, nested via dotted flags), output pretty-printed or
-  `--json`; async mode prints the runId and polls `read_capability_run`
-  unless `--no-wait`. Acme's command is:
-  `oxagen cap run acme_returns_process_refund --return-id R-1042 --reason damaged`.
-  Manifest-declared first-class command groups (`oxagen returns refund …`)
-  are **considered and deferred** for the same reason as HTTP pretty paths
-  (§10.1): they add reserved-name and collision machinery for ergonomics
-  that completions already deliver — and a user who wants brevity has shell
-  aliases. Revisit with customer evidence.
-- **Completions & help:** shell completions for `cap run` — capability
-  names and their flags — regenerate from the cache on sync, so
-  discoverability matches hand-written commands. The REPL slash catalog
-  derives from the same commander tree, so installed capabilities appear
-  there too — the existing `slash-parity` tests extend to cover the dynamic
-  set.
-
-This keeps **one** distributed binary (`@oxagen/cli` on npm), no per-workspace
-builds, and the workspace-specific behavior lives where the rest of this
-design puts it: in the synced, signed capability index. What is genuinely
-per-workspace is a cache file, not a compilation.
-
-### 10.6 Docs surface
+### 10.5 Docs surface
 
 The `docs` layer stays mandatory: `docs/<action>.md` ships in the package,
 renders on the capability's catalog page (with contract tables generated from
 the compiled schemas, the way `capability.registry.get` derives field specs
 today), and is exported by `system.install.instructions`-style copy blocks
-(REST curl, MCP config for external runners, CLI invocation) generated from
+(REST curl, MCP config for external runners) generated from
 the same declaration. Nothing is hand-synced.
 
 ---
@@ -867,7 +824,7 @@ a structured report (the same report `cap doctor` prints locally).
 
 ### 11.2 Ways in (the "Compile/Package" processes)
 
-1. **Local:** `oxagen cap build` + `oxagen cap publish` (CI-friendly; the
+1. **Local:** `cap build` + `cap publish` (CI-friendly; the
    scaffolded GitHub Action publishes on tag).
 2. **Package Studio (in-app):** connect a repo (the GitHub app connection
    from ADR-027 / `repo.*` capabilities) → pick ref/tag → the platform runs
@@ -1047,9 +1004,7 @@ with gates).
    the question is presentation.)
 5. **Per-seat vs usage pricing for runner compute** — pricing owns this; the
    meters land either way (§9.6).
-6. **CLI offline invocation** — is offline-after-sync enough, or do
-   air-gapped fleets justify Option B (npm plugin emission) sooner?
-7. **Org-level install** — Acme's refunds package is really an org
+6. **Org-level install** — Acme's refunds package is really an org
    capability; installing workspace-by-workspace is toil at 40 workspaces.
    `plugin.org.install_bulk` is precedent for the mechanic; the open design
    questions are defaulting (auto-install into newly created workspaces?)

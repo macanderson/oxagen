@@ -20,7 +20,7 @@ ADR in `docs/adr/` before Phase 1 starts:
 ## Phase 1 — Monorepo scaffold
 
 - [ ] Turborepo workspace with `/apps`, `/packages`, `/plugins`, `/tools`
-- [ ] App stubs: `api`, `mcp`, `runner`, `app`, `website`, `cli`
+- [ ] App stubs: `api`, `mcp`, `runner`, `app`, `website`
 - [ ] Shared `tsconfig`, `eslint`, `prettier` configs in `/packages/config`
 - [ ] `pnpm dev` / `pnpm kill` skeletons (no infra wired yet)
 

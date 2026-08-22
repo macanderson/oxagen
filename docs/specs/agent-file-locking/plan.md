@@ -133,7 +133,7 @@ write may proceed.
   l.expiresAt < $now DELETE l` run from the same Inngest cron that sweeps stale
   claims, so dead-agent locks are reaped even if no one tries to re-acquire.
 
-## 7. Capability parity (contract → API → MCP → CLI)
+## 7. Capability parity (contract → API → MCP)
 
 Per CLAUDE.md, the lock ops are real capabilities invoked via `invoke()` so
 metering / IAM / lineage flow — never a raw Neo4j call from a route.
@@ -146,7 +146,6 @@ metering / IAM / lineage flow — never a raw Neo4j call from a route.
 | Handler | `packages/agent/src/handlers/agent.file.lock.*.ts` (runs the Cypher via the ontology query layer) |
 | API route | `apps/api/src/routes/v1/agent.file.lock.acquire.ts` + `.release.ts` + `.list.ts` |
 | MCP tool | `apps/mcp/src/tools/agent.file.lock.acquire.ts` + `.release.ts` + `.list.ts` |
-| CLI | `apps/cli/src/commands/` file-lock command (parity) |
 | Docs | `docs/capabilities/agent.file.lock.acquire.md` (+ release/list), update `_index.md` |
 
 Contract shape mirrors `agent.subagent.fanout.get.ts`: `domain: "agent"`,
@@ -178,8 +177,8 @@ heldBy?, blockedUntil? }`.
    contract tests.
 4. `packages/agent/src/handlers/agent.file.lock.*.ts` — handlers calling the
    mutations via the ontology query layer; register in `@oxagen/handlers`.
-5. `apps/api/src/routes/v1/agent.file.lock.*.ts` + `apps/mcp/src/tools/agent.file.lock.*.ts`
-   + CLI command; verify with `pnpm check:manifest`.
+5. `apps/api/src/routes/v1/agent.file.lock.*.ts` + `apps/mcp/src/tools/agent.file.lock.*.ts`;
+   verify with `pnpm check:manifest`.
 6. `packages/agent/src/adapters/graph-sync.ts` — `acquireFileLocks` /
    `releaseFileLocks`; call from the coding-agent turn (acquire pre-write, release
    in `finally`).
@@ -250,9 +249,9 @@ never sees target file paths itself), so a true *before-write* gate has to
 live where the write actually happens: `write_file`/`edit_file` in
 `packages/agent-engine/src/tools.ts`. This is also the ONE place shared by
 every caller of `runCodingAgent` — the chat surface
-(`apps/app/src/app/api/v1/chat/stream/route.ts`), the CLI, and
+(`apps/app/src/app/api/v1/chat/stream/route.ts`) and
 `agent.repo.edit` (dispatched both directly and as a subagent-fanout child) —
-per `docs/adr/ADR-017-unified-agent-engine.md`'s shared engine, so wiring it
+through the shared engine, so wiring it
 once here protects all of them without per-caller code. See:
 `packages/agent-engine/src/ports.ts` (`FileLockProvider` port),
 `packages/agent-engine/src/tools.ts` (acquire-before-write / release-after,
@@ -293,9 +292,9 @@ user-facing lock view was added in this ticket.
 **(d) Capability parity — mostly done, two pieces deferred.**
 `agent.file.lock.{acquire,release,list}` contracts + handlers + API routes +
 MCP tools are shipped (`pnpm check:manifest --json` confirms schema/api/mcp/unit
-all present). **Deferred as fast-follows:** `docs/capabilities/agent.file.lock.*.md`
-+ `_index.md`, and a CLI command. Both are mechanical, low-risk additions
-against the now-stable contracts.
+all present). **Deferred as a fast-follow:** `docs/capabilities/agent.file.lock.*.md`
++ `_index.md` — a mechanical, low-risk addition against the now-stable
+contracts.
 
 **§9 item 8 (sweep) — done.** `agent.lease-sweep.ts`'s existing 5-minute cron
 now also calls `sweepExpiredFileLocks()` as step 4, fail-soft (a Neo4j outage

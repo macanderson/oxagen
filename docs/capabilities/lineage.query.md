@@ -3,7 +3,7 @@
 **Domain:** lineage
 **Mode:** sync
 **Scope:** org + workspace (org: Owner, Admin; workspace: Owner, Member, Viewer)
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Capability name:** `query_lineage`
 

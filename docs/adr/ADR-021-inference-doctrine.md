@@ -1,11 +1,11 @@
 # ADR-021: Inference doctrine — deterministic-first, cache-aligned, structured-tool agentic coding
 
 **Status:** Proposed (2026-07-06)
-**Related:** ADR-019 (unified agent engine), ADR-009 (unified capability-tool model), ADR-010 (subagent fan-out via Inngest), ADR-017 (OpenTelemetry tracing), `docs/VISION.md`
+**Related:** ADR-033 (Stella engine core), ADR-009 (unified capability-tool model), ADR-010 (subagent fan-out via Inngest), ADR-017 (OpenTelemetry tracing), `docs/VISION.md`
 
 ## Context
 
-Oxagen's coding agent runs on four surfaces — CLI, web app, API, MCP — through one shared engine (ADR-019). The mission is to consistently outperform every other agentic coding tool on **wall-clock time, output quality, token burn, context retrieval, and multi-hour mission planning**, while remaining the governed, grounded, metered backbone (the Stripe-for-agents wedge: every observed token flows through metering into billing).
+Oxagen's agent runs on three surfaces — web app, API, MCP — through one shared engine. The mission is to consistently outperform every other agentic coding tool on **wall-clock time, output quality, token burn, context retrieval, and multi-hour mission planning**, while remaining the governed, grounded, metered backbone (the Stripe-for-agents wedge: every observed token flows through metering into billing).
 
 Performance in an agentic system is not primarily a model problem; it is an **inference-engineering** problem. The dominant costs are: (1) model calls that a function could have made, (2) KV-cache misses caused by unstable prompt prefixes, (3) raw tool output (logs, diffs, test runs) flooding the context, and (4) fleet coordination overhead (dispatcher models, duplicated context, lock contention). This ADR fixes the doctrine that every engine, surface, and tool change is judged against.
 
@@ -34,7 +34,7 @@ The prompt is an append-only, prefix-stable data structure:
 
 ### 3. Structured tools over generic execution
 
-A generic `bash` tool is the floor, not the pattern. Any diagnostic or mechanical duty the agent performs more than rarely becomes a **contract-backed tool with typed output** (capability parity: contract → API → MCP → CLI), e.g. `debug_with_trace` returning a structured failure frame (failing step, error class, top stack frames, related trace spans, suspect files ranked by the code graph) instead of 10k lines of logs. Rules:
+A generic `bash` tool is the floor, not the pattern. Any diagnostic or mechanical duty the agent performs more than rarely becomes a **contract-backed tool with typed output** (capability parity: contract → API → MCP), e.g. `debug_with_trace` returning a structured failure frame (failing step, error class, top stack frames, related trace spans, suspect files ranked by the code graph) instead of 10k lines of logs. Rules:
 
 - **Raw output never enters context.** Every tool result passes a deterministic compressor (truncate, parse, rank, summarize-by-rule) before the model sees it. LLM summarization of tool output is a last resort (ladder rung 4–5).
 - Tool descriptions are written for **routing precision**: one sentence of what it does, one of when to prefer it over neighbors, explicit anti-triggers. Overlapping tools with vague descriptions are how a model "uses the wrong tool" — that is a tool-registry defect, not a model defect.
@@ -54,15 +54,13 @@ Fleet fan-out uses **zero dispatcher-model calls**. Work partitioning is determi
 
 **Neo4j never enforces or mirrors a lock for launch.** A graph projection is eventually consistent and would leak branch/worktree-specific file paths into shared state without providing replay-grade evidence. File locks remain queryable in Postgres; exact file lineage belongs in the future immutable run-evidence ledger, and any coarse workspace projection must be derived from verified evidence.
 
-Local-only CLI fleets (no platform round-trip on the critical path) back the same `LockProvider` port with a local implementation (single-process mutex + lock file); the port contract, fencing semantics, and lease TTLs are identical.
-
 ### 6. Metering is a first-class output
 
-Every inference emits usage to ClickHouse with surface, capability, model, cache-read split, and mission/trace lineage — this is the product (metering → billing), not telemetry overhead. A code path that calls a model without metering is a P0. Wall-clock, token burn, and cache hit rate are benchmarked per release against the SWE-bench harness in `packages/bench`.
+Every inference emits usage to ClickHouse with surface, capability, model, cache-read split, and mission/trace lineage — this is the product (metering → billing), not telemetry overhead. A code path that calls a model without metering is a P0.
 
 ### 7. Surface parity is an invariant, not an aspiration
 
-Behavior lives in the engine; surfaces own only adapters (ADR-019 ports). Any behavioral logic found in a surface (custom prompt text, tool filtering, retry policy, budget handling) is a defect to be pulled into the engine behind a port. Parity is enforced by a manifest test: the engine exports its per-surface configuration (tools, prompt hash, ports) and CI diffs the four surfaces against declared divergences.
+Behavior lives in the engine; surfaces own only adapters (ADR-033 ports). Any behavioral logic found in a surface (custom prompt text, tool filtering, retry policy, budget handling) is a defect to be pulled into the engine behind a port. Parity is enforced by a manifest test: the engine exports its per-surface configuration (tools, prompt hash, ports) and CI diffs the three surfaces against declared divergences.
 
 ### 8. Memory closes the loop
 

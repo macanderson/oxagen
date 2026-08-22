@@ -4,7 +4,7 @@
 automatic Neo4j execution projection and semantic peer-recall slice were
 retired for launch.
 **Owner:** Mac Anderson
-**Related:** `docs/specs/graph-mediated-fanout/` (Phase 1, shipped in #527), ADR-010 (subagent fanout via Inngest), ADR-019 (unified agent engine)
+**Related:** `docs/specs/graph-mediated-fanout/` (Phase 1, shipped in #527), ADR-010 (subagent fanout via Inngest)
 
 > **Launch boundary:** `subagent_runs` summaries, claims, leases, sibling reads,
 > and telemetry remain authoritative. The historical `:Execution` projection
@@ -63,7 +63,7 @@ didn't ask.
 - Peer-to-peer messaging or persistent inter-agent channels.
 - Replacing Inngest as the execution substrate.
 - LLM-generated summaries (Phase 1's structural digests stay).
-- Changing the CLI fleet (in-process, already summary-based and lock-aware).
+- Changing the in-process fleet runner (already summary-based and lock-aware).
 
 ## Design
 
@@ -204,7 +204,7 @@ anywhere in the loop.
 
 - Compact-by-default aggregate, `result.get`, structural summaries (Phase 1).
 - Inngest as executor; Postgres as operational truth; Neo4j as semantic index.
-- The Phase 1 decision to keep `readFanout()` and the CLI fleet untouched.
+- The Phase 1 decision to keep `readFanout()` and the in-process fleet runner untouched.
 
 ## Delivery slices (each independently shippable, in order of value)
 

@@ -8,7 +8,6 @@ Trigger incremental or full re-index of a repository connection.
 ## Surfaces
 - API: `POST /v1/repos/:id/sync`
 - MCP: `repo.sync`
-- CLI: `oxagen repo sync <id>`
 - Agent: callable (no approval required, risk: medium)
 
 ## Input

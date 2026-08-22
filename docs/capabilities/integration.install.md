@@ -8,7 +8,6 @@ Install a plugin instance from the catalog or a custom URL. Fetches schema, vali
 ## Surfaces
 - API: `POST /v1/integrations`
 - MCP: `integration.install`
-- CLI: `oxagen integration install`
 - Agent: callable (requires approval, risk: high)
 
 ## Input

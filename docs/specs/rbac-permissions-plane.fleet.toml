@@ -194,8 +194,8 @@ Do:
    (e.g. set/list/delete of skill grants — follow ADR-025 naming conventions used by
    neighboring contracts) that read/write iam.resource_grants rows with
    resource_type='skill'. Capability parity is law: contract → API route
-   (apps/api/src/routes/v1/) → MCP tool (apps/mcp/src/tools/) → CLI command
-   (apps/cli/src/commands/). Write the per-capability doc file(s) under
+   (apps/api/src/routes/v1/) → MCP tool (apps/mcp/src/tools/). Write the
+   per-capability doc file(s) under
    docs/capabilities/ but do NOT edit docs/capabilities/_index.md — a later task owns
    that file.
 3. Unit tests: enforcement fires on a deny row targeting a specific skill (including for

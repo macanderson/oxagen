@@ -3,7 +3,6 @@
   "pages": [
     "index",
     "getting-started",
-    "cli",
     "configuration",
     "connections",
     "knowledge",
@@ -18,7 +17,6 @@
     "a2a",
     "capabilities",
     "agent",
-    "plugins",
-    "specs-and-plans"
+    "plugins"
   ]
 }

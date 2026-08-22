@@ -122,7 +122,7 @@ non-holder release is a no-op.
 
 ---
 
-## 5. Capability parity (contract → API → MCP → CLI → docs)
+## 5. Capability parity (contract → API → MCP → docs)
 
 Per the capability-parity law, locking is a governed capability, not raw Cypher:
 
@@ -131,7 +131,7 @@ Per the capability-parity law, locking is a governed capability, not raw Cypher:
 - Handlers in `packages/handlers/` calling the ontology mutation layer
   (`packages/ontology/src/mutations/file-lock.ts`), tenant-scoped via `invoke()`.
 - API routes `apps/api/src/routes/v1/agent-lock.ts`; MCP tools
-  `apps/mcp/src/tools/agent-lock.ts`; CLI `apps/cli/src/commands/lock.tsx`;
+  `apps/mcp/src/tools/agent-lock.ts`;
   docs `docs/capabilities/agent.lock.*.md` + `_index.md`.
 - `agent.lease-sweep` cron gains a FileLock pass: delete/telemeter locks past
   `expiresAt`, emit `agent.lock.expired` / `agent.lock.reclaimed` to ClickHouse.
@@ -157,10 +157,10 @@ Two seams, both already located:
    guessed manifest). The in-process Set stays as a fast-path L1 cache in front
    of the graph.
 
-CLI injects a local `LockPort` (still graph-backed via `@oxagen/ontology` when
-`NEO4J_*` present; degrades to the existing in-memory `IntentLedger` for
-offline BYOK). Platform injects the metered, tenant-scoped `invoke()`-backed
-adapter.
+An offline embedder injects a local `LockPort` (still graph-backed via
+`@oxagen/ontology` when `NEO4J_*` present; degrades to the existing in-memory
+`IntentLedger` when they are not). The platform injects the metered,
+tenant-scoped `invoke()`-backed adapter.
 
 ---
 
@@ -174,7 +174,7 @@ adapter.
   integration tests against local Neo4j proving MERGE exclusivity, expired
   steal, holder-guarded release, org isolation.
 - **P2 — capability parity:** four `agent.lock.*` contracts + handlers + API +
-  MCP + CLI + docs; `pnpm check:manifest` clean.
+  MCP + docs; `pnpm check:manifest` clean.
 - **P3 — engine wiring:** `LockPort` in `ports.ts`; claim/release in
   `tools.ts`; replace fleet `lockedFiles` with graph claims; heartbeat renew.
 - **P4 — self-healing:** FileLock pass in `agent.lease-sweep`; `agent.lock.*`

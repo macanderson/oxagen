@@ -20,7 +20,7 @@ The single-automation editor and detail view: configure what fires it, what it d
 
 ## Functionality
 - **Header:** name, description (both inline-editable), trigger-type badge, enabled toggle (opens confirm dialog on enable).
-- **Trigger config panel:** for `event` — entity type (e.g. `Contact`, `Deal`), event type (`node.created`/`node.updated`/`node.deleted`), property conditions (property, operator `eq`/`gt`/`lt`/`changed`, from/to value); for `schedule` — cron expression + IANA timezone; for `api` — read-only note that it only fires via Trigger-now or the API/MCP/CLI capability.
+- **Trigger config panel:** for `event` — entity type (e.g. `Contact`, `Deal`), event type (`node.created`/`node.updated`/`node.deleted`), property conditions (property, operator `eq`/`gt`/`lt`/`changed`, from/to value); for `schedule` — cron expression + IANA timezone; for `api` — read-only note that it only fires via Trigger-now or the API/MCP capability.
 - **Playbook body:** read-only view of the scaffolded steps (name, step type — `agent`/`tool`/`condition`/`webhook`/`prompt`/`human_input` — and config) set at creation. **Contract gap:** `automation.update` edits name/description/trigger config only — there is no capability to edit steps after creation; step editing needs a new contract (e.g. `automation.steps.update`) before this panel can be made editable. Flag as build-later; ship read-only first.
 - **Run history tab:** table from `playbook_events` — timestamp, event type, run outcome, linked `playbook_run_id`.
 - **Trigger now:** button + optional JSON payload editor, shows the resulting execution id/status.

@@ -4,7 +4,7 @@
 **Domain:** router
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -36,9 +36,3 @@ or the built-in OFF default). Read-only — no AI tokens spent.
 
 None. Reads `workspace.routing_policy` (org-default + workspace rows) and resolves
 them (workspace > org > OFF).
-
-## Example
-
-```bash
-oxagen router policy get
-```

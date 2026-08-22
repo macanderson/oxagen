@@ -65,15 +65,6 @@ Content-Type: application/json
 
 Tool name: `code.format` (read-only, idempotent).
 
-## CLI
-
-```
-oxagen code format <file> [--language json|python] [--indent <n>] [--write]
-```
-
-The language is inferred from the file extension (`.json`, `.py`) when
-`--language` is omitted. `--write` overwrites the file with the formatted output.
-
 ## Errors
 
 - Throws if `SANDBOX_ENABLED` is not `true` or the driver is not configured.

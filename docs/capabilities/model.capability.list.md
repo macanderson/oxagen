@@ -4,7 +4,7 @@
 **Domain:** model
 **Mode:** sync
 **Scope:** unscoped (platform metadata, not tenant data)
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent
@@ -106,12 +106,10 @@ input shape.
 - **API:** `GET /v1/model/capabilities` — `?vendor=` or `?model=` query params, both optional
 - **MCP:** `list_model_capabilities` tool (idempotent, read-only)
 - **Agent:** `invoke("list_model_capabilities", { vendor?, model? })` — no approval required, risk `low`
-- **CLI:** `oxagen models capabilities [--vendor <vendor>] [--model <gateway-id>] [--json]`
 
-The CLI reads the registry **directly** from `@oxagen/ai/posture` rather than
-calling the API — the registry is a static, client-safe module (no `@ai-sdk/*`
-imports), so the command works offline and needs no auth for platform
-metadata, matching how `oxagen models list` already reads its local registry.
+The registry itself is a static, client-safe module (`@oxagen/ai/posture`, no
+`@ai-sdk/*` imports), so a caller that only needs platform metadata can read it
+directly instead of going through the API.
 
 ## Access control
 
@@ -132,66 +130,6 @@ response with `vendors: []` and `unknownFilter` set to the value that missed,
 so BYOK callers can branch on "unknown" without parsing an HTTP status.
 
 ## Examples
-
-### CLI — full matrix
-
-```bash
-$ oxagen models capabilities
-Provider capability posture matrix (cache, reasoning, structured output, attachments):
-
-  Vendor      Cache       Reasoning     Structured  Attachments
-  anthropic   opt-in      controllable  native      supported
-  bfl         n/a         n/a           n/a         n/a
-  deepseek    implicit    unsupported   emulated    text-only
-  google      implicit    controllable  native      supported
-  meta        implicit    fixed-off     emulated    supported
-  mistral     implicit    fixed-off     emulated    text-only
-  openai      implicit    controllable  native      supported
-  xai         implicit    controllable  native      supported
-
-Run `oxagen models capabilities --vendor <vendor>` (or --model <gateway-id>) for the mechanism/witness detail behind each cell.
-```
-
-### CLI — one vendor's detail
-
-```bash
-$ oxagen models capabilities --vendor anthropic
-Anthropic (anthropic)
-  Models: anthropic/claude-fable-5, anthropic/claude-sonnet-5, anthropic/claude-opus-4.8, anthropic/claude-haiku-4.5
-
-Cache: opt-in
-  Anthropic caches NOTHING without an explicit breakpoint. streamAgentReply carries the
-  (stable, per-workspace) system prompt as a leading system message tagged
-  providerOptions.anthropic.cacheControl = {type: 'ephemeral'} — the system *param* cannot
-  hold the marker, only message-level providerOptions can. Every other vendor ignores the
-  anthropic namespace, so the marker is a no-op (never an error) off Anthropic.
-  Witness: "prepends the system prompt as an Anthropic-cacheable system message"
-
-Reasoning: controllable
-  Claude 4.x adaptive thinking: providerOptions.anthropic.thinking = {type: 'adaptive'} plus
-  outputConfig.effort carrying all five tiers verbatim (low…max — Anthropic is the only
-  vendor with xhigh/max). Temperature MUST be omitted entirely while thinking is active.
-  Witness: "sets adaptive thinking + output_config.effort and locks temperature"
-
-Structured output: native
-  generateObjectFor passes the zod schema to the AI SDK's generateObject; the gateway maps
-  it onto Anthropic's tool-based structured output
-  Witness: "calls generateObject with default temperature 0 and the schema"
-
-Attachments: supported
-  Claude accepts image parts (the `vision` capability on every Claude row in the catalog);
-  no native video or audio parts — those must be transcoded to frames/transcript upstream (accepts: image)
-  Witness: "distinguishes vision (image input) from image generation"
-```
-
-### CLI — unknown vendor (never a silent empty table)
-
-```bash
-$ oxagen models capabilities --vendor some-byok-provider
-No posture declared for "some-byok-provider" — unknown provider.
-$ echo $?
-1
-```
 
 ### API
 

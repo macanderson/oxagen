@@ -3,8 +3,8 @@
 Self-contained HTML slide deck for the **office of the CIO** — the engineering
 tour behind the Oxagen platform: capability contracts & surface parity,
 envelope encryption at rest, vendor-neutral BYOK, SOC 2 tenant isolation, the
-ClickHouse→Stripe metering loop, observability, plugins/skills, and the
-governed agentic-coding CLI.
+ClickHouse→Stripe metering loop, observability, plugins/skills, and graph
+grounding.
 
 Served by `apps/docs` at the clean URL **`/decks/architecture-deep-dive`**
 (rewrite in `apps/docs/next.config.mjs`). Statically hosted — no build step.

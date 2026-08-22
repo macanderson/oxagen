@@ -10,7 +10,7 @@
 
 Update the active organization's profile settings (partial). Routes the settings
 page edit through the capability kernel so the same fields are editable from the
-agent, MCP, and CLI — every write runs through IAM, metering, and audit instead
+agent and MCP — every write runs through IAM, metering, and audit instead
 of a page-local server action.
 
 ## Input

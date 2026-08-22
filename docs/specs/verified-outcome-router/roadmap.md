@@ -18,7 +18,7 @@ What landed, in one line each:
   audit trail; deterministic fallback when data is sparse.
 - Judge-rejection escalation ladder (fast to balanced to precise) in the revise loop.
 - Routing policy (`off` / `shadow` / `enforce`) per org/workspace with capability
-  surfaces on API, MCP, and CLI: `get_routing_policy`, `set_routing_policy`,
+  surfaces on API and MCP: `get_routing_policy`, `set_routing_policy`,
   `list_routing_stats`, `preview_routing_decision`.
 - Shadow mode records outcomes for whatever actually ran, so curves accumulate at
   zero behavior risk.
@@ -141,7 +141,7 @@ automatic refund issued by the loop with a full audit trail.
 - **Judge independence.** The judge model is never the worker model, in every phase.
 - **Store boundaries.** Curves and outcomes are ClickHouse; policies and SLAs are
   Postgres; nothing crosses the infrastructure boundary rules in `CLAUDE.md`.
-- **Capability parity.** Every new surface ships contract first, then API, MCP, CLI,
+- **Capability parity.** Every new surface ships contract first, then API, MCP,
   and (from Phase 1) app UI with proof, per the UI capability parity law.
 - **Auditability beats cleverness.** Every routing decision, exploration allocation,
   and refund must be explainable from stored records. If a phase's mechanism cannot

@@ -18,7 +18,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     { url: BASE_URL, lastModified: new Date(), changeFrequency: "daily" },
-    { url: `${BASE_URL}/install`, lastModified: new Date(), changeFrequency: "monthly" },
     ...docPages,
   ];
 }

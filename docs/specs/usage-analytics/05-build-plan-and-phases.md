@@ -1,7 +1,7 @@
 # 05 — Build plan & phases
 
 Sequenced so the **headline ask ships first**. Each phase is independently mergeable, leaves the
-gate green, and respects contract-wiring order (contract → API route → MCP tool → CLI → app UI)
+gate green, and respects contract-wiring order (contract → API route → MCP tool → app UI)
 + UI Capability Parity (`capability-ui-map.json` binding with runtime proof).
 
 ## Phase 0 — Org dashboard MVP (reuse only, no new backend)  ·  ship this first
@@ -38,7 +38,7 @@ Work:
    seeded ClickHouse fixture.
 2. **New contract `get_my_usage`** (self-scoped, cross-org) — contract + `readMyUsage()` handler
    with the **`WHERE user_id = ctx.session-derived id`** guard (⚠ the sole isolation guard; test a
-   cross-tenant-leak case explicitly) + API route + MCP tool + CLI command + app page
+   cross-tenant-leak case explicitly) + API route + MCP tool + app page
    `apps/app/src/app/account/usage/page.tsx` + `routes.ts`/`sidebar.ts` account tab.
 3. Workspace overview: swap `MeteringKpiStrip` onto `UsageStatCard`, add the new stats + "vs org"
    delta.
@@ -55,7 +55,7 @@ auth-sensitive, our rules require Opus + explicit gates); Sonnet for the UI wiri
 **Goal:** the non-token activity metrics, each an independent fail-open tile.
 
 1. **`get_generated_asset_stats`** (Postgres `generated_assets`, `GROUP BY kind` + mime split for
-   svg/mermaid, `source='generated'`) → contract→route→MCP→CLI→tile. Backs docs/images/videos.
+   svg/mermaid, `source='generated'`) → contract→route→MCP→tile. Backs docs/images/videos.
 2. **`get_automation_stats`** (Postgres `workflow.playbooks`) → automations created.
 3. **`get_repo_activity_stats`** (ClickHouse `tool_invocations` counts of `open_pr`/`put_repo_file`
    + `audit`/`security` fallback) → PRs opened / commits.

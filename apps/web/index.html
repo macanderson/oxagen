@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxagen — AI coding agents with your context. Governed, metered, on the record.</title>
-<meta name="description" content="Oxagen is an AI coding agent for your terminal and a control plane for your whole fleet. It turns your code and business data into one connected map, so agents get the right answer the first time — and every action is approved, measured, and on the record.">
+<title>Oxagen — the control plane for enterprise AI agents. Governed, metered, on the record.</title>
+<meta name="description" content="Oxagen is the governance and control plane for enterprise AI agents. It turns your code and business data into one connected map, so agents get the right answer the first time — and every action they take is approved, measured, and on the record.">
 <link rel="canonical" href="https://oxagen.sh/">
 <meta name="theme-color" content="#0B0D16">
 <meta name="color-scheme" content="dark">
@@ -12,12 +12,12 @@
 <meta property="og:url" content="https://oxagen.sh/">
 <meta property="og:site_name" content="Oxagen">
 <meta property="og:title" content="Oxagen — Everyone has the same models. Your edge is context.">
-<meta property="og:description" content="An AI coding agent for your terminal, and a control plane for your whole fleet. Grounded in your own map of code and business data. Governed, metered, on the record.">
+<meta property="og:description" content="The governance and control plane for enterprise AI agents. Grounded in your own map of code and business data. Governed, metered, on the record.">
 <meta property="og:image" content="https://oxagen.sh/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
 <meta name="twitter:title" content="Oxagen — Everyone has the same models. Your edge is context.">
-<meta name="twitter:description" content="An AI coding agent for your terminal, and a control plane for your whole fleet. Governed, metered, on the record.">
+<meta name="twitter:description" content="The governance and control plane for enterprise AI agents. Governed, metered, on the record.">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -199,40 +199,42 @@ button,input,textarea{font:inherit;color:inherit}
 .hero-note a{color:var(--indigo);border-bottom:1px solid transparent}
 .hero-note a:hover{border-bottom-color:var(--indigo)}
 
-/* terminal */
-.term{
-  background:#0B0E15;border:1px solid var(--line-strong);border-radius:var(--radius);
+/* the governed path — the hero's central diagram */
+.gate{
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius);
   box-shadow:0 30px 80px -30px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.02) inset;
-  overflow:hidden;font-family:"Aeonik Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.75;
-  min-height:328px;display:flex;flex-direction:column;
+  overflow:hidden;min-height:328px;display:flex;flex-direction:column;
 }
-.term-bar{
-  display:flex;align-items:center;gap:8px;padding:11px 14px;
-  background:#111521;border-bottom:1px solid var(--line);
+.gate-bar{
+  display:flex;align-items:center;gap:10px;padding:11px 16px;
+  background:var(--bg-raise);border-bottom:1px solid var(--line);
+  font-family:"Aeonik Mono",monospace;font-size:12px;color:var(--faint);letter-spacing:.06em;
 }
-.term-bar .dot{width:11px;height:11px;border-radius:50%}
-.term-bar .dot:nth-child(1){background:#FF5F57}
-.term-bar .dot:nth-child(2){background:#FEBC2E}
-.term-bar .dot:nth-child(3){background:#28C840}
-.term-bar .title{margin-inline:auto;color:var(--faint);font-size:12px;letter-spacing:.06em}
-.term-body{padding:18px 20px;flex:1}
-.term-line{white-space:pre-wrap;word-break:break-word;min-height:1.75em}
-.t-prompt{color:var(--ember-c)}
-.t-cmd{color:var(--ink)}
-.t-dim{color:var(--faint)}
-.t-plan{color:var(--indigo)}
-.t-diff{color:var(--ink-soft)}
-.t-ok{color:var(--ok)}
-.caret{
-  display:inline-block;width:8px;height:1.05em;background:var(--ember-c);
-  vertical-align:text-bottom;margin-left:2px;animation:blink 1.05s steps(1) infinite;
+.gate-bar .state{margin-left:auto;color:var(--ok)}
+.gate-body{padding:22px 20px;flex:1;display:flex;flex-direction:column;justify-content:center}
+.gate-doors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gate-door{
+  border:1px solid var(--line);border-radius:10px;background:var(--card);
+  padding:10px 6px;text-align:center;font-size:12.5px;color:var(--muted);
 }
-@keyframes blink{50%{opacity:0}}
+.gate-stem{width:1px;height:20px;margin:0 auto;background:linear-gradient(var(--line),var(--ember-b))}
+.gate-core{border-radius:12px;padding:1px;background:var(--grad-ember)}
+.gate-core-in{border-radius:11px;background:var(--bg);padding:12px;text-align:center}
+.gate-core-in b{font-family:"Aeonik Mono",monospace;font-size:15px;color:var(--ink)}
+.gate-core-in span{display:block;margin-top:4px;font-size:12.5px;color:var(--faint)}
+.gate-steps{display:flex;flex-direction:column;gap:8px}
+.gate-step{
+  display:flex;gap:12px;align-items:baseline;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px 12px;
+}
+.gate-step .n{font-family:"Aeonik Mono",monospace;font-size:11.5px;color:var(--ember-b);flex:none}
+.gate-step b{font-size:13.5px;font-weight:600;color:var(--ink-soft)}
+.gate-step span{font-size:13px;color:var(--faint)}
 
 @media (max-width:960px){
   .hero-in{grid-template-columns:1fr;gap:44px}
   .hero{padding-top:calc(var(--nav-h) + 48px)}
-  .term{min-height:300px}
+  .gate{min-height:300px}
 }
 
 /* ============ ticker ============ */
@@ -279,42 +281,13 @@ button,input,textarea{font:inherit;color:inherit}
 .card-icon svg{width:22px;height:22px;stroke:var(--ember-c);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .card-viz{margin-top:18px;border-top:1px dashed var(--line);padding-top:16px}
 
-/* mini terminal snippet inside cards */
-.snippet{font-family:"Aeonik Mono",monospace;font-size:12.5px;line-height:1.8;color:var(--faint)}
-.snippet .p{color:var(--ember-c)}
-.snippet .c{color:var(--ink-soft)}
-.snippet .g{color:var(--ok)}
-.snippet .r{color:var(--ember-a)}
-.snippet .i{color:var(--indigo)}
-
-/* fleet svg */
-.fleet-svg .lane{stroke:var(--line-strong);stroke-width:1.4;fill:none;stroke-dasharray:4 5;animation:lanes 1.4s linear infinite}
-@keyframes lanes{to{stroke-dashoffset:-9}}
-.fleet-svg .node{fill:var(--surface);stroke:var(--indigo);stroke-width:1.5}
-.fleet-svg .root{stroke:var(--ember-c)}
-.fleet-svg text{font-family:"Aeonik Mono",monospace;font-size:9.5px;fill:var(--faint)}
-.fleet-svg .pulse{animation:fleetPulse 2.4s ease-in-out infinite}
-@keyframes fleetPulse{0%,100%{opacity:.5}50%{opacity:1}}
-
-/* install strip */
-.install{
-  margin-top:26px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;
-}
-.install code{
-  font-family:"Aeonik Mono",monospace;font-size:14.5px;color:var(--ink);
-  display:inline-flex;align-items:center;gap:10px;
-}
-.install code .p{color:var(--ember-c)}
-.copy-btn{
-  margin-left:auto;display:inline-flex;align-items:center;gap:7px;
-  border:1px solid var(--line-strong);background:transparent;border-radius:8px;
-  padding:7px 13px;font-size:13px;color:var(--muted);cursor:pointer;transition:color .15s,border-color .15s;
-}
-.copy-btn:hover{color:var(--ink);border-color:var(--faint)}
-.copy-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
-.install .note{width:100%;font-size:13px;color:var(--faint)}
-@media (max-width:640px){.copy-btn{margin-left:0}}
+/* compact fact list inside cards */
+.recviz{font-family:"Aeonik Mono",monospace;font-size:12.5px;line-height:1.8;color:var(--faint)}
+.recviz .k{color:var(--ember-c)}
+.recviz .c{color:var(--ink-soft)}
+.recviz .g{color:var(--ok)}
+.recviz .r{color:var(--ember-a)}
+.recviz .i{color:var(--indigo)}
 
 /* ============ platform ============ */
 .platform-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:48px;align-items:center}
@@ -521,7 +494,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   .meter .fill{transform:scaleX(var(--w,.7));animation:none}
   .audit-line{opacity:1;transform:none;animation:none}
   .reveal{opacity:1;transform:none}
-  .caret{animation:none}
 }
 </style>
 </head>
@@ -553,7 +525,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       oxagen
     </a>
     <nav class="nav-links" aria-label="Sections">
-      <a href="#agent">The agent</a>
+      <a href="#boundary">The boundary</a>
       <a href="#platform">The platform</a>
       <a href="#field-manual">Field manual</a>
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
@@ -594,13 +566,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 
     <div class="wrap hero-in">
       <div class="hero-copy">
-        <p class="eyebrow">AI coding agents · grounded in your context</p>
+        <p class="eyebrow">Governance for enterprise AI agents</p>
         <h1>Everyone has the same models.<br><span class="grad-text">Your edge is context.</span></h1>
         <p class="hero-sub">
-          Oxagen is an <strong>AI coding agent for your terminal</strong> and a
-          <strong>control plane for your whole fleet</strong>. It turns your code and business
-          data into one connected map, so agents get the right answer the first time —
-          and every action they take is approved, measured, and on the record.
+          Oxagen is the <strong>governance and control plane</strong> for the AI agents
+          your teams already run. It turns your code and business data into one connected
+          map, so agents get the right answer the first time — and it puts every action
+          they take through one boundary: <strong>approved before it runs, measured as it
+          runs, on the record after</strong>.
         </p>
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
@@ -609,12 +582,31 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         <p class="hero-note">Free 14-part ebook by our founder · <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">or dive straight into the docs</a></p>
       </div>
 
-      <div class="term" aria-label="Oxagen CLI demo (simulated)">
-        <div class="term-bar" aria-hidden="true">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-          <span class="title">oxagen — zsh</span>
+      <div class="gate" aria-label="How a governed agent action reaches a handler">
+        <div class="gate-bar">
+          <span>one path in</span>
+          <span class="state">policy: enforced</span>
         </div>
-        <div class="term-body" id="termBody" aria-live="off"></div>
+        <div class="gate-body">
+          <div class="gate-doors">
+            <div class="gate-door">In-app agent</div>
+            <div class="gate-door">REST API</div>
+            <div class="gate-door">MCP clients</div>
+          </div>
+          <div class="gate-stem" aria-hidden="true"></div>
+          <div class="gate-core">
+            <div class="gate-core-in">
+              <b>invoke()</b>
+              <span>the only way an action reaches a handler</span>
+            </div>
+          </div>
+          <div class="gate-stem" aria-hidden="true"></div>
+          <div class="gate-steps">
+            <div class="gate-step"><span class="n">01</span><span><b>Authorize</b> &middot; <span>default-deny IAM, scoped to org and workspace</span></span></div>
+            <div class="gate-step"><span class="n">02</span><span><b>Meter</b> &middot; <span>credits, tokens and latency, per call</span></span></div>
+            <div class="gate-step"><span class="n">03</span><span><b>Record</b> &middot; <span>an immutable, tamper-evident audit event</span></span></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -623,68 +615,57 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   <div class="ticker" aria-hidden="true">
     <div class="ticker-track" id="tickerTrack">
       <span class="tick-item">
-        <span><b>oxagen</b> solve</span><span class="sep">·</span>
-        <span><b>oxagen</b> agents</span><span class="sep">·</span>
-        <span><b>oxagen</b> view</span><span class="sep">·</span>
-        <span><b>oxagen</b> graph search</span><span class="sep">·</span>
-        <span><b>oxagen</b> pr</span><span class="sep">·</span>
-        <span><b>oxagen</b> sandbox</span><span class="sep">·</span>
-        <span><b>oxagen</b> memory</span><span class="sep">·</span>
-        <span><b>oxagen</b> trace</span><span class="sep">·</span>
-        <span><b>oxagen</b> replay</span><span class="sep">·</span>
-        <span><b>oxagen</b> eval</span><span class="sep">·</span>
-        <span><b>oxagen</b> cost</span><span class="sep">·</span>
-        <span><b>oxagen</b> models</span><span class="sep">·</span>
-        <span><b>oxagen</b> mcp</span><span class="sep">·</span>
-        <span><b>oxagen</b> env</span><span class="sep">·</span>
-        <span><b>oxagen</b> secret</span><span class="sep">·</span>
+        <span><b>authorized</b> before it runs</span><span class="sep">·</span>
+        <span><b>metered</b> as it runs</span><span class="sep">·</span>
+        <span><b>on the record</b> after it runs</span><span class="sep">·</span>
+        <span><b>default-deny</b> by role</span><span class="sep">·</span>
+        <span><b>tenant-isolated</b> by the database</span><span class="sep">·</span>
+        <span><b>RBAC-scoped</b> retrieval</span><span class="sep">·</span>
+        <span><b>cited</b> answers, not guesses</span><span class="sep">·</span>
+        <span><b>your keys</b>, your models</span><span class="sep">·</span>
+        <span><b>one boundary</b>, every surface</span><span class="sep">·</span>
+        <span><b>exportable</b> audit trail</span><span class="sep">·</span>
       </span>
     </div>
   </div>
 
-  <!-- ================= THE AGENT ================= -->
-  <section class="sec" id="agent">
+  <!-- ================= THE BOUNDARY ================= -->
+  <section class="sec" id="boundary">
     <div class="wrap">
       <div class="sec-head reveal">
-        <p class="eyebrow">The agent — in your terminal</p>
-        <h2>An agent that already knows your codebase</h2>
-        <p>Type what you want done. The agent reads your code, makes the edits, runs the
-        checks, and shows its work — grounded in your team's shared map, not just the files in front of it.</p>
+        <p class="eyebrow">The boundary — one path in</p>
+        <h2>Govern the agents you already run</h2>
+        <p>Oxagen does not replace your agents. It gives every one of them a single
+        governed way to act — the same contract, the same authorization, the same meter,
+        whether the request came from the app, your API, or an MCP client.</p>
       </div>
 
       <div class="grid-2">
         <article class="card reveal">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M4 3v4M12 3v4M20 3v4"/><path d="M4 7h16"/><path d="M12 7v5"/><circle cx="12" cy="15" r="3"/><path d="M12 18v3"/></svg>
           </div>
-          <h3>One command, done</h3>
-          <p>Ask in plain English. It plans, edits, verifies, and hands you the diff —
-          in an interactive session or a single shot.</p>
-          <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen "make the export async"</span></div>
-            <div><span class="g">✎</span> src/export/index.ts <span class="g">+12</span> <span class="r">−4</span></div>
-            <div><span class="g">✔</span> checks passed — diff ready for review</div>
+          <h3>Bring the agents you have</h3>
+          <p>The in-app agent, an agent you wrote against the API, an MCP client on a
+          developer's laptop — each one arrives at the same boundary.</p>
+          <div class="card-viz recviz" aria-hidden="true">
+            <div><span class="k">surface</span> <span class="c">in-app agent · REST API · MCP</span></div>
+            <div><span class="k">boundary</span> <span class="c">invoke() — no side door</span></div>
+            <div><span class="g">✔</span> one audit record, whichever door it came through</div>
           </div>
         </article>
 
         <article class="card reveal reveal-d1">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 4v5"/><path d="M12 9l-6 4"/><path d="M12 9l6 4"/><path d="M12 9v4"/><circle cx="12" cy="4" r="1.6"/><circle cx="6" cy="15" r="1.6"/><circle cx="12" cy="15" r="1.6"/><circle cx="18" cy="15" r="1.6"/><path d="M6 17v2M12 17v2M18 17v2"/></svg>
+            <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>
           </div>
-          <h3>Dispatch a fleet</h3>
-          <p>One goal becomes many tasks. Several agents work in parallel, each safely in
-          its own copy of the repo, and report back as one.</p>
-          <div class="card-viz" aria-hidden="true">
-            <svg class="fleet-svg" viewBox="0 0 320 92" role="img">
-              <path class="lane" d="M160 16 v14 M160 30 H60 V46 M160 30 V46 M160 30 H260 V46"/>
-              <circle class="node root" cx="160" cy="12" r="7"/>
-              <rect class="node pulse" x="42" y="46" width="36" height="22" rx="5"/>
-              <rect class="node pulse" x="142" y="46" width="36" height="22" rx="5" style="animation-delay:.5s"/>
-              <rect class="node pulse" x="242" y="46" width="36" height="22" rx="5" style="animation-delay:1s"/>
-              <text x="60" y="84" text-anchor="middle">worker/1</text>
-              <text x="160" y="84" text-anchor="middle">worker/2</text>
-              <text x="260" y="84" text-anchor="middle">worker/3</text>
-            </svg>
+          <h3>One contract, every surface</h3>
+          <p>Each action is declared once — its shape, its roles, its risk level. A
+          prompt-injected agent cannot invent a wider one.</p>
+          <div class="card-viz recviz" aria-hidden="true">
+            <div><span class="k">declared</span> <span class="c">schema · roles · risk · tenancy</span></div>
+            <div><span class="i">◆</span> exposed identically on API, MCP and the agent</div>
+            <div><span class="g">✔</span> parity checked in CI — a surface cannot drift</div>
           </div>
         </article>
 
@@ -692,13 +673,13 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           <div class="card-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
           </div>
-          <h3>Private by default</h3>
-          <p>Run the agent on a model that lives on your own machine. Works offline,
-          no key required, nothing leaves the laptop.</p>
-          <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen models</span></div>
-            <div><span class="i">◆</span> on-device coordinator: <span class="g">ready</span> · fitted to your hardware</div>
-            <div><span class="i">◆</span> network: <span class="c">not required</span></div>
+          <h3>Your keys, your models</h3>
+          <p>Bring your own provider keys. Oxagen governs and meters the call without
+          ever becoming the owner of your model relationship.</p>
+          <div class="card-viz recviz" aria-hidden="true">
+            <div><span class="k">keys</span> <span class="c">yours — encrypted at rest</span></div>
+            <div><span class="i">◆</span> model choice stays a policy decision, not a lock-in</div>
+            <div><span class="g">✔</span> every call metered against the workspace that made it</div>
           </div>
         </article>
 
@@ -707,23 +688,14 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
             <svg viewBox="0 0 24 24"><path d="M12 3l4 2.3v4.6L12 12.2 8 9.9V5.3L12 3z"/><path d="M17.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/><path d="M6.5 10.5l4 2.3v4.6l-4 2.3-4-2.3v-4.6"/></svg>
           </div>
           <h3>Grounded in your map</h3>
-          <p>Query your workspace's governed context through its live authorization boundary.
-          Exact checkout detail stays local; shared answers remain scoped and citable.</p>
-          <div class="card-viz snippet" aria-hidden="true">
-            <div><span class="p">$</span> <span class="c">oxagen graph search -q "billing policy"</span></div>
+          <p>Ask your workspace's governed context through its live authorization
+          boundary. The graph returns only what the caller is entitled to see.</p>
+          <div class="card-viz recviz" aria-hidden="true">
+            <div><span class="k">query</span> <span class="c">"who owns the billing policy?"</span></div>
             <div><span class="i">◆</span> live query · workspace scoped · RBAC enforced</div>
             <div><span class="g">✔</span> bounded results cite their sources</div>
           </div>
         </article>
-      </div>
-
-      <div class="install reveal" id="install">
-        <code><span class="p">$</span> npm install -g @oxagen/cli</code>
-        <button class="copy-btn" type="button" data-copy="npm install -g @oxagen/cli">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
-          <span>Copy</span>
-        </button>
-        <span class="note">Bring your own model keys — or run fully on-device. Your account plugs in when you want the shared map.</span>
       </div>
     </div>
   </section>
@@ -833,8 +805,8 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         <div class="step reveal reveal-d1">
           <span class="step-num mono">STEP 02</span>
           <h3>Ask</h3>
-          <p>Work with the agent in your terminal or in the app. It answers from your
-          map — right the first time, with sources you can check.</p>
+          <p>Point your agents at Oxagen. They answer from your map — right the first
+          time, with sources you can check.</p>
         </div>
         <div class="step reveal reveal-d2">
           <span class="step-num mono">STEP 03</span>
@@ -1016,7 +988,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       <nav class="foot-col" aria-label="Product">
         <h4>Product</h4>
         <ul>
-          <li><a href="#agent">The agent</a></li>
+          <li><a href="#boundary">The boundary</a></li>
           <li><a href="#platform">The platform</a></li>
           <li><a href="#field-manual">Field manual</a></li>
           <li><a href="#demo">Get a demo</a></li>
@@ -1095,118 +1067,6 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   /* ---------- ticker: duplicate track for seamless loop ---------- */
   var track = document.getElementById("tickerTrack");
   if (track) { track.innerHTML += track.innerHTML; }
-
-  /* ---------- terminal typewriter ---------- */
-  var SCRIPTS = [
-    [
-      { cls: "cmd", text: 'oxagen "fix the failing auth test"' },
-      { cls: "t-dim", text: "◆ reading your workspace map · 34 files · 12 services linked" },
-      { cls: "t-plan", text: "◆ plan: patch token refresh in auth/session.ts, update the test" },
-      { cls: "t-diff", text: "✎ src/auth/session.ts        +9 −3" },
-      { cls: "t-diff", text: "✎ src/auth/session.test.ts   +4 −1" },
-      { cls: "t-ok", text: "▶ tests: 8 passed · 0 failed" },
-      { cls: "t-ok", text: "✔ done in 41s — every step logged" }
-    ],
-    [
-      { cls: "cmd", text: 'oxagen agents "migrate billing to the new schema"' },
-      { cls: "t-plan", text: "◆ plan: 4 tasks · 4 workers · isolated copies of the repo" },
-      { cls: "t-dim", text: "worker/1  schema + migration          ▮▮▮▮▮▮▮▮ done" },
-      { cls: "t-dim", text: "worker/2  api routes                  ▮▮▮▮▮▮▮▮ done" },
-      { cls: "t-dim", text: "worker/3  webhooks                    ▮▮▮▮▮▮▯▯ running" },
-      { cls: "t-dim", text: "worker/4  tests + docs                ▮▮▮▮▮▮▮▯ running" },
-      { cls: "t-ok", text: "✔ 2 pull requests open · 2 on the way" }
-    ],
-    [
-      { cls: "cmd", text: 'oxagen graph search -q "who owns the billing policy?"' },
-      { cls: "t-dim", text: "◆ live workspace query · RBAC scoped · bounded results" },
-      { cls: "t-diff", text: "1. Billing Platform team        owner · directory source" },
-      { cls: "t-diff", text: "2. Subscription Policy          document · Drive source" },
-      { cls: "t-diff", text: "3. PR #842                      provider metadata · GitHub" },
-      { cls: "t-ok", text: "✔ 3 results · each answer cites its source" }
-    ]
-  ];
-
-  var termBody = document.getElementById("termBody");
-
-  function line(cls) {
-    var el = document.createElement("div");
-    el.className = "term-line " + (cls === "cmd" ? "" : cls);
-    termBody.appendChild(el);
-    return el;
-  }
-
-  function renderStatic(script) {
-    termBody.innerHTML = "";
-    script.forEach(function (row) {
-      var el = line(row.cls);
-      if (row.cls === "cmd") {
-        el.innerHTML = '<span class="t-prompt">$ </span><span class="t-cmd"></span>';
-        el.querySelector(".t-cmd").textContent = row.text;
-      } else {
-        el.textContent = row.text;
-      }
-    });
-  }
-
-  if (reduceMotion || !termBody) {
-    if (termBody) renderStatic(SCRIPTS[0]);
-  } else {
-    var si = 0;
-    var playScript = function () {
-      termBody.innerHTML = "";
-      var script = SCRIPTS[si];
-      si = (si + 1) % SCRIPTS.length;
-
-      var cmdLine = line("cmd");
-      cmdLine.innerHTML = '<span class="t-prompt">$ </span><span class="t-cmd"></span><span class="caret"></span>';
-      var cmdSpan = cmdLine.querySelector(".t-cmd");
-      var caret = cmdLine.querySelector(".caret");
-      var text = script[0].text;
-      var ci = 0;
-
-      var typeTick = function () {
-        if (ci <= text.length) {
-          cmdSpan.textContent = text.slice(0, ci);
-          ci += 1;
-          setTimeout(typeTick, 26 + Math.random() * 40);
-          return;
-        }
-        caret.remove();
-        var li = 1;
-        var nextLine = function () {
-          if (li < script.length) {
-            var el = line(script[li].cls);
-            el.textContent = script[li].text;
-            el.style.opacity = "0";
-            el.style.transition = "opacity .3s";
-            requestAnimationFrame(function () { el.style.opacity = "1"; });
-            li += 1;
-            setTimeout(nextLine, li <= 2 ? 620 : 430);
-            return;
-          }
-          setTimeout(playScript, 4200);
-        };
-        setTimeout(nextLine, 500);
-      };
-      typeTick();
-    };
-    playScript();
-  }
-
-  /* ---------- copy button ---------- */
-  document.querySelectorAll(".copy-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var txt = btn.getAttribute("data-copy") || "";
-      var label = btn.querySelector("span");
-      var done = function () {
-        label.textContent = "Copied";
-        setTimeout(function () { label.textContent = "Copy"; }, 1600);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(done, done);
-      } else { done(); }
-    });
-  });
 
   /* ---------- lead forms ---------- */
   function setStatus(form, msg, isErr) {

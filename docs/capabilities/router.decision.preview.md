@@ -4,7 +4,7 @@
 **Domain:** router
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -44,9 +44,3 @@ would the router do?".
 ## Side effects
 
 None. Reads `router_outcomes`; changes nothing.
-
-## Example
-
-```bash
-oxagen router preview "add an RLS policy to the tenant table" --files 3
-```

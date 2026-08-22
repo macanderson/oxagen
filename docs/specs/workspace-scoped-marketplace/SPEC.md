@@ -43,7 +43,7 @@ servers from the seeded registry, fetched live. No sync. No org pre-approval. No
 
 ### 2.3 Sync machinery (to delete)
 `mcp.catalog_servers` ← `packages/plugins/src/registry/sync-service.ts` ← `plugin.registry.sync`
-(contract + API route `/plugin/registries/sync` + MCP tool + CLI command) ← `organization.create.ts` fire-and-forget
+(contract + API route `/plugin/registries/sync` + MCP tool) ← `organization.create.ts` fire-and-forget
 trigger (`eventClient.send("plugin/registry.sync")`) ← a 6-hour cron. Browse reads the synced table.
 
 ### 2.4 Capability packs = "Oxagen Plugins" (to rename, not delete)
@@ -60,7 +60,7 @@ trigger (`eventClient.send("plugin/registry.sync")`) ← a 6-hour cron. Browse r
 flips on click but no class responds → no highlight, no panel change, no indicator move. **One-component fix, repo-wide benefit.**
 
 ### 2.6 Surface inventory (parity must move in lockstep)
-17 org-scoped + 1 workspace-scoped contract/route/MCP-tool/CLI quads under `plugin.*`. Latent IDOR found:
+17 org-scoped + 1 workspace-scoped contract/route/MCP-tool triples under `plugin.*`. Latent IDOR found:
 `plugin.workspace.set_enabled` accepts a body `workspaceId` never validated against the API-key's bound workspace.
 
 ### 2.7 Partially-started migration (important)
@@ -118,7 +118,7 @@ org-create sync trigger. **New unit test:** creating a workspace yields exactly 
   (e.g. `https://registry.modelcontextprotocol.io`), and links to `${NEXT_APP_DOCS_URL}/<path>` — a new docs page.
 
 ### 3.6 Capability parity
-Every changed capability moves contract → API route → MCP tool → CLI together. Delete `plugin.registry.sync` across all
+Every changed capability moves contract → API route → MCP tool together. Delete `plugin.registry.sync` across all
 four. Fix the `plugin.workspace.set_enabled` IDOR while we're rewriting the scope gate. `pnpm check:manifest` stays green.
 
 ---
@@ -151,7 +151,7 @@ Atlas migrations so a re-baseline can't drop them — memory: prod-outage postmo
   shape. No backfill, no nullable legacy rows. Workspaces re-seed their default registry on creation.
 - **B. `content_tool` → FOLD INTO `agent_capability`.** Any `content_tool` row/type becomes `agent_capability`; the
   `content_tool` type is removed from the CHECK and from all code.
-- **C. `plugin.org_denylist` → DROP ENTIRELY.** Delete the table, the denylist contracts/routes/MCP tools/CLI, and all
+- **C. `plugin.org_denylist` → DROP ENTIRELY.** Delete the table, the denylist contracts/routes/MCP tools, and all
   "blocked by your organization's admins" UI. Pure workspace self-service — no org-level install gating.
 - **D. Rename `plugin.org_listings` → `plugin.installed_plugins`.** Workspace-scoped install record; the old name is
   retired across schema, handlers, RLS manifest, and all references.

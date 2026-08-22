@@ -9,7 +9,6 @@ Poll the status and progress of a schema reconciliation job dispatched by `schem
 - API: `GET /v1/schema/reconcile/{executionId}`
 - MCP: `schema.reconcile.status`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

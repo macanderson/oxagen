@@ -9,7 +9,6 @@ Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`.
 - API: `GET /v1/graph/nodes/:nodeId`
 - MCP: `graph.node.get`
 - Agent: callable (no approval required, risk: low)
-- CLI: `oxagen graph node get`
 
 ## Input
 | Parameter | Type | Required | Description |

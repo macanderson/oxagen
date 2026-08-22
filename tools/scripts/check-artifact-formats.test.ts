@@ -9,12 +9,12 @@ import {
 describe("scanContent", () => {
   it("flags a loader that reintroduces the legacy skill manifest", () => {
     const violations = scanContent(
-      "apps/cli/src/skills/loader.ts",
+      "packages/skills/src/loader.ts",
       'const manifest = join(dir, "SKILL.md");\n',
     );
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatchObject({
-      file: "apps/cli/src/skills/loader.ts",
+      file: "packages/skills/src/loader.ts",
       line: 1,
       label: "SKILL.md (legacy skill manifest)",
     });
@@ -27,7 +27,7 @@ describe("scanContent", () => {
       ["Authored as YAML frontmatter.", "YAML frontmatter (legacy format)"],
     ] as const;
     for (const [line, label] of labels) {
-      const violations = scanContent("apps/cli/src/skills/loader.ts", line);
+      const violations = scanContent("packages/skills/src/loader.ts", line);
       expect(violations.map((v) => v.label)).toContain(label);
     }
   });
@@ -44,30 +44,19 @@ describe("scanContent", () => {
   it("passes canonical TOML loader code", () => {
     expect(
       scanContent(
-        "apps/cli/src/skills/loader.ts",
+        "packages/skills/src/loader.ts",
         'const manifest = join(dir, "skill.toml");\n',
       ),
     ).toEqual([]);
   });
 
-  it("allows the import adapters, which parse foreign Markdown by design", () => {
+  it("allows the one-way migration converter, which reads the legacy shape by design", () => {
     expect(
       scanContent(
-        "apps/cli/src/artifact-import/discover.ts",
-        'join(spec.dir, entry.name, "SKILL.md")',
+        "packages/handlers/src/skill-legacy-migration.ts",
+        'const legacy = row.body ?? "SKILL.md"',
       ),
     ).toEqual([]);
-  });
-
-  it("allows documentation of the importer to name what it converts from", () => {
-    for (const path of [
-      "docs/guides/import-agent-artifacts.md",
-      "apps/docs/content/docs/cli/import-artifacts.mdx",
-    ]) {
-      expect(
-        scanContent(path, "the manifest is `SKILL.md` or `skill.md`"),
-      ).toEqual([]);
-    }
   });
 
   it("allows explicitly historical documentation", () => {
@@ -85,8 +74,8 @@ describe("scanContent", () => {
 
   it("does not allow live customer documentation to teach the legacy format", () => {
     const violations = scanContent(
-      "apps/docs/content/docs/cli/custom-commands.mdx",
-      "Author commands as Markdown with YAML frontmatter.",
+      "apps/docs/content/docs/agent/skills.mdx",
+      "Author skills as Markdown with YAML frontmatter.",
     );
     expect(violations).toHaveLength(1);
   });
@@ -99,9 +88,9 @@ describe("scanContent", () => {
 
   it("skips tests, which legitimately assert the legacy format is ignored", () => {
     for (const path of [
-      "apps/cli/src/skills/__tests__/loader.test.ts",
+      "packages/skills/src/__tests__/loader.test.ts",
       "packages/skills/src/filesystem.test.ts",
-      "apps/cli/src/artifact-import/fixtures/claude/agent.md",
+      "packages/handlers/src/fixtures/legacy/skill.md",
     ]) {
       expect(scanContent(path, 'writeFile("a.skill.md", "legacy")')).toEqual(
         [],
@@ -113,16 +102,16 @@ describe("scanContent", () => {
 describe("allowlist", () => {
   it("matches directory entries by prefix and file entries exactly", () => {
     expect(
-      allowlistEntryFor("apps/cli/src/artifact-import/adapters/claude.ts"),
+      allowlistEntryFor("docs/adr/ADR-008-skills-filesystem-first.md"),
     ).toBeDefined();
     expect(
-      allowlistEntryFor("docs/guides/import-agent-artifacts.md"),
+      allowlistEntryFor("packages/handlers/src/skill-legacy-migration.ts"),
     ).toBeDefined();
     // A file entry must not match a sibling by prefix.
     expect(
-      allowlistEntryFor("docs/guides/import-agent-artifacts.md.bak"),
+      allowlistEntryFor("packages/handlers/src/skill-legacy-migration.ts.bak"),
     ).toBeUndefined();
-    expect(allowlistEntryFor("apps/cli/src/skills/loader.ts")).toBeUndefined();
+    expect(allowlistEntryFor("packages/skills/src/loader.ts")).toBeUndefined();
   });
 
   it("requires every exemption to carry a reason", () => {
@@ -144,10 +133,10 @@ describe("allowlist", () => {
 describe("isTestFile", () => {
   it("recognizes test files and fixture directories", () => {
     expect(isTestFile("packages/skills/src/loader.test.ts")).toBe(true);
-    expect(isTestFile("apps/cli/src/agents/__tests__/loader.test.ts")).toBe(
+    expect(isTestFile("packages/skills/src/__tests__/loader.test.ts")).toBe(
       true,
     );
-    expect(isTestFile("apps/cli/src/artifact-import/fixtures/a.md")).toBe(true);
+    expect(isTestFile("packages/handlers/src/fixtures/a.md")).toBe(true);
     expect(isTestFile("packages/skills/src/loader.ts")).toBe(false);
   });
 });

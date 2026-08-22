@@ -1,2 +1,0 @@
-- [ ] failing test first
-- [ ] one assertion per behavior

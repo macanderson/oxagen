@@ -8,7 +8,6 @@ Set repo-specific configuration: filters, inference toggles, sync cadence, and f
 ## Surfaces
 - API: `PATCH /v1/repos/:id/configure`
 - MCP: `repo.configure`
-- CLI: `oxagen repo configure <id>`
 - Agent: callable (no approval required, risk: medium)
 
 ## Input

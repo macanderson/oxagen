@@ -46,7 +46,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Test / E2E harness only — never present in deployed environments
   "E2E_TEST",
   "PLAYWRIGHT_BASE_URL",
-  // Set automatically by the Vitest runner; used to keep CLI turn assembly
+  // Set automatically by the Vitest runner; used to keep turn assembly
   // (workspace MCP fetch) hermetic in unit tests. Never a deployed var.
   "VITEST",
   // Legacy E2E aliases for canonical schema names (e2e fixtures only)
@@ -56,13 +56,12 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
 
 // ── Schema-exempt keys ────────────────────────────────────────────────────────
 // These are intentionally in ENV_REGISTRY (documented + deployed by env-manager)
-// but deliberately NOT promoted to baseEnvSchema. They are CLI-only, dev-tooling,
-// or operator-local vars that never run through loadEnv() validation. Listing
+// but deliberately NOT promoted to baseEnvSchema. They are dev-tooling or
+// operator-local vars that never run through loadEnv() validation. Listing
 // them here silences the "promote to schema" warning without polluting the
 // runtime Zod schema with vars that deployed services never validate.
 export const SCHEMA_EXEMPT = new Set<string>([
-  // CLI-only — read via process.env in apps/cli; services: []
-  "OXAGEN_NO_TUI",
+  // Operator-local tooling vars — read via process.env; services: []
   "OXAGEN_API_TOKEN",
   "OXAGEN_ORG_ID",
   "OXAGEN_WORKSPACE_ID",
@@ -80,16 +79,10 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_MID_JUDGE_STEPS",
   "OXAGEN_MAX_REVISE_ROUNDS",
   "OXAGEN_JUDGE_FAST_COMPLEXITY_MAX",
-  "OXAGEN_CLI_MOUSE",
-  // CLI / agent-engine local pipeline knobs — read via process.env in the CLI
-  // turn pipeline and local tooling; never validated by deployed services
+  // agent-engine local knobs — read via process.env in local tooling; never
+  // validated by deployed services
   "OXAGEN_ALLOW_NO_SESSION",
   "OXAGEN_ALLOW_STDIO_MCP",
-  "OXAGEN_BEST_OF_N_MODE",
-  "OXAGEN_BEST_OF_N_PIPELINE",
-  "OXAGEN_BEST_OF_N_VERIFY",
-  "OXAGEN_CLI_FUN",
-  "OXAGEN_CLI_MOTION",
   "OXAGEN_FLEET_DIR",
   "OXAGEN_FLEET_RECORD",
   "OXAGEN_COMMIT_LEDGER",
@@ -110,11 +103,11 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_REPO_PRIORS",
   "OXAGEN_REVISE_MIN_CONFIDENCE",
   "OXAGEN_TELEMETRY",
-  // Local-embeddings provider endpoint (CLI code-graph embeddings)
+  // Local-embeddings provider endpoint (code-graph embeddings)
   "OLLAMA_HOST",
-  // Console Do Not Track standard — CLI telemetry opt-out, never a service var
+  // Console Do Not Track standard — local telemetry opt-out, never a service var
   "DO_NOT_TRACK",
-  // CLI-only BYOK fallback key (see ENV_REGISTRY) — never validated by services
+  // Local BYOK fallback key (see ENV_REGISTRY) — never validated by services
   "ANTHROPIC_API_KEY",
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
   "OXAGEN_LOCAL_DEV",

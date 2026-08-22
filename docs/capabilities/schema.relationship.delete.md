@@ -9,7 +9,6 @@ Remove a relationship type from the current draft version. Does not affect publi
 - API: `DELETE /v1/schemas/{schemaName}/relationships/{name}`
 - MCP: `schema.relationship.delete`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

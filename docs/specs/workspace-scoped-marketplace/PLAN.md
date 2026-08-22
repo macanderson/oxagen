@@ -4,9 +4,9 @@
 
 **Goal:** Re-scope the entire plugin/marketplace system from org to org+workspace, replace registry "sync" with live HTTP reads, collapse to a 5-type plugin taxonomy, fix the broken Base UI tabs, and ship workspace-level registry self-service with a single-default rule.
 
-**Architecture:** Postgres schema clean-rebuild (workspace-scoped `mcp.registries` + `plugin.installed_plugins`; drop `mcp.catalog_servers` + `plugin.org_denylist`). Browse reads registries live via the existing `registry-client.ts` with a short server-side TTL cache. Capability/skill packs come from the static `@oxagen/oxagen/plugins` registry, gated by the kernel entitlement service. All contracts/routes/MCP tools/CLI move to workspace scope in lockstep.
+**Architecture:** Postgres schema clean-rebuild (workspace-scoped `mcp.registries` + `plugin.installed_plugins`; drop `mcp.catalog_servers` + `plugin.org_denylist`). Browse reads registries live via the existing `registry-client.ts` with a short server-side TTL cache. Capability/skill packs come from the static `@oxagen/oxagen/plugins` registry, gated by the kernel entitlement service. All contracts/routes/MCP tools move to workspace scope in lockstep.
 
-**Tech Stack:** Drizzle + Atlas (Postgres), Hono (API), xmcp (MCP), Commander+Ink (CLI), Next.js 16 App Router + Base UI (`@oxagen/ui`), Vitest + Playwright.
+**Tech Stack:** Drizzle + Atlas (Postgres), Hono (API), xmcp (MCP), Next.js 16 App Router + Base UI (`@oxagen/ui`), Vitest + Playwright.
 
 ## Global Constraints (verbatim from spec + CLAUDE.md / engineering policy)
 - Pre-launch, no live customers → **clean rebuild**, drop+recreate plugin/registry tables. Commit to `main` after `pnpm gate`.
@@ -16,7 +16,7 @@
 - Coverage thresholds are ratchets capped at 90; bump only to `floor(coverage − 2.5)`, never lower.
 - UI imports from `@/components/ui/<name>`, never `@oxagen/ui/components/*` directly (except the re-export files).
 - Migration files in `packages/database/` only. RLS manifest + `oxagen_app` grants replayed as Atlas migrations.
-- Capability parity: contract → API route → MCP tool → CLI together; `pnpm check:manifest` stays green.
+- Capability parity: contract → API route → MCP tool together; `pnpm check:manifest` stays green.
 - Docs link uses `NEXT_APP_DOCS_URL` env var; help copy follows brand-voice policy.
 
 ---
@@ -25,7 +25,7 @@
 
 **Schema/DB** — `packages/database/src/schema/mcp.ts`, `.../plugin.ts`, `.../index.ts`, `src/seed.ts`, `src/tenant-policy.manifest.ts`, new Atlas migration under `packages/database/atlas/migrations/`.
 **Backend** — `packages/handlers/src/plugin.*` (browse, install, list, registry.add/remove/list, set_enabled), new `packages/handlers/src/registry-default.ts` (state machine), `packages/handlers/src/organization.create.ts` (drop sync trigger), `packages/plugins/src/registry/` (drop sync-service, keep client/map-server), `packages/oxagen/src/contracts/plugin.*`, `packages/oxagen/src/plugins/*` (rename concept), seed scripts.
-**Surfaces** — `apps/api/src/routes/v1/plugin.*` + `app.ts`, `apps/mcp/src/tools/plugin.*`, `apps/cli/src/commands/plugin.*`.
+**Surfaces** — `apps/api/src/routes/v1/plugin.*` + `app.ts`, `apps/mcp/src/tools/plugin.*`.
 **UI** — `packages/ui/src/components/tabs.tsx` (data-attr fix), `apps/app/src/components/plugins/marketplace-modal.tsx`, `.../plugin-detail-panel.tsx`, `apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/plugins/*`, delete `apps/app/src/app/[orgSlug]/settings/plugins/*`, new registry-management + help-popover components, `apps/app/src/app/api/v1/plugin/catalog/*`.
 **Docs** — new `apps/docs/content/docs/plugins/registries.mdx`.
 
@@ -112,7 +112,7 @@
 
 ## Task 6: Delete sync end-to-end
 
-**Files (delete):** `packages/plugins/src/registry/sync-service.ts` (+ test), `packages/oxagen/src/contracts/plugin.registry.sync.ts`, `apps/api/src/routes/v1/plugin.registry.sync.ts`, `apps/mcp/src/tools/plugin.registry.sync.ts`, `apps/cli/src/commands/plugin.registry.sync.ts`.
+**Files (delete):** `packages/plugins/src/registry/sync-service.ts` (+ test), `packages/oxagen/src/contracts/plugin.registry.sync.ts`, `apps/api/src/routes/v1/plugin.registry.sync.ts`, `apps/mcp/src/tools/plugin.registry.sync.ts`.
 **Modify:** `packages/handlers/src/organization.create.ts` (remove the `plugin/registry.sync` fire-and-forget trigger + unused imports), `apps/api/src/app.ts` (remove `/plugin/registries/sync` route mount), any cron registration for `plugin/registry.sync`, the contracts barrel, `packages/plugins/src/registry/index.ts`.
 
 - [ ] Step 1: Delete the sync files; remove route mount + cron + org-create trigger.
@@ -141,12 +141,12 @@
 - [ ] Step 1: Write failing test (seed → capability disabled, skill enabled; kernel gate blocks uninstalled capability).
 - [ ] Step 2: Run — FAIL. Step 3: Implement seeding + renames. Step 4: Run — PASS. Step 5: Commit.
 
-## Task 9: API / MCP / CLI parity sweep
+## Task 9: API / MCP parity sweep
 
-**Files:** `apps/api/src/routes/v1/plugin.*` + `app.ts`, `apps/mcp/src/tools/plugin.*`, `apps/cli/src/commands/plugin.*` — workspace scope in path/params; remove sync + denylist route/tool/command; align with new contracts.
+**Files:** `apps/api/src/routes/v1/plugin.*` + `app.ts`, `apps/mcp/src/tools/plugin.*` — workspace scope in path/params; remove sync + denylist route/tool; align with new contracts.
 
-- [ ] Step 1: Update routes/tools/commands; remove deleted capabilities; ensure `/{org}/{workspace}` scoping is enforced (not just present).
-- [ ] Step 2: Update `apps/api/src/__tests__/routes.plugin.test.ts` + MCP/CLI tests.
+- [ ] Step 1: Update routes/tools; remove deleted capabilities; ensure `/{org}/{workspace}` scoping is enforced (not just present).
+- [ ] Step 2: Update `apps/api/src/__tests__/routes.plugin.test.ts` + MCP tests.
 - [ ] Step 3: `pnpm check:manifest` green; `pnpm typecheck`. Commit.
 
 ## Task 10: Fix Base UI tabs (data-attribute)

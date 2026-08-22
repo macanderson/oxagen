@@ -8,7 +8,6 @@ Remove a plugin instance and optionally purge its graph data from Neo4j.
 ## Surfaces
 - API: `DELETE /v1/integrations/:id`
 - MCP: `integration.delete`
-- CLI: `oxagen integration delete <id>`
 - Agent: callable (requires approval, risk: high)
 
 ## Input

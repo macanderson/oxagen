@@ -5,9 +5,8 @@
 - **Owners:** database / agent-engine
 - **Related:** ADR-021 (inference doctrine — deterministic-before-model,
   determinism ladder), ADR-012 (connector dual-write), ADR-022 / ADR-025
-  (capability naming), ADR-028 (time-travel replay — bi-temporal graph),
-  `docs/cli/CONTEXT_ENGINE_SPEC.md` (per-turn context compilation under a token
-  budget), `packages/database/src/tenant-policy.manifest.ts` (RLS source of truth)
+  (capability naming), `packages/database/src/tenant-policy.manifest.ts`
+  (RLS source of truth)
 
 ## Context
 
@@ -131,8 +130,7 @@ grounds them in the platform's own structure:
   (e.g. the ClickHouse analytics mirror of a Postgres table).
 - **Bi-temporal + system-flagged:** every node/edge carries `is_system = true`
   and bi-temporal validity (valid-time / transaction-time) so the platform model
-  time-travels exactly like the rest of the graph (consistent with ADR-028) and
-  is never confused with customer ontology nodes (the `:GraphNode` anchor +
+  time-travels exactly like the rest of the graph and is never confused with customer ontology nodes (the `:GraphNode` anchor +
   `is_system` convention already in `schema.cypher`).
 - **Reserved `platform` scope:** these nodes live under a reserved platform
   org/workspace scope, not any tenant's, so tenant queries never see them and a

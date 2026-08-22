@@ -16,7 +16,7 @@
 ## Vision alignment (flagged per CLAUDE.md)
 Standalone eval tooling is an explicit *fast-follow*, not the wedge (`docs/VISION.md` — "do not fight on the front line of … standalone evals (Braintrust)"). This rework is justified as (a) fixing the drawer UX and (b) **surfacing metered cost** — every run's tokens and cost (from the ClickHouse→Stripe metering pipe) are first-class in the runs table and available as a cost-over-time series, so "eval cost is visible cost." That keeps the work anchored to the metering→billing loop rather than pure quality benchmarking. Called out in the PR body for the Vision Gate.
 
-## New capabilities (contract-first, contract → handler → api → mcp → cli → docs)
+## New capabilities (contract-first, contract → handler → api → mcp → docs)
 Both are read-only, workspace-scoped, `surfaces: ["api","mcp","cli"]`, `layers` include `app`, `noBillingGate: true`, reader roles (Owner/Member/Viewer). Both read Postgres `eval.eval_runs` (transactional run summaries) joined to `eval.eval_datasets`; per-run cost/tokens come from one grouped ClickHouse read over the page's run ids (four-store model respected).
 
 ### `eval.run.list` — `list_eval_runs`

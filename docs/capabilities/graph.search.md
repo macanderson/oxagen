@@ -13,7 +13,6 @@ Distinct from `graph.node.search`, which performs lexical substring matching on 
 - API: `POST /v1/{org}/{workspace}/graph/search`
 - MCP: `graph.search`
 - Agent: callable (no approval required, risk: low)
-- CLI: `oxagen graph search`
 
 ## Input
 | Parameter | Type | Required | Description |

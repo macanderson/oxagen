@@ -4,8 +4,7 @@
 - **Date:** 2026-07-11
 - **Owners:** agent-engine
 - **Related:** ADR-021 (inference doctrine — deterministic-before-model),
-  ADR-017 (unified agent engine), ADR-029 (mutation verifier gate),
-  `docs/ideas/agentic-cli-roadmap-2026-07-10.md` (Phase 2, "Feels Instant")
+  ADR-029 (mutation verifier gate)
 
 ## Context
 
@@ -66,6 +65,6 @@ option wins):
   ToolSet).
 - Stats (`predicted/hits/misses/wasted/invalidations`) are exposed via an
   injectable callback for future trace/eval wiring; no new event-envelope
-  variant is introduced (the CLI/app envelope copies stay untouched).
+  variant is introduced (the app's envelope copies stay untouched).
 - The predictor port is the seam where Phase 2's "tiny local draft model"
   lands later; swapping it is a one-line injection, not a redesign.

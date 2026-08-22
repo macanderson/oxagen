@@ -2,13 +2,13 @@
 
 **Branch:** `feat/sandbox-templates-portable`
 **Parent spec:** `docs/superpowers/specs/2026-06-24-credential-vault-environments-sandboxes-spec.md` (§5.2, §5.3, §5.6, §8, §10–§13, §19)
-**Status of prerequisites:** Phase 0 (Vault + Environments) is SHIPPED on main — `environments.environments`, `secret_keys`, `secret_values`, `secret_access_log`, all `environment.*`/`secret.*` contracts, `injectEnvironmentSecrets()` trusted-env boundary (`packages/agent/src/handlers/_environment-env.ts`), CLI `env`/`secret` commands, `settings/environments` web UI.
+**Status of prerequisites:** Phase 0 (Vault + Environments) is SHIPPED on main — `environments.environments`, `secret_keys`, `secret_values`, `secret_access_log`, all `environment.*`/`secret.*` contracts, `injectEnvironmentSecrets()` trusted-env boundary (`packages/agent/src/handlers/_environment-env.ts`), `settings/environments` web UI.
 
 ## What this branch ships
 
 Phase 1 of the spec, with the §19 decisions locked in, **plus a portability requirement**:
 
-> Sandbox templates are **portable artifacts**. A third party building on Oxagen (e.g. a company that baked in SWE-benchmarking exactly like we did) must be able to ship a pre-optimized sandbox config — custom prewarmed image, resources, preloaded tools, required secret keys — as a versioned manifest, distribute it via the plugin/marketplace path, and run evals on it. Nothing about a template may be hard-coded to Oxagen-internal use.
+> Sandbox templates are **portable artifacts**. A third party building on Oxagen (e.g. a company running its own code-evaluation suite) must be able to ship a pre-optimized sandbox config — custom prewarmed image, resources, preloaded tools, required secret keys — as a versioned manifest, distribute it via the plugin/marketplace path, and run evals on it. Nothing about a template may be hard-coded to Oxagen-internal use.
 
 ## §19 decisions (locked)
 
@@ -75,17 +75,17 @@ New `sandbox-template-service.ts` mirroring `environment-service.ts`:
 {
   "kind": "oxagen.sandbox-template",
   "version": 1,
-  "name": "SWE-bench prewarmed",
-  "slug": "swe-bench-prewarmed",
+  "name": "Acme eval prewarmed",
+  "slug": "acme-eval-prewarmed",
   "description": "Pre-optimized eval sandbox: prewarmed Node + repo toolchain",
   "provider": "modal",
-  "runtime": "ghcr.io/acme/swe-bench-prewarmed@sha256:…",
+  "runtime": "ghcr.io/acme/eval-prewarmed@sha256:…",
   "resources": { "vcpu": 2, "memoryMb": 4096, "timeoutMs": 300000, "diskMb": 10240 },
   "network": { "mode": "public" },
-  "literalEnv": { "SWEBENCH_SPLIT": "verified" },
+  "literalEnv": { "ACME_EVAL_SPLIT": "verified" },
   "tools": [
     { "kind": "capability", "ref": "agent.code.execute" },
-    { "kind": "agent_skill", "ref": "swe-bench" }
+    { "kind": "agent_skill", "ref": "acme-eval" }
   ],
   "secretKeys": [
     { "key": "EVAL_API_KEY", "sensitive": true, "memo": "provider key for the eval judge", "required": true }
@@ -116,7 +116,7 @@ Rules:
 | `agent.environment.unbind` | |
 | `agent.environment.list` | bindings for an agent (resolved template names) |
 
-Every contract: `layers: ["api", "mcp", "cli", "app", "docs", "unit"]` (check existing environment.* contracts for the exact layer vocabulary and copy it; `app` layer only for the ones with UI surface: create/list/update/delete/set_default/tools.set/export/import + agent.environment.*). Handlers in `packages/handlers/src/` (or `packages/agent/src/handlers/` for agent.* — follow where `agent.sandbox.*` handlers live), registered in `packages/handlers/src/register.ts`. API routes `apps/api/src/routes/v1/` (one combined `sandbox-template.ts` + `agent-environment.ts` file is fine — note the combined-file false-positive convention in CLAUDE.md), mounted in `apps/api/src/app.ts`. MCP tools in `apps/mcp/src/tools/`. Org+workspace from ctx, never request. Mutations Owner/Admin-gated same as `environment.create`.
+Every contract: `layers: ["api", "mcp", "app", "docs", "unit"]` (check existing environment.* contracts for the exact layer vocabulary and copy it; `app` layer only for the ones with UI surface: create/list/update/delete/set_default/tools.set/export/import + agent.environment.*). Handlers in `packages/handlers/src/` (or `packages/agent/src/handlers/` for agent.* — follow where `agent.sandbox.*` handlers live), registered in `packages/handlers/src/register.ts`. API routes `apps/api/src/routes/v1/` (one combined `sandbox-template.ts` + `agent-environment.ts` file is fine — note the combined-file false-positive convention in CLAUDE.md), mounted in `apps/api/src/app.ts`. MCP tools in `apps/mcp/src/tools/`. Org+workspace from ctx, never request. Mutations Owner/Admin-gated same as `environment.create`.
 
 ## 5. Provisioning integration (§11/§12)
 
@@ -128,7 +128,7 @@ Every contract: `layers: ["api", "mcp", "cli", "app", "docs", "unit"]` (check ex
 
 - Plugin manifest type (`packages/plugins/src/registry/` — read `builtin skills` pattern from PR #713 for the embedded-data convention) gains optional `sandboxTemplates?: SandboxTemplateManifest[]`.
 - On plugin install into a workspace (find the install seam — `plugin.installed_plugins` write path / `resolveAgentToolsManager` install seam in `apps/app/src/lib/agent-tools/authz.ts` per memory), each manifest imports via the same code path as `sandbox.template.import` into the workspace's **default environment**, non-default, slug-prefixed by the pack if collision. Idempotent re-install (upsert by slug).
-- Ship ONE first-party proof pack: an `swe-bench-evals` template manifest (modeled on our real SWE-bench prewarmed config: node-flavored prewarmed image ref placeholder, 2 vcpu / 4 GB / 300 s, tools = `agent.code.execute` capability + `swe-bench` skill ref, secretKeys = `AI_GATEWAY_API_KEY` required) registered as embedded module data. This proves: "another company bakes in SWE benchmarking with a preoptimized sandbox config and runs evals on Oxagen" with zero platform code.
+- Ship ONE first-party proof pack: an `code-evals` template manifest (node-flavored prewarmed image ref placeholder, 2 vcpu / 4 GB / 300 s, tools = `agent.code.execute` capability + a `code-eval` skill ref, secretKeys = `AI_GATEWAY_API_KEY` required) registered as embedded module data. This proves: "another company ships its own evaluation suite with a preoptimized sandbox config and runs it on Oxagen" with zero platform code.
 
 ## 7. UI (`apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/`)
 
@@ -139,11 +139,7 @@ Every contract: `layers: ["api", "mcp", "cli", "app", "docs", "unit"]` (check ex
 - `apps/app/capability-ui-map.json` entries for every `app`-layer capability (route, page, entry, proof → e2e spec path).
 - E2E spec `apps/app/e2e/sandbox-templates.spec.ts`: create template → set default → export → import round-trip → bind agent; screenshots.
 
-## 8. CLI (`apps/cli/src/commands/`)
-
-Extend `sandbox.ts` (or new `sandbox-template.ts` if cleaner) with noun→verb group: `oxagen sandbox template list|get|create|rm|set-default|export|import` (`--env`, `--json`, import `-f manifest.json --yes` preview-then-commit like `secret import`), and `oxagen agent env bind|unbind|list` (find where agent CLI verbs live). Flag-driven, `--json` on reads.
-
-## 9. Docs + tests
+## 8. Docs + tests
 
 - `docs/capabilities/<name>.md` for every new contract + `_index.md` rows.
 - Unit tests colocated for every contract/handler/service (match existing `environment.*.test.ts` patterns). Manifest zod round-trip, import warnings, resolution chain, secret_selection filter, literal_env merge order, provider override, default-swap atomicity, guards.
@@ -156,6 +152,6 @@ Extend `sandbox.ts` (or new `sandbox-template.ts` if cleaner) with noun→verb g
 2. **provisioning**: §5 (after core-backend)
 3. **portability-packs**: §6 (after core-backend)
 4. **ui**: §7 (after core-backend)
-5. **cli-docs**: §8 + §9 docs (after core-backend)
+5. **docs**: §8 docs (after core-backend)
 
 All agents: commit frequently with explicit pathspecs, push to `feat/sandbox-templates-portable`, never rebase, never run whole-repo suites.

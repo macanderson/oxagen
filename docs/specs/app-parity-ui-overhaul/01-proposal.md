@@ -4,7 +4,7 @@
 
 You can do more from a terminal than from the product you pay for. That is backwards.
 
-Oxagen ships ~287 governed capabilities. A developer with the CLI or the MCP server can
+Oxagen ships ~287 governed capabilities. A developer with the API or the MCP server can
 create an agent, equip it with skills and a chosen subset of tools, wire triggers, run a
 fleet, and read the metered cost. A buyer sitting in the web app can do almost none of
 that. The app today is a chat window with a knowledge graph bolted on and a pile of
@@ -18,7 +18,7 @@ Worse, the pieces that *do* exist are scattered by accident of history, not by d
 - **Skills** live under Workspace Settings.
 - **System prompts** are a read-only box plus a per-capability override form, also under
   Workspace Settings. There is no way to save the prompt you like and reuse it.
-- **Slash commands** do not exist in the app. They are markdown files the CLI reads.
+- **Slash commands** do not exist in the app. They are markdown files read off the filesystem.
 - **MCP servers** install under Org → Developer. **Plugins** install under Workspace →
   Settings. They are the same idea (extend the agent) in two different places.
 - **Fleets** and **approvals** have no page. A risky step shows up as an inline card in the
@@ -47,7 +47,7 @@ Gate asks are about surfaces this overhaul creates or fixes:
 - *"Does it present agent output without citations where graph grounding applies?"* The new
   Run and Ask surfaces make citation first-class, not incidental.
 
-Capability parity across API, MCP, CLI, and UI is not a nice-to-have. It is pillar three of
+Capability parity across API, MCP, and UI is not a nice-to-have. It is pillar three of
 our own positioning and one of the four moats. The UI is the leg of that promise we are not
 keeping. This overhaul is how we keep it.
 

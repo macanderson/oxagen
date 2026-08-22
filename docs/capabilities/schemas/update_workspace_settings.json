@@ -1,7 +1,7 @@
 {
   "name": "update_workspace_settings",
   "domain": "workspace",
-  "description": "Update the active workspace's general settings (partial): name, slug, and description. Routes the workspace settings edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
+  "description": "Update the active workspace's general settings (partial): name, slug, and description. Routes the workspace settings edit through the kernel so the same fields are reachable from the agent and MCP with metering + audit.",
   "mode": "sync",
   "surfaces": [
     "api",

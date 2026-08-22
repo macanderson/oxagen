@@ -8,7 +8,6 @@ Update a plugin instance's config: credentials, sync cadence, inference toggles,
 ## Surfaces
 - API: `PATCH /v1/integrations/:id/configure`
 - MCP: `integration.configure`
-- CLI: `oxagen integration configure <id>`
 - Agent: callable (no approval required, risk: medium)
 
 ## Input

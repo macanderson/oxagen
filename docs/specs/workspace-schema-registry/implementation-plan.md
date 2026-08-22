@@ -27,7 +27,7 @@ cd ../oxagen-schema-registry
 
 # worktree gotcha (project memory): copy env files in before pnpm dev
 cp ../oxagen-platform/.env.local . 2>/dev/null || true
-for app in apps/app apps/api apps/mcp apps/cli; do
+for app in apps/app apps/api apps/mcp; do
   cp "../oxagen-platform/$app/.env.local" "$app/.env.local" 2>/dev/null || true
 done
 
@@ -50,15 +50,15 @@ git push -u origin feat/schema-registry   # back up + make visible immediately
         │  F1 contracts + RELATIONSHIP_TYPE_PATTERN     F2 DB schema (drizzle) │
         └───────────┬──────────────────────────────────────────┬─────────────┘
                     │ (contract types)                          │ (table defs)
-   ┌────────────────┼───────────────┬───────────────┬───────────┴───────┐
-   ▼                ▼               ▼               ▼                     ▼
- A handlers      B API+MCP       C CLI          D App UI            E migrations
- +ingestion      (apps/api,      (apps/cli)     (apps/app           (atlas + CH,
- (packages/      apps/mcp)                       schema-builder      from F2)
-  handlers,                                      + Storybook)
-  packages/                                                         F docs
-  ingestion)                                                        (docs/capabilities)
-   └──────────────── all reconverge ────────────────────────────────────┘
+   ┌────────────────┼───────────────┬───────────────────┴───────┐
+   ▼                ▼               ▼                             ▼
+ A handlers      B API+MCP       C App UI                   D migrations
+ +ingestion      (apps/api,      (apps/app                  (atlas + CH,
+ (packages/      apps/mcp)        schema-builder             from F2)
+  handlers,                       + Storybook)
+  packages/                                                 E docs
+  ingestion)                                                (docs/capabilities)
+   └──────────────── all reconverge ────────────────────────────────┘
                               ▼
                      Phase 2: integration + v1 gate → PR
 ```
@@ -80,12 +80,12 @@ git push -u origin feat/schema-registry   # back up + make visible immediately
 
 Both commit + push as soon as their piece typechecks. **Gate to Phase 1:** F1
 exports the contract names/types and the pattern module; F2 exports the table
-objects. (Atlas SQL migration is generated in Stream E, after F2's schema is
+objects. (Atlas SQL migration is generated in Stream D, after F2's schema is
 final, to avoid churn.)
 
 ---
 
-## 3. Phase 1 — Parallel fan-out (6 concurrent streams, disjoint files)
+## 3. Phase 1 — Parallel fan-out (5 concurrent streams, disjoint files)
 
 Each is an independent subagent. Disjoint paths in the right column = safe to run
 all at once.
@@ -94,18 +94,17 @@ all at once.
 |---|---|---|---|
 | **A — Handlers + ingestion** | `packages/handlers`, `packages/ingestion` | Handler impl for every `schema.*` contract; the **shared validator** `validate/schema.ts` (backs both `schema.validate.node/relationship` and the pipeline); `getPinnedSchema` resolver (active-vocabulary, §4.8); grounding injection in `infer/index.ts`; property validation in `mutations/upsert-entity.ts` (§8); `graph_observed_labels` emission; **swap the `GRAPH_EDGE_TYPES` guard** in `ontology.neighbors.ts`/`ontology.query.ts`/`graph.ingest.ts` to `RELATIONSHIP_TYPE_PATTERN` + active-vocab membership (§3.2). Stub `schema.reconcile.dispatch/status` (v2). | `packages/handlers/src/schema.*.ts`, `ontology.*.ts`, `graph.*.ts`; `packages/ingestion/src/{validate,pipeline,infer,mutations}/*` |
 | **B — API + MCP** | `apps/api`, `apps/mcp` | Combined `schema.ts` route (all `schema.*`, thin `invoke()` wrappers) mounted in `app.ts`; matching MCP tools file. Document the `check:manifest` combined-file false-positives in the route header. | `apps/api/src/routes/v1/schema.ts`, `apps/api/src/app.ts`, `apps/mcp/src/tools/schema.ts` |
-| **C — CLI** | `apps/cli` | `schema` command group (get/config/label/relationship/property/version/pin/list/diff/export/recommend/validate/list/toggle) + the `oxagen schemas setup` Ink wizard (§5.3) with `--sample-limit`, `--enforcement`, `--no-interactive`, `--json`. | `apps/cli/src/commands/schema/*` |
-| **D — App UI + Storybook** | `apps/app` | `schema-builder/` components (§6): builder, label/relationship editors, property table, onboarding recommendation (with inference-depth control), **`schema-assistant-drawer` (the AI assistant drawer — generative multi-schema scaffold + additive re-prompt; existing `use-tool-stream.ts` transport + `agent.ui.render`, no `ai/rsc`)**, version-history/diff, pin-change dialog (prune knob; fires after activation auto-pins), export button, **schema-list with activate/deactivate toggles (activation auto-publishes + pins, §1.4)**; the Settings→Knowledge→Schema route; the `/api/v1/graph/explore`-style API client. **A Storybook story for every new component** (app SB :6007). UI imports via `@/components/ui/*` only. | `apps/app/src/components/knowledge/schema-builder/*`, settings route, `*.stories.tsx` |
-| **E — Migrations** | `packages/database` (migrations) | After F2 lands: generate the Atlas migration for the five Postgres tables (indexes/uniques/checks/RLS per §10–§11); finalize ClickHouse DDL. Verify locally against `:5433` (`unset DATABASE_URL`; `SELECT` after). Migration files in `packages/database/migrations/` only. | `packages/database/migrations/*` |
-| **F — Docs** | `docs/capabilities` | One `docs/capabilities/<schema.*>.md` per contract + `_index.md` update; deprecation notes for the renamed `graph.relationship.*`/`semantic.relationship.*`. | `docs/capabilities/*` |
+| **C — App UI + Storybook** | `apps/app` | `schema-builder/` components (§6): builder, label/relationship editors, property table, onboarding recommendation (with inference-depth control), **`schema-assistant-drawer` (the AI assistant drawer — generative multi-schema scaffold + additive re-prompt; existing `use-tool-stream.ts` transport + `agent.ui.render`, no `ai/rsc`)**, version-history/diff, pin-change dialog (prune knob; fires after activation auto-pins), export button, **schema-list with activate/deactivate toggles (activation auto-publishes + pins, §1.4)**; the Settings→Knowledge→Schema route; the `/api/v1/graph/explore`-style API client. **A Storybook story for every new component** (app SB :6007). UI imports via `@/components/ui/*` only. | `apps/app/src/components/knowledge/schema-builder/*`, settings route, `*.stories.tsx` |
+| **D — Migrations** | `packages/database` (migrations) | After F2 lands: generate the Atlas migration for the five Postgres tables (indexes/uniques/checks/RLS per §10–§11); finalize ClickHouse DDL. Verify locally against `:5433` (`unset DATABASE_URL`; `SELECT` after). Migration files in `packages/database/migrations/` only. | `packages/database/migrations/*` |
+| **E — Docs** | `docs/capabilities` | One `docs/capabilities/<schema.*>.md` per contract + `_index.md` update; deprecation notes for the renamed `graph.relationship.*`/`semantic.relationship.*`. | `docs/capabilities/*` |
 
 **Coordination notes**
-- Stream B/C/D code against F1's **contract types** immediately; they reach real
+- Stream B/C code against F1's **contract types** immediately; they reach real
   data through `invoke()` as Stream A's handlers land. Where a handler isn't
-  ready, B/D use the contract's typed shape with a temporary fixture, swapped at
+  ready, B/C use the contract's typed shape with a temporary fixture, swapped at
   integration — no blocking.
-- If Stream D is the long pole, split it: **D1** = editors + property table +
-  schema-list; **D2** = chat + onboarding + version/pin/export. Disjoint files,
+- If Stream C is the long pole, split it: **C1** = editors + property table +
+  schema-list; **C2** = chat + onboarding + version/pin/export. Disjoint files,
   still safe.
 - Each stream writes its **unit tests beside the code** and bumps coverage
   thresholds only up to `floor(current − 2.5)`, capped at 90 (CLAUDE.md ratchet).
@@ -116,7 +115,7 @@ all at once.
 
 Run in the worktree, in this order. Narrow commands only.
 
-1. **Wire UI→API:** replace Stream D fixtures with live `invoke()` calls; smoke
+1. **Wire UI→API:** replace Stream C fixtures with live `invoke()` calls; smoke
    one full flow headlessly (define label → version → pin → export) via
    `tsx`/`curl` and assert the JSON (no browser needed for the data path).
 2. **Per-package narrow tests** for every package touched (e.g.
@@ -144,10 +143,10 @@ Run in the worktree, in this order. Narrow commands only.
 
 ## 5. Speed levers (why this is fast)
 
-- **One barrier only** (Phase 0). After it, six streams run fully concurrently on
-  disjoint trees — wall-clock ≈ Phase 0 + slowest single stream (Stream D), not
+- **One barrier only** (Phase 0). After it, five streams run fully concurrently on
+  disjoint trees — wall-clock ≈ Phase 0 + slowest single stream (Stream C), not
   the sum.
-- **Surfaces code against contract types, not finished handlers** — B/C/D don't
+- **Surfaces code against contract types, not finished handlers** — B/C don't
   wait on A.
 - **Migrations (E) and docs (F) run alongside code**, not after.
 - **Worktree isolation** means this branch never contends with the parallel

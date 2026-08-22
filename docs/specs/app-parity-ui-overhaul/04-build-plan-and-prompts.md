@@ -66,7 +66,7 @@ folders; structural but not deep logic).
 ## Phase 1 — Net-new persistence (unblocks Studio)
 
 ### WP-1.1 — Prompt Template library
-**Model: Opus** (new schema + contracts + API + MCP + CLI + UI; a full new capability domain,
+**Model: Opus** (new schema + contracts + API + MCP + UI; a full new capability domain,
 must land governed and metered end to end).
 
 > Ready-to-go prompt:
@@ -78,7 +78,7 @@ must land governed and metered end to end).
 > in `packages/database/atlas/migrations` with a fresh timestamp prefix later than the local
 > DB head; regenerate `atlas.sum` with `atlas migrate hash`. (2) Contracts
 > `prompt.template.{create,get,list,update,version.list}` with IAM `defaultRoles`, metering,
-> `layers` including api/mcp/app/docs (NOT cli unless wired). (3) `/v1` API routes, MCP
+> `layers` including api/mcp/app/docs. (3) `/v1` API routes, MCP
 > tools, docs in `docs/capabilities/`. (4) It must be selectable from the Agent Builder step
 > ② and from Commands. Unit + e2e. Verify with a real SELECT after migration. Confirm local
 > DB target (`localhost:5433`, `unset DATABASE_URL`). Do NOT run the full test suite; run
@@ -86,19 +86,18 @@ must land governed and metered end to end).
 
 ### WP-1.2 — Commands (slash) entity
 **Model: Opus** (new schema + contracts + API + MCP + UI, and it must reach parity with the
-CLI file loader; multi-system).
+filesystem loader; multi-system).
 
 > Ready-to-go prompt:
 > "Branch `feat/commands-entity`. Give slash commands DB-backed org/workspace persistence at
-> parity with the CLI's `.oxagen/commands/*.md` loader. Follow `oxagen-feature`. (1) Schema
+> parity with the `.oxagen/commands/*.md` filesystem loader. Follow `oxagen-feature`. (1) Schema
 > `agent.commands`: trigger (e.g. 'audit'), description, agentId (nullable = inline prompt),
 > promptTemplateId (nullable), argumentHint, variables mapping ($1..$9 → template vars),
 > modelOverride, visibility org|workspace, enabled. (2) Contracts
 > `command.{create,get,list,update,delete,run}` — `command.run` resolves the command to an
 > agent+prompt+inputs and dispatches through the existing run path (reuse, do not fork the
-> transport). IAM + metering. (3) `/v1` routes + MCP tools + docs. (4) The CLI loader should
-> read these too (a command defined in the app shows up in `oxagen` CLI), closing the parity
-> gap in both directions. Migration + `atlas.sum` rehash, fresh prefix. Unit + e2e. Narrow
+> transport). IAM + metering. (3) `/v1` routes + MCP tools + docs. (4) The filesystem loader
+> should read these too, closing the parity gap in both directions. Migration + `atlas.sum` rehash, fresh prefix. Unit + e2e. Narrow
 > test runs only."
 
 ---
@@ -286,7 +285,7 @@ money-touching).
 | 0 | Parity gate | **Opus** | Cross-system law; contracts + checker + CI |
 | 0 | Nav shell | Sonnet | Structural, many files, low logic depth |
 | 1 | Prompt templates | **Opus** | Full new domain, all layers, migration |
-| 1 | Commands entity | **Opus** | New domain + CLI parity, multi-system |
+| 1 | Commands entity | **Opus** | New domain + loader parity, multi-system |
 | 2 | schema/connection/integration/repo/semantic/workflow API | Sonnet | Mechanical route-wrapping over existing contracts |
 | 3 | Tools catalog | Haiku | Single read-only page |
 | 3 | Skills move | Haiku | Existing page, small delta |

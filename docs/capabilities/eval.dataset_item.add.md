@@ -3,7 +3,7 @@
 **Domain:** eval
 **Mode:** batch
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent

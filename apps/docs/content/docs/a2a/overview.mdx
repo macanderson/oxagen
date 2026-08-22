@@ -22,12 +22,7 @@ GET /.well-known/agent-card.json
 - **Anonymous** requests get a base card: the endpoint, the Bearer security scheme, and a single generic skill. It never leaks any workspace's agent inventory.
 - **Authenticated** requests (a workspace API key as a Bearer token) get the full workspace card, where each active agent definition becomes an A2A **skill**, plus a baseline `chat` skill for the general-purpose workspace agent.
 
-The same card is available through the governed capability `a2a.card.get` (API / MCP / CLI):
-
-```bash
-oxagen a2a card          # human-readable
-oxagen a2a card --json   # raw Agent Card JSON
-```
+The same card is available through the governed capability `a2a.card.get`, so a client that already holds a workspace key can read it without a second auth model.
 
 ## Authentication and scope
 

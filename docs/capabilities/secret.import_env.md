@@ -16,7 +16,7 @@ forms; surrounding quotes are stripped while inner content (including `=`) is
 preserved; blank lines and `#` comments are ignored. New keys default to
 `sensitive=true`; existing keys keep their flag. The call is **preview-only by
 default** (`commit: false`) — it returns the parsed rows and which are new keys vs
-overrides so the UI/CLI can confirm before an explicit commit. Owner/Admin only.
+overrides so the UI can confirm before an explicit commit. Owner/Admin only.
 
 ## Input
 

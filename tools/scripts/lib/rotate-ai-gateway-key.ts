@@ -23,7 +23,7 @@ export interface VercelTokenEntry {
 /**
  * Parse and validate the `vercel.tokens.json` payload. Accepts either a bare
  * array of entries or `{ "tokens": [...] }`. Throws with a descriptive
- * message on any malformed entry so the CLI can surface it verbatim.
+ * message on any malformed entry so the caller can surface it verbatim.
  */
 export function parseTokensFile(raw: string): VercelTokenEntry[] {
   let json: unknown;
@@ -34,11 +34,15 @@ export function parseTokensFile(raw: string): VercelTokenEntry[] {
   }
   const list = Array.isArray(json)
     ? json
-    : typeof json === "object" && json !== null && Array.isArray((json as { tokens?: unknown }).tokens)
+    : typeof json === "object" &&
+        json !== null &&
+        Array.isArray((json as { tokens?: unknown }).tokens)
       ? (json as { tokens: unknown[] }).tokens
       : null;
   if (list === null) {
-    throw new Error('vercel.tokens.json must be an array of entries or { "tokens": [...] }');
+    throw new Error(
+      'vercel.tokens.json must be an array of entries or { "tokens": [...] }',
+    );
   }
   return list.map((entry, i) => {
     if (typeof entry !== "object" || entry === null) {
@@ -46,21 +50,30 @@ export function parseTokensFile(raw: string): VercelTokenEntry[] {
     }
     const { slug, token } = entry as { slug?: unknown; token?: unknown };
     if (typeof slug !== "string" || slug.length === 0) {
-      throw new Error(`vercel.tokens.json entry ${i} is missing a non-empty "slug"`);
+      throw new Error(
+        `vercel.tokens.json entry ${i} is missing a non-empty "slug"`,
+      );
     }
     if (typeof token !== "string" || token.length === 0) {
-      throw new Error(`vercel.tokens.json entry ${i} ("${slug}") is missing a non-empty "token"`);
+      throw new Error(
+        `vercel.tokens.json entry ${i} ("${slug}") is missing a non-empty "token"`,
+      );
     }
     return { slug, token };
   });
 }
 
 /** Find the token entry for `slug`, or throw listing the slugs that exist. */
-export function tokenForSlug(entries: VercelTokenEntry[], slug: string): VercelTokenEntry {
+export function tokenForSlug(
+  entries: VercelTokenEntry[],
+  slug: string,
+): VercelTokenEntry {
   const match = entries.find((e) => e.slug === slug);
   if (!match) {
     const known = entries.map((e) => `"${e.slug}"`).join(", ") || "(none)";
-    throw new Error(`no token for org slug "${slug}" in vercel.tokens.json — known slugs: ${known}`);
+    throw new Error(
+      `no token for org slug "${slug}" in vercel.tokens.json — known slugs: ${known}`,
+    );
   }
   return match;
 }
@@ -79,16 +92,23 @@ export interface EnvUpsertResult {
  * lines are left alone); appends at the end when absent. Output always ends
  * with a trailing newline.
  */
-export function upsertGatewayKey(content: string, value: string): EnvUpsertResult {
+export function upsertGatewayKey(
+  content: string,
+  value: string,
+): EnvUpsertResult {
   const assignment = `${ENV_KEY}=${value}`;
   // Anchored to line start: never rewrites `# AI_GATEWAY_API_KEY=...` comments
   // or other keys that merely contain the name as a suffix.
   const keyLine = new RegExp(`^${ENV_KEY}=.*$`, "gm");
   if (keyLine.test(content)) {
     const next = content.replace(keyLine, assignment);
-    return { content: next.endsWith("\n") ? next : `${next}\n`, action: "replaced" };
+    return {
+      content: next.endsWith("\n") ? next : `${next}\n`,
+      action: "replaced",
+    };
   }
-  const base = content.length === 0 || content.endsWith("\n") ? content : `${content}\n`;
+  const base =
+    content.length === 0 || content.endsWith("\n") ? content : `${content}\n`;
   return { content: `${base}${assignment}\n`, action: "appended" };
 }
 
@@ -107,7 +127,8 @@ export function extractGatewayKey(response: unknown): string | null {
     if (typeof node === "string") {
       return !preferredOnly && node.startsWith("vck_") ? node : null;
     }
-    if (typeof node !== "object" || node === null || seen.has(node)) return null;
+    if (typeof node !== "object" || node === null || seen.has(node))
+      return null;
     seen.add(node);
     if (Array.isArray(node)) {
       for (const item of node) {
@@ -117,7 +138,12 @@ export function extractGatewayKey(response: unknown): string | null {
       return null;
     }
     for (const [k, v] of Object.entries(node)) {
-      if (preferredOnly && preferred.includes(k) && typeof v === "string" && v.startsWith("vck_")) {
+      if (
+        preferredOnly &&
+        preferred.includes(k) &&
+        typeof v === "string" &&
+        v.startsWith("vck_")
+      ) {
         return v;
       }
       if (!preferredOnly || typeof v === "object") {
@@ -148,8 +174,12 @@ export interface VercelTeam {
  */
 export function resolveTeam(teamsResponse: unknown, slug: string): VercelTeam {
   const teams =
-    typeof teamsResponse === "object" && teamsResponse !== null && Array.isArray((teamsResponse as { teams?: unknown }).teams)
-      ? ((teamsResponse as { teams: unknown[] }).teams as Array<Record<string, unknown>>)
+    typeof teamsResponse === "object" &&
+    teamsResponse !== null &&
+    Array.isArray((teamsResponse as { teams?: unknown }).teams)
+      ? ((teamsResponse as { teams: unknown[] }).teams as Array<
+          Record<string, unknown>
+        >)
       : [];
   const found = teams.find((t) => t.slug === slug);
   if (found && typeof found.id === "string") {

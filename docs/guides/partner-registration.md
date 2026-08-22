@@ -77,7 +77,7 @@ After approval:
 - Your schema URL is registered in Oxagen's partner registry.
 - `metadata.publisher.verified` is set to `true` in the rendered schema.
 - Your connector appears in the Oxagen marketplace under your declared category.
-- The connector is installable via the UI, CLI, MCP, and agent surfaces.
+- The connector is installable via the UI, MCP, and agent surfaces.
 
 ---
 

@@ -20,7 +20,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Shipped today · one seam",
-    say: "Third: where it lives. All of this is enforced at the single tool layer every agent run shares, the same seam as our graph-backed file locks. Chat, CLI, fleet workers, sandboxed runs: all inherit it with zero per-surface wiring, and none can opt out. We also shipped a diagnostics provider port, which is the seam a full project typechecker plugs into next.",
+    say: "Third: where it lives. All of this is enforced at the single tool layer every agent run shares, the same seam as our graph-backed file locks. Chat, API runs, fleet workers, sandboxed runs: all inherit it with zero per-surface wiring, and none can opt out. We also shipped a diagnostics provider port, which is the seam a full project typechecker plugs into next.",
   },
   {
     title: "The audit trail",

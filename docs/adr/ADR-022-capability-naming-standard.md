@@ -5,7 +5,7 @@
 
 ## Context
 
-Oxagen exposes ~286 capabilities, each a single contract that fans out to an API route, an MCP tool, a CLI command, and (for agent-surface capabilities) a model-facing tool (ADR-009). A capability's **name** is not cosmetic: it is a load-bearing string key. It joins the contract registry, the kernel's handler-loader map, the IAM `role_grants.capability_id` column, the ClickHouse `tool_invocations.capability_name` analytics column, the MCP tool name a model sees, and — by filename convention — the contract/route/tool/test/docs files on disk.
+Oxagen exposes ~286 capabilities, each a single contract that fans out to an API route, an MCP tool, and (for agent-surface capabilities) a model-facing tool (ADR-009). A capability's **name** is not cosmetic: it is a load-bearing string key. It joins the contract registry, the kernel's handler-loader map, the IAM `role_grants.capability_id` column, the ClickHouse `tool_invocations.capability_name` analytics column, the MCP tool name a model sees, and — by filename convention — the contract/route/tool/test/docs files on disk.
 
 Names had drifted. Some ran to four segments (`agent.file.lock.acquire`, `agent.task.background.start`), some used inconsistent domains (`organization.create` vs the `org.*` family, `documents.*` vs `document.*`), some pluralised segments (`graph.node.labels.get`), and one used kebab-case (`eval-schema`). Without a written standard and a lint, drift is the steady state, and drift makes the model pick the wrong tool (ADR-021 §3: overlapping/vaguely-named tools are a tool-registry defect), makes capabilities hard to discover, and makes the manifest an unreliable index.
 
@@ -59,7 +59,7 @@ Renaming a name would orphan every call site, every existing IAM grant row, and 
 - The **registry** (`packages/oxagen/src/registry.ts`) indexes each alias to its canonical name. `getCapability(alias)` resolves to the canonical contract and reports the hit through an injectable deprecation sink (one telemetry counter per alias, not per call; a single dev-console warn when no sink is wired). `resolveCanonicalName()` and `namesForCapability()` expose the mapping.
 - The **kernel** dispatches, gates (IAM / billing / entitlement), and **meters** every call under the canonical name — a call made via an alias is attributed to the canonical name in ClickHouse and audit.
 - **IAM** matches legacy rows without a data migration: `fetch-authz` queries `role_grants` for the canonical name **and** all aliases (`inArray`), and the pure resolver matches any of them. An existing grant keyed by the old string keeps granting access.
-- **API HTTP paths and CLI paths are unaffected** — they are hand-authored and independent of the capability name, so the external REST/CLI surface stays byte-stable across a rename; only the contract file moves.
+- **API HTTP paths are unaffected** — they are hand-authored and independent of the capability name, so the external REST surface stays byte-stable across a rename; only the contract file moves.
 - **Billing is safe by construction**: the revenue path (`token_usage`, `consumeCredits`) keys on `model` + `execution_step_id`, never the capability name, so a rename cannot mis-attribute revenue.
 
 An alias is a permanent shim until deliberately retired; retiring one is a breaking change that needs its own migration of any durable rows still keyed by the old name.
@@ -73,6 +73,6 @@ A name that cannot be validated **and was deliberately not renamed** goes into a
 ## Consequences
 
 - **Renames in this wave** (all with alias shims): 29 four-segment collapses (`agent.file.lock.* → agent.file_lock.*`, `agent.task.background.* → agent.background_task.*`, `graph.node.label(s).* → graph.node_label.*`, `workspace.model.settings.* → workspace.model_settings.*`, `workspace.budget.policy.* → workspace.budget_policy.*`, …), one semantic fix (`agent.memory.promotion.candidates → agent.memory_promotion.list`), and the domain dedupe (`organization.create → org.create`, `documents.* → document.*`, `notifications.* → notification.*`, with the `domain` field normalised to the first segment).
-- **Nothing breaks**: internal callers resolve through the alias index, existing IAM grants keep working, external REST/CLI paths are unchanged, and metering stays correct.
+- **Nothing breaks**: internal callers resolve through the alias index, existing IAM grants keep working, external REST paths are unchanged, and metering stays correct.
 - **Drift is now caught in CI** on every PR, and the grandfather list is the running ledger of naming debt.
 - **Follow-ups**: (a) migrate MCP tool names to the underscore form (§3); (b) fix the 12 grandfathered noun-terminal reads; (c) retire aliases once no durable row references an old name.

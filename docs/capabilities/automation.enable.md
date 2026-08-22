@@ -6,7 +6,7 @@
 
 ## Intent
 
-Enable an automation trigger so it fires live. This is the ONLY path from "configured" to "live" — AI agents may create and edit automations, but activation must cross a human gate: the agent surface renders an approval card (`requiresApproval: true`), MCP hosts surface their own tool-call confirmation, and CLI/API calls are human-initiated by construction.
+Enable an automation trigger so it fires live. This is the ONLY path from "configured" to "live" — AI agents may create and edit automations, but activation must cross a human gate: the agent surface renders an approval card (`requiresApproval: true`), MCP hosts surface their own tool-call confirmation, and API calls are human-initiated by construction.
 
 Sets `workflow.playbook_triggers.is_enabled = true` and the parent playbook's status to `active`.
 

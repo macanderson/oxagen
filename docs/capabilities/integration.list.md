@@ -8,7 +8,6 @@ Browse installed plugin instances with status, config summary, and sync metrics.
 ## Surfaces
 - API: `GET /v1/integrations`
 - MCP: `integration.list`
-- CLI: `oxagen integration list`
 - Agent: callable (no approval required, risk: low)
 
 ## Input

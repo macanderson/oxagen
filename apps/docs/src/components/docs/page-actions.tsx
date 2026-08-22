@@ -5,12 +5,12 @@ import { useEffect, useRef, useState } from "react";
 interface PageActionsProps {
   /**
    * Absolute path to the page's raw-Markdown endpoint,
-   * e.g. `/llms.mdx/docs/cli/installation`.
+   * e.g. `/llms.mdx/docs/security/overview`.
    */
   markdownUrl: string;
   /**
    * Filename stem for the downloaded `.md` file (no extension),
-   * e.g. `cli-installation`.
+   * e.g. `security-overview`.
    */
   fileStem: string;
 }

@@ -134,7 +134,7 @@ default), `recall_threshold` (0–1).
 - `agent.memory.evidence.attach`
 - `agent.memory.citations.list` (execution citations; supports compliance/influence filters → covers §7d/§7e)
 
-Each: contract → API route → MCP tool → CLI command → docs → tests.
+Each: contract → API route → MCP tool → docs → tests.
 
 ## Legacy → new migration (idempotent, in schema.cypher migration block)
 For every `:AgentMemory` missing `memory_class`:

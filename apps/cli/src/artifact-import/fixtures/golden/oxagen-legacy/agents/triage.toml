@@ -1,9 +1,0 @@
-schema_version = 1
-kind = "agent"
-name = "triage"
-description = "Triages incoming issues."
-model = "balanced"
-developer_instructions = "Classify the issue, then propose the smallest next step."
-tools = [ "read_file", "list_dir", "glob", "grep", "write_file" ]
-skills = [ "debugging" ]
-unresolved_tools = []

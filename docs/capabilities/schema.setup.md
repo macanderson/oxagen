@@ -9,7 +9,6 @@ Interactive LLM-assisted registry setup wizard — orchestrates `schema.recommen
 - API: `POST /v1/schema/setup`
 - MCP: `schema.setup`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

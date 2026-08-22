@@ -74,15 +74,6 @@ Content-Type: application/json
 
 Tool name: `import_sandbox_template`
 
-
-## CLI
-
-```
-oxagen sandbox template import --env <slug> [-f <file>] [--slug <override>] [--set-default] [--yes]
-```
-
-Reads the manifest from `-f <file>` or stdin. Previews (with warnings) and writes nothing until you pass `--yes`, mirroring `oxagen secret import`.
-
 ## Errors
 
 - `validation_error` — `manifest` failed Zod parse (wrong `kind`/`version`, malformed secret-key name).

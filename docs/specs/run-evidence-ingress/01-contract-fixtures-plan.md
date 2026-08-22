@@ -135,7 +135,7 @@
 
 - [ ] Pin `contextgraph-types` and `contextgraph-host` to the exact merged PR 0A revision at the workspace dependency level, then consume them with `workspace = true` from the three production crates. Add the minimum `contextgraph-types`/host dev-dependency to `stella-protocol` for its conformance test rather than introducing a production dependency it does not use.
 - [ ] Write the fixture test first and verify the vendored manifest/digests, deserialization of the valid frame/query, and rejection of the missing/blank-citation fixture through the same current-CGP conformance path.
-- [ ] Replace `ocp_types`/`ocp_host` imports with `contextgraph_types`/`contextgraph_host`; rename the CLI module and update comments/user-visible terminology to Context Graph Protocol.
+- [ ] Replace `ocp_types`/`ocp_host` imports with `contextgraph_types`/`contextgraph_host`; update comments/user-visible terminology to Context Graph Protocol.
 - [ ] Preserve Stella's local storage, retrieval, code graph, and compiler behavior. This PR changes interchange types and naming, not the engine loop or database.
 - [ ] Where the current Stella adapter drops a frame with no citation label, retain the drop but emit/return an explicit adapter diagnostic so later evidence can label it `legacy_adapter` until upstream conformance is guaranteed.
 - [ ] Run `cargo test -p stella-protocol --test contextgraph_fixtures`; expect pass.

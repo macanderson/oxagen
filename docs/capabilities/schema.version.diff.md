@@ -9,7 +9,6 @@ Structural diff of two schema versions: added/removed/changed schemas, labels, r
 - API: `GET /v1/schema/versions/diff`
 - MCP: `schema.version.diff`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

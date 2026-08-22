@@ -71,18 +71,6 @@ Content-Type: application/json
 
 Tool name: `create_sandbox_template`
 
-
-## CLI
-
-```
-oxagen sandbox template create --env <slug> --name <name> --slug <slug> \
-  [--provider modal|vercel|docker] [--runtime <ref>] \
-  [--vcpu <n>] [--memory-mb <n>] [--timeout-ms <n>] [--disk-mb <n>] \
-  [--network-mode public|static_egress|…] [--env-var KEY=value]… [--set-default]
-```
-
-`--env-var` is repeatable and non-secret only (real credentials go in the vault). Resource flags are bounded exactly as the `resources` input.
-
 ## Errors
 
 - `validation_error` — input failed Zod parse (empty `name`/`slug`, resource cap exceeded, unsupported `network.mode`).

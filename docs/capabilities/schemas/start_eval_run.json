@@ -5,8 +5,7 @@
   "mode": "async",
   "surfaces": [
     "api",
-    "mcp",
-    "cli"
+    "mcp"
   ],
   "sensitivity": "medium",
   "agent": {

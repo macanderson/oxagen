@@ -9,7 +9,6 @@ Create or update a relationship type on a schema within the current draft versio
 - API: `PUT /v1/schemas/{schemaName}/relationships/{name}`
 - MCP: `schema.relationship.upsert`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

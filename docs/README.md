@@ -12,10 +12,9 @@ docs/
 ├── README.md                ← you are here
 ├── VISION.md                 product north star (metered/governed/graph-grounded control plane)
 ├── adr/                      architectural decision records
-├── audits/                   committed release-audit HTML reports
+├── audits/                   committed audit reports
 ├── brand/                    brand assets
 ├── capabilities/             contract surface documentation (per-capability)
-├── cli/                      CLI-specific docs (incl. point-in-time competitive snapshots)
 ├── compliance/                SOC 2 / compliance references
 ├── erd/                       entity-relationship diagrams
 ├── guides/                    how-to guides

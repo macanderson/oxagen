@@ -1,12 +1,11 @@
 /**
  * Eval-result protocol — the single boundary that lands eval runs in ClickHouse.
  *
- * Every harness (the TS engram golden suite and the Python bench suites) produces
- * a normalized run object; this module denormalizes it onto the `eval_runs` /
- * `eval_results` rows and inserts via @oxagen/telemetry. Keeping the insert in one
- * place means a harness never talks to ClickHouse directly — it just emits the
- * `oxagen.eval.v1` shape and hands it here (in-process for TS, via a `.eval.json`
- * file for Python; see eval-ingest.ts / run-evals.ts).
+ * Every harness produces a normalized run object; this module denormalizes it onto
+ * the `eval_runs` / `eval_results` rows and inserts via @oxagen/telemetry. Keeping
+ * the insert in one place means a harness never talks to ClickHouse directly — it
+ * just emits the `oxagen.eval.v1` shape and hands it here, either in-process or as
+ * a `.eval.json` file (see eval-ingest.ts / run-evals.ts).
  */
 import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -73,7 +72,10 @@ export function clickhouseConfigured(): boolean {
 export function gitProvenance(): { git_sha: string; git_branch: string } {
   const read = (cmd: string): string => {
     try {
-      return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      return execSync(cmd, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
     } catch {
       return "";
     }
@@ -94,7 +96,10 @@ function toRunRow(run: NormalizedRun): EvalRunRow {
   };
 }
 
-function toResultRows(run: NormalizedRun, results: NormalizedResult[]): EvalResultRow[] {
+function toResultRows(
+  run: NormalizedRun,
+  results: NormalizedResult[],
+): EvalResultRow[] {
   return results.map((r) => ({
     run_id: run.run_id,
     task_id: r.task_id,
@@ -159,7 +164,9 @@ export async function ingestRun(
 
 /** Read a `.eval.json` file → one or many EvalRunFile objects (the file may be an array). */
 export function loadEvalFile(path: string): EvalRunFile[] {
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as EvalRunFile | EvalRunFile[];
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as
+    | EvalRunFile
+    | EvalRunFile[];
   const arr = Array.isArray(parsed) ? parsed : [parsed];
   return arr.filter((f) => f && f.run && f.run.run_id);
 }

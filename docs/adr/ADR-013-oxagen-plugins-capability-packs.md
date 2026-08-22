@@ -55,11 +55,11 @@ Manifests are plain TypeScript objects validated by a Zod schema at startup (`pa
 
 - A contract may be claimed by **at most one plugin**. The registry throws at startup if two manifests claim the same contract name.
 - A plugin must claim at least one contract.
-- All four apps (api, mcp, app, cli) share the same in-process registry anchored on `globalThis` via `Symbol.for` to survive Turbopack HMR dual-module graphs.
+- All three apps (api, mcp, app) share the same in-process registry anchored on `globalThis` via `Symbol.for` to survive Turbopack HMR dual-module graphs.
 
 ### Kernel as the single enforcement point
 
-The entitlement gate is injected into the kernel via `setCapabilityEntitlementGate`, symmetrically with `setBillingAdmissionGate`. It sits in the hot path of `kernel.invoke()`, after the billing gate, so API, MCP, agent, and CLI surfaces inherit it identically.
+The entitlement gate is injected into the kernel via `setCapabilityEntitlementGate`, symmetrically with `setBillingAdmissionGate`. It sits in the hot path of `kernel.invoke()`, after the billing gate, so the API, MCP, and agent surfaces inherit it identically.
 
 Logic:
 1. `pluginForContract(capabilityName)` — O(1) in-process lookup; returns `undefined` for builtin contracts.
@@ -104,7 +104,7 @@ No new tables. No RLS changes (org_listings is already `org_only`).
 - Zero new tables or RLS policies for Phase 1.
 - Existing `plugin.org.install`, `plugin.org.uninstall`, `plugin.org.set_enabled`, `plugin.denylist.*`, and `plugin.org.list` contracts work unchanged with capability listings.
 - Schema is forward-compatible with Phase 3 partner plugins (same zod schema validates DB rows).
-- Single enforcement point: adding a new surface (CLI, webhook, etc.) inherits entitlement automatically.
+- Single enforcement point: adding a new surface (a webhook, say) inherits entitlement automatically.
 
 ### Constraints and gotchas
 

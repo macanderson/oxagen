@@ -46,15 +46,6 @@ Content-Type: application/json
 
 Tool name: `list_sandbox_templates`
 
-
-## CLI
-
-```
-oxagen sandbox template list [--env <slug>] [--json]
-```
-
-`--env` filters to one environment; `--json` emits the template array on one line for scripting.
-
 ## Errors
 
 - `validation_error` — `environmentId` present but empty.

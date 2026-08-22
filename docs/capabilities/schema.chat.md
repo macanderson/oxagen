@@ -9,7 +9,6 @@ AI iterative schema builder turn — takes a conversation and the current draft,
 - API: `POST /v1/schema/chat`
 - MCP: `schema.chat`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |
@@ -65,7 +64,7 @@ Content-Type: application/json
 ## Notes
 - **Access:** Org: Owner/Admin; Workspace: Owner/Member.
 - Sensitivity: medium.
-- Agent surface only — no CLI available for this conversational capability.
+- Agent surface only — this conversational capability has no API or MCP surface.
 - **Proposes mutations but never executes them directly.** The caller must invoke the proposed capabilities to apply changes — this preserves the human-in-the-loop approval pattern.
 - Pass `conversationId` from the previous response to continue a multi-turn session.
 - Makes one LLM call through `@oxagen/ai` (metered) per turn.

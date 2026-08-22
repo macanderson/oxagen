@@ -5,7 +5,6 @@ export default [
   "packages/*/vitest.config.ts",
   "apps/api/vitest.config.ts",
   "apps/app/vitest.config.ts",
-  "apps/cli/vitest.config.ts",
   "apps/mcp/vitest.config.ts",
   "apps/schemas/vitest.config.ts",
   "tools/scripts/vitest.config.ts",

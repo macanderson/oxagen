@@ -5,9 +5,10 @@
  *
  * Oxagen agents, skills, and slash commands are canonical TOML only. Exactly
  * one component is still allowed to understand Markdown/YAML-frontmatter
- * artifacts: the import engine, which converts foreign artifacts into Oxagen
- * TOML. This guard fails the build when a *normal* loader, scaffold, or a piece
- * of *live* documentation reintroduces the Markdown-era formats.
+ * artifacts: the one-way migration converter that lifts pre-cutover managed
+ * skill rows into TOML. This guard fails the build when a *normal* loader,
+ * scaffold, or a piece of *live* documentation reintroduces the Markdown-era
+ * formats.
  *
  * What it does NOT do: police prose in dated, explicitly historical documents
  * (ADRs, archived specs, superpowers plans). Rewriting history is not the goal;
@@ -43,7 +44,6 @@ export const PATTERNS = [
  * reference documentation.
  */
 const SCAN = [
-  { dir: "apps/cli/src", exts: [".ts", ".tsx"] },
   { dir: "packages/skills/src", exts: [".ts"] },
   { dir: "packages/handlers/src", exts: [".ts"] },
   { dir: "packages/agent-artifacts/src", exts: [".ts"] },
@@ -60,25 +60,11 @@ const SCAN = [
  * exemption is a visible, reviewable decision.
  */
 export const ALLOWLIST = [
-  // --- The import engine: the one component that reads foreign formats. ---
-  {
-    path: "apps/cli/src/artifact-import/",
-    reason: "import adapters parse foreign Markdown by design",
-  },
+  // --- The one component that reads foreign formats. ---
   {
     path: "packages/handlers/src/skill-legacy-migration.ts",
     reason:
       "one-way converter for pre-cutover managed skill rows; the only server-side legacy reader",
-  },
-
-  // --- Documentation *of* the importer: must name what it converts from. ---
-  {
-    path: "docs/guides/import-agent-artifacts.md",
-    reason: "import guide documents the legacy formats it converts",
-  },
-  {
-    path: "apps/docs/content/docs/cli/import-artifacts.mdx",
-    reason: "customer import guide documents the legacy formats it converts",
   },
 
   // --- Explicitly historical documentation. Dated; not live guidance. ---
@@ -192,14 +178,16 @@ export function main() {
       console.error(`    ${v.text}`);
     }
     console.error(
-      "\nIf this reference is legitimate — import-adapter code, documentation of\n" +
-        "the importer, or an explicitly historical document — add an enumerated\n" +
-        "entry with a reason to ALLOWLIST in tools/scripts/check-artifact-formats.mjs.\n",
+      "\nIf this reference is legitimate — the one-way migration converter, or an\n" +
+        "explicitly historical document — add an enumerated entry with a reason to\n" +
+        "ALLOWLIST in tools/scripts/check-artifact-formats.mjs.\n",
     );
     process.exit(1);
   }
 
-  console.log("✓ agent artifacts are TOML-only outside the import engine");
+  console.log(
+    "✓ agent artifacts are TOML-only outside the migration converter",
+  );
 }
 
 // Only run when executed directly, so tests can import the rule set.

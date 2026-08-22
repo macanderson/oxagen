@@ -22,7 +22,7 @@ Oxagen is a **generic, configuration-driven, multi-source knowledge graph platfo
 - **Custom ontology prompts per connector** let customers define what to extract and how to relate it to their domain (not just SaaS/code)
 - **Semantic edges** link inferred concepts across sources (e.g., a Google Drive spec document related to a GitHub feature by shared intent)
 - **Plugin architecture** allows partners to build their own connectors via YAML schema + custom inference prompts
-- **Full surface parity:** Any source configuration reachable identically via UI, API, MCP, CLI
+- **Full surface parity:** Any source configuration reachable identically via UI, API, MCP
 
 **Not a SaaS-specific tool.** Oxagen works for enterprises, agencies, researchers, nonprofits—any organization connecting multiple data sources to get rich AI context. The customer defines the ontology, not the tool.
 
@@ -91,7 +91,7 @@ Specialization on `connection.*` for code repositories. A repo connection is alw
 | `repo.pause` / `repo.resume` | sync | Pause/resume sync loop |
 | `repo.metrics` | sync | Sync stats (entities by type, last sync, error log) |
 
-**Surfaces:** API, MCP, CLI, Agent  
+**Surfaces:** API, MCP, Agent  
 **Scope:** Workspace-scoped  
 **Notes:** `repo.create/list/get/delete` delegate to `connection.*` with validated `connectorId`
 
@@ -111,7 +111,7 @@ Manages installed plugin instances at workspace scope. A plugin is a configured,
 | `integration.metrics` | sync | Sync stats |
 | `integration.delete` | async | Remove plugin + optionally purge graph data |
 
-**Surfaces:** API, MCP, CLI, Agent  
+**Surfaces:** API, MCP, Agent  
 **Scope:** Workspace-scoped  
 **Relationship:** Replaces manual connection setup with schema-driven install flow
 
@@ -137,7 +137,7 @@ Bridge between the plugin registry and dynamic form rendering.
 
 This historical design proposed LLM-driven relationship extraction across workspace nodes. The entire infer/review capability family is retired for launch and must not be reimplemented from this document.
 
-**Launch disposition:** no API, MCP, agent, CLI, or app surface. A replacement must define attributable candidate records, explicit approval authority, audit events, invalidation, and revocation before relationships are materialized.
+**Launch disposition:** no API, MCP, agent, or app surface. A replacement must define attributable candidate records, explicit approval authority, audit events, invalidation, and revocation before relationships are materialized.
 
 ---
 
@@ -327,9 +327,8 @@ Each customer defines their own ontology via these prompts. **The platform is ag
 - Define 20 contracts in `packages/oxagen/src/contracts/` (repo.*, integration.*, plugin.schema.*, semantic.edge.*, graph.node.list, graph.stats)
 - Implement API routes in `apps/api/src/routes/v1/` (create endpoints for all contracts)
 - Implement MCP tools in `apps/mcp/src/tools/` (expose all contracts via MCP)
-- Implement CLI commands in `apps/cli/src/commands/` (repo, integration, semantic, graph commands)
 
-**API parity checks:** `pnpm check:manifest` should list all three surfaces (api, mcp, cli) for all contracts except internal ones.
+**API parity checks:** `pnpm check:manifest` should list both surfaces (api, mcp) for all contracts except internal ones.
 
 ### Phase 2: YAML Schema System (Weeks 3–4)
 
@@ -352,7 +351,7 @@ Each customer defines their own ontology via these prompts. **The platform is ag
   - `auth-scheme-picker.tsx`, `record-type-selector.tsx`, `filters-panel.tsx`, `inference-panel.tsx`, `sync-cadence-panel.tsx`
   - `key-value-editor.tsx`, `secret-file-upload.tsx` — new primitives
 - Replace `github-connection-wizard.tsx` (777-line hand-coded component) with a generic connection setup flow driven by the schema
-- Full surface parity: UI, API, MCP, CLI all accept same config shape
+- Full surface parity: UI, API, MCP all accept same config shape
 
 ### Phase 4: Filter Enforcement & Sync Orchestration (Weeks 7–8)
 
@@ -542,7 +541,7 @@ Agent now has rich context: code implementation + design intent + architecture, 
 ## Success Criteria
 
 ### Functional
-- [ ] 20 contracts fully implemented across API, MCP, CLI, Agent (no surface gaps)
+- [ ] 20 contracts fully implemented across API, MCP, Agent (no surface gaps)
 - [ ] All 15 built-in connectors ship co-located `schema.yaml` + pass alignment check
 - [ ] Dynamic form renderer works for all built-in connectors (no hand-coded per-connector wizards)
 - [ ] `repo.configure` and `integration.configure` allow custom `ontologyPrompt` and `semanticEdgePrompt` per-connector
@@ -564,7 +563,6 @@ Agent now has rich context: code implementation + design intent + architecture, 
 - [ ] Partner connector authoring guide (how to write a YAML schema + prompts)
 - [ ] Example partner connector (prove the pattern works)
 - [ ] API reference for all 20 contracts
-- [ ] CLI usage guide (oxagen repo, oxagen integration, oxagen semantic commands)
 
 ---
 
@@ -589,9 +587,6 @@ Agent now has rich context: code implementation + design intent + architecture, 
 
 **MCP tools:**
 - `apps/mcp/src/tools/repo.ts`, `integration.ts`, `semantic_edge.ts`, `graph.ts`
-
-**CLI:**
-- `apps/cli/src/commands/repo/`, `integration/`, `semantic/`, `graph/`
 
 **Frontend:**
 - `apps/app/src/components/connectors/` — generic schema-driven form components

@@ -93,7 +93,7 @@ but have no corresponding app page, server action, or UI control in `apps/app`.
 | 6 | `graph.cypher` | Raw Cypher execution | Admin/agent internal |
 | 7 | `ontology.query` / `ontology.neighbors` | Knowledge graph queries | Used by semantic inference pipeline |
 | 8 | `agent.code.execute` | Sandbox code execution | Agent runtime primitive |
-| 9 | `skill.author` | AI-assisted skill authoring | CLI/agent workflow |
+| 9 | `skill.author` | AI-assisted skill authoring | Agent workflow |
 
 ---
 

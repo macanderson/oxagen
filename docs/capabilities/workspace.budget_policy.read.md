@@ -51,6 +51,6 @@ All roles (Owner, Admin, Member, Viewer), org and workspace level. Readable by a
 
 ## Notes
 
-- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the CLI, the API, and the web app.
+- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the API and the web app.
 - When `enabled=false`, members' personal budgets remain in effect. When `enabled=true`, the workspace budget is merged with each member's personal budget via `resolveEffectiveTurnBudget` (@oxagen/billing).
 - The saved value is a **default**; a surface may override the budget per turn at submit time.

@@ -53,12 +53,6 @@ Content-Type: application/json
 
 Tool name: `code.diff` (read-only, idempotent).
 
-## CLI
-
-```
-oxagen code diff <before-file> <after-file> [--path <p>] [--context <n>]
-```
-
 ## Errors
 
 - Rejects either blob larger than 1 MiB at the schema boundary.

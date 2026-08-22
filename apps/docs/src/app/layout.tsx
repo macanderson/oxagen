@@ -2,12 +2,12 @@ import "./global.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { RootProvider } from "fumadocs-ui/provider/next";
-import { InstallCliButton } from "@/components/install/install-cli-button";
 import { SwRegister } from "@/components/pwa/sw-register";
 
 export const metadata: Metadata = {
   title: "Oxagen Docs",
-  description: "Documentation for the Oxagen agent platform.",
+  description:
+    "Documentation for Oxagen — the governance and control plane for enterprise AI agents.",
   // No explicit `manifest` string here — apps/docs/src/app/manifest.ts
   // (Next's native metadata-route convention) is auto-detected and linked at
   // /manifest.webmanifest. The old static apps/docs/public/pwa/manifest.json
@@ -34,7 +34,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    description:
+      "Documentation for Oxagen — the governance and control plane for enterprise AI agents.",
     images: [
       {
         url: "/social/og-image-dark-1200x630.png",
@@ -48,7 +49,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    description:
+      "Documentation for Oxagen — the governance and control plane for enterprise AI agents.",
     images: ["/social/og-image-dark-1200x630.png"],
   },
 };
@@ -67,7 +69,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
         <RootProvider>{children}</RootProvider>
-        <InstallCliButton />
         <SwRegister />
       </body>
     </html>

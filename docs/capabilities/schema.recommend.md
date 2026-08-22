@@ -9,7 +9,6 @@ AI onboarding — reads the existing graph (via `graph.stats`, observed labels f
 - API: `POST /v1/schema/recommend`
 - MCP: `schema.recommend`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

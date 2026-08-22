@@ -9,7 +9,6 @@ Freeze the current draft into an immutable published version and open a fresh em
 - API: `POST /v1/schema/versions`
 - MCP: `schema.version.create`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

@@ -28,8 +28,8 @@
  * `lp-*` so it never leaks into the Fumadocs /docs theme. Colours are pulled
  * from the @oxagen/ui brand tokens (ember gradient + graphite neutrals) so the
  * page re-skins with the rest of the system. The concept is "context windows,
- * more free than full": hex-cell fields (abstracted from the Oxagen logomark),
- * an animated install terminal, and a context-window meter that drains.
+ * more free than full": hex-cell fields (abstracted from the Oxagen logomark)
+ * and a context-window meter that drains.
  * ─────────────────────────────────────────────────────────────────────────── */
 
 /* The canonical ember sweep, reused for clipped headline text + accents. */
@@ -89,34 +89,6 @@
   animation: lp-glow 9s ease-in-out infinite;
 }
 
-/* Terminal window chrome. Intentionally always-dark (like a real terminal) in
-   both light and dark mode — fixed literal colours so the panel never washes
-   out on the light page. */
-.lp-term {
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(18 19 24 / 0.94);
-  box-shadow:
-    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
-    0 30px 80px -28px color-mix(in oklch, var(--_ember-crimson, #C2185B) 42%, transparent),
-    0 18px 50px -30px rgb(0 0 0 / 0.7);
-  backdrop-filter: blur(8px);
-}
-
-.lp-caret {
-  display: inline-block;
-  width: 0.6ch;
-  height: 1.05em;
-  translate: 0 0.16em;
-  background: var(--_ember-flame);
-  box-shadow: 0 0 8px color-mix(in oklch, var(--_ember-flame) 80%, transparent);
-  animation: lp-blink 1.05s steps(1) infinite;
-}
-
-.lp-line {
-  opacity: 0;
-  animation: lp-rise 0.42s ease-out forwards;
-}
-
 /* Context-window cell field — a token grid that fills (full) then drains (free). */
 .lp-cell {
   fill: color-mix(in oklch, var(--foreground) 9%, transparent);
@@ -140,14 +112,6 @@
   animation: lp-float 14s ease-in-out infinite;
 }
 
-@keyframes lp-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
-}
-@keyframes lp-rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 @keyframes lp-glow {
   0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 0.9; transform: scale(1.08); }
@@ -161,35 +125,12 @@
   50% { transform: translateY(-12px) rotate(1.5deg); }
 }
 
-/* TUI screenshot components (apps/docs/src/components/tui/*) — a blinking
-   block caret and a subtle looping status-dot/pointer pulse, reused across
-   every screen instead of each one rolling its own animation. */
-.tui-caret {
-  animation: tui-blink 1s steps(1) infinite;
-}
-.tui-pulse {
-  animation: tui-pulse 2.2s ease-in-out infinite;
-}
-@keyframes tui-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
-}
-@keyframes tui-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .lp-orb,
-  .lp-caret,
-  .lp-line,
   .lp-hex-lit,
-  .lp-float,
-  .tui-caret,
-  .tui-pulse {
+  .lp-float {
     animation: none !important;
   }
-  .lp-line { opacity: 1; }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -198,16 +139,14 @@
  * The per-page actions menu (PageActions) exports a page by triggering
  * `window.print()`. These rules strip everything that isn't the article — the
  * Fumadocs sidebar (#nd-sidebar), top subnav (#nd-subnav), TOC rail (#nd-toc),
- * the floating Install-CLI pill, and the actions menu itself — then let the
- * article (#nd-page) fill the printable width so the prose, headings, and code
- * blocks print cleanly.
+ * and the actions menu itself — then let the article (#nd-page) fill the
+ * printable width so the prose, headings, and code blocks print cleanly.
  * ─────────────────────────────────────────────────────────────────────────── */
 @media print {
   #nd-sidebar,
   #nd-subnav,
   #nd-toc,
-  [data-docs-page-actions],
-  button[aria-label^="Install the Oxagen CLI"] {
+  [data-docs-page-actions] {
     display: none !important;
   }
 

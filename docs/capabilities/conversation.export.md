@@ -51,7 +51,6 @@ Two formats:
 - **API:** `GET /v1/:org/:workspace/conversations/:conversationId/export?format=markdown|pdf`
 - **MCP:** `conversation.export` tool
 - **Agent:** invoked directly via `invoke("conversation.export", ...)` — no approval required
-- **CLI:** `oxagen conversation export <id> [--format md|markdown|pdf] [-o <file>] [--json]`
 - **App:** `ConversationExportMenu` component → `GET /api/v1/conversations/:conversationId/export`
 
 ## Access control

@@ -266,43 +266,28 @@ This audit record lives in ClickHouse (append-only telemetry). It is accessible 
 
 ## 7. Cross-Surface Parity
 
-Per the platform capability parity rule, every skill management action reachable from the in-app UI must also be reachable from the API, MCP, and CLI.
+Per the platform capability parity rule, every skill management action reachable from the in-app UI must also be reachable from the API and MCP.
 
 ### 7.1 Capability Surface Map
 
-| Capability | App | API | MCP | CLI |
-|------------|-----|-----|-----|-----|
-| `skill.list` | Skills list page | GET /v1/skills | `skill_list` tool | `oxagen skill list` |
-| `skill.get` | Skill detail view | GET /v1/skills/:id | `skill_get` tool | `oxagen skill get <slug>` |
-| `skill.workspace.list` | Skills list page | GET /v1/skills/workspace | `skill_workspace_list` tool | `oxagen skill workspace list` |
-| `skill.create` | Import UI | POST /v1/skills | `skill_create` tool | `oxagen skill import <file>` |
-| `skill.update` | Editor tab | PATCH /v1/skills/:id | `skill_update` tool | `oxagen skill edit <slug>` |
-| `skill.version.create` | Save in editor | POST /v1/skills/:id/versions | `skill_version_create` tool | `oxagen skill version create <slug>` |
-| `skill.version.list` | Version History tab | GET /v1/skills/:id/versions | `skill_version_list` tool | `oxagen skill version list <slug>` |
-| `skill.version.activate` | "Publish (pin)" button | POST /v1/skills/:id/versions/:v/activate | `skill_version_activate` tool | `oxagen skill version activate <slug> <n>` |
-| `skill.enable` / `skill.disable` | Toggle in list | PATCH /v1/skills/:id/enabled | `skill_enable` / `skill_disable` tool | `oxagen skill enable/disable <slug>` |
-| `skill.delete` | Settings → delete | DELETE /v1/skills/:id | `skill_delete` tool | `oxagen skill delete <slug>` |
-| `skill.export` | Bulk export | GET /v1/skills/:id/export | `skill_export` tool | `oxagen skill export <slug>` |
-| `skill.marketplace.list` | Marketplace tab | GET /v1/marketplace/skills | `skill_marketplace_list` tool | `oxagen marketplace skills` |
-| `skill.marketplace.install` | Install button | POST /v1/marketplace/skills/:id/install | `skill_marketplace_install` tool | `oxagen marketplace install skill <id>` |
-| `skill.marketplace.publish` | Publish flow | POST /v1/marketplace/skills | `skill_marketplace_publish` tool | `oxagen marketplace publish skill <slug>` |
+| Capability | App | API | MCP |
+|------------|-----|-----|-----|
+| `skill.list` | Skills list page | GET /v1/skills | `skill_list` tool |
+| `skill.get` | Skill detail view | GET /v1/skills/:id | `skill_get` tool |
+| `skill.workspace.list` | Skills list page | GET /v1/skills/workspace | `skill_workspace_list` tool |
+| `skill.create` | Import UI | POST /v1/skills | `skill_create` tool |
+| `skill.update` | Editor tab | PATCH /v1/skills/:id | `skill_update` tool |
+| `skill.version.create` | Save in editor | POST /v1/skills/:id/versions | `skill_version_create` tool |
+| `skill.version.list` | Version History tab | GET /v1/skills/:id/versions | `skill_version_list` tool |
+| `skill.version.activate` | "Publish (pin)" button | POST /v1/skills/:id/versions/:v/activate | `skill_version_activate` tool |
+| `skill.enable` / `skill.disable` | Toggle in list | PATCH /v1/skills/:id/enabled | `skill_enable` / `skill_disable` tool |
+| `skill.delete` | Settings → delete | DELETE /v1/skills/:id | `skill_delete` tool |
+| `skill.export` | Bulk export | GET /v1/skills/:id/export | `skill_export` tool |
+| `skill.marketplace.list` | Marketplace tab | GET /v1/marketplace/skills | `skill_marketplace_list` tool |
+| `skill.marketplace.install` | Install button | POST /v1/marketplace/skills/:id/install | `skill_marketplace_install` tool |
+| `skill.marketplace.publish` | Publish flow | POST /v1/marketplace/skills | `skill_marketplace_publish` tool |
 
 The `skill.workspace.list` contract already exists. All others above are new and must be filed as sub-issues before implementation begins.
-
-### 7.2 CLI Sync Commands
-
-The CLI provides filesystem-friendly commands for teams that prefer to author skills in their editor:
-
-```
-oxagen skill pull <slug>        # download active version as a .skill.md file
-oxagen skill push <file>        # upload a .skill.md file as a new version
-oxagen skill pull --all         # pull all workspace skills to ./skills/
-oxagen skill push --all         # push all .skill.md files in ./skills/
-```
-
-Push and pull do not auto-activate versions; activation remains an explicit step.
-
----
 
 ## 8. Telemetry Foundation
 
@@ -324,7 +309,7 @@ All events are append-only records in ClickHouse.
 | `workspace_id` | UUID | Workspace context |
 | `org_id` | UUID | Org context |
 | `agent_id` | UUID (nullable) | Agent that requested the skill |
-| `surface` | string | `api` / `mcp` / `app` / `cli` |
+| `surface` | string | `api` / `mcp` / `app` |
 | `loaded_at` | timestamp | UTC |
 | `latency_ms` | integer | Time from request to skill body returned |
 
@@ -440,9 +425,8 @@ The following capabilities are explicitly deferred from v1 but the design must n
 | 3 | Should the filesystem builtin registry be surfaced in the marketplace, or only tenant-created skills? | Builtins in marketplace vs separate browsing | Keeping builtins separate avoids confusion between "install a copy" and "already seeded" |
 | 4 | When a builtin template is updated in the repository, should workspace owners be notified? | Silent / notification banner / opt-in email | Recommend in-app banner on skills list page; no auto-update |
 | 5 | Should community marketplace submissions require an org verification step before any submissions are allowed? | Per-submission review only vs org pre-verification | Start with per-submission review; add org verification as abuse patterns emerge |
-| 6 | Can the CLI `push` command create skills that don't exist yet (create-on-push)? | Create-on-push vs explicit `skill create` first | Create-on-push is ergonomic; add a `--create` flag to be explicit |
-| 7 | Should the `skill.invoked` telemetry event be emitted inline (same request) or async (Inngest)? | Inline (simpler) vs async (lower latency impact) | Async via Inngest; follows existing telemetry patterns |
-| 8 | How are skills versioned in the marketplace listing — does the listing show the latest template version or allow pinning to a specific template version on install? | Latest-at-install vs pinned listing version | Latest-at-install for simplicity; listings page shows the current template semver |
+| 6 | Should the `skill.invoked` telemetry event be emitted inline (same request) or async (Inngest)? | Inline (simpler) vs async (lower latency impact) | Async via Inngest; follows existing telemetry patterns |
+| 7 | How are skills versioned in the marketplace listing — does the listing show the latest template version or allow pinning to a specific template version on install? | Latest-at-install vs pinned listing version | Latest-at-install for simplicity; listings page shows the current template semver |
 
 ---
 
@@ -479,10 +463,8 @@ The following capabilities are explicitly deferred from v1 but the design must n
 
 ### 12.5 Cross-Surface Parity
 
-- [ ] `skill.list`, `skill.get`, `skill.version.list`, `skill.version.activate`, `skill.enable`, `skill.disable` are all callable via the REST API, MCP, and CLI and return consistent results
+- [ ] `skill.list`, `skill.get`, `skill.version.list`, `skill.version.activate`, `skill.enable`, `skill.disable` are all callable via the REST API and MCP and return consistent results
 - [ ] `pnpm check:manifest` reports zero unmatched gaps for all `skill.*` capabilities
-- [ ] CLI `oxagen skill pull <slug>` downloads the active version body as a valid `.skill.md` file
-- [ ] CLI `oxagen skill push <file>` creates a new version on the matching workspace skill
 
 ### 12.6 Telemetry
 

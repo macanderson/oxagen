@@ -9,7 +9,6 @@ Create or update a property on a node label or relationship type in the current 
 - API: `PUT /v1/schemas/properties`
 - MCP: `schema.property.upsert`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

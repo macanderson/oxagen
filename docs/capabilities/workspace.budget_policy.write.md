@@ -66,4 +66,4 @@ Owner and Admin only, workspace level. Users update the workspace's shared polic
 ## Notes
 
 - When `enforcement="ceiling"`, members' personal budgets are overridden by the workspace ceiling. When `enforcement="default"`, members with a stricter personal budget take precedence.
-- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the CLI, the API, and the web app.
+- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the API and the web app.

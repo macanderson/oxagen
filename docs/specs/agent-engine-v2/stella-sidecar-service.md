@@ -201,7 +201,7 @@ Vercel + `.env.local`, health-check `/healthz`, and the drift-diagnosis steps
 
 1. **Off by default.** `ENGINE=ts` everywhere; the Stella client ships inert.
 2. **Shadow mode.** Run `ENGINE=stella` in a preview env, compare AgentEvent
-   streams + verdicts against the TS engine over the arena/SWE-bench suite
+   streams + verdicts against the TS engine over the shared task suite
    (spec.md §7 parity gate). The Stella-side `validate_stream` conformance gate
    runs in CI over recorded platform streams.
 3. **Per-surface flip.** Enable `stella` for `agent.repo.edit` / fleet code-mode

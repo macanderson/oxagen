@@ -60,16 +60,6 @@ Content-Type: application/json
 Tool name: `code.patch` (read-only, idempotent — it returns computed results and
 persists nothing).
 
-## CLI
-
-```
-oxagen code patch <diff-file> [--dir <dir>] [--write]
-```
-
-The CLI gathers the workspace files the diff references from `--dir` (default
-`.`), sends them with the diff, prints the changed files, and — with `--write` —
-applies the results to disk.
-
 ## Errors
 
 - Rejects a diff whose target escapes the workspace root (path traversal).

@@ -752,7 +752,7 @@ Ordered by dependency. Steps 1-4 are independent and can be built in parallel by
 | File | Change |
 |---|---|
 | `packages/billing/src/stripe-sync.ts` | Read `stripe-products.json`. For each product/price: check if product with `metadata.slug` exists; if not, create. Set `OXAGEN_METER_MARKUP` in env to solved value (~2.9086) after sync. |
-| `scripts/billing-stripe-sync.ts` | CLI entry point: `pnpm billing:stripe-sync [--apply] [--dry-run]`. |
+| `scripts/billing-stripe-sync.ts` | Script entry point: `pnpm billing:stripe-sync [--apply] [--dry-run]`. |
 | `package.json` (root) | Add `"billing:stripe-sync": "tsx scripts/billing-stripe-sync.ts"`. |
 | `packages/database/src/migrations/` | Migration: insert v3 plans into `billing.plans` table. Archive v2 plans (set `archived_at`). |
 

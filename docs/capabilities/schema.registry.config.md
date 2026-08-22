@@ -9,7 +9,6 @@ Set `enforcement_mode` and `conformance_floor` for the workspace schema registry
 - API: `PATCH /v1/schema/registry`
 - MCP: `schema.registry.config`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

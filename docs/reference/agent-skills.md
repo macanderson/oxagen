@@ -14,8 +14,7 @@ not executable tools: loading one returns prose the model reads.
 TOML is the only format Oxagen accepts for agents, skills, and slash commands.
 Markdown-with-frontmatter is not a supported authoring format anywhere in the
 runtime; the sole component that still reads it is the import engine, which
-converts foreign artifacts into canonical TOML. See
-[`docs/guides/import-agent-artifacts.md`](../guides/import-agent-artifacts.md).
+converts foreign artifacts into canonical TOML.
 
 Design remains **filesystem-first with DB augmentation** (ADR-008,
 `docs/adr/ADR-008-skills-filesystem-first.md`) — that ADR predates the TOML
@@ -231,10 +230,6 @@ page, no `/skill` or `@skill` syntax in the ask bar, no `skills` field in
 loading by literally asking the agent to "load the coding skill," which works
 because the tools are materialized.
 
-**CLI:** Read-only introspection only — `oxagen agent skill list` and
-`skill workspace list` command files exist (`apps/cli/src/commands/`). There
-are no flags to enable/disable/pin skills for an agent run.
-
 **MCP server:** It exposes the three skill capabilities as MCP *tools*
 (`apps/mcp/src/tools/agent.skill.{list,load}.ts`, `skill.workspace.list.ts`),
 so a connected client's model can list/load skills. But `apps/mcp` runs no LLM
@@ -244,14 +239,14 @@ the client model chooses to call the skill tools.
 
 **Parity matrix:**
 
-| Operation | App UI | API | MCP | CLI | Agent |
-|---|---|---|---|---|---|
-| List skills | ✗ | ✓ | ✓ | ✓ | ✓ |
-| Load skill body | ✗ | ✓ | ✓ | ✗ | ✓ |
-| Create / edit / version | ✓ | ✓ | ✓ | ✗ | ✓ (`skill.create`, `skill.author`) |
-| Enable / disable | ✓ | ✓ | ✓ | ✗ | ✓ |
-| Export as `<slug>.toml` | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Pin skills for a session | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Operation | App UI | API | MCP | Agent |
+|---|---|---|---|---|
+| List skills | ✗ | ✓ | ✓ | ✓ |
+| Load skill body | ✗ | ✓ | ✓ | ✓ |
+| Create / edit / version | ✓ | ✓ | ✓ | ✓ (`skill.create`, `skill.author`) |
+| Enable / disable | ✓ | ✓ | ✓ | ✓ |
+| Export as `<slug>.toml` | ✓ | ✓ | ✓ | ✗ |
+| Pin skills for a session | ✗ | ✗ | ✗ | ✗ |
 
 ## Improvement opportunities
 
@@ -262,24 +257,19 @@ Ordered by leverage:
    instruction to `agent.skill.load` when relevant. This is the
    metadata-first / progressive-disclosure pattern Claude Code itself uses, and
    it converts dormant infrastructure into behavior for ~50 cached tokens.
-2. **CLI authoring parity.** The authoring surface shipped (create/edit/version/
-   enable/export across API, MCP, and the app), but the CLI still has no write
-   commands and no `agent.skill.load`. Closing that gap would let a workspace be
-   driven entirely from the terminal, and pairs naturally with
-   `oxagen import artifacts` as the on-ramp.
-3. **Session-level pinning.** `skills: string[]` on chat-stream input +
-   `PromptConfig`, an `@skill` mention in the ask bar, and a `--skill` CLI
-   flag. Pinned skills get prepended (cache-safely, after the static prefix).
-4. **Auto-suggestion, not auto-injection.** Embed skill descriptions
+2. **Session-level pinning.** `skills: string[]` on chat-stream input +
+   `PromptConfig` and an `@skill` mention in the ask bar. Pinned skills get
+   prepended (cache-safely, after the static prefix).
+3. **Auto-suggestion, not auto-injection.** Embed skill descriptions
    (`embeddingModel` via the gateway) and surface top-k matches to the model as
    a hint ("relevant skills: …") rather than stuffing bodies — keeps the token
    discipline while fixing discoverability.
-5. **Skill→capability synergy.** `agent.skill.load` already extracts
+4. **Skill→capability synergy.** `agent.skill.load` already extracts
    capability slugs; use them to expand the session's tool allowlist when a
    skill is loaded ("loading the `ingestion` skill equips the ingestion
    tools"). No other framework ties knowledge artifacts to authorization-aware
    tool surfaces.
-6. **Observability.** Meter skill loads in ClickHouse with outcome attribution
+5. **Observability.** Meter skill loads in ClickHouse with outcome attribution
    (did loading `debugging` shorten failure investigations?) — skills become
    measurable, promotable assets.
 
@@ -287,6 +277,5 @@ Ordered by leverage:
 
 - `docs/capabilities/` covers `agent.skill.list` / `agent.skill.load`; ensure
   `skill.workspace.list` is documented when touched.
-- `agent.skill.load` is absent from the CLI (parity gap with API/MCP).
 - The `debugging` built-in references `ontology.*` graph capabilities that are
   not yet shipped — the skill's guidance is partially aspirational.

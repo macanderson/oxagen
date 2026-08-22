@@ -8,7 +8,6 @@ Trigger synchronization of a plugin instance.
 ## Surfaces
 - API: `POST /v1/integrations/:id/sync`
 - MCP: `integration.sync`
-- CLI: `oxagen integration sync <id>`
 - Agent: callable (no approval required, risk: medium)
 
 ## Input

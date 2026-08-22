@@ -76,7 +76,7 @@ IAM. A capability answers to exactly one name — its canonical verb-first snake
 name — and nothing else.
 
 This is safe because the rename is an atomic, in-repo cutover: every contract, route,
-MCP tool, CLI command, handler, test, and import site is renamed together on this
+MCP tool, handler, test, and import site is renamed together on this
 branch, so no in-repo caller ever references an old name. The prior alias shim existed
 only to bridge a staged rollout; a single-commit-wave rename does not need it, and the
 dead machinery would be pure bloat.
@@ -87,7 +87,7 @@ dead machinery would be pure bloat.
 - **IAM** matches `role_grants` rows by the exact canonical `capability_id`. Any durable
   rows written under an old dotted name are realigned by the rename mapping, not by a
   runtime alias.
-- **API HTTP paths and CLI paths are unaffected** — they are hand-authored and
+- **API HTTP paths are unaffected** — they are hand-authored and
   independent of the capability name.
 - **Billing is safe by construction** — revenue keys on `model` + `execution_step_id`,
   never the capability name.
@@ -130,7 +130,7 @@ is now a bug to fix, never a grandfather entry.
   old→new mapping is `docs/specs/adr025-naming-mapping.md`; the machine-readable source is
   `tools/scripts/adr025-name-map.mjs`.
 - **Nothing breaks in-repo:** every in-repo caller, route, tool, and test is renamed in
-  the same wave, external REST/CLI paths are unchanged, and metering attributes to the
+  the same wave, external REST paths are unchanged, and metering attributes to the
   canonical name.
 - **Contract/route/mcp/docs FILE names and the ~895 dotted contract-import sites are a
   separate realignment phase.** The functional rename (contract `name` + aliases) is

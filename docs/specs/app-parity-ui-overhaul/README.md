@@ -6,14 +6,14 @@
 ## The pain, in one line
 
 Oxagen's backend can build, govern, ground, meter, and resell agents. The web app cannot.
-The CLI, MCP server, and API expose ~287 typed capabilities across 41 domains. The app
+The MCP server and API expose ~287 typed capabilities across 41 domains. The app
 exposes a fraction of them, and the ones it does expose are scattered across workspace
 settings, org settings, account settings, the knowledge page, the automations page, and
 the activity page. There is no place to build an agent, no place to see a fleet, and no
 place to approve what an agent wants to do.
 
-Our third brand pillar is literally *"Same power in the API, the MCP server, the web app,
-and the CLI."* Today the app breaks that promise. This spec fixes it.
+Our third brand pillar is literally *"Same power in the API, the MCP server, and the web
+app."* Today the app breaks that promise. This spec fixes it.
 
 ## What this spec delivers
 
@@ -48,7 +48,7 @@ need a thin new persistence layer; the rest just need a face.
 | **Agent** | `agent.definition.create/get/list/update/publish`, `agent.deploy`, `agent.compose` | `agent.agents` + `agent_versions` + `agent_triggers`; config = `AgentDefinition` | **None (biggest gap)** |
 | **Skill** | `skill.create/edit/author/enable`, `skill.version.*`, `skill.workspace.*` | `agent.skills` + `skill_versions` | Exists (`settings/skills`) |
 | **Prompt template** | `prompt.settings.read/write` (singleton only) | `workspace.settings.promptConfig` + per-agent `instructions` | Partial, **no named library** |
-| **Command (slash)** | none (CLI file loader only) | none | **None (propose thin entity)** |
+| **Command (slash)** | none (filesystem loader only) | none | **None (propose thin entity)** |
 | **Tool / capability** | `agent.tool.list`, the full registry | `agentTools[]` + IAM grants + entitlements | Partial (via plugins) |
 | **Fleet / fan-out** | `agent.subagent.dispatch/aggregate/fanout.*`, `research.swarm.*` | `agent_executions` lineage | **None (gap)** |
 | **Run / trace** | `agent.execution.list`, `agent.trace.get` | `agent_executions` + steps + tool_calls | Exists (`activity`) |

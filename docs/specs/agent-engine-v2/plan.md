@@ -1,9 +1,9 @@
 # Agent Engine V2 — Phased Plan
 
 Phases are ordered by dependency, not calendar. Each phase is shippable alone
-and none of the Track-1 phases depend on Rust. "Parity gate" always means: the
-arena/SWE-bench suite (`bench/`) run old-vs-new on the same tasks, plus shadow
-traffic on the platform, with resolve-rate ≥ baseline and cost/turn ≤ baseline.
+and none of the Track-1 phases depend on Rust. "Parity gate" always means:
+old-vs-new run on the same tasks, plus shadow traffic on the platform, with
+resolve-rate ≥ baseline and cost/turn ≤ baseline.
 
 ## Phase 0 — Quick wins in the current TS engine (days, no restructuring)
 
@@ -52,7 +52,7 @@ integration test exercising the full path.
 - Per-step checkpoint (messages digest + budget + loop state) in the same
   transaction as the event append; resume-from-checkpoint on re-claim.
 - SSE = replayable subscription from last seq; reconnect works mid-run.
-- ClickHouse ingestion + ADR-028 replay re-pointed at the event log.
+- ClickHouse ingestion re-pointed at the event log.
 
 Exit: kill -9 a worker mid-run → run completes on another worker; client
 reconnect mid-run loses zero events; chat.persist-stream retired or reduced to
@@ -88,10 +88,8 @@ retired in favor of the ladder.
 ## Phase 5 — Consolidation
 
 - Delete `pipeline/index.ts`, loop heuristics superseded by the engine, and
-  route-inlined turn logic. `engine.ts` remains only as the CLI-compat shim
-  until the CLI also fronts `agent-runner`.
-- `docs/specs/oxagen-rust-cli/` marked superseded (the Rust agent exists —
-  it is Stella; the platform now embeds it).
+  route-inlined turn logic. `engine.ts` remains only as a compatibility shim
+  until every caller fronts `agent-runner`.
 
 Exit: one engine implementation reachable from every surface; LOC delta
 strongly negative.

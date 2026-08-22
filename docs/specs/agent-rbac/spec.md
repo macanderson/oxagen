@@ -1,7 +1,7 @@
 # Agent RBAC — Design Specification
 
 Status: **Proposed** - Author: platform - Date: 2026-07-07
-Related: `docs/specs/iam/plan.md`, `docs/adr/ADR-009` (unified capability/tool model), `ADR-013` (capability packs / entitlements), `ADR-014` (workspace-scoped MCP registry), `ADR-019` (unified agent engine), `ADR-022` (capability naming), `packages/oxagen/src/agent-schema.ts`.
+Related: `docs/specs/iam/plan.md`, `docs/adr/ADR-009` (unified capability/tool model), `ADR-013` (capability packs / entitlements), `ADR-014` (workspace-scoped MCP registry), `ADR-022` (capability naming), `packages/oxagen/src/agent-schema.ts`.
 
 ## 0. Recommendation (TL;DR)
 

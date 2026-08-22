@@ -72,7 +72,6 @@ Subscribe to `privacy/erasure.execute` to hook in downstream cleanup:
 
 - `POST /api/v1/{org}/{ws}/privacy/erase`
 - MCP tool `privacy_data_erase` (marked `destructiveHint: true`, requires approval)
-- CLI: `oxagen privacy erase [--scope user|org] [--org-id <uuid>] [--yes]`
 - App: Account → Privacy (user scope), Org Settings → Privacy (org scope)
 
 ## Errors

@@ -7,7 +7,7 @@
 - **Disposition vs today:** Keep + wire nav + build write path
 
 ## Purpose
-Datasets and runs for evaluating agent/model quality — the place a team checks whether an agent's answers are actually good before reselling access to it. The page and its data model already exist and are functionally complete for reading, but the route has no inbound nav link today (a shipped orphan) and every write action (creating a dataset, adding items, launching a run) currently requires the CLI.
+Datasets and runs for evaluating agent/model quality — the place a team checks whether an agent's answers are actually good before reselling access to it. The page and its data model already exist and are functionally complete for reading, but the route has no inbound nav link today (a shipped orphan) and every write action (creating a dataset, adding items, launching a run) currently requires the API.
 
 ## Primary user & jobs-to-be-done
 - **Primary user:** developer or QA owner validating agent quality before wider rollout
@@ -46,4 +46,4 @@ Postgres (dataset and dataset-item records); ClickHouse (run results and per-ite
 - **Today:** `apps/app/src/app/[orgSlug]/[workspaceSlug]/evals/page.tsx` is PARTIAL and ORPHANED — dataset list + explainer render correctly, read-only, but rows don't link anywhere and there is no nav path to this route at all. Build: nav wiring (Activity tab strip) + the create/add-item/run-launcher write path described above; row-to-detail linking.
 
 ## Vision alignment
-Evals are a declared fast-follow, not the front line (per `docs/VISION.md`) — P1 here is justified purely as fixing a shipped orphan (dead nav surface) and closing a CLI-only write path, not as new front-line investment in eval tooling itself.
+Evals are a declared fast-follow, not the front line (per `docs/VISION.md`) — P1 here is justified purely as fixing a shipped orphan (dead nav surface) and closing an API-only write path, not as new front-line investment in eval tooling itself.

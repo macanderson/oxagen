@@ -241,8 +241,8 @@ Every step binds to a slice of `AgentDefinition`. Shown mid-build for the "Audit
 │ /summarize (inline)    —          ●    │  │ Argument hint  [ <domain> ]        │
 │                                        │  │ Inputs → variables:                │
 │ Row → editor. On = enabled.            │  │   $1 → {{domain}}   «$ARGUMENTS»   │
-│ Available in Ask composer + CLI + API. │  │ Model override ( ) default (•) fast │
-│ Parity with CLI .oxagen/commands/*.md. │  │ Visibility  (•) Workspace ( ) Org  │
+│ Available in Ask composer + API.       │  │ Model override ( ) default (•) fast │
+│ Parity with .oxagen/commands/*.md.     │  │ Visibility  (•) Workspace ( ) Org  │
 │                                        │  │ Preview:  /audit oxagen.sh         │
 │                                        │  │ [ Save command ▸ ]                 │
 └────────────────────────────────────────┘  └─────────────────────────────────────┘

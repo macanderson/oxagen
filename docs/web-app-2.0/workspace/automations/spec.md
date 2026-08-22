@@ -42,7 +42,7 @@ Postgres (`workflow` schema): `playbooks` (aggregate root), `playbook_triggers` 
 - **Error:** inline banner with retry; row-level action failures toast per item.
 
 ## Existing implementation
-- **Today:** no route exists. `automation.*` is fully wired (api/mcp/agent/cli surfaces) but only reachable via chat's inline creation components (`apps/app/src/components/chat/registry-components/automation-create-inline-*.tsx`). Build new — reuse `PageHeader`/`PageTabs` and the list-page pattern from `knowledge/repos` or `workbench/agents`.
+- **Today:** no route exists. `automation.*` is fully wired (api/mcp/agent surfaces) but only reachable via chat's inline creation components (`apps/app/src/components/chat/registry-components/automation-create-inline-*.tsx`). Build new — reuse `PageHeader`/`PageTabs` and the list-page pattern from `knowledge/repos` or `workbench/agents`.
 
 ## Vision alignment
 Human-gated activation on an otherwise autonomous action is the accountability chain (identity → permitted action → verified outcome) applied to scheduled/event-driven agent work — a direct instance of wedge (2), governance. P1 because the capability is fully built server-side and the missing UI is pure debt.

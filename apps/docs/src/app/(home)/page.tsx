@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { OxagenLogomark } from "@oxagen/ui";
-import { HeroTerminal } from "@/components/landing/hero-terminal";
 import { ContextWindow } from "@/components/landing/context-window";
-import { CopyCommand } from "@/components/landing/copy-command";
+import { InvokeChokepoint } from "@/components/landing/invoke-chokepoint";
 import { HexField } from "@/components/ui/hex-field";
 
 export const metadata: Metadata = {
-  title: "Oxagen — context, governed",
+  title: "Oxagen — the control plane for enterprise AI agents",
   description:
-    "Oxagen keeps the context window free, not full: a typed knowledge graph and RBAC-scoped retrieval feed every model call only what it is authorized to see — through one metered, audited chokepoint, across the API, MCP server, and in-app agent.",
+    "Oxagen is the governance and control plane for enterprise AI agents: every agent action authorized before it runs, metered as it runs, and recorded after it runs — grounded in a typed knowledge graph, across the REST API, MCP server, and in-app agent.",
 };
 
 /* The four governed-AI pillars, mirrored from the docs landing copy. */
@@ -49,9 +48,9 @@ const SURFACES = [
     href: "/docs/getting-started",
   },
   {
-    title: "CLI",
-    body: "Install the oxagen CLI, run the agent loop locally, query the knowledge graph from your terminal.",
-    href: "/docs/cli",
+    title: "Governance",
+    body: "Agent roles, RBAC, BYOK and model policy, and the plugin governance model.",
+    href: "/docs/governance/overview",
   },
   {
     title: "REST API",
@@ -98,24 +97,28 @@ export default function HomePage(): ReactNode {
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
               <OxagenLogomark className="size-3.5" />
               <span className="ox-eyebrow !text-[11px] !tracking-[0.14em]">
-                Governed AI · for the enterprise
+                The control plane · for enterprise AI agents
               </span>
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Give your agents <span className="lp-grad-text">context</span> —
-              not the whole haystack.
+              Your agents already run.{" "}
+              <span className="lp-grad-text">Govern them.</span>
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen keeps the context window{" "}
-              <span className="text-foreground">free, not full</span>. A typed
-              knowledge graph and RBAC-scoped retrieval feed every model call
-              only what it is authorized to see — through one metered, audited{" "}
+              Oxagen is the governance and control plane for enterprise AI
+              agents. Every action is{" "}
+              <span className="text-foreground">
+                authorized before it runs, metered as it runs, and recorded
+                after it runs
+              </span>{" "}
+              — through one{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
-              chokepoint, across the API, MCP server, and in-app agent.
+              chokepoint shared by the REST API, the MCP server, and the in-app
+              agent, and grounded in a typed knowledge graph.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -132,15 +135,11 @@ export default function HomePage(): ReactNode {
                 Read the docs
               </Link>
             </div>
-
-            <div className="mt-6">
-              <CopyCommand command="pnpm add -g @oxagen/cli" />
-            </div>
           </div>
 
-          {/* animated install terminal */}
+          {/* the governed path a capability takes, start to finish */}
           <div className="relative w-full">
-            <HeroTerminal />
+            <InvokeChokepoint />
           </div>
         </div>
       </section>
@@ -283,13 +282,10 @@ export default function HomePage(): ReactNode {
             <span className="lp-grad-text">open</span>.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
-            Install the CLI and ask your codebase a question, or read the
-            getting-started guide to stand up an organization and workspace.
+            Stand up an organization and workspace, connect your sources, and
+            put your first agent action through the governed path.
           </p>
-          <div className="mt-8">
-            <CopyCommand command="pnpm add -g @oxagen/cli" />
-          </div>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/docs/getting-started"
               className="lp-grad-surface inline-flex h-11 items-center rounded-lg px-6 text-sm font-semibold text-ink-dark shadow-sm transition-transform hover:scale-[1.02] active:scale-100"

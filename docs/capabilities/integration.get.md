@@ -8,7 +8,6 @@ Get full details of a single plugin instance including schema and configuration.
 ## Surfaces
 - API: `GET /v1/integrations/:id`
 - MCP: `integration.get`
-- CLI: `oxagen integration get <id>`
 - Agent: callable (no approval required, risk: low)
 
 ## Input

@@ -43,11 +43,10 @@ Columns: **Oxg** = Oxagen (this audit). Others from the dossier. **Niche leaders
 | 11 | Security / compliance | **66** | 75 | 85 | 88 | 92 | 90 | 70 | 58 | 65 | **MSFT 92**; AWS/Sierra/Cohere 90 |
 | 12 | Multi-tenancy for agencies / resellers | **42** | 32 | 30 | 45 | 55 | 50 | 38 | 35 | 30 | **Stripe Connect 90**; Orb 68 |
 | 13 | Model neutrality / BYOK | **78** | 10 | 28 | 62 | 65 | 85 | 95 | 90 | 90 | **LangChain 95**; Bedrock 85 |
-| 14 | CLI & developer experience | **62** | 72 | 95 | 74 | 62 | 68 | 82 | 72 | 76 | **Anthropic 95**; Stripe 90 |
-| 15 | Web UI / console maturity | **60** | 80 | 72 | 76 | 80 | 68 | 84 | 65 | 84 | **Stripe 92**; LangSmith/Braintrust/Glean 82–84 |
-| 16 | Docs quality | **52** | 85 | 90 | 70 | 75 | 74 | 78 | 70 | 80 | **Stripe 94**; Anthropic 90 |
-| 17 | Pricing model | **55** | 75 | 70 | 78 | 62 | 76 | 75 | 60 | 68 | **Stripe 85**; Google/AWS 76–78 |
-| 18 | Ecosystem / mindshare | **8** | 93 | 90 | 85 | 87 | 76 | 87 | 70 | 60 | OpenAI/Stripe 93; Anthropic 90 |
+| 14 | Web UI / console maturity | **60** | 80 | 72 | 76 | 80 | 68 | 84 | 65 | 84 | **Stripe 92**; LangSmith/Braintrust/Glean 82–84 |
+| 15 | Docs quality | **52** | 85 | 90 | 70 | 75 | 74 | 78 | 70 | 80 | **Stripe 94**; Anthropic 90 |
+| 16 | Pricing model | **55** | 75 | 70 | 78 | 62 | 76 | 75 | 60 | 68 | **Stripe 85**; Google/AWS 76–78 |
+| 17 | Ecosystem / mindshare | **8** | 93 | 90 | 85 | 87 | 76 | 87 | 70 | 60 | OpenAI/Stripe 93; Anthropic 90 |
 
 **Oxagen mean ≈ 56** (agent-field peers cluster 62–72). The distribution is the story: Oxagen is bimodal — 70–78 on the four wedge dimensions (contracts, grounding, memory, neutrality) and metering/billing, but ≤42 on evals, marketplace, multi-tenancy, and 8 on mindshare. It is not "uniformly behind"; it is "deep where it chose to fight, empty everywhere it hasn't launched."
 
@@ -56,13 +55,13 @@ Columns: **Oxg** = Oxagen (this audit). Others from the dossier. **Niche leaders
 ## 3. Per-dimension detail
 
 **1. Agent orchestration / runtime — Oxagen 68 (leader LangGraph 90).**
-A single well-engineered TS step-loop (`packages/agent-engine/src/engine.ts` `runCodingAgent`) drives both CLI and in-app chat: per-step deterministic compaction at 80% context, exponential-backoff retry, loop-detection nudges, deterministic tier routing (no extra LLM call), guarded subagent fan-out (depth 3 / width 100 / 250-descendant cap with lineage), and a self-improvement evaluate→judge→revise pipeline (agent-engine audit: flows 85). Real hosted runtime spans app + API + MCP + durable sandboxes (Docker/Modal/Vercel drivers). It loses to the leaders only on breadth (one engine, not a multi-language SDK) and zero production scale. **+10:** ship a per-workspace runtime-bounds config (maxSteps/timeout are hardcoded 256) and a public managed-runtime surface with SLAs.
+A single well-engineered TS step-loop (`packages/agent-engine/src/engine.ts` `runCodingAgent`) drives in-app chat: per-step deterministic compaction at 80% context, exponential-backoff retry, loop-detection nudges, deterministic tier routing (no extra LLM call), guarded subagent fan-out (depth 3 / width 100 / 250-descendant cap with lineage), and a self-improvement evaluate→judge→revise pipeline (agent-engine audit: flows 85). Real hosted runtime spans app + API + MCP + durable sandboxes (Docker/Modal/Vercel drivers). It loses to the leaders only on breadth (one engine, not a multi-language SDK) and zero production scale. **+10:** ship a per-workspace runtime-bounds config (maxSteps/timeout are hardcoded 256) and a public managed-runtime surface with SLAs.
 
 **2. Tool / MCP ecosystem — Oxagen 48 (leader Anthropic 95).**
-MCP is wired (connect at `/mcp`, 299 MCP tools, external-server registration + OAuth + envelope-encrypted creds), and the 308-capability native surface is large. But the *ecosystem* is empty (no third-party servers, no directory reach) and the integration audit scored skills+MCP 58 because the DB-backed platform contributor applies none of the rich allow/deny/visibility permission model the file/CLI path uses. **+10:** unify the two MCP permission planes (`packages/mcp-config/permissions.ts` → the DB `mcp.ts` path) and seed a governed public server catalog.
+MCP is wired (connect at `/mcp`, 299 MCP tools, external-server registration + OAuth + envelope-encrypted creds), and the 308-capability native surface is large. But the *ecosystem* is empty (no third-party servers, no directory reach) and the integration audit scored skills+MCP 58 because the DB-backed platform contributor applies none of the rich allow/deny/visibility permission model the file-based path uses. **+10:** unify the two MCP permission planes (`packages/mcp-config/permissions.ts` → the DB `mcp.ts` path) and seed a governed public server catalog.
 
 **3. Typed / governed tool contracts & policy — Oxagen 70 (leader MSFT Entra 80).**
-This is the stated wedge and the code *partially* delivers it: every first-party capability is a typed contract routed through `invoke()`, which enforces IAM → billing admission → entitlement → handler → per-call audit (kernel fails closed on IAM eval error). No competitor binds identity+action+metering+entitlement+audit in one object with API/MCP/CLI/UI parity. **But** the headline "un-poisonable typed contract for *external* MCP tools" is not delivered — `readLatestSnapshots` has zero production callers, live tool descriptions are injected raw (no drift diff, no sanitization), and external inputs are discarded to `z.record(unknown)`; commercial-terms binding is uniform-at-kernel, not per-capability. That external hole and thin commercial binding keep it just under Entra's GA identity governance. **+10:** wire snapshot-diff drift detection + delimit/typed-validate external MCP tools, closing the poisoning gap the mission claims.
+This is the stated wedge and the code *partially* delivers it: every first-party capability is a typed contract routed through `invoke()`, which enforces IAM → billing admission → entitlement → handler → per-call audit (kernel fails closed on IAM eval error). No competitor binds identity+action+metering+entitlement+audit in one object with API/MCP/UI parity. **But** the headline "un-poisonable typed contract for *external* MCP tools" is not delivered — `readLatestSnapshots` has zero production callers, live tool descriptions are injected raw (no drift diff, no sanitization), and external inputs are discarded to `z.record(unknown)`; commercial-terms binding is uniform-at-kernel, not per-capability. That external hole and thin commercial binding keep it just under Entra's GA identity governance. **+10:** wire snapshot-diff drift detection + delimit/typed-validate external MCP tools, closing the poisoning gap the mission claims.
 
 **4. Knowledge grounding / graph RAG — Oxagen 74 (leader Glean 90).**
 Genuinely differentiated and one of the three moats. `packages/ontology` (Neo4j constraints + range + 1536-dim cosine vector indexes) plus engram's `context-compiler.ts` fuse temporal, vector-ANN, graph-structural, and lexical/BM25 retrieval under budget/diversity constraints; answers cite nodes by human label via `NodeRef`; a 23-capability schema registry governs the ontology with versioning/validation; semantic-edge inference is human-reviewable; RLS scopes the graph per tenant. This is the ontology-governed, cited, BYOK developer graph the dossier says is unclaimed (Glean is closed/search-shaped, Writer quota'd, AWS generic auto-extraction). Docked for no published accuracy benchmark, thin node-browse UI, and no scale proof. **+10:** publish a GraphRAG accuracy benchmark and ship real node browse/search UI (the `nodes` route currently redirects away).
@@ -71,7 +70,7 @@ Genuinely differentiated and one of the three moats. `packages/ontology` (Neo4j 
 A managed AgentMemory graph with full CRUD + promote, a governed decay policy (per-weight half-lives, recall/compliance thresholds, decay floor), two-axis memory (class+kind), citations/evidence/promotions, and human-confirmed promotion to RULE/FACT. Richer on *governance* than the metered-memory leaders, but unproven at scale and citations/promotions have no review UI. **+10:** surface the memory-citation/evidence/promotion review queue in-app and prove recall quality.
 
 **6. Evals & testing — Oxagen 40 (leader Braintrust 95).**
-Eight `eval.*` contracts exist (dataset create / from-traces / item.add, run start/status/get) and the CLI covers the write path, but the app Evals surface is **read-only and a true nav orphan** (2 unlinked pages, no create/run affordances) and there is no online-eval or LLM-judge-at-scale product. `eval.dataset.from_traces` (build datasets from already-metered runs) is a nice vision-aligned hook. **+10:** wire the eval write path into the app and link the surface into nav/Activity.
+Eight `eval.*` contracts exist (dataset create / from-traces / item.add, run start/status/get), but the app Evals surface is **read-only and a true nav orphan** (2 unlinked pages, no create/run affordances) and there is no online-eval or LLM-judge-at-scale product. `eval.dataset.from_traces` (build datasets from already-metered runs) is a nice vision-aligned hook. **+10:** wire the eval write path into the app and link the surface into nav/Activity.
 
 **7. Observability / tracing — Oxagen 62 (leader LangSmith 92).**
 Real per-execution tracing is live: Activity pages render span-tree traces backed by ClickHouse (token_usage, tool_invocations, error_events) with `captureError` wired at 4 boundaries. The former `agent.execution.lineage` file-touch graph was retired because its generic client-authored projection could not provide verified provenance; durable execution trace remains, and exact file evidence belongs in a future immutable evidence ledger. It supports the "fleet lineage" pillar but has no OTel-export product and no scale. **+10:** ship OTel export and the typed evidence-ledger ingest.
@@ -94,19 +93,16 @@ Tenant *isolation* engineering is strong (org/workspace two-level RLS, IAM, per-
 **13. Model neutrality / BYOK — Oxagen 78 (leader LangChain 95).**
 Neutral by construction and a stated trust moat: `modelIdOf()` resolution, the AI Gateway, `OXAGEN_LLM_{FAST,BALANCED,PRECISE}` tier→slug env swap, all LLM calls forced through `@oxagen/ai` re-exports, hard-coded slugs lint-banned. Below LangChain only on proven provider breadth and pre-launch. **+10:** document and test the BYOK provider matrix + self-host path publicly to convert design-neutrality into proven neutrality.
 
-**14. CLI & developer experience — Oxagen 62 (leader Anthropic 95).**
-35 Commander+Ink command modules (graph push/pull/search, fleet, sandbox, eval, memory, agent, secret, `oxagen dev`) with contract→API→MCP→CLI parity discipline. Docked for unproven DX adoption and doc staleness (a broken clone URL and stale ADR-025 tool names in the install guide). **+10:** fix the install-guide breakages and add a polished onboarding/quickstart with proven first-run success.
-
-**15. Web UI / console maturity — Oxagen 60 (leader Stripe 92).**
+**14. Web UI / console maturity — Oxagen 60 (leader Stripe 92).**
 Substantial: 84 pages, 61 real content pages, most fully wired (ask, knowledge, activity, studio, billing, security, settings). Docked for the 2 orphan Evals pages, a mis-keyed `capability-ui-map.json` (43 forward "gaps" that are mostly a key-naming bug, +2 genuine, +1 fictional binding), 41/56 bindings lacking runtime proof, a stale command menu, a latent sidebar 404, and systemic reverse-parity drift. **+10:** fix the parity-map keying + orphan Evals + command-menu staleness, and attach runtime proof to the bindings.
 
-**16. Docs quality — Oxagen 52 (leader Stripe 94).**
-Decent structure (~105 Fumadocs pages, strong CLI section, good getting-started/index) undercut by ADR-025 rename fallout (18+ pages with stale dotted capability names, a broken clone URL, a broken anchor), **zero user-facing narrative for 15 domains including billing — the wedge itself** — and public exposure of internal specs that admit a "3x overcharging bug" and contradict their own pricing tiers. **+10:** write `billing/overview.mdx` + `knowledge/*` and run the ADR-025 naming sweep.
+**15. Docs quality — Oxagen 52 (leader Stripe 94).**
+Decent structure (~105 Fumadocs pages, good getting-started/index) undercut by ADR-025 rename fallout (18+ pages with stale dotted capability names, a broken clone URL, a broken anchor), **zero user-facing narrative for 15 domains including billing — the wedge itself** — and public exposure of internal specs that admit a "3x overcharging bug" and contradict their own pricing tiers. **+10:** write `billing/overview.mdx` + `knowledge/*` and run the ADR-025 naming sweep.
 
-**17. Pricing model — Oxagen 55 (leader Stripe 85).**
+**16. Pricing model — Oxagen 55 (leader Stripe 85).**
 The *mechanism* is clean and vision-aligned (1 credit = $0.01, subscriptions + credit packs, solved blended-margin markup, per-turn budget governance, auto-reload, dunning). But there is no shipped public pricing page (the marketing site is an investor deck) and the only pricing docs are archived internal specs that contradict each other (Starter $50/Growth $200/Scale $600 vs Pro $20/Scale $99). **+10:** publish one reconciled public pricing page backed by the `pricing.ts` source of truth.
 
-**18. Ecosystem / mindshare — Oxagen 8 (leader OpenAI/Stripe 93).**
+**17. Ecosystem / mindshare — Oxagen 8 (leader OpenAI/Stripe 93).**
 Pre-launch: no users, community, GitHub presence, partner network, or third-party content; the public site is a static deck. This is correctly near the floor and will only move with launch, adoption, and proof — not code. **+10:** ship, get real logos/usage, and publish the graph-grounding + metering-to-billing proof points that anchor the wedge.
 
 ---
@@ -120,13 +116,13 @@ Pre-launch: no users, community, GitHub presence, partner network, or third-part
 - **Agency/reseller multi-tenancy** (dim 12, 42) — every agent platform ≤55; open ground for an agency-first control plane.
 
 **Dominated (do not fight head-on — fast-follow only):**
-Orchestration frameworks (LangGraph 90), evals (Braintrust 95 / LangSmith 85 — even OpenAI retreated), tracing (LangSmith 92), MCP-ecosystem breadth (Anthropic 95, Glean gateway), managed runtime+memory scale (AWS/Google/MSFT), raw billing rails (Stripe post-Metronome, Adyen post-Orb), consumer distribution (OpenAI 900M WAU), agent-identity rails (MSFT Entra), CLI mindshare (Claude Code 95).
+Orchestration frameworks (LangGraph 90), evals (Braintrust 95 / LangSmith 85 — even OpenAI retreated), tracing (LangSmith 92), MCP-ecosystem breadth (Anthropic 95, Glean gateway), managed runtime+memory scale (AWS/Google/MSFT), raw billing rails (Stripe post-Metronome, Adyen post-Orb), consumer distribution (OpenAI 900M WAU), agent-identity rails (MSFT Entra).
 
 **Five highest-leverage investments (ranked):**
 1. **Build the reseller/agency billing + tenancy layer** (dims 9, 12) — converts a strong *platform-billing* loop into the actual "Stripe-for-agents" wedge no one else has. Highest strategic ROI.
 2. **Close the external-MCP poisoning gap** (dim 3) — wire snapshot-diff drift detection + typed/sanitized external tool I/O; makes the "un-poisonable contract" claim true and defensible.
 3. **Wire the pre-turn credit admission gate + agent-path rate limiting** (dim 8) — closes the zero-balance free-ride and abuse surface; a correctness precondition for monetization credibility.
-4. **Publish the graph-grounding proof + billing narrative** (dims 4, 16) — a GraphRAG accuracy benchmark and a `billing/overview.mdx`; turns two silent moats into marketable, verifiable claims.
+4. **Publish the graph-grounding proof + billing narrative** (dims 4, 15) — a GraphRAG accuracy benchmark and a `billing/overview.mdx`; turns two silent moats into marketable, verifiable claims.
 5. **Harden the audit sink and land SOC 2 Type II** (dim 11) — WORM/hash-chain `security_events`; enterprise resellers cannot buy governance infrastructure whose own audit trail is mutable and fire-and-forget.
 
 ---

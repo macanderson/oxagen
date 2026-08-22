@@ -49,15 +49,6 @@ Content-Type: application/json
 
 Tool name: `delete_sandbox_template`
 
-
-## CLI
-
-```
-oxagen sandbox template rm <slug-or-id> [--env <slug>] --yes
-```
-
-Soft-deletes; requires `--yes`. A default template cannot be removed — promote another first.
-
 ## Errors
 
 - `validation_error` — missing/empty `templateId`.

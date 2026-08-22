@@ -3,7 +3,7 @@
 **Domain:** automation
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent

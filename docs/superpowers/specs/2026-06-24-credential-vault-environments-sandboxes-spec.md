@@ -192,7 +192,7 @@ metadata jsonb            -- advertised reachable CIDRs/hosts, agent version
 ## 6. Environments — defaults & lifecycle
 
 - **Seeded** at workspace creation (hook at `workspace.create.ts:102`, mirroring `seedWorkspaceDefaultRegistry`; use the `withSystemDb` variant for the new-org Server Action path).
-- **Set default** (`environment.set_default`) — atomic swap; updates the partial-unique `is_default`. Available in **workspace settings UI** and via **CLI/MCP** (capability parity).
+- **Set default** (`environment.set_default`) — atomic swap; updates the partial-unique `is_default`. Available in **workspace settings UI** and via **API/MCP** (capability parity).
 - **Deactivate/Delete guard** — reject if the target is the current default; the error instructs the user to promote another environment first. Deactivating an environment stops new runs from resolving to it; in-flight runs finish.
 - **Workspace setting** — "Default environment" selector lives under `settings/environments` (new route) and is also exposed via `workspace.settings.write` (add `defaultEnvironmentId`).
 
@@ -319,7 +319,7 @@ provisionForRun(agentId, runEnvironmentId?):
 
 ---
 
-## 13. Contracts (new) — capability parity (contract → API → MCP → CLI → docs)
+## 13. Contracts (new) — capability parity (contract → API → MCP → docs)
 
 **Environments:** `environment.create` · `environment.list` · `environment.get` · `environment.update` · `environment.delete` · `environment.set_default`
 **Sandbox templates:** `sandbox.template.create` · `.list` · `.get` · `.update` · `.delete` · `.set_default` · `sandbox.template.tools.set`
@@ -355,9 +355,9 @@ New files `workspace-environment-seed.ts` / `workspace-sandbox-template-seed.ts`
 
 ---
 
-## 16. UI surfaces (web + TUI)
+## 16. UI surfaces
 
-The vault + environments feature presents through **one web settings page** and **two CLI command groups**. Both surfaces call the *same* contracts (§13) — no drift. OXA-1848/1849/1850 are backend-only; **OXA-1853** builds the web UI from this section. Secrets never travel to a client in plaintext: pages render masked placeholders and `reveal` is a separate, audited round-trip.
+The vault + environments feature presents through **one web settings page** backed by the contracts in §13. OXA-1848/1849/1850 are backend-only; **OXA-1853** builds the web UI from this section. Secrets never travel to a client in plaintext: pages render masked placeholders and `reveal` is a separate, audited round-trip.
 
 ### 16.1 Web — `settings/environments`
 - **Route:** `apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/` — server `page.tsx` (resolve org+ws, role-check, fetch masked rows via `runInTenantScope`+`invoke`) → client `environments-panel.tsx` (state) → `environments-actions.ts` server actions (`"use server"`, re-check Owner/Admin, `invoke()`, `revalidatePath`). New declarative entry in `settings/layout.tsx`'s `SettingsNav`. Primitives from `@/components/ui/*` (Button, Input, Switch, Badge, Textarea); hand-rolled `<table>` matrix (matches the integrations-panel convention).
@@ -377,33 +377,8 @@ SECRETS                            [ + Add key ]  [ Paste .env ]  [ Export ▾ ]
 - **Cell = (key, environment) override.** Click a value cell → inline editor (`secret.value.set`/`unset`); `‹inherit›` cells offer "Set override for ‹env›". The **Default** column edits `secret_keys.default_value` (`secret.key.upsert`). Row-header cells (Key/SENS/Memo) → key editor; toggling `sensitive` re-stores the row (encrypted ↔ plaintext).
 - **Paste `.env`** → dialog: paste box → `secret.import_env` returns a **preview** (new vs override, per-target) → confirm → commit. **Export ▾** (`secret.export`, per env → `.env`) and per-cell **👁 reveal** (`secret.reveal`) are Owner/Admin-only and surface a "recorded" toast.
 
-### 16.2 TUI — `oxagen env` + `oxagen secret`
-Flag-driven first (agents/scripts drive these with few tokens — the CLI-over-MCP rationale); `--json` on every read for scripting; Ink only for an optional interactive editor. `fetch()` → `/api/v1/<capability>` with the Bearer token + org/ws scope from `apps/cli/src/lib/config.ts`. New files `apps/cli/src/commands/env.ts` + `secret.ts` (mirror `config.ts`), wired as Commander noun→verb groups in `index.tsx`.
-
-```
-$ oxagen env list                     # → environment.list
-  NAME         SLUG        DEFAULT  ACTIVE  TEMPLATES
-  Default      default     ★        yes     1
-  Production   production           yes     2
-
-$ oxagen env set-default production   # → environment.set_default (atomic swap)
-  ✓ default environment: Development → Production
-
-$ oxagen secret list --env production # → secret.key.list (resolved per env)
-  KEY           SENS  VALUE      SOURCE     MEMO
-  DATABASE_URL  ●     ••••••••   override   primary pg
-  REDIS_URL     ●     ‹unset›    —          (no default, no override)
-
-$ oxagen secret set LOG_LEVEL debug --env dev --sensitive=false   # key.upsert + value.set
-$ oxagen secret import --env prod -f .env.prod                    # import_env → preview; --yes commits
-$ oxagen secret reveal DATABASE_URL --env prod                    # reveal  (⚠ recorded)
-$ oxagen secret export --env prod -o .env.prod                    # export  (⚠ recorded)
-```
-
-- **Verb→contract:** `env list/get/create/rename/rm/set-default` → `environment.*`; `secret list/get/set/unset/import/reveal/export/rm` → `secret.*`. `import` prints a preview and requires `--yes` to commit (mirrors the web preview-then-import); `reveal`/`export` echo `⚠ recorded` (mirrors the web "recorded" toast). `‹unset›`/`‹inherit›` render the resolution rule (§5.5) in the terminal.
-
 ### 16.3 Empty state (what OXA-1848 seeding buys)
-A brand-new workspace already shows **one ★ Default environment** and an **empty secrets grid** — never blank-and-broken — because seeding (§15) creates the default env up front. The grid's first row appears on first `Add key` / `Paste .env` / `oxagen secret set`.
+A brand-new workspace already shows **one ★ Default environment** and an **empty secrets grid** — never blank-and-broken — because seeding (§15) creates the default env up front. The grid's first row appears on first `Add key` / `Paste .env`.
 
 ---
 

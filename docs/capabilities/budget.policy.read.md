@@ -43,5 +43,5 @@ All roles (Owner, Admin, Member, Viewer), org and workspace level. Users read on
 
 ## Notes
 
-- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the CLI, the API, and the web app.
+- Enforcement is applied in the shared agent turn loop (`runCodingAgent`), so the same budget behaves identically in the API and the web app.
 - The saved value is a **default**; a surface may override the budget per turn at submit time.

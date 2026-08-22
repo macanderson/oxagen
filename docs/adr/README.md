@@ -31,7 +31,3 @@ with a new ADR if the call changes.
 ## Developer workflow epic
 
 - [ADR-015](./ADR-015-graph-edge-driven-git-hooks-and-biome.md) — Graph-edge-driven git hooks (Vitest import-graph) + Biome formatting
-
-## CLI & Local Agent Runtime epic
-
-- [ADR-016](./ADR-016-oxagen-cli-daemon-live-code-graph.md) — Oxagen CLI daemon: live code-graph memory fed by coding-agent hooks (Proposed)

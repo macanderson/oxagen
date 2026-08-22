@@ -4,7 +4,7 @@
 **Domain:** router
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -33,10 +33,3 @@ human sees what the router has learned from the org's own history. Read-only.
 ## Side effects
 
 None. Reads the append-only `router_outcomes` ClickHouse table (tenant-scoped).
-
-## Example
-
-```bash
-oxagen router stats
-oxagen router stats --task-class auth/single --window 30 --json
-```

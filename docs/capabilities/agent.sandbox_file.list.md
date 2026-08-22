@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Billing:** not gated (a read-only listing consumes no AI tokens)
 
@@ -11,7 +11,7 @@
 
 List files and directories inside a durable sandbox session's workspace (a
 session created by `agent.sandbox.start`), so the web workspace-context panel,
-the CLI, and MCP callers can render a file tree without a manual
+and MCP callers can render a file tree without a manual
 `agent.sandbox.exec("ls -R")` round-trip.
 
 ## Driver normalization
@@ -45,7 +45,6 @@ snapshot and the listing retried once (same recovery contract as
 - **API:** `POST /v1/:org/:workspace/agent/sandbox/files` — body `{ sessionId, path?, depth? }`
 - **MCP:** `agent.sandbox.files.list` tool (read-only, idempotent)
 - **Agent:** invoked via `invoke("agent.sandbox_file.list", ...)` — no approval required
-- **CLI:** `oxagen sandbox files <sessionId> [--path <dir>] [--depth <n>] [--json]`
 
 ## Access control
 

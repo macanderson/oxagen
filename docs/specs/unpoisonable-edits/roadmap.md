@@ -24,7 +24,7 @@ the later phases add the first three.
 ## What we have today (V1 — this PR)
 
 Single enforcement point in `buildWorkspaceTools` (`packages/agent-engine/src/tools.ts`),
-the same seam the graph-backed file lock uses, so chat, CLI, fleet dispatch, and sandboxed
+the same seam the graph-backed file lock uses, so chat, fleet dispatch, and sandboxed
 runs all inherit it with zero per-surface wiring:
 
 1. **Hash anchoring (stale-read rejection).** Every whole-file `read_file` records a
@@ -56,7 +56,7 @@ file's package. The gate then catches type damage, not just syntax damage: a ren
 export that breaks three importers is rejected (or declared) at write time.
 - Debounced, budgeted: single-file check is synchronous; cross-file check runs within a
   latency budget (~500ms) and degrades to advisory when exceeded.
-- CLI wires it first (local tsserver already warm from the code graph); sandbox runner second.
+- The local runner wires it first (tsserver already warm from the code graph); the sandbox runner second.
 - **Acceptance:** an edit that breaks a sibling file's types is rejected with the sibling's
   diagnostic quoted; p95 edit latency overhead < 700ms.
 

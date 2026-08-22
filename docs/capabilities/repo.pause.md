@@ -8,7 +8,6 @@ Pause automatic syncing for a repository connection.
 ## Surfaces
 - API: `POST /v1/repos/:id/pause`
 - MCP: `repo.pause`
-- CLI: `oxagen repo pause <id>`
 - Agent: callable (no approval required, risk: low)
 
 ## Input

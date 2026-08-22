@@ -52,15 +52,6 @@ Content-Type: application/json
 
 Tool name: `export_sandbox_template`
 
-
-## CLI
-
-```
-oxagen sandbox template export <slug-or-id> [-o <file>]
-```
-
-Prints the v1 manifest (secret **names** only) to stdout, or writes it to `-o <file>`.
-
 ## Errors
 
 - `validation_error` — missing/empty `templateId`.

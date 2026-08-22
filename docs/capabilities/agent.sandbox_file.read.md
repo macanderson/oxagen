@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Billing:** not gated (a read-only file read consumes no AI tokens)
 **Alias:** `agent.sandbox.files.read` (symmetry with `agent.sandbox_file.list`'s legacy alias)
@@ -12,7 +12,7 @@
 
 Read one file's contents from a durable sandbox session's workspace (a session
 created by `agent.sandbox.start`), so the web workspace-context panel's file
-viewer, the CLI, and MCP callers can show what the coding agent is working on
+viewer and MCP callers can show what the coding agent is working on
 without a manual `agent.sandbox.exec("cat …")` round-trip. The read counterpart
 of `agent.sandbox_file.list`.
 
@@ -52,7 +52,6 @@ retried once (same recovery contract as `agent.sandbox.exec`).
 - **API:** `POST /v1/:org/:workspace/agent/sandbox/file` — body `{ sessionId, path, maxBytes? }`
 - **MCP:** `agent.sandbox_file.read` tool (read-only, idempotent)
 - **Agent:** invoked via `invoke("agent.sandbox_file.read", ...)` — no approval required
-- **CLI:** `oxagen sandbox cat <sessionId> <path> [--max-bytes <n>] [--json]`
 
 ## Access control
 

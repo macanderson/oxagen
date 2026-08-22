@@ -1,14 +1,12 @@
 /**
  * eval-ingest — load normalized `*.eval.json` files into the ClickHouse eval tables.
  *
- *   pnpm eval:ingest bench/rag-eval/rag-eval.eval.json
- *   pnpm eval:ingest bench/**\/*.eval.json            # after running the bench suites
+ *   pnpm eval:ingest tools/eval-out/engram-golden.eval.json
  *   pnpm eval:ingest --force results/run.eval.json    # re-ingest (skips the dup guard)
  *
- * This is how the Python harnesses (rag-eval, context-eval, terminal-bench) get
- * their results into ClickHouse: they each write a `.eval.json`, then this loads it.
- * If CLICKHOUSE_* env is absent it prints a notice and exits 0 (so local/offline runs
- * don't fail). See docs/cli/eval-results-schema.md.
+ * This is how an out-of-process harness lands its results in ClickHouse: it writes a
+ * normalized `.eval.json`, then this loads it. If CLICKHOUSE_* env is absent it prints
+ * a notice and exits 0 (so local/offline runs don't fail).
  */
 import { closeClickhouse } from "@oxagen/telemetry";
 import {
@@ -18,7 +16,11 @@ import {
   type EvalRunFile,
 } from "./lib/eval-protocol";
 
-function parseArgs(argv: string[]): { paths: string[]; force: boolean; agentVersion?: string } {
+function parseArgs(argv: string[]): {
+  paths: string[];
+  force: boolean;
+  agentVersion?: string;
+} {
   const paths: string[] = [];
   let force = false;
   let agentVersion: string | undefined;
@@ -39,7 +41,8 @@ export async function ingestFiles(
 ): Promise<string[]> {
   const lines: string[] = [];
   for (const file of files) {
-    if (opts.agentVersion && !file.run.agent_version) file.run.agent_version = opts.agentVersion;
+    if (opts.agentVersion && !file.run.agent_version)
+      file.run.agent_version = opts.agentVersion;
     const r = await ingestRun(file, { force: opts.force });
     lines.push(
       `  ${r.status.padEnd(22)} ${file.run.harness}/${file.run.suite} ${r.run_id} (${r.results} results)`,
@@ -51,7 +54,9 @@ export async function ingestFiles(
 async function main(): Promise<void> {
   const { paths, force, agentVersion } = parseArgs(process.argv.slice(2));
   if (paths.length === 0) {
-    process.stderr.write("usage: eval:ingest <file.eval.json...> [--force] [--agent-version X]\n");
+    process.stderr.write(
+      "usage: eval:ingest <file.eval.json...> [--force] [--agent-version X]\n",
+    );
     process.exitCode = 1;
     return;
   }
@@ -66,7 +71,9 @@ async function main(): Promise<void> {
     try {
       return loadEvalFile(p);
     } catch (err) {
-      process.stderr.write(`  skipped ${p}: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `  skipped ${p}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
       return [];
     }
   });
@@ -75,14 +82,21 @@ async function main(): Promise<void> {
     return;
   }
   const lines = await ingestFiles(files, { force, agentVersion });
-  process.stdout.write(`Ingested ${files.length} run(s) into ClickHouse:\n${lines.join("\n")}\n`);
+  process.stdout.write(
+    `Ingested ${files.length} run(s) into ClickHouse:\n${lines.join("\n")}\n`,
+  );
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop() ?? "")) {
+if (
+  process.argv[1] &&
+  import.meta.url.endsWith(process.argv[1].split("/").pop() ?? "")
+) {
   main()
     .then(() => closeClickhouse())
     .catch(async (err: unknown) => {
-      process.stderr.write(`eval-ingest failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `eval-ingest failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
       await closeClickhouse();
       process.exitCode = 1;
     });

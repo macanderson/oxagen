@@ -14,7 +14,8 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Oxagen Docs",
     short_name: "Oxagen Docs",
-    description: "Documentation for the Oxagen agent platform.",
+    description:
+      "Documentation for Oxagen — the governance and control plane for enterprise AI agents.",
     lang: "en",
     dir: "ltr",
     start_url: "/",

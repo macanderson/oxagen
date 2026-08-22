@@ -29,11 +29,11 @@ import {
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT_DIR = resolve(REPO_ROOT, "tools/eval-out");
 
-/** Oxagen agent version = the CLI package version (the thing being measured over time). */
-function cliVersion(): string {
+/** The platform version stamped on a run — the thing being measured over time. */
+function platformVersion(): string {
   try {
     const pkg = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, "apps/cli/package.json"), "utf8"),
+      readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"),
     ) as {
       version?: string;
     };
@@ -80,7 +80,7 @@ function buildEngramRunFile(
       run_id: runId,
       run_group: process.env.OXAGEN_EVAL_GROUP ?? "",
       agent_name: "oxagen",
-      agent_version: cliVersion(),
+      agent_version: platformVersion(),
       model: "deterministic-lexical",
       harness: "engram-golden",
       suite: result.results[0]?.traceId ?? "engram-golden",
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
   writeFileSync(outPath, JSON.stringify(runFile, null, 2) + "\n", "utf8");
   process.stdout.write(`  wrote ${outPath}\n`);
 
-  // 3. Collect any extra harness files passed on the CLI (rag-eval, terminal-bench, …).
+  // 3. Collect any extra harness files passed on the command line.
   const allFiles: EvalRunFile[] = [runFile];
   for (const p of extraFiles) {
     try {

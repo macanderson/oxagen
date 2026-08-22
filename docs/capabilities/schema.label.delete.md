@@ -9,7 +9,6 @@ Remove a node label and all its properties from the current draft version. Does 
 - API: `DELETE /v1/schemas/{schemaName}/labels/{name}`
 - MCP: `schema.label.delete`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

@@ -383,7 +383,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       </div>
       <div class="card rv" data-d="6">
         <h3><span class="g">Agent engine</span>+ Fleet mode</h3>
-        <p>One engine powers chat, CLI and fan-out. <strong>Fleet mode</strong> dispatches a governed team of sub-agents — each in isolation, with lineage — under hard budget caps.</p>
+        <p>One engine powers chat, the API and fan-out. <strong>Fleet mode</strong> dispatches a governed team of sub-agents — each in isolation, with lineage — under hard budget caps.</p>
       </div>
     </div>
     <p class="footnote rv" data-d="7">Every layer runs under the same identity, metering and audit spine — not bolted on afterward.</p>
@@ -402,7 +402,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       </div>
       <div class="card rv" data-d="4">
         <h3>Typed contracts, un-poisonable tools</h3>
-        <p>Every tool is a typed capability contract with a fixed shape. A prompt-injected instruction can't invent a new tool or widen an existing one — <strong>the contract is the boundary,</strong> and it's the same boundary in the API, the MCP server and the CLI.</p>
+        <p>Every tool is a typed capability contract with a fixed shape. A prompt-injected instruction can't invent a new tool or widen an existing one — <strong>the contract is the boundary,</strong> and it's the same boundary in the app, the API and the MCP server.</p>
       </div>
       <div class="card rv" data-d="5">
         <h3><span style="color:var(--ember-a)">New ·</span> Per-turn budgeting</h3>
@@ -439,7 +439,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid2">
       <div class="card rv" data-d="3">
         <h3>The execution span tree</h3>
-        <p>A run expands into its ordered steps; each step shows its <strong>tool calls with duration, tokens, cost and status</strong>, and every sub-agent it spawned as <strong>child lineage</strong>. The same view lives in the CLI as <code>oxagen trace</code> and in the app's Activity screen.</p>
+        <p>A run expands into its ordered steps; each step shows its <strong>tool calls with duration, tokens, cost and status</strong>, and every sub-agent it spawned as <strong>child lineage</strong>. The same view lives in the app's Activity screen and over <code>/v1</code>.</p>
         <ul class="tight" style="margin-top:14px">
           <li class="good">Nothing runs off the record</li>
           <li class="good">Sub-agent &amp; A2A lineage is preserved end-to-end</li>
@@ -509,7 +509,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <h1 class="rv" data-d="2">Enough slides.<br><span class="gradtext">Here's the tool.</span></h1>
     <p class="lede rv" data-d="3">Three things, live — the exact answers to the three questions from earlier.</p>
     <div class="demo-stage">
-      <div class="card rv" data-d="4"><div class="n">DEMO 1</div><div class="big-cta" style="font-size:22px">Governed CLI</div><p>A coding agent that queries the graph before it edits, runs read-only or ask-first, and is capped per turn.</p></div>
+      <div class="card rv" data-d="4"><div class="n">DEMO 1</div><div class="big-cta" style="font-size:22px">Governed answers</div><p>An agent that queries the graph before it answers, runs under a read-only grant, and is capped per turn.</p></div>
       <div class="card rv" data-d="5"><div class="n">DEMO 2</div><div class="big-cta" style="font-size:22px">Fleet mode</div><p>Plan a goal, dispatch a governed team of sub-agents, watch it work under hard budget caps.</p></div>
       <div class="card rv" data-d="6"><div class="n">DEMO 3</div><div class="big-cta" style="font-size:22px">Trace &amp; bill</div><p>Open the execution span tree, then the usage dashboard and audit export — the bill and the record, explained.</p></div>
     </div>

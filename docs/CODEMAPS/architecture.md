@@ -3,23 +3,23 @@
 # Architecture — Oxagen v2
 
 ## Project Type
-**Monorepo** (pnpm workspaces + Turborepo) — 7 apps, 31 packages (incl. `@oxagen/bench`), `bench/web` dashboard, 2 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
+**Monorepo** (pnpm workspaces + Turborepo) — 6 apps, 36 packages, 3 tooling packages. See `docs/VISION.md` for product north star: the metered, governed, graph-grounded control plane ("Stripe for agents").
 
 ## System Diagram
 
 ```
-                        ┌───────────────────────────────────────┐
-                        │                Clients                  │
-                        │  Browser │ CLI │ MCP Client │ A2A Caller │
-                        └─────┬────┴──┬──┴─────┬──────┴─────┬─────┘
-                              │       │         │            │
-                    ┌─────────▼──┐ ┌──▼─────┐ ┌─▼─────────┐  │
-                    │  apps/app  │ │apps/cli│ │ apps/mcp  │  │
-                    │ Next.js 16 │ │  Ink   │ │  xmcp     │  │
-                    │  (RSC+SA)  │ │  REPL  │ │ /mcp SSE  │  │
-                    └─────┬──────┘ └───┬────┘ └──┬────────┘  │
-                          │            │           │          │
-                          └────────────┼───────────┴──────────┘
+                        ┌─────────────────────────────────┐
+                        │             Clients              │
+                        │  Browser │ MCP Client │ A2A Caller │
+                        └─────┬────┴─────┬──────┴─────┬─────┘
+                              │           │            │
+                    ┌─────────▼──┐  ┌─────▼─────┐      │
+                    │  apps/app  │  │ apps/mcp  │      │
+                    │ Next.js 16 │  │  xmcp     │      │
+                    │  (RSC+SA)  │  │ /mcp SSE  │      │
+                    └─────┬──────┘  └──┬────────┘      │
+                          │            │                │
+                          └────────────┴────────────────┘
                                        │  REST + SSE + JSON-RPC (A2A)
                               ┌────────▼────────────┐
                               │      apps/api        │
@@ -53,11 +53,9 @@
 | `apps/api` | api.oxagen.sh | Hono + Node.js | REST API, webhooks, LLM proxy, A2A JSON-RPC |
 | `apps/app` | app.oxagen.sh | Next.js 16 (App Router) | Web UI, Server Actions |
 | `apps/mcp` | mcp.oxagen.sh/mcp | xmcp (streamable HTTP) | MCP protocol surface |
-| `apps/cli` | npm: `oxagen` | Ink + Commander | Local agent REPL + fleet orchestration |
 | `apps/docs` | docs.oxagen.sh | Fumadocs (Next.js) | Documentation site |
 | `apps/web` | oxagen.sh | Static | Public site / investor deck (interim) |
 | `apps/schemas` | schemas.oxagen.sh | Static host | Generated JSON Schemas (editor autocompletion) |
-| `bench/web` | — | Next.js | `@oxagen/bench-web` eval/replay dashboard |
 
 ## Data Flow — Chat / Agent Execution
 
@@ -74,18 +72,17 @@ User → apps/app chat UI → POST /api/v1/chat/stream
 
 The app UI's primary chat path is this in-process Next.js Route Handler, not a
 round trip through apps/api's Hono `/v1/:org/:ws/chat/messages` route — that
-route remains for CLI/MCP/API-key callers (see CLAUDE.md "Main chat path").
+route remains for MCP and API-key callers (see CLAUDE.md "Main chat path").
 
 ## Data Flow — Background Agent / Fleet
 
 ```
-CLI/MCP/A2A → dispatch_subagent (file: agent.subagent.dispatch.ts)
-            → Inngest: agent.execute-subagent
-            → @oxagen/agent-engine pipeline (planner/fork/oracle/evaluate)
-            → Tool calls (sandbox/browser/code)
-            → agent.sync-execution-to-graph
-            → Neo4j lineage (get_execution_trace, file: agent.trace.get.ts /
-              `oxagen trace`)
+MCP/A2A → dispatch_subagent (file: agent.subagent.dispatch.ts)
+        → Inngest: agent.execute-subagent
+        → @oxagen/agent-engine pipeline (planner/fork/oracle/evaluate)
+        → Tool calls (sandbox/browser/code)
+        → agent.sync-execution-to-graph
+        → Neo4j lineage (get_execution_trace, file: agent.trace.get.ts)
 ```
 
 Post-ADR-025, capability *names* are verb-first snake_case

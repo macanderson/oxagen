@@ -3,7 +3,7 @@ title: Permissions
 description: Control which external MCP tools are allowed, denied, or require confirmation before execution.
 ---
 
-The permission system lets you control what external MCP tools can do — without modifying the MCP server itself. Permissions are defined in the same settings files as server definitions and use glob patterns for flexible matching.
+The permission system lets you control what external MCP tools can do — without modifying the MCP server itself. Permissions are configured per workspace, alongside the server definitions, and use glob patterns for flexible matching.
 
 ## Permission policies
 
@@ -79,44 +79,6 @@ Denied tools are **never advertised to the model**. They are filtered out during
 - Denied tools do not consume context window space
 - The user never sees the tool in the chat interface
 
-## Scope precedence for permissions
-
-When the same server has permission rules in multiple scopes:
-
-- `deny` and `allow` lists **append** across scopes (all rules apply)
-- `defaultPolicy` follows the standard override order: local > project > user
-
-Example with two scopes:
-
-```json
-// .oxagen/settings.json (project)
-{
-  "permissions": {
-    "mcpServers": {
-      "github": {
-        "defaultPolicy": "allow",
-        "deny": ["delete_repository"]
-      }
-    }
-  }
-}
-```
-
-```json
-// .oxagen/settings.local.json (local)
-{
-  "permissions": {
-    "mcpServers": {
-      "github": {
-        "deny": ["force_push"]
-      }
-    }
-  }
-}
-```
-
-Effective result: `defaultPolicy: "allow"`, deny: `["delete_repository", "force_push"]`.
-
 ## Tool visibility
 
 Separate from permissions, **tool visibility** controls which tools are shown to the model at all — even if they would be allowed by permissions:
@@ -143,10 +105,10 @@ If a server exposes 40 tools but you only need 3, use `include` to keep the mode
 
 ## Interaction with platform IAM
 
-When both file-based permissions and platform IAM policies apply (e.g. when using the platform runtime), the most restrictive policy wins:
+Workspace permissions and platform IAM are enforced independently, and the most restrictive answer wins:
 
-- If file-based config says `allow` but platform IAM says `deny` → denied
-- If file-based config says `deny` → denied (regardless of platform IAM)
-- If file-based config says `ask` and platform IAM says `allow` → ask
+- Workspace config says `allow` but IAM says `deny` → denied
+- Workspace config says `deny` → denied, regardless of IAM
+- Workspace config says `ask` and IAM says `allow` → ask
 
-The file-based permission system is designed to be the **developer-side** control. Platform IAM is the **org-admin-side** control. Both are enforced independently.
+Workspace permissions are the **workspace-side** control over an external server's surface area. Platform IAM is the **org-admin-side** control over who may invoke a capability at all. An [organization managed policy](/docs/mcp/managed-policy) sits above both as a floor neither can widen.

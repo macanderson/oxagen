@@ -20,8 +20,9 @@
  *   node tools/codemods/relocate-lib-squatters.mjs <repoRoot> <srcRootRel> <alias|-> <moves.json> [--dry]
  *
  *   alias   "@" for apps/app (rewrites cross-dir specifiers to "@/…", keeps
- *           the extensionless convention); "-" for apps/cli (rewrites to
- *           relative ESM specifiers with the ".js" suffix convention).
+ *           the extensionless convention); "-" for an alias-free package
+ *           (rewrites to relative ESM specifiers with the ".js" suffix
+ *           convention).
  *   moves   JSON array of { "from": "<repo-rel .ts/.tsx>", "to": "<repo-rel>" }
  *           (main modules only — tests are found and mapped automatically).
  */
@@ -121,7 +122,7 @@ function newSpecifier(newImporter, newTarget, oldSpec) {
       noExt(path.relative(srcRoot, newTarget)).split(path.sep).join("/")
     );
   }
-  // apps/cli convention: relative ESM specifiers with a ".js" suffix.
+  // Alias-free convention: relative ESM specifiers with a ".js" suffix.
   let r = path
     .relative(path.dirname(newImporter), newTarget)
     .split(path.sep)

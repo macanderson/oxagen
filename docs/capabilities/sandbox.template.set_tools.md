@@ -57,11 +57,6 @@ Content-Type: application/json
 
 Tool name: `set_sandbox_template_tools`
 
-
-## CLI
-
-No dedicated CLI verb. A template's preloaded tool set is seeded at create time (`oxagen sandbox template create`) and replaced via the API/MCP or the app; `oxagen sandbox template get <slug-or-id>` lists the current tools.
-
 ## Errors
 
 - `validation_error` — input failed Zod parse (empty `templateId`/`ref`, duplicate `kind`+`ref` pair).

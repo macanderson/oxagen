@@ -10,7 +10,7 @@
 
 Read the active workspace's general settings — name, slug, and description.
 Routes the workspace settings page read through the capability kernel so the same
-data is reachable from the agent, MCP, and CLI with consistent IAM + metering.
+data is reachable from the agent and MCP with consistent IAM + metering.
 
 ## Input
 

@@ -9,7 +9,6 @@ Typed multi-hop traversal over the knowledge graph. The caller names a start nod
 - API: `POST /v1/ontology/query`
 - MCP: `ontology.query`
 - Agent: callable (no approval required, risk: low)
-- CLI: `oxagen ontology query`
 
 ## Input
 | Parameter | Type | Required | Description |

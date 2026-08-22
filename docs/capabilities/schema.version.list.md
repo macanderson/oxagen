@@ -9,7 +9,6 @@ List all schema versions with version number, label, status, published timestamp
 - API: `GET /v1/schema/versions`
 - MCP: `schema.version.list`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

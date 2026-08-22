@@ -16,7 +16,7 @@
 - Raw source, prompts, model/tool payloads, diffs, paths, credentials, chain-of-thought, storage keys, KMS ARNs, and internal UUIDs never appear in a manifest, API response, ClickHouse, or Neo4j.
 - Exact bytes are persisted only as tenant-encrypted evidence blobs and referenced by `evb_` public ID plus plaintext digest/length/media type.
 - The manifest and blob index are immutable. Claims, exports, and downstream deliveries use separate mutable coordination rows.
-- Evidence finalization is kernel-enforced and default deny in every tier. It has no API, MCP, CLI, app, or agent discovery surface and no second billing gate.
+- Evidence finalization is kernel-enforced and default deny in every tier. It has no API, MCP, app, or agent discovery surface and no second billing gate.
 - A service principal proves workload identity; the one-shot grant proves authority over one sealed attempt/digest. The finalizer requires both.
 - The foundation grant public ID is the stable envelope `submission_id`; retries never mint a replacement submission identity.
 - KMS failure, blob-policy mismatch, malformed evidence, missing receipt, or identity conflict leaves the immutable obligation pending. It never creates an unsigned or partial manifest.
@@ -262,7 +262,7 @@ PR 2A may run in parallel with PR 1A. PR 2B depends on both PR 1A and PR 2A. PR 
 - Modify: `packages/database/atlas/migrations/atlas.sum`
 
 - [ ] Register `ingest_run_evidence` as sync, `surfaces: ["internal"]`, high sensitivity, default deny, always-IAM-enforced, non-billable lifecycle work, and no default human/agent role grants. Input is only the PR 0B envelope; output is accepted/duplicate plus `revm_` ID, digest, runner authority, grade, and receive time.
-- [ ] Extend capability surfaces and completeness checks with `internal`, but omit internal capabilities from user/agent/MCP/CLI discovery and generated interactive docs.
+- [ ] Extend capability surfaces and completeness checks with `internal`, but omit internal capabilities from user/agent/MCP discovery and generated interactive docs.
 - [ ] Resolve an explicit active service principal by ID and tenant. Reject combined human/API-key/service identities and remove the non-enterprise fast-path for `alwaysEnforceIam` capabilities.
 - [ ] Deterministically provision one org service principal `Run Evidence Worker`, one `Run Evidence Finalizer` role, and the sole allow grant for exact-name `ingest_run_evidence`.
 - [ ] Construct the checked service context only from the attested `evidence-finalizer` workload identity established at process bootstrap, then resolve that org's provisioned principal; no in-process handler/caller field may self-assert the principal ID. Run an audited idempotent backfill over every existing org and gate finalizer claims on zero missing/duplicate principals, roles, or exact-name grants.
@@ -389,7 +389,6 @@ PR 2A may run in parallel with PR 1A. PR 2B depends on both PR 1A and PR 2A. PR 
 - Modify: `packages/database/storage-manifest.json`
 - Modify: `packages/database/atlas/migrations/atlas.sum`
 - Modify: `docs/capabilities/_index.md`
-- Modify: `docs/cli/eval-runbook.md`
 - Modify: `tools/scripts/adr025-name-map.mjs`
 - Modify: `tools/scripts/adr025-reland-custom-role-grant-remap.sql`
 - Modify: `packages/handlers/src/chat.message.execution.ts`

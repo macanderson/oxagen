@@ -9,7 +9,6 @@ Validate a connector plugin config object against its schema before install or c
 - API: `POST /v1/plugin-schema/:pluginId/validate`
 - MCP: `plugin.schema.validate`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

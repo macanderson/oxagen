@@ -14,7 +14,7 @@ YAML file hosted at a stable HTTPS URL.
 ## Overview
 
 The connector schema system is built around the `ConnectorPlugin` resource
-kind. When a user installs your connector via the Oxagen UI, CLI, or agent, the
+kind. When a user installs your connector via the Oxagen UI or agent, the
 platform:
 
 1. Fetches your `schema.yaml` from the URL you registered.

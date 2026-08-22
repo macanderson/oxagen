@@ -1,7 +1,7 @@
 {
   "name": "list_orgs",
   "domain": "org",
-  "description": "List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the CLI tenant picker.",
+  "description": "List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the tenant picker used at link time.",
   "mode": "sync",
   "surfaces": [
     "api",

@@ -12,7 +12,7 @@ Update the active workspace's general settings — name, slug, description, and
 avatar — as a **partial** update: omit a field to leave it unchanged, pass a
 value to set it, pass `null` (description and avatarUrl only) to clear it.
 Routes the workspace settings edit through the capability kernel so the same
-fields are reachable from the agent, MCP, and CLI with consistent IAM,
+fields are reachable from the agent and MCP with consistent IAM,
 metering, and audit.
 
 Allowed for org/workspace Owners and Admins only (`defaultEffect: deny`).

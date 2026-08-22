@@ -13,7 +13,7 @@ This directory contains the product specification for the Skills Marketplace and
 - Workspace-seeded editable copies of built-in skill templates
 - Immutable version history with an explicit pinned active version
 - In-app management UI (browse, edit, version, rollback)
-- Cross-surface capability parity (app / API / MCP / CLI)
+- Cross-surface capability parity (app / API / MCP)
 - Telemetry foundation (load events, token burn, latency, last-used)
 
 ## Documents

@@ -41,7 +41,6 @@ redeclaring the shape in consuming code.
 - **API:** `GET /v1/:org/:workspace/conversations/:conversationId/files?kind=&limit=&cursor=`
 - **MCP:** `conversation.files.list` tool (read-only, idempotent)
 - **Agent:** invoked directly via `invoke("conversation.files.list", ...)` — no approval required
-- **CLI:** `oxagen conversation files --conversation <id> [--kind <kind>] [--limit <n>] [--cursor <cursor>]`
 
 ## Access control
 

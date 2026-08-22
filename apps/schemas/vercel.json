@@ -5,7 +5,7 @@
   "trailingSlash": false,
   "headers": [
     {
-      "source": "/oxagen-cli-settings-schema.json",
+      "source": "/(.*).json",
       "headers": [
         {
           "key": "Content-Type",

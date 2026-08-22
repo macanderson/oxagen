@@ -6,7 +6,7 @@
     <title>Oxagen Schemas</title>
     <meta
       name="description"
-      content="JSON Schemas for Oxagen configuration files, generated from the canonical Zod source with zero drift."
+      content="JSON Schemas for Oxagen configuration files, served for editor validation and autocompletion."
     />
     <link rel="icon" href="data:," />
     <style>
@@ -57,42 +57,14 @@
         font-size: 0.875rem;
       }
 
-      ul.schemas {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        border: 1px solid #27272a;
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      ul.schemas li {
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid #27272a;
-      }
-
-      ul.schemas li:last-child {
-        border-bottom: none;
-      }
-
-      .schema-name {
-        display: block;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #fafafa;
-        text-decoration: none;
-        margin-bottom: 0.35rem;
-      }
-
-      .schema-name:hover {
-        text-decoration: underline;
-      }
-
-      .schema-desc {
+      p.status {
         color: #a1a1aa;
         font-size: 0.8rem;
         line-height: 1.5;
         margin: 0;
+        padding: 1.25rem 1.5rem;
+        border: 1px solid #27272a;
+        border-radius: 8px;
       }
 
       footer {
@@ -118,23 +90,12 @@
     <main>
       <h1>Oxagen Schemas</h1>
       <p class="lede">
-        JSON Schemas for Oxagen configuration files, generated directly from the canonical Zod
-        source — reference one from <code>$schema</code> for editor autocompletion, with no drift
-        between the schema and the code that validates it.
+        JSON Schemas for Oxagen configuration files. Reference one from <code>$schema</code> and
+        your editor validates the file and completes its fields as you type.
       </p>
-      <ul class="schemas">
-        <li>
-          <a class="schema-name" href="/oxagen-cli-settings-schema.json"
-            >oxagen-cli-settings-schema.json</a
-          >
-          <p class="schema-desc">
-            Oxagen CLI <code>settings.json</code> — model, apiUrl, env, permissions, hooks,
-            mcpServers, toolVisibility, and inline agents.
-          </p>
-        </li>
-      </ul>
+      <p class="status">No schema documents are published on this domain yet.</p>
       <footer>
-        Generated from <code>apps/cli/src/settings/schema.ts</code> in the
+        Served from the
         <a href="https://github.com/oxagen/oxagen-monorepo">oxagen-monorepo</a>.
       </footer>
     </main>

@@ -8,7 +8,7 @@
 
 ## Intent
 
-Drop an entire named schema from the draft — its labels, relationship types, and properties. Invoked by the schema chat agent against draft-state grounding; not exposed as an API route, MCP tool, or CLI command.
+Drop an entire named schema from the draft — its labels, relationship types, and properties. Invoked by the schema chat agent against draft-state grounding; not exposed as an API route or MCP tool.
 
 ## Input
 

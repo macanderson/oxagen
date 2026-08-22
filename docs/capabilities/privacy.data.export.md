@@ -55,7 +55,6 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 - `POST /api/v1/{org}/{ws}/privacy/export`
 - `GET /api/v1/{org}/{ws}/privacy/export/:exportId` (status polling)
 - MCP tool `privacy_data_export`
-- CLI: `oxagen privacy export [--scope user|org] [--org-id <uuid>]`
 
 ## Errors
 

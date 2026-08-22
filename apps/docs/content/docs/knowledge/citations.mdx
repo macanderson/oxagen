@@ -61,9 +61,6 @@ curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/
   -H "Authorization: Bearer $OXAGEN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"days": 30, "limit": 10}'
-
-# CLI
-oxagen memory citations --days 30 --limit 10
 ```
 
 `days` (1–365, default 30) sets the window; `limit` (1–50, default 10) caps each top-N list. The MCP tool `get_citation_stats` takes the same input, so agents can read their own citation quality.
@@ -71,4 +68,3 @@ oxagen memory citations --days 30 --limit 10
 ## Related
 
 - [Agent memory](/docs/agent/memory) — the memory model, promotion lifecycle, and management surface.
-- [CLI memory commands](/docs/cli/memory) — `oxagen memory citations` and the rest of the lifecycle from the terminal.

@@ -1,6 +1,0 @@
----
-name: explain
-description: Explain the selected code.
----
-
-Explain $ARGUMENTS in plain language.

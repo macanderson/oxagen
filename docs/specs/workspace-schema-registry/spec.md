@@ -326,7 +326,7 @@ The epic is complete when **all** of the following hold:
    ingested node/relationship.
 10. Every authored mutation flows through `invoke()` and emits metering +
     lineage; every contract has full capability parity (contract → API → MCP →
-    CLI → docs), verified by `pnpm check:manifest`.
+    docs), verified by `pnpm check:manifest`.
 11. **Reconcile offered on activation.** Because activation auto-pins (criterion
     6), once a schema is configured and activated the user is prompted — never
     automatically — to dispatch **worker agents that prune / improve / polish /
@@ -344,14 +344,13 @@ The epic is complete when **all** of the following hold:
     relationship types validated by the lexical guard + pinned registry (active
     vocabulary), with **no Cypher-injection regression** (a test feeds a
     malicious relationship-type string and asserts rejection).
-14. `oxagen schemas setup` walks a user through recommend → intent chat → apply →
-    **activate (auto-publish + auto-pin)** in the terminal — and lets the user
-    **enable/disable schemas** (`schema enable` / `schema disable`) as part of the
-    wizard; and `schema.reconcile.dispatch --prune` removes off-schema properties
+14. `schema.setup` walks a user through recommend → intent chat → apply →
+    **activate (auto-publish + auto-pin)** headlessly — and lets the user
+    **enable/disable schemas** (`schema.toggle`) as part of the walkthrough;
+    and `schema.reconcile.dispatch` with `prune` removes off-schema properties
     with an audit trail (v2).
 15. A workspace's registry is composed of named **schemas**, each independently
-    **enabled/disabled** via `schema.list` / `schema.toggle` (CLI `schema list`,
-    `schema enable`, `schema disable`; UI toggles in §6). Disabling a schema is
+    **enabled/disabled** via `schema.list` / `schema.toggle` (UI toggles in §6). Disabling a schema is
     **non-destructive** — it never deletes Neo4j nodes/relationships, only
     narrows the active vocabulary — verified by a test asserting existing
     instances remain queryable after a disable.
@@ -752,30 +751,30 @@ Owner/Admin (org) + Owner/Member (workspace) allow, except read-only ones also
 allow Viewer. `schema.recommend`, `schema.chat`, and the validators carry
 `surfaces` including `agent`; mutators carry `agent.requiresApproval` per risk.
 
-| Contract | API route | MCP tool | CLI | Mode | Description |
-|---|---|---|---|---|---|
-| `schema.registry.get` | `routes/v1/schema.ts` | `tools/schema.ts` | `schema get` | sync | Resolve a workspace's registry: pinned version, draft version, enforcement mode, **per-schema enabled state**, label/relationship/property tree. |
-| `schema.registry.config` | `schema.ts` | `schema.ts` | `schema config` | sync | Set `enforcement_mode` + `conformance_floor`. IAM: Admin. |
-| `schema.list` | `schema.ts` | `schema.ts` | `schema list` | sync | List the workspace's schemas (name, display, source, connector, **enabled state**). Viewer-allowed. |
-| `schema.toggle` | `schema.ts` | `schema.ts` | `schema enable` / `schema disable` | sync | Enable/disable a schema for the workspace (writes `schema_activations`). **Activation is the go-live trigger: auto-publishes the current draft if it has unpublished edits (`version.create`) and auto-pins the resulting version (`version.pin`)** so the schema is "ready for use" — no separate publish/pin step (§1.4, §16.8). **Non-destructive** — re-pins to reflect the active set but never touches Neo4j data. Returns the resulting pinned version + whether reconcile is recommended. IAM: Admin. |
-| `schema.label.upsert` | `schema.ts` | `schema.ts` | `schema label upsert` | sync | Create/update a node label (name, display, description, natural-key props) on a schema within the draft version. |
-| `schema.label.delete` | `schema.ts` | `schema.ts` | `schema label delete` | sync | Remove a label (+ its properties) from the draft. |
-| `schema.relationship.upsert` | `schema.ts` | `schema.ts` | `schema rel upsert` | sync | Create/update a relationship type (name, start/end label, cardinality, description) on a schema within the draft. |
-| `schema.relationship.delete` | `schema.ts` | `schema.ts` | `schema rel delete` | sync | Remove a relationship type from the draft. |
-| `schema.property.upsert` | `schema.ts` | `schema.ts` | `schema prop upsert` | sync | Create/update a property (key, dataType, required, description, constraints, enum/item/example) on a label or relationship type. |
-| `schema.property.delete` | `schema.ts` | `schema.ts` | `schema prop delete` | sync | Remove a property from the draft. |
-| `schema.version.create` | `schema.ts` | `schema.ts` | `schema version create` | sync | Freeze the current draft into an immutable published version; open a fresh draft. |
-| `schema.version.pin` | `schema.ts` | `schema.ts` | `schema version pin` | sync | Point the workspace at a published version; returns whether a pin *downgrade* (older version) occurred → reconcile prompt. |
-| `schema.version.list` | `schema.ts` | `schema.ts` | `schema version list` | sync | List versions (number, label, status, published_at, change_summary). Viewer-allowed. |
-| `schema.version.diff` | `schema.ts` | `schema.ts` | `schema version diff` | sync | Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties. |
-| `schema.export` | `schema.ts` | `schema.ts` | `schema export` | sync | Build a ZIP of a version (manifest + one file per label/relationship type, grouped by schema) via the `archive.create` plumbing; returns access-controlled `serveUrl`. |
-| `schema.recommend` | `schema.ts` | `schema.ts` | `schema recommend` | sync | AI onboarding: read existing graph (`graph.stats`, `graph_observed_labels` telemetry, sampled `ontology.query`) **and the workspace's enabled schemas** → propose a starter schema / additions (labels/relationship types/properties). Does NOT mutate; returns a proposal the UI applies. Accepts `sampleLimit` (default 200); the agent may request more samples mid-run, and the value is exposed as a UI inference control, a CLI `--sample-limit` flag, and an API/MCP argument. |
-| `schema.setup` | `schema.ts` | `schema.ts` | `schema setup` | sync | **Interactive, LLM-assisted registry walkthrough** — the CLI/headless analogue of the app onboarding. Drives `schema.recommend` → intent-Q&A (`schema.chat`) → apply (`schema.label/relationship/property.upsert`) → **activate** (`schema.toggle`, which auto-publishes the draft + pins it — §1.4). The flagship `oxagen schemas setup` command (see §5.3). |
-| `schema.chat` | `schema.ts` | `schema.ts` | `schema chat` | sync | AI iterative builder turn: takes conversation + draft; returns assistant message + proposed mutation tool calls (rendered via `agent.ui.render`). |
-| `schema.validate.node` | `schema.ts` | `schema.ts` | `schema validate node` | sync | Validate a node `{label, properties}` against the pinned (or specified) version's **active vocabulary**; returns `{valid, conformanceScore, errors[]}`. |
-| `schema.validate.relationship` | `schema.ts` | `schema.ts` | `schema validate relationship` | sync | Validate a relationship `{type, startLabel, endLabel, properties}` against the active vocabulary; same return shape. |
-| `schema.reconcile.dispatch` | `schema.ts` | `schema.ts` | `schema reconcile` | async | (v2) Dispatch Inngest workers to backfill/re-derive node & relationship properties to match a version. Records the run on an `agent_executions` row (§4.7). Accepts `prune: boolean` (default `false`) — when set, also **removes** node/relationship properties not present in the target schema (see §9). Exposed as a CLI `--prune` flag and a UI knob in the pin-change dialog. Returns `executionId` (`aex_…`). |
-| `schema.reconcile.status` | `schema.ts` | `schema.ts` | `schema reconcile status` | sync | (v2) Read a reconcile run's progress by reading back its `agent_executions` row and projecting the counters from `state` (§4.7). |
+| Contract | API route | MCP tool | Mode | Description |
+|---|---|---|---|---|
+| `schema.registry.get` | `routes/v1/schema.ts` | `tools/schema.ts` | sync | Resolve a workspace's registry: pinned version, draft version, enforcement mode, **per-schema enabled state**, label/relationship/property tree. |
+| `schema.registry.config` | `schema.ts` | `schema.ts` | sync | Set `enforcement_mode` + `conformance_floor`. IAM: Admin. |
+| `schema.list` | `schema.ts` | `schema.ts` | sync | List the workspace's schemas (name, display, source, connector, **enabled state**). Viewer-allowed. |
+| `schema.toggle` | `schema.ts` | `schema.ts` | sync | Enable/disable a schema for the workspace (writes `schema_activations`). **Activation is the go-live trigger: auto-publishes the current draft if it has unpublished edits (`version.create`) and auto-pins the resulting version (`version.pin`)** so the schema is "ready for use" — no separate publish/pin step (§1.4, §16.8). **Non-destructive** — re-pins to reflect the active set but never touches Neo4j data. Returns the resulting pinned version + whether reconcile is recommended. IAM: Admin. |
+| `schema.label.upsert` | `schema.ts` | `schema.ts` | sync | Create/update a node label (name, display, description, natural-key props) on a schema within the draft version. |
+| `schema.label.delete` | `schema.ts` | `schema.ts` | sync | Remove a label (+ its properties) from the draft. |
+| `schema.relationship.upsert` | `schema.ts` | `schema.ts` | sync | Create/update a relationship type (name, start/end label, cardinality, description) on a schema within the draft. |
+| `schema.relationship.delete` | `schema.ts` | `schema.ts` | sync | Remove a relationship type from the draft. |
+| `schema.property.upsert` | `schema.ts` | `schema.ts` | sync | Create/update a property (key, dataType, required, description, constraints, enum/item/example) on a label or relationship type. |
+| `schema.property.delete` | `schema.ts` | `schema.ts` | sync | Remove a property from the draft. |
+| `schema.version.create` | `schema.ts` | `schema.ts` | sync | Freeze the current draft into an immutable published version; open a fresh draft. |
+| `schema.version.pin` | `schema.ts` | `schema.ts` | sync | Point the workspace at a published version; returns whether a pin *downgrade* (older version) occurred → reconcile prompt. |
+| `schema.version.list` | `schema.ts` | `schema.ts` | sync | List versions (number, label, status, published_at, change_summary). Viewer-allowed. |
+| `schema.version.diff` | `schema.ts` | `schema.ts` | sync | Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties. |
+| `schema.export` | `schema.ts` | `schema.ts` | sync | Build a ZIP of a version (manifest + one file per label/relationship type, grouped by schema) via the `archive.create` plumbing; returns access-controlled `serveUrl`. |
+| `schema.recommend` | `schema.ts` | `schema.ts` | sync | AI onboarding: read existing graph (`graph.stats`, `graph_observed_labels` telemetry, sampled `ontology.query`) **and the workspace's enabled schemas** → propose a starter schema / additions (labels/relationship types/properties). Does NOT mutate; returns a proposal the UI applies. Accepts `sampleLimit` (default 200); the agent may request more samples mid-run, and the value is exposed as a UI inference control and an API/MCP argument. |
+| `schema.setup` | `schema.ts` | `schema.ts` | sync | **Interactive, LLM-assisted registry walkthrough** — the headless analogue of the app onboarding. Drives `schema.recommend` → intent-Q&A (`schema.chat`) → apply (`schema.label/relationship/property.upsert`) → **activate** (`schema.toggle`, which auto-publishes the draft + pins it — §1.4). |
+| `schema.chat` | `schema.ts` | `schema.ts` | sync | AI iterative builder turn: takes conversation + draft; returns assistant message + proposed mutation tool calls (rendered via `agent.ui.render`). |
+| `schema.validate.node` | `schema.ts` | `schema.ts` | sync | Validate a node `{label, properties}` against the pinned (or specified) version's **active vocabulary**; returns `{valid, conformanceScore, errors[]}`. |
+| `schema.validate.relationship` | `schema.ts` | `schema.ts` | sync | Validate a relationship `{type, startLabel, endLabel, properties}` against the active vocabulary; same return shape. |
+| `schema.reconcile.dispatch` | `schema.ts` | `schema.ts` | async | (v2) Dispatch Inngest workers to backfill/re-derive node & relationship properties to match a version. Records the run on an `agent_executions` row (§4.7). Accepts `prune: boolean` (default `false`) — when set, also **removes** node/relationship properties not present in the target schema (see §9). Exposed as an API/MCP argument and a UI knob in the pin-change dialog. Returns `executionId` (`aex_…`). |
+| `schema.reconcile.status` | `schema.ts` | `schema.ts` | sync | (v2) Read a reconcile run's progress by reading back its `agent_executions` row and projecting the counters from `state` (§4.7). |
 
 > `schema.ts` is a **combined route file** (like `connection.ts`,
 > `integration.ts`) covering all `schema.*` capabilities, mounted in
@@ -809,34 +808,6 @@ Validators add `conformanceScore: number` and `outcome` to the output.
 - `schema.version.pin.input`: `{ versionId }` → `{ pinnedVersionId, previousVersionId, isDowngrade, reconcileRecommended }`.
 - `schema.reconcile.dispatch.input`: `{ versionId, prune?: boolean = false }` → `{ executionId }` (the `aex_…` `agent_executions` id, §4.7).
 - `schema.reconcile.status.input`: `{ executionId }` → `{ status, totalNodes, processedNodes, updatedNodes, totalRelationships, processedRelationships, updatedRelationships, prunedNodes, prunedRelationships }` (projected from the `agent_executions` row's `state`).
-
-### 5.3 `oxagen schemas setup` — LLM-assisted CLI walkthrough
-
-The flagship onboarding command, mirroring the app's agent-assisted
-configuration in a terminal wizard (Commander + Ink, per `apps/cli`). Flow:
-
-1. Resolve org/workspace context; check for an existing registry (offer to edit
-   vs. start fresh). List existing schemas and their enabled state (`schema.list`).
-2. Call `schema.recommend` (honoring `--sample-limit`, default 200; it factors in
-   the enabled schemas) and render the proposed schemas / labels / relationship
-   types / properties for review.
-3. Enter an interactive `schema.chat` loop: the agent asks intent questions
-   ("What kind of business are you? Do you track customers / source code / CRM
-   data / vendors & contracts?") and proposes mutations the user confirms inline;
-   each confirmation applies via `schema.label/relationship/property.upsert`.
-4. **Enable/disable schemas.** The wizard lets the user toggle any schema
-   (connector-contributed, user-authored, or recommended) on/off via
-   `schema.toggle` (`schema enable` / `schema disable`), non-destructively.
-5. On exit, **activating** a schema (`schema enable`) auto-publishes the draft and
-   pins it — "ready for use" in one step (§1.4); the wizard does not require a
-   separate `version create` / `version pin` (those remain available via
-   `schema version create` / `schema version pin` for manual control). Whenever the
-   activate (or an explicit pin) changes the pin, prompt for `schema reconcile`
-   with the `--prune` choice.
-
-Flags: `--sample-limit <n>`, `--no-interactive` (apply the recommendation
-verbatim and pin), `--enforcement <strict|lenient|off>`, `--json`. All work
-flows through `invoke()` so IAM + metering + lineage fire identically to the app.
 
 ## 6. UI
 
@@ -878,8 +849,7 @@ Components:
   `schema.recommend` and renders an accept/edit/discard proposal (grouped by
   proposed schema). Includes an **inference depth control** (sample size, default
   200) and a "sample more" action so the user can ask the agent to read a larger
-  slice of the graph; the value maps 1:1 to the `--sample-limit` CLI flag and the
-  API/MCP `sampleLimit` argument.
+  slice of the graph; the value maps 1:1 to the API/MCP `sampleLimit` argument.
 - `schema-assistant-drawer.tsx` — the **AI assistant drawer** (the north-star
   §2.0 hero surface): a slide-over drawer with a prompt box where the user types
   a single natural-language ask (e.g. the B2B-SaaS ontology prompt) and the agent
@@ -899,7 +869,7 @@ Components:
   newly published/activated schema?" → calls `schema.reconcile.dispatch`. Includes
   a **"Prune properties not in the schema" knob** (off by default, with a clear
   destructive-action warning) that sets the `prune` flag — the UI equivalent of
-  the CLI `--prune`.
+  the API/MCP `prune` argument.
 - `export-button.tsx` — calls `schema.export`, downloads the ZIP.
 
 Every new component above ships a **Storybook story in the app Storybook**
@@ -948,8 +918,7 @@ workspace-defined** — there is no built-in relationship-type vocabulary to bia
 toward (see §3.2).
 
 **Sample size is user-controllable.** `sampleLimit` defaults to 200 nodes but is
-surfaced as a UI inference-depth control, a CLI `--sample-limit` flag, and an
-API/MCP argument. When the user asks for more thorough inference (or coverage of
+surfaced as a UI inference-depth control and an API/MCP argument. When the user asks for more thorough inference (or coverage of
 the observed labels is thin), the agent requests additional samples up to a hard
 ceiling before proposing — so larger graphs can be characterized more completely
 on demand without making the default expensive.
@@ -1071,7 +1040,7 @@ implementation (single source of truth). Ingestion also emits
    completion) and a `schema_conformance_events` row (`outcome=pruned`) so the
    deletion is auditable. Default is **additive-only** (no deletion). Pruning is a
    destructive write, so it requires the same Admin gate as dispatch and a
-   confirmed UI/CLI opt-in; it never runs implicitly. **Disabling a schema
+   confirmed opt-in; it never runs implicitly. **Disabling a schema
    (`schema.toggle`) is NOT a prune** — it only narrows the active vocabulary and
    never deletes data (§1.4); `--prune` is the only destructive path.
 5. Update the `state` progress counters (`processedNodes` / `updatedNodes` /
@@ -1090,8 +1059,7 @@ Triggering policy: prompted (never automatic) whenever a pin changes. Because
 **activation auto-pins** (§1.4, criterion 6), the most common trigger is **a
 schema being activated**; it also fires on an explicit new-version pin OR when the
 pin moves to a different (older) version (`isDowngrade`). The
-`pin-change-dialog.tsx` is the only entry point; the prune knob there (and the CLI
-`--prune` flag) sets the `prune` flag.
+`pin-change-dialog.tsx` is the only entry point; the prune knob there (and the API/MCP `prune` argument) sets the `prune` flag.
 
 ## 10. Migrations
 
@@ -1107,7 +1075,7 @@ pin moves to a different (older) version (`isDowngrade`). The
   (§4.10) in the ClickHouse migration set.
 - **Contract rename + alias (v1).** `graph.edge.upsert` → `graph.relationship.upsert`
   and `semantic.edge.*` → `semantic.relationship.*` (§1.2): add the new contracts
-  + API/MCP/CLI parity, mount the old names as one-release deprecation aliases that
+  + API/MCP parity, mount the old names as one-release deprecation aliases that
   route to the new handlers and emit a deprecation note, and remove the
   `GRAPH_EDGE_TYPES` enum (§3.2). Aliases are dropped one release later (§14).
 - **`ingestion.entity_types` sunset (phased).** (a) Ship the registry + ClickHouse
@@ -1138,7 +1106,7 @@ pin moves to a different (older) version (`isDowngrade`). The
   schemas re-grounds all future ingestion; reconcile rewrites the graph). Because
   **`apps/app` does not bootstrap IAM**, every app call site adds explicit
   `assertBillingManager`-style gates (`assertOrgMember` / Admin assertion).
-  MCP/API/CLI go through `invoke()` which enforces IAM.
+  MCP and API go through `invoke()` which enforces IAM.
 - **Export** is served only through the access-controlled
   `/api/v1/assets/<publicId>` route (same as `archive.create`); no public blob
   URLs.
@@ -1256,14 +1224,14 @@ pin moves to a different (older) version (`isDowngrade`). The
   **`ingestion.entity_types` sunset** import + recommender repoint (§10); the
   start of the §3.3 **dual-write** (ingestion writes real labels); builder UI +
   chat + **schemas list with enable/disable toggles**; configurable recommender
-  sampling; `oxagen schemas setup` wizard with enable/disable.
+  sampling; the `schema.setup` walkthrough with enable/disable.
   **v1 completion gate = unit tests + coverage thresholds + the §13 Storybook /
   light-dark-screenshot / LLM-judge visual gate.** E2E is explicitly deferred to
   v2.
 - **v2 — Reconciliation workers + physical relabel + E2E.** §4.7 (reuse of
   `agent_executions`) + §9: `schema.reconcile.dispatch` / `.status`, Inngest
   fanout, pin-change prompt, progress reporting on the `agent_executions` row,
-  best-effort backfill of existing graph, the opt-in **prune** mode (CLI `--prune`
+  best-effort backfill of existing graph, the opt-in **prune** mode (API/MCP argument
   / UI knob) with audit trail; the §3.3 **batch relabel** off
   `:EntityNode {entityType}` to first-class labels (shares the paging machinery),
   followed by dropping `entityType` and the `:EntityNode` secondary label; and the
@@ -1315,15 +1283,15 @@ All originally-open questions are now decided (signed off):
    `draft` version row per workspace; concurrent edits resolve last-writer-wins at
    the property-row level. No per-user drafts.
 4. **Recommender sampling — configurable, default 200.** `sampleLimit` defaults to
-   200 nodes and is exposed as a UI inference-depth control, CLI `--sample-limit`,
-   and API/MCP argument; the agent may request more samples on user request or
+   200 nodes and is exposed as a UI inference-depth control and an
+   API/MCP argument; the agent may request more samples on user request or
    thin coverage, up to a hard ceiling. Surfaced first-class via the
-   `oxagen schemas setup` LLM-assisted wizard (§5.3), mirroring the app onboarding.
+   `schema.setup` LLM-assisted walkthrough, mirroring the app onboarding.
 5. **Reconcile pruning — supported, opt-in.** `schema.reconcile.dispatch` takes a
    `prune` flag (default `false`, additive-only). When set it removes off-schema
    properties, audited via the `agent_executions` `state.prunedPropertyKeys` map +
    `outcome=pruned` ClickHouse events, behind an Admin gate and a confirmed
-   destructive-action opt-in. Exposed as the CLI `--prune` flag and the
+   destructive-action opt-in. Exposed as the API/MCP `prune` argument and the
    pin-change-dialog UI knob. Pruning is the **only** destructive path — disabling
    a schema is not (decision 8).
 6. **Canonical Neo4j vocabulary — adopted (§1.2), grounded in Neo4j's official
@@ -1348,8 +1316,8 @@ All originally-open questions are now decided (signed off):
 8. **Per-workspace enable/disable of schemas — yes, non-destructive, and
    activation auto-publishes + auto-pins (§1.4, north-star §2.0).** A registry is
    composed of named **schemas** (connector / user / recommended), each
-   independently enabled/disabled via `schema.list` + `schema.toggle` (CLI
-   `schema list` / `enable` / `disable`; UI toggles). New schemas are **born
+   independently enabled/disabled via `schema.list` + `schema.toggle` (UI
+   toggles). New schemas are **born
    disabled/draft** and have no graph effect until activated. **Activating a
    schema is the go-live trigger: it auto-publishes the current draft (if it has
    unpublished edits) and auto-pins the resulting immutable version — the user

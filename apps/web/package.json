@@ -2,5 +2,5 @@
   "name": "@oxagen/web-v2",
   "version": "2.1.1",
   "private": true,
-  "description": "oxagen.sh public website (v2). Static for now — the platform health & investor deck is the interim homepage."
+  "description": "oxagen.sh public website (v2). Static — no build step."
 }

@@ -3,24 +3,17 @@
   "version": "2.1.1",
   "private": true,
   "type": "module",
-  "description": "Static hosting for Oxagen JSON Schemas (schemas.oxagen.sh) — generated from the canonical Zod schemas so editors get $schema autocompletion with zero drift.",
+  "description": "Static hosting for Oxagen JSON Schemas (schemas.oxagen.sh) so editors get $schema autocompletion for Oxagen configuration files.",
   "scripts": {
-    "settings:schema": "tsx scripts/generate.ts",
-    "generate": "pnpm run settings:schema",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src scripts --max-warnings 0",
+    "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
-  },
-  "dependencies": {
-    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
     "@vitest/coverage-v8": "2.1.9",
-    "tsx": "4.22.3",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "zod-to-json-schema": "3.24.1"
+    "vitest": "2.1.9"
   }
 }

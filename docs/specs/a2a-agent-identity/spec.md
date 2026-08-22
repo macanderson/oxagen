@@ -38,7 +38,7 @@ per-agent interop surface:
    agent genuinely subscribe to another's ongoing work.
 5. **No agent awareness.** No skill file and neither live system-prompt
    builder (`packages/ai/src/prompts/registry.ts` for chat/A2A,
-   `packages/agent-engine/src/prompt/system-prompt.ts` for the CLI loop)
+   `packages/agent-engine/src/prompt/system-prompt.ts` for the engine loop)
    mentions the A2A protocol, external agent addressing, or subscribing to
    another agent's work.
 
@@ -78,7 +78,7 @@ The epic is complete when **all** of the following are true:
    `status-update`/`artifact-update` events until terminal, instead of one
    snapshot. On a terminal task it still returns the one final snapshot
    (correct A2A behavior — nothing to subscribe to).
-6. Both live system-prompt builders (chat/A2A shared registry, CLI
+6. Both live system-prompt builders (chat/A2A shared registry, the
    agent-engine loop) mention: A2A exists, how to address another agent's
    skill via `skillId`, that `tasks/resubscribe` can live-attach to a
    non-terminal task, and that internal fan-out lineage now covers A2A

@@ -3,20 +3,16 @@ title: Managed policy
 description: Organization-level control over which MCP servers and tools are allowed — for enterprise governance.
 ---
 
-Managed policies let organization admins control which external MCP servers developers can connect and which tools are allowed or blocked. This is the enterprise governance layer that cannot be overridden by individual user or project settings.
+Managed policies let organization admins control which external MCP servers a workspace may connect and which tools are allowed or blocked. This is the enterprise governance layer, and it cannot be widened by a workspace's own settings.
 
 ## How it works
 
-The managed config is stored at `~/.config/oxagen/managed.json` and synced automatically from the platform (on login and periodically in the background). This file acts as an **unoverridable floor** — its rules take precedence over all user/project/local settings.
+The policy is published once for the organization and evaluated by the runtime on every server registration and every tool materialization. It acts as an **unoverridable floor**: a workspace can tighten it, never loosen it.
 
-## Managed config structure
+## Policy structure
 
 ```json
 {
-  "_managed": true,
-  "_orgId": "org_abc123",
-  "_syncedAt": "2026-06-25T10:00:00Z",
-
   "mcpServers": {
     "company-jira": {
       "transport": "streamable-http",
@@ -31,10 +27,6 @@ The managed config is stored at `~/.config/oxagen/managed.json` and synced autom
       "https://api.githubcopilot.com/mcp/",
       "https://mcp.linear.app/**",
       "https://mcp.internal.acme.com/**"
-    ],
-    "allowedCommands": [
-      "npx -y @modelcontextprotocol/*",
-      "npx -y @anthropic/*"
     ],
     "deniedServerUrls": [
       "http://**"
@@ -64,7 +56,7 @@ When `allowedServerUrls` is non-empty, **only** URLs matching at least one patte
 }
 ```
 
-If a developer runs `oxagen mcp add my-server --url https://random-server.com/mcp`, they receive:
+Registering a server outside the list fails with an explicit refusal:
 
 ```
 Blocked by organization policy: URL "https://random-server.com/mcp" is not in the allowed server list. Contact your admin.
@@ -83,20 +75,6 @@ URLs matching `deniedServerUrls` are always blocked, even if they match the allo
 ```
 
 This blocks all non-TLS servers — a common enterprise requirement.
-
-### Command allowlist (for stdio)
-
-Controls which local commands can be spawned as stdio MCP servers:
-
-```json
-{
-  "allowedCommands": [
-    "npx -y @modelcontextprotocol/*",
-    "npx -y @anthropic/*",
-    "docker run acme-registry.internal/*"
-  ]
-}
-```
 
 ### Tool denylist
 
@@ -120,9 +98,9 @@ Denied tools are filtered out before they reach the model. They never appear in 
 Org-provisioned servers in the `mcpServers` section (with `"managed": true`) are:
 
 - Automatically available in every workspace
-- Cannot be removed by users
-- Cannot have their auth overridden by local settings
-- Cannot be disabled by users
+- Cannot be removed by workspace members
+- Cannot have their auth overridden by workspace settings
+- Cannot be disabled by workspace members
 
 This ensures critical integrations (internal tools, company Jira, etc.) are always available and correctly configured.
 
@@ -130,29 +108,19 @@ This ensures critical integrations (internal tools, company Jira, etc.) are alwa
 
 | Action | Enforcement |
 |--------|-------------|
-| `oxagen mcp add` | URL/command checked against allowlist/denylist |
+| Registering a server | URL checked against allowlist/denylist |
 | Tool materialization | Tools checked against `deniedTools` |
-| `oxagen mcp remove` | Blocked for managed servers |
+| Removing a server | Blocked for managed servers |
 | Auth override | Blocked for managed servers |
-
-## Syncing the policy
-
-The managed config is pulled from the platform automatically on `oxagen auth login` and periodically when the CLI is used (at most once per hour). To check when the policy was last synced:
-
-```bash
-cat ~/.config/oxagen/managed.json | jq '._syncedAt'
-```
 
 ## For org admins
 
-Managed policies are configured in the platform at **Organization → Governance → MCP Policy**. Changes take effect on the next sync for all org members.
+Managed policies are configured in the platform at **Organization → Governance → MCP Policy**. Publishing a change takes effect for every workspace in the organization on its next server registration or tool materialization.
 
 To set up a managed policy:
 
 1. Define allowed server URLs (or leave empty to allow all)
 2. Add any denied URL patterns (e.g. `http://**` for TLS-only)
 3. Add denied tool patterns for dangerous operations
-4. Optionally provision managed servers that all members receive
+4. Optionally provision managed servers that all workspaces receive
 5. Publish the policy
-
-Members receive the updated policy on their next automatic background sync (triggered on login or CLI use, at most once per hour).

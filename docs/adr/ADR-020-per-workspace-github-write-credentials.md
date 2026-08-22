@@ -1,7 +1,7 @@
 # ADR-020: Per-workspace GitHub write credentials
 
 **Status:** Accepted (2026-06-28)
-**Related:** ADR-019 (unified agent engine), the GitHub App setup spec (`docs/specs/github-app/github-app-setup.md`)
+**Related:** the GitHub App setup spec (`docs/specs/github-app/github-app-setup.md`)
 
 ## Context
 
@@ -20,7 +20,7 @@ What's missing: the App is configured **read-only**; **installation-token mintin
 **Resolve a per-workspace WRITE token via a single resolution chain in `resolveGitHubToken(ctx)`, installation-token-preferred:**
 
 1. **GitHub App installation access token (preferred, production path).** When the workspace's `source_connections` row carries an `installationId` AND the App key is configured, mint a **short-lived** installation token: build an RS256 JWT signed with the App private key (`GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`) and `POST /app/installations/{installationId}/access_tokens`. Cache per installation for ~55 min. Workspace-scoped, repo-granular, bot identity, no long-lived secret stored, high rate limits, revocable by uninstalling.
-   - **Implemented with `node:crypto` (RS256) + `fetch` — NOT `@octokit`** — so it stays dependency-light and cannot re-break the Next/Turbopack app bundle (the failure ADR-019/#240 fixed).
+   - **Implemented with `node:crypto` (RS256) + `fetch` — NOT `@octokit`** — so it stays dependency-light and cannot re-break the Next/Turbopack app bundle (the failure #240 fixed).
 2. **Stored per-workspace OAuth token (fallback).** Look up `source_connections` by `(orgId, workspaceId, connectorId="github")`, join `oauth_accounts` via `oauthAccountId`, KMS-decrypt `accessTokenEnc`, return it. Acts as the connecting user. Reuses the existing connect flow + storage + crypto verbatim.
 3. **Dev/demo env `GITHUB_PERSONAL_ACCESS_TOKEN` (last resort).** Local only; never the path in a deployed multi-tenant env.
 

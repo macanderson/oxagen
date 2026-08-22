@@ -64,13 +64,6 @@ curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/
   -d '{"memoryId": "mem_01H…", "toClass": "FACT", "rationale": "confirmed by finance", "basedOnEvidenceIds": ["ev_01H…"]}'
 ```
 
-CLI (rationale flag now optional):
-
-```bash
-oxagen memory promote mem_01H… --to rule --enforcement 80
-oxagen memory promote mem_01H… --to fact --rationale "confirmed by finance"
-```
-
 ## SPEC references
 
 - `docs/specs/two-axis-memory/DESIGN.md` §4

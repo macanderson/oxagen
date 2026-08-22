@@ -8,7 +8,7 @@
 
 **First surface:** a deployed agent executing `edit_repo_file` on behalf of a human principal
 
-**Related:** `docs/specs/workspace-graph-boundary/spec.md`, `docs/specs/agent-engine-v2/spec.md`, `docs/adr/ADR-033-stella-engine-core.md`, `docs/specs/agent-rbac/spec.md`, `docs/adr/ADR-028-time-travel-replay.md`
+**Related:** `docs/specs/workspace-graph-boundary/spec.md`, `docs/specs/agent-engine-v2/spec.md`, `docs/adr/ADR-033-stella-engine-core.md`, `docs/specs/agent-rbac/spec.md`
 
 ## Executive decision
 
@@ -23,7 +23,7 @@ The manifest is the evidence bridge defined by the workspace-graph boundary. It 
 
 This slice deliberately does **not** add a public Stella upload endpoint. Hosted execution produces `runner_observed` evidence inside Oxagen. A later standalone-client contract may submit the same envelope shape, but Oxagen will assign it `client_attested` authority and will derive all identity fields from authentication rather than trusting the body.
 
-The hosted finalizer invokes one Oxagen-owned capability, `ingest_run_evidence`, through `kernel.invoke()`. Its launch exposure is an internal API transport callable only by the durable-worker service principal: scoped, high-sensitivity, default-deny, excluded from agent/MCP/CLI discovery, and not blocked by a second billing gate. This preserves IAM, validation, audit, metering, and lineage enforcement without creating a user-addressable upload endpoint.
+The hosted finalizer invokes one Oxagen-owned capability, `ingest_run_evidence`, through `kernel.invoke()`. Its launch exposure is an internal API transport callable only by the durable-worker service principal: scoped, high-sensitivity, default-deny, excluded from agent/MCP discovery, and not blocked by a second billing gate. This preserves IAM, validation, audit, metering, and lineage enforcement without creating a user-addressable upload endpoint.
 
 ## Why this must precede the Stella engine swap
 
@@ -37,7 +37,7 @@ The current seams are useful but insufficient for the enterprise claim:
 | The GitHub API fallback has no checkout, local graph, command execution, or verification | It cannot produce environment-restorable or verified evidence | Require a sandbox checkout for governed agent edits; fail closed when it is unavailable |
 | Stella currently compiles against pinned `opencontextprotocol` `ocp-types`/`ocp-host`, not this repository's current `context-graph-protocol` crates | Similar Rust names are not proof of CGP wire compatibility | Switch to the current CGP crates or land a version-pinned adapter with shared conformance fixtures before claiming CGP evidence |
 | Stella's current `ContextRecall` event carries frame id, citation, source, and token cost | It cannot prove the exact authorized bytes framed into a model call | Capture frame and rendered-content digests at the `ContextRecallPort`/compiler boundary |
-| ADR-028 `record-v1` is a local session sidecar containing cwd, prompts, tool I/O, and filesystem layers | It is not tenant-scoped, IAM-bound, retention-aware cloud evidence | Reuse its content-addressing and integrity patterns, not its envelope as the platform contract |
+| A local session sidecar record containing cwd, prompts, tool I/O, and filesystem layers | It is not tenant-scoped, IAM-bound, retention-aware cloud evidence | Reuse its content-addressing and integrity patterns, not its envelope as the platform contract |
 
 Importing Stella before these corrections would put a first-class engine behind an ambiguous run and context record. The evidence seam makes the later engine change transport-only: TS and Stella engines must emit the same platform receipts.
 
@@ -461,7 +461,7 @@ Projection or provider-reconciliation failure does not discard accepted evidence
 ## Security and retention rules
 
 - Tenant and workspace scope come from authenticated execution context, never the envelope body.
-- The first slice accepts evidence only from the internal durable-worker service principal. `ingest_run_evidence` has no user-addressable route, agent/MCP/CLI exposure, or generic graph-mutation side door.
+- The first slice accepts evidence only from the internal durable-worker service principal. `ingest_run_evidence` has no user-addressable route, agent/MCP exposure, or generic graph-mutation side door.
 - `runner_observed` finalization requires both the internal durable-worker service principal and the matching one-shot grant minted atomically when that attempt is sealed. The reclaimer mints it through the same seal transaction for an abandoned attempt. The grant is bound to the attempt, seal, final event and stream digests, and exact capability; it does not expire operationally, can finalize successfully only once, and cannot execute tools.
 - The pinned authorization snapshot is the run's non-expanding grant ceiling. Every tool call and context selection re-enters current kernel enforcement and checks active principal/agent status plus the org/workspace deny-generation. Later grants cannot expand an active run; any deny-generation increment invalidates cached allows so agent disablement, explicit revocation, and emergency deny policies take effect before the next operation. Each result is recorded as a new decision without rewriting prior evidence.
 - Public APIs expose public IDs, human labels, and RBAC-filtered summaries—never internal UUIDs, raw path HMACs, raw frame URIs, or blob keys. The signed manifest contains only opaque `rpl_` path-locator IDs.

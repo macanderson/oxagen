@@ -9,7 +9,6 @@ List version history for a connector plugin, including changelog entries and bre
 - API: `GET /v1/plugin-versions/:pluginId`
 - MCP: `plugin.version.list`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

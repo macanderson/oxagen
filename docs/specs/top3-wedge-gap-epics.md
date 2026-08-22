@@ -50,7 +50,7 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
   workspace at `invoke()` time, editable at runtime via `plugin.org.install`/`set_enabled`.
 - **Metering and budget enforcement work — at org grain.** Single charge chokepoint
   (`packages/billing/src/metering.ts:124`), atomic credit debits, pre-turn admission,
-  and 3-mode per-turn USD budgets shared across CLI/API/app.
+  and 3-mode per-turn USD budgets shared across API and app.
 - **Trace capture is the strongest area.** `agent.execution.record` persists nested
   steps with per-tool tokens/latency; ClickHouse rows are OTEL-stamped with
   trace/span ids. IAM audit events are principal-attributed and hash-chained
@@ -79,7 +79,6 @@ play needs the same spine built first: carry identity end-to-end, then attach sc
   idempotency keys, hashes, or signatures. The audit hash-chain omits payload,
   outcome, principal, and timestamp from the chained hash (edits don't break it), is
   unsigned, and unanchored. Billing has no outcome/per-resolution price type.
-  The executed-test verification harness exists only offline in `packages/bench`.
 
 ---
 
@@ -169,7 +168,7 @@ Persist verified outcomes as durable, joinable facts — not live reads.
 - Persist CI/PR verdicts (webhook or poll) against the execution that produced the
   change: `tests_passed@sha`, `pr_merged`, and blast radius from an immutable,
   typed run-evidence manifest bound to the exact commit and declared scope.
-- Bring the `packages/bench` executed-test harness in-runtime as deterministic
+- Build an executed-test verification harness in-runtime as deterministic
   verification rules; LLM-judge evals become one (subjective) verifier among several.
 - **Done when:** "show me executions whose diffs merged with green CI" is a query,
   per customer, in production.

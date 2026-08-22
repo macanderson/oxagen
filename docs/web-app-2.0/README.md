@@ -10,7 +10,7 @@ serves the product wedge.
 
 Inputs it was authored from: the current-state route inventory (`84` page files, `61`
 real content pages, a 3-mode sidebar, `308` registered capability contracts of which only
-`57` declare an `app` layer, leaving `251` operable only via API/MCP/CLI), and
+`57` declare an `app` layer, leaving `251` operable only via API/MCP), and
 [`docs/VISION.md`](../VISION.md) — the "metered, governed, graph-grounded control plane
 for teams that build and **resell** AI agents" north star.
 
@@ -35,7 +35,7 @@ graph grounding — are present in the codebase but scattered, buried, or headle
   knowledge scope → permitted action → commercial terms → verified outcome → audit record)
   is the product's core differentiator, yet there is **no page anywhere** that makes a
   contract legible as that enforced object. The 308 contracts are introspectable only via
-  a CLI (`pnpm check:manifest`).
+  a repo script (`pnpm check:manifest`).
 - **251 capabilities have no human surface.** Whole families are invisible: `automation.*`
   (6, zero UI — the sidebar's own header comment names an intended "Automation" item that
   was never built), `repo.*` (13), subagent fan-out / fleet (8), `workflow.*` (3), the eval
@@ -94,7 +94,7 @@ into a governed grounding wizard rather than becoming a breadth play).
    vision's clearest whitespace, and a real new build (contracts required).
 2. **Make governance a place.** New **Governance** group with a **Capability & Contract
    catalog** that renders each typed contract as identity → scope → action → terms → outcome
-   → audit — the differentiator, currently CLI-only.
+   → audit — the differentiator, with no human surface today.
 3. **Give the 251 headless capabilities their highest-value UIs.** New **Automations**
    primary section, a **Repos** workbench tab (`repo.*`), a **Fleet** subagent-lineage view,
    and a real **Connect-a-source wizard** for every connector (not just GitHub).
@@ -119,7 +119,7 @@ appears in the file's header.
 - [`root/spec.md`](./root/spec.md) — Identity dispatcher at `/` (auth → org → workspace redirect).
 - [`auth/spec.md`](./auth/spec.md) — All unauthenticated surfaces: login, signup, forgot/reset password, two-factor, verify.
 - [`onboarding/spec.md`](./onboarding/spec.md) — Org creation (`/new-organization`) and workspace creation (`/{orgSlug}/new-workspace`).
-- [`system/spec.md`](./system/spec.md) — Machine/OAuth landings: CLI PKCE authorize and GitHub App setup.
+- [`system/spec.md`](./system/spec.md) — Machine/OAuth landings: loopback PKCE authorize and GitHub App setup.
 
 ### Account scope (`/account`)
 

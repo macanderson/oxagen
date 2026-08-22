@@ -6,7 +6,7 @@
 
 ## Intent
 
-Return ordered, copy-ready MCP/CLI installation instructions for a given AI
+Return ordered, copy-ready MCP installation instructions for a given AI
 client (claude-code, cursor, claude-desktop, codex, vscode). Uses the
 production Vercel app domains from `CLAUDE.md` throughout — no hard-coded
 localhost values.

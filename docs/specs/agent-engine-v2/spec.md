@@ -4,7 +4,7 @@
 **Companions:** `plan.md` (phases + exit criteria), `README.md` (index).
 
 The one-sentence version: **Stella supplies the engine, Oxagen remains the
-law.** The Rust core that already exists, benches well, and is property-tested
+law.** The Rust core that already exists and is property-tested
 becomes the platform's turn driver; every side effect it requests still flows
 through the capability kernel, the sandbox, engram, and billing — none of which
 Stella has and all of which are the platform's moat.
@@ -17,7 +17,7 @@ An audit of the live code (2026-07-18, `main` @ a4331a985) found:
 
 | # | Finding | Evidence |
 |---|---------|----------|
-| 1 | The judged pipeline never runs in production. Evaluate→enhance→route→execute→judge→revise exists (`packages/agent-engine/src/pipeline/index.ts`, 1,968 lines) but only the CLI and `agent.repo.edit` call `runTurn`. Chat, REST, and A2A call bare `runCodingAgent`. | `apps/app/src/app/api/v1/chat/stream/route.ts:40,1579`; `apps/api/src/routes/v1/chat.stream.ts:442`; `apps/api/src/routes/a2a/bridge.ts:517`; `packages/handlers/src/agent.repo.edit.ts:102` |
+| 1 | The judged pipeline never runs in production. Evaluate→enhance→route→execute→judge→revise exists (`packages/agent-engine/src/pipeline/index.ts`, 1,968 lines) but only `agent.repo.edit` calls `runTurn`. Chat, REST, and A2A call bare `runCodingAgent`. | `apps/app/src/app/api/v1/chat/stream/route.ts:40,1579`; `apps/api/src/routes/v1/chat.stream.ts:442`; `apps/api/src/routes/a2a/bridge.ts:517`; `packages/handlers/src/agent.repo.edit.ts:102` |
 | 2 | No durability. Turn state is an in-memory `conversation` array inside a request-scoped stream; disconnect/timeout loses the turn. No checkpoint, no resume, anywhere in the loop path. `chat.persist-stream` only mirrors the *final* output after the fact. | `packages/agent-engine/src/engine.ts:306`; `route.ts:700` (1,856-line handler); `packages/inngest-functions/src/functions/chat.persist-stream.ts` |
 | 3 | No hook/event bus. "Hooks" are three fixed log-only functions; blocking policy is the hardcoded kernel gate order (IAM → billing → entitlement). Plugins cannot register policy; extending policy means editing `kernel.ts` (1,183 lines, six module-global injected singletons). | `packages/agent/src/hooks/runtime.ts:45-48`; `packages/oxagen/src/kernel.ts:504` |
 | 4 | Tool parallelism is inherited and unguarded. The AI SDK fires each tool call without awaiting ("we don't await the tool execution here"), so calls in a step run concurrently — with no cap and no read/write distinction. Parallel `write_file` + `bash` can interleave in the sandbox. | `ai@7.0.14` (the engine's resolved version) `src/generate-text/execute-tools-from-stream.ts:200-205`; same behavior in `ai@6.0.224` `run-tools-transformation.ts:351-386` |
@@ -29,7 +29,7 @@ What is genuinely strong and must not be disturbed:
 
 - **The capability kernel** — `invoke()` over ~300 Zod contracts with IAM,
   billing admission, entitlement, and approval gates; surface parity across
-  API/MCP/CLI/UI (`packages/oxagen/src/kernel.ts:504`, `_invokeCore:545`).
+  API/MCP/UI (`packages/oxagen/src/kernel.ts:504`, `_invokeCore:545`).
 - **`materializeTools`** — capabilities → governed AI-SDK tools with approval
   waits, consent, metering, and OTEL (`packages/agent/src/runtime/materialize-tools.ts:303`).
 - **Engram** — episodic+graph memory with a token-budgeted context compiler,
@@ -59,7 +59,7 @@ priority order:
    defines "done" (checked to actually fail). The worker can see it —
    convergence comes from iterating against it — and integrity comes from
    fingerprinting the witness files: if they changed at verify time, the flip
-   degrades to inconclusive. SWE-bench-grade rigor, minimal machinery.
+   degrades to inconclusive. Benchmark-grade rigor, minimal machinery.
 3. **Structured tool dispatch** (`stella-core/src/driver.rs:702-759`).
    Consecutive read-only calls run concurrently (`buffer_unordered`, cap 8);
    every mutating call is a serial barrier; results re-ordered to call order
@@ -112,7 +112,7 @@ Decisive factors for A: the Stella core is I/O-free by construction, which is
 exactly the shape napi embeds well (TS implements the ports, Rust owns the
 loop); the durable worker we need *anyway* (finding #2) is a natural native-
 module host, sidestepping serverless build pain; and one shared engine means
-CLI bench wins (arena/SWE-bench) transfer to the platform verbatim.
+Stella's own engine wins transfer to the platform verbatim.
 
 ## 4. Target architecture
 
@@ -159,8 +159,8 @@ cheaper, but removing the bus must never weaken the platform's guarantees.
 | `ApprovalGate` (`stella-pipeline/src/ports.rs:172`) | `createApprovalRequest` + `waitForApproval` | Scope review above blast-radius thresholds becomes a real HITL approval row. Headless without bypass = hard error (Stella semantics: never silent auto-approve). |
 | `HookBus` (`stella-core/src/bus.rs`) | The new platform extension surface | See §4.4. |
 | `Clock`/`Sleeper` | Trivial impls | Injected for testability, as upstream. |
-| `stella-core::hooks` (shell hooks) | **Explicitly not used server-side** | Tenant-supplied shell commands in the worker are a non-starter; the bus + kernel gates cover policy. CLI keeps them. |
-| `stella-store` (SQLite) | **Not used server-side** | Persistence is the platform's: `agent_events` (Postgres) + ClickHouse. The store stays a CLI concern. |
+| `stella-core::hooks` (shell hooks) | **Explicitly not used server-side** | Tenant-supplied shell commands in the worker are a non-starter; the bus + kernel gates cover policy. Stella keeps them for local runs. |
+| `stella-store` (SQLite) | **Not used server-side** | Persistence is the platform's: `agent_events` (Postgres) + ClickHouse. The store stays a Stella-local concern. |
 
 ### 4.2 Durable turn runner (engine-independent; Track 1)
 
@@ -173,8 +173,8 @@ New `packages/agent-runner`:
 - **Run records:** `agent_runs` row + append-only `agent_events` log (Postgres,
   `UNIQUE(run_id, seq)` — mirroring Stella's `events` table discipline). The
   event log is *canonical*: SSE is a replayable subscription (client reconnect
-  = resume from last seq), ClickHouse ingestion tails it, and ADR-028 replay
-  reads it instead of a parallel recorder. Large payloads (tool outputs, diffs)
+  = resume from last seq), and ClickHouse ingestion tails it, instead of a
+  parallel recorder reading its own log. Large payloads (tool outputs, diffs)
   go to content-addressed blobs (`packages/replay`'s `RecordStore` pattern).
 - **Workers:** a small pool of long-lived Node processes (the napi host).
   Claim via `FOR UPDATE SKIP LOCKED` + lease heartbeat — the exact pattern
@@ -335,7 +335,7 @@ while (true) {
 | Checkpoint serialization cost | Content-addressed blobs; checkpoint = digest + small state structs, amortized per step, not per event |
 | Rust bus + JS handlers = cross-language policy debugging | Every verdict is an `AgentEvent` in the log; policy decisions are replayable by construction |
 | Team Rust capacity | The platform side writes TS (ports + worker); Rust changes are upstream in Stella where the engine work already lives |
-| Regression vs. current behavior | Shadow mode + arena/SWE-bench parity gate before any surface flips (see `plan.md`) |
+| Regression vs. current behavior | Shadow mode + a parity gate against live traffic before any surface flips (see `plan.md`) |
 
 ## 8. Open questions
 

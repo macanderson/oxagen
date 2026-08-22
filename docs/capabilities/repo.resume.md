@@ -8,7 +8,6 @@ Resume automatic syncing for a paused repository connection.
 ## Surfaces
 - API: `POST /v1/repos/:id/resume`
 - MCP: `repo.resume`
-- CLI: `oxagen repo resume <id>`
 - Agent: callable (no approval required, risk: low)
 
 ## Input

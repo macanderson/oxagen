@@ -9,7 +9,6 @@ Create or update a node label on a schema within the current draft version. Chan
 - API: `PUT /v1/schemas/{schemaName}/labels/{name}`
 - MCP: `schema.label.upsert`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

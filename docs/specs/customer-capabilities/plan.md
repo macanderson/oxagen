@@ -52,14 +52,14 @@ both.*
 | 2.B1 | Runner image (`oxagen/cap-runner`, digest-pinned) + supervisor (`cap-call` protocol) + warm session pools on sandbox durable sessions + reaper integration | new `packages/cap-runner`, `packages/sandbox` | Docker-driver e2e: cold + warm invocation; policy clamps proven (timeout, memory, egress deny) |
 | 2.B2 | Host broker: `POST /v1/runner/host`, scoped invocation tokens, `ctx.invoke/secrets/ai/storage/log` with permission intersection + re-entry depth cap; runner compute metering + rate-card entries | `apps/api`, `packages/oxagen`, `packages/billing` | Security tests: undeclared capability/secret/host denied at broker AND kernel; token replay/expiry/audience tests; metered rows land in ClickHouse |
 | 2.B3 | Async envelope: `cap/execute` Inngest fn, `capability_runs` lifecycle, `read_capability_run` contract on all surfaces | `packages/inngest-functions`, `packages/handlers` | Async fixture package runs queued→succeeded/failed with progress; cancellation works |
-| 2.C1 | Install lifecycle contracts (`install_capability_package`, `activate_…_version`, `set_…_enabled`, `uninstall_…`, `list/read_…`) + consent screen + IAM default-grant seeding + upgrade permission-delta re-consent + revoke/kill-switch (`CAP_PACKAGES_ENABLED` in env registry, `pnpm env:check --write`) | `packages/handlers`, `apps/app`, `packages/config` | Full lifecycle e2e: upload→validate→install→consent→enable→invoke on all five surfaces→upgrade→rollback→revoke; audit rows verified |
+| 2.C1 | Install lifecycle contracts (`install_capability_package`, `activate_…_version`, `set_…_enabled`, `uninstall_…`, `list/read_…`) + consent screen + IAM default-grant seeding + upgrade permission-delta re-consent + revoke/kill-switch (`CAP_PACKAGES_ENABLED` in env registry, `pnpm env:check --write`) | `packages/handlers`, `apps/app`, `packages/config` | Full lifecycle e2e: upload→validate→install→consent→enable→invoke on all four surfaces→upgrade→rollback→revoke; audit rows verified |
 | 2.C2 | Beta hardening: per-org runner concurrency, API rate limits, run history UI (runs list + detail w/ logs), upgrade **consumer preview** (spec §11.5, from ClickHouse `tool_invocations`) | `apps/api`, `apps/app` | Load test at beta scale; runaway-package drill (revoke under load) |
-| 2.C3 | `oxagen cap dev` local loop: docker runner + surface emulator + local host broker with **fixture** and **live-proxy** modes (spec §6.3) — beta-blocking, promoted from Phase 3 | `packages/cap-cli`, `packages/cap-runner` | External-author walkthrough doc; cold-start-to-first-invoke < 5 min; fixture-mode runs are CI-hermetic |
+| 2.C3 | `cap dev` local loop: docker runner + surface emulator + local host broker with **fixture** and **live-proxy** modes (spec §6.3) — beta-blocking, promoted from Phase 3 | `packages/cap-cli`, `packages/cap-runner` | External-author walkthrough doc; cold-start-to-first-invoke < 5 min; fixture-mode runs are CI-hermetic |
 
 **Phase exit / beta gate:** the Acme example package (developed against
 `cap dev`, built from a real external repo in CI) installs into a fresh
-workspace and serves **REST, MCP (external client), agent tool, app runner
-page, and `oxagen cap run`** with IAM, billing, audit, and revocation
+workspace and serves **REST, MCP (external client), agent tool, and the app
+runner page** with IAM, billing, audit, and revocation
 demonstrated. Media `.cap` fixtures
 install via the `trusted` profile with zero latency regression
 (spec §13 step 2); `generate_video` migrated onto `capability_runs`.
@@ -69,9 +69,8 @@ install via the `trusted` profile with zero latency regression
 | # | Work | Exit gate |
 |---|---|---|
 | 3.1 | Package Studio: Git-connected sandboxed builds (Inngest job, streamed logs, provenance) | Build from a private GitHub repo tag → validated version, no local toolchain |
-| 3.2 | CLI workspace sync: `oxagen sync`, `cap run` flag derivation, completions, REPL slash inclusion (no first-class command groups — spec §10.5) | `slash-parity` tests cover dynamic entries; Acme command demo |
-| 3.3 | Workspace OpenAPI export (`export_openapi_document`) | Generated doc validates; installed caps present |
-| 3.4 | Publisher policy controls (org-level: require review, forbid egress, sensitivity ceiling) + custom runner images (scan gate — resolve open question 3) | Policy matrix tests |
+| 3.2 | Workspace OpenAPI export (`export_openapi_document`) | Generated doc validates; installed caps present |
+| 3.3 | Publisher policy controls (org-level: require review, forbid egress, sensitivity ceiling) + custom runner images (scan gate — resolve open question 3) | Policy matrix tests |
 
 Custom UI components are deliberately **not scheduled** in this plan — the
 lane is stubbed in spec §10.4 (reserved `ui/` dir, warn-and-ignore) and ships

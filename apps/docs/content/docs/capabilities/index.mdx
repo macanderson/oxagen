@@ -3,7 +3,7 @@ title: Capability registry
 description: Every action in Oxagen is a typed capability contract — declared once, enforced everywhere, and browsable in the governance catalog.
 ---
 
-A **capability** is the unit of action in Oxagen. Each one is a typed contract declared once in the in-process registry and exposed identically across every surface it opts into — the REST API, the MCP server, the in-app agent, and the CLI. There is no side door: if an action exists, it exists as a capability, and it runs through the `invoke()` kernel with IAM, metering, and audit applied.
+A **capability** is the unit of action in Oxagen. Each one is a typed contract declared once in the in-process registry and exposed identically across every surface it opts into — the REST API, the MCP server, and the in-app agent. There is no side door: if an action exists, it exists as a capability, and it runs through the `invoke()` kernel with IAM, metering, and audit applied.
 
 ## What a contract declares
 
@@ -11,7 +11,7 @@ A **capability** is the unit of action in Oxagen. Each one is a typed contract d
 |---|---|
 | Name | ADR-025 snake_case identifier, e.g. `query_audit_log` |
 | Domain | Functional grouping (billing, graph, agent, …) |
-| Surfaces | Where it is mounted: `api`, `mcp`, `agent`, `cli` |
+| Surfaces | Where it is mounted: `api`, `mcp`, `agent` |
 | Sensitivity | `low`, `medium`, `high`, or `destructive` — destructive capabilities require explicit approval before running |
 | IAM grants | Default role grants (allow / deny / require_approval) |
 | Entitlement gate | Which plan or entitlement pack unlocks it |

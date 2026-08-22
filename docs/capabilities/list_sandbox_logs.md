@@ -3,14 +3,14 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Billing:** not gated (a read-only log tail consumes no AI tokens)
 
 ## Intent
 
 Return the captured stdout/stderr/command output of a durable sandbox session's
-commands, so the sandbox inspector's log console — plus CLI, MCP, and agent
+commands, so the sandbox inspector's log console — plus MCP and agent
 callers — can show what a coding session actually ran and printed. The `level`
 filter drives the inspector's Debug toggle: `normal` returns only program
 output, while omitting `level` (Debug ON) also includes command echoes,
@@ -60,7 +60,6 @@ Each `LogLine`:
 - **API:** `POST /v1/:org/:workspace/agent/sandbox/logs` — body `{ sessionId, level?, limit?, sinceMs? }`
 - **MCP:** `list_sandbox_logs` tool (read-only, idempotent)
 - **Agent:** invoked via `invoke("list_sandbox_logs", ...)` — no approval required
-- **CLI:** `oxagen sandbox logs <sessionId> [--debug] [--limit <n>] [--json]`
 
 ## Access control
 

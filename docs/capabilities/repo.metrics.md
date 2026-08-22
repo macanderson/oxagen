@@ -9,7 +9,6 @@ Get sync statistics and metrics for a repository connection.
 - API: `GET /v1/repos/:id/metrics`
 - MCP: `repo.metrics`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available (use `integration.metrics` for generic plugin metrics)
 
 ## Input
 | Parameter | Type | Required | Description |

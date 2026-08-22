@@ -55,13 +55,6 @@ reaviz                  Charts / visualizations
 reablocks               Table + block layouts
 ```
 
-### CLI (`apps/cli`)
-```
-ink                     React-based terminal UI
-commander               CLI argument parsing
-@ai-sdk/openai-compatible  LLM via API gateway
-```
-
 ### MCP (`apps/mcp`)
 ```
 xmcp                    MCP server framework (streamable HTTP)
@@ -78,8 +71,8 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/auth` | api, app, mcp | Better Auth, session/API-key resolution |
 | `@oxagen/agent` | api, app | Agent runtime, memory, dispatch |
 | `@oxagen/agent-engine` | agent, api | Pipeline, planner, fleet, evaluator |
-| `@oxagen/engram` | cli, agent | Local DuckDB memory, context compilation, replay |
-| `@oxagen/ai` | api, app, cli, mcp | AI SDK wrappers, prompt registry |
+| `@oxagen/engram` | agent | Local DuckDB memory, context compilation, replay |
+| `@oxagen/ai` | api, app, mcp | AI SDK wrappers, prompt registry |
 | `@oxagen/billing` | api, app | Stripe, credits, usage |
 | `@oxagen/iam` | api, handlers | AuthZ, audit emission |
 | `@oxagen/ingestion` | api, handlers | Connectors, parsers, pipeline |
@@ -92,17 +85,16 @@ xmcp                    MCP server framework (streamable HTTP)
 | `@oxagen/github` | api, ingestion | GitHub App client, OAuth |
 | `@oxagen/notifications` | api, app | Notification delivery |
 | `@oxagen/compliance` | app | SOC-2 compliance helpers |
-| `@oxagen/telemetry` | api, app, cli | OpenTelemetry tracing |
-| `@oxagen/config` | api, app, cli, mcp | Shared runtime config |
+| `@oxagen/telemetry` | api, app | OpenTelemetry tracing |
+| `@oxagen/config` | api, app, mcp | Shared runtime config |
 | `@oxagen/ontology` | api, handlers | Ontology query/management |
-| `@oxagen/skills` | api, cli | Skill filesystem scanner |
+| `@oxagen/skills` | api | Skill filesystem scanner |
 | `@oxagen/ui` | app | coss ui component system (Base UI–based; migrated off shadcn/Radix) |
 | `@oxagen/web` | app | Shared web utilities |
-| `@oxagen/code-graph` | cli, api | Code graph indexing |
+| `@oxagen/code-graph` | api | Code graph indexing |
 | `@oxagen/functions` | api, app | Shared function utilities |
-| `@oxagen/mcp-config` | cli, mcp | MCP server config schema |
+| `@oxagen/mcp-config` | mcp | MCP server config schema |
 | `@oxagen/prompt-templates` | app, handlers | Prompt template library |
-| `@oxagen/bench` | bench/web | Deterministic eval/replay benchmark engine (`runBenchmark()`) |
 
 ## Tooling Packages
 

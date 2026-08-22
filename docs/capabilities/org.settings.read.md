@@ -10,7 +10,7 @@
 
 Read the active organization's profile settings — name, slug, avatar, website,
 industry, employee size, and type. Routes the org settings page read through the
-capability kernel so the same data is reachable from the agent, MCP, and CLI
+capability kernel so the same data is reachable from the agent and MCP
 with consistent IAM + metering.
 
 ## Input

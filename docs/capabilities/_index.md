@@ -298,7 +298,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Org (8)
 
-- [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the CLI tenant picker
+- [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the tenant picker
 - [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
 - [org.member.invite.accept](org.member.invite.accept.md) — Accept a pending org invitation; creates membership and provisions IAM
 - [org.member.invite.decline](org.member.invite.decline.md) — Decline a pending org invitation; frees the reserved license seat
@@ -486,7 +486,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [workspace.budget.policy.write](workspace.budget.policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only; controls how agent turns are budget-governed for members
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
-- [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
+- [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the workspace picker at link time
 - [workspace.member.list](workspace.member.list.md) — List members of a workspace
 - [workspace.model.settings.read](workspace.model.settings.read.md) — Read the workspace-level model defaults
 - [workspace.model.settings.write](workspace.model.settings.write.md) — Update the workspace-level model defaults (partial update)
@@ -508,13 +508,3 @@ paths without separate APIs.
 | [Connector Authoring Guide](../guides/connector-authoring.md) | How to author a `schema.yaml` for a partner connector — schema sections, field widgets, validation patterns, AI prompt best practices, and testing. |
 | [Partner Registration](../guides/partner-registration.md)     | Registration workflow, marketplace listing requirements, security checklist, and support SLA.                                                       |
 | `packages/ingestion/src/connectors/example-saas/schema.yaml`  | Fully annotated reference schema demonstrating every section and field type.                                                                        |
-
-To install a partner connector by schema URL:
-
-```bash
-oxagen integrations install \
-  --plugin-id my-platform \
-  --schema-url https://cdn.mycompany.com/oxagen/schema.yaml \
-  --display-name "My Platform" \
-  --config '{"accountId":"acme"}'
-```

@@ -175,6 +175,19 @@ export interface ToolRequestFrame {
 export interface ProviderRequestFrame {
   readonly type: "provider_request";
   readonly request_id: string;
+  /**
+   * The provider the caller asked to serve THIS call: the turn's own
+   * `provider_id`, or the override on its goal/sub-agent block.
+   *
+   * One turn used to mean one model, so neither this nor `role` was needed. A
+   * judged goal run and a turn that spawns sub-agents both put several agents
+   * behind one turn id, and a host that cannot tell them apart cannot route the
+   * verifier to a different model family — which is the entire point of an
+   * independent verifier.
+   */
+  readonly provider_id: string;
+  /** What the call is for, so a host routes by role rather than string-matching an id. */
+  readonly role: string;
   readonly request: CompletionRequest;
 }
 

@@ -9,7 +9,6 @@ Paginated browse of all nodes in the workspace graph. Enables the graph explorer
 - API: `GET /v1/graph/nodes`
 - MCP: `graph.node.list`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

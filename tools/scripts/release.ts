@@ -16,14 +16,13 @@
  *   tsx tools/scripts/release.ts --set 0.2.0         # set an exact version
  *
  * Flags:
- *   --dry-run     compute + print, but write no files, no git, no Vercel, no npm
+ *   --dry-run     compute + print, but write no files, no git, no Vercel
  *   --set X.Y.Z   set an exact version instead of bumping
  *   --from <ref>  base ref for the notes diff (default: newest tag); use this to
  *                 regenerate notes for an already-tagged release
  *   --no-notes    skip the Anthropic release-notes generation (plain changelog)
  *   --no-git      skip the commit + tag
  *   --no-vercel   skip the Vercel PLATFORM_VERSION sync
- *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
  * Release notes are AI-generated from the commit log + diffstat between the last
@@ -43,7 +42,6 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
 import kleur from "kleur";
-import { formatError } from "./lib/format-error";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
@@ -61,7 +59,6 @@ interface Options {
   notes: boolean;
   git: boolean;
   vercel: boolean;
-  npm: boolean;
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
@@ -69,11 +66,17 @@ interface Options {
 /** Env values pasted into a Vercel dashboard arrive double-quoted; strip one pair. */
 function deQuote(v: string | undefined): string {
   if (!v) return "";
-  return v.length >= 2 && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v;
+  return v.length >= 2 && v.startsWith('"') && v.endsWith('"')
+    ? v.slice(1, -1)
+    : v;
 }
 
 function git(args: string[]): string {
-  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
+  return execFileSync("git", args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  }).trim();
 }
 
 function gitSafe(args: string[]): string | null {
@@ -129,15 +132,24 @@ function workspacePackageFiles(): string[] {
 }
 
 /** Rewrite a package.json `version` field in place, preserving 2-space format. */
-function setPackageVersion(file: string, version: string): { name: string; from: string } {
+function setPackageVersion(
+  file: string,
+  version: string,
+): { name: string; from: string } {
   const text = readFileSync(file, "utf8");
   const pkg = JSON.parse(text) as { name?: string; version?: string };
   const from = pkg.version ?? "(none)";
   // Replace only the top-level "version": "..." to avoid touching nested fields.
-  const next = text.replace(/^(\s*)"version":\s*"[^"]*"/m, `$1"version": "${version}"`);
+  const next = text.replace(
+    /^(\s*)"version":\s*"[^"]*"/m,
+    `$1"version": "${version}"`,
+  );
   if (next === text && from !== version) {
     // No top-level version key — inject one after "name".
-    const injected = text.replace(/^(\s*)"name":\s*"[^"]*",/m, `$1"name": ${JSON.stringify(pkg.name)},\n$1"version": "${version}",`);
+    const injected = text.replace(
+      /^(\s*)"name":\s*"[^"]*",/m,
+      `$1"name": ${JSON.stringify(pkg.name)},\n$1"version": "${version}",`,
+    );
     writeFileSync(file, injected);
   } else {
     writeFileSync(file, next);
@@ -169,19 +181,31 @@ interface NotesInput {
   diff: string;
 }
 
-function collectHistory(version: string, overrideFrom: string | null): NotesInput {
+function collectHistory(
+  version: string,
+  overrideFrom: string | null,
+): NotesInput {
   // Base ref: explicit --from wins; otherwise the newest tag reachable from HEAD;
   // otherwise the root commit. (--from is how you regenerate notes for an
   // already-tagged release, where `git describe` would resolve to that tag.)
   const lastTag = gitSafe(["describe", "--tags", "--abbrev=0"]);
-  const fromRef = overrideFrom ?? lastTag ?? git(["rev-list", "--max-parents=0", "HEAD"]).split("\n")[0] ?? "HEAD~1";
+  const fromRef =
+    overrideFrom ??
+    lastTag ??
+    git(["rev-list", "--max-parents=0", "HEAD"]).split("\n")[0] ??
+    "HEAD~1";
   const range = `${fromRef}..HEAD`;
-  const log = gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h) — %an"]) ?? "";
+  const log =
+    gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h) — %an"]) ??
+    "";
   const stat = gitSafe(["diff", "--stat", range]) ?? "";
   // Cap the unified diff so the prompt stays bounded on large releases.
   const fullDiff = gitSafe(["diff", range]) ?? "";
   const MAX = 60_000;
-  const diff = fullDiff.length > MAX ? `${fullDiff.slice(0, MAX)}\n…(diff truncated at ${MAX} chars)…` : fullDiff;
+  const diff =
+    fullDiff.length > MAX
+      ? `${fullDiff.slice(0, MAX)}\n…(diff truncated at ${MAX} chars)…`
+      : fullDiff;
   return { fromRef, toRef: "HEAD", version, log, stat, diff };
 }
 
@@ -224,11 +248,20 @@ async function notesViaGateway(prompt: string): Promise<string | null> {
   const model = deQuote(env.OXAGEN_LLM_BALANCED) || "anthropic/claude-sonnet-5";
   const res = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
     method: "POST",
-    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, max_tokens: NOTES_MAX_TOKENS, messages: [{ role: "user", content: prompt }] }),
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: NOTES_MAX_TOKENS,
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
   if (!res.ok) throw new Error(`gateway ${res.status} ${await res.text()}`);
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
   const text = (json.choices?.[0]?.message?.content ?? "").trim();
   if (!text) throw new Error("gateway empty completion");
   console.log(kleur.dim(`[release]   (via AI Gateway model ${model})`));
@@ -242,27 +275,50 @@ async function generateNotes(h: NotesInput): Promise<string> {
   try {
     const text = await notesViaGateway(prompt);
     if (text) {
-      console.log(kleur.green("[release] release notes generated via AI Gateway."));
+      console.log(
+        kleur.green("[release] release notes generated via AI Gateway."),
+      );
       return `${text}\n`;
     }
-    console.log(kleur.yellow("[release] AI_GATEWAY_API_KEY not set — using plain commit-log notes."));
+    console.log(
+      kleur.yellow(
+        "[release] AI_GATEWAY_API_KEY not set — using plain commit-log notes.",
+      ),
+    );
   } catch (err) {
-    console.log(kleur.yellow(`[release] AI Gateway failed (${err instanceof Error ? err.message : err}) — using plain commit-log notes.`));
+    console.log(
+      kleur.yellow(
+        `[release] AI Gateway failed (${err instanceof Error ? err.message : err}) — using plain commit-log notes.`,
+      ),
+    );
   }
   return fallbackNotes(h);
 }
 
-function writeNotes(version: string, notes: string): { changelog: string; release: string } {
+function writeNotes(
+  version: string,
+  notes: string,
+): { changelog: string; release: string } {
   const releasesDir = join(ROOT, "releases");
   if (!existsSync(releasesDir)) execFileSync("mkdir", ["-p", releasesDir]);
   const releaseFile = join(releasesDir, `v${version}.md`);
-  writeFileSync(releaseFile, `# v${version}\n\n${notes.replace(/^#+\s/, "## ").trimStart()}`);
+  writeFileSync(
+    releaseFile,
+    `# v${version}\n\n${notes.replace(/^#+\s/, "## ").trimStart()}`,
+  );
 
   const changelogFile = join(ROOT, "CHANGELOG.md");
-  const prior = existsSync(changelogFile) ? readFileSync(changelogFile, "utf8") : "# Changelog\n";
-  const header = prior.startsWith("# Changelog") ? "# Changelog\n" : "# Changelog\n";
+  const prior = existsSync(changelogFile)
+    ? readFileSync(changelogFile, "utf8")
+    : "# Changelog\n";
+  const header = prior.startsWith("# Changelog")
+    ? "# Changelog\n"
+    : "# Changelog\n";
   const rest = prior.replace(/^#\s*Changelog\s*\n?/, "");
-  writeFileSync(changelogFile, `${header}\n${notes.trim()}\n\n${rest.trimStart()}`);
+  writeFileSync(
+    changelogFile,
+    `${header}\n${notes.trim()}\n\n${rest.trimStart()}`,
+  );
   return { changelog: changelogFile, release: releaseFile };
 }
 
@@ -279,7 +335,9 @@ function resolveTeamId(): string {
   const linked = join(ROOT, ".vercel/project.json");
   if (existsSync(linked)) {
     try {
-      const orgId = (JSON.parse(readFileSync(linked, "utf8")) as { orgId?: string }).orgId;
+      const orgId = (
+        JSON.parse(readFileSync(linked, "utf8")) as { orgId?: string }
+      ).orgId;
       if (orgId) return orgId;
     } catch {
       /* fall through to env/default */
@@ -291,42 +349,87 @@ function resolveTeamId(): string {
 function vercelCfg(): { token: string; teamId: string } | null {
   const token = deQuote(env.VERCEL_TOKEN) || deQuote(env.TURBO_TOKEN);
   if (!token) {
-    console.log(kleur.yellow("[release] VERCEL_TOKEN not set — skipping Vercel sync."));
+    console.log(
+      kleur.yellow("[release] VERCEL_TOKEN not set — skipping Vercel sync."),
+    );
     return null;
   }
   return { token, teamId: resolveTeamId() };
 }
 
-async function vercelFetch(cfg: { token: string; teamId: string }, path: string, init?: RequestInit): Promise<Response> {
+async function vercelFetch(
+  cfg: { token: string; teamId: string },
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
   const sep = path.includes("?") ? "&" : "?";
   return fetch(`https://api.vercel.com${path}${sep}teamId=${cfg.teamId}`, {
     ...init,
-    headers: { Authorization: `Bearer ${cfg.token}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
   });
 }
 
-async function listV2Projects(cfg: { token: string; teamId: string }): Promise<VercelProject[]> {
+async function listV2Projects(cfg: {
+  token: string;
+  teamId: string;
+}): Promise<VercelProject[]> {
   const res = await vercelFetch(cfg, "/v9/projects?limit=100");
-  if (!res.ok) throw new Error(`list projects: ${res.status} ${await res.text()}`);
+  if (!res.ok)
+    throw new Error(`list projects: ${res.status} ${await res.text()}`);
   const json = (await res.json()) as { projects?: VercelProject[] };
-  return (json.projects ?? []).filter((p) => p.name.startsWith(VERCEL_PROJECT_PREFIX));
+  return (json.projects ?? []).filter((p) =>
+    p.name.startsWith(VERCEL_PROJECT_PREFIX),
+  );
 }
 
-async function upsertPlatformVersion(cfg: { token: string; teamId: string }, project: VercelProject, version: string): Promise<void> {
+async function upsertPlatformVersion(
+  cfg: { token: string; teamId: string },
+  project: VercelProject,
+  version: string,
+): Promise<void> {
   // Remove any existing all-branches PLATFORM_VERSION on every target, then POST
   // a single plain value scoped to all three targets. Idempotent re-run safe.
   const listRes = await vercelFetch(cfg, `/v9/projects/${project.id}/env`);
-  if (!listRes.ok) throw new Error(`${project.name} list env: ${listRes.status} ${await listRes.text()}`);
-  const envs = ((await listRes.json()) as { envs?: Array<{ id: string; key: string; gitBranch?: string }> }).envs ?? [];
-  for (const e of envs.filter((e) => e.key === "PLATFORM_VERSION" && !e.gitBranch)) {
-    const del = await vercelFetch(cfg, `/v10/projects/${project.id}/env/${e.id}`, { method: "DELETE" });
-    if (!del.ok) throw new Error(`${project.name} delete: ${del.status} ${await del.text()}`);
+  if (!listRes.ok)
+    throw new Error(
+      `${project.name} list env: ${listRes.status} ${await listRes.text()}`,
+    );
+  const envs =
+    (
+      (await listRes.json()) as {
+        envs?: Array<{ id: string; key: string; gitBranch?: string }>;
+      }
+    ).envs ?? [];
+  for (const e of envs.filter(
+    (e) => e.key === "PLATFORM_VERSION" && !e.gitBranch,
+  )) {
+    const del = await vercelFetch(
+      cfg,
+      `/v10/projects/${project.id}/env/${e.id}`,
+      { method: "DELETE" },
+    );
+    if (!del.ok)
+      throw new Error(
+        `${project.name} delete: ${del.status} ${await del.text()}`,
+      );
   }
   const post = await vercelFetch(cfg, `/v10/projects/${project.id}/env`, {
     method: "POST",
-    body: JSON.stringify({ key: "PLATFORM_VERSION", value: version, type: "plain", target: [...PLATFORM_ENVS] }),
+    body: JSON.stringify({
+      key: "PLATFORM_VERSION",
+      value: version,
+      type: "plain",
+      target: [...PLATFORM_ENVS],
+    }),
   });
-  if (!post.ok) throw new Error(`${project.name} post: ${post.status} ${await post.text()}`);
+  if (!post.ok)
+    throw new Error(
+      `${project.name} post: ${post.status} ${await post.text()}`,
+    );
 }
 
 async function syncVercel(version: string): Promise<void> {
@@ -334,105 +437,36 @@ async function syncVercel(version: string): Promise<void> {
   if (!cfg) return;
   const projects = await listV2Projects(cfg);
   if (projects.length === 0) {
-    console.log(kleur.yellow("[release] no oxagen-v2-* projects found on the team — nothing to sync."));
+    console.log(
+      kleur.yellow(
+        "[release] no oxagen-v2-* projects found on the team — nothing to sync.",
+      ),
+    );
     return;
   }
   for (const p of projects) {
     await upsertPlatformVersion(cfg, p, version);
-    console.log(kleur.green(`[release]   ✓ ${p.name} PLATFORM_VERSION=${version} (dev+preview+prod)`));
-  }
-}
-
-// ── npm CLI publish (only if NPM_TOKEN is available) ────────────────────────
-
-function npmCfg(): { token: string } | null {
-  const token = deQuote(env.NPM_TOKEN);
-  if (!token) {
-    console.log(kleur.dim("[release] NPM_TOKEN not set — skipping npm publish."));
-    return null;
-  }
-  return { token };
-}
-
-/**
- * Build the standalone, publishable CLI artifact under apps/cli/dist-standalone/:
- * a single self-contained `oxagen.mjs` (every @oxagen/* and npm dep inlined, runs
- * under plain `node`) plus a clean manifest with NO `workspace:*` deps. Publishing
- * apps/cli/package.json directly is BROKEN — its deps carry `@oxagen/*:
- * workspace:*` (unpublished, protocol leaks) and its bin shebang is `tsx`, so
- * `npm i -g @oxagen/cli` fails in a clean env. See apps/cli/scripts/bundle.mjs +
- * prepare-standalone-publish.mjs for the full why. Must run AFTER the version
- * bump: the CLI inlines apps/cli/package.json at bundle time, so the bumped
- * version is what gets baked into oxagen.mjs.
- */
-function buildCliBundle(): void {
-  console.log(kleur.dim("    bundling standalone CLI..."));
-  try {
-    execFileSync("pnpm", ["-C", "apps/cli", "publish:standalone"], {
-      cwd: ROOT,
-      stdio: "pipe",
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch (err) {
-    throw new Error(`CLI bundle failed: ${formatError(err)}`);
-  }
-}
-
-async function publishCliToNpm(version: string): Promise<void> {
-  const cfg = npmCfg();
-  if (!cfg) return;
-
-  try {
-    console.log(kleur.bold("\n  npm CLI publish:"));
-    // Build the standalone single-file bundle + clean publish manifest.
-    buildCliBundle();
-    console.log(kleur.green("    ✓ standalone CLI bundle built"));
-
-    // Validate the generated publish manifest (NOT apps/cli/package.json, which
-    // is unpublishable). Guard against the historical failure modes: private,
-    // missing bin, version drift, and leaked workspace:* deps.
-    const distDir = join(ROOT, "apps/cli/dist-standalone");
-    const manifest = JSON.parse(readFileSync(join(distDir, "package.json"), "utf8")) as {
-      name?: string;
-      version?: string;
-      private?: boolean;
-      bin?: Record<string, string>;
-      dependencies?: Record<string, string>;
-    };
-    if (manifest.private) throw new Error('CLI manifest has "private": true — cannot publish');
-    if (!manifest.bin || Object.keys(manifest.bin).length === 0) throw new Error("CLI manifest missing bin field");
-    if (manifest.version !== version) throw new Error(`CLI manifest version ${manifest.version} != release version ${version}`);
-    const leaked = Object.entries(manifest.dependencies ?? {}).filter(([, v]) => v.startsWith("workspace:"));
-    if (leaked.length) throw new Error(`workspace:* deps leaked into publish manifest: ${leaked.map(([k]) => k).join(", ")}`);
-
-    // npm reads the auth token from .npmrc; write one that pulls NPM_TOKEN from
-    // the environment. Never published — not in the manifest `files`, and npm
-    // always excludes .npmrc from the tarball.
-    writeFileSync(join(distDir, ".npmrc"), "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n");
-
-    // Publish the bundle. access:public lives in the manifest publishConfig.
-    console.log(kleur.dim("    publishing to npm registry..."));
-    execFileSync("npm", ["publish"], {
-      cwd: distDir,
-      stdio: "pipe",
-      env: { ...env, NPM_TOKEN: cfg.token },
-      maxBuffer: 64 * 1024 * 1024,
-    });
-
-    console.log(kleur.green(`    ✓ @oxagen/cli v${version} published to npm`));
-  } catch (err) {
-    throw new Error(
-      `npm publish failed: ${formatError(err)}. ` +
-        `Ensure NPM_TOKEN is set and the CLI package is not marked as private.`,
+    console.log(
+      kleur.green(
+        `[release]   ✓ ${p.name} PLATFORM_VERSION=${version} (dev+preview+prod)`,
+      ),
     );
   }
 }
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
+// ── argument parsing ─────────────────────────────────────────────────────────
 
 function parseArgs(): Options {
   const args = argv.slice(2);
-  const opts: Options = { bump: null, setVersion: null, fromRef: null, dryRun: false, notes: true, git: true, vercel: true, npm: true };
+  const opts: Options = {
+    bump: null,
+    setVersion: null,
+    fromRef: null,
+    dryRun: false,
+    notes: true,
+    git: true,
+    vercel: true,
+  };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined) continue;
@@ -441,9 +475,9 @@ function parseArgs(): Options {
     else if (a === "--no-notes") opts.notes = false;
     else if (a === "--no-git") opts.git = false;
     else if (a === "--no-vercel") opts.vercel = false;
-    else if (a === "--no-npm") opts.npm = false;
-    else if (a === "--yes") {/* non-interactive already */}
-    else if (a === "--set") opts.setVersion = args[++i] ?? null;
+    else if (a === "--yes") {
+      /* non-interactive already */
+    } else if (a === "--set") opts.setVersion = args[++i] ?? null;
     else if (a.startsWith("--set=")) opts.setVersion = a.slice("--set=".length);
     else if (a === "--from") opts.fromRef = args[++i] ?? null;
     else if (a.startsWith("--from=")) opts.fromRef = a.slice("--from=".length);
@@ -458,26 +492,43 @@ function parseArgs(): Options {
 async function main(): Promise<void> {
   const opts = parseArgs();
   if (!opts.bump && !opts.setVersion) {
-    console.error(kleur.red("[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--dry-run] [--no-notes|--no-git|--no-vercel]"));
+    console.error(
+      kleur.red(
+        "[release] usage: release.ts <patch|minor|major> [--set X.Y.Z] [--from <ref>] [--dry-run] [--no-notes|--no-git|--no-vercel]",
+      ),
+    );
     exit(2);
   }
 
-  const rootPkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string };
+  const rootPkg = JSON.parse(
+    readFileSync(join(ROOT, "package.json"), "utf8"),
+  ) as { version: string };
   const current = rootPkg.version;
   const next = opts.setVersion ?? bumpVersion(current, opts.bump as Bump);
   if (!/^\d+\.\d+\.\d+$/.test(next)) {
-    console.error(kleur.red(`[release] target version "${next}" is not semver X.Y.Z`));
+    console.error(
+      kleur.red(`[release] target version "${next}" is not semver X.Y.Z`),
+    );
     exit(2);
   }
 
-  console.log(kleur.bold(`\n  Oxagen release  ${kleur.cyan(current)} → ${kleur.green(next)}${opts.dryRun ? kleur.yellow("  (dry run)") : ""}\n`));
+  console.log(
+    kleur.bold(
+      `\n  Oxagen release  ${kleur.cyan(current)} → ${kleur.green(next)}${opts.dryRun ? kleur.yellow("  (dry run)") : ""}\n`,
+    ),
+  );
 
   const files = workspacePackageFiles();
   console.log(kleur.bold(`  Packages (${files.length}):`));
   for (const file of files) {
     if (opts.dryRun) {
-      const pkg = JSON.parse(readFileSync(file, "utf8")) as { name?: string; version?: string };
-      console.log(`    ${kleur.dim(pkg.version ?? "?")} → ${kleur.green(next)}  ${pkg.name ?? file}`);
+      const pkg = JSON.parse(readFileSync(file, "utf8")) as {
+        name?: string;
+        version?: string;
+      };
+      console.log(
+        `    ${kleur.dim(pkg.version ?? "?")} → ${kleur.green(next)}  ${pkg.name ?? file}`,
+      );
     } else {
       const { name, from } = setPackageVersion(file, next);
       console.log(`    ${kleur.dim(from)} → ${kleur.green(next)}  ${name}`);
@@ -494,9 +545,21 @@ async function main(): Promise<void> {
     notes = await generateNotes(history);
     if (!opts.dryRun) {
       const written = writeNotes(next, notes);
-      console.log(kleur.green(`    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md`));
+      console.log(
+        kleur.green(
+          `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md`,
+        ),
+      );
     } else {
-      console.log(kleur.dim("\n" + notes.split("\n").map((l) => "    │ " + l).join("\n")));
+      console.log(
+        kleur.dim(
+          "\n" +
+            notes
+              .split("\n")
+              .map((l) => "    │ " + l)
+              .join("\n"),
+        ),
+      );
     }
   }
 
@@ -520,25 +583,28 @@ async function main(): Promise<void> {
       const cfg = vercelCfg();
       if (cfg) {
         const projects = await listV2Projects(cfg);
-        for (const p of projects) console.log(kleur.dim(`    would set ${p.name} → ${next} (dev+preview+prod)`));
+        for (const p of projects)
+          console.log(
+            kleur.dim(`    would set ${p.name} → ${next} (dev+preview+prod)`),
+          );
       }
     } else {
       await syncVercel(next);
     }
   }
 
-  // ── npm CLI publish ──
-  if (opts.npm && !opts.dryRun) {
-    await publishCliToNpm(next);
-  } else if (opts.npm && opts.dryRun) {
-    const cfg = npmCfg();
-    if (cfg) console.log(kleur.dim("\n  npm CLI publish: would build and publish @oxagen/cli to npm"));
-  }
-
-  console.log(kleur.bold(kleur.green(`\n  ✓ release ${next} ${opts.dryRun ? "previewed" : "prepared"}\n`)));
+  console.log(
+    kleur.bold(
+      kleur.green(
+        `\n  ✓ release ${next} ${opts.dryRun ? "previewed" : "prepared"}\n`,
+      ),
+    ),
+  );
 }
 
 main().catch((err) => {
-  console.error(kleur.red(err instanceof Error ? err.stack ?? err.message : String(err)));
+  console.error(
+    kleur.red(err instanceof Error ? (err.stack ?? err.message) : String(err)),
+  );
   exit(1);
 });

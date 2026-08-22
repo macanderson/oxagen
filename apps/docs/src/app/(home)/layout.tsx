@@ -24,8 +24,7 @@ async function CopyrightYear() {
 
 const NAV = [
   { label: "Docs", href: "/docs" },
-  { label: "Install", href: "/install" },
-  { label: "CLI", href: "/docs/cli" },
+  { label: "Governance", href: "/docs/governance/overview" },
   { label: "API", href: "/docs/api/overview" },
   { label: "MCP", href: "/docs/mcp/overview" },
   { label: "Security", href: "/docs/security/overview" },
@@ -44,7 +43,7 @@ const FOOTER = [
   {
     heading: "Build",
     links: [
-      { label: "CLI", href: "/docs/cli" },
+      { label: "Capabilities", href: "/docs/capabilities" },
       { label: "REST API", href: "/docs/api/overview" },
       { label: "MCP server", href: "/docs/mcp/overview" },
       { label: "Connections", href: "/docs/connections/github" },

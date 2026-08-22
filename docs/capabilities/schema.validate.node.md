@@ -9,7 +9,6 @@ Validate a node's properties against the workspace schema. Returns a conformance
 - API: `POST /v1/schema/validate/node`
 - MCP: `schema.validate.node`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

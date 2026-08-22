@@ -51,15 +51,6 @@ Content-Type: application/json
 
 Tool name: `unbind_agent_environment`
 
-
-## CLI
-
-```
-oxagen agent env unbind <agent> --env <slug>
-```
-
-Removing the primary binding falls back to the workspace default environment and its default template.
-
 ## Errors
 
 - `validation_error` — missing/empty `agentId`/`environmentId`.

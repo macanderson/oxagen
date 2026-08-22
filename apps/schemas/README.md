@@ -6,43 +6,30 @@ Static host for Oxagen's public JSON Schemas, deployed to
 
 ## What's hosted
 
-| File                                                                                   | Source of truth                       |
-| --------------------------------------------------------------------------------------- | -------------------------------------- |
-| [`oxagen-cli-settings-schema.json`](./public/oxagen-cli-settings-schema.json)            | `apps/cli/src/settings/schema.ts` (`oxagenSettingsSchema`) |
-
-Reference it from an Oxagen CLI `settings.json` for editor autocompletion:
+Nothing yet. Each schema document lives at
+`https://schemas.oxagen.sh/<name>.json` and is referenced from the
+configuration file it describes:
 
 ```json
 {
-  "$schema": "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json"
+  "$schema": "https://schemas.oxagen.sh/<name>.json"
 }
 ```
 
-## Regenerating
+## Adding a schema
 
-The JSON Schema is generated from the canonical Zod schema — never hand-edit
-`public/*.json`.
+Drop the document in `public/`, give it a top-level `$id` equal to the URL it
+is served under (`https://schemas.oxagen.sh/<file>`) plus a `title` and
+`description`, and link it from `public/index.html`.
 
-```bash
-pnpm --filter @oxagen/schemas run settings:schema
-```
-
-`src/schema-drift.test.ts` regenerates the schema in-memory and fails if it
-doesn't deep-equal the committed file, so CI catches any Zod change that
-wasn't followed by a regeneration:
+`src/hosted-schemas.test.ts` enforces exactly that: it fails if a hosted
+document is invalid JSON, carries an `$id` that doesn't match where it is
+served, or isn't listed on the index page — and equally if the index links a
+document that isn't hosted.
 
 ```bash
 pnpm --filter @oxagen/schemas test:unit
 ```
-
-## How it works
-
-`scripts/generate.ts` imports `oxagenSettingsSchema` directly from
-`apps/cli/src/settings/schema.ts` by relative path (the CLI package doesn't
-export this module for import — there's exactly one copy of the schema, not a
-duplicated one) and converts it with
-[`zod-to-json-schema`](https://github.com/StefanTerdell/zod-to-json-schema),
-adding a top-level `$id`, `title`, and `description`.
 
 ## Deploying
 

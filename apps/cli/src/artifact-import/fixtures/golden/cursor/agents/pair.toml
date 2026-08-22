@@ -1,9 +1,0 @@
-schema_version = 1
-kind = "agent"
-name = "pair"
-description = "Pairs on a focused change."
-model = "balanced"
-developer_instructions = "Work in small steps and explain each one."
-tools = [ "read_file", "list_dir", "glob", "grep", "bash" ]
-skills = []
-unresolved_tools = [ "Composer" ]

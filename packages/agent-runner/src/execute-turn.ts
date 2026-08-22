@@ -1,61 +1,69 @@
 /**
- * The ONE entrypoint for running a platform agent turn (agent-engine v2
- * Phase 1 — docs/specs/agent-engine-v2/plan.md, ADR-033).
+ * The ONE entrypoint for running a platform agent turn.
  *
- * Every platform surface — app chat, REST chat, the A2A bridge, and the
- * `agent.repo.edit` fleet capability — enters the engine through this module
- * instead of importing `runCodingAgent`/`runTurn` directly. Behavior today is
- * a byte-identical delegation; the value is the seam:
+ * Every platform surface — the web app's chat route, the REST chat API, the
+ * A2A bridge, and the `agent.repo.edit` fleet capability — enters the engine
+ * through this module. That seam is what made the engine swap a one-file
+ * change: the surfaces call `executeTurn`, and `executeTurn` decides what runs
+ * a turn.
  *
- * - Phase 2 (durable runs) adds run rows, the append-only event log,
- *   per-step checkpoints, and resume HERE, without touching any surface.
- * - Phase 3 (embedded Stella core) swaps the engine behind an ENGINE flag
- *   HERE, without touching any surface.
+ * ## What runs a turn
  *
- * Two functions rather than one polymorphic spec, deliberately: the bare loop
- * and the judged pipeline take different option types and return different
- * results, and the call sites read best with the options object inline. The
- * consolidation into a serializable RunSpec happens in Phase 2, when run rows
- * force the options apart from the ports anyway.
+ * Stella, over its headless serve surface. `stella-serve` owns the agent loop —
+ * steps, compaction, loop detection, budget boundaries, read-only-partitioned
+ * tool dispatch — and holds NO ambient authority: it never calls a model and
+ * never executes a tool. It asks, and `stella-runner` answers, so every model
+ * call still goes through `@oxagen/ai` and every tool call still re-enters the
+ * capability kernel's IAM, entitlement and billing gates.
+ *
+ * There is deliberately no engine flag. Two engines behind a switch means two
+ * code paths, two sets of behaviour to reason about, and a losing branch that
+ * rots — so the swap is the whole swap.
  */
-import {
-  runCodingAgent,
-  runTurn,
-  type RunCodingAgentOptions,
-  type RunCodingAgentResult,
-  type RunTurnOptions,
-  type RunTurnResult,
+import type {
+  RunCodingAgentOptions,
+  RunCodingAgentResult,
+  RunTurnOptions,
+  RunTurnResult,
 } from "@oxagen/agent-engine";
+import { runTurn } from "@oxagen/agent-engine";
+import { runCodingAgentOnStella, type StellaRunDeps } from "./stella-runner";
 
 /**
- * Which platform surface is running this turn. Inert today (nothing routes on
- * it); it exists so every caller declares its identity at the seam, and so
- * Phase 2 can stamp it onto the run row / event log without another
- * all-call-sites sweep.
+ * Which platform surface is running this turn. Carried so a run row and the
+ * event log can record who asked, without another all-call-sites sweep.
  */
 export type PlatformSurface = "chat" | "api-chat" | "a2a" | "repo-edit";
 
 /**
- * Run one bare engine turn (the step loop, no judge/revise pipeline) for
- * `surface`. Exactly `runCodingAgent(engine)` today — see the module doc for
- * why the indirection exists.
+ * Run one agent turn for `surface`.
+ *
+ * `deps` exists for tests, which inject a client pointed at a fake sidecar
+ * rather than reaching for the ambient environment.
  */
 export function executeTurn(
   surface: PlatformSurface,
   engine: RunCodingAgentOptions,
+  deps: StellaRunDeps = {},
 ): Promise<RunCodingAgentResult> {
-  void surface; // recorded on the run row starting in Phase 2
-  return runCodingAgent(engine);
+  void surface;
+  return runCodingAgentOnStella(engine, deps);
 }
 
 /**
- * Run one judged pipeline turn (evaluate → enhance → route → execute → judge
- * → revise) for `surface`. Exactly `runTurn(pipeline)` today.
+ * Run one judged multi-round turn for `surface`.
+ *
+ * Still the TypeScript pipeline. Stella serves judged multi-round runs natively
+ * — a `goal` block with its own verifier role — and that is where this belongs,
+ * because a judge/revise loop in one language wrapped around an engine in
+ * another is two brains disagreeing about one turn. Moving it requires the
+ * round-by-round trace this returns (`TurnTrace`) to be reconstructed from
+ * engine events first, which is a separate change from the engine swap.
  */
 export function executePipelineTurn(
   surface: PlatformSurface,
   pipeline: RunTurnOptions,
 ): Promise<RunTurnResult> {
-  void surface; // recorded on the run row starting in Phase 2
+  void surface;
   return runTurn(pipeline);
 }

@@ -189,8 +189,8 @@ attests; enforcement is host-side).
 serves filtered + temporal listing over canonical records (kind, status,
 sharing, scope, known_at/valid_at/observed/valid_overlaps). Semantic fusion
 retrieval over context records routes through engram in a follow-up once the
-record volume justifies indexing; the two-axis-memory and
-stella-graph-memory-sync specs are adjacent and must not be duplicated.
+record volume justifies indexing; the two-axis-memory spec is adjacent and
+must not be duplicated.
 Provider-relative `known_at` uses `context_ingestions.received_at` and the
 capability document advertises the earliest reconstructable time.
 

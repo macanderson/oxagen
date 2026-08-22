@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Requires approval:** no
 
@@ -39,7 +39,6 @@ There is no driver round-trip.
 - **API:** `POST /v1/:org/:workspace/agent/sandbox/rename` — body `{ sessionId, label }`
 - **MCP:** `rename_sandbox` tool (not read-only, non-destructive, idempotent)
 - **Agent:** invoked via `invoke("rename_sandbox", ...)` — no approval required
-- **CLI:** `oxagen sandbox rename <session-id> <label> [--json]`
 
 ## API
 

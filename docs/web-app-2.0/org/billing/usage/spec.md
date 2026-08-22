@@ -20,7 +20,7 @@ Usage is the observed-usage half of the ClickHouse→Stripe loop — the dashboa
 ## Functionality
 - **KPI tiles:** total metered cost (period), total events, top model, top capability.
 - **Daily trend chart:** usage/cost over time, selectable period.
-- **Breakdown tables:** by model, by surface (app/api/mcp/cli), by workspace, by capability, by principal (acting user/agent) — each sortable, each linking to a filtered detail view.
+- **Breakdown tables:** by model, by surface (app/api/mcp), by workspace, by capability, by principal (acting user/agent) — each sortable, each linking to a filtered detail view.
 - Degrades gracefully to a zeroed view with an explanatory banner if the ClickHouse read fails or returns no data.
 - Access gated: `assertOrgMember` then `assertBillingManager` before invoking the breakdown.
 

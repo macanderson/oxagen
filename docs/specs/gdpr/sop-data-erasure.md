@@ -13,7 +13,7 @@
 This SOP defines the procedure Oxagen follows to fulfill GDPR Article 17 erasure requests ("right to be forgotten"). It covers:
 
 - Self-service erasure initiated by a data subject through the product
-- Operator-initiated erasure via API, MCP, or CLI
+- Operator-initiated erasure via API or MCP
 - Support-desk erasure requests received outside the product
 - Evidence collection for GDPR audit responses
 
@@ -84,14 +84,7 @@ When a request is received by email or via another channel:
 
 1. **Verify identity.** Confirm the requester is the data subject or their authorized representative. For account holders: verify via the email address on file. For org-scope: verify Owner role.
 2. **Check for active account.** Query `auth.users` for the email. If account exists, proceed to step 3. If deleted/anonymised already, provide confirmation.
-3. **Initiate erasure via CLI:**
-   ```bash
-   # User scope
-   oxagen privacy erase --scope user --yes
-   # Org scope (requires org Owner API key)
-   oxagen privacy erase --scope org --org-id <uuid> --yes
-   ```
-   Or via API:
+3. **Initiate erasure via the API:**
    ```bash
    curl -X POST https://api.oxagen.sh/v1/{org}/{ws}/privacy/erase \
      -H "Authorization: Bearer <api_key>" \

@@ -59,13 +59,6 @@ MCP — tool `dismiss_memory_promotion`:
 { "memoryId": "mem_01H…" }
 ```
 
-CLI:
-
-```bash
-oxagen memory dismiss mem_01H…            # silence the suggestion
-oxagen memory dismiss mem_01H… --restore  # let it re-qualify
-```
-
 App: Knowledge → Memory → **Dismiss** on a promotion-candidate card (an Undo
 toast calls `restore: true`).
 

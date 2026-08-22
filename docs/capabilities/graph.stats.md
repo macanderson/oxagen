@@ -9,7 +9,6 @@ Workspace graph statistics: node count, edge count, inferred edge count, and bre
 - API: `GET /v1/graph/stats`
 - MCP: `graph.stats`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

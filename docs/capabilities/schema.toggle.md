@@ -9,7 +9,6 @@ Enable or disable a schema. Activation auto-publishes the current draft and auto
 - API: `POST /v1/schemas/{schemaName}/toggle`
 - MCP: `schema.toggle`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

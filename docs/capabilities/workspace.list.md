@@ -8,7 +8,7 @@
 
 ## Intent
 
-List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`: at link time the user has chosen an org (via `org.list`) but not yet a workspace. The handler verifies the caller is a member of the org before listing — a non-member gets a not-a-member error, never another tenant's workspaces.
+List the workspaces inside an organization the authenticated user belongs to. Backs the workspace picker: at link time the user has chosen an org (via `org.list`) but not yet a workspace. The handler verifies the caller is a member of the org before listing — a non-member gets a not-a-member error, never another tenant's workspaces.
 
 ## Input
 

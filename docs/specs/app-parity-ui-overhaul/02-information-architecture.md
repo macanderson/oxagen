@@ -9,7 +9,7 @@ can be enforced. Start with the vocabulary, because the words are the structure.
 ## Part A — The lexicon (words drive the nav)
 
 These are the canonical nouns. One word per concept, used identically in the app, the docs,
-the CLI, and marketing. No synonyms. This table is the source of truth; if a screen or a
+and marketing. No synonyms. This table is the source of truth; if a screen or a
 blog post needs a word for one of these, it uses this word.
 
 | Noun | Definition (plain) | Backing entity | Never call it |
@@ -169,7 +169,7 @@ Nothing is deleted without a redirect (deep links must survive, as `chat` → `a
 | Members | `/members` | `/access` (People tab) | merge |
 | Access (ent) | `/access/{sessions,reviews}` | `/access/{sessions,reviews}` | merge under one section |
 | **Agents** | — (none) | `/studio/agents`, `/studio/agents/[id]` | **NEW** |
-| **Commands** | — (CLI files) | `/studio/commands` | **NEW** |
+| **Commands** | — (filesystem files) | `/studio/commands` | **NEW** |
 | **Fleets** | — (none) | `/fleets`, `/fleets/[id]` | **NEW** |
 | **Approvals** | inline cards | `/approvals` | **NEW** |
 | **Roles/grants** | inline role change | `/access/roles`, `/access/roles/[id]` | **NEW** |

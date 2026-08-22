@@ -3,7 +3,7 @@
 **Domain:** documents
 **Mode:** sync
 **Scope:** tenant + workspace
-**Status:** live — fully wired (contract → handler → API route → MCP tool → CLI command).
+**Status:** live — fully wired (contract → handler → API route → MCP tool).
 
 ## Intent
 
@@ -75,13 +75,6 @@ Tool name: `markdown.generate`
 
 Available as `markdown.generate` in the MCP tool list. Accepts `title`, `markdown`, and
 `sections` parameters.
-
-## CLI
-
-```bash
-oxagen markdown-generate --title "My Document" --markdown "# Hello\n\nWorld."
-oxagen markdown-generate --title "Structured" --sections '[{"heading":"Intro","paragraphs":["Hello."]}]'
-```
 
 ## Errors
 

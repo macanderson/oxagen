@@ -9,7 +9,6 @@ Build a ZIP of a schema version (grouped by schema) via the `archive.create` plu
 - API: `POST /v1/schema/export`
 - MCP: `schema.export`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

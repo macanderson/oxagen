@@ -402,12 +402,12 @@ This is a shared helper (extracted from plugin.org.install) for idempotent agent
 <!-- entities: InstallClient -->
 <!-- enforced: system.install.instructions.handler() -->
 
-The handler SHALL return platform-specific installation steps for connecting Oxagen MCP to a user's IDE/editor (Claude Code, Cursor, Claude Desktop, Codex, VS Code). Each client receives tailored instructions (CLI setup for Claude Code, config file edits for Claude Desktop/Cursor/VS Code, yaml for Codex). Instructions include API key generation, MCP URL, and verification steps. Workspace slug is interpolated into steps when available.
+The handler SHALL return platform-specific installation steps for connecting Oxagen MCP to a user's IDE/editor (Claude Code, Cursor, Claude Desktop, Codex, VS Code). Each client receives tailored instructions (an `mcp add` command for Claude Code, config file edits for Claude Desktop/Cursor/VS Code, yaml for Codex). Instructions include API key generation, MCP URL, and verification steps. Workspace slug is interpolated into steps when available.
 
 #### Scenario: Installation steps for Claude Code
-<!-- test: system.install.instructions handler — stepsForClaudeCode — includes CLI login and claude mcp add -->
+<!-- test: system.install.instructions handler — stepsForClaudeCode — includes claude mcp add -->
 - **WHEN** client is "claude-code" and workspaceSlug provided (or default placeholder)
-- **THEN** handler returns array of InstallStep[]: (1) npm install -g @oxagen/cli, (2) oxagen auth login && oxagen workspace use {ws}, (3) claude mcp add oxagen --transport http --url {MCP_URL}/mcp --header "Authorization: Bearer $OXAGEN_API_KEY", (4) claude mcp list (verify), (5) Start a session
+- **THEN** handler returns array of InstallStep[]: generate an API key, `claude mcp add oxagen --transport http --url {MCP_URL}/mcp --header "Authorization: Bearer $OXAGEN_API_KEY"`, `claude mcp list` (verify), and start a session
 
 #### Scenario: Installation steps for Claude Desktop
 <!-- test: system.install.instructions handler — stepsForClaudeDesktop — includes config file path and JSON entry -->

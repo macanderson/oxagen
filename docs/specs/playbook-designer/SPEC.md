@@ -297,8 +297,7 @@ The YAML format is the **interchange format**. It supports:
 1. **Export**: `playbook.export` capability serializes a DB playbook version to YAML
 2. **Import**: `playbook.import` capability parses YAML, validates, and creates a draft version
 3. **Seed**: On workspace creation, `seed-playbooks` Inngest job reads `.oxagen/playbooks/*.yaml`
-4. **CLI**: `oxagen playbook push/pull` syncs between filesystem and workspace
-5. **MCP**: `playbook.export` / `playbook.import` exposed as MCP tools
+4. **MCP**: `playbook.export` / `playbook.import` exposed as MCP tools
 
 
 ---
@@ -404,7 +403,7 @@ ALTER TABLE workflow.playbooks
 ## 6. Capability Contracts (API Surface)
 
 All playbook operations are kernel capabilities — exposed identically across
-API, MCP, App, and CLI surfaces.
+the API, MCP, and App surfaces.
 
 ### 6.1 CRUD Capabilities
 
@@ -1119,7 +1118,6 @@ on completed steps (green check, red X, orange clock for approval).
 | AI-assisted playbook generation (chat → graph) | 1.5 weeks | AI/Backend |
 | Dry-run / testing mode (mocked context) | 1 week | Backend |
 | Collaborative editing (cursor presence, lock) | 1 week | Full-stack |
-| CLI `oxagen playbook push/pull` commands | 3 days | CLI |
 | MCP surface: playbook tools | 2 days | Backend |
 | Custom step type plugin system | 1 week | Backend |
 | Performance: large playbook rendering (100+ steps) | 3 days | Frontend |
@@ -1128,7 +1126,6 @@ on completed steps (green check, red X, orange clock for approval).
 **Exit Criteria**:
 - Organizations can publish/install playbooks via marketplace
 - AI can generate a playbook graph from a natural language description
-- CLI bidirectional sync between filesystem and workspace works
 - Designer performs smoothly with 100+ node graphs
 
 

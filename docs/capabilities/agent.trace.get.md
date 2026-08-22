@@ -12,7 +12,7 @@ Fetch one agent execution as a collapsible **span tree** — the run itself, its
 ordered steps, each step's tool calls (with durations, token/cost figures, and
 status), and any child executions linked via `parent_execution_id` (subagent /
 A2A lineage). Powers the in-app run-trace viewer and is callable from the
-agent, MCP, API, and CLI surfaces.
+agent, MCP, and API surfaces.
 
 The durable source of truth for the tree is **Postgres** (`agent.agent_executions`
 → `agent.agent_execution_steps` → `agent.agent_tool_calls`). ClickHouse holds
@@ -77,5 +77,4 @@ path like any capability.
 
 - **API:** `GET /v1/{org}/{ws}/agent/trace/:executionId`
 - **MCP:** tool `agent.trace.get`
-- **CLI:** `oxagen trace <executionId> [--json]`
 - **App:** run-trace page under the workspace Activity section.

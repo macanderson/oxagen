@@ -70,8 +70,7 @@
                   "enum": [
                     "api",
                     "mcp",
-                    "agent",
-                    "cli"
+                    "agent"
                   ]
                 },
                 "description": "Surfaces the capability is exposed on"

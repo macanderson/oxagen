@@ -35,8 +35,8 @@ POST /webhooks/github/app            → GitHub App events → @oxagen/github
 POST /webhooks                       → Generic connector webhooks (HMAC boundary)
 POST /api/inngest                    → Inngest event receiver
 GET  /.well-known                    → A2A protocol discovery card (public/optional-auth)
-GET  /v1/auth/cli                    → CLI loopback token exchange (PKCE boundary)
-POST /v1/telemetry                   → anonymous CLI usage telemetry (rate-limited)
+GET  /v1/auth/cli                    → loopback token exchange (PKCE boundary)
+POST /v1/telemetry                   → anonymous usage telemetry (rate-limited)
 POST /v1/cms                         → anonymous marketing-site lead gate (rate-limited)
 GET  /oauth/github                   → GitHub OAuth callback (HMAC-verified)
 ```
@@ -46,7 +46,7 @@ GET  /oauth/github                   → GitHub OAuth callback (HMAC-verified)
 GET  /v1/auth/whoami                 → session identity (works for API-key too)
 POST /v1/organizations               → org create
 GET  /v1/user/organizations          → org list
-GET  /v1/user/workspaces             → workspace list (pre-org CLI linker)
+GET  /v1/user/workspaces             → workspace list (pre-org linker)
 GET  /v1/user/preferences/read       → user prefs
 POST /v1/user/preferences/write      → update prefs
 GET  /v1/user/budget/read            → per-user turn budget (default)
@@ -57,9 +57,9 @@ POST /v1/user/budget/write           → update per-user turn budget
 
 **Chat / Conversations**
 ```
-POST   /chat/messages                → send message → @oxagen/agent runtime (CLI/MCP/API-key path)
+POST   /chat/messages                → send message → @oxagen/agent runtime (MCP/API-key path)
 POST   /chat/messages/execution      → record execution
-GET    /chat/stream                  → SSE stream (same CLI/MCP/API-key path; the app UI's own
+GET    /chat/stream                  → SSE stream (same MCP/API-key path; the app UI's own
                                         chat instead calls POST /api/v1/chat/stream in-process —
                                         see architecture.md Data Flow)
 GET    /conversations                → list (also serves /:id/files and /:id/export at the
@@ -250,7 +250,7 @@ POST   /workflows
 GET    /telemetry/error/cluster      → fleet-wide error-cluster triage (org+workspace scoped)
 GET    /system/install-instructions  → one hyphenated segment (was /system/install/instructions)
 ```
-Note: `GET /v1/telemetry` (raw CLI usage events) is a separate, PUBLIC, top-level
+Note: `GET /v1/telemetry` (raw usage events) is a separate, PUBLIC, top-level
 mount (see "Public / Webhook" above) — distinct from the org-scoped
 `/telemetry/error/cluster` above. The two are easy to conflate; they are
 different routes with different auth.

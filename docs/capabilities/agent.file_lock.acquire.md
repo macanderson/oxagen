@@ -20,7 +20,7 @@ instead of conflicting with itself; a DIFFERENT agent holding a live lock
 fails with `granted:false` rather than an error.
 
 **Postgres, not Neo4j, is the lock authority.** File locking is
-mutual-exclusion state, and the graph sync path (ADR-018) is asynchronous —
+mutual-exclusion state, and the graph projection path is asynchronous —
 a lock "written to the graph" would be invisible to a concurrent agent for the
 duration of sync lag, which is fatal for mutual exclusion. The lease lives in
 the tenant-scoped `agent.file_locks` table (RLS-enforced via

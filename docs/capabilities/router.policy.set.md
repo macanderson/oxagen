@@ -4,7 +4,7 @@
 **Domain:** router
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp
 **Risk level:** high
 
 ## Intent
@@ -34,10 +34,3 @@ The stored policy after the merge: `{ scope, mode, successThreshold, minSamples,
 
 Upserts a row in `workspace.routing_policy` (org-level row has `workspace_id = NULL`).
 Takes effect on the next agent turn that routes through `runTurn`.
-
-## Example
-
-```bash
-oxagen router policy set --mode enforce --threshold 0.95 --min-samples 20
-oxagen router policy set --scope org --mode shadow
-```

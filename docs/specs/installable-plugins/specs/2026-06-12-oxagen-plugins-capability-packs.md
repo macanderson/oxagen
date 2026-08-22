@@ -28,7 +28,7 @@ Three phases:
 
 1. **The kernel is the enforcement point.** Entitlement is checked in
    `kernel.invoke()` (packages/oxagen/src/kernel.ts), beside the billing gate, so
-   API, MCP, agent, and CLI surfaces inherit it identically. Tool-list filtering in
+   API, MCP, and agent surfaces inherit it identically. Tool-list filtering in
    `materializeTools()` is UX, not security.
 2. **One install model.** Capability packs reuse `plugin.org_listings`
    (plugin_type `capability`, source `oxagen`) and the existing

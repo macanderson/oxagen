@@ -9,7 +9,6 @@ Get sync statistics and metrics for a plugin instance.
 - API: `GET /v1/integrations/:id/metrics`
 - MCP: `integration.metrics`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

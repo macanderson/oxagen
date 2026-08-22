@@ -103,7 +103,7 @@ fail-open tile:
   (`get_memory_stats`, Neo4j) or deferred to Phase 3 where a `write_memory` emit is added. See
   tier-3.
 
-Every new contract follows the wiring order (law): **contract → API route → MCP tool → CLI →
+Every new contract follows the wiring order (law): **contract → API route → MCP tool →
 app UI**, with a `capability-ui-map.json` binding + runtime proof (UI Capability Parity).
 
 ## 3. Capability-pack counts — *derive the list, never hard-code it*
@@ -207,7 +207,7 @@ the **org's configured timezone** (fall back to UTC) so "today" means the custom
 | Cache read (hit-rate) | `token_usage.cached_tokens / input_tokens` | 1 | "cache-read share" only |
 | Cache miss / write | — | 3 | `cache_misses`=0; no write column |
 | Cost / USD | `token_usage.cost_usd_micros` | 1 | micro-USD |
-| Model / provider / surface / capability | `token_usage.model/provider/surface/capability_name` | 1 | `surface` has no `cli` (folds into api/agent) |
+| Model / provider / surface / capability | `token_usage.model/provider/surface/capability_name` | 1 | — |
 | Principal (who) | `token_usage.principal_id/principal_kind` | 1 | human/agent/service |
 | **User** | `token_usage.user_id` | 1 | needs `byUser` GROUP BY (new, migration-free) |
 | **Org (cross-org for a user)** | `token_usage.org_id` + `get_my_usage` | 1 | new self-scoped contract (§2.2) |

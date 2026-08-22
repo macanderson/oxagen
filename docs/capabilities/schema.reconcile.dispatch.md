@@ -9,7 +9,6 @@ Dispatch an async reconciliation job to re-label existing graph nodes and relati
 - API: `POST /v1/schema/reconcile`
 - MCP: `schema.reconcile.dispatch`
 - Agent: callable (requires approval, risk: high)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

@@ -9,7 +9,6 @@ Remove a property from a node label or relationship type in the current draft ve
 - API: `DELETE /v1/schemas/properties`
 - MCP: `schema.property.delete`
 - Agent: callable (requires approval, risk: medium)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

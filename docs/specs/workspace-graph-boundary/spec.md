@@ -181,9 +181,9 @@ Use a periodic ref reconciliation job as insurance against lost, duplicated, or 
 1. Initial sync resolved the default branch, fetched its recursive tree by the moving branch name, and fanned out per-file parsing without pinning to one immutable commit (`packages/inngest-functions/src/functions/ingestion.github-initial-sync.ts`).
 2. GitHub push webhooks only became generic commit entity records — no changed-blob fetch, no deletion processing, no projection head advance (`apps/api/src/routes/v1/github-webhook.ts`, `packages/ingestion/src/connectors/github/index.ts`).
 3. `SourceFile`, `SourceSymbol`, `SourceChunk` identities omitted commit SHA and were updated in place; plaintext chunks persisted in Neo4j (`packages/inngest-functions/src/functions/ingestion.github-parse-file.ts`).
-4. The same source file had incompatible identities across GitHub ingestion, in-app lineage/locks, CLI code push, and CLI lineage push.
-5. `push_graph` was exposed through API, MCP, and CLI to workspace Members, accepting arbitrary system labels, properties, edges, embeddings, and destructive tombstones, without enforcing idempotency key, repository binding, branch, or commit SHA (`packages/oxagen/src/contracts/graph.sync.push.ts`, `packages/handlers/src/graph.sync.push.ts`).
-6. CLI code push parsed the working tree but keyed its cursor/idempotency around `HEAD` with no clean-tree or canonical-ref requirement (`apps/cli/src/commands/graph.push.ts`).
+4. The same source file had incompatible identities across GitHub ingestion, in-app lineage/locks, and client-authored code and lineage pushes.
+5. `push_graph` was exposed through API and MCP to workspace Members, accepting arbitrary system labels, properties, edges, embeddings, and destructive tombstones, without enforcing idempotency key, repository binding, branch, or commit SHA (`packages/oxagen/src/contracts/graph.sync.push.ts`, `packages/handlers/src/graph.sync.push.ts`).
+6. Client-side code push parsed the working tree but keyed its cursor/idempotency around `HEAD` with no clean-tree or canonical-ref requirement.
 7. Domain classification is inferred and bounded — it must retain source, input snapshot, confidence, model/method, and coverage rather than becoming authoritative RBAC truth by itself.
 8. Stella's local index identifies files by mutable path and content hash, not repository/checkout/generation — it needs the snapshot/generation barrier before frame provenance is attestable.
 
@@ -191,8 +191,8 @@ Use a periodic ref reconciliation job as insurance against lost, duplicated, or 
 
 Delete or disable for launch:
 
-- the public/API/MCP/CLI `push_graph` capability;
-- `oxagen graph push` and CLI lineage up-sync;
+- the public/API/MCP `push_graph` capability;
+- client-authored graph and lineage up-sync;
 - fire-and-forget in-app `GraphSyncProvider` writes;
 - centrally persisted feature-branch source graphs;
 - workspace-graph `SourceSymbol`, `SourceChunk`, line/call/reference detail, and plaintext code embeddings/content;

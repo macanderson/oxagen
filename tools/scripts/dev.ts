@@ -11,7 +11,10 @@ import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
 import { inspectAppPorts, type AppPort } from "./lib/preflight-ports";
-import { guardTurbopackCaches, markCleanShutdown } from "./lib/next-cache-guard";
+import {
+  guardTurbopackCaches,
+  markCleanShutdown,
+} from "./lib/next-cache-guard";
 
 const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
@@ -26,14 +29,21 @@ async function preflightAppPorts(): Promise<void> {
   const result = await inspectAppPorts();
   if (result.status === "clean") return;
 
-  const list = (ports: AppPort[]): string => ports.map((p) => `${p.name} :${p.port}`).join(", ");
+  const list = (ports: AppPort[]): string =>
+    ports.map((p) => `${p.name} :${p.port}`).join(", ");
   const killHint =
     "[dev] to restart cleanly run `pnpm kill` then `pnpm dev` — note `pnpm kill` also stops the " +
     "shared Docker datastores other sessions of this repo may be using.";
 
   if (result.status === "running") {
-    console.log(kleur.green(`[dev] the local dev stack is already running (${list(result.bound)}).`));
-    console.log(kleur.cyan("[dev] reuse it at http://localhost:3000 — nothing to start."));
+    console.log(
+      kleur.green(
+        `[dev] the local dev stack is already running (${list(result.bound)}).`,
+      ),
+    );
+    console.log(
+      kleur.cyan("[dev] reuse it at http://localhost:3000 — nothing to start."),
+    );
     console.log(kleur.dim(killHint));
     process.exit(0);
   }
@@ -41,9 +51,15 @@ async function preflightAppPorts(): Promise<void> {
   // Partial / wedged: some app ports bound, some free — a second launch can't
   // cleanly take over. Surface it as an error so the developer resolves it.
   console.error(
-    kleur.yellow(`[dev] a partial dev stack is already up — bound: ${list(result.bound)}; free: ${list(result.free)}.`),
+    kleur.yellow(
+      `[dev] a partial dev stack is already up — bound: ${list(result.bound)}; free: ${list(result.free)}.`,
+    ),
   );
-  console.error(kleur.cyan("[dev] this is a wedged state; a fresh launch would crash on the bound ports."));
+  console.error(
+    kleur.cyan(
+      "[dev] this is a wedged state; a fresh launch would crash on the bound ports.",
+    ),
+  );
   console.error(kleur.dim(killHint));
   process.exit(1);
 }
@@ -52,7 +68,9 @@ async function checkDocker(): Promise<void> {
   try {
     await execa("docker", ["info"], { stdio: "ignore" });
   } catch {
-    console.error(kleur.red("Docker is not running. Start Docker Desktop and retry."));
+    console.error(
+      kleur.red("Docker is not running. Start Docker Desktop and retry."),
+    );
     process.exit(1);
   }
 }
@@ -106,8 +124,16 @@ async function readContainerStates(): Promise<ContainerState[]> {
     .filter(Boolean)
     .map((line) => {
       try {
-        const row = JSON.parse(line) as { Service?: string; Health?: string; State?: string };
-        return { service: row.Service ?? "?", health: row.Health ?? "", state: row.State ?? "?" };
+        const row = JSON.parse(line) as {
+          Service?: string;
+          Health?: string;
+          State?: string;
+        };
+        return {
+          service: row.Service ?? "?",
+          health: row.Health ?? "",
+          state: row.State ?? "?",
+        };
       } catch {
         return { service: "?", health: "", state: "?" };
       }
@@ -121,17 +147,35 @@ async function readContainerStates(): Promise<ContainerState[]> {
 async function dumpDiagnostics(states: ContainerState[]): Promise<void> {
   console.error(kleur.red("[dev] container states:"));
   for (const s of states) {
-    console.error(kleur.red(`  - ${s.service}: state=${s.state} health=${s.health || "<none>"}`));
+    console.error(
+      kleur.red(
+        `  - ${s.service}: state=${s.state} health=${s.health || "<none>"}`,
+      ),
+    );
   }
   const broken = states.filter(
-    (s) => !(s.health === "healthy" || (s.health === "" && s.state === "running")),
+    (s) =>
+      !(s.health === "healthy" || (s.health === "" && s.state === "running")),
   );
   for (const s of broken) {
     console.error(kleur.yellow(`\n[dev] last 40 log lines for ${s.service}:`));
     try {
-      await execa("docker", ["compose", "-f", COMPOSE_FILE, "logs", "--no-color", "--tail", "40", s.service], {
-        stdio: "inherit",
-      });
+      await execa(
+        "docker",
+        [
+          "compose",
+          "-f",
+          COMPOSE_FILE,
+          "logs",
+          "--no-color",
+          "--tail",
+          "40",
+          s.service,
+        ],
+        {
+          stdio: "inherit",
+        },
+      );
     } catch {
       console.error(kleur.red(`[dev] could not read logs for ${s.service}`));
     }
@@ -148,7 +192,9 @@ async function waitForHealthy(): Promise<void> {
     const states = await readContainerStates();
     // A container stuck in restarting/exited will never become healthy — bail
     // immediately with diagnostics rather than burning the full 60s deadline.
-    const crashed = states.filter((s) => s.state === "restarting" || s.state === "exited");
+    const crashed = states.filter(
+      (s) => s.state === "restarting" || s.state === "exited",
+    );
     if (crashed.length > 0) {
       console.error(
         kleur.red(
@@ -159,7 +205,8 @@ async function waitForHealthy(): Promise<void> {
       process.exit(1);
     }
     const ready = states.every(
-      (s) => s.health === "healthy" || (s.health === "" && s.state === "running"),
+      (s) =>
+        s.health === "healthy" || (s.health === "" && s.state === "running"),
     );
     if (ready && states.length > 0) {
       console.log(kleur.green("[dev] all containers healthy"));
@@ -203,11 +250,9 @@ function tapStream(
 
 async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
-  // @oxagen/cli is an Ink commander that exits 1 without a subcommand, and
-  // @oxagen/env-manager is an on-demand local tool (`pnpm env:manager`); both
-  // are excluded from the long-running dev set. Invoke the cli ad-hoc via
-  // `pnpm cli <command>`. Turbo 2 runs `persistent: true` tasks (see turbo.json)
-  // in parallel by default — no --parallel flag needed.
+  // @oxagen/env-manager is an on-demand local tool (`pnpm env:manager`), so it is
+  // excluded from the long-running dev set. Turbo 2 runs `persistent: true` tasks
+  // (see turbo.json) in parallel by default — no --parallel flag needed.
   //
   // We capture the combined output into the local ClickHouse `dev_logs` table so
   // the compile/runtime errors that scroll past in the terminal stay queryable.
@@ -218,20 +263,21 @@ async function turbo(): Promise<void> {
   // stdout/stderr — the only visible change is tui → prefixed stream lines.
   const devSession = randomUUID();
   console.log(
-    kleur.dim(`[dev] mirroring logs to ClickHouse dev_logs (session ${devSession})`),
+    kleur.dim(
+      `[dev] mirroring logs to ClickHouse dev_logs (session ${devSession})`,
+    ),
   );
   const shipper = createDevLogShipper(devSession);
 
   const sub = execa(
     "pnpm",
-    [
-      "turbo",
-      "dev",
-      "--ui=stream",
-      "--filter=!@oxagen/cli",
-      "--filter=!@oxagen/env-manager",
-    ],
-    { stdin: "inherit", stdout: "pipe", stderr: "pipe", env: { FORCE_COLOR: "1" } },
+    ["turbo", "dev", "--ui=stream", "--filter=!@oxagen/env-manager"],
+    {
+      stdin: "inherit",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { FORCE_COLOR: "1" },
+    },
   );
 
   tapStream(sub.stdout, process.stdout, "stdout", shipper);
@@ -279,7 +325,12 @@ async function main(): Promise<void> {
   // normalizeEnv-stripped warnings on boot. Strip one surrounding double-quote
   // pair from every value here so the children see clean env.
   for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string" && value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    if (
+      typeof value === "string" &&
+      value.length >= 2 &&
+      value.startsWith('"') &&
+      value.endsWith('"')
+    ) {
       process.env[key] = value.slice(1, -1);
     }
   }

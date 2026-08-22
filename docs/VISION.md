@@ -48,7 +48,7 @@ Own the intersection no incumbent bundles:
 
 1. **Governance** — capability-parity typed contracts that make every MCP tool
    inherently governed and un-poisonable. Every capability is a typed contract with
-   IAM + entitlement enforcement, exposed with parity across API, MCP, CLI, and UI.
+   IAM + entitlement enforcement, exposed with parity across API, MCP, and UI.
    The contract is the one enforced object that binds identity → knowledge scope →
    permitted action → commercial terms → verified outcome → audit record — the full
    accountability chain, not just routing or authentication.
@@ -115,7 +115,7 @@ Work that strengthens the wedge:
   that can be priced and re-billed (`invoke()` metering, `@oxagen/ai` telemetry,
   Stripe meter sync).
 - Contract governance: new capabilities land as typed contracts with IAM +
-  entitlement gates and full API/MCP/CLI/UI parity; nothing ships as an ungoverned
+  entitlement gates and full API/MCP/UI parity; nothing ships as an ungoverned
   tool surface.
 - Graph grounding: agent answers cite nodes/edges with time-aware validity;
   ingestion and ontology work that deepens cited, multi-tenant grounding.

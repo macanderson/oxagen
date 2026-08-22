@@ -19,7 +19,7 @@ Governance-level. Default roles: org `Owner`/`Admin`/`Compliance` and workspace 
 |-----------|------|----------|-------------|
 | `domain` | string | no | Exact domain filter (e.g. `billing`) |
 | `q` | string | no | Case-insensitive substring match on name, domain, or description |
-| `surface` | `"api" \| "mcp" \| "agent" \| "cli"` | no | Only capabilities exposed on this surface |
+| `surface` | `"api" \| "mcp" \| "agent"` | no | Only capabilities exposed on this surface |
 | `missingLayer` | `"schema" \| "api" \| "mcp" \| "unit" \| "e2e" \| "docs" \| "app"` | no | Only capabilities that do NOT declare this layer (surface-gap filter) |
 | `sensitivity` | `"low" \| "medium" \| "high" \| "destructive"` | no | Only capabilities with this sensitivity |
 | `limit` | number | no | Max rows 1–1000; default `500` |

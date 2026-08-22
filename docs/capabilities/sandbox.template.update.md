@@ -61,11 +61,6 @@ Content-Type: application/json
 
 Tool name: `update_sandbox_template`
 
-
-## CLI
-
-No dedicated CLI verb. Update a template's fields via the API/MCP or the app; `oxagen sandbox template get <slug-or-id>` shows the current config, and `oxagen sandbox template set-default` / `rm` cover the default and lifecycle changes.
-
 ## Errors
 
 - `validation_error` — input failed Zod parse (empty `name`/`slug`, resource cap exceeded).

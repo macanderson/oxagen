@@ -3,7 +3,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent, cli
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 **Billing:** not gated (a read-only registry listing consumes no AI tokens)
 
@@ -11,7 +11,7 @@
 
 Enumerate the durable sandbox sessions in the caller's workspace — the rows in
 `sandbox_sessions` created by `agent.sandbox.start` — so the app's "sandbox
-detail" page (plus CLI, MCP, and agent callers) can show which sessions exist,
+detail" page (plus MCP and agent callers) can show which sessions exist,
 their lifecycle status, and when each was last used, without probing every
 session id one at a time.
 
@@ -73,7 +73,6 @@ Work-recovery fields (`recoveryStatus`, `recoveryBranch`, `recoveryCommit`,
 - **API:** `POST /v1/:org/:workspace/agent/sandbox/list` — body `{ status?, activeOnly?, limit? }`
 - **MCP:** `list_sandboxes` tool (idempotent)
 - **Agent:** invoked via `invoke("list_sandboxes", ...)` — no approval required
-- **CLI:** `oxagen sandbox list [--status <status>] [--limit <n>] [--json]`
 
 ## Access control
 

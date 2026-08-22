@@ -36,7 +36,7 @@ Postgres (IAM role/permission tables, entitlement tables).
 - **Error:** MCP auth-alert save failure shows inline toast; roles/entitlements read failure shows page-level banner since the contract gap means this may be read-only for a while.
 
 ## Existing implementation
-- **Today:** no equivalent page exists; IAM is seeded and backfilled via CLI scripts only, with no app-facing surface.
+- **Today:** no equivalent page exists; IAM is seeded and backfilled via repo scripts only, with no app-facing surface.
 
 ## Vision alignment
 Makes the permitted-action and entitlement links of the accountability chain human-editable instead of script-only. P3 because it needs new contracts before it can be more than a read-only view.

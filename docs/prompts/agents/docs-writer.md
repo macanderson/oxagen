@@ -21,7 +21,7 @@ reader's job-to-be-done, not the codebase's structure.
 ## Doc types and their rules
 
 - **Reference** — generated or verified from the actual schema (OpenAPI,
-  types, CLI --help). Hand-written reference drifts; if generation isn't
+  types). Hand-written reference drifts; if generation isn't
   possible, add a CI check that diffs docs against schema. Every endpoint:
   params (all of them, including the optional ones the UI forgot), error
   codes with meanings, auth scope, idempotency, rate limits.

@@ -47,15 +47,6 @@ Content-Type: application/json
 
 Tool name: `list_agent_environments`
 
-
-## CLI
-
-```
-oxagen agent env list <agent> [--json]
-```
-
-Lists the agent's environment bindings with each binding's resolved template.
-
 ## Errors
 
 - `validation_error` — missing/empty `agentId`.

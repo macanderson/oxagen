@@ -244,7 +244,7 @@
     </div>
     <a href="#overview">Platform overview</a>
     <a href="#datastores" class="sub">The four data stores</a>
-    <a href="#surfaces" class="sub">The four surfaces</a>
+    <a href="#surfaces" class="sub">The three surfaces</a>
 
     <div class="kicker">Parity</div>
     <a href="#spine">The contract spine</a>
@@ -272,7 +272,7 @@
   <!-- ================================================================= -->
   <header>
     <h1>Oxagen Platform — Internal Architecture Guide</h1>
-    <p class="lead">How the platform is wired today: one capability definition fanned out across four surfaces, who is allowed to do what, how tenants are kept apart, what SOC&nbsp;2 controls exist, and how the app is laid out. Written for engineers, security, and anyone onboarding. It is honest about what is half-built.</p>
+    <p class="lead">How the platform is wired today: one capability definition fanned out across three surfaces, who is allowed to do what, how tenants are kept apart, what SOC&nbsp;2 controls exist, and how the app is laid out. Written for engineers, security, and anyone onboarding. It is honest about what is half-built.</p>
     <div class="meta-row">
       <span><b>Status:</b> pre-launch build mode — no live customers</span>
       <span><b>Snapshot:</b> 2026-06-05</span>
@@ -332,8 +332,8 @@
     </div>
     <p class="muted"><strong>The hard rule:</strong> never put analytics in Neo4j, never put graph relationships in Postgres, never put transactional state in ClickHouse, and never put a binary blob in any of the three databases. Each store has one job.</p>
 
-    <h3 id="surfaces">The four surfaces</h3>
-    <p>There are four &ldquo;doors&rdquo; into the building. Three of them serve the same set of platform abilities; the fourth is just a developer convenience.</p>
+    <h3 id="surfaces">The three surfaces</h3>
+    <p>There are three &ldquo;doors&rdquo; into the building, and every one of them serves the same set of platform abilities.</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Surface</th><th>What it is</th><th>Who uses it</th><th>Status</th></tr></thead>
@@ -341,13 +341,12 @@
           <tr><td><b>In-app agent</b><br><code>apps/app</code></td><td>Next.js chat UI. The agent calls platform abilities as tool-calls, streamed over SSE.</td><td>End users in the browser</td><td><span class="pill live">Live</span></td></tr>
           <tr><td><b>REST API</b><br><code>apps/api</code></td><td>Hono service. One <code>/v1</code> route per ability. No UI.</td><td>Programmatic / server-to-server</td><td><span class="pill live">Live</span></td></tr>
           <tr><td><b>MCP server</b><br><code>apps/mcp</code></td><td>xmcp server at <code>/mcp</code>. Each ability is an MCP tool. Auth by API key.</td><td>Claude, Cursor, Windsurf, etc.</td><td><span class="pill live">Live</span></td></tr>
-          <tr><td><b>CLI</b><br><code>apps/cli</code></td><td>Ink/Commander dev tool. One command (<code>oxagen dev</code>) that shows local stack status.</td><td>Engineers locally</td><td><span class="pill stub">Dev-only</span></td></tr>
         </tbody>
       </table>
     </div>
     <div class="note">
       <span class="tag muted">Clarification</span>
-      <p>The CLI is <strong>not a capability surface</strong> today. It does not call the platform kernel and exposes none of the abilities below — it only probes ports to report dev-stack health. When this guide says &ldquo;the surfaces stay in parity,&rdquo; it means <strong>API + MCP + in-app agent</strong>. A customer-facing CLI is a roadmap item.</p>
+      <p>When this guide says &ldquo;the surfaces stay in parity,&rdquo; it means <strong>API + MCP + in-app agent</strong> — all three funnel through the same kernel, so an ability is either available on all of them or on none.</p>
     </div>
   </section>
 
@@ -414,10 +413,6 @@
       <div class="card">
         <h4>In-app agent — <span class="pill live">Live</span></h4>
         <p>The chat stream route asks <code>materializeTools()</code> for every capability whose <code>surfaces</code> include <code>"agent"</code>, hands them to the model as tools, and routes each tool-call back through <code>invoke()</code>. Token-by-token output is streamed to the browser as typed SSE events.</p>
-      </div>
-      <div class="card">
-        <h4>CLI — <span class="pill stub">Dev-only</span></h4>
-        <p>Not a capability surface. <code>oxagen dev</code> renders a status panel. It never touches the kernel. Listed here only so the &ldquo;four surfaces&rdquo; framing is honest.</p>
       </div>
     </div>
 
@@ -679,7 +674,7 @@
         </tbody>
       </table>
     </div>
-    <p class="muted">The other apps in one line each: <strong>website</strong> — static marketing landing; <strong>admin</strong> — stub landing card only; <strong>docs</strong> — Fumadocs/MDX site; <strong>api</strong> — Hono REST, no UI; <strong>mcp</strong> — xmcp server at <code>/mcp</code>; <strong>cli</strong> — one dev command.</p>
+    <p class="muted">The other apps in one line each: <strong>website</strong> — static marketing landing; <strong>admin</strong> — stub landing card only; <strong>docs</strong> — Fumadocs/MDX site; <strong>api</strong> — Hono REST, no UI; <strong>mcp</strong> — xmcp server at <code>/mcp</code>.</p>
   </section>
 
   <hr />
@@ -705,7 +700,6 @@
           <tr><td>Access editor UI, audit-feed UI, SIEM export</td><td><span class="pill planned">Planned</span></td><td>IAM Waves 5–6</td></tr>
           <tr><td>Knowledge / Automation / Activity / Studio pages</td><td><span class="pill stub">Stub</span></td><td>Front-end build-out</td></tr>
           <tr><td>Private/signed blob access</td><td><span class="pill planned">Planned</span></td><td>Before user documents</td></tr>
-          <tr><td>Customer-facing CLI as a real surface</td><td><span class="pill planned">Planned</span></td><td>Dev-only today</td></tr>
           <tr><td>Admin app (access reviews, incidents)</td><td><span class="pill stub">Stub</span></td><td>Operator dashboard</td></tr>
         </tbody>
       </table>

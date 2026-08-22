@@ -4,12 +4,15 @@
  * host — which means oxagen supplies the model completion and every tool
  * result, and the Rust engine supplies the orchestration.
  *
- * This is intentionally the smallest possible client: it exists so the smoke
- * test can prove the wire contract, not to be oxagen's production sidecar
- * integration (that lives in the platform's agent-runner once ADR-033 Track 2
- * lands — see docs/adr/ADR-033-stella-engine-core.md and
- * docs/specs/agent-engine-v2/). Keep it dependency-free (fetch only) so it
- * stays easy to keep in lockstep with stella's serve surface.
+ * This is oxagen's ONE sidecar client: the platform's turn runner
+ * (`@oxagen/agent-runner`'s stella-runner) drives production turns through the
+ * very same `runTurn` the smoke test exercises. That is deliberate — a second
+ * "production" pump beside a "contract-proving" one would mean the test proved
+ * a parallel implementation, and the two would drift until the smoke test was
+ * green about code nobody ran.
+ *
+ * Keep it dependency-free (fetch only) so it stays easy to hold in lockstep
+ * with stella's serve surface.
  *
  * ## Why this file was rewritten (oxagen #1132)
  *
@@ -60,15 +63,52 @@ export interface SidecarClientOptions {
   fetchImpl?: typeof fetch;
 }
 
+/** One streamed fragment of an in-flight completion. */
+export interface ProviderDelta {
+  readonly kind: "text" | "reasoning";
+  readonly text: string;
+}
+
+/** What the engine says about the model call it is asking for. */
+export interface ProviderCallContext {
+  readonly requestId: string;
+  /**
+   * The provider asked to serve THIS call — the turn's own, or the override on
+   * a goal/sub-agent block. A host that cannot tell them apart cannot route a
+   * verifier to a different model family.
+   */
+  readonly providerId: string;
+  /** What the call is for, so a host routes by role rather than by string-matching an id. */
+  readonly role: string;
+  /**
+   * Stream fragments to the engine ahead of the final result.
+   *
+   * Advisory — the returned `CompletionResult` is authoritative — but load
+   * bearing for two reasons: a second subscriber sees text as it arrives, and
+   * each batch RE-ARMS the reverse-request deadline. That is what makes the
+   * provider deadline an idle bound rather than a total one, so a long
+   * completion cannot time out mid-stream.
+   */
+  pushDelta(deltas: readonly ProviderDelta[]): Promise<void>;
+  readonly signal: AbortSignal;
+}
+
+export interface ToolCallContext {
+  readonly requestId: string;
+  readonly signal: AbortSignal;
+}
+
 /** The host's model port: answer one `provider_request`. */
 export type ProviderHandler = (
   request: CompletionRequest,
+  ctx: ProviderCallContext,
 ) => Promise<CompletionResult>;
 
 /** The host's tool port: answer one `tool_request`. */
 export type ToolHandler = (
   name: string,
   input: Record<string, unknown>,
+  ctx: ToolCallContext,
 ) => Promise<ToolOutput>;
 
 export interface DriveTurnHandlers {
@@ -190,6 +230,39 @@ export class StellaSidecarClient {
     });
   }
 
+  /**
+   * `POST /v1/turns/{id}/provider-delta` — stream fragments for an in-flight
+   * model call, ahead of its terminating provider-result.
+   *
+   * An EMPTY batch is refused at the route (400), so it is dropped here rather
+   * than sent: a caller flushing on its own cadence should not have to guard.
+   */
+  async pushProviderDelta(
+    turnId: string,
+    requestId: string,
+    deltas: readonly ProviderDelta[],
+  ): Promise<void> {
+    if (deltas.length === 0) return;
+    const res = await this.fetchImpl(
+      `${this.baseUrl}/v1/turns/${turnId}/provider-delta`,
+      {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ request_id: requestId, deltas }),
+      },
+    );
+    // A delta is advisory: the authoritative answer is the provider-result
+    // that follows. Losing one must never fail the turn — a 409 here just
+    // means the result already landed.
+    if (!res.ok && res.status !== 409) {
+      throw new SidecarHttpError(
+        "provider-delta",
+        res.status,
+        await res.text(),
+      );
+    }
+  }
+
   /** `POST /v1/turns/{id}/tool-result` — answer a tool call. */
   async resolveTool(
     turnId: string,
@@ -247,8 +320,28 @@ export class StellaSidecarClient {
   async runTurn(
     request: TurnRequest,
     handlers: DriveTurnHandlers,
+    opts: { signal?: AbortSignal } = {},
   ): Promise<TurnRunResult> {
     const { turnId } = await this.createTurn(request);
+
+    // An abort unwinds the engine at its next STEP boundary — never mid-tool —
+    // and the turn still emits a terminal frame, so the loop below exits
+    // normally rather than being torn out from under its in-flight handlers.
+    // Held so the cancel is awaited before this method returns: fire-and-forget
+    // would let a caller that exits right after aborting leave the turn running
+    // server-side, still spending.
+    let cancelling: Promise<void> | undefined;
+    // Handlers get this rather than the caller's signal directly, so an
+    // in-flight model call or tool sees the abort even when the turn was
+    // stopped by something other than the caller.
+    const abort = new AbortController();
+    const onAbort = () => {
+      abort.abort();
+      cancelling = this.cancelTurn(turnId).catch(() => undefined);
+    };
+    if (opts.signal?.aborted) onAbort();
+    else opts.signal?.addEventListener("abort", onAbort, { once: true });
+
     const frames = await this.openFrameStream(turnId);
 
     const events: AgentEventEnvelope[] = [];
@@ -275,9 +368,17 @@ export class StellaSidecarClient {
         case "provider_request": {
           providerCalls += 1;
           const { request_id, request: completion } = frame;
+          const ctx: ProviderCallContext = {
+            requestId: request_id,
+            providerId: frame.provider_id,
+            role: frame.role,
+            pushDelta: (deltas) =>
+              this.pushProviderDelta(turnId, request_id, deltas),
+            signal: abort.signal,
+          };
           track(
             handlers
-              .onProviderRequest(completion)
+              .onProviderRequest(completion, ctx)
               .then((result) =>
                 this.resolveProvider(turnId, request_id, result),
               ),
@@ -287,9 +388,13 @@ export class StellaSidecarClient {
         case "tool_request": {
           toolCalls += 1;
           const { request_id, name, input } = frame;
+          const ctx: ToolCallContext = {
+            requestId: request_id,
+            signal: abort.signal,
+          };
           track(
             handlers
-              .onToolRequest(name, input)
+              .onToolRequest(name, input, ctx)
               .then((output) => this.resolveTool(turnId, request_id, output)),
           );
           break;
@@ -302,6 +407,8 @@ export class StellaSidecarClient {
     }
 
     await Promise.all(inFlight);
+    await cancelling;
+    opts.signal?.removeEventListener("abort", onAbort);
     if (failures.length > 0) {
       throw failures[0];
     }

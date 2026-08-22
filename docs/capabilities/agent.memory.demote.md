@@ -63,13 +63,6 @@ MCP — tool `demote_memory` with the same input shape:
 { "memoryId": "mem_01H…", "toClass": "RULE", "enforcementScore": 60 }
 ```
 
-CLI:
-
-```bash
-oxagen memory demote mem_01H… --to observation
-oxagen memory demote mem_01H… --to rule --enforcement 60 --rationale "still useful, no longer binding"
-```
-
 App: Knowledge → Memory → open a RULE/FACT memory → **Demote** in the detail sheet.
 
 ## SPEC references

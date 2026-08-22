@@ -6,7 +6,6 @@
   "surfaces": [
     "api",
     "mcp",
-    "cli",
     "agent"
   ],
   "sensitivity": "destructive",

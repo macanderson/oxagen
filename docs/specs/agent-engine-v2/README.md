@@ -22,6 +22,3 @@ re-enters `kernel.invoke()`.
 - [`../../adr/ADR-033-stella-engine-core.md`](../../adr/ADR-033-stella-engine-core.md)
   — the decision record.
 
-Supersedes `docs/specs/oxagen-rust-cli/` on the "build a Rust agent" point:
-that agent was built — it is Stella — and this spec brings its core into the
-platform instead of porting the platform into a CLI.

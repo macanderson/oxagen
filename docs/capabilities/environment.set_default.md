@@ -14,7 +14,7 @@ existing default is demoted and the target is set as the single default in one
 transaction (enforced by a partial-unique constraint on `is_default`). The
 promoted environment is reactivated if it was inactive. This is the path used by
 the `settings/environments` "Default environment" selector and is also exposed
-via CLI/MCP for capability parity. Owner/Admin only.
+via API/MCP for capability parity. Owner/Admin only.
 
 ## Input
 

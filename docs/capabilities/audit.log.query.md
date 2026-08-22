@@ -9,7 +9,6 @@ Query the org's security and automation audit events (`security_events` + `playb
 - API: `POST /v1/audit/log/query`
 - MCP: `audit.log.query`
 - Agent: callable (no approval required, risk: low)
-- CLI: `oxagen audit log query`
 
 ## Access
 Admin-level. Default roles: org `Owner`/`Admin` and workspace `Owner`. Sensitivity: **high**. Tenant isolation is enforced in the handler — every underlying query is filtered by the caller's `orgId`.

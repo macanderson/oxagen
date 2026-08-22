@@ -6,8 +6,7 @@
   "surfaces": [
     "api",
     "mcp",
-    "agent",
-    "cli"
+    "agent"
   ],
   "sensitivity": "high",
   "agent": {

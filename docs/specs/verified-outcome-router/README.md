@@ -32,7 +32,7 @@ none of them learned:
    (Haiku / Sonnet / Fable by default). It never looks at outcomes. A high-stakes
    domain regex (auth, billing, security, migrations, architecture) forces the precise
    tier; everything else is vocabulary heuristics.
-2. **Per-function human overrides.** The CLI's `/worker-model`, `/judge-model`, and
+2. **Per-function human overrides.** The `/worker-model`, `/judge-model`, and
    `/triage-model` commands persist per-role model pins through settings into env
    (`OXAGEN_MODEL`, `OXAGEN_LLM_ADVISOR`, `OXAGEN_LLM_EVALUATOR`), consumed fresh each
    turn by the engine. A pin always wins over the classifier.
@@ -80,7 +80,7 @@ behavior is unchanged:
 4. **Policy and governance.** Per-org/workspace routing policy with three modes:
    `off` (today's behavior, the default), `shadow` (compute and record decisions
    without acting on them), `enforce` (route by the market). Four capabilities,
-   named per ADR-025 and wired across API, MCP, and CLI:
+   named per ADR-025 and wired across API and MCP:
    `get_routing_policy`, `set_routing_policy`, `list_routing_stats`,
    `preview_routing_decision`.
 5. **Shadow-mode learning loop.** In shadow mode every turn records what actually ran

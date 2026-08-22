@@ -39,10 +39,9 @@ sandboxes cost money and must not linger. Today the platform does neither well:
    provisions a brand-new sandbox (fresh clone); the prior work is safe on its
    recovery branch.
 
-**Non-goal (this epic):** moving CLI coding sessions into sandboxes. Per ADR-019
-the CLI runs local + always-linked (`CwdWorkspace`) and keeps its own
-`commit-ledger`/`oxagen recover` safety net. The CLI instead gains *management*
-commands over the platform sandboxes (`oxagen sandbox {list,inspect,logs,recover}`).
+**Non-goal (this epic):** moving locally-run coding sessions into sandboxes. A
+local runner works against the checkout directly (`CwdWorkspace`) and keeps its
+own `commit-ledger` safety net.
 
 ## 3. The hard invariant
 
@@ -161,7 +160,7 @@ minus the PR. Given a session row:
 
 Recovery is **idempotent**: keyed on the session id; a branch collision reuses the
 existing recovery branch. Also exposed as an on-demand capability
-(`recover_sandbox_session`) so a user can force-recover from the inspector/CLI.
+(`recover_sandbox_session`) so a user can force-recover from the inspector.
 
 ## 7. Observability
 
@@ -188,7 +187,7 @@ currently unbound — a standing parity gap this epic closes).
 
 ## 8. Capabilities & parity
 
-New contracts (full api/mcp/cli/app parity + docs + capability-ui-map binding):
+New contracts (full api/mcp/app parity + docs + capability-ui-map binding):
 
 - `list_sandbox_logs` — `{ sessionId, level?, since?, limit }` → log rows (tail).
 - `recover_sandbox_session` — `{ sessionId }` → `{ recoveryBranch, recoveryCommit }`.
@@ -205,7 +204,7 @@ Existing `list_sandboxes` / `sandbox_file.*` gain the `app` layer + binding.
 3. **Log capture** — CH table + exec-handler append + `list_sandbox_logs` (parity).
 4. **Inspector UI** — state panel + logs console + debug toggle + recovery banner;
    capability-ui-map bindings.
-5. **CLI management commands** + capability docs.
+5. **Capability docs.**
 
 ## 10. Testing
 

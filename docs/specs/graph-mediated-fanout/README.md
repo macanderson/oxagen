@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Owner:** Mac Anderson
-**Related:** ADR-010 (subagent fanout via Inngest), ADR-019 (unified agent engine)
+**Related:** ADR-010 (subagent fanout via Inngest)
 **Supersedes on acceptance:** parts of ADR-010's aggregate model → file as ADR-021
 
 > **2026-07 launch update:** Phase 1's compact Postgres summary model remains.
@@ -38,9 +38,8 @@ Symptoms already visible in the codebase:
 - Parent latency scales with context size: every child output relayed into the
   parent makes the parent's *next* LLM call slower.
 
-The CLI fleet already proves the alternative works. `Fleet.run()`
-(`apps/cli/src/agent/fleet/orchestrator.ts:379` and
-`packages/agent-engine/src/fleet/index.ts:266`) keeps only a **280-character
+The in-process fleet runner already proves the alternative works. `Fleet.run()`
+(`packages/agent-engine/src/fleet/index.ts:266`) keeps only a **280-character
 summary** per worker plus token counts; full worker text never re-enters a
 coordinator LLM. The platform path should behave the same way.
 
@@ -62,7 +61,7 @@ coordinator LLM. The platform path should behave the same way.
   micro-agent scaling). This spec builds the substrate those need — structured
   result refs + graph projection — without changing the coordination topology.
 - Replacing the workflow supervisor (`agent.workflow.supervisor.ts`) planner.
-- Changing the CLI fleet (already summary-based).
+- Changing the in-process fleet runner (already summary-based).
 
 ## Design
 
@@ -113,7 +112,7 @@ The parent fetches one child's full output only when the summary is insufficient
   dispatching agent didn't already own.
 - **Parity layers** (per capability-parity rule): API route
   `apps/api/src/routes/v1/agent.ts` (or the existing subagent route file), MCP
-  tool `apps/mcp/src/tools/agent.subagent.result.get.ts`, CLI command, and
+  tool `apps/mcp/src/tools/agent.subagent.result.get.ts`, and
   `docs/capabilities/agent.subagent.result.get.md` + `_index.md` entry.
   Verify with `pnpm check:manifest`.
 - **Tool description** must steer the model: *"Fetch ONE child's full output when
@@ -134,7 +133,7 @@ child finishes, with zero LLM calls:
 2. Else → `JSON.stringify(output)` truncated to 280 chars.
 3. On failure → `errorReason` truncated to 280 chars.
 
-280 chars matches the proven CLI-fleet budget (`orchestrator.ts:379`). Handlers
+280 chars matches the proven fleet-runner budget (`packages/agent-engine/src/fleet/index.ts:266`). Handlers
 that want better summaries add a `summary` field to their output schema — an
 incremental, per-capability improvement path that needs no coordination.
 
@@ -181,7 +180,6 @@ aggregate tool while the fanout is still running:
 | MCP | `apps/mcp/src/tools/agent.subagent.aggregate.ts` | schema + description update |
 | MCP | `apps/mcp/src/tools/agent.subagent.result.get.ts` | new |
 | API | `apps/api/src/routes/v1/` (subagent route file) | new result.get route |
-| CLI | `apps/cli/src/commands/` | result.get command |
 | Ontology | `packages/ontology/src/mutations/record-execution.ts` | accept `fanoutId`/`runId` properties (if not already generic via `properties` bag) |
 | Docs | `docs/capabilities/agent.subagent.aggregate.md`, `agent.subagent.result.get.md`, `_index.md` | update/new |
 | ADR | `docs/adr/ADR-021-graph-mediated-fanout-results.md` | record decision, supersede ADR-010 aggregate model |
@@ -234,7 +232,7 @@ Baseline for one week before rollout, compare one week after:
   summary derivation precedence (summary → message → text → stringify → error),
   tenancy isolation on result.get (cross-org runId → not found).
 - Contract tests: schema round-trip for both contracts; `pnpm check:contracts`.
-- Parity: `pnpm check:manifest` green for result.get across api/mcp/cli/docs.
+- Parity: `pnpm check:manifest` green for result.get across api/mcp/docs.
 - Migration: `pnpm db:lint-migrations`; post-migrate `SELECT` verifying `summary`
   column exists and is populated by a dispatched test fanout.
 - E2E: one fanout via MCP — dispatch 3 children, aggregate returns summaries only,
@@ -245,7 +243,7 @@ Baseline for one week before rollout, compare one week after:
 ## Rollout
 
 1. Migration + executor summary writes ship first (additive, inert).
-2. Contract/handler/MCP/API/CLI/docs land together behind the default-flip
+2. Contract/handler/MCP/API/docs land together behind the default-flip
    (`includeOutputs` default `false` at launch — callers needing old behavior
    pass the flag; the sweep in Risks ensures first-party callers are updated in
    the same PR).
@@ -259,7 +257,7 @@ Every other benefit of the full blackboard design (peer connections, self-healin
 leases, dynamic scaling) changes *coordination topology* — high design risk,
 many new primitives. This spec changes only *what flows over the existing
 topology*: references and summaries instead of payloads. It reuses the proven
-CLI-fleet summary budget, the existing Postgres result store, the existing
+fleet-runner summary budget, the existing Postgres result store, the existing
 event-driven aggregator, and the existing graph projection rails. Token cost on
 the dominant seam drops by an order of magnitude, parent turns get faster and
 fewer, and nothing about scheduling, IAM, metering, or approval flows moves.

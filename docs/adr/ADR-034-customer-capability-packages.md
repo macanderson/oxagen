@@ -20,7 +20,7 @@ tracing. This model is strict and correct — but it is **compile-time only**:
 2. Surface exposure is hand-written per capability: a Hono route file plus two
    hand-listed lines in `apps/api/src/app.ts` (276 route files / 571 `.route()`
    calls), an xmcp tool file per capability (330 files), optional app server
-   action + `capability-ui-map.json` entry, and hand-wired CLI commands.
+   action + `capability-ui-map.json` entry.
    Parity is enforced after the fact by gates (`check:manifest`,
    `check:ui-parity`, route/tool parity tests) rather than produced by
    construction.
@@ -41,8 +41,8 @@ version, or install their own capabilities today.
 We will let customers author capabilities **as code in their own Git
 repositories**, package them as **`.cap` files** (a zip archive with a required
 layout and manifest), and install them per workspace. The platform — not the
-author — surfaces each installed capability on REST, MCP, agent tools, the app,
-and the CLI, driven entirely by the contract and manifest. Concretely:
+author — surfaces each installed capability on REST, MCP, agent tools, and the
+app, driven entirely by the contract and manifest. Concretely:
 
 1. **`.cap` package format.** A zip with `manifest.json` (generated, machine
    artifact), portable JSON Schema contracts, bundled ESM handlers, a reserved
@@ -51,7 +51,7 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
    extends the shipped `oxagenPluginManifestSchema` and follows the
    `kind`/`formatVersion` literal pattern of the portable sandbox-template
    manifest v1. Source of truth is the author's TypeScript
-   (`defineCapability()` in `@oxagen/cap-sdk`); `oxagen cap build` compiles it.
+   (`defineCapability()` in `@oxagen/cap-sdk`); `cap build` compiles it.
 
 2. **Dynamic registry overlay.** New tables `capability_packages`,
    `capability_package_versions` (immutable, checksummed, semver — the
@@ -75,14 +75,13 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
    `agent/video.render` pattern, generalized into a `capability_runs` job
    envelope).
 
-4. **Generic surface binders, first-party first.** REST routes, MCP tools, app
-   pages, and CLI commands are materialized from the registry the way
+4. **Generic surface binders, first-party first.** REST routes, MCP tools, and
+   app pages are materialized from the registry the way
    `materializeTools` already does for agent tools: a registry-driven route
    table replaces the hand-listed `app.ts` mounts, the MCP server moves from
    build-time file discovery to a per-connection dynamic tool list
-   (static ∪ workspace installs), the app gains a schema-driven generic
-   capability runner page feeding the existing render-directive pipeline, and
-   the CLI materializes workspace commands from a synced capability index.
+   (static ∪ workspace installs), and the app gains a schema-driven generic
+   capability runner page feeding the existing render-directive pipeline.
    We dogfood by binding `generate_svg`, `generate_image`, and
    `generate_video` through the binders and deleting their hand-written
    wrappers before any customer package ships. Surface parity becomes a
@@ -99,7 +98,7 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
 ## Consequences
 
 - Customers design the contract and write the handler; Oxagen does everything
-  else. Surfacing a capability on API + MCP + app + CLI becomes a
+  else. Surfacing a capability on API + MCP + app becomes a
   business-process decision (flags in the manifest), not an engineering task.
 - The kernel remains the single enforcement point. Nothing in this design adds
   a second dispatch path; it adds a second *source of declarations*.
@@ -125,9 +124,6 @@ and the CLI, driven entirely by the contract and manifest. Concretely:
 - **In-process execution of customer bundles** (`vm`/worker threads): rejected —
   Node has no safe in-process isolation; a hostile bundle could reach ambient
   tenant scope, env, and connection pools.
-- **Per-workspace compiled CLI binaries**: rejected — distribution, signing,
-  and update churn for marginal benefit; the CLI instead materializes commands
-  dynamically from the synced workspace capability index (see spec §10.5).
-- **MCP-only exposure of customer capabilities** (skip REST/app/CLI): rejected —
+- **MCP-only exposure of customer capabilities** (skip REST/app): rejected —
   parity is the product's law and the customer requirement ("effort concerning
   business processes, not technology").

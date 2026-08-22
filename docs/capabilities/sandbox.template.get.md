@@ -47,15 +47,6 @@ Content-Type: application/json
 
 Tool name: `get_sandbox_template`
 
-
-## CLI
-
-```
-oxagen sandbox template get <slug-or-id> [--env <slug>] [--json]
-```
-
-Accepts a slug or a `sbx_…` id. Add `--env` to disambiguate a slug across environments.
-
 ## Errors
 
 - `validation_error` — missing/empty `templateId`.

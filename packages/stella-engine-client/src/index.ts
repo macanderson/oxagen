@@ -2,8 +2,11 @@ export * from "./wire-types.js";
 export { SidecarHttpError, StellaSidecarClient } from "./sidecar-transport.js";
 export type {
   DriveTurnHandlers,
+  ProviderCallContext,
+  ProviderDelta,
   ProviderHandler,
   SidecarClientOptions,
+  ToolCallContext,
   ToolHandler,
   TurnRunResult,
 } from "./sidecar-transport.js";

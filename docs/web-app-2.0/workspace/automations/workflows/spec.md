@@ -42,7 +42,7 @@ Postgres: `agent_executions` (workflow run root), Inngest job state. ClickHouse:
 - **Error:** failed launch shows the capability's validation error inline; a run that errors mid-flight shows its status badge as `error` with a link to the failing child in Fleet.
 
 ## Existing implementation
-- **Today:** no dedicated route; both families are `agent`-surface capabilities today (no `app`/`cli` in `workflow.run`'s `surfaces[]`) rendered only via the chat `workflow-progress` component. Build new — this is the first non-chat surface for either family.
+- **Today:** no dedicated route; both families are `agent`-surface capabilities today (no `app` in `workflow.run`'s `surfaces[]`) rendered only via the chat `workflow-progress` component. Build new — this is the first non-chat surface for either family.
 
 ## Vision alignment
 Fan-out with typed lineage and per-step cost is vision pillar 5 (fleet lineage) made operable outside chat — every step already emits lineage + metering through `invoke()`; P3 because the underlying primitives exist but a dedicated launch/monitor UI needs product sequencing behind Automations/Triggers.

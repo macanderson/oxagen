@@ -40,7 +40,7 @@ capabilities the others miss):
    able to SEE and, where legal, ACT on).
 5. RBAC permissions defined but never checked by any UI element.
 6. Feature flags, plan/entitlement gates, and per-tenant limits.
-7. SDK/CLI-only operations.
+7. SDK-only operations.
 8. Error codes the API can return (each distinct error code needs a designed
    UI treatment — see Pattern Selector).
 

@@ -107,11 +107,11 @@ A shared, dependency-light module will own:
 - Lifecycle invocation and prompt-patch schemas.
 - Lifecycle eligibility metadata used by capability contracts.
 - Runtime-ready versus needs-review classification.
-- Import candidate and receipt types shared by CLI adapters and tests.
+- Import candidate and receipt types shared by the import adapters and tests.
 - The foreign-tool mapping registry format and target validation.
 - Canonical hashing helpers for TOML documents and structured receipt values.
 
-Every CLI, server, handler, code generator, and seeder consumes these shared
+Every server, handler, code generator, and seeder consumes these shared
 types. Oxagen must not retain separate parsers with subtly different behavior.
 
 ## Canonical TOML formats
@@ -328,7 +328,7 @@ closed when:
 Lifecycle execution remains inside `invoke()`, but the kernel receives an
 internal execution kind and lifecycle event instead of pretending the runner is
 an external `agent` surface. The kernel checks lifecycle metadata independently
-from API/MCP/agent/CLI exposure and records `ctx.surface = "runner"` in audit and
+from API/MCP/agent exposure and records `ctx.surface = "runner"` in audit and
 metering data.
 
 ## Deterministic lifecycle driver
@@ -696,14 +696,8 @@ wildcards and never cause Oxagen to grant all tools.
 
 ### User experience
 
-The REPL exposes `/import`. The CLI exposes the same engine through:
-
-```bash
-oxagen import artifacts --from claude,codex,cursor --scope all
-oxagen import artifacts --dry-run --json
-oxagen import artifacts --conflict rename
-oxagen import artifacts --conflict overwrite
-```
+Import runs against a chosen set of source platforms and scopes, with dry-run
+and JSON output modes, and a conflict policy of skip, rename, or overwrite.
 
 Interactive conflicts are resolved per item with:
 
@@ -762,8 +756,6 @@ does not rewrite the artifact.
 The same release converts and updates:
 
 - Local agent, skill, and command loaders.
-- CLI scaffolding and show/list commands.
-- Slash-command discovery in the REPL.
 - Configuration indexing.
 - Bundled skills under `packages/skills` and their code generator.
 - Skill authoring, drafting, editing, revision, version upload, version get, and
@@ -911,12 +903,11 @@ Documentation will include:
 - Import source locations for each supported platform.
 - Tool mapping and unresolved-review guidance.
 - Conflict and symlink behavior.
-- CLI and REPL walkthroughs.
 - A migration guide for existing `.oxagen` Markdown artifacts and bundled
   skills.
 
-Scaffold commands create TOML only. Error messages that encounter a legacy file
-point directly to `/import` or `oxagen import artifacts`.
+Scaffolding creates TOML only. Error messages that encounter a legacy file
+point directly to the import engine.
 
 ## Implementation decomposition
 
@@ -943,7 +934,7 @@ must not introduce a second artifact or invocation path.
 2. The import engine and legacy adapters are available in the cutover release.
 3. Repository-owned artifacts are converted using the same engine customers use.
 4. All normal loaders switch atomically to TOML-only behavior.
-5. Server capability contracts, handlers, generated data, CLI behavior, and
+5. Server capability contracts, handlers, generated data, and
    documentation move together so no supported surface advertises Markdown.
 6. The lifecycle driver ships behind canonical schema validation; invalid
    lifecycle configuration prevents agent activation.
@@ -956,8 +947,8 @@ The feature is complete when:
 
 - No normal agent, skill, or slash-command loader parses Markdown frontmatter.
 - Repository-bundled skills and examples are TOML manifests.
-- `/import` and `oxagen import artifacts` discover Claude Code, Codex, Cursor,
-  and legacy Oxagen artifacts.
+- The import engine discovers Claude Code, Codex, Cursor, and legacy Oxagen
+  artifacts.
 - Imported artifacts are independent from their sources and symlinks.
 - Foreign tools are either mapped to verified Oxagen identifiers or visibly
   unresolved and non-executable.

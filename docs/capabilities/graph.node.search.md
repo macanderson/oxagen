@@ -9,7 +9,6 @@ Text search over the workspace graph. Matches `displayName` and `description`, w
 - API: `GET /v1/graph/nodes/search`
 - MCP: `graph.node.search`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

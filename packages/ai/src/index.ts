@@ -176,12 +176,17 @@ export type {
 // Tool descriptor builder, JSON-Schema tool input helper, and core message
 // types — re-exported here so agent domain code doesn't import directly from
 // "ai", keeping @oxagen/ai as the single AI SDK chokepoint. `jsonSchema` builds
-// a tool input schema from a raw JSON Schema (used by the OpenAI-compatible CLI
-// proxy, where tool params arrive as JSON Schema rather than Zod).
-// `stepCountIs` builds the `stopWhen` predicate that bounds a multi-step
-// agentic tool loop. Callers with tools MUST pass one — the AI SDK default is
-// `stepCountIs(1)`, which halts the turn after the first step, so a tool call
-// executes but the model never gets a second step to read the result and reply.
-export { tool, jsonSchema, stepCountIs } from "ai";
+// a tool input schema from a raw JSON Schema, which is how a materialized
+// capability arrives — its contract is already JSON Schema, not Zod.
+// `stepCountIs` builds the `stopWhen` predicate that bounds a model call. The
+// Stella engine owns the agent loop, so a call from the bridge pins
+// `stepCountIs(1)`: the model proposes tool calls and the engine decides what
+// runs, rather than the SDK looping and executing on its own.
+// `asSchema` normalizes either tool input dialect — a Zod schema or a
+// `jsonSchema()` wrapper — into one object carrying `.jsonSchema`. The bridge
+// declares the whole tool surface to the engine over the wire and needs JSON
+// Schema for every tool however it was authored; going through the SDK's own
+// normalizer keeps that from becoming a second copy of either contract.
+export { tool, jsonSchema, stepCountIs, asSchema } from "ai";
 export type { Tool, ToolSet, ModelMessage } from "ai";
 export type { JSONSchema7 } from "@ai-sdk/provider";

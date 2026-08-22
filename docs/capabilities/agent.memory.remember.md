@@ -8,7 +8,7 @@
 
 ## Intent
 
-The one-shot "just remember this" entry point. Where `agent.memory.write` demands every field up front, `remember` takes raw text and infers the memory `kind` and `class`/`weight` with a small classifier when the caller does not pin them, then embeds and writes the result. It backs the CLI `/remember <text>` slash command and `oxagen remember`, so a human can capture a lesson without learning the weight/kind taxonomy. The write lands on the workspace-scoped Neo4j `:AgentMemory` store — the same nodes `agent.memory.list`/`recall` read — so a memory captured from the CLI is immediately synced to the workspace and visible in Knowledge → Memories.
+The one-shot "just remember this" entry point. Where `agent.memory.write` demands every field up front, `remember` takes raw text and infers the memory `kind` and `class`/`weight` with a small classifier when the caller does not pin them, then embeds and writes the result. It backs the `/remember <text>` shorthand, so a human can capture a lesson without learning the weight/kind taxonomy. The write lands on the workspace-scoped Neo4j `:AgentMemory` store — the same nodes `agent.memory.list`/`recall` read — so a captured memory is immediately visible in Knowledge → Memories.
 
 ## Input
 

@@ -8,7 +8,7 @@
 
 ## Intent
 
-List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the CLI tenant picker — a freshly-authenticated user has no org selected yet, so this is the first call the linker makes to present the picker. The handler reads the caller's own memberships and never crosses to another user's memberships.
+List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the tenant picker — a freshly-authenticated user has no org selected yet, so this is the first call the linker makes to present the picker. The handler reads the caller's own memberships and never crosses to another user's memberships.
 
 ## Input
 

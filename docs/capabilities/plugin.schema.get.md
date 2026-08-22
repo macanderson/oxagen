@@ -9,7 +9,6 @@ Fetch the typed config schema for a connector plugin, used to drive dynamic form
 - API: `GET /v1/plugin-schema/:pluginId`
 - MCP: `plugin.schema.get`
 - Agent: callable (no approval required, risk: low)
-- CLI: not available
 
 ## Input
 | Parameter | Type | Required | Description |

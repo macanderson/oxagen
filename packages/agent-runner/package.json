@@ -19,7 +19,9 @@
   },
   "dependencies": {
     "@oxagen/agent-engine": "workspace:*",
+    "@oxagen/ai": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/stella-engine-client": "workspace:*",
     "drizzle-orm": "0.45.2",
     "typescript": "6.0.3",
     "zod": "3.25.76"

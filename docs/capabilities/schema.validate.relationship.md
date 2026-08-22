@@ -9,7 +9,6 @@ Validate a relationship's type and properties against the workspace schema. Retu
 - API: `POST /v1/schema/validate/relationship`
 - MCP: `schema.validate.relationship`
 - Agent: callable (no approval required, risk: low)
-- CLI: available
 
 ## Input
 | Parameter | Type | Required | Description |

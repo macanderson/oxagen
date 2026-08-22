@@ -1,7 +1,7 @@
 {
   "name": "list_workspaces",
   "domain": "workspace",
-  "description": "List the workspaces inside an organization the authenticated user belongs to. Backs the CLI workspace picker in `oxagen init`.",
+  "description": "List the workspaces inside an organization the authenticated user belongs to. Backs the workspace picker used at link time.",
   "mode": "sync",
   "surfaces": [
     "api",
