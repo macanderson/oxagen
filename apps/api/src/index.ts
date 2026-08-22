@@ -11,7 +11,20 @@ import { logger } from "./middleware/logger";
 // bootstrap() is async (awaits assertRlsConnectionSafe before accepting traffic).
 await bootstrap();
 
-const port = PORTS.api;
-serve({ fetch: app.fetch, port }, (info) => {
-  logger.info({ port: info.port }, "api listening");
+// `PORTS.api` is the default, not the answer. A self-hosted process has to be
+// placeable by whatever is running it, and this one runs on a shared instance
+// where Caddy decides which port it proxies to — a hardcoded port makes that a
+// code change.
+const port = Number(process.env.PORT ?? PORTS.api);
+
+// Loopback by default, and deliberately not `0.0.0.0`. On that instance this
+// runs with host networking beside Postgres, Neo4j and ClickHouse, so binding
+// every interface would publish the API on the instance's public address
+// directly, bypassing the TLS and routing Caddy provides. The security group
+// opens no port but 80 and 443, so this is defence in depth rather than the
+// only control — but the control that fails open is the one worth having.
+const hostname = process.env.HOST ?? process.env.HOSTNAME ?? "127.0.0.1";
+
+serve({ fetch: app.fetch, port, hostname }, (info) => {
+  logger.info({ port: info.port, hostname }, "api listening");
 });

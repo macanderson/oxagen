@@ -2,8 +2,24 @@ import { createMDX } from "fumadocs-mdx/next";
 
 const withMDX = createMDX();
 
+/**
+ * `standalone` emits `.next/standalone/server.js` together with only the
+ * modules that server actually needs, which is what ships to the AWS instance
+ * serving docs.oxagen.sh. It is opt-in rather than the default because `next
+ * dev` and every other consumer wants the ordinary output; only the deploy
+ * wants a server bundle.
+ *
+ * This existed nowhere on `main` until now, while the running site had been
+ * built from it by hand during the migration off Vercel — so `main` could not
+ * reproduce what production was serving. `next build` without it writes no
+ * `.next/standalone` at all, and the deploy job would have had nothing to
+ * package.
+ */
+const isStandalone = process.env.STANDALONE === "1";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(isStandalone ? { output: "standalone" } : {}),
   // Cache Components (Next 16): `use cache` + cacheLife/cacheTag with Partial
   // Prerendering as the default. The docs site is fully static (MDX +
   // generateStaticParams), so pages prerender into the static shell; the model
