@@ -53,10 +53,33 @@ rm -f "$ZIP"
 # the source tree. Packages that legitimately ship only a manifest do exist,
 # and recopying one is a no-op.
 BUNDLE_MODULES="$SERVER/node_modules"
-SOURCE_MODULES="$APP_DIR/node_modules"
 repaired=0
 
-if [[ -d $BUNDLE_MODULES && -d $SOURCE_MODULES ]]; then
+# Where to look for the real copy of a package. In a monorepo a hoisted install
+# places shared dependencies in the workspace root's `node_modules`, not the
+# app's — `apps/docs` has no `@swc/helpers` of its own — so the search walks up
+# from the app to the filesystem root and takes the first tree that has the
+# package. Nearest-first, which is also Node's own resolution order, so the
+# copy taken is the copy that would have been loaded.
+SEARCH_ROOTS=()
+probe=$APP_DIR
+while [[ $probe != "/" ]]; do
+  [[ -d "$probe/node_modules" ]] && SEARCH_ROOTS+=("$probe/node_modules")
+  probe=$(dirname "$probe")
+done
+
+find_source() {
+  local rel=$1 root
+  for root in "${SEARCH_ROOTS[@]}"; do
+    if [[ -d "$root/$rel" ]]; then
+      echo "$root/$rel"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ -d $BUNDLE_MODULES && ${#SEARCH_ROOTS[@]} -gt 0 ]]; then
   while IFS= read -r manifest; do
     pkg_dir=$(dirname "$manifest")
     # Only a package.json and nothing beside it.
@@ -65,8 +88,7 @@ if [[ -d $BUNDLE_MODULES && -d $SOURCE_MODULES ]]; then
     fi
 
     rel=${pkg_dir#"$BUNDLE_MODULES"/}
-    src="$SOURCE_MODULES/$rel"
-    [[ -d $src ]] || continue
+    src=$(find_source "$rel") || continue
 
     # -L dereferences symlinks, which is the point: the source tree may reach
     # the real package through one, and a symlink copied into a zip is a
@@ -79,7 +101,7 @@ if [[ -d $BUNDLE_MODULES && -d $SOURCE_MODULES ]]; then
 fi
 
 if (( repaired > 0 )); then
-  echo "    $repaired package(s) recopied from $SOURCE_MODULES" >&2
+  echo "    $repaired package(s) recopied from ${SEARCH_ROOTS[*]}" >&2
 fi
 
 # Zipped from inside the function directory so that `index.mjs` sits at the
