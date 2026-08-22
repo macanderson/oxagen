@@ -1,0 +1,114 @@
+name: Ship a built service to the node
+description: >-
+  Package a directory as <service>-standalone.tgz, upload it to the deploy
+  bucket, and send the one SSM document that restarts that service on the
+  shared instance. Assumes AWS credentials are already configured in the job.
+
+  Four services do exactly this and only the inputs differ, which is what a
+  composite action is for. The alternative — four copies of a forty-line
+  publish-and-poll block — drifts the moment one of them is fixed.
+
+inputs:
+  service:
+    description: >-
+      Logical service name. Selects <service>-standalone.tgz in the deploy
+      bucket and is the SSM document's only argument, where it is validated
+      against ^[a-z][a-z0-9-]{0,30}$ before the instance sees it.
+    required: true
+  directory:
+    description: Directory to package. Its root must hold oxagen-run.json.
+    required: true
+  hostname:
+    description: >-
+      Public hostname to re-check once the deploy reports success. Optional:
+      the node's own health check is a loopback request and passes for a
+      service that is up behind a broken front door, so this is the only step
+      that exercises DNS, TLS and Caddy the way a user does.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Package
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.service }}
+        DIRECTORY: ${{ inputs.directory }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "$DIRECTORY/oxagen-run.json" ]; then
+          echo "::error::$DIRECTORY/oxagen-run.json is missing — the node reads it to learn how to run this service. See oxagen-aws-infra tools/node/README.md."
+          exit 1
+        fi
+        # Parsed here rather than discovered on the instance: a malformed
+        # manifest should fail the job that produced it, not a deploy that has
+        # already stopped the running container.
+        jq -e '.port and .image and (.command | type == "array" and length > 0)' \
+          "$DIRECTORY/oxagen-run.json" > /dev/null \
+          || { echo "::error::oxagen-run.json needs port, image and a non-empty command array"; exit 1; }
+
+        tar -czf "/tmp/$SERVICE-standalone.tgz" -C "$DIRECTORY" .
+        echo "packaged $SERVICE ($(du -h "/tmp/$SERVICE-standalone.tgz" | cut -f1))"
+
+    - name: Publish and restart
+      shell: bash
+      env:
+        SERVICE: ${{ inputs.service }}
+        INSTANCE: i-023d002d6e44f8f84
+        BUCKET: oxagen-deploy-578673726240
+      run: |
+        set -euo pipefail
+        aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
+          "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors
+
+        command_id=$(aws ssm send-command \
+          --instance-ids "$INSTANCE" \
+          --document-name oxagen-deploy-service \
+          --parameters "service=$SERVICE" \
+          --query 'Command.CommandId' --output text)
+        echo "ssm command $command_id"
+
+        # Polled rather than waited on: there is no waiter for a command
+        # invocation, and the invocation is briefly not found at all right
+        # after send-command — which a naive first call reads as failure.
+        status=Pending
+        for _ in $(seq 1 60); do
+          status=$(aws ssm get-command-invocation \
+            --command-id "$command_id" --instance-id "$INSTANCE" \
+            --query Status --output text 2>/dev/null || echo Pending)
+          case "$status" in InProgress|Pending|Delayed) sleep 10 ;; *) break ;; esac
+        done
+
+        aws ssm get-command-invocation --command-id "$command_id" \
+          --instance-id "$INSTANCE" --query StandardOutputContent --output text || true
+        aws ssm get-command-invocation --command-id "$command_id" \
+          --instance-id "$INSTANCE" --query StandardErrorContent --output text || true
+
+        if [ "$status" != "Success" ]; then
+          echo "::error::$SERVICE deploy finished as $status. The node rolls back to the previous release when the new one fails its health check, so a service that was already running is still serving its last good build."
+          exit 1
+        fi
+
+    - name: Verify through the public hostname
+      if: inputs.hostname != ''
+      shell: bash
+      env:
+        PUBLIC_HOST: ${{ inputs.hostname }}
+      run: |
+        set -euo pipefail
+        for attempt in $(seq 1 10); do
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$PUBLIC_HOST/" || echo 000)
+          # Any answer below 500 means the request reached the application and
+          # it decided what to say. A 401 or a 404 from an app that requires a
+          # session is a healthy deploy; only a 5xx, or no answer at all, says
+          # the request never got there.
+          if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+            echo "$PUBLIC_HOST -> $code"
+            exit 0
+          fi
+          echo "attempt $attempt: $code"
+          sleep 6
+        done
+        echo "::error::$PUBLIC_HOST did not answer below 500 after the deploy (last status $code)"
+        exit 1

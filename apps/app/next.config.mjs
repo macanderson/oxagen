@@ -17,8 +17,26 @@ const honoApiBase = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
 ).replace(/\/$/, "");
 
+/**
+ * `standalone` emits `.next/standalone/server.js` with only the modules that
+ * server needs, which is what ships to the AWS instance serving
+ * app.oxagen.sh. Opt-in rather than the default: `next dev` and every other
+ * consumer wants the ordinary output, and only the deploy wants a server
+ * bundle.
+ *
+ * The packages listed in `serverExternalPackages` and aliased in `turbopack`
+ * below are NOT bundled into the standalone output — that is what "external"
+ * means — so the deploy has to carry a real `node_modules` alongside it. The
+ * deploy job builds one with `pnpm deploy --prod`. On Vercel that was covered
+ * by the platform running `pnpm install` at the monorepo root beside the
+ * function; nothing does that here, and the symptom of getting it wrong is a
+ * module-not-found at first request rather than at build.
+ */
+const isStandalone = process.env.STANDALONE === "1";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(isStandalone ? { output: "standalone" } : {}),
   // Cache Components (Next 16): opt-in caching via `use cache` + cacheLife/
   // cacheTag, Partial Prerendering by default, and build-time enforcement that
   // every runtime data access (cookies/headers/params/searchParams/uncached IO)

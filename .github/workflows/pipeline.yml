@@ -613,10 +613,184 @@ jobs:
         if: steps.changes.outputs.pg == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm billing:stripe-sync --apply
 
-  deploy:
+  # ==========================================================================
+  # Production deploy
+  #
+  # This was an `echo` saying Vercel's GitHub integration would handle it.
+  # Vercel suspended the account over an unpaid balance — every site behind it
+  # answers 402 — so nothing had deployed this repository since the migration,
+  # and `main` could drift from production with no signal.
+  #
+  # Two targets, because the repository holds two kinds of thing:
+  #
+  #   apps/web is files. It goes to S3 behind CloudFront.
+  #
+  #   docs, app, api and mcp are processes. They go to the shared instance,
+  #   which is where they have to be: three of them reach Postgres, Neo4j and
+  #   ClickHouse over loopback, and those are bound to 127.0.0.1 with the
+  #   security group opening no port to them at all.
+  #
+  # Both jobs authenticate with OIDC rather than a stored key, against a role
+  # that trusts exactly `repo:oxageninc/oxagen-platform:environment:production`.
+  # The `environment: production` line is therefore load-bearing: removing it
+  # breaks the deploy rather than loosening it.
+  #
+  # The old job had no `needs:` at all, so a real deploy in its place would
+  # have raced the test jobs and shipped whatever merged. These wait.
+  # ==========================================================================
+
+  deploy-web:
+    name: deploy oxagen.sh
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [checks, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      # Mints the OIDC token the role trusts. Job-scoped, so the jobs that run
+      # on pull requests cannot request one.
+      id-token: write
     steps:
-      - name: Deploy confirmation
-        run: echo "Merge to main detected. Vercel deploys changed apps via its GitHub integration (turbo-ignore skips unchanged apps)."
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::578673726240:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      - name: Publish the marketing site
+        env:
+          BUCKET: oxagen-web-578673726240
+          DISTRIBUTION: E291NC0ETAP42G
+        run: |
+          set -euo pipefail
+
+          # apps/web has no build step — it is hand-authored HTML, fonts and
+          # images. `package.json` carries no scripts at all, so there is
+          # nothing to run and nothing that can fail quietly; the guard below
+          # is against the directory itself having been emptied.
+          count=$(find apps/web -type f -not -name 'package.json' -not -name 'vercel.json' \
+            -not -name 'README.md' -not -name '.*' | wc -l | tr -d ' ')
+          if [ "$count" -lt 10 ]; then
+            echo "::error::apps/web holds $count publishable files — refusing to publish what looks like a mistake"
+            exit 1
+          fi
+          echo "publishing $count files"
+
+          # `--delete` makes this repository the source of truth for the whole
+          # bucket, which is what it should be — but it was NOT, and the first
+          # run of this job would have proved it destructively:
+          # `overview-video.html` was serving 200 on oxagen.sh and had never
+          # existed on `main`, having been uploaded by hand during the
+          # migration. It is committed now. If anything else is ever added to
+          # this bucket out of band, this line removes it.
+          #
+          # The exclusions are build configuration and repository metadata, not
+          # site content. Uploading them would serve them.
+          aws s3 sync apps/web "s3://$BUCKET" \
+            --delete \
+            --exclude 'package.json' \
+            --exclude 'vercel.json' \
+            --exclude 'README.md' \
+            --exclude '.*' \
+            --exclude '*/.*' \
+            --cache-control 'no-cache' \
+            --only-show-errors
+
+          invalidation=$(aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION" --paths '/*' \
+            --query 'Invalidation.Id' --output text)
+          echo "invalidation $invalidation"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$DISTRIBUTION" --id "$invalidation"
+
+      - name: Verify through the public hostname
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://oxagen.sh/ || echo 000)
+            [ "$code" = "200" ] && { echo "oxagen.sh -> 200"; exit 0; }
+            echo "attempt $attempt: $code"
+            sleep 6
+          done
+          echo "::error::oxagen.sh did not return 200 after the deploy (last status $code)"
+          exit 1
+
+  deploy-node:
+    name: deploy ${{ matrix.service }}.oxagen.sh
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Also waits on `migrate`: api and app read a schema that the same merge may
+    # have changed, and deploying code ahead of its migration is what took
+    # production login down once already.
+    needs: [checks, test, migrate]
+    # arm64, matching the t4g.medium these ship to. An x86 build passes every
+    # check here and fails to load a native module there, at first request
+    # rather than at build.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      # One at a time. All four land on the same 4 GB instance, which also runs
+      # Postgres, Neo4j and ClickHouse; four concurrent container starts is the
+      # one moment this node is most likely to run out of memory.
+      max-parallel: 1
+      # A failure in one service must not cancel the others' deploys. They are
+      # independent processes and a broken `mcp` is no reason to leave `api` on
+      # an old build.
+      fail-fast: false
+      matrix:
+        include:
+          - service: docs
+            hostname: docs.oxagen.sh
+          - service: app
+            hostname: app.oxagen.sh
+          - service: api
+            hostname: api.oxagen.sh
+          - service: mcp
+            hostname: mcp.oxagen.sh
+    # These are compiled INTO the client bundle, so they are build inputs, not
+    # runtime configuration — setting them in Parameter Store beside the
+    # secrets would be too late. They are hostnames, not credentials.
+    #
+    # The other NEXT_PUBLIC_* values this repository reads (PostHog, the Stripe
+    # publishable key, Google Maps) are not set here and the affected features
+    # degrade. Wiring them is tracked separately; guessing at them would bake a
+    # wrong value into a bundle where it is invisible.
+    env:
+      NEXT_PUBLIC_APP_URL: https://app.oxagen.sh
+      NEXT_PUBLIC_API_URL: https://api.oxagen.sh
+      NEXT_PUBLIC_DOCS_URL: https://docs.oxagen.sh
+    steps:
+      - uses: actions/checkout@v5
+
+      # Not `./.github/actions/pnpm-install`: that action assumes the job runs
+      # inside the ghcr.io/oxageninc/oxagen-ci-* toolchain image, which already
+      # ships Node and pnpm. This job runs on a bare arm runner, because the
+      # artifact's architecture has to match the instance's.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Package ${{ matrix.service }}
+        run: tools/scripts/package-for-node.sh ${{ matrix.service }}
+
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::578673726240:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
+
+      - uses: ./.github/actions/ship-to-node
+        with:
+          service: ${{ matrix.service }}
+          directory: dist-deploy/${{ matrix.service }}
+          hostname: ${{ matrix.hostname }}
