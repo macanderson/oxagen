@@ -1,53 +1,26 @@
-# Oxagen ui/src/styles — Space Grotesk addition
+# SUPERSEDED — Space Grotesk is no longer the wordmark face
 
-## What changed
-Two precise edits to `globals.css`, plus two new files in `fonts/`. **No color
-tokens were changed** — your uploaded `globals.css` was already a complete, correct
-"Nocturne Violet" implementation; every value matched the delivered `tokens.css`
-(violet ramp, ember mark, surfaces, ink, borders, semantics). Re-inferring them
-would have produced the same file. The real gap was the typeface.
+This was the handoff note for adding **Space Grotesk** and pointing
+`.ox-wordmark` at it, alongside the "Nocturne Violet" token set. Both have since
+been replaced by the brand shipped on **oxagen.sh**, so the instructions it
+carried no longer describe this tree — following them now would put the one
+element that appears on every surface back into a typeface the website does not
+load.
 
-### 1. New font: Space Grotesk (the logomark wordmark face)
-- `fonts/SpaceGrotesk-VF.woff2` — variable font, weight axis **300–700**, self-hosted
-  (converted from the supplied TTF; matches your Aeonik VF approach). 48 KB.
-- `fonts/space-grotesk.css` — the `@font-face` declaration.
-- Licensed SIL Open Font License 1.1 (Google Fonts). Free to self-host/redistribute.
+**What is true now:**
 
-### 2. globals.css edits (only these two)
-- Added `@import "./fonts/space-grotesk.css";` right after the Aeonik import.
-- Set Space Grotesk as `--font-display` (the `.ox-wordmark` face), ahead of the
-  Aeonik Fono fallback. **Why:** Space Grotesk is the typeface in the OXAGEN
-  logomark, so the wordmark in-app now matches the logo. `--font-sans` (Aeonik)
-  and `--font-mono` (Aeonik Mono) are unchanged.
+- The wordmark is set in **Aeonik**, weight 660 / tracking -0.02em — oxagen.sh's
+  own `.brand` values. See `--font-wordmark` and `.ox-wordmark` in
+  `packages/ui/src/styles/globals.css`, and `packages/ui/THEME.md`.
+- `space-grotesk.css` is **no longer imported** by `globals.css`; the wordmark
+  was its only consumer.
+- `SpaceGrotesk-VF.woff2` and `space-grotesk.css` are still in this directory,
+  unreferenced. They are kept rather than deleted so the choice stays
+  reversible — deleting a licensed binary is a separate decision from changing
+  which face the wordmark uses. If nothing adopts them, they can go.
 
-## IMPORTANT — merge, don't overwrite the fonts/ dir
-Your `globals.css` still imports `./fonts/aeonik.css` and the Aeonik woff2 files
-(`Aeonik-VF.woff2`, `AeonikFono-VF.woff2`, `AeonikMono-VF.woff2`, `aeonik.css`).
-Those were not part of this upload, so they are NOT in this zip. **Copy the two
-Space Grotesk files into your existing `fonts/` directory** — do not replace the
-folder, or you'll drop Aeonik.
-
-Final `ui/src/styles/` should be:
-```
-styles/
-  globals.css              ← replace with the one in this zip
-  fonts/
-    aeonik.css             ← keep (yours)
-    Aeonik-VF.woff2        ← keep (yours)
-    AeonikFono-VF.woff2    ← keep (yours)
-    AeonikMono-VF.woff2    ← keep (yours)
-    space-grotesk.css      ← add (this zip)
-    SpaceGrotesk-VF.woff2  ← add (this zip)
-```
-
-## Using it
-- The wordmark already picks it up via `.ox-wordmark` (uses `--font-display`).
-- For display headings, apply `font-display` (the Tailwind utility from the
-  `--font-display` token) or `var(--font-display)`.
-- Weights 300–700 are all available from the single VF; e.g. `font-weight: 500`.
-
-## If you'd rather pull from Google Fonts instead of self-hosting
-Space Grotesk is at https://fonts.google.com/specimen/Space+Grotesk. You could
-swap the `@font-face` for a `@import url('https://fonts.googleapis.com/...')`,
-but self-hosting (as done here) avoids the extra network round-trip and a FOUT,
-and matches how Aeonik is already handled. Recommend keeping it self-hosted.
+The rest of the type system is unchanged: **Aeonik** for UI and body, **Aeonik
+Fono** for display headings, **Aeonik Mono** for code and eyebrows. See
+`aeonik.css` in this directory for the `@font-face` declarations and the
+licensing note (Aeonik is commercial — self-hosted delivery from our own origin
+only; do not redistribute those binaries).

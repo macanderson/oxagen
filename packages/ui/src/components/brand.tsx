@@ -1,15 +1,23 @@
 /**
- * Oxagen brand marks — ember hex-cluster identity.
+ * Oxagen brand marks — the "o + cursor" identity.
  *
- * LOGOMARK: six interlocking hexagon cells. Four are ink outlines that flip with
- * the theme (they inherit the current text colour); two are lit with the ember
- * gradient (gold → flame → crimson). The gradient is canonical and holds in both
- * light and dark modes — never recolour it. WORDMARK: "oxagen" — always
- * lowercase — set in Space Grotesk (weight 600); the ink flips between modes via
- * `text-foreground`. The lowercase is enforced in CSS (.ox-wordmark) too.
+ * LOGOMARK: the lowercase "o" letterform beside a terminal cursor block. This
+ * is the canonical mark from `docs/brand/logos/svg/` — the geometry here is
+ * `oxagen-glyph-adaptive.svg` verbatim (viewBox and path data unchanged), so
+ * the rendered component and the shipped asset files cannot drift apart.
  *
- *   <OxagenLogomark className="size-7" />        // the hex-cluster mark
- *   <OxagenWordmark className="text-xl" />       // "Oxagen" wordmark text
+ * The "o" is INK and inherits `currentColor`, so it flips with the app theme.
+ * The cursor is the brand's own red-orange (--ox-cursor: #FF3D1F light /
+ * #FF4B2A dark). That is deliberately NOT the ember accent: the brand asset
+ * set defines the cursor in this hue, and the mark is kept faithful to those
+ * files rather than recoloured to match the surrounding UI.
+ *
+ * WORDMARK: "oxagen" — always lowercase — set in Aeonik (weight 660), matching
+ * the oxagen.sh lockup; the ink flips between modes via `text-foreground`. The
+ * lowercase is enforced in CSS (.ox-wordmark) too.
+ *
+ *   <OxagenLogomark className="h-7" />           // the o + cursor mark
+ *   <OxagenWordmark className="text-xl" />       // "oxagen" wordmark text
  *   <BrandMark />                                // mark at the app-chrome size
  *   <OxagenLockup />                             // mark + wordmark, side by side
  *   <OxagenLogo variant="vertical" size={48} />  // full lockup API
@@ -17,15 +25,28 @@
  *   <ConfidenceBar score={0.82} />               // edge-inference confidence
  *
  * All marks are pure presentational (no hooks) so they render in Server
- * Components. The two ember gradients use fixed ids — every instance paints the
- * identical gradient, so shared defs are safe.
+ * Components.
  */
 
 import type { CSSProperties } from "react";
 import { cn } from "../lib/utils";
 
-const EMBER_ID = "oxagenEmber";
-const EMBER_ID_2 = "oxagenEmber2";
+/**
+ * The mark's intrinsic aspect. The glyph is WIDE — an "o" beside a cursor
+ * block — not square like the hex-cluster mark it replaces, so callers size it
+ * by HEIGHT and let width follow. Forcing it into a square box would letterbox
+ * the mark and paint it at ~63% of the height available to it.
+ */
+const MARK_W = 143;
+const MARK_H = 90;
+const MARK_ASPECT = MARK_W / MARK_H;
+
+/** The mark's own viewBox, straight from oxagen-glyph-adaptive.svg. */
+const MARK_VIEWBOX = "-4.40 -80.00 143.40 90.20";
+
+/** The "o" letterform. */
+const O_PATH =
+  "M30 1.2Q22.4 1.2 16.7 -2.25Q11 -5.7 7.8 -12Q4.6 -18.3 4.6 -26.8Q4.6 -35.4 7.8 -41.65Q11 -47.9 16.7 -51.35Q22.4 -54.8 30 -54.8Q37.6 -54.8 43.3 -51.35Q49 -47.9 52.2 -41.65Q55.4 -35.4 55.4 -26.8Q55.4 -18.3 52.2 -12Q49 -5.7 43.3 -2.25Q37.6 1.2 30 1.2ZM30 -10.8Q35.4 -10.8 38.35 -14.95Q41.3 -19.1 41.3 -26.8Q41.3 -34.6 38.35 -38.7Q35.4 -42.8 30 -42.8Q24.6 -42.8 21.65 -38.7Q18.7 -34.6 18.7 -26.8Q18.7 -19.1 21.65 -14.95Q24.6 -10.8 30 -10.8Z";
 
 export type LogoTone = "gradient" | "mono-light" | "mono-dark" | "solid";
 
@@ -33,10 +54,10 @@ function monoColor(tone: LogoTone): string | null {
   if (tone === "mono-light") return "var(--ink-light)";
   if (tone === "mono-dark") return "var(--ink-dark)";
   if (tone === "solid") return "currentColor";
-  return null; // gradient
+  return null; // full colour — ink + brand cursor
 }
 
-/** The Oxagen logomark — the ember hex-cluster mark. */
+/** The Oxagen logomark — the "o + cursor" mark. */
 export function OxagenLogomark({
   className,
   tone = "gradient",
@@ -48,65 +69,23 @@ export function OxagenLogomark({
 }) {
   const mono = monoColor(tone);
   const ink = mono ?? "currentColor";
-  const ember1 = mono ?? `url(#${EMBER_ID})`;
-  const ember2 = mono ?? `url(#${EMBER_ID_2})`;
+  // A mono tone flattens the whole mark to one colour; otherwise the cursor
+  // keeps its brand hue while the "o" tracks the surrounding text colour.
+  const cursor = mono ?? "var(--ox-cursor)";
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="7.775 4.325 36.343 37.216"
+      viewBox={MARK_VIEWBOX}
       fill="none"
       role="img"
       aria-label="Oxagen logomark"
       className={cn("text-foreground", className)}
       style={style}
     >
-      {!mono && (
-        <defs>
-          <linearGradient
-            id={EMBER_ID}
-            gradientUnits="userSpaceOnUse"
-            gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)"
-            x1="0"
-            y1="0"
-            x2="1"
-            y2="0"
-          >
-            <stop offset="0" stopColor="#F9D423" />
-            <stop offset=".5" stopColor="#FF7E5F" />
-            <stop offset="1" stopColor="#C2185B" />
-          </linearGradient>
-          <linearGradient
-            id={EMBER_ID_2}
-            gradientUnits="userSpaceOnUse"
-            gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)"
-            x1="0"
-            y1="0"
-            x2="1"
-            y2="0"
-          >
-            <stop offset="0" stopColor="#F9D423" />
-            <stop offset=".5" stopColor="#FF7E5F" />
-            <stop offset="1" stopColor="#C2185B" />
-          </linearGradient>
-        </defs>
-      )}
-      {/* Outline cells — ink that flips with the theme (inherits text colour) */}
-      <g fill="none" stroke={ink} strokeWidth="1" strokeLinejoin="miter">
-        <path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" />
-        <path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" />
-        <path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" />
-        <path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" />
-      </g>
-      {/* Ember cells — the gradient accent, canonical in both modes */}
-      <path
-        d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z"
-        fill={ember1}
-      />
-      <path
-        d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z"
-        fill={ember2}
-        opacity=".55"
-      />
+      {/* The "o" — ink that flips with the theme (inherits text colour) */}
+      <path d={O_PATH} fill={ink} />
+      {/* The cursor block — the brand red-orange, or flattened by a mono tone */}
+      <rect x="74" y="-71" width="56" height="71" rx="3.4" fill={cursor} />
     </svg>
   );
 }
@@ -133,9 +112,13 @@ export function OxagenWordmark({
   );
 }
 
-/** Brand mark — the ember hex-cluster mark at the app-chrome size. */
+/**
+ * Brand mark — the o + cursor mark at the app-chrome size. Sized by HEIGHT
+ * (`h-7 w-auto`), not `size-7`: the mark is wider than it is tall, so a square
+ * box would letterbox it.
+ */
 export function BrandMark({ className }: { className?: string }) {
-  return <OxagenLogomark className={cn("size-7 shrink-0", className)} />;
+  return <OxagenLogomark className={cn("h-7 w-auto shrink-0", className)} />;
 }
 
 /** Brand lockup: mark + wordmark, side by side. Wordmark hides on mobile. */
@@ -165,13 +148,15 @@ export function OxagenLogo({
   size?: number;
   className?: string;
 }) {
-  const ringStyle: CSSProperties = { width: size, height: size };
+  // `size` is the mark HEIGHT; width follows the mark's own aspect so the
+  // glyph is never squashed or letterboxed.
+  const markStyle: CSSProperties = { width: size * MARK_ASPECT, height: size };
 
   if (variant === "mark") {
     return (
       <span
         className={cn("inline-flex", className)}
-        style={ringStyle}
+        style={markStyle}
         aria-label="Oxagen"
       >
         <OxagenLogomark tone={tone} className="size-full" />
@@ -193,7 +178,7 @@ export function OxagenLogo({
         style={{ gap: size * 0.34 }}
         aria-label="Oxagen"
       >
-        <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
+        <OxagenLogomark tone={tone} style={markStyle} className="shrink-0" />
         <OxagenWordmark
           tone={tone}
           style={{ fontSize: size * 0.92 }}
@@ -209,7 +194,7 @@ export function OxagenLogo({
       style={{ gap: size * 0.42 }}
       aria-label="Oxagen"
     >
-      <OxagenLogomark tone={tone} style={ringStyle} className="shrink-0" />
+      <OxagenLogomark tone={tone} style={markStyle} className="shrink-0" />
       <OxagenWordmark
         tone={tone}
         style={{ fontSize: size * 1.02 }}

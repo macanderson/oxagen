@@ -34,9 +34,9 @@
 :root{
   color-scheme:light;
   /* Oxagen palette */
-  --ember-g:#FD9A4C; --ember-f:#F07650; --ember-c:#EB5C5E;
-  --grad:linear-gradient(135deg,#FD9A4C 0%,#F07650 50%,#EB5C5E 100%);
-  --gradH:linear-gradient(100deg,#FD9A4C 0%,#F07650 46%,#EB5C5E 100%);
+  --ember-g:#FFCB66; --ember-f:#FFB000; --ember-c:#A37200; --ox-cursor:#FF4B2A;
+  --grad:linear-gradient(135deg,#FFCB66 0%,#FFB000 50%,#A37200 100%);
+  --gradH:linear-gradient(100deg,#FFCB66 0%,#FFB000 46%,#A37200 100%);
   --header-dark:#151924; --ink-white:#F1EDEA;
   /* theme: light (Oxagen paper) */
   --bg:#F8F9FA; --surface:#FBFAF8; --card:#FFFFFF;
@@ -56,7 +56,7 @@
   --bg:#090B11; --surface:#0F121A; --card:#0F121A;
   --ink:#F1EDEA; --ink-soft:#D8D2CB; --muted:#BCB2A9; --faint:#6F7785;
   --line:#292E37; --line-strong:#323A48;
-  --det:#FD9A4C; --det-soft:#261507;
+  --det:#FFCB66; --det-soft:#261507;
   --prob:#9CA3E8; --prob-soft:#151A30;
   --link:#9CA3E8; --mark-bg:#72311D;
   --shadow:0 1px 2px #00000066;
@@ -67,7 +67,7 @@
     --bg:#090B11; --surface:#0F121A; --card:#0F121A;
     --ink:#F1EDEA; --ink-soft:#D8D2CB; --muted:#BCB2A9; --faint:#6F7785;
     --line:#292E37; --line-strong:#323A48;
-    --det:#FD9A4C; --det-soft:#261507;
+    --det:#FFCB66; --det-soft:#261507;
     --prob:#9CA3E8; --prob-soft:#151A30;
     --link:#9CA3E8; --mark-bg:#72311D;
     --shadow:0 1px 2px #00000066;
@@ -235,7 +235,7 @@ pre{
 }
 pre .c{color:#8A93A6}
 pre .k{color:#9CA3E8}
-pre .a{color:#FD9A4C}
+pre .a{color:#FFCB66}
 pre code{background:none;border:0;padding:0;color:inherit;font-size:inherit}
 
 .evidence{
@@ -364,7 +364,7 @@ footer.colophon{max-width:var(--max);margin:4rem auto 0;padding-top:2rem;border-
 
 <div class="shell">
 <aside id="toc" aria-label="Table of contents">
-  <a class="ox-lockup" href="https://oxagen.sh" aria-label="Oxagen"><svg xmlns="http://www.w3.org/2000/svg" viewBox="7.775 4.325 36.343 37.216" fill="none" role="img" aria-label="Oxagen logomark"><defs><linearGradient id="oxEA" gradientUnits="userSpaceOnUse" gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient id="oxE2A" gradientUnits="userSpaceOnUse" gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><g fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#oxEA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#oxE2A)" opacity=".55"/></svg><span class="wm">oxagen</span></a>
+  <a class="ox-lockup" href="https://oxagen.sh" aria-label="Oxagen"><svg xmlns="http://www.w3.org/2000/svg" viewBox="-4.40 -80.00 143.40 90.20" fill="none" role="img" aria-label="Oxagen logomark"><path fill="currentColor" d="M30 1.2Q22.4 1.2 16.7 -2.25Q11 -5.7 7.8 -12Q4.6 -18.3 4.6 -26.8Q4.6 -35.4 7.8 -41.65Q11 -47.9 16.7 -51.35Q22.4 -54.8 30 -54.8Q37.6 -54.8 43.3 -51.35Q49 -47.9 52.2 -41.65Q55.4 -35.4 55.4 -26.8Q55.4 -18.3 52.2 -12Q49 -5.7 43.3 -2.25Q37.6 1.2 30 1.2ZM30 -10.8Q35.4 -10.8 38.35 -14.95Q41.3 -19.1 41.3 -26.8Q41.3 -34.6 38.35 -38.7Q35.4 -42.8 30 -42.8Q24.6 -42.8 21.65 -38.7Q18.7 -34.6 18.7 -26.8Q18.7 -19.1 21.65 -14.95Q24.6 -10.8 30 -10.8Z"/><rect x="74" y="-71" width="56" height="71" rx="3.4" fill="var(--ox-cursor)"/></svg><span class="wm">oxagen</span></a>
   <div class="toc-brand">Oxagen Press · Field Manual · 14 Parts</div>
   <div class="toc-title">Engineering Deterministic AI Coding Agents</div>
   <div class="searchbox">
@@ -1080,7 +1080,7 @@ g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6
       <div class="role">Founder &amp; CEO, Oxagen Inc. · Los Angeles, California</div>
       <p><strong>Oxagen</strong> enables enterprise businesses and software companies to build, deploy, run, and meter AI agent usage — governed context infrastructure for enterprise agents, the deterministic layer this book argues every serious agent system needs.</p>
       <p>Mac has been building code agents since the first rollout of OpenAI's Codex. The fourteen parts of this field manual distill what that experience — and the published research — consistently shows: the durable advantage in AI systems belongs to the architecture around the model, not the model itself.</p>
-      <div class="co"><svg xmlns="http://www.w3.org/2000/svg" viewBox="7.775 4.325 36.343 37.216" fill="none" role="img" aria-label="Oxagen logomark"><defs><linearGradient id="oxEB" gradientUnits="userSpaceOnUse" gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient id="oxE2B" gradientUnits="userSpaceOnUse" gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset=".5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><g fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z"/></g><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#oxEB)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#oxE2B)" opacity=".55"/></svg><span class="wm">oxagen</span><a href="https://oxagen.sh">oxagen.sh</a></div>
+      <div class="co"><svg xmlns="http://www.w3.org/2000/svg" viewBox="-4.40 -80.00 143.40 90.20" fill="none" role="img" aria-label="Oxagen logomark"><path fill="currentColor" d="M30 1.2Q22.4 1.2 16.7 -2.25Q11 -5.7 7.8 -12Q4.6 -18.3 4.6 -26.8Q4.6 -35.4 7.8 -41.65Q11 -47.9 16.7 -51.35Q22.4 -54.8 30 -54.8Q37.6 -54.8 43.3 -51.35Q49 -47.9 52.2 -41.65Q55.4 -35.4 55.4 -26.8Q55.4 -18.3 52.2 -12Q49 -5.7 43.3 -2.25Q37.6 1.2 30 1.2ZM30 -10.8Q35.4 -10.8 38.35 -14.95Q41.3 -19.1 41.3 -26.8Q41.3 -34.6 38.35 -38.7Q35.4 -42.8 30 -42.8Q24.6 -42.8 21.65 -38.7Q18.7 -34.6 18.7 -26.8Q18.7 -19.1 21.65 -14.95Q24.6 -10.8 30 -10.8Z"/><rect x="74" y="-71" width="56" height="71" rx="3.4" fill="var(--ox-cursor)"/></svg><span class="wm">oxagen</span><a href="https://oxagen.sh">oxagen.sh</a></div>
     </div>
   </div>
   <div class="ch-nav"><a href="#closing">&larr; Closing thought</a><a href="#refs">References &rarr;</a></div>

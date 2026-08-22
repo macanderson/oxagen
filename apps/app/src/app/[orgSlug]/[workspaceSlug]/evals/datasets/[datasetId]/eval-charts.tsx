@@ -14,11 +14,11 @@
  *      line per model, with a legend by model + vendor.
  *   3. Gauges — reaviz RadialGauges for avg score and pass rate.
  *
- * Colors come from the same CVD-validated dataviz palette + useDarkMode() hook
- * as usage-charts.tsx.
+ * Colours are the theme's categorical ramp (--chart-1..5), resolved at runtime
+ * by lib/chart-colors.ts — the same source usage-charts.tsx uses.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   LineChart,
   LineSeries,
@@ -28,45 +28,16 @@ import {
   RadialGaugeSeries,
 } from "reaviz";
 import type { EvalRunSeriesOutput } from "@oxagen/oxagen/contracts/eval.run.series";
+import { useChartSeriesColors } from "@/lib/chart-colors";
 
 type SeriesModel = EvalRunSeriesOutput["byModel"][number];
 
-// Validated dataviz categorical slots, stepped per mode (same palette as
-// usage-charts.tsx, extended to more slots for the multi-model comparison).
-const SERIES_LIGHT = [
-  "#2a78d6",
-  "#1baf7a",
-  "#eda100",
-  "#c0392b",
-  "#8e44ad",
-  "#16a085",
-] as const;
-const SERIES_DARK = [
-  "#3987e5",
-  "#199e70",
-  "#c98500",
-  "#e05a4d",
-  "#a569c4",
-  "#1ab89a",
-] as const;
-
-/** Track the app's active theme (.dark class, or system pref when unset). */
-function useDarkMode(): boolean {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const root = document.documentElement;
-    const compute = () => {
-      if (root.classList.contains("dark")) return true;
-      if (root.classList.contains("light")) return false;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    };
-    setDark(compute());
-    const obs = new MutationObserver(() => setDark(compute()));
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
+// Categorical slots come from the theme (`--chart-1..5`) via the shared
+// resolver, the same ramp usage-charts.tsx uses. There are FIVE, where this
+// chart previously carried six private hexes: a sixth model cycles back to
+// slot 1, and the legend by model + vendor is what disambiguates it. Inventing
+// a sixth hue that belongs to no token is what let this palette drift in the
+// first place.
 
 export interface EvalChartsProps {
   series: EvalRunSeriesOutput | null;
@@ -81,8 +52,7 @@ export function EvalCharts({
   passRate,
   totalRuns,
 }: EvalChartsProps) {
-  const dark = useDarkMode();
-  const colors = dark ? SERIES_DARK : SERIES_LIGHT;
+  const colors = useChartSeriesColors();
 
   // Single-series: overall avg score over time. Buckets with a null avgScore
   // are dropped (no run scored in that bucket) so the line only connects real

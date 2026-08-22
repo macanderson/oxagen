@@ -3,12 +3,11 @@
 /**
  * reaviz charts for the usage dashboard. Loaded client-only (dynamic ssr:false
  * from the breakdown view) — reaviz measures the DOM, so it must not run during
- * SSR. Colors come from the dataviz reference palette (categorical slots 1–3,
- * light/dark variants), which is CVD-validated; a legend + direct values satisfy
+ * SSR. Colours are the THEME's categorical ramp (--chart-1..3), resolved at
+ * runtime so they flip with the theme; a legend + direct values satisfy
  * the relief rule for the sub-3:1 light slots.
  */
 
-import { useEffect, useState } from "react";
 import {
   StackedBarChart,
   StackedBarSeries,
@@ -19,31 +18,10 @@ import {
   LinearYAxisTickLabel,
 } from "reaviz";
 import type { UsageTimePoint, UsageBreakdownRow } from "@oxagen/telemetry";
+import { useChartSeriesColors } from "@/lib/chart-colors";
 import { formatDayShort, formatTokens } from "./usage-format";
 
 export type UsageMetric = "cost" | "tokens";
-
-// Validated dataviz categorical slots 1–3 (blue / aqua / yellow), stepped per mode.
-const SERIES_LIGHT = ["#2a78d6", "#1baf7a", "#eda100"] as const;
-const SERIES_DARK = ["#3987e5", "#199e70", "#c98500"] as const;
-
-/** Track the app's active theme (.dark class, or system pref when unset). */
-function useDarkMode(): boolean {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const root = document.documentElement;
-    const compute = () => {
-      if (root.classList.contains("dark")) return true;
-      if (root.classList.contains("light")) return false;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    };
-    setDark(compute());
-    const obs = new MutationObserver(() => setDark(compute()));
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
 
 const TOKEN_LEGEND = [
   { label: "Input", i: 0 },
@@ -58,8 +36,7 @@ export function DailyUsageChart({
   series: UsageTimePoint[];
   metric: UsageMetric;
 }) {
-  const dark = useDarkMode();
-  const colors = dark ? SERIES_DARK : SERIES_LIGHT;
+  const colors = useChartSeriesColors();
 
   if (series.length === 0) {
     return <EmptyChart label="No usage recorded in this window yet." />;
@@ -107,7 +84,10 @@ export function DailyUsageChart({
           ))}
         </div>
       ) : null}
-      <div style={{ height: 260, width: "100%" }} data-testid="usage-daily-chart">
+      <div
+        style={{ height: 260, width: "100%" }}
+        data-testid="usage-daily-chart"
+      >
         <StackedBarChart
           height={260}
           data={data}
@@ -136,8 +116,7 @@ export function TopModelsChart({
   byModel: UsageBreakdownRow[];
   metric: UsageMetric;
 }) {
-  const dark = useDarkMode();
-  const colors = dark ? SERIES_DARK : SERIES_LIGHT;
+  const colors = useChartSeriesColors();
 
   if (byModel.length === 0) {
     return <EmptyChart label="No model usage recorded in this window yet." />;
@@ -153,7 +132,10 @@ export function TopModelsChart({
 
   return (
     <div style={{ width: "100%" }} data-testid="usage-models-chart">
-      <BarList data={data} series={<BarListSeries colorScheme={[colors[0]]} />} />
+      <BarList
+        data={data}
+        series={<BarListSeries colorScheme={[colors[0]]} />}
+      />
     </div>
   );
 }

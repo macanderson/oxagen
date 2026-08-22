@@ -34,21 +34,22 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Nocturne Violet" (docs/brand) — warm paper (#FAF7F2) + crisp
- * white panels in light, deep nocturne navy-violet (#0B0D16 page, #15131F
- * panels) in dark. Card and table HEADERS are flat — they sit on the surface
- * with hairline borders, never shaded bars. Colour is concentrated in ONE
- * violet accent (#6E48CE light / #A78BFA dark — CTAs, focus rings, the
- * active-tab underline, links) — never smeared across every surface;
- * secondary fills are quiet violet-leaning neutrals. Errors reuse the ember
- * crimson, which never clashes with the violet primary. Brand mark gradient
- * is the ember sweep — gold (#F9D423) → flame (#FF7E5F) → crimson (#C2185B) —
- * theme-independent; never recolor the mark. Warm logo, cool ground.
+ * CURRENT SKIN: "Oxagen Ember" — the brand shipped on oxagen.sh. Surfaces are
+ * NEUTRAL: neutral paper in light, and in dark the site's own steps — #0B0B0C
+ * page → #141414 card → #161616 popover → #2A2A2A accent, all at chroma 0.000.
+ * The INK on top of them is warm (#F1EDEA → #BCB2A9 → #6E6A5F), which is the
+ * split that makes the brand read as black-and-gold rather than as grey. Card
+ * and table HEADERS are flat — they sit on the surface with hairline borders,
+ * never shaded bars. Colour is concentrated in ONE amber ember accent
+ * (#FFB000 — CTAs, focus rings, the active-tab underline, the mark) plus a
+ * cool indigo (#9CA3E8) that carries links, exactly as the site does — never
+ * smeared across every surface. Errors use a true red and warning is pushed
+ * to orange so neither reads as the ember primary. Brand mark gradient is the
+ * site's ember ramp #A37200 → #FFB000 → #FFCB66.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
 @import "./fonts/aeonik.css";
-@import "./fonts/space-grotesk.css";
 
 /*
  * Scan the @oxagen/ui component source for utility classes. Tailwind v4 skips
@@ -62,132 +63,145 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Nocturne Violet":
-     * warm paper in light / deep nocturne navy-violet in dark, violet primary
-     * accent opposite the fixed warm ember mark. Warm logo, cool ground —
-     * colour lives in the accent, not smeared across surfaces (design system
-     * stays flat — see THEME.md §7 and docs/brand/tokens.css).
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Ember", matching
+     * oxagen.sh: NEUTRAL near-black surfaces carrying no cast at all, a WARM
+     * ink ramp sitting on top of them, and one amber ember accent. That split
+     * is the brand — the site's surface steps measure chroma 0.000–0.002
+     * while its text ramp runs 0.006–0.018, so warmth reads in the type and
+     * the accent, never in the panels (design system stays flat, THEME.md §7).
+     * Every hex quoted here was read off the shipped oxagen.sh stylesheet.
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — warm paper, cool near-black navy ink, soft warm white.
-       The paper keeps a whisper of warmth so the cool violet accent and the
-       warm ember mark both read cleanly against it. */
-    --_paper: oklch(0.977 0.007 80.7);   /* #FAF7F2 — warm paper */
-    --_ink: oklch(0.209 0.010 268.2);    /* #16181D — near-black navy ink */
-    --_ink-white: oklch(0.967 0.003 84.6); /* #F5F4F2 — soft warm white */
+    /* Brand anchors — neutral paper, the site's page black as light-mode ink,
+       and the site's warm off-white as dark-mode ink. */
+    --_paper: oklch(0.985 0 0);          /* #FAFAFA — neutral paper */
+    --_ink: oklch(0.150 0.002 286);      /* #0B0B0C — site --bg, the light-mode ink */
+    --_ink-white: oklch(0.948 0.006 60); /* #F1EDEA — site --ink */
 
-    /* Named brand swatches. Violet is the primary accent (bright variant for
-       dark grounds); ox-indigo* the cool chart accent. --ox-rust is retained as
-       a deprecated alias of the accent knob (name stability); the legacy
-       warm/sand swatches are unused. */
+    /* Named brand swatches — the three ember stops are oxagen.sh's
+       --ember-a/b/c verbatim. --ox-ember is THE accent knob: it drives
+       --primary, --ring, tabs and chart-1. --ox-indigo* is the cool link
+       accent, which is what the site uses for links (never the ember).
+       The legacy tangerine/rose/teak/bronze/sunset/gold/wheat swatches are
+       gone rather than re-pointed: they named the old coral brand, had no
+       consumers outside this file, and a swatch called "rose" holding amber
+       is a comment that lies. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(1 0 0);   /* crisp white */
+    --ox-surface: oklch(0.992 0 0);              /* neutral near-white panel */
     --ox-ink: var(--_ink);
-    --ox-violet: oklch(0.519 0.196 291.0);   /* #6E48CE — THE accent knob (light): drives --primary, --ring, tabs, chart-1 */
-    --ox-violet-bright: oklch(0.709 0.159 293.5);   /* #A78BFA — accent on dark grounds */
-    --ox-tangerine: oklch(0.876 0.174 95.6);   /* #F9D423 — ember gold (legacy name) */
-    --ox-rose: oklch(0.531 0.202 5.6);   /* #C2185B — ember crimson (legacy name) */
-    --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (legacy, unused) */
-    --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
-    --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
-    --ox-rust: var(--ox-violet);   /* deprecated alias — kept for name stability */
-    --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
-    --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
+    --ox-ember-deep: oklch(0.587 0.122 78.7);    /* #A37200 — site --ember-a */
+    --ox-ember: oklch(0.812 0.170 76.4);         /* #FFB000 — site --ember-b, the brand mark */
+    --ox-ember-light: oklch(0.869 0.132 82.1);   /* #FFCB66 — site --ember-c, text-safe on dark (13.1:1) */
+    --ox-ember-soft: oklch(0.215 0.037 59.0);    /* #261507 — site --ember-soft, tinted fill */
 
-    --ox-indigo: oklch(0.45 0.055 278);   /* muted indigo — chart categorical accent (light) */
-    --ox-indigo-bright: oklch(0.74 0.06 279);   /* muted indigo — chart categorical accent (dark) */
+    /* Link accent. The site ships one indigo (#9CA3E8) because it is dark-only;
+       it clears 8.3:1 there but only 2.4:1 on paper, so light mode takes the
+       same hue darkened to a text-safe 6.9:1 rather than shipping the site
+       value where it would fail. */
+    --ox-indigo: oklch(0.477 0.137 277.4);        /* #4C51A8 — link accent (light) */
+    --ox-indigo-bright: oklch(0.736 0.100 279.2); /* #9CA3E8 — site --indigo (dark) */
 
-    /* Neutral ramp — violet-leaning cool neutrals (hue ~290–306° at low
-       chroma): light steps read as faintly violet-tinted paper fills, dark
-       steps as nocturne navy-violet. Stepped elevation in dark (950 page →
-       900 card → 850 popover → 800 accent) is preserved. */
-    --_stone-50: oklch(0.985 0.005 300);    /* violet-tinged near-white */
-    --_stone-100: oklch(0.955 0.013 306);   /* #F2EEF7 — muted / card-header (brand surface-alt) */
-    --_stone-150: oklch(0.938 0.016 303);   /* surface-alt */
-    --_stone-200: oklch(0.915 0.019 302);   /* secondary surface */
-    --_stone-300: oklch(0.875 0.022 300);   /* input border (light) — a touch darker for contrast */
-    --_stone-400: oklch(0.768 0.037 297.8); /* #B6AFC9 — muted-foreground (dark) */
-    --_stone-500: oklch(0.600 0.034 299.9); /* #837C92 — tertiary text */
-    --_stone-600: oklch(0.401 0.034 298.6); /* #4A4458 — secondary text (light) */
-    --_stone-700: oklch(0.33 0.030 296);    /* violet graphite */
-    --_stone-800: oklch(0.28 0.045 292);    /* raised violet accent surface (dark) */
-    --_stone-850: oklch(0.233 0.038 292.3); /* #1E1A2E — violet popover / muted (dark) */
-    --_stone-900: oklch(0.195 0.024 291.7); /* #15131F — violet-black card / sidebar (dark) */
-    --_stone-950: oklch(0.162 0.019 274.4); /* #0B0D16 — near-black navy background (dark) */
+    /* Cursor block of the "o + cursor" logomark (docs/brand). This is the ONE
+       place the mark diverges from the ember accent: the brand asset set ships
+       the cursor in its own red-orange, and it is kept rather than recolored
+       so the mark matches the canonical files in docs/brand/logos/. */
+    --ox-cursor: oklch(0.655 0.233 31.6);        /* #FF3D1F — brand cursor (light) */
 
-    /* Violet accent ramp (the theme accent — drives accent-subtle backgrounds).
-       The --_violet-* names carry true violet values again (docs/brand). */
-    --_violet-50: oklch(0.951 0.021 301.1);   /* #F1ECFB */
-    --_violet-100: oklch(0.883 0.048 300.2);  /* #DDD2F4 */
-    --_violet-200: oklch(0.791 0.087 298.7);  /* #C2AFEC */
-    --_violet-300: oklch(0.709 0.159 293.5);  /* #A78BFA — accent on dark */
-    --_violet-400: oklch(0.612 0.167 293.8);  /* #8B6BDD */
-    --_violet-500: oklch(0.519 0.196 291.0);  /* #6E48CE — primary accent (matches --ox-violet) */
-    --_violet-600: oklch(0.443 0.186 289.8);  /* #5733B0 */
-    --_violet-700: oklch(0.383 0.161 289.6);
-    --_violet-800: oklch(0.324 0.137 289.4);  /* #361E73 */
-    --_violet-900: oklch(0.243 0.098 293.3);  /* #241149 */
+    /* Neutral ramp. The DARK steps are the site's own surface values and are
+       genuinely neutral (chroma 0.000) — that is the single biggest visual
+       change from the old skin, which tinted every panel warm. Light steps are
+       neutral to match. Stepped elevation in dark (950 page → 900 card →
+       850 popover → 800 accent) is preserved; 400/500/600 stay WARM because
+       they carry TEXT, and the site's ink ramp is warm. */
+    --_stone-50: oklch(0.99 0 0);           /* neutral near-white */
+    --_stone-100: oklch(0.965 0 0);         /* #F2F2F2 — muted / card-header */
+    --_stone-150: oklch(0.949 0 0);         /* surface-alt */
+    --_stone-200: oklch(0.925 0 0);         /* secondary surface */
+    --_stone-300: oklch(0.885 0 0);         /* input border (light) */
+    --_stone-400: oklch(0.769 0.017 64.6);  /* #BCB2A9 — site --muted, muted-foreground (dark) */
+    --_stone-500: oklch(0.525 0.018 90.3);  /* #6E6A5F — site --faint, tertiary text */
+    --_stone-600: oklch(0.47 0.014 78);     /* warm secondary text (light) — darker for contrast */
+    --_stone-700: oklch(0.35 0.012 75);     /* warm graphite */
+    --_stone-800: oklch(0.285 0 0);         /* #2A2A2A — site --line, accent surface (dark) */
+    --_stone-850: oklch(0.200 0 0);         /* #161616 — site --card, popover (dark) */
+    --_stone-900: oklch(0.191 0 0);         /* #141414 — site --surface, card / sidebar (dark) */
+    --_stone-950: oklch(0.150 0.002 286);   /* #0B0B0C — site --bg, page background (dark) */
 
-    /* Brand mark primitives (ember: gold → flame → crimson — never recolor). */
-    --_ember-gold: oklch(0.876 0.174 95.6);    /* #F9D423 — gold (gradient start) */
-    --_ember-flame: oklch(0.736 0.164 34.7);   /* #FF7E5F — flame (gradient midpoint) */
-    --_ember-crimson: oklch(0.531 0.202 5.6);  /* #C2185B — crimson (gradient end) */
-    --_ember-navy: oklch(0.162 0.019 274.4);   /* #0B0D16 — nocturne navy */
+    /* Ember accent ramp — drives the accent-subtle backgrounds. Anchored on
+       #FFB000 at 400 so it matches --ox-ember exactly; tints run up, shades
+       down through the site's deep ember (#A37200) toward its soft fill. */
+    --_amber-50: oklch(0.975 0.022 85);
+    --_amber-100: oklch(0.950 0.045 84);
+    --_amber-200: oklch(0.910 0.085 82);
+    --_amber-300: oklch(0.869 0.132 82.1);  /* #FFCB66 — site --ember-c */
+    --_amber-400: oklch(0.812 0.170 76.4);  /* #FFB000 — site --ember-b (matches --ox-ember) */
+    --_amber-500: oklch(0.720 0.150 77.5);
+    --_amber-600: oklch(0.587 0.122 78.7);  /* #A37200 — site --ember-a */
+    --_amber-700: oklch(0.480 0.100 79);
+    --_amber-800: oklch(0.370 0.075 72);
+    --_amber-900: oklch(0.280 0.055 65);
 
-    /* Status hues (kept warm-neutral so they don't clash — docs/brand). Error
-       reuses the ember crimson; distinct from the violet primary by design. */
-    --_clay: oklch(0.531 0.202 5.6);           /* error — ember crimson #C2185B */
-    --_clay-light: oklch(0.63 0.185 5.6);      /* error (dark grounds) */
-    --_moss: oklch(0.623 0.123 165.5);         /* success — #1D9E75 */
-    --_moss-light: oklch(0.72 0.12 165);
-    --_ochre: oklch(0.622 0.130 67.2);         /* warning — #BA7517 */
-    --_ochre-light: oklch(0.74 0.13 72);
+    /* Brand mark primitives — the site's ember gradient stops (a → b → c). */
+    --_ember-a: oklch(0.587 0.122 78.7);   /* #A37200 — gradient start */
+    --_ember-b: oklch(0.812 0.170 76.4);   /* #FFB000 — gradient midpoint, the solid mark */
+    --_ember-c: oklch(0.869 0.132 82.1);   /* #FFCB66 — gradient end */
+    --_ember-navy: oklch(0.150 0.002 286); /* #0B0B0C — site page black */
+
+    /* Status hues. Success is the site's --ok; error stays a true red so it
+       never reads as the ember primary. */
+    --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
+    --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
+    --_moss: oklch(0.529 0.106 154.4);         /* #2F7D4F — success (light, 5.0:1 on paper) */
+    --_moss-light: oklch(0.769 0.119 149.1);   /* #7BC98A — site --ok (dark) */
+    /* Warning is pushed to a clearly ORANGE hue. It used to sit at hue ~73–79,
+       which was safely distant from a terracotta primary at hue 40 — but the
+       ember primary now lives at hue 76, so the old ochre would have read as
+       the brand accent rather than as a warning state. */
+    --_ochre: oklch(0.620 0.150 52);           /* warning (light) */
+    --_ochre-light: oklch(0.750 0.140 55);     /* warning (dark) */
     --_slate: oklch(0.508 0.042 233.7);        /* info */
     --_slate-light: oklch(0.618 0.04 233.3);
-    --_terracotta: oklch(0.583 0.121 44.5);
-    --_terracotta-light: oklch(0.659 0.117 47.1);
 
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding — Nocturne is confident, not brutal. */
-    --ui-shadow: 0 1px 2px oklch(0.24 0.048 293 / 0.06); /* subtle cool-violet shadow — hairline borders do the real work. */
+    --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
+    --ui-shadow: 0 1px 2px oklch(0.15 0 0 / 0.07); /* subtle neutral shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
     --ink-light: var(--_ink-white);
     --ink-dark: var(--_ink);
 
-    /* The theme hue — violet accent drives links, focus, CTAs. */
-    --brand: var(--ox-violet);
-    --brand-foreground: oklch(1 0 0);
+    /* The brand hue — ember accent drives links, focus, CTAs. */
+    --brand: var(--ox-ember);
+    --brand-foreground: var(--ox-ink);
 
     /* ════════════════════════════════════════════════════════════════════════
-     * CORE SEMANTIC — LIGHT. Nocturne Violet: warm paper page, crisp white
-     * panels, violet-leaning cool neutrals. Colour lives in the violet accent
-     * + ring; the warm ember mark stays the focal point.
+     * CORE SEMANTIC — LIGHT. Graphite: off-white page, crisp white panels,
+     * neutral graphite grays. Warmth lives only in the ember accent + ring.
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
-    --card: oklch(1 0 0);              /* crisp white card (dramatic on warm paper) */
+    --card: oklch(1 0 0);              /* crisp white card (dramatic on off-white) */
     --card-foreground: var(--_ink);
     --popover: oklch(1 0 0);
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-violet);       /* violet #6E48CE */
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.925 0.016 300);   /* quiet violet-neutral fill (secondary buttons, badges) */
-    --secondary-foreground: oklch(0.32 0.030 296);
+    --primary: var(--ox-ember);         /* tangerine */
+    --primary-foreground: var(--ox-ink);
+    --secondary: oklch(0.925 0 0);   /* quiet neutral fill (secondary buttons, badges) */
+    --secondary-foreground: oklch(0.30 0.010 75);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.951 0.021 301.1);   /* barely-there violet-tinted hover/selected wash (#F1ECFB) */
-    --accent-foreground: var(--_violet-800);   /* deep violet ink on the tint */
-    --destructive: var(--_clay);         /* ember crimson */
+    --accent: oklch(0.962 0.030 85);   /* barely-there ember-tinted hover/selected wash */
+    --accent-foreground: oklch(0.350 0.070 76);   /* deep ember ink on the tint */
+    --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.324 0.137 289.4 / 0.14);   /* violet hairline — rgba(54,30,115,.14) per docs/brand */
+    --border: oklch(0.885 0 0 / 0.9);   /* neutral hairline */
     --input: var(--_stone-300);
-    --ring: var(--ox-violet);
-    --link: var(--_violet-500);   /* #6E48CE — the brand link violet (≥4.5:1 on paper) */
-    --link-hover: var(--_violet-600);
+    --ring: var(--ox-ember);
+    --link: var(--ox-indigo);   /* indigo — the site links in indigo, never the ember */
+    --link-hover: oklch(0.415 0.130 277);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -199,14 +213,19 @@
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
-    /* Ember mark gradient (theme-independent — never recolor the mark). */
-    --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
+    /* Ember text ink — the shade of the ember accent that is legible as TEXT on
+       the current background. #FFB000 is the MARK colour and is only 1.8:1 on
+       paper, so accent copy must not use it directly: light mode takes a deep
+       ember (5.5:1) and dark mode the site's own --ember-c (13.1:1). */
+    --ember-ink: oklch(0.522 0.108 79.7);   /* #8A6100 — accent text (light) */
 
-    /* Charts — distinct categorical ramp (violet · ember flame · moss · ochre · slate).
-       Chart-2 is the warm ember flame — the old indigo sat too close to the
-       violet primary to survive as a categorical neighbour. */
-    --chart-1: var(--ox-violet);
-    --chart-2: var(--_ember-flame);
+    /* Ember mark gradient (theme-independent — never recolor the mark).
+       The site's own angle and stops: 92deg, 0% / 46% / 100%. */
+    --brand-gradient: linear-gradient(92deg, var(--_ember-a) 0%, var(--_ember-b) 46%, var(--_ember-c) 100%);
+
+    /* Charts — distinct categorical ramp (ember · indigo · moss · ochre · slate). */
+    --chart-1: var(--ox-ember);
+    --chart-2: var(--ox-indigo);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
     --chart-5: var(--_slate);
@@ -217,11 +236,11 @@
     /* Core sidebar surface — crisp white. */
     --sidebar: var(--surface);
     --sidebar-foreground: var(--surface-foreground);
-    --sidebar-primary: var(--ox-violet);
-    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-primary: var(--ox-ember);
+    --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.324 0.137 289.4 / 0.10);
+    --sidebar-border: oklch(0.885 0 0 / 0.5);
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -274,13 +293,13 @@
     --tab-fg-active: var(--foreground);
     --tab-border: transparent;
     --tab-border-hover: var(--border);
-    --tab-border-active: var(--ox-violet);
+    --tab-border-active: var(--ox-ember);
     --tab-border-width: 2px;
 
     /* ── Buttons (two variants). Hover/active adapt via color-mix toward the
      *    background, so they flip correctly in dark with no re-declaration. ── */
     --button-primary-bg: var(--primary);
-    --button-primary-fg: oklch(1 0 0);
+    --button-primary-fg: var(--ox-ink);
     --button-primary-border: transparent;
     --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
     --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
@@ -335,7 +354,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.213 0.048 292.9 / 0.45);   /* rgba(26,20,45,.45) per docs/brand */
+    --overlay-scrim: oklch(0.150 0.002 286 / 0.5);
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -358,10 +377,9 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — Nocturne. Near-black navy page, stepped violet-black panels,
-   * bright violet accent. Re-declares core tokens + the two header bgs (which
-   * point at fixed primitives); the rest of the component-token surface
-   * inherits the flip.
+   * DARK — Graphite. Neutral near-black page, stepped charcoal panels, ember
+   * accent. Re-declares core tokens + the two header bgs (which point at fixed
+   * primitives); the rest of the component-token surface inherits the flip.
    * ════════════════════════════════════════════════════════════════════════ */
   .dark {
     color-scheme: dark;
@@ -372,22 +390,24 @@
     --card-foreground: var(--_ink-white);
     --popover: var(--_stone-850);
     --popover-foreground: var(--_ink-white);
-    --primary: var(--ox-violet-bright);
+    --primary: var(--ox-ember);
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.28 0.045 292);   /* calm violet chip fill */
+    --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
     --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
-    /* Brighter secondary ink in dark for legibility on the nocturne surfaces. */
+    /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.30 0.062 292);   /* deep violet-tinted hover/selected */
+    --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.709 0.159 293.5 / 0.16);   /* violet hairline — rgba(167,139,250,.16) per docs/brand */
-    --input: oklch(0.709 0.159 293.5 / 0.22);
-    --ring: var(--ox-violet-bright);
-    --link: var(--_violet-300);   /* #A78BFA — text-safe violet for dark */
-    --link-hover: var(--_violet-200);
+    --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
+    --input: oklch(0.360 0 0 / 0.7);
+    --ring: var(--ox-ember);
+    --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+    --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
+    --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
+    --link-hover: oklch(0.800 0.090 279);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -398,8 +418,8 @@
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
 
-    --chart-1: var(--ox-violet-bright);
-    --chart-2: var(--_ember-flame);
+    --chart-1: var(--ox-ember);
+    --chart-2: var(--ox-indigo-bright);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
     --chart-5: var(--_slate-light);
@@ -409,11 +429,11 @@
 
     --sidebar: var(--_stone-900);
     --sidebar-foreground: var(--_ink-white);
-    --sidebar-primary: var(--ox-violet-bright);
+    --sidebar-primary: var(--ox-ember);
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.709 0.159 293.5 / 0.12);
+    --sidebar-border: oklch(0.42 0 0 / 0.45);
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -422,25 +442,6 @@
     --card-header-fg: var(--foreground);
 
     --overlay-scrim: oklch(0 0 0 / 0.6);
-
-    /* The accent differs between modes (#6E48CE → #A78BFA), so every token
-     * that freezes an accent-bearing var() at :root (see the freeze note
-     * below) must recompute here: the bright violet with dark navy ink. */
-    --brand: var(--ox-violet-bright);
-    --brand-foreground: var(--ox-ink);
-    --tab-border-active: var(--ox-violet-bright);
-    --button-primary-bg: var(--primary);
-    --button-primary-fg: var(--ox-ink);
-    --button-primary-ring: var(--ring);
-    --button-default-ring: var(--ring);
-    --input-border-focus: var(--ring);
-    --input-ring: var(--ring);
-    --input-invalid-border: var(--error);
-    --input-invalid-ring: var(--error);
-    --control-track-bg-checked: var(--primary);
-    --control-indicator: var(--primary-foreground);
-    --control-ring: var(--ring);
-    --app-link-active-fg: var(--primary);
 
     /* ── Component tokens that indirect through theme-flipping core tokens must
      *    be re-declared in the dark context. A token declared ONLY on :root has
@@ -504,22 +505,24 @@
       --card-foreground: var(--_ink-white);
       --popover: var(--_stone-850);
       --popover-foreground: var(--_ink-white);
-      --primary: var(--ox-violet-bright);
+      --primary: var(--ox-ember);
       --primary-foreground: var(--ox-ink);
-      --secondary: oklch(0.28 0.045 292);   /* calm violet chip fill */
+      --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
       --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: oklch(0.30 0.062 292);   /* deep violet-tinted hover/selected (matches .dark) */
+      --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.709 0.159 293.5 / 0.16);   /* violet hairline — rgba(167,139,250,.16) per docs/brand */
-      --input: oklch(0.709 0.159 293.5 / 0.22);
-      --ring: var(--ox-violet-bright);
-      --link: var(--_violet-300);   /* #A78BFA — text-safe violet for dark */
-      --link-hover: var(--_violet-200);
+      --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
+      --input: oklch(0.360 0 0 / 0.7);
+      --ring: var(--ox-ember);
+      --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+      --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
+      --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
+      --link-hover: oklch(0.800 0.090 279);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -530,8 +533,8 @@
       --info: var(--_slate-light);
       --info-foreground: oklch(0.18 0.01 230);
 
-      --chart-1: var(--ox-violet-bright);
-      --chart-2: var(--_ember-flame);
+      --chart-1: var(--ox-ember);
+      --chart-2: var(--ox-indigo-bright);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
       --chart-5: var(--_slate-light);
@@ -541,11 +544,11 @@
 
       --sidebar: var(--_stone-900);
       --sidebar-foreground: var(--_ink-white);
-      --sidebar-primary: var(--ox-violet-bright);
+      --sidebar-primary: var(--ox-ember);
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.709 0.159 293.5 / 0.12);
+      --sidebar-border: oklch(0.42 0 0 / 0.45);
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -554,23 +557,6 @@
       --card-header-fg: var(--foreground);
 
       --overlay-scrim: oklch(0 0 0 / 0.6);
-
-      /* Accent-mode flip — keep in sync with the .dark block above. */
-      --brand: var(--ox-violet-bright);
-      --brand-foreground: var(--ox-ink);
-      --tab-border-active: var(--ox-violet-bright);
-      --button-primary-bg: var(--primary);
-      --button-primary-fg: var(--ox-ink);
-      --button-primary-ring: var(--ring);
-      --button-default-ring: var(--ring);
-      --input-border-focus: var(--ring);
-      --input-ring: var(--ring);
-      --input-invalid-border: var(--error);
-      --input-invalid-ring: var(--error);
-      --control-track-bg-checked: var(--primary);
-      --control-indicator: var(--primary-foreground);
-      --control-ring: var(--ring);
-      --app-link-active-fg: var(--primary);
 
       /* Re-declare component tokens against the dark core (see .dark above for
        * why a :root-only declaration freezes to the light value). */
@@ -666,22 +652,22 @@
   --color-ink-dark: var(--ink-dark);
 
   /* Ember gradient stops (mark-specific, rarely used directly in utilities). */
-  --color-ember-gold: var(--_ember-gold);
-  --color-ember-flame: var(--_ember-flame);
-  --color-ember-crimson: var(--_ember-crimson);
+  --color-ember-gold: var(--_ember-a);
+  --color-ember-flame: var(--_ember-b);
+  --color-ember-crimson: var(--_ember-c);
 
-  /* Accent ramp — exposed for rare direct-access. The --*-violet-* names carry
-     true violet values (Nocturne Violet, docs/brand/tokens.css). */
-  --color-violet-50: var(--_violet-50);
-  --color-violet-100: var(--_violet-100);
-  --color-violet-200: var(--_violet-200);
-  --color-violet-300: var(--_violet-300);
-  --color-violet-400: var(--_violet-400);
-  --color-violet-500: var(--_violet-500);
-  --color-violet-600: var(--_violet-600);
-  --color-violet-700: var(--_violet-700);
-  --color-violet-800: var(--_violet-800);
-  --color-violet-900: var(--_violet-900);
+  /* Accent ramp — exposed for rare direct-access. NOTE: the --*-violet-* NAMES
+     are retained for API stability; the VALUES are ember flame, not violet. */
+  --color-violet-50: var(--_amber-50);
+  --color-violet-100: var(--_amber-100);
+  --color-violet-200: var(--_amber-200);
+  --color-violet-300: var(--_amber-300);
+  --color-violet-400: var(--_amber-400);
+  --color-violet-500: var(--_amber-500);
+  --color-violet-600: var(--_amber-600);
+  --color-violet-700: var(--_amber-700);
+  --color-violet-800: var(--_amber-800);
+  --color-violet-900: var(--_amber-900);
 
   /* Charts */
   --color-chart-1: var(--chart-1);
@@ -836,10 +822,12 @@
   --font-mono:
     "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
     Consolas, "DejaVu Sans Mono", monospace;
-  /* Wordmark face — Space Grotesk, used ONLY by .ox-wordmark (the "oxagen"
-     lockup). Headings keep --font-display (Aeonik Fono); this is intentional. */
+  /* Wordmark face — Aeonik, matching oxagen.sh, whose ".brand" lockup is set in
+     the body face at weight 660 / tracking -0.02em. It used to be Space Grotesk,
+     which put the one element that appears on every surface in a typeface the
+     website does not load. Headings keep --font-display (Aeonik Fono). */
   --font-wordmark:
-    "Space Grotesk", "Aeonik Fono", ui-sans-serif, system-ui, -apple-system,
+    "Aeonik", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -855,8 +843,8 @@
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* Native form controls (checkbox/radio/range/progress) tint brand violet,
-       not the OS blue. Inherits to the whole tree. */
+    /* Native form controls (checkbox/radio/range/progress) tint ember, not the
+       OS blue. Inherits to the whole tree. */
     accent-color: var(--primary);
   }
 
@@ -908,12 +896,12 @@
   }
 
   /*
-   * Focus ring — brand violet everywhere, NEVER the browser's default blue.
-   * Native <select>/<input>/<textarea> that ship no focus styling
-   * (e.g. the agent-editor selects) get a violet outline + border on
+   * Focus ring — brand ember everywhere, NEVER the browser's blue/violet
+   * default. Native <select>/<input>/<textarea> that ship no focus styling
+   * (e.g. the agent-editor selects) get an ember outline + border on
    * :focus-visible. coss Input/Select/Button opt out via
    * focus-visible:outline-none (a utility with higher specificity) and keep
-   * their own brand ring, so this never doubles up on them.
+   * their own ember ring, so this never doubles up on them.
    */
   :where(input, select, textarea):focus-visible {
     outline: 2px solid var(--ring);
@@ -953,13 +941,14 @@
     animation: fade-in var(--motion-base) var(--ease-entry);
   }
 
-  /* The Oxagen wordmark — set in Space Grotesk, ALWAYS lowercase ("oxagen").
+  /* The Oxagen wordmark — Aeonik, ALWAYS lowercase ("oxagen"). Weight and
+     tracking are oxagen.sh's ".brand" values verbatim (660 / -0.02em).
      text-transform guarantees the lowercase lockup even if a caller passes
      mixed-case text. */
   .ox-wordmark {
     font-family: var(--font-wordmark);
-    font-weight: 600;
-    letter-spacing: -0.03em;
+    font-weight: 660;
+    letter-spacing: -0.02em;
     line-height: 1;
     text-transform: lowercase;
   }
@@ -1016,9 +1005,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold, #F9D423) 0%,
-      var(--_ember-flame, #FF7E5F) 46%,
-      var(--_ember-crimson, #C2185B) 100%
+      var(--_ember-a, #A37200) 0%,
+      var(--_ember-b, #FFB000) 46%,
+      var(--_ember-c, #FFCB66) 100%
     );
   }
 
@@ -1026,9 +1015,9 @@
   .ox-grad-text {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold) 0%,
-      var(--_ember-flame) 46%,
-      var(--_ember-crimson) 100%
+      var(--_ember-a) 0%,
+      var(--_ember-b) 46%,
+      var(--_ember-c) 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
@@ -1062,17 +1051,16 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
   }
 
-  /* Vibrant code/terminal surface — a nocturne violet-black fill with the ember
-     brand gradient painted into a 1px border (padding-box fill + border-box
-     gradient), identical in light and dark so a code block reads as a
-     high-contrast, bold terminal on the light page. A real transparent `border`
-     keeps a system line in forced-colors mode where the gradient background is
-     stripped. */
+  /* Vibrant code/terminal surface — a warm charcoal fill with the ember brand
+     gradient painted into a 1px border (padding-box fill + border-box gradient),
+     identical in light and dark so a code block reads as a high-contrast, bold
+     terminal on the light page. A real transparent `border` keeps a system line
+     in forced-colors mode where the gradient background is stripped. */
   .ox-code-frame {
     --code-fg: var(--_ink-white);
     color: var(--code-fg);
     background:
-      linear-gradient(180deg in oklab, oklch(0.22 0.030 292), oklch(0.17 0.022 280)) padding-box,
+      linear-gradient(180deg in oklab, oklch(0.26 0.005 78), oklch(0.22 0.004 78)) padding-box,
       var(--brand-gradient) border-box;
     border: 1px solid transparent;
   }
@@ -1081,8 +1069,8 @@
   .ox-hero-orb {
     background: radial-gradient(
       circle at center,
-      color-mix(in oklch, var(--_ember-flame) 38%, transparent) 0%,
-      color-mix(in oklch, var(--_ember-crimson) 16%, transparent) 40%,
+      color-mix(in oklch, var(--_ember-b) 38%, transparent) 0%,
+      color-mix(in oklch, var(--_ember-c) 16%, transparent) 40%,
       transparent 70%
     );
     filter: blur(36px);

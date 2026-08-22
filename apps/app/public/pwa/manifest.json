@@ -1,11 +1,18 @@
 {
+  "id": "/",
   "name": "Oxagen",
   "short_name": "Oxagen",
   "description": "Governed context infrastructure for enterprise agents.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0B0D16",
-  "theme_color": "#6E48CE",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "categories": ["productivity", "developer", "business"],
   "icons": [
     {
       "src": "/pwa/icon-72.png",

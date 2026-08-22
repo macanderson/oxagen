@@ -60,7 +60,7 @@ export function InstallCliButton() {
       onClick={install}
       aria-label={`Install the Oxagen CLI — copies: ${INSTALL_CMD}`}
       title={INSTALL_CMD}
-      className="lp-grad-surface fixed bottom-5 right-5 z-50 inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-ink-dark shadow-lg transition-transform hover:scale-[1.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--_ember-flame,#FF7E5F)] active:scale-100"
+      className="lp-grad-surface fixed bottom-5 right-5 z-50 inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-ink-dark shadow-lg transition-transform hover:scale-[1.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--_ember-b,#FFB000)] active:scale-100"
     >
       {copied ? (
         <>

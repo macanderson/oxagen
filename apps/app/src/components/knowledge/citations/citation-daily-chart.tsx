@@ -11,40 +11,30 @@
  * another metric.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { LineChart, LineSeries, LinearXAxis, LinearYAxis } from "reaviz";
 import type { AgentMemoryCitationStatsOutput } from "@oxagen/oxagen/contracts/agent.memory_citation.stats";
 import { formatDayShort } from "@/app/[orgSlug]/[workspaceSlug]/knowledge/citations/citations-format";
+import { useThemeColors } from "@/lib/chart-colors";
 
-const CITATIONS_COLOR = { light: "#2a78d6", dark: "#3987e5" };
-const VIOLATIONS_COLOR = { light: "#d03b3b", dark: "#e66767" };
-
-/** Track the app's active theme (.dark class, or system pref when unset). */
-function useDarkMode(): boolean {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const root = document.documentElement;
-    const compute = () => {
-      if (root.classList.contains("dark")) return true;
-      if (root.classList.contains("light")) return false;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    };
-    setDark(compute());
-    const obs = new MutationObserver(() => setDark(compute()));
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
+/**
+ * Citations read as a neutral categorical series; violations are a failure
+ * state and take the theme's destructive token, so they can never drift to a
+ * red that means nothing in the palette. Resolved from the design tokens — see
+ * lib/chart-colors.ts for why this is done at runtime rather than as hexes.
+ */
+const SERIES_TOKENS = ["--chart-2", "--destructive"] as const;
+const SERIES_FALLBACK = ["#4C51A8", "#DC2828"] as const;
 
 export interface CitationDailyChartProps {
   daily: AgentMemoryCitationStatsOutput["daily"];
 }
 
 export function CitationDailyChart({ daily }: CitationDailyChartProps) {
-  const dark = useDarkMode();
-  const citationsColor = dark ? CITATIONS_COLOR.dark : CITATIONS_COLOR.light;
-  const violationsColor = dark ? VIOLATIONS_COLOR.dark : VIOLATIONS_COLOR.light;
+  const [citationsColor, violationsColor] = useThemeColors(
+    SERIES_TOKENS,
+    SERIES_FALLBACK,
+  );
 
   const hasData = daily.some((d) => d.citations > 0 || d.violations > 0);
 

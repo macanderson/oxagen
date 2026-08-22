@@ -7,7 +7,7 @@ Published at **https://docs.oxagen.sh/decks/first-call-enterprise**.
 
 | File | Purpose |
 |---|---|
-| `index.html` | The deck. 13 slides, brand-matched to the web app (`apps/web/index.html`) — narwhal `#0B0D16` bg, ember gradient, embedded Aeonik fonts, hex-motif chrome. Keyboard/dot/swipe nav, `⌘P` → PDF. |
+| `index.html` | The deck. 13 slides, brand-matched to the web app (`apps/web/index.html`) — `#0B0B0C` bg, ember gradient, embedded Aeonik fonts, hex-motif chrome. Keyboard/dot/swipe nav, `⌘P` → PDF. |
 | `script.html` | Standalone, printable master narration — every slide's script **plus** the full live-demo walkthrough. Openable on a second screen. Served at `/decks/first-call-enterprise/script`. |
 | `script-data.js` | **Single source of truth** for all narration + demo steps (`window.OX_SCRIPT`). Both `index.html` and `script.html` load it — edit narration here and both update. |
 
