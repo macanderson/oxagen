@@ -11,7 +11,7 @@
 @source "../../../../node_modules/fumadocs-ui/dist/**/*.js";
 
 /*
- * Brand the Fumadocs accent: map its primary/ring tokens to the Oxagen violet
+ * Brand the Fumadocs accent: map its primary/ring tokens to the Oxagen ember
  * (theme-mapped in @oxagen/ui tokens.css, so it adapts light/dark). Links,
  * active nav, focus rings and the TOC marker pick this up; the neutral base
  * surfaces stay on Fumadocs' own tokens.
@@ -26,7 +26,7 @@
  *
  * Pure-CSS animation layer for the docs landing page. Everything is namespaced
  * `lp-*` so it never leaks into the Fumadocs /docs theme. Colours are pulled
- * from the @oxagen/ui brand tokens (ember gradient + graphite neutrals) so the
+ * from the @oxagen/ui brand tokens (ember gradient + neutral near-blacks) so the
  * page re-skins with the rest of the system. The concept is "context windows,
  * more free than full": hex-cell fields (abstracted from the Oxagen logomark),
  * an animated install terminal, and a context-window meter that drains.
@@ -36,9 +36,9 @@
 .lp-grad-text {
   background-image: linear-gradient(
     100deg,
-    var(--_ember-gold) 0%,
-    var(--_ember-flame) 46%,
-    var(--_ember-crimson) 100%
+    var(--_ember-a) 0%,
+    var(--_ember-b) 46%,
+    var(--_ember-c) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -51,9 +51,9 @@
      to render regardless of which token scope is active. */
   background-image: linear-gradient(
     100deg,
-    var(--_ember-gold, #fd9a4b) 0%,
-    var(--_ember-flame, #f07650) 46%,
-    var(--_ember-crimson, #eb5c5e) 100%
+    var(--_ember-a, #A37200) 0%,
+    var(--_ember-b, #FFB000) 46%,
+    var(--_ember-c, #FFCB66) 100%
   );
 }
 
@@ -62,7 +62,7 @@
   background-image: linear-gradient(
     90deg,
     transparent,
-    color-mix(in oklch, var(--_ember-flame) 55%, transparent),
+    color-mix(in oklch, var(--_ember-b) 55%, transparent),
     transparent
   );
 }
@@ -81,8 +81,8 @@
 .lp-orb {
   background: radial-gradient(
     circle at center,
-    color-mix(in oklch, var(--_ember-flame) 38%, transparent) 0%,
-    color-mix(in oklch, var(--_ember-crimson) 16%, transparent) 40%,
+    color-mix(in oklch, var(--_ember-b) 38%, transparent) 0%,
+    color-mix(in oklch, var(--_ember-c) 16%, transparent) 40%,
     transparent 70%
   );
   filter: blur(36px);
@@ -94,10 +94,10 @@
    out on the light page. */
 .lp-term {
   border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(18 19 24 / 0.94);
+  background: rgb(20 20 20 / 0.94);
   box-shadow:
     0 1px 0 0 rgb(255 255 255 / 0.06) inset,
-    0 30px 80px -28px color-mix(in oklch, var(--_ember-crimson, #eb5c5e) 42%, transparent),
+    0 30px 80px -28px color-mix(in oklch, var(--_ember-c, #FFCB66) 42%, transparent),
     0 18px 50px -30px rgb(0 0 0 / 0.7);
   backdrop-filter: blur(8px);
 }
@@ -107,8 +107,8 @@
   width: 0.6ch;
   height: 1.05em;
   translate: 0 0.16em;
-  background: var(--_ember-flame);
-  box-shadow: 0 0 8px color-mix(in oklch, var(--_ember-flame) 80%, transparent);
+  background: var(--_ember-b);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--_ember-b) 80%, transparent);
   animation: lp-blink 1.05s steps(1) infinite;
 }
 
@@ -123,8 +123,8 @@
   transition: fill 0.5s ease, opacity 0.5s ease;
 }
 .lp-cell[data-lit="true"] {
-  fill: var(--_ember-flame);
-  filter: drop-shadow(0 0 3px color-mix(in oklch, var(--_ember-flame) 70%, transparent));
+  fill: var(--_ember-b);
+  filter: drop-shadow(0 0 3px color-mix(in oklch, var(--_ember-b) 70%, transparent));
 }
 .lp-cell[data-lit="cool"] {
   fill: var(--ox-indigo-bright, #9ca3e8);

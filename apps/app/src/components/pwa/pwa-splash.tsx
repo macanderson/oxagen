@@ -46,7 +46,7 @@ export function PwaSplash() {
       aria-hidden="true"
       role="presentation"
     >
-      {/* Dark-variant spinner for the dark background (#0B0D16).
+      {/* Dark-variant spinner for the dark background (#0B0B0C).
           Light variant shown via CSS when the system prefers light.
           Falls back to a pure-CSS ring if either GIF fails to load. */}
       {imgFailed ? (

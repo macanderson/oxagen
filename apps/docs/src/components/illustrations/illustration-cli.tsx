@@ -8,16 +8,30 @@ import { illustrationClassName } from "./hex-utils";
 
 export function IllustrationCli({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>A terminal window with a single ember cursor after a typed prompt</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A terminal window with a single ember cursor after a typed prompt
+      </title>
       <defs>
         <linearGradient id="ill-cli-g1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
         <radialGradient id="ill-cli-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.75} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0.75}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 
@@ -32,7 +46,12 @@ export function IllustrationCli({ className }: { className?: string }) {
         strokeWidth={1}
         opacity={0.28}
       />
-      <path d="M60,66 L500,66" stroke="currentColor" strokeWidth={1} opacity={0.16} />
+      <path
+        d="M60,66 L500,66"
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.16}
+      />
       <circle cx={80} cy={53} r={2.5} fill="currentColor" opacity={0.25} />
       <circle cx={94} cy={53} r={2.5} fill="currentColor" opacity={0.25} />
       <circle cx={108} cy={53} r={2.5} fill="currentColor" opacity={0.25} />
@@ -48,7 +67,15 @@ export function IllustrationCli({ className }: { className?: string }) {
         $ oxagen ask &quot;refactor the billing meter&quot;
       </text>
       <circle cx={444} cy={95} r={10} fill="url(#ill-cli-glow)" />
-      <line x1={444} y1={88} x2={444} y2={102} stroke="url(#ill-cli-g1)" strokeWidth={1.5} strokeLinecap="round" />
+      <line
+        x1={444}
+        y1={88}
+        x2={444}
+        y2={102}
+        stroke="url(#ill-cli-g1)"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
 
       <text
         x={82}

@@ -8,16 +8,30 @@ import { illustrationClassName } from "./hex-utils";
 
 export function IllustrationPrivacySpot({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 120" className={illustrationClassName(className)}>
-      <title>A document exporting outward, representing data portability and erasure</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 120"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A document exporting outward, representing data portability and erasure
+      </title>
       <defs>
         <linearGradient id="ill-privacy-spot-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
         <radialGradient id="ill-privacy-spot-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.75} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0.75}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 
@@ -29,9 +43,31 @@ export function IllustrationPrivacySpot({ className }: { className?: string }) {
         strokeLinejoin="round"
         opacity={0.32}
       />
-      <path d="M240,32 L240,48 L256,48" fill="none" stroke="currentColor" strokeWidth={1} opacity={0.32} />
-      <line x1={210} y1={62} x2={246} y2={62} stroke="currentColor" strokeWidth={1} opacity={0.22} />
-      <line x1={210} y1={74} x2={236} y2={74} stroke="currentColor" strokeWidth={1} opacity={0.22} />
+      <path
+        d="M240,32 L240,48 L256,48"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.32}
+      />
+      <line
+        x1={210}
+        y1={62}
+        x2={246}
+        y2={62}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.22}
+      />
+      <line
+        x1={210}
+        y1={74}
+        x2={236}
+        y2={74}
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.22}
+      />
 
       <path
         d="M280,60 L380,60"

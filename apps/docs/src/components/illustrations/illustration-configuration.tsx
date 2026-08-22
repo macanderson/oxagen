@@ -13,18 +13,34 @@ const TOGGLES = [
   { x: 450, on: false },
 ];
 
-export function IllustrationConfiguration({ className }: { className?: string }) {
+export function IllustrationConfiguration({
+  className,
+}: {
+  className?: string;
+}) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
       <title>A row of configuration toggles with one set</title>
       <defs>
         <linearGradient id="ill-configuration-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
         <radialGradient id="ill-configuration-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.75} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0.75}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 
@@ -41,7 +57,14 @@ export function IllustrationConfiguration({ className }: { className?: string })
             strokeWidth={1}
             opacity={t.on ? 0.6 : 0.25}
           />
-          {t.on && <circle cx={t.x + 12} cy={100} r={10} fill="url(#ill-configuration-glow)" />}
+          {t.on && (
+            <circle
+              cx={t.x + 12}
+              cy={100}
+              r={10}
+              fill="url(#ill-configuration-glow)"
+            />
+          )}
           <circle
             cx={t.on ? t.x + 32 : t.x + 12}
             cy={100}

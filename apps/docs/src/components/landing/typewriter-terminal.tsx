@@ -13,7 +13,12 @@ import { useEffect, useRef, useState } from "react";
  * the fully-rendered transcript with no typing animation.
  */
 
-type Line = { id: number; kind: "cmd" | "out" | "ok" | "dim"; text: string; caret?: boolean };
+type Line = {
+  id: number;
+  kind: "cmd" | "out" | "ok" | "dim";
+  text: string;
+  caret?: boolean;
+};
 
 export interface TerminalStep {
   cmd: string;
@@ -27,7 +32,8 @@ function fullTranscript(steps: TerminalStep[]): Line[] {
   const lines: Line[] = [];
   for (const s of steps) {
     lines.push({ id: nextId(), kind: "cmd", text: s.cmd });
-    for (const o of s.out) lines.push({ id: nextId(), kind: o.kind, text: o.text });
+    for (const o of s.out)
+      lines.push({ id: nextId(), kind: o.kind, text: o.text });
   }
   lines.push({ id: nextId(), kind: "cmd", text: "", caret: true });
   return lines;
@@ -71,20 +77,30 @@ export function TypewriterTerminal({
             if (cancelled.current) return;
             await wait(36 + Math.random() * 46);
             const slice = step.cmd.slice(0, i);
-            setLines((p) => p.map((l) => (l.id === id ? { ...l, text: slice } : l)));
+            setLines((p) =>
+              p.map((l) => (l.id === id ? { ...l, text: slice } : l)),
+            );
           }
           // command "runs" — drop the caret, stream output
-          setLines((p) => p.map((l) => (l.id === id ? { ...l, caret: false } : l)));
+          setLines((p) =>
+            p.map((l) => (l.id === id ? { ...l, caret: false } : l)),
+          );
           await wait(440);
           for (const o of step.out) {
             if (cancelled.current) return;
             await wait(240 + Math.random() * 160);
-            setLines((p) => [...p, { id: nextId(), kind: o.kind, text: o.text }]);
+            setLines((p) => [
+              ...p,
+              { id: nextId(), kind: o.kind, text: o.text },
+            ]);
           }
           await wait(720);
         }
         // rest at a fresh prompt, then loop
-        setLines((p) => [...p, { id: nextId(), kind: "cmd", text: "", caret: true }]);
+        setLines((p) => [
+          ...p,
+          { id: nextId(), kind: "cmd", text: "", caret: true },
+        ]);
         await wait(4600);
       }
     }
@@ -103,7 +119,9 @@ export function TypewriterTerminal({
         <span className="size-3 rounded-full bg-[#ff5f57]" />
         <span className="size-3 rounded-full bg-[#febc2e]" />
         <span className="size-3 rounded-full bg-[#28c840]" />
-        <span className="ml-3 select-none text-[11px] text-white/40">{title}</span>
+        <span className="ml-3 select-none text-[11px] text-white/40">
+          {title}
+        </span>
       </div>
 
       {/* transcript */}
@@ -111,7 +129,9 @@ export function TypewriterTerminal({
         {lines.map((l) =>
           l.kind === "cmd" ? (
             <div key={l.id} className="lp-line flex items-start gap-2">
-              <span className="select-none text-[var(--_ember-flame,#F07650)]">$</span>
+              <span className="select-none text-[var(--_ember-b,#FFB000)]">
+                $
+              </span>
               <span className="break-all">
                 {l.text}
                 {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}

@@ -23,13 +23,20 @@ const TOTAL = COLS * ROWS;
 
 // Deterministic "overloaded" scatter — frothy, not a clean fill line.
 function isOverloaded(i: number): boolean {
-  return ((i * 73 + (i % 7) * 11) % 100) < 86;
+  return (i * 73 + (i % 7) * 11) % 100 < 86;
 }
 
 // The governed slice: a focused cluster + a few precise satellites.
 const GOVERNED = new Set<number>();
-for (let r = 3; r <= 4; r++) for (let c = 7; c <= 10; c++) GOVERNED.add(r * COLS + c);
-[1 * COLS + 2, 6 * COLS + 14, 5 * COLS + 3, 0 * COLS + 16, 7 * COLS + 11].forEach((i) => GOVERNED.add(i));
+for (let r = 3; r <= 4; r++)
+  for (let c = 7; c <= 10; c++) GOVERNED.add(r * COLS + c);
+[
+  1 * COLS + 2,
+  6 * COLS + 14,
+  5 * COLS + 3,
+  0 * COLS + 16,
+  7 * COLS + 11,
+].forEach((i) => GOVERNED.add(i));
 
 const FULL_PCT = 86;
 const FREE_USED_PCT = 9;
@@ -82,7 +89,9 @@ export function ContextWindow() {
           <span
             className="size-2.5 rounded-full transition-colors duration-500"
             style={{
-              background: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #F07650)",
+              background: governed
+                ? "var(--ox-indigo-bright, #9CA3E8)"
+                : "var(--_ember-b, #FFB000)",
               boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(255,126,95,.8)"}`,
             }}
           />
@@ -93,7 +102,11 @@ export function ContextWindow() {
         <div className="flex items-baseline gap-1.5 font-mono">
           <span
             className="text-2xl font-semibold tabular-nums transition-colors duration-500"
-            style={{ color: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #F07650)" }}
+            style={{
+              color: governed
+                ? "var(--ox-indigo-bright, #9CA3E8)"
+                : "var(--_ember-b, #FFB000)",
+            }}
           >
             {used}%
           </span>
@@ -109,7 +122,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "linear-gradient(90deg, var(--_ember-gold,#FD9A4B), var(--_ember-flame,#F07650), var(--_ember-crimson,#EB5C5E))",
+              : "linear-gradient(90deg, var(--_ember-a,#A37200), var(--_ember-b,#FFB000), var(--_ember-c,#FFCB66))",
           }}
         />
       </div>
@@ -126,7 +139,7 @@ export function ContextWindow() {
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "var(--_ember-flame, #F07650)";
+              : "var(--_ember-b, #FFB000)";
           return (
             <span
               key={i}
@@ -148,15 +161,18 @@ export function ContextWindow() {
       <p className="mt-5 text-sm text-muted-foreground">
         {governed ? (
           <>
-            <span className="font-medium text-foreground">Free, not full.</span> Oxagen
-            retrieves only the authorized, relevant slice from your typed knowledge graph —
-            RBAC-scoped, so the window stays open and the model stays sharp.
+            <span className="font-medium text-foreground">Free, not full.</span>{" "}
+            Oxagen retrieves only the authorized, relevant slice from your typed
+            knowledge graph — RBAC-scoped, so the window stays open and the
+            model stays sharp.
           </>
         ) : (
           <>
-            <span className="font-medium text-foreground">Full, and failing.</span> Dump every
-            document into the prompt and the window saturates — latency climbs, cost climbs, and
-            recall collapses in the noise.
+            <span className="font-medium text-foreground">
+              Full, and failing.
+            </span>{" "}
+            Dump every document into the prompt and the window saturates —
+            latency climbs, cost climbs, and recall collapses in the noise.
           </>
         )}
       </p>

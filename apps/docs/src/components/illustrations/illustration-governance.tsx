@@ -12,16 +12,30 @@ const CY = 100;
 
 export function IllustrationGovernance({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>Three nested policy scopes narrowing from organization to principal</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        Three nested policy scopes narrowing from organization to principal
+      </title>
       <defs>
         <linearGradient id="ill-governance-g1" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="var(--_ember-crimson, #eb5c5e)" />
-          <stop offset="1" stopColor="var(--_ember-gold, #fd9a4b)" />
+          <stop offset="0" stopColor="var(--_ember-c, #FFCB66)" />
+          <stop offset="1" stopColor="var(--_ember-a, #A37200)" />
         </linearGradient>
         <radialGradient id="ill-governance-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.8} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0.8}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0}
+          />
         </radialGradient>
       </defs>
 

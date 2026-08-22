@@ -20,16 +20,30 @@ const ROWS = 6;
 
 export function IllustrationSecurity({ className }: { className?: string }) {
   return (
-    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
-      <title>A shield and lock over a row-level security boundary, one row lit</title>
+    <svg
+      role="img"
+      viewBox="0 0 560 200"
+      className={illustrationClassName(className)}
+    >
+      <title>
+        A shield and lock over a row-level security boundary, one row lit
+      </title>
       <defs>
         <linearGradient id="ill-security-g1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
         <radialGradient id="ill-security-glow">
-          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.7} />
-          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+          <stop
+            offset="0"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0.7}
+          />
+          <stop
+            offset="1"
+            stopColor="var(--_ember-b, #FFB000)"
+            stopOpacity={0}
+          />
         </radialGradient>
         <linearGradient id="ill-security-fade" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#fff" />
@@ -38,7 +52,13 @@ export function IllustrationSecurity({ className }: { className?: string }) {
           <stop offset="1" stopColor="#fff" />
         </linearGradient>
         <mask id="ill-security-mask">
-          <rect x={0} y={0} width={560} height={200} fill="url(#ill-security-fade)" />
+          <rect
+            x={0}
+            y={0}
+            width={560}
+            height={200}
+            fill="url(#ill-security-fade)"
+          />
         </mask>
       </defs>
 
@@ -61,7 +81,15 @@ export function IllustrationSecurity({ className }: { className?: string }) {
         opacity={0.3}
       />
 
-      <circle cx={280} cy={82} r={16} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.4} />
+      <circle
+        cx={280}
+        cy={82}
+        r={16}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1}
+        opacity={0.4}
+      />
       <path
         d="M270,74 L270,66 Q270,56 280,56 Q290,56 290,66 L290,74"
         fill="none"
@@ -71,7 +99,16 @@ export function IllustrationSecurity({ className }: { className?: string }) {
         opacity={0.4}
       />
       <circle cx={280} cy={82} r={9} fill="url(#ill-security-glow)" />
-      <line x1={280} y1={82} x2={280} y2={98} stroke="url(#ill-security-g1)" strokeWidth={1.25} strokeLinecap="round" opacity={0.85} />
+      <line
+        x1={280}
+        y1={82}
+        x2={280}
+        y2={98}
+        stroke="url(#ill-security-g1)"
+        strokeWidth={1.25}
+        strokeLinecap="round"
+        opacity={0.85}
+      />
 
       {Array.from({ length: ROWS }, (_, i) => {
         const enforced = i === 3;

@@ -34,21 +34,22 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Oxagen Terracotta" — warm-neutral throughout: ivory paper
- * (#FAF9F5) + crisp white panels in light, warm charcoal (#1E1D1B) page +
- * stepped warm-gray panels in dark (no blue cast anywhere). Card and table
- * HEADERS are flat — they sit on the surface with hairline borders, never
- * shaded bars. Colour is concentrated in ONE muted terracotta accent
- * (#D97757 — CTAs, focus rings, the active-tab underline, links via a deeper
- * rust) — never smeared across every surface; secondary fills are quiet
- * warm neutrals. Errors use a true red so they never read as the terracotta
- * primary. Brand mark gradient stays tangerine → flame (#F07650) → rose
- * (theme-independent; never recolor the mark).
+ * CURRENT SKIN: "Oxagen Ember" — the brand shipped on oxagen.sh. Surfaces are
+ * NEUTRAL: neutral paper in light, and in dark the site's own steps — #0B0B0C
+ * page → #141414 card → #161616 popover → #2A2A2A accent, all at chroma 0.000.
+ * The INK on top of them is warm (#F1EDEA → #BCB2A9 → #6E6A5F), which is the
+ * split that makes the brand read as black-and-gold rather than as grey. Card
+ * and table HEADERS are flat — they sit on the surface with hairline borders,
+ * never shaded bars. Colour is concentrated in ONE amber ember accent
+ * (#FFB000 — CTAs, focus rings, the active-tab underline, the mark) plus a
+ * cool indigo (#9CA3E8) that carries links, exactly as the site does — never
+ * smeared across every surface. Errors use a true red and warning is pushed
+ * to orange so neither reads as the ember primary. Brand mark gradient is the
+ * site's ember ramp #A37200 → #FFB000 → #FFCB66.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
 @import "./fonts/aeonik.css";
-@import "./fonts/space-grotesk.css";
 
 /*
  * Scan the @oxagen/ui component source for utility classes. Tailwind v4 skips
@@ -62,92 +63,110 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Tangerine":
-     * warm off-white in light / cool narwhal near-black in dark, tangerine
-     * primary + rose secondary + teak accent. Warmth lives in the accent, not
-     * smeared across surfaces (design system stays flat — see THEME.md §7).
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Ember", matching
+     * oxagen.sh: NEUTRAL near-black surfaces carrying no cast at all, a WARM
+     * ink ramp sitting on top of them, and one amber ember accent. That split
+     * is the brand — the site's surface steps measure chroma 0.000–0.002
+     * while its text ramp runs 0.006–0.018, so warmth reads in the type and
+     * the accent, never in the panels (design system stays flat, THEME.md §7).
+     * Every hex quoted here was read off the shipped oxagen.sh stylesheet.
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — warm ivory paper, warm near-black slate ink, warm soft
-       white. Chroma on the paper is 0.004 — felt as warmth, never seen as a
-       cast — so neutrals stay honest and colour is introduced intentionally
-       via the terracotta accent + brand mark instead. */
-    --_paper: oklch(0.982 0.004 95);     /* #FAF9F5 — warm ivory paper */
-    --_ink: oklch(0.24 0.004 75);        /* #1F1E1D — warm near-black slate ink */
-    --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
+    /* Brand anchors — neutral paper, the site's page black as light-mode ink,
+       and the site's warm off-white as dark-mode ink. */
+    --_paper: oklch(0.985 0 0);          /* #FAFAFA — neutral paper */
+    --_ink: oklch(0.150 0.002 286);      /* #0B0B0C — site --bg, the light-mode ink */
+    --_ink-white: oklch(0.948 0.006 60); /* #F1EDEA — site --ink */
 
-    /* Named brand swatches. Tangerine is the primary accent; rose the secondary;
-       ox-indigo* the cool link accent. --ox-rust is retained (name stability) and
-       re-pointed at tangerine; the legacy warm/sand swatches are unused. */
+    /* Named brand swatches — the three ember stops are oxagen.sh's
+       --ember-a/b/c verbatim. --ox-ember is THE accent knob: it drives
+       --primary, --ring, tabs and chart-1. --ox-indigo* is the cool link
+       accent, which is what the site uses for links (never the ember).
+       The legacy tangerine/rose/teak/bronze/sunset/gold/wheat swatches are
+       gone rather than re-pointed: they named the old coral brand, had no
+       consumers outside this file, and a swatch called "rose" holding amber
+       is a comment that lies. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(0.985 0.003 84.6);   /* warm near-white */
+    --ox-surface: oklch(0.992 0 0);              /* neutral near-white panel */
     --ox-ink: var(--_ink);
-    --ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine (primary) */
-    --ox-rose: oklch(0.661 0.177 22.5);   /* #EB5C5E — rose (secondary) */
-    --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (accent, dark) */
-    --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
-    --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
-    --ox-rust: oklch(0.66 0.115 40);   /* #D97757 — muted terracotta. THE accent knob: drives --primary, --ring, tabs, chart-1 */
-    --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
-    --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
+    --ox-ember-deep: oklch(0.587 0.122 78.7);    /* #A37200 — site --ember-a */
+    --ox-ember: oklch(0.812 0.170 76.4);         /* #FFB000 — site --ember-b, the brand mark */
+    --ox-ember-light: oklch(0.869 0.132 82.1);   /* #FFCB66 — site --ember-c, text-safe on dark (13.1:1) */
+    --ox-ember-soft: oklch(0.215 0.037 59.0);    /* #261507 — site --ember-soft, tinted fill */
 
-    --ox-indigo: oklch(0.45 0.055 278);   /* muted indigo — chart categorical accent (light) */
-    --ox-indigo-bright: oklch(0.74 0.06 279);   /* muted indigo — chart categorical accent (dark) */
+    /* Link accent. The site ships one indigo (#9CA3E8) because it is dark-only;
+       it clears 8.3:1 there but only 2.4:1 on paper, so light mode takes the
+       same hue darkened to a text-safe 6.9:1 rather than shipping the site
+       value where it would fail. */
+    --ox-indigo: oklch(0.477 0.137 277.4);        /* #4C51A8 — link accent (light) */
+    --ox-indigo-bright: oklch(0.736 0.100 279.2); /* #9CA3E8 — site --indigo (dark) */
 
-    /* Neutral ramp — warm-neutral throughout (hue ~75–95° at very low chroma):
-       light steps read as ivory, dark steps as warm charcoal. Stepped elevation
-       in dark (950 page → 900 card → 850 popover → 800 accent) is preserved. */
-    --_stone-50: oklch(0.99 0.002 95);      /* warm near-white */
-    --_stone-100: oklch(0.965 0.006 92);    /* #F0EEE6 — muted / card-header */
-    --_stone-150: oklch(0.949 0.007 92);    /* surface-alt */
-    --_stone-200: oklch(0.925 0.008 90);    /* secondary surface */
-    --_stone-300: oklch(0.885 0.009 88);    /* input border (light) — a touch darker for contrast */
-    --_stone-400: oklch(0.77 0.012 80);     /* muted-foreground (dark) */
-    --_stone-500: oklch(0.55 0.012 80);     /* warm tertiary text */
+    /* Cursor block of the "o + cursor" logomark (docs/brand). This is the ONE
+       place the mark diverges from the ember accent: the brand asset set ships
+       the cursor in its own red-orange, and it is kept rather than recolored
+       so the mark matches the canonical files in docs/brand/logos/. */
+    --ox-cursor: oklch(0.655 0.233 31.6);        /* #FF3D1F — brand cursor (light) */
+
+    /* Neutral ramp. The DARK steps are the site's own surface values and are
+       genuinely neutral (chroma 0.000) — that is the single biggest visual
+       change from the old skin, which tinted every panel warm. Light steps are
+       neutral to match. Stepped elevation in dark (950 page → 900 card →
+       850 popover → 800 accent) is preserved; 400/500/600 stay WARM because
+       they carry TEXT, and the site's ink ramp is warm. */
+    --_stone-50: oklch(0.99 0 0);           /* neutral near-white */
+    --_stone-100: oklch(0.965 0 0);         /* #F2F2F2 — muted / card-header */
+    --_stone-150: oklch(0.949 0 0);         /* surface-alt */
+    --_stone-200: oklch(0.925 0 0);         /* secondary surface */
+    --_stone-300: oklch(0.885 0 0);         /* input border (light) */
+    --_stone-400: oklch(0.769 0.017 64.6);  /* #BCB2A9 — site --muted, muted-foreground (dark) */
+    --_stone-500: oklch(0.525 0.018 90.3);  /* #6E6A5F — site --faint, tertiary text */
     --_stone-600: oklch(0.47 0.014 78);     /* warm secondary text (light) — darker for contrast */
     --_stone-700: oklch(0.35 0.012 75);     /* warm graphite */
-    --_stone-800: oklch(0.320 0.005 78);    /* #393836 — charcoal accent surface (dark) */
-    --_stone-850: oklch(0.285 0.004 78);    /* #2E2D2B — charcoal popover / muted (dark) */
-    --_stone-900: oklch(0.253 0.004 78);    /* #262624 — charcoal card / sidebar (dark) */
-    --_stone-950: oklch(0.220 0.004 78);    /* #1E1D1B — warm charcoal background (dark) */
+    --_stone-800: oklch(0.285 0 0);         /* #2A2A2A — site --line, accent surface (dark) */
+    --_stone-850: oklch(0.200 0 0);         /* #161616 — site --card, popover (dark) */
+    --_stone-900: oklch(0.191 0 0);         /* #141414 — site --surface, card / sidebar (dark) */
+    --_stone-950: oklch(0.150 0.002 286);   /* #0B0B0C — site --bg, page background (dark) */
 
-    /* Terracotta accent ramp (the theme accent — drives accent-subtle backgrounds).
-       Keeps the --_violet-* NAMES for zero-churn; the VALUES are terracotta. */
-    --_violet-50: oklch(0.965 0.015 45);   /* terracotta 95% tint */
-    --_violet-100: oklch(0.925 0.030 45);
-    --_violet-200: oklch(0.865 0.055 43);
-    --_violet-300: oklch(0.775 0.085 41);
-    --_violet-400: oklch(0.66 0.115 40);   /* #D97757 — terracotta (matches --ox-rust) */
-    --_violet-500: oklch(0.60 0.115 38);
-    --_violet-600: oklch(0.53 0.105 36);
-    --_violet-700: oklch(0.46 0.090 35);
-    --_violet-800: oklch(0.38 0.070 34);
-    --_violet-900: oklch(0.31 0.050 33);
+    /* Ember accent ramp — drives the accent-subtle backgrounds. Anchored on
+       #FFB000 at 400 so it matches --ox-ember exactly; tints run up, shades
+       down through the site's deep ember (#A37200) toward its soft fill. */
+    --_amber-50: oklch(0.975 0.022 85);
+    --_amber-100: oklch(0.950 0.045 84);
+    --_amber-200: oklch(0.910 0.085 82);
+    --_amber-300: oklch(0.869 0.132 82.1);  /* #FFCB66 — site --ember-c */
+    --_amber-400: oklch(0.812 0.170 76.4);  /* #FFB000 — site --ember-b (matches --ox-ember) */
+    --_amber-500: oklch(0.720 0.150 77.5);
+    --_amber-600: oklch(0.587 0.122 78.7);  /* #A37200 — site --ember-a */
+    --_amber-700: oklch(0.480 0.100 79);
+    --_amber-800: oklch(0.370 0.075 72);
+    --_amber-900: oklch(0.280 0.055 65);
 
-    /* Brand mark primitives (tangerine → flame → rose gradient). */
-    --_ember-gold: oklch(0.775 0.150 56.4);    /* #FD9A4B — tangerine (gradient start) */
-    --_ember-flame: oklch(0.701 0.160 37.9);   /* #F07650 — flame (gradient midpoint) */
-    --_ember-crimson: oklch(0.661 0.177 22.5); /* #EB5C5E — rose (gradient end) */
-    --_ember-navy: oklch(0.151 0.012 266.5);   /* #0B0D16 — narwhal */
+    /* Brand mark primitives — the site's ember gradient stops (a → b → c). */
+    --_ember-a: oklch(0.587 0.122 78.7);   /* #A37200 — gradient start */
+    --_ember-b: oklch(0.812 0.170 76.4);   /* #FFB000 — gradient midpoint, the solid mark */
+    --_ember-c: oklch(0.869 0.132 82.1);   /* #FFCB66 — gradient end */
+    --_ember-navy: oklch(0.150 0.002 286); /* #0B0B0C — site page black */
 
-    /* Status hues (desaturated to fit the palette). Error is a true red so it
-       never reads as the tangerine primary. */
+    /* Status hues. Success is the site's --ok; error stays a true red so it
+       never reads as the ember primary. */
     --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
     --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
-    --_moss: oklch(0.60 0.12 160);             /* success — #1D9E75 adjacent */
-    --_moss-light: oklch(0.72 0.12 160);
-    --_ochre: oklch(0.667 0.124 73.1);         /* warning */
-    --_ochre-light: oklch(0.747 0.13 78.8);
+    --_moss: oklch(0.529 0.106 154.4);         /* #2F7D4F — success (light, 5.0:1 on paper) */
+    --_moss-light: oklch(0.769 0.119 149.1);   /* #7BC98A — site --ok (dark) */
+    /* Warning is pushed to a clearly ORANGE hue. It used to sit at hue ~73–79,
+       which was safely distant from a terracotta primary at hue 40 — but the
+       ember primary now lives at hue 76, so the old ochre would have read as
+       the brand accent rather than as a warning state. */
+    --_ochre: oklch(0.620 0.150 52);           /* warning (light) */
+    --_ochre-light: oklch(0.750 0.140 55);     /* warning (dark) */
     --_slate: oklch(0.508 0.042 233.7);        /* info */
     --_slate-light: oklch(0.618 0.04 233.3);
-    --_terracotta: oklch(0.583 0.121 44.5);
-    --_terracotta-light: oklch(0.659 0.117 47.1);
 
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
     --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
-    --ui-shadow: 0 1px 2px oklch(0.25 0.015 75 / 0.06); /* subtle warm-neutral shadow — hairline borders do the real work. */
+    --ui-shadow: 0 1px 2px oklch(0.15 0 0 / 0.07); /* subtle neutral shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
     /* Absolute ink semantics (theme-independent). */
@@ -155,7 +174,7 @@
     --ink-dark: var(--_ink);
 
     /* The brand hue — ember accent drives links, focus, CTAs. */
-    --brand: var(--ox-rust);
+    --brand: var(--ox-ember);
     --brand-foreground: var(--ox-ink);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -168,21 +187,21 @@
     --card-foreground: var(--_ink);
     --popover: oklch(1 0 0);
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-rust);         /* tangerine */
+    --primary: var(--ox-ember);         /* tangerine */
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.925 0.012 83);   /* quiet warm-neutral fill (secondary buttons, badges) */
-    --secondary-foreground: oklch(0.30 0.012 75);
+    --secondary: oklch(0.925 0 0);   /* quiet neutral fill (secondary buttons, badges) */
+    --secondary-foreground: oklch(0.30 0.010 75);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.945 0.018 45);   /* barely-there terracotta-tinted hover/selected wash */
-    --accent-foreground: oklch(0.32 0.050 40);   /* deep rust ink on the tint */
+    --accent: oklch(0.962 0.030 85);   /* barely-there ember-tinted hover/selected wash */
+    --accent-foreground: oklch(0.350 0.070 76);   /* deep ember ink on the tint */
     --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.885 0.008 85 / 0.9);   /* warm hairline — slightly darker for definition/contrast */
+    --border: oklch(0.885 0 0 / 0.9);   /* neutral hairline */
     --input: var(--_stone-300);
-    --ring: var(--ox-rust);
-    --link: oklch(0.49 0.10 40);   /* deep rust — the text-safe (≥4.5:1) shade of the terracotta accent */
-    --link-hover: oklch(0.42 0.10 38);
+    --ring: var(--ox-ember);
+    --link: var(--ox-indigo);   /* indigo — the site links in indigo, never the ember */
+    --link-hover: oklch(0.415 0.130 277);
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -194,11 +213,18 @@
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
-    /* Ember mark gradient (theme-independent — never recolor the mark). */
-    --brand-gradient: linear-gradient(135deg, var(--_ember-gold) 0%, var(--_ember-flame) 50%, var(--_ember-crimson) 100%);
+    /* Ember text ink — the shade of the ember accent that is legible as TEXT on
+       the current background. #FFB000 is the MARK colour and is only 1.8:1 on
+       paper, so accent copy must not use it directly: light mode takes a deep
+       ember (5.5:1) and dark mode the site's own --ember-c (13.1:1). */
+    --ember-ink: oklch(0.522 0.108 79.7);   /* #8A6100 — accent text (light) */
+
+    /* Ember mark gradient (theme-independent — never recolor the mark).
+       The site's own angle and stops: 92deg, 0% / 46% / 100%. */
+    --brand-gradient: linear-gradient(92deg, var(--_ember-a) 0%, var(--_ember-b) 46%, var(--_ember-c) 100%);
 
     /* Charts — distinct categorical ramp (ember · indigo · moss · ochre · slate). */
-    --chart-1: var(--ox-rust);
+    --chart-1: var(--ox-ember);
     --chart-2: var(--ox-indigo);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
@@ -210,11 +236,11 @@
     /* Core sidebar surface — crisp white. */
     --sidebar: var(--surface);
     --sidebar-foreground: var(--surface-foreground);
-    --sidebar-primary: var(--ox-rust);
+    --sidebar-primary: var(--ox-ember);
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.885 0.008 85 / 0.5);
+    --sidebar-border: oklch(0.885 0 0 / 0.5);
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -267,7 +293,7 @@
     --tab-fg-active: var(--foreground);
     --tab-border: transparent;
     --tab-border-hover: var(--border);
-    --tab-border-active: var(--ox-rust);
+    --tab-border-active: var(--ox-ember);
     --tab-border-width: 2px;
 
     /* ── Buttons (two variants). Hover/active adapt via color-mix toward the
@@ -328,7 +354,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.20 0.010 70 / 0.45);
+    --overlay-scrim: oklch(0.150 0.002 286 / 0.5);
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -364,22 +390,24 @@
     --card-foreground: var(--_ink-white);
     --popover: var(--_stone-850);
     --popover-foreground: var(--_ink-white);
-    --primary: var(--ox-rust);
+    --primary: var(--ox-ember);
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+    --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
     --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
     /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected */
+    --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
-    --input: oklch(0.360 0.008 80 / 0.6);
-    --ring: var(--ox-rust);
-    --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
-    --link-hover: oklch(0.84 0.075 45);
+    --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
+    --input: oklch(0.360 0 0 / 0.7);
+    --ring: var(--ox-ember);
+    --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+    --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
+    --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
+    --link-hover: oklch(0.800 0.090 279);
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -390,7 +418,7 @@
     --info: var(--_slate-light);
     --info-foreground: oklch(0.18 0.01 230);
 
-    --chart-1: var(--ox-rust);
+    --chart-1: var(--ox-ember);
     --chart-2: var(--ox-indigo-bright);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
@@ -401,11 +429,11 @@
 
     --sidebar: var(--_stone-900);
     --sidebar-foreground: var(--_ink-white);
-    --sidebar-primary: var(--ox-rust);
+    --sidebar-primary: var(--ox-ember);
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.42 0.006 75 / 0.4);
+    --sidebar-border: oklch(0.42 0 0 / 0.45);
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -477,22 +505,24 @@
       --card-foreground: var(--_ink-white);
       --popover: var(--_stone-850);
       --popover-foreground: var(--_ink-white);
-      --primary: var(--ox-rust);
+      --primary: var(--ox-ember);
       --primary-foreground: var(--ox-ink);
-      --secondary: oklch(0.34 0.020 50);   /* calm warm-clay chip fill */
+      --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
       --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: oklch(0.36 0.045 42);   /* deep terracotta-tinted hover/selected (was drifted from .dark; now identical) */
+      --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.340 0.008 80 / 0.65);   /* warm charcoal hairline */
-      --input: oklch(0.360 0.008 80 / 0.6);
-      --ring: var(--ox-rust);
-      --link: oklch(0.78 0.080 45);   /* warm apricot — text-safe terracotta shade for dark */
-      --link-hover: oklch(0.84 0.075 45);
+      --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
+      --input: oklch(0.360 0 0 / 0.7);
+      --ring: var(--ox-ember);
+      --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+      --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
+      --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
+      --link-hover: oklch(0.800 0.090 279);
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -503,7 +533,7 @@
       --info: var(--_slate-light);
       --info-foreground: oklch(0.18 0.01 230);
 
-      --chart-1: var(--ox-rust);
+      --chart-1: var(--ox-ember);
       --chart-2: var(--ox-indigo-bright);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
@@ -514,11 +544,11 @@
 
       --sidebar: var(--_stone-900);
       --sidebar-foreground: var(--_ink-white);
-      --sidebar-primary: var(--ox-rust);
+      --sidebar-primary: var(--ox-ember);
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.42 0.006 75 / 0.4);
+      --sidebar-border: oklch(0.42 0 0 / 0.45);
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -622,22 +652,22 @@
   --color-ink-dark: var(--ink-dark);
 
   /* Ember gradient stops (mark-specific, rarely used directly in utilities). */
-  --color-ember-gold: var(--_ember-gold);
-  --color-ember-flame: var(--_ember-flame);
-  --color-ember-crimson: var(--_ember-crimson);
+  --color-ember-gold: var(--_ember-a);
+  --color-ember-flame: var(--_ember-b);
+  --color-ember-crimson: var(--_ember-c);
 
   /* Accent ramp — exposed for rare direct-access. NOTE: the --*-violet-* NAMES
      are retained for API stability; the VALUES are ember flame, not violet. */
-  --color-violet-50: var(--_violet-50);
-  --color-violet-100: var(--_violet-100);
-  --color-violet-200: var(--_violet-200);
-  --color-violet-300: var(--_violet-300);
-  --color-violet-400: var(--_violet-400);
-  --color-violet-500: var(--_violet-500);
-  --color-violet-600: var(--_violet-600);
-  --color-violet-700: var(--_violet-700);
-  --color-violet-800: var(--_violet-800);
-  --color-violet-900: var(--_violet-900);
+  --color-violet-50: var(--_amber-50);
+  --color-violet-100: var(--_amber-100);
+  --color-violet-200: var(--_amber-200);
+  --color-violet-300: var(--_amber-300);
+  --color-violet-400: var(--_amber-400);
+  --color-violet-500: var(--_amber-500);
+  --color-violet-600: var(--_amber-600);
+  --color-violet-700: var(--_amber-700);
+  --color-violet-800: var(--_amber-800);
+  --color-violet-900: var(--_amber-900);
 
   /* Charts */
   --color-chart-1: var(--chart-1);
@@ -792,10 +822,12 @@
   --font-mono:
     "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
     Consolas, "DejaVu Sans Mono", monospace;
-  /* Wordmark face — Space Grotesk, used ONLY by .ox-wordmark (the "oxagen"
-     lockup). Headings keep --font-display (Aeonik Fono); this is intentional. */
+  /* Wordmark face — Aeonik, matching oxagen.sh, whose ".brand" lockup is set in
+     the body face at weight 660 / tracking -0.02em. It used to be Space Grotesk,
+     which put the one element that appears on every surface in a typeface the
+     website does not load. Headings keep --font-display (Aeonik Fono). */
   --font-wordmark:
-    "Space Grotesk", "Aeonik Fono", ui-sans-serif, system-ui, -apple-system,
+    "Aeonik", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -909,13 +941,14 @@
     animation: fade-in var(--motion-base) var(--ease-entry);
   }
 
-  /* The Oxagen wordmark — set in Space Grotesk, ALWAYS lowercase ("oxagen").
+  /* The Oxagen wordmark — Aeonik, ALWAYS lowercase ("oxagen"). Weight and
+     tracking are oxagen.sh's ".brand" values verbatim (660 / -0.02em).
      text-transform guarantees the lowercase lockup even if a caller passes
      mixed-case text. */
   .ox-wordmark {
     font-family: var(--font-wordmark);
-    font-weight: 600;
-    letter-spacing: -0.03em;
+    font-weight: 660;
+    letter-spacing: -0.02em;
     line-height: 1;
     text-transform: lowercase;
   }
@@ -972,9 +1005,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold, #FD9A4B) 0%,
-      var(--_ember-flame, #F07650) 46%,
-      var(--_ember-crimson, #EB5C5E) 100%
+      var(--_ember-a, #A37200) 0%,
+      var(--_ember-b, #FFB000) 46%,
+      var(--_ember-c, #FFCB66) 100%
     );
   }
 
@@ -982,9 +1015,9 @@
   .ox-grad-text {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold) 0%,
-      var(--_ember-flame) 46%,
-      var(--_ember-crimson) 100%
+      var(--_ember-a) 0%,
+      var(--_ember-b) 46%,
+      var(--_ember-c) 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
@@ -1036,8 +1069,8 @@
   .ox-hero-orb {
     background: radial-gradient(
       circle at center,
-      color-mix(in oklch, var(--_ember-flame) 38%, transparent) 0%,
-      color-mix(in oklch, var(--_ember-crimson) 16%, transparent) 40%,
+      color-mix(in oklch, var(--_ember-b) 38%, transparent) 0%,
+      color-mix(in oklch, var(--_ember-c) 16%, transparent) 40%,
       transparent 70%
     );
     filter: blur(36px);

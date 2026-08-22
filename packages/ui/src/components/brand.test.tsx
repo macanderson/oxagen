@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * brand.test.tsx — render tests for the ember hex-cluster mark components.
+ * brand.test.tsx — render tests for the "o + cursor" mark components.
  *
- * The logomark is the hex-cluster SVG (role=img) with the ember gradient; the
- * wordmark is lowercase "oxagen" as real text. BrandMark renders the mark directly. Note:
- * SVG elements in JSDOM expose className as SVGAnimatedString, not a plain
- * string — use getAttribute("class").
+ * The logomark is an SVG (role=img) holding the "o" letterform plus the cursor
+ * block; the wordmark is lowercase "oxagen" as real text. BrandMark renders the
+ * mark directly. Note: SVG elements in JSDOM expose className as
+ * SVGAnimatedString, not a plain string — use getAttribute("class").
  */
 
 import { render, cleanup } from "@testing-library/react";
@@ -28,19 +28,45 @@ describe("OxagenLogomark — render", () => {
     expect(getByRole("img", { name: "Oxagen logomark" })).toBeInTheDocument();
   });
 
-  it("paints the ember gradient by default (defs present)", () => {
+  it("paints the cursor block in the brand cursor hue by default", () => {
     const { container } = render(<OxagenLogomark />);
-    expect(container.querySelector("linearGradient#oxagenEmber")).toBeInTheDocument();
+    const cursor = container.querySelector("rect");
+    expect(cursor).toBeInTheDocument();
+    expect(cursor?.getAttribute("fill")).toBe("var(--ox-cursor)");
   });
 
-  it("renders a flat stroke (no gradient defs) for a mono tone", () => {
-    const { container } = render(<OxagenLogomark tone="mono-light" />);
+  it("lets the 'o' inherit the surrounding text colour so it flips with the theme", () => {
+    const { container } = render(<OxagenLogomark />);
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
+      "currentColor",
+    );
+  });
+
+  it("carries no gradient — the mark is flat ink plus a solid cursor", () => {
+    const { container } = render(<OxagenLogomark />);
     expect(container.querySelector("linearGradient")).not.toBeInTheDocument();
   });
 
+  it("flattens BOTH the 'o' and the cursor to one colour for a mono tone", () => {
+    const { container } = render(<OxagenLogomark tone="mono-light" />);
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
+      "var(--ink-light)",
+    );
+    expect(container.querySelector("rect")?.getAttribute("fill")).toBe(
+      "var(--ink-light)",
+    );
+  });
+
+  it("keeps the canonical viewBox from oxagen-glyph-adaptive.svg", () => {
+    const { getByRole } = render(<OxagenLogomark />);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(
+      "-4.40 -80.00 143.40 90.20",
+    );
+  });
+
   it("accepts className via getAttribute", () => {
-    const { getByRole } = render(<OxagenLogomark className="size-7" />);
-    expect(getByRole("img").getAttribute("class")).toContain("size-7");
+    const { getByRole } = render(<OxagenLogomark className="h-7" />);
+    expect(getByRole("img").getAttribute("class")).toContain("h-7");
   });
 });
 
@@ -64,14 +90,28 @@ describe("OxagenWordmark — render", () => {
 });
 
 describe("BrandMark — render", () => {
-  it("renders the ember hex-cluster SVG", () => {
+  it("renders the o + cursor SVG", () => {
     const { container } = render(<BrandMark />);
     expect(container.querySelector("svg")).toBeInTheDocument();
   });
 
   it("merges custom className onto the mark", () => {
     const { container } = render(<BrandMark className="custom-brand" />);
-    expect(container.querySelector("svg")?.getAttribute("class")).toContain("custom-brand");
+    expect(container.querySelector("svg")?.getAttribute("class")).toContain(
+      "custom-brand",
+    );
+  });
+
+  /**
+   * The mark is wider than it is tall, so it must be sized by HEIGHT. A square
+   * utility (`size-7`) would letterbox it down to ~63% of the available height.
+   */
+  it("sizes by height, not into a square box", () => {
+    const { container } = render(<BrandMark />);
+    const cls = container.querySelector("svg")?.getAttribute("class") ?? "";
+    expect(cls).toContain("h-7");
+    expect(cls).toContain("w-auto");
+    expect(cls).not.toContain("size-7");
   });
 });
 
@@ -84,7 +124,9 @@ describe("OxagenLockup — render", () => {
 
   it("merges custom className on lockup span", () => {
     const { container } = render(<OxagenLockup className="custom-lockup" />);
-    expect((container.firstChild as HTMLElement).className).toContain("custom-lockup");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "custom-lockup",
+    );
   });
 });
 
@@ -95,13 +137,15 @@ describe("OxagenLogo — variants", () => {
     expect(queryByText("oxagen")).not.toBeInTheDocument();
   });
 
-  it("horizontal variant renders brain + wordmark", () => {
-    const { container, getByText } = render(<OxagenLogo variant="horizontal" size={40} />);
+  it("horizontal variant renders mark + wordmark", () => {
+    const { container, getByText } = render(
+      <OxagenLogo variant="horizontal" size={40} />,
+    );
     expect(container.querySelector("svg")).toBeInTheDocument();
     expect(getByText("oxagen")).toBeInTheDocument();
   });
 
-  it("vertical variant renders ring + wordmark", () => {
+  it("vertical variant renders mark + wordmark", () => {
     const { container, getByText } = render(<OxagenLogo variant="vertical" />);
     expect(container.querySelector("svg")).toBeInTheDocument();
     expect(getByText("oxagen")).toBeInTheDocument();
@@ -115,7 +159,9 @@ describe("NodeChip — render", () => {
   });
 
   it("renders an optional label", () => {
-    const { getByText } = render(<NodeChip kind="user" id="prn_8fa21c" label="Ada" />);
+    const { getByText } = render(
+      <NodeChip kind="user" id="prn_8fa21c" label="Ada" />,
+    );
     expect(getByText("Ada")).toBeInTheDocument();
     expect(getByText("prn_8fa21c")).toBeInTheDocument();
   });
@@ -133,7 +179,9 @@ describe("ConfidenceBar — render", () => {
   });
 
   it("hides the value when showValue is false", () => {
-    const { queryByText } = render(<ConfidenceBar score={0.5} showValue={false} />);
+    const { queryByText } = render(
+      <ConfidenceBar score={0.5} showValue={false} />,
+    );
     expect(queryByText("50%")).not.toBeInTheDocument();
   });
 });

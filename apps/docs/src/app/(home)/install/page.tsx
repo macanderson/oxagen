@@ -112,7 +112,7 @@ export default function InstallPage(): ReactNode {
               </Link>
               <Link
                 href="/docs/cli"
-                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-flame,#F07650)]/60"
+                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-b,#FFB000)]/60"
               >
                 CLI docs
               </Link>
@@ -147,7 +147,7 @@ export default function InstallPage(): ReactNode {
                 className="group relative flex flex-col bg-background p-7 sm:p-8"
               >
                 <HexField className="pointer-events-none absolute inset-0 h-full w-full text-foreground opacity-0 transition-opacity duration-500 group-hover:opacity-30" />
-                <span className="relative font-mono text-sm font-semibold text-[var(--_ember-flame,#F07650)]">
+                <span className="relative font-mono text-sm font-semibold text-[var(--ember-ink)]">
                   {s.step}
                 </span>
                 <h3 className="relative mt-3 text-lg font-semibold text-foreground">
@@ -157,7 +157,7 @@ export default function InstallPage(): ReactNode {
                   {s.body}
                 </p>
                 <code className="relative mt-5 block overflow-x-auto whitespace-nowrap rounded-lg border border-border bg-muted/60 px-4 py-3 font-mono text-xs text-foreground">
-                  <span className="select-none text-[var(--_ember-flame,#F07650)]">
+                  <span className="select-none text-[var(--ember-ink)]">
                     ${" "}
                   </span>
                   {s.command}
@@ -204,7 +204,7 @@ export default function InstallPage(): ReactNode {
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-flame,#F07650)]" />
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-b,#FFB000)]" />
                   <span>
                     <span className="font-medium text-foreground">{t}.</span>{" "}
                     <span className="text-muted-foreground">{d}</span>
@@ -229,7 +229,7 @@ export default function InstallPage(): ReactNode {
               bundle for CI runners — are in the{" "}
               <Link
                 href="/docs/cli/installation"
-                className="font-medium text-[var(--_ember-flame,#F07650)] hover:underline"
+                className="font-medium text-[var(--ember-ink)] hover:underline"
               >
                 installation guide
               </Link>
@@ -261,8 +261,8 @@ export default function InstallPage(): ReactNode {
           <div className="mt-12 grid gap-5 md:grid-cols-3">
             {NEXT_STEPS.map((s) => (
               <Link key={s.href} href={s.href} className="group">
-                <div className="flex h-full flex-col rounded-xl border border-border bg-background/60 p-6 backdrop-blur transition-colors hover:border-[var(--_ember-flame,#F07650)]/60 hover:bg-muted/40">
-                  <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--_ember-flame,#F07650)]">
+                <div className="flex h-full flex-col rounded-xl border border-border bg-background/60 p-6 backdrop-blur transition-colors hover:border-[var(--_ember-b,#FFB000)]/60 hover:bg-muted/40">
+                  <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--ember-ink)]">
                     {s.title}
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
