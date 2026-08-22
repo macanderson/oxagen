@@ -1,0 +1,18 @@
+# Terraform working state. The remote S3 backend is the source of truth; a
+# local copy is a stale second answer waiting to be applied by mistake.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Plan files resolve variables, so they can contain secrets.
+*.tfplan
+
+# `terraform.tfvars` is committed deliberately — account ids, zone ids and
+# subnet ids are not secret and pinning them is the point. Anything
+# auto-loaded beside it is assumed to carry credentials.
+*.auto.tfvars
+*.auto.tfvars.json
+
+.DS_Store
