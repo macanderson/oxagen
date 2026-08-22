@@ -70,7 +70,7 @@ export function bookAccessEmailTemplate(input: BookAccessEmailTemplateInput): {
       </p>
       <p style="margin:0 0 24px">
         <a href="${esc(readUrl)}"
-           style="display:inline-block;background:#F07650;color:#ffffff;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px;text-decoration:none">
+           style="display:inline-block;background:#FFB000;color:#ffffff;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px;text-decoration:none">
           Read the book &rarr;</a>
       </p>
       <p style="font-size:13px;color:#6b7280;margin:0 0 8px">
