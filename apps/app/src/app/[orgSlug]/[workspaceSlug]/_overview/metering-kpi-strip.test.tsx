@@ -50,7 +50,7 @@ const PROPS = {
 function breakdown(
   overrides: Partial<BillingUsageBreakdownOutput> = {},
 ): BillingUsageBreakdownOutput {
-  return {
+  const base: BillingUsageBreakdownOutput = {
     range: { start: "", end: "" },
     totals: {
       inputTokens: 0,
@@ -58,6 +58,7 @@ function breakdown(
       cachedTokens: 0,
       costMicros: 0,
       executions: 0,
+      messages: 0,
     },
     series: [],
     byModel: [],
@@ -65,14 +66,15 @@ function breakdown(
     byWorkspace: [],
     byCapability: [],
     byPrincipal: [],
-    ...overrides,
+    byUser: [],
   };
+  return Object.assign(base, overrides);
 }
 
 function subscription(
   overrides: Partial<BillingSubscriptionReadOutput> = {},
 ): BillingSubscriptionReadOutput {
-  return {
+  const base: BillingSubscriptionReadOutput = {
     subscription: null,
     creditBalanceCents: 0,
     periodUsage: {
@@ -82,8 +84,8 @@ function subscription(
       costMicros: 0,
       executions: 0,
     },
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 function subscriptionRecord(
@@ -132,6 +134,7 @@ describe("MeteringKpiStrip", () => {
               cachedTokens: 0,
               costMicros: 1_250_000,
               executions: 4,
+              messages: 4,
             },
             series: [
               {
@@ -141,6 +144,7 @@ describe("MeteringKpiStrip", () => {
                 cachedTokens: 0,
                 costMicros: 600_000,
                 executions: 2,
+                messages: 2,
               },
               {
                 day: "2026-07-11",
@@ -149,6 +153,7 @@ describe("MeteringKpiStrip", () => {
                 cachedTokens: 0,
                 costMicros: 650_000,
                 executions: 2,
+                messages: 2,
               },
             ],
           }),
