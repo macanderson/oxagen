@@ -57,3 +57,45 @@ variable "account_id" {
   EOT
   type        = string
 }
+
+variable "oxagen_ai_elsewhere" {
+  description = <<-EOT
+    Subdomain label -> IPv4 address, for `oxagen.ai` names served by a host
+    this migration does not touch.
+
+    All six are the same Google Cloud load balancer, which still answers:
+    `api` and `mcp` return application responses today, and the three
+    datastore consoles sit behind the same front end. They are listed here
+    rather than carried by `tools/import-dns.py` because that tool drops every
+    A record on the reasoning that an A record is the old website — true for
+    `oxagen.sh`, false here.
+
+    Listed one by one rather than covered by a wildcard: a wildcard in this
+    zone makes ACM's CAA check follow the alias to another domain and fail
+    certificate issuance outright. See `dns.tf` for the full account.
+
+    Remove an entry when that service moves or is switched off.
+  EOT
+  type        = map(string)
+  default = {
+    admin      = "34.144.223.45"
+    api        = "34.144.223.45"
+    clickhouse = "34.144.223.45"
+    mcp        = "34.144.223.45"
+    pgadmin    = "34.144.223.45"
+    redis      = "34.144.223.45"
+  }
+}
+
+variable "oxagen_ai_redirect_to" {
+  description = <<-EOT
+    Where `oxagen.ai` and `www.oxagen.ai` send every request.
+
+    The homepage specifically, not the matching path: the two domains never
+    shared a URL structure, so a path-preserving redirect would answer most
+    links with a 404 on the target rather than with the page someone was
+    looking for.
+  EOT
+  type        = string
+  default     = "https://oxagen.sh/"
+}

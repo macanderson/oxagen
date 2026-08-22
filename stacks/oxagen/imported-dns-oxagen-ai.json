@@ -1,0 +1,426 @@
+{
+  "2znvdnlt4hsl57uygdcuituv2zdxfpdu._domainkey.receipts|CNAME": {
+    "name": "2znvdnlt4hsl57uygdcuituv2zdxfpdu._domainkey.receipts",
+    "records": [
+      "2znvdnlt4hsl57uygdcuituv2zdxfpdu.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "4706876f-bb5c-41c9-9932-85967564171d.linear|CNAME": {
+    "name": "4706876f-bb5c-41c9-9932-85967564171d.linear",
+    "records": [
+      "4706876f-bb5c-41c9-9932-85967564171d.workspace.oxagen.ai.intake.linear.app."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "4fub6go4jb7cqnnq3oozh6o3ehyj4o3h._domainkey.receipts|CNAME": {
+    "name": "4fub6go4jb7cqnnq3oozh6o3ehyj4o3h._domainkey.receipts",
+    "records": [
+      "4fub6go4jb7cqnnq3oozh6o3ehyj4o3h.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "4nwwko36pe7c2celghfrxe6japbodjdh._domainkey|CNAME": {
+    "name": "4nwwko36pe7c2celghfrxe6japbodjdh._domainkey",
+    "records": [
+      "4nwwko36pe7c2celghfrxe6japbodjdh.dkim.oxagen.ai.intake.linear.app."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "53404493|CNAME": {
+    "name": "53404493",
+    "records": [
+      "sendgrid.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "6rpgmqnupzbortbmj6eagv3chmbzj3oe._domainkey|CNAME": {
+    "name": "6rpgmqnupzbortbmj6eagv3chmbzj3oe._domainkey",
+    "records": [
+      "6rpgmqnupzbortbmj6eagv3chmbzj3oe.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "7y4mfhzyi63ghop37yvelhueawlm4fdo._domainkey.receipts|CNAME": {
+    "name": "7y4mfhzyi63ghop37yvelhueawlm4fdo._domainkey.receipts",
+    "records": [
+      "7y4mfhzyi63ghop37yvelhueawlm4fdo.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "@|MX": {
+    "name": "",
+    "records": [
+      "20 mx2.improvmx.com.",
+      "10 mx1.improvmx.com."
+    ],
+    "ttl": 60,
+    "type": "MX"
+  },
+  "@|TXT": {
+    "name": "",
+    "records": [
+      "v=spf1 include:amazonses.com include:spf.improvmx.com ~all",
+      "anthropic-domain-verification-hwx888=3hEFmE2FmNrJik9KUzBJxsWzO",
+      "mistral-domain-verification=3719fec61f6e144bf8f2bd0110cdf841beb15c97",
+      "google-site-verification=ika72fCfK3kyPA9pqTidSNkkEAm8SXI6hGzNTqzBFlg",
+      "plaid-inc-domain-verification-b4d62b=3zKEy536IROdKNguuc8vblxUN",
+      "stripe-verification=887318a727adabd840423fbf51af59d5a1b1a3663ec10f2a765f51af8abd8e14",
+      "google-site-verification=EF4W6vXBMxFT0-FR8qfbrIlzMHoL7MWe9N9TuGn44No"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_acme-challenge.admin|CNAME": {
+    "name": "_acme-challenge.admin",
+    "records": [
+      "eff44a12-9b58-4052-9316-ab20b99f7ef6.19.authorize.certificatemanager.goog."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "_acme-challenge.api|CNAME": {
+    "name": "_acme-challenge.api",
+    "records": [
+      "44cb909b-95db-44c9-9ea1-d1ed0c9f00b6.2.authorize.certificatemanager.goog."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "_acme-challenge.mcp|CNAME": {
+    "name": "_acme-challenge.mcp",
+    "records": [
+      "91988fd6-eae9-4378-89cc-a1ca2b99a963.0.authorize.certificatemanager.goog."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "_acme-challenge.pay|TXT": {
+    "name": "_acme-challenge.pay",
+    "records": [
+      "hBbnMgG00qdcrjK1e7o9lbfIVWs6UorOYmDyzf-DNA8"
+    ],
+    "ttl": 300,
+    "type": "TXT"
+  },
+  "_amazonses|TXT": {
+    "name": "_amazonses",
+    "records": [
+      "eiRALoOocx5oIfLAbji1+B7Qugd82mx5f7awp68eBOE="
+    ],
+    "ttl": 3600,
+    "type": "TXT"
+  },
+  "_discord|TXT": {
+    "name": "_discord",
+    "records": [
+      "dh=405978a868da52b80f59c6b93f9318126efa0cd0"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_dmarc.receipts|TXT": {
+    "name": "_dmarc.receipts",
+    "records": [
+      "v=DMARC1; p=none; rua=mailto:dmarc@oxagen.ai"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_dmarc|TXT": {
+    "name": "_dmarc",
+    "records": [
+      "v=DMARC1; p=none; rua=mailto:finance@oxagen.ai",
+      "v=DMARC1; p=none;"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_gh-oxagenai-o|TXT": {
+    "name": "_gh-oxagenai-o",
+    "records": [
+      "569fff5733"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_gh-oxageninc-o|TXT": {
+    "name": "_gh-oxageninc-o",
+    "records": [
+      "887c6cc905"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_github-pages-challenge-oxagenai|TXT": {
+    "name": "_github-pages-challenge-oxagenai",
+    "records": [
+      "4180629dea617552f588e2d5b1857f"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "_vercel|TXT": {
+    "name": "_vercel",
+    "records": [
+      "vc-domain-verify=docs.oxagen.ai,b201a8a082ab84e5fde3"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "a2gwualvoagsmies5sy46psi47q3orhp._domainkey|CNAME": {
+    "name": "a2gwualvoagsmies5sy46psi47q3orhp._domainkey",
+    "records": [
+      "a2gwualvoagsmies5sy46psi47q3orhp.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "atnhorvmue5jf4c73vvkpqjxlokhou6d._domainkey|CNAME": {
+    "name": "atnhorvmue5jf4c73vvkpqjxlokhou6d._domainkey",
+    "records": [
+      "atnhorvmue5jf4c73vvkpqjxlokhou6d.dkim.oxagen.ai.intake.linear.app."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "bi5um5343pfqf4env62znjizd2zkjrp6._domainkey|CNAME": {
+    "name": "bi5um5343pfqf4env62znjizd2zkjrp6._domainkey",
+    "records": [
+      "bi5um5343pfqf4env62znjizd2zkjrp6.dkim.amazonses.com."
+    ],
+    "ttl": 3600,
+    "type": "CNAME"
+  },
+  "borifet3nsyw2qqersnocdx722sb6gjh._domainkey|CNAME": {
+    "name": "borifet3nsyw2qqersnocdx722sb6gjh._domainkey",
+    "records": [
+      "borifet3nsyw2qqersnocdx722sb6gjh.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "bounce.receipts|CNAME": {
+    "name": "bounce.receipts",
+    "records": [
+      "custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "bounce|CNAME": {
+    "name": "bounce",
+    "records": [
+      "custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "em2154|CNAME": {
+    "name": "em2154",
+    "records": [
+      "u53404493.wl244.sendgrid.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "envelope.linear|CNAME": {
+    "name": "envelope.linear",
+    "records": [
+      "spf.oxagen.ai.intake.linear.app."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "feedback|MX": {
+    "name": "feedback",
+    "records": [
+      "10 feedback-smtp.us-east-1.amazonses.com."
+    ],
+    "ttl": 3600,
+    "type": "MX"
+  },
+  "feedback|TXT": {
+    "name": "feedback",
+    "records": [
+      "v=spf1 include:amazonses.com ~all"
+    ],
+    "ttl": 3600,
+    "type": "TXT"
+  },
+  "google._domainkey|TXT": {
+    "name": "google._domainkey",
+    "records": [
+      "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmG/GXMx94O35bqeh5X1XIXDKdUrmILVCYGyYBVq4rQKlbcV4437YRuDkhqANUn/9vOwUNZOVeDozyD5sxxSiiZpHBqLCCXyrsl1LubCIgaC1jEpAKAtZ8cEmfjPCgVeNU307fgAAanB6maLWSCpwZX4Hiwh9kp0zKmYQdIuTBBWC6Mi/pd6vXUViIm3fQrFBLCh\" \"/xhBCKKwJeiUOIPh/nFpHBocvGUovDssWLfh2E67djPFiQ+rKOpdwTVciGfUwwEQTINEdk+9D4tEyDIqqBR3bKYDK5FocUjlFUdWfKfwuLksRHr7nXWTKywJFScMu8HWmdwFYho77dwchySCetwIDAQAB"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "i56g6a4qrm2a|CNAME": {
+    "name": "i56g6a4qrm2a",
+    "records": [
+      "gv-prsecnswhzxkj7.dv.googlehosted.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "jubm5ha4j7jhl4gngrk3qbktgbdtdooe._domainkey|CNAME": {
+    "name": "jubm5ha4j7jhl4gngrk3qbktgbdtdooe._domainkey",
+    "records": [
+      "jubm5ha4j7jhl4gngrk3qbktgbdtdooe.dkim.amazonses.com."
+    ],
+    "ttl": 3600,
+    "type": "CNAME"
+  },
+  "links.notifications|CNAME": {
+    "name": "links.notifications",
+    "records": [
+      "links1.resend-dns.com."
+    ],
+    "ttl": 3600,
+    "type": "CNAME"
+  },
+  "nax4jniu2t2yf3nag5j7rer65fk2d2de._domainkey|CNAME": {
+    "name": "nax4jniu2t2yf3nag5j7rer65fk2d2de._domainkey",
+    "records": [
+      "nax4jniu2t2yf3nag5j7rer65fk2d2de.dkim.amazonses.com."
+    ],
+    "ttl": 3600,
+    "type": "CNAME"
+  },
+  "notifications|MX": {
+    "name": "notifications",
+    "records": [
+      "10 inbound-smtp.us-east-1.amazonaws.com."
+    ],
+    "ttl": 3600,
+    "type": "MX"
+  },
+  "o7oodutremumaowu64qdb7lydb332n45._domainkey|CNAME": {
+    "name": "o7oodutremumaowu64qdb7lydb332n45._domainkey",
+    "records": [
+      "o7oodutremumaowu64qdb7lydb332n45.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "pay|CNAME": {
+    "name": "pay",
+    "records": [
+      "hosted-checkout.stripecdn.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "q36btcvvsdmsheporgt7hqwad6uijcaw._domainkey|CNAME": {
+    "name": "q36btcvvsdmsheporgt7hqwad6uijcaw._domainkey",
+    "records": [
+      "q36btcvvsdmsheporgt7hqwad6uijcaw.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "receipts|TXT": {
+    "name": "receipts",
+    "records": [
+      "stripe-verification=1999a5b58a76e1c5a654541c2523652449f25941fb2fd72345af9e287f2ecf9e"
+    ],
+    "ttl": 60,
+    "type": "TXT"
+  },
+  "resend._domainkey.notifications|TXT": {
+    "name": "resend._domainkey.notifications",
+    "records": [
+      "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCbZNI0OX8DZdaprl0du4foKyCzmqJe8TsVNYyHrVYzoL6TOiPdB5HBiDoX/LJFiE3TdmOaFogKXc1LDolKhLd8FeLp0J5jj6cy+00OaM+l8QqZkn9xDzZfRS076nkyFYskB+pWflqIFElR6/E35tRprhbIcO+A+F6maa4xLvNNOQIDAQAB"
+    ],
+    "ttl": 3600,
+    "type": "TXT"
+  },
+  "s1._domainkey|CNAME": {
+    "name": "s1._domainkey",
+    "records": [
+      "s1.domainkey.u53404493.wl244.sendgrid.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "s2._domainkey|CNAME": {
+    "name": "s2._domainkey",
+    "records": [
+      "s2.domainkey.u53404493.wl244.sendgrid.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "send.notifications|MX": {
+    "name": "send.notifications",
+    "records": [
+      "10 feedback-smtp.us-east-1.amazonses.com."
+    ],
+    "ttl": 3600,
+    "type": "MX"
+  },
+  "send.notifications|TXT": {
+    "name": "send.notifications",
+    "records": [
+      "v=spf1 include:amazonses.com ~all"
+    ],
+    "ttl": 3600,
+    "type": "TXT"
+  },
+  "ucgfmlh3jss3oiekfvvpscxmp5p6iygh._domainkey.receipts|CNAME": {
+    "name": "ucgfmlh3jss3oiekfvvpscxmp5p6iygh._domainkey.receipts",
+    "records": [
+      "ucgfmlh3jss3oiekfvvpscxmp5p6iygh.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "ump5plcygwegzmmk22hg5dlf5vdewnuv._domainkey.receipts|CNAME": {
+    "name": "ump5plcygwegzmmk22hg5dlf5vdewnuv._domainkey.receipts",
+    "records": [
+      "ump5plcygwegzmmk22hg5dlf5vdewnuv.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "uoyzrhbdzr5c2mooushnrsltkxrbxqmk._domainkey|CNAME": {
+    "name": "uoyzrhbdzr5c2mooushnrsltkxrbxqmk._domainkey",
+    "records": [
+      "uoyzrhbdzr5c2mooushnrsltkxrbxqmk.dkim.oxagen.ai.intake.linear.app."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "url6326|CNAME": {
+    "name": "url6326",
+    "records": [
+      "sendgrid.net."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "va4p7vjqmdyew6kgq3sjatvi6ff5wb5q._domainkey.receipts|CNAME": {
+    "name": "va4p7vjqmdyew6kgq3sjatvi6ff5wb5q._domainkey.receipts",
+    "records": [
+      "va4p7vjqmdyew6kgq3sjatvi6ff5wb5q.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  },
+  "xzokicd4douyw7mmxoby6witytmtmje7._domainkey|CNAME": {
+    "name": "xzokicd4douyw7mmxoby6witytmtmje7._domainkey",
+    "records": [
+      "xzokicd4douyw7mmxoby6witytmtmje7.dkim.custom-email-domain.stripe.com."
+    ],
+    "ttl": 60,
+    "type": "CNAME"
+  }
+}
