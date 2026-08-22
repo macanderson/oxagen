@@ -17,8 +17,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { readSidecarConfig, resolveStellaBinary } from "./stella-binary.js";
-import type { SidecarConfig } from "./stella-binary.js";
+import { readSidecarConfig, resolveStellaBinary } from "./stella-binary";
+import type { SidecarConfig } from "./stella-binary";
 
 const ENV_VAR = "STELLA_SERVE_BIN_UNDER_TEST";
 const LEGACY_ENV_VAR = "STELLA_BIN_UNDER_TEST";

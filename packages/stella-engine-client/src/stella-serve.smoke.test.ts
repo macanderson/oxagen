@@ -32,14 +32,14 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { StellaSidecarClient } from "./sidecar-transport.js";
-import { readSidecarConfig, resolveStellaBinary } from "./stella-binary.js";
+import { StellaSidecarClient } from "./sidecar-transport";
+import { readSidecarConfig, resolveStellaBinary } from "./stella-binary";
 import type {
   CompletionRequest,
   CompletionResult,
   ToolOutput,
   TurnRequest,
-} from "./wire-types.js";
+} from "./wire-types";
 
 /** 32+ chars so the server does not warn about a guessable token. */
 const TOKEN = "oxagen-smoke-test-bearer-token-0123456789";
@@ -232,11 +232,15 @@ if (skipReason) {
 
       // --- the AgentEvent stream reached the host ---
       const eventTypes = new Set(run.events.map((e) => e.type));
+      // `turn_complete`, not `complete`: the engine ends a turn with
+      // `turn_complete` and the whole run with `run_complete`; a bare
+      // `complete` is not in the vocabulary. This assertion caught that drift
+      // against a live engine, which is exactly the job it exists to do.
       for (const expected of [
         "tool_start",
         "tool_result",
         "text",
-        "complete",
+        "turn_complete",
       ]) {
         expect(
           eventTypes.has(expected),

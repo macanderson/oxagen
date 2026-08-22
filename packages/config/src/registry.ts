@@ -850,6 +850,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OXAGEN_STELLA_SERVE_URL: {
+    group: "Inngest",
+    description:
+      "Base URL of the stella-serve instance that runs this worker slot's agent turns. The " +
+      "engine holds no ambient authority: it asks for every model and tool call over " +
+      "reverse-RPC and this process answers, so each one re-enters the capability kernel's " +
+      "IAM, entitlement and billing gates. executeTurn throws when it is unset rather than " +
+      "falling back to another engine — a silent fallback would run turns outside those " +
+      "gates. ONE sidecar per worker SLOT, not per process: stella's provider credentials " +
+      "are process-global, so two tenants must never share one.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+    placeholder: "http://127.0.0.1:8420",
+  },
+  OXAGEN_STELLA_SERVE_TOKEN: {
+    group: "Inngest",
+    description:
+      "Bearer token for OXAGEN_STELLA_SERVE_URL. It is the sidecar's ONLY authentication " +
+      "beyond /healthz, so generate it with `openssl rand -base64 32` — stella-serve warns on " +
+      "anything shorter than 32 characters.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
   OXAGEN_WORKER_CONCURRENCY: {
     group: "Inngest",
     description:

@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "vitest";
 
-import { SidecarHttpError, StellaSidecarClient } from "./sidecar-transport.js";
+import { SidecarHttpError, StellaSidecarClient } from "./sidecar-transport";
 
 type FetchArgs = { url: string; method: string };
 

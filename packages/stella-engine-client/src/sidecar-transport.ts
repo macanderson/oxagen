@@ -49,7 +49,7 @@ import type {
   TurnCreated,
   TurnOutcome,
   TurnRequest,
-} from "./wire-types.js";
+} from "./wire-types";
 
 export interface SidecarClientOptions {
   /** Base URL of a running `stella-serve` process, e.g. http://127.0.0.1:8137. */

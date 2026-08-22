@@ -1,5 +1,5 @@
-export * from "./wire-types.js";
-export { SidecarHttpError, StellaSidecarClient } from "./sidecar-transport.js";
+export * from "./wire-types";
+export { SidecarHttpError, StellaSidecarClient } from "./sidecar-transport";
 export type {
   DriveTurnHandlers,
   ProviderCallContext,
@@ -9,6 +9,6 @@ export type {
   ToolCallContext,
   ToolHandler,
   TurnRunResult,
-} from "./sidecar-transport.js";
-export { resolveStellaBinary, readSidecarConfig } from "./stella-binary.js";
-export type { SidecarConfig, StellaBinaryResolution } from "./stella-binary.js";
+} from "./sidecar-transport";
+export { resolveStellaBinary, readSidecarConfig } from "./stella-binary";
+export type { SidecarConfig, StellaBinaryResolution } from "./stella-binary";

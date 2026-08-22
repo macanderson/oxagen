@@ -1,6 +1,6 @@
 {
-  "$comment": "Pin for oxagen's Stella sidecar transport (oxagen #1072). The smoke test in src/stella-serve.smoke.test.ts boots exactly this stella version's `stella-serve` binary and drives a full multi-step turn through it. Bump stellaVersion deliberately, in its own commit, when upgrading — stella releases daily and this file is the only place oxagen records which release it has verified the wire contract against. NOTE (oxagen #1132): a version MISMATCH no longer skips the test. The smoke test's assertions are themselves the drift detector, so running against an unpinned build is how drift gets caught — and skipping on mismatch is precisely what made stella-sidecar-nightly.yml, which installs `latest` by design, permanently skip-green. Only a missing binary skips.",
-  "stellaVersion": "0.6.2",
+  "$comment": "Pin for oxagen's Stella sidecar transport (oxagen #1072). The smoke test in src/stella-serve.smoke.test.ts boots exactly this stella version's `stella-serve` binary and drives a full multi-step turn through it. Bump stellaVersion deliberately, in its own commit, when upgrading \u2014 stella releases daily and this file is the only place oxagen records which release it has verified the wire contract against. NOTE (oxagen #1132): a version MISMATCH no longer skips the test. The smoke test's assertions are themselves the drift detector, so running against an unpinned build is how drift gets caught \u2014 and skipping on mismatch is precisely what made stella-sidecar-nightly.yml, which installs `latest` by design, permanently skip-green. Only a missing binary skips.",
+  "stellaVersion": "0.9.119",
   "binaryEnvVar": "STELLA_SERVE_BIN",
   "legacyBinaryEnvVar": "STELLA_BIN",
   "binaryName": "stella-serve",
