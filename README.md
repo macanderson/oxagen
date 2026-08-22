@@ -35,9 +35,10 @@ modules/
   brand-group/   Resource Group + brand identity
   static-site/   S3 + CloudFront for a site that is entirely files
   nextjs-site/   S3 + Lambda + CloudFront for a site that runs code
+  redirect-site/ CloudFront Function that sends a retired domain elsewhere
   data-node/     Postgres + Neo4j + ClickHouse on one instance
 stacks/
-  oxagen/        oxagen.sh zone, marketing site, docs site
+  oxagen/        oxagen.sh zone, marketing site, docs site, oxagen.ai redirect
   oxagen-data/   the data plane (separate state; see below)
   stella/        stella.oxagen.sh
   cgp/           contextgraphprotocol.org
@@ -94,6 +95,35 @@ tofu -chdir=stacks/oxagen apply -target='aws_route53_record.node_service'
 The three records in `stacks/oxagen/node-services.tf` — `app`, `api` and `mcp`
 — are unaffected: they are plain `A` records this repository owns outright, and
 nothing else proposes changes to them.
+
+## `oxagen.ai` is a redirect, and it carries live mail
+
+The domain is retired as a website. Apex and `www` answer every route with a
+301 to the `oxagen.sh` homepage — path discarded, because the two domains never
+shared a URL structure and a path-preserving redirect would answer most old
+links with a 404 on the target.
+
+**The website is the least of what the zone does.** Before changing anything in
+`stacks/oxagen/dns-oxagen-ai.tf`, know what else is in there:
+
+- **Mail.** Inbound routes through improvMX. Outbound is signed by Amazon SES,
+  SendGrid, Stripe, Resend and Linear, each with its own DKIM keys, under SPF
+  and DMARC records at three different names.
+- **Live services.** `api`, `mcp`, `admin`, `redis`, `clickhouse` and `pgadmin`
+  are served from a Google Cloud load balancer this migration never touched.
+  `api` and `mcp` answer requests today.
+- **Ownership proofs.** GitHub, Google, Discord, Anthropic, Mistral and Stripe
+  each verify control of the domain through a TXT record.
+
+`tools/import-dns.py` drops every `A` record, on the reasoning that an `A`
+record is the old website. That was true for `oxagen.sh` and is false here, so
+those six names are declared explicitly in the `oxagen_ai_elsewhere` variable.
+Deleting them does not break the redirect — it takes an API down.
+
+The failure mode throughout is quiet. A zone missing an `MX` record does not
+return an error, it bounces mail; a missing DKIM key bounces nothing and just
+starts landing in spam folders days later, with nothing pointing back at the
+change that caused it.
 
 ## The certificate ordering trap
 
