@@ -203,7 +203,18 @@ resource "aws_lambda_function" "server" {
 resource "aws_lambda_function_url" "server" {
   function_name      = aws_lambda_function.server.function_name
   authorization_type = "AWS_IAM"
-  invoke_mode        = "RESPONSE_STREAM"
+
+  # Buffered, not RESPONSE_STREAM. Streaming is the better mode for a server
+  # that renders progressively, but paired with an Origin Access Control it
+  # returned 403 `{"Message":null}` on every request — the Function URL
+  # rejecting CloudFront's SigV4 signature — while the same distribution's S3
+  # origin served 200 through its own OAC. Buffered responses sign and verify
+  # cleanly.
+  #
+  # The cost is time-to-first-byte on a large page, not correctness: the whole
+  # response is assembled before it leaves Lambda. Worth revisiting if AWS
+  # documents the streaming pairing as supported, but not worth an outage.
+  invoke_mode = "BUFFERED"
 }
 
 resource "aws_lambda_permission" "cloudfront" {

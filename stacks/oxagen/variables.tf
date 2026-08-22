@@ -4,6 +4,26 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "legacy_subdomains" {
+  description = <<-EOT
+    Subdomain label -> CNAME target, for names still served by the previous
+    host. Listed one by one rather than covered by a wildcard: a wildcard CNAME
+    in this zone makes ACM's CAA check follow the alias to another domain and
+    fail certificate issuance outright. See dns.tf for the full account.
+
+    Only names with a real alias on the old host belong here. `app` and `docs`
+    never had one — they reached the old host through the wildcard and returned
+    its error page, so reproducing them would preserve a 404, not a service.
+
+    Remove an entry when that subdomain moves to AWS.
+  EOT
+  type        = map(string)
+  default = {
+    arena = "cname.vercel-dns-016.com"
+    cgp   = "cname.vercel-dns-016.com"
+  }
+}
+
 variable "docs_bundle_path" {
   description = "Path to the docs site's zipped OpenNext server function, from tools/package-nextjs.sh."
   type        = string

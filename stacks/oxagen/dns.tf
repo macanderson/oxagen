@@ -29,6 +29,36 @@ resource "aws_route53_record" "imported" {
 }
 
 # ---------------------------------------------------------------------------
+# Subdomains still hosted elsewhere
+# ---------------------------------------------------------------------------
+
+# Subdomains still served by the previous host get an explicit record each.
+#
+# A wildcard was tried here first and must not come back. `*.oxagen.sh` makes
+# every name that has no record of its own an alias to another domain, and
+# RFC 8659 says a CAA check on an aliased name follows the CNAME — so ACM
+# looked up the CAA policy of the *target* domain, found no `amazon.com`, and
+# hard-failed with CAA_ERROR. That is not a slow validation that eventually
+# succeeds: the certificate goes to FAILED and has to be reissued. It cost
+# three reissues of the Stella certificate to find, because the failure names
+# CAA and not the wildcard that caused it.
+#
+# The rule that follows: while any certificate in this zone is issued or
+# renewed by ACM, this zone must contain no wildcard CNAME. Renewal re-runs
+# validation, so adding one later breaks certificates that are working today.
+#
+# Each entry is temporary. It disappears when that subdomain moves to AWS.
+resource "aws_route53_record" "legacy_host" {
+  for_each = var.legacy_subdomains
+
+  zone_id = aws_route53_zone.oxagen_sh.zone_id
+  name    = "${each.key}.oxagen.sh"
+  type    = "CNAME"
+  ttl     = 300
+  records = [each.value]
+}
+
+# ---------------------------------------------------------------------------
 # Certificate authority authorisation
 # ---------------------------------------------------------------------------
 
