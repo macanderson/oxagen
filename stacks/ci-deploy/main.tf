@@ -99,10 +99,21 @@ data "aws_iam_policy_document" "assume" {
     # anyone who can open one, on a fork, running their own workflow file.
     # These repositories are public. An exact subject accepts only the
     # environment, which a fork's pull request cannot enter.
+    #
+    # Two spellings, because every one of these repositories already carried a
+    # `Production` environment created by Vercel's GitHub integration, and
+    # GitHub resolves an environment name case-insensitively while the
+    # workflows here write it lowercase. Which casing reaches the `sub` claim
+    # is not something to find out from a failed deploy, and listing both is
+    # still exact matching — two literal strings, no wildcard, no widening of
+    # what is accepted beyond the same environment under its other spelling.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${each.value.repository}:environment:production"]
+      values = [
+        "repo:${each.value.repository}:environment:production",
+        "repo:${each.value.repository}:environment:Production",
+      ]
     }
   }
 }

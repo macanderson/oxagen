@@ -49,10 +49,21 @@ strings that reach a command line.
 
 Secrets in the artifact would mean rebuilding the application to rotate one,
 and would put them in a tarball produced by a public CI job. Read at start
-instead, a rotation is a parameter write plus a restart. The values are written
-to a root-owned `0600` file and passed with `--env-file`, never with `-e`:
-`-e` would put every secret into the instance's process table, where
-`docker inspect` and `ps` show them to anything running on the box.
+instead, a rotation is a parameter write plus a restart.
+
+Each value is exported into the deploy script's environment and passed as
+`-e KEY` with no `=`, which tells Docker to copy it from its client. The two
+alternatives are both worse: `-e KEY=value` puts every secret into the argv of
+`docker run`, readable from `/proc` while the command runs; and `--env-file`
+keeps it out of argv but cannot represent a newline at all — its format is
+literal `KEY=VALUE` lines with no quoting or escaping, so
+`/oxagen/production/GITHUB_APP_PRIVATE_KEY`, which is a PEM, would have had its
+first line carried and the rest silently dropped.
+
+None of this hides the values from `docker inspect`, which reports a
+container's environment however it was set. That is inherent to configuring a
+process through its environment; the control that matters there is that
+reaching this instance requires SSM and there is no SSH key.
 
 ## Architecture
 

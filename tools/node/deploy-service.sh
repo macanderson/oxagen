@@ -67,10 +67,21 @@ release=$RELEASES/$release_id
 mkdir -p "$release"
 
 tarball=$(mktemp "/tmp/$SERVICE-XXXXXX.tgz")
+# Declared before the trap so that the handler can name it unconditionally —
+# it is set later, in the configuration block, and a trap that referenced an
+# unset variable would abort under `set -u` at the worst possible moment.
+config_dump=""
+
 # The release directory is removed on any failure before the swap. After the
 # swap it must survive, because it is what `current` points at — so the trap is
 # cleared at that moment rather than being conditional here.
-cleanup_incoming() { rm -f "$tarball"; rm -rf "$release"; }
+#
+# One handler covers every temporary this script makes. An earlier revision
+# installed a second `trap ... EXIT` around the configuration read, which
+# silently replaced this one: a failure after that point left the half-unpacked
+# release directory on disk, where the next deploy's prune would treat it as a
+# rollback candidate.
+cleanup_incoming() { rm -f "$tarball" ${config_dump:+"$config_dump"}; rm -rf "$release"; }
 trap cleanup_incoming EXIT
 
 log "fetching s3://$DEPLOY_BUCKET/_deploy/$SERVICE-standalone.tgz"
@@ -115,16 +126,39 @@ done < <(jq -re 'if has("env") then (.env | to_entries[] | "\(.key)=\(.value)") 
 # Configuration from Parameter Store.
 #
 # Read here rather than baked into the artifact so that rotating a secret is a
-# parameter write plus a restart, not a rebuild of the application. The values
-# are written to a root-owned 0600 file and handed to Docker with --env-file:
-# passing them as -e would put every secret in this instance's process table,
-# where `docker inspect` and `ps` would show them to anything on the box.
+# parameter write plus a restart, not a rebuild of the application — and so
+# that secrets never sit in a tarball produced by a public CI job.
+#
+# Each value is exported into this script's own environment and passed as
+# `-e KEY` with no `=`, which tells Docker to copy the value from its client's
+# environment. The two obvious alternatives are both worse:
+#
+#   `-e KEY=value` puts every secret into the argv of `docker run`, where any
+#   process on the box can read it out of /proc while the command runs.
+#
+#   `--env-file` keeps it out of argv but cannot represent a value containing a
+#   newline at all — the format is literal `KEY=VALUE` lines with no quoting or
+#   escaping. `/oxagen/production/GITHUB_APP_PRIVATE_KEY` is a PEM. A file
+#   would have carried its first line and silently dropped the key.
+#
+# What this does *not* buy is concealment from `docker inspect`, which reports
+# a container's environment however it was set. That is inherent to configuring
+# a process through its environment and is not something a deploy script can
+# fix; the control that matters there is that reaching this instance requires
+# SSM and there is no SSH key.
 # ---------------------------------------------------------------------------
 
-env_file=$SERVICE_DIR/.env
 if [[ -n $config_prefix ]]; then
   log "reading configuration from $config_prefix"
-  umask 077
+
+  # Materialised to a file rather than read straight from a process
+  # substitution. A `while ... done < <(cmd)` reports the exit status of the
+  # loop, not of `cmd`, so a failed `aws ssm` call there would read as an empty
+  # parameter set — a service started with no configuration at all, reported
+  # as a successful deploy.
+  config_dump=$(mktemp "/tmp/$SERVICE-config-XXXXXX")
+  chmod 600 "$config_dump"
+
   aws ssm get-parameters-by-path \
     --region "$REGION" --path "$config_prefix" --recursive --with-decryption \
     --query 'Parameters[].[Name,Value]' --output json \
@@ -133,18 +167,29 @@ import json, sys
 params = json.load(sys.stdin)
 if not params:
     sys.exit("no parameters found under the configured prefix")
+# NUL-separated so a value containing newlines, spaces or quotes survives the
+# trip to the shell; the read loop on the other side is the matching half.
+out = sys.stdout.buffer
 for name, value in params:
-    key = name.rsplit("/", 1)[-1]
-    # Docker --env-file takes KEY=VALUE lines and does not process quotes or
-    # escapes, so a value containing a newline cannot be represented at all.
-    # Failing here beats silently truncating a connection string.
-    if "\n" in value:
-        sys.exit(f"parameter {name} contains a newline, which --env-file cannot carry")
-    print(f"{key}={value}")
-  ' > "$env_file.incoming" || fail "could not read configuration under $config_prefix"
-  mv "$env_file.incoming" "$env_file"
-  chmod 600 "$env_file"
-  env_args+=(--env-file "$env_file")
+    out.write(name.rsplit("/", 1)[-1].encode() + b"\0")
+    out.write(value.encode() + b"\0")
+' > "$config_dump" || fail "could not read configuration under $config_prefix"
+
+  loaded=0
+  while IFS= read -r -d '' key && IFS= read -r -d '' value; do
+    [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] \
+      || fail "parameter '$key' is not a usable environment variable name"
+    export "${key}=${value}"
+    env_args+=(-e "$key")
+    loaded=$((loaded + 1))
+  done < "$config_dump"
+
+  # Removed as soon as it is consumed rather than left to the EXIT trap: it
+  # holds every decrypted secret the service starts with, and the window it
+  # exists for should be the loop above and nothing more.
+  rm -f "$config_dump"
+  config_dump=""
+  log "loaded $loaded parameters"
 fi
 
 # ---------------------------------------------------------------------------

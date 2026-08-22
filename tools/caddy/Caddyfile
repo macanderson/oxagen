@@ -1,0 +1,95 @@
+# The node's front door: TLS termination and hostname routing for everything
+# that answers from this instance.
+#
+# This file lived only on the box until now. It is the single point every
+# public request passes through, and it was one `rm` away from being
+# unreproducible — so it is version-controlled here and installed by
+# `tools/install-node-scripts.sh`, which validates it before reloading and
+# leaves the running config in place if it does not parse.
+#
+# Certificates come from Let's Encrypt over HTTP-01, which is why the security
+# group opens port 80 as well as 443 and why a hostname must resolve to this
+# instance *before* it is added here — Caddy will otherwise retry a failing
+# challenge for that name on every reload. The zone's CAA authorises
+# `letsencrypt.org`; adding a host served from a zone that does not is a silent
+# non-issuance, not an error.
+#
+# Every upstream is on 127.0.0.1 because Caddy runs with `--network host`, as
+# do the services. That is not a style choice: three of them reach Postgres,
+# Neo4j and ClickHouse over loopback, and those are bound to 127.0.0.1 on the
+# instance and are not reachable from Docker's bridge network at all.
+#
+# The port each service listens on is declared by the artifact that repository
+# publishes (`oxagen-run.json`) and read by `deploy-service.sh`. The two must
+# agree; they are written down in `tools/node/README.md` and here, and nothing
+# enforces it — a mismatch shows up as a 502 from this file.
+{
+	email mac@macanderson.com
+}
+
+# --- Websites -------------------------------------------------------------
+# Static-ish Next.js servers. Nothing here talks to a database.
+
+stella.oxagen.sh {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:3001
+}
+
+docs.oxagen.sh {
+	encode gzip zstd
+	reverse_proxy 127.0.0.1:3002
+}
+
+# --- Applications ---------------------------------------------------------
+# These hold sessions and reach the databases over loopback.
+
+app.oxagen.sh {
+	encode gzip zstd
+
+	# Server Actions validate the request Origin against the forwarded Host, so
+	# the proxy has to tell the truth about what the browser asked for. Caddy
+	# sets X-Forwarded-* by default; Host is passed through unchanged, which is
+	# what Next needs to accept an action from this origin.
+	reverse_proxy 127.0.0.1:3000 {
+		# A cold Next 16 start on two shared vCPUs can take longer than the
+		# default read timeout allows, and the visible symptom of losing that
+		# race is a 502 on the first request after every deploy.
+		transport http {
+			response_header_timeout 60s
+		}
+	}
+}
+
+api.oxagen.sh {
+	encode gzip zstd
+
+	reverse_proxy 127.0.0.1:4000 {
+		transport http {
+			response_header_timeout 60s
+		}
+	}
+}
+
+mcp.oxagen.sh {
+	# Deliberately NOT encoded. MCP's streamable HTTP transport is
+	# `text/event-stream`, and putting a compressor in front of an event stream
+	# is how events arrive in batches when the compression buffer fills instead
+	# of when they are produced. The failure looks like an agent that hangs and
+	# then receives everything at once.
+	reverse_proxy 127.0.0.1:4100 {
+		# Flush every write straight through rather than waiting for a buffer.
+		# Caddy already does this when it recognises the content type; saying
+		# it outright means a response that is streamed under some other type
+		# is not silently held.
+		flush_interval -1
+
+		transport http {
+			# A long-lived stream must not be cut off for being quiet. An MCP
+			# session can idle between tool calls for longer than any default
+			# here would allow.
+			response_header_timeout 60s
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+}

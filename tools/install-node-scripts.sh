@@ -27,6 +27,10 @@ echo "==> uploading tools/node -> s3://$BUCKET/_bin/"
 aws s3 sync "$HERE/node" "s3://$BUCKET/_bin/" \
   --region "$REGION" --exclude '*.md' --delete --only-show-errors
 
+echo "==> uploading tools/caddy -> s3://$BUCKET/_caddy/"
+aws s3 sync "$HERE/caddy" "s3://$BUCKET/_caddy/" \
+  --region "$REGION" --delete --only-show-errors
+
 read -r -d '' REMOTE <<'REMOTE_EOF' || true
 set -euxo pipefail
 mkdir -p /opt/oxagen/bin /opt/oxagen/services
@@ -38,6 +42,25 @@ for tool in jq python3 curl docker aws; do
 done
 bash -n /opt/oxagen/bin/deploy-service.sh
 ls -l /opt/oxagen/bin
+
+# Caddy is the single point every public request passes through, so the new
+# config is validated before it is installed and the running one is left alone
+# if it does not parse. `caddy reload` would refuse a bad config too, but by
+# then the file on disk is already wrong and the next container restart picks
+# it up — which turns a typo into an outage that appears hours later.
+aws s3 cp s3://oxagen-deploy-578673726240/_caddy/Caddyfile /tmp/Caddyfile.incoming --region us-east-1
+docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
+  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+if cmp -s /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile; then
+  echo "caddy config unchanged"
+else
+  cp /opt/oxagen/caddy/Caddyfile /opt/oxagen/caddy/Caddyfile.prev || true
+  cp /tmp/Caddyfile.incoming /opt/oxagen/caddy/Caddyfile
+  docker exec oxagen-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+  echo "caddy reloaded"
+fi
+rm -f /tmp/Caddyfile.incoming
 REMOTE_EOF
 
 # The script goes to SSM as a JSON file, not as an inline shell-interpolated
