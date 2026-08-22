@@ -54,23 +54,73 @@ locals {
   # it nothing on its own: it gets a role with an empty permission set until a
   # policy in `roles.tf` names it, which keeps "who may deploy" and "what they
   # may touch" as two separate reviewable decisions.
+  #
+  # `owner_id` and `repo_id` are the numeric database ids, and they are not
+  # optional decoration — see the subject note in the trust policy below.
+  # Read them with:
+  #
+  #   gh api repos/<owner>/<name> --jq '"\(.owner.id) \(.id)"'
   deployers = {
     stella = {
       repository  = "macanderson/stella"
+      owner_id    = 542881
+      repo_id     = 1297837446
       description = "Publishes stella.oxagen.sh from website/."
     }
     cgp-website = {
       repository  = "macanderson/cgp-website"
+      owner_id    = 542881
+      repo_id     = 1310376825
       description = "Publishes contextgraphprotocol.org."
     }
     context-graph-protocol = {
       repository  = "macanderson/context-graph-protocol"
+      owner_id    = 542881
+      repo_id     = 1304589599
       description = "Publishes the CGP schema and specification artifacts."
     }
     oxagen-platform = {
       repository  = "oxageninc/oxagen-platform"
+      owner_id    = 294371946
+      repo_id     = 1252628274
       description = "Publishes oxagen.sh and the four services on the node."
     }
+  }
+
+  # The environment every deploy job declares. One place, because it appears in
+  # four trust policies and the workflows have to spell it identically.
+  deploy_environment = "production"
+}
+
+locals {
+  # The two subject spellings GitHub may mint, per repository.
+  #
+  # The documented form is `repo:<owner>/<name>:environment:<env>`. This account
+  # also sees the **immutable-id** form, in which the owner and repository each
+  # carry their numeric database id:
+  #
+  #   repo:macanderson@542881/stella@1297837446:environment:production
+  #
+  # That is not a guess. The first real deploy failed with
+  # `Not authorized to perform sts:AssumeRoleWithWebIdentity`, and CloudTrail's
+  # `userIdentity.principalId` for the denied call carried exactly that string.
+  # The point of the format is that renaming a repository cannot silently hand
+  # its trust to whoever claims the old name — the ids do not move.
+  #
+  # Both are trusted because the setting is configurable per organisation and
+  # these four repositories span two owners; a role that trusted only one form
+  # would break the day the setting changed, with an error that says nothing
+  # about why. Listing both is still exact matching — literal strings, no
+  # wildcard.
+  #
+  # The environment name is taken verbatim from the workflow, lowercase, which
+  # the same CloudTrail record settles: the repositories carry a `Production`
+  # environment left over from Vercel, and the claim still said `production`.
+  deploy_subjects = {
+    for key, d in local.deployers : key => [
+      "repo:${d.repository}:environment:${local.deploy_environment}",
+      "repo:${split("/", d.repository)[0]}@${d.owner_id}/${split("/", d.repository)[1]}@${d.repo_id}:environment:${local.deploy_environment}",
+    ]
   }
 }
 
@@ -100,20 +150,11 @@ data "aws_iam_policy_document" "assume" {
     # These repositories are public. An exact subject accepts only the
     # environment, which a fork's pull request cannot enter.
     #
-    # Two spellings, because every one of these repositories already carried a
-    # `Production` environment created by Vercel's GitHub integration, and
-    # GitHub resolves an environment name case-insensitively while the
-    # workflows here write it lowercase. Which casing reaches the `sub` claim
-    # is not something to find out from a failed deploy, and listing both is
-    # still exact matching — two literal strings, no wildcard, no widening of
-    # what is accepted beyond the same environment under its other spelling.
+    # Both spellings GitHub may mint; see `local.deploy_subjects`.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${each.value.repository}:environment:production",
-        "repo:${each.value.repository}:environment:Production",
-      ]
+      values   = local.deploy_subjects[each.key]
     }
   }
 }
