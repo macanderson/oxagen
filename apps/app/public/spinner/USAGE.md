@@ -1,37 +1,59 @@
-# Oxagen loading spinner (hex assembly)
+# Oxagen loading spinner (cursor type)
 
-The six hexagons of the mark assemble one by one into the honeycomb, hold the
-complete mark, then dissolve and rebuild. A 2.8s loop. Thematically tied to the
-hexagon logo the way a self-drawing brain would tie to a brain mark.
+The mark types itself: a terminal cursor blinks in an empty slot, the "o" is
+typed, the cursor advances to its place beside it and blinks the way a terminal
+prompt does. This is the same mechanic as the brand's own spinner in
+`docs/brand/spinner/` — that one types the whole `oxagen.sh` wordmark; this is
+the single-glyph version of it, sized for a square slot.
 
 ## Files
-- `oxagen-spinner-assemble.svg` — light-ink, self-contained SMIL. Works as
-  `<img src>`, CSS `background-image`, or inline.
-- `oxagen-spinner-assemble-dark.svg` — light ink for dark grounds.
-- `oxagen-spinner-assemble-light/dark.gif` — raster fallback (128px) for
-  surfaces that strip SVG animation.
+- `oxagen-spinner-assemble.svg` — the brand's adaptive spinner, self-contained
+  SMIL. Flips with `prefers-color-scheme`. Works as `<img src>`, CSS
+  `background-image`, or inline.
+- `oxagen-spinner-assemble-light/dark.gif` — raster fallback (128px, 16 frames,
+  a 1.6s loop) for surfaces that strip SVG animation. `PwaSplash` uses these.
 
-The ember gradient on the two filled hexagons is fixed — never recolor it.
+The two GIFs are rendered on the **solid splash background** they sit on
+(`#0B0B0C` dark, `#FAFAFA` light) rather than on transparency — the splash
+background is a known colour, and a matte avoids the fringing that 1-bit GIF
+alpha produces around the round counter of the "o".
+
+Colours are the brand's: ink `#F5F6F7` / `#0B0B0C`, cursor `#FF4B2A` / `#FF3D1F`.
+The cursor is **not** the ember accent, and is not recoloured to match the UI —
+see `packages/ui/THEME.md`.
+
+## Regenerating
+
+The GIFs are generated, not hand-drawn. Frames are emitted as SVG, rasterised
+with `rsvg-convert`, and assembled with `ffmpeg` (`palettegen`/`paletteuse`, 64
+colours). The frame table lives in the generator: four frames of a blinking
+cursor in the empty slot, then the "o" plus the advanced cursor blinking two
+frames on, two off.
+
+Keep the mark's own path data and `viewBox` — copy them from
+`docs/brand/logos/svg/oxagen-glyph-adaptive.svg` so the spinner and the logomark
+cannot drift apart.
 
 ## Inline
 ```html
 <span role="status" aria-label="Loading" style="display:inline-block;width:48px;height:48px">
-  <!-- paste oxagen-spinner-assemble.svg (or -dark for dark UI) -->
+  <!-- paste oxagen-spinner-assemble.svg -->
 </span>
 ```
 
 ## React (svgr)
 ```tsx
-import Hex from "@/assets/oxagen-spinner-assemble.svg?react";
+import Mark from "@/assets/oxagen-spinner-assemble.svg?react";
 export const OxLoader = ({ size = 48 }: { size?: number }) => (
   <span role="status" aria-label="Loading" style={{ display:"inline-block", width:size, height:size }}>
-    <Hex width="100%" height="100%" />
+    <Mark width="100%" height="100%" />
   </span>
 );
 ```
 
 ## Tuning
-- Speed: change every `dur="2.8s"`.
-- Stagger: the per-hex `begin` offsets (0, .13, .26, .39, .52, .65s) set the
-  build order — top row first, down to the bottom.
-- Below ~32px the six cells crowd; for tiny spinners prefer a single-hex pulse.
+- Speed: the GIF is 10fps; change the generator's `-framerate`. For the SVG,
+  change every `dur="3.6s"`.
+- Blink rhythm: the frame table's trailing `[1, 74, …]` rows — two on, two off.
+- The mark is **wider than it is tall**, so give it a square slot only when the
+  slot is at least ~32px; below that prefer the cursor block alone.

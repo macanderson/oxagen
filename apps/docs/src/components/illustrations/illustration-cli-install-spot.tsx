@@ -27,18 +27,18 @@ export function IllustrationCliInstallSpot({
           x2="0"
           y2="1"
         >
-          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
         <radialGradient id="ill-cli-install-spot-glow">
           <stop
             offset="0"
-            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopColor="var(--_ember-b, #FFB000)"
             stopOpacity={0.75}
           />
           <stop
             offset="1"
-            stopColor="var(--_ember-flame, #FF7E5F)"
+            stopColor="var(--_ember-b, #FFB000)"
             stopOpacity={0}
           />
         </radialGradient>

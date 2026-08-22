@@ -1,0 +1,16 @@
+:root {
+  --oxagen-ink: #0B0B0C;
+  --oxagen-sub: #9AA0A6;
+  --oxagen-chevron: #C9CDD2;
+  --oxagen-cursor: #FF3D1F;
+  --oxagen-paper: #FFFFFF;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --oxagen-ink: #F5F6F7;
+    --oxagen-sub: #7D838A;
+    --oxagen-chevron: #45494F;
+    --oxagen-cursor: #FF4B2A;
+    --oxagen-paper: #0B0B0C;
+  }
+}

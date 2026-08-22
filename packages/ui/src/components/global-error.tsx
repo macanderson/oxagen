@@ -9,7 +9,7 @@
  * cannot trip the `useContext` null crash that breaks `/_global-error` static
  * export when the default (provider-wrapped) error tree is used instead.
  *
- * Styling is fully self-contained (explicit Nocturne Violet light palette, no
+ * Styling is fully self-contained (explicit Oxagen Ember light palette, no
  * theme `class` dependency) so the fallback renders correctly with zero app
  * context. Flat: no radius, no shadow — matching the product skin. Keep these
  * hexes in lockstep with docs/brand/tokens.css when the brand changes.
@@ -31,8 +31,8 @@ export function GlobalErrorPage({
           alignItems: "center",
           justifyContent: "center",
           padding: "1.5rem",
-          background: "#f2eef7",
-          color: "#16181d",
+          background: "#FAFAFA",
+          color: "#0B0B0C",
           fontFamily:
             "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         }}
@@ -42,8 +42,8 @@ export function GlobalErrorPage({
             width: "100%",
             maxWidth: "28rem",
             borderRadius: "0",
-            border: "1px solid #ded7ea",
-            background: "#faf7f2",
+            border: "1px solid #E6E6E6",
+            background: "#FFFFFF",
             padding: "2.5rem",
             textAlign: "center",
           }}
@@ -55,7 +55,7 @@ export function GlobalErrorPage({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.875rem",
-              color: "#4a4458",
+              color: "#3E3A34",
             }}
           >
             An unexpected error occurred. You can try again, and if it keeps
@@ -66,7 +66,7 @@ export function GlobalErrorPage({
               style={{
                 marginTop: "0.75rem",
                 fontSize: "0.75rem",
-                color: "#837c92",
+                color: "#5F5A52",
                 fontFamily: "ui-monospace, SFMono-Regular, monospace",
               }}
             >
@@ -82,8 +82,8 @@ export function GlobalErrorPage({
               padding: "0 1.25rem",
               borderRadius: "0",
               border: "none",
-              background: "#6e48ce",
-              color: "#ffffff",
+              background: "#FFB000",
+              color: "#0B0B0C",
               fontSize: "0.875rem",
               fontWeight: 500,
               cursor: "pointer",

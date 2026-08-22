@@ -91,7 +91,7 @@ export function ContextWindow() {
             style={{
               background: governed
                 ? "var(--ox-indigo-bright, #9CA3E8)"
-                : "var(--_ember-flame, #FF7E5F)",
+                : "var(--_ember-b, #FFB000)",
               boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(255,126,95,.8)"}`,
             }}
           />
@@ -105,7 +105,7 @@ export function ContextWindow() {
             style={{
               color: governed
                 ? "var(--ox-indigo-bright, #9CA3E8)"
-                : "var(--_ember-flame, #FF7E5F)",
+                : "var(--_ember-b, #FFB000)",
             }}
           >
             {used}%
@@ -122,7 +122,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "linear-gradient(90deg, var(--_ember-gold,#F9D423), var(--_ember-flame,#FF7E5F), var(--_ember-crimson,#C2185B))",
+              : "linear-gradient(90deg, var(--_ember-a,#A37200), var(--_ember-b,#FFB000), var(--_ember-c,#FFCB66))",
           }}
         />
       </div>
@@ -139,7 +139,7 @@ export function ContextWindow() {
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "var(--_ember-flame, #FF7E5F)";
+              : "var(--_ember-b, #FFB000)";
           return (
             <span
               key={i}

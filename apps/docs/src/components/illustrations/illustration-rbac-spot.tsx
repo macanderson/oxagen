@@ -22,8 +22,8 @@ export function IllustrationRbacSpot({ className }: { className?: string }) {
       </title>
       <defs>
         <linearGradient id="ill-rbac-spot-g1" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--_ember-gold, #F9D423)" />
-          <stop offset="1" stopColor="var(--_ember-crimson, #C2185B)" />
+          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
+          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
         </linearGradient>
       </defs>
 
