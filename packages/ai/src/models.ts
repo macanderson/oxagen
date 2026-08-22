@@ -1,8 +1,12 @@
 import { gateway } from "@ai-sdk/gateway";
 import { wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
-import type { Experimental_VideoModelV4, LanguageModelV4 } from "@ai-sdk/provider";
+import type {
+  Experimental_VideoModelV4,
+  LanguageModelV4,
+} from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
+import { resolveLanguageModel } from "./provider-resolution";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
 
 /**
@@ -18,13 +22,23 @@ import type { MediaTier, ResolvedTierCatalog } from "./catalog";
  * the catch swallows the error and returns the unwrapped model so the app
  * continues to work.
  */
-let _devToolsMiddleware: (() => import("@ai-sdk/provider").LanguageModelV4Middleware) | null = null;
+let _devToolsMiddleware:
+  | (() => import("@ai-sdk/provider").LanguageModelV4Middleware)
+  | null = null;
 if (process.env.NODE_ENV === "development") {
   // Eager synchronous-style load: Next.js dev mode processes this at module
   // evaluation time. We store the factory so selectModel() stays synchronous.
   try {
+    // A dynamic import cannot be awaited here: selectModel() is synchronous.
+    // Kept as its own statement so the formatter cannot reflow the call away
+    // from the directive above it — which it did, twice, silently re-breaking
+    // lint each time the file was touched.
+    type DevTools = {
+      devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV4Middleware;
+    };
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _devToolsMiddleware = (require("@ai-sdk/devtools") as { devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV4Middleware }).devToolsMiddleware;
+    const devtools = require("@ai-sdk/devtools") as DevTools;
+    _devToolsMiddleware = devtools.devToolsMiddleware;
   } catch {
     // devtools not available — silent no-op
   }
@@ -175,8 +189,10 @@ export function resolvedTierCatalog(): ResolvedTierCatalog {
  * `creator/model` ids, so one seam reaches every vendor (Anthropic, OpenAI,
  * Google, xAI, …) with no per-provider SDK or key. The model id is the explicit
  * `selector.model`, else the tier (defaulting to the balanced tier). If the
- * gateway key is missing the client still builds and surfaces an auth error at
- * call time — there is no direct-provider fallback.
+ * gateway key is missing, a model whose vendor has its own key configured
+ * resolves through that vendor's provider instead of failing at call time —
+ * see `provider-resolution.ts`. The gateway still wins whenever it is
+ * configured, so a deployment that has one is unaffected.
  */
 export function selectModel(selector: ModelSelector = {}): LanguageModel {
   const env = requireEnv([
@@ -186,10 +202,10 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
   ] as const);
   const modelId =
     selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
-  return applyDevtools(gateway.languageModel(modelId));
+  return applyDevtools(resolveLanguageModel(modelId));
 }
 
-/** The platform default model — the balanced tier through the gateway. */
+/** The platform default model — the balanced tier. */
 export const defaultModel = () => selectModel();
 
 // ── Image model selection ─────────────────────────────────────────────────────
@@ -217,7 +233,9 @@ const IMAGE_DEFAULT_GATEWAY = "openai/gpt-image-1";
  * as `image.generate.ts` does — this never throws on a missing key, it builds a
  * client that surfaces the error at call time.
  */
-export function selectImageModel(selector: ImageModelSelector = {}): ImageModel {
+export function selectImageModel(
+  selector: ImageModelSelector = {},
+): ImageModel {
   return gateway.imageModel(selector.model ?? IMAGE_DEFAULT_GATEWAY);
 }
 

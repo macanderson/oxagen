@@ -42,6 +42,7 @@
 
 import type {
   AgentEventEnvelope,
+  ProviderError,
   CompletionRequest,
   CompletionResult,
   ServerFrame,
@@ -263,6 +264,35 @@ export class StellaSidecarClient {
     }
   }
 
+  /**
+   * `POST /v1/turns/{id}/provider-result` with a classified failure.
+   *
+   * Best-effort by design: if answering the failure itself fails there is
+   * nothing further to try, and throwing here would replace the real error
+   * with a less useful one.
+   */
+  private async failProvider(
+    turnId: string,
+    requestId: string,
+    err: unknown,
+  ): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    // `terminal` rather than `transport`: the host already applies its own
+    // retry policy around the model call, so a failure that reaches here has
+    // been given up on. Declaring it retryable would buy a second attempt the
+    // host has already decided against.
+    const error: ProviderError = { kind: "terminal", message };
+    try {
+      await this.post(turnId, "provider-result", {
+        request_id: requestId,
+        status: "error",
+        error,
+      });
+    } catch {
+      // swallowed: see the doc comment
+    }
+  }
+
   /** `POST /v1/turns/{id}/tool-result` — answer a tool call. */
   async resolveTool(
     turnId: string,
@@ -381,7 +411,17 @@ export class StellaSidecarClient {
               .onProviderRequest(completion, ctx)
               .then((result) =>
                 this.resolveProvider(turnId, request_id, result),
-              ),
+              )
+              // A rejecting handler must still ANSWER. Recording the failure
+              // and staying silent leaves the engine parked on a request it
+              // only gives up on at the reverse-request deadline — minutes of
+              // apparent hang for what is usually an instant, nameable error.
+              // Answering lets the engine classify and recover; the rethrow
+              // still surfaces the failure to the caller.
+              .catch(async (err: unknown) => {
+                await this.failProvider(turnId, request_id, err);
+                throw err;
+              }),
           );
           break;
         }
@@ -395,7 +435,17 @@ export class StellaSidecarClient {
           track(
             handlers
               .onToolRequest(name, input, ctx)
-              .then((output) => this.resolveTool(turnId, request_id, output)),
+              .then((output) => this.resolveTool(turnId, request_id, output))
+              // Same contract on the tool side: the model sees the error text
+              // and can adapt, instead of the turn stalling to its deadline.
+              .catch(async (err: unknown) => {
+                await this.resolveTool(turnId, request_id, {
+                  error: {
+                    message: err instanceof Error ? err.message : String(err),
+                  },
+                });
+                throw err;
+              }),
           );
           break;
         }

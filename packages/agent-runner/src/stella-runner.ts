@@ -143,7 +143,10 @@ export async function runCodingAgentOnStella(
 
   const provider = createProviderHandler({
     ai: opts.ai,
-    model: opts.model ?? "",
+    // Pass an absent model through as ABSENT. Coercing to "" defeats
+    // `selectModel`'s tier default — "" is not nullish, so it becomes the
+    // model id and the gateway is asked for a model with no name.
+    ...(opts.model != null ? { model: opts.model } : {}),
     system: opts.system ?? "",
     tools,
     onStreamPart: opts.onStreamPart,

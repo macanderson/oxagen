@@ -55,6 +55,11 @@ const MUTATING_TOOL_NAMES: ReadonlySet<string> = new Set([
   "edit_file",
 ]);
 
+/** Fragments buffered before a `provider-delta` POST is worth making. */
+const DELTA_BATCH_SIZE = 24;
+/** Longest a fragment waits in the buffer, so a slow trickle still shows. */
+const DELTA_FLUSH_MS = 200;
+
 /** A Stella `CompletionMessage`, as it arrives on a `provider_request`. */
 interface StellaMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -182,7 +187,8 @@ export function readCachedInputTokens(usage: unknown): number {
  */
 export function createProviderHandler(args: {
   ai: AgentAi;
-  model: string;
+  /** Absent means "let the platform pick its default tier" — never "". */
+  model?: string;
   system: string;
   tools: ToolSet;
   /**
@@ -201,7 +207,9 @@ export function createProviderHandler(args: {
     );
 
     const result = args.ai.stream({
-      model: args.model,
+      // Only set when the caller named one, so an absent model reaches
+      // selectModel as undefined and resolves to the default tier.
+      ...(args.model != null ? { model: args.model } : {}),
       system: args.system,
       messages,
       // Definitions only — see this module's header. Stella dispatches tools.
@@ -210,15 +218,41 @@ export function createProviderHandler(args: {
       abortSignal: ctx.signal,
     });
 
+    // Deltas are BATCHED, never one POST per token. A per-token HTTP request
+    // costs far more than the latency it buys, and the engine accepts a batch
+    // precisely so a host can flush on its own cadence. Sending one at a time
+    // turned a normal answer into minutes of round trips.
     let text = "";
+    let pending: Array<{ kind: "text" | "reasoning"; text: string }> = [];
+    let lastFlush = Date.now();
+
+    const flush = async () => {
+      if (pending.length === 0) return;
+      const batch = pending;
+      pending = [];
+      lastFlush = Date.now();
+      await ctx.pushDelta(batch);
+    };
+
     for await (const part of result.fullStream) {
       args.onStreamPart?.(part);
       const p = part as { type?: string; text?: string };
       if (p.type === "text-delta" && p.text) {
         text += p.text;
-        await ctx.pushDelta([{ kind: "text", text: p.text }]);
+        pending.push({ kind: "text", text: p.text });
+        // Flush on either bound: enough fragments to be worth a request, or
+        // enough elapsed time that a watcher would notice the silence. The
+        // time bound is what keeps a slow trickle visible; the size bound is
+        // what keeps a fast burst from growing an unbounded buffer.
+        if (
+          pending.length >= DELTA_BATCH_SIZE ||
+          Date.now() - lastFlush >= DELTA_FLUSH_MS
+        ) {
+          await flush();
+        }
       }
     }
+    await flush();
 
     const [toolCalls, usage, response] = await Promise.all([
       result.toolCalls,
@@ -242,8 +276,14 @@ export function createProviderHandler(args: {
         // them. Getting this wrong double-counts a cached prompt.
         cached_input_tokens: readCachedInputTokens(usage),
       },
+      // The concrete model that actually served the call, as the provider
+      // reported it; then what was asked for; then empty. The engine requires
+      // the field, and empty is honest about not knowing when a caller named
+      // no model and the response carried none.
       model:
-        (response as { modelId?: string } | undefined)?.modelId ?? args.model,
+        (response as { modelId?: string } | undefined)?.modelId ??
+        args.model ??
+        "",
       cost_usd: 0,
     };
   };

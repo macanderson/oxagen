@@ -16,7 +16,12 @@ import type { ZodType } from "zod";
 
 /** Arguments for one streaming model turn (mirrors the subset of `streamText` the loop uses). */
 export interface ModelRunArgs {
-  model: string;
+  /**
+   * Absent means "let the adapter pick its default tier" — never the empty
+   * string. `selectModel` treats "" as an explicit model id, so coercing an
+   * absent model to it asks the provider for a model with no name.
+   */
+  model?: string;
   system: string;
   messages: ModelMessage[];
   tools: ToolSet;
