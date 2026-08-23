@@ -2,7 +2,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
-  updateSet: vi.fn<(arg: { table: unknown; payload: Record<string, unknown> }) => void>(),
+  updateSet:
+    vi.fn<
+      (arg: { table: unknown; payload: Record<string, unknown> }) => void
+    >(),
   selectCalls: [] as Array<{ cols: unknown; table: unknown }>,
   put: vi.fn(),
   zipSync: vi.fn(),
@@ -84,7 +87,10 @@ function rowsFor(table: unknown): Promise<unknown[]> {
 function makeTx() {
   return {
     select(cols?: unknown) {
-      const call: { cols: unknown; table: unknown } = { cols, table: undefined };
+      const call: { cols: unknown; table: unknown } = {
+        cols,
+        table: undefined,
+      };
       mocks.selectCalls.push(call);
       return {
         from(table: unknown) {
@@ -116,13 +122,21 @@ vi.mock("@oxagen/storage", () => ({
 
 vi.mock("fflate", () => ({ zipSync: mocks.zipSync }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ col, val }),
-  inArray: (col: unknown, vals: unknown) => ({ col, vals }),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    eq: (col: unknown, val: unknown) => ({ col, val }),
+    inArray: (col: unknown, vals: unknown) => ({ col, vals }),
+  };
+});
 
 vi.mock("../logger", () => ({
-  logger: { info: mocks.loggerInfo, warn: mocks.loggerWarn, error: mocks.loggerError },
+  logger: {
+    info: mocks.loggerInfo,
+    warn: mocks.loggerWarn,
+    error: mocks.loggerError,
+  },
 }));
 
 vi.mock("../inngest", () => ({
@@ -169,7 +183,10 @@ function firstPutInput(): { key: string; access: string; contentType: string } {
 }
 
 // Decode a captured ZIP entry (Uint8Array of UTF-8 JSON) back to an object.
-function decodeEntry(entries: Record<string, Uint8Array>, name: string): unknown {
+function decodeEntry(
+  entries: Record<string, Uint8Array>,
+  name: string,
+): unknown {
   const bytes = entries[name];
   if (!bytes) throw new Error(`zip entry not found: ${name}`);
   return JSON.parse(new TextDecoder().decode(bytes));
@@ -206,7 +223,12 @@ function seedUserScopeRows() {
   ]);
 }
 
-const baseEvent = { exportId: "exp-1", userId: "user-1", orgId: "org-1", scope: "user" as const };
+const baseEvent = {
+  exportId: "exp-1",
+  userId: "user-1",
+  orgId: "org-1",
+  scope: "user" as const,
+};
 
 describe("privacyExportProcess Inngest handler", () => {
   beforeEach(() => {
@@ -218,13 +240,17 @@ describe("privacyExportProcess Inngest handler", () => {
     mocks.selectCalls.length = 0;
     mocks.rowsByTable.clear();
 
-    mocks.zipSync.mockImplementation(() => new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
-    mocks.put.mockImplementation(async (input: { key: string; access?: string }) => ({
-      url: `blob-private://${input.key}`,
-      key: input.key,
-      bytes: 4,
-      access: input.access ?? "private",
-    }));
+    mocks.zipSync.mockImplementation(
+      () => new Uint8Array([0x50, 0x4b, 0x03, 0x04]),
+    );
+    mocks.put.mockImplementation(
+      async (input: { key: string; access?: string }) => ({
+        url: `blob-private://${input.key}`,
+        key: input.key,
+        bytes: 4,
+        access: input.access ?? "private",
+      }),
+    );
   });
 
   it("assembles the ZIP, uploads it privately, and marks the request ready with the URL", async () => {
@@ -238,7 +264,9 @@ describe("privacyExportProcess Inngest handler", () => {
     expect(setCalls.some((p) => p.status === "processing")).toBe(true);
     const readyCall = setCalls.find((p) => p.status === "ready");
     expect(readyCall).toBeDefined();
-    expect(readyCall?.exportUrl).toBe("blob-private://privacy-exports/org-1/exp-1.zip");
+    expect(readyCall?.exportUrl).toBe(
+      "blob-private://privacy-exports/org-1/exp-1.zip",
+    );
     expect(readyCall?.completedAt).toBeInstanceOf(Date);
     expect(setCalls.some((p) => p.status === "failed")).toBe(false);
 
@@ -274,7 +302,9 @@ describe("privacyExportProcess Inngest handler", () => {
     expect(conv.messages).toHaveLength(1);
 
     // bigint sizeBytes coerced to a JSON-safe number.
-    const assets = decodeEntry(entries, "generated-assets.json") as Array<{ sizeBytes: number }>;
+    const assets = decodeEntry(entries, "generated-assets.json") as Array<{
+      sizeBytes: number;
+    }>;
     expect(assets[0]?.sizeBytes).toBe(1234);
   });
 
@@ -284,11 +314,21 @@ describe("privacyExportProcess Inngest handler", () => {
     await handler({ event: { data: baseEvent }, step: makeStep() });
 
     const entries = firstZipEntries();
-    const apiKeys = decodeEntry(entries, "api-keys.json") as Array<Record<string, unknown>>;
+    const apiKeys = decodeEntry(entries, "api-keys.json") as Array<
+      Record<string, unknown>
+    >;
     expect(apiKeys).toHaveLength(1);
     const keys = Object.keys(apiKeys[0] ?? {}).sort();
     expect(keys).toEqual(
-      ["createdAt", "expiresAt", "id", "lastUsedAt", "name", "prefix", "scopes"].sort(),
+      [
+        "createdAt",
+        "expiresAt",
+        "id",
+        "lastUsedAt",
+        "name",
+        "prefix",
+        "scopes",
+      ].sort(),
     );
     // No hashed/plaintext key material in the serialized entry.
     const raw = new TextDecoder().decode(entries["api-keys.json"]);
@@ -305,15 +345,22 @@ describe("privacyExportProcess Inngest handler", () => {
   it("a single optional-artifact read failure still yields a ZIP (logged, not thrown)", async () => {
     seedUserScopeRows();
     // Audit read fails; every other artifact still succeeds.
-    mocks.rowsByTable.set(schema.securityEvents, new Error("clickhouse timeout"));
+    mocks.rowsByTable.set(
+      schema.securityEvents,
+      new Error("clickhouse timeout"),
+    );
     const handler = getHandler("privacy.export-process");
 
-    await expect(handler({ event: { data: baseEvent }, step: makeStep() })).resolves.toBeUndefined();
+    await expect(
+      handler({ event: { data: baseEvent }, step: makeStep() }),
+    ).resolves.toBeUndefined();
 
     // ZIP still assembled and uploaded, request still marked ready.
     expect(mocks.zipSync).toHaveBeenCalledTimes(1);
     expect(mocks.put).toHaveBeenCalledTimes(1);
-    const readyCall = mocks.updateSet.mock.calls.map((c) => c[0].payload).find((p) => p.status === "ready");
+    const readyCall = mocks.updateSet.mock.calls
+      .map((c) => c[0].payload)
+      .find((p) => p.status === "ready");
     expect(readyCall).toBeDefined();
 
     // The failing artifact is absent; the rest are present; the failure is logged.
@@ -332,7 +379,9 @@ describe("privacyExportProcess Inngest handler", () => {
     mocks.rowsByTable.set(schema.users, []);
     const handler = getHandler("privacy.export-process");
 
-    await expect(handler({ event: { data: baseEvent }, step: makeStep() })).rejects.toThrow(/user user-1 not found/);
+    await expect(
+      handler({ event: { data: baseEvent }, step: makeStep() }),
+    ).rejects.toThrow(/user user-1 not found/);
 
     expect(mocks.put).not.toHaveBeenCalled();
     const setCalls = mocks.updateSet.mock.calls.map((c) => c[0].payload);
@@ -342,10 +391,20 @@ describe("privacyExportProcess Inngest handler", () => {
   it("org scope adds members.json and workspaces.json and scopes reads to the org", async () => {
     seedUserScopeRows();
     mocks.rowsByTable.set(schema.orgUsers, [
-      { id: "oru_1", userId: "user-1", role: "owner", joinedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        id: "oru_1",
+        userId: "user-1",
+        role: "owner",
+        joinedAt: "2026-01-01T00:00:00.000Z",
+      },
     ]);
     mocks.rowsByTable.set(schema.workspaces, [
-      { id: "wrk_1", name: "Main", slug: "main", createdAt: "2026-01-01T00:00:00.000Z" },
+      {
+        id: "wrk_1",
+        name: "Main",
+        slug: "main",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
     ]);
     const handler = getHandler("privacy.export-process");
 
@@ -359,24 +418,36 @@ describe("privacyExportProcess Inngest handler", () => {
     expect(entries["workspaces.json"]).toBeDefined();
 
     // Conversations were scoped by org, not user, in org mode.
-    const convSelect = mocks.selectCalls.find((c) => c.table === schema.conversations);
+    const convSelect = mocks.selectCalls.find(
+      (c) => c.table === schema.conversations,
+    );
     expect(convSelect).toBeDefined();
   });
 
   it("on-failure handler marks the export failed with the error message", async () => {
     const handler = getHandler("privacy.export-process.on-failure");
     await handler({
-      event: { data: { event: { data: { exportId: "exp-1" } }, error: { message: "kaboom" } } },
+      event: {
+        data: {
+          event: { data: { exportId: "exp-1" } },
+          error: { message: "kaboom" },
+        },
+      },
       step: makeStep(),
     });
 
     const calls = mocks.updateSet.mock.calls.map((c) => c[0].payload);
-    expect(calls.some((p) => p.status === "failed" && p.errorMessage === "kaboom")).toBe(true);
+    expect(
+      calls.some((p) => p.status === "failed" && p.errorMessage === "kaboom"),
+    ).toBe(true);
   });
 
   it("on-failure handler is a no-op when exportId is missing", async () => {
     const handler = getHandler("privacy.export-process.on-failure");
-    await handler({ event: { data: { event: { data: {} }, error: "x" } }, step: makeStep() });
+    await handler({
+      event: { data: { event: { data: {} }, error: "x" } },
+      step: makeStep(),
+    });
     expect(mocks.updateSet).not.toHaveBeenCalled();
   });
 });

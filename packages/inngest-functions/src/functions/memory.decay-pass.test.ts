@@ -22,10 +22,14 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  asc: vi.fn((col: unknown) => col),
-  gt: vi.fn((...args: unknown[]) => args),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    asc: vi.fn((col: unknown) => col),
+    gt: vi.fn((...args: unknown[]) => args),
+  };
+});
 
 vi.mock("@oxagen/agent/memory/neo4j", () => ({
   applyDecayToMemory: mocks.applyDecayToMemory,
@@ -69,7 +73,10 @@ function makeStep(): StepCtx {
 }
 
 // ── DB tx factories ───────────────────────────────────────────────────────────
-interface WorkspaceRow { id: string; orgId: string }
+interface WorkspaceRow {
+  id: string;
+  orgId: string;
+}
 
 function makeSystemTx(workspaceRows: WorkspaceRow[]) {
   const workspacesFindMany = vi.fn().mockResolvedValue(workspaceRows);
@@ -94,7 +101,9 @@ interface DecayableMemoryFixture {
   nodeRef: string;
 }
 
-function makeMemory(overrides: Partial<DecayableMemoryFixture> = {}): DecayableMemoryFixture {
+function makeMemory(
+  overrides: Partial<DecayableMemoryFixture> = {},
+): DecayableMemoryFixture {
   return {
     id: "mem-default",
     confidenceScore: 90,
@@ -115,7 +124,9 @@ describe("memoryDecayPass Inngest handler", () => {
     mocks.applyDecayToMemory.mockResolvedValue(undefined);
     mocks.insertMemoryChange.mockResolvedValue(undefined);
     mocks.listDecayableMemories.mockResolvedValue([]);
-    mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => fn(),
+    );
   });
 
   afterEach(() => {
@@ -124,7 +135,9 @@ describe("memoryDecayPass Inngest handler", () => {
 
   it("returns totalDecayed:0 when workspace page is empty", async () => {
     const { tx } = makeSystemTx([]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     const result = await capturedHandler!({ step: makeStep() });
 
@@ -134,7 +147,9 @@ describe("memoryDecayPass Inngest handler", () => {
 
   it("returns totalDecayed:0 when workspace has no decayable memories", async () => {
     const { tx } = makeSystemTx([{ id: "ws-1", orgId: "org-1" }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
     mocks.listDecayableMemories.mockResolvedValue([]);
 
     const result = await capturedHandler!({ step: makeStep() });
@@ -149,7 +164,9 @@ describe("memoryDecayPass Inngest handler", () => {
     vi.setSystemTime(new Date("2026-06-27T04:00:00.000Z"));
 
     const { tx } = makeSystemTx([{ id: "ws-2", orgId: "org-2" }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     // Created 543 days ago, halfLife=90 days, confidenceScore=90 (0-100 scale),
     // decayFloor=5 → massive decay toward the floor.
@@ -199,7 +216,9 @@ describe("memoryDecayPass Inngest handler", () => {
     vi.setSystemTime(new Date("2026-06-27T04:00:00.000Z"));
 
     const { tx } = makeSystemTx([{ id: "ws-floor", orgId: "org-floor" }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     // Extremely old memory — decay curve asymptotically approaches the floor
     // but must never go below it.
@@ -228,7 +247,9 @@ describe("memoryDecayPass Inngest handler", () => {
     vi.setSystemTime(new Date("2026-06-27T04:00:00.000Z"));
 
     const { tx } = makeSystemTx([{ id: "ws-3", orgId: "org-3" }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     // lastEvidenceAt is only 1 minute ago — epsilon check should skip it
     mocks.listDecayableMemories.mockResolvedValue([
@@ -253,7 +274,9 @@ describe("memoryDecayPass Inngest handler", () => {
       { id: "ws-err", orgId: "org-err" },
       { id: "ws-ok", orgId: "org-ok" },
     ]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     // First workspace: listDecayableMemories throws; second: returns empty
     mocks.listDecayableMemories
@@ -272,24 +295,31 @@ describe("memoryDecayPass Inngest handler", () => {
   it("stops pagination when page is smaller than PAGE_SIZE (200)", async () => {
     // First page: exactly 200 rows (PAGE_SIZE) → would paginate
     // But we return < 200 on the second call to signal end of results.
-    const page1 = Array.from({ length: 200 }, (_, i) => ({ id: `ws-${i}`, orgId: `org-${i}` }));
+    const page1 = Array.from({ length: 200 }, (_, i) => ({
+      id: `ws-${i}`,
+      orgId: `org-${i}`,
+    }));
     const page2 = [{ id: "ws-200", orgId: "org-200" }]; // < PAGE_SIZE → stop
 
     const tx1 = makeSystemTx(page1);
     const tx2 = makeSystemTx(page2);
 
     let callCount = 0;
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const rawTx = callCount === 0 ? tx1.tx : tx2.tx;
-      callCount++;
-      return fn(rawTx);
-    });
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => {
+        const rawTx = callCount === 0 ? tx1.tx : tx2.tx;
+        callCount++;
+        return fn(rawTx);
+      },
+    );
 
     mocks.listDecayableMemories.mockResolvedValue([]);
 
     // Run — just verify it doesn't infinite-loop and exits with a result
     const result = await capturedHandler!({ step: makeStep() });
     expect(result).toBeDefined();
-    expect((result as Record<string, unknown>).totalDecayed).toBeGreaterThanOrEqual(0);
+    expect(
+      (result as Record<string, unknown>).totalDecayed,
+    ).toBeGreaterThanOrEqual(0);
   });
 });

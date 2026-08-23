@@ -48,9 +48,10 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
 }));
 
-vi.mock("drizzle-orm", () => ({
-  sql: sqlTag,
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return { ...actual, sql: sqlTag };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope.mockImplementation(

@@ -36,7 +36,8 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
 }));
 
-vi.mock("drizzle-orm", () => {
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
   const sql = (strings: TemplateStringsArray, ...values: unknown[]) => ({
     text: strings.join("?"),
     values,
@@ -44,7 +45,7 @@ vi.mock("drizzle-orm", () => {
   // Real drizzle binds an array as ONE parameter via sql.param — mirror it so
   // the ANY(${sql.param(ids)}::uuid[]) call sites work under the mock.
   sql.param = (value: unknown) => ({ param: value });
-  return { sql };
+  return { ...actual, sql };
 });
 
 vi.mock("@oxagen/telemetry", () => ({

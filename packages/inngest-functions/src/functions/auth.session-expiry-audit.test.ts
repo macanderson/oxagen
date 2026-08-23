@@ -39,14 +39,21 @@ vi.mock("@oxagen/database/security", () => ({
   emitSecurityEventAsync: mocks.emitSecurityEventAsync,
 }));
 
-vi.mock("drizzle-orm", () => ({
-  and: vi.fn((...args: unknown[]) => args),
-  gt: vi.fn((...args: unknown[]) => args),
-  lt: vi.fn((...args: unknown[]) => args),
-  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
-  isNull: vi.fn((arg: unknown) => arg),
-  inArray: vi.fn((...args: unknown[]) => args),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    and: vi.fn((...args: unknown[]) => args),
+    gt: vi.fn((...args: unknown[]) => args),
+    lt: vi.fn((...args: unknown[]) => args),
+    sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+      strings,
+      values,
+    })),
+    isNull: vi.fn((arg: unknown) => arg),
+    inArray: vi.fn((...args: unknown[]) => args),
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: mocks.logger,
@@ -115,8 +122,8 @@ describe("authSessionExpiryAudit Inngest handler", () => {
   });
 
   it("returns emitted:0 and logs info when no expired sessions found", async () => {
-    mocks.withSystemDb.mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
-      fn(makeSessionTx([])),
+    mocks.withSystemDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => unknown) => fn(makeSessionTx([])),
     );
 
     const result = await capturedHandler!({ step: makeStep() });
@@ -130,11 +137,21 @@ describe("authSessionExpiryAudit Inngest handler", () => {
 
   it("emits with NO_ORG_SENTINEL when user has no org membership", async () => {
     const sessions: Session[] = [
-      { sessionId: "sess-1", userId: "user-1", expiresAt: new Date("2026-06-26"), ipAddress: null, userAgent: null },
+      {
+        sessionId: "sess-1",
+        userId: "user-1",
+        expiresAt: new Date("2026-06-26"),
+        ipAddress: null,
+        userAgent: null,
+      },
     ];
     mocks.withSystemDb
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeSessionTx(sessions)))
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeOrgTx([])));
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeSessionTx(sessions)),
+      )
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeOrgTx([])),
+      );
 
     await capturedHandler!({ step: makeStep() });
 
@@ -151,16 +168,32 @@ describe("authSessionExpiryAudit Inngest handler", () => {
 
   it("resolves org membership and emits for each session", async () => {
     const sessions: Session[] = [
-      { sessionId: "sess-a", userId: "user-a", expiresAt: new Date("2026-06-26"), ipAddress: "1.2.3.4", userAgent: "Firefox" },
-      { sessionId: "sess-b", userId: "user-b", expiresAt: new Date("2026-06-25"), ipAddress: null, userAgent: null },
+      {
+        sessionId: "sess-a",
+        userId: "user-a",
+        expiresAt: new Date("2026-06-26"),
+        ipAddress: "1.2.3.4",
+        userAgent: "Firefox",
+      },
+      {
+        sessionId: "sess-b",
+        userId: "user-b",
+        expiresAt: new Date("2026-06-25"),
+        ipAddress: null,
+        userAgent: null,
+      },
     ];
     const orgRows: OrgRow[] = [
       { userId: "user-a", orgId: "org-a" },
       { userId: "user-b", orgId: "org-b" },
     ];
     mocks.withSystemDb
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeSessionTx(sessions)))
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeOrgTx(orgRows)));
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeSessionTx(sessions)),
+      )
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeOrgTx(orgRows)),
+      );
 
     const result = await capturedHandler!({ step: makeStep() });
 
@@ -184,8 +217,12 @@ describe("authSessionExpiryAudit Inngest handler", () => {
       userAgent: null,
     }));
     mocks.withSystemDb
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeSessionTx(sessions)))
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeOrgTx([])));
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeSessionTx(sessions)),
+      )
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeOrgTx([])),
+      );
 
     await capturedHandler!({ step: makeStep() });
 
@@ -198,16 +235,28 @@ describe("authSessionExpiryAudit Inngest handler", () => {
   it("parses expiresAt as Date when it arrives as an ISO string (post-Inngest serialization)", async () => {
     const isoString = "2026-06-26T12:00:00.000Z";
     const sessions: Session[] = [
-      { sessionId: "sess-s", userId: "user-s", expiresAt: isoString, ipAddress: null, userAgent: null },
+      {
+        sessionId: "sess-s",
+        userId: "user-s",
+        expiresAt: isoString,
+        ipAddress: null,
+        userAgent: null,
+      },
     ];
     mocks.withSystemDb
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeSessionTx(sessions)))
-      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(makeOrgTx([])));
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeSessionTx(sessions)),
+      )
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) =>
+        fn(makeOrgTx([])),
+      );
 
     await capturedHandler!({ step: makeStep() });
 
     // emitSecurityEventAsync should receive a real Date, not a string
-    const call = mocks.emitSecurityEventAsync.mock.calls[0] as [Record<string, unknown>];
+    const call = mocks.emitSecurityEventAsync.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(call[0].occurredAt).toBeInstanceOf(Date);
     expect((call[0].occurredAt as Date).toISOString()).toBe(isoString);
   });

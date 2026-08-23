@@ -21,32 +21,41 @@ vi.mock("../create-function", () => ({
   createFunction: mocks.createFunction,
 }));
 
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: mocks.withTenantDb,
-  schema: {
-    subagentRuns: {
-      fanoutId: "fanout_id",
-      orgId: "org_id",
-      id: "id",
-      status: "status",
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...actual,
+    withTenantDb: mocks.withTenantDb,
+    schema: {
+      ...actual.schema,
+      subagentRuns: {
+        fanoutId: "fanout_id",
+        orgId: "org_id",
+        id: "id",
+        status: "status",
+      },
+      subagentFanouts: { id: "id", orgId: "org_id", status: "status" },
     },
-    subagentFanouts: { id: "id", orgId: "org_id", status: "status" },
-  },
-}));
+  };
+});
 
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((...args: unknown[]) => args),
-  and: vi.fn((...args: unknown[]) => args),
-  count: vi.fn((...args: unknown[]) => args),
-  inArray: vi.fn((...args: unknown[]) => args),
-  sql: Object.assign(
-    (strings: TemplateStringsArray, ...values: unknown[]) => ({
-      strings,
-      values,
-    }),
-    { raw: (s: string) => s },
-  ),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    eq: vi.fn((...args: unknown[]) => args),
+    and: vi.fn((...args: unknown[]) => args),
+    count: vi.fn((...args: unknown[]) => args),
+    inArray: vi.fn((...args: unknown[]) => args),
+    sql: Object.assign(
+      (strings: TemplateStringsArray, ...values: unknown[]) => ({
+        strings,
+        values,
+      }),
+      { raw: (s: string) => s },
+    ),
+  };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
@@ -56,10 +65,14 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: mocks.invoke,
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertToolInvocation: mocks.insertToolInvocation,
-  insertEvents: mocks.insertEvents,
-}));
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return {
+    ...actual,
+    insertToolInvocation: mocks.insertToolInvocation,
+    insertEvents: mocks.insertEvents,
+  };
+});
 
 vi.mock("../lease", () => ({
   claimNextSubagentRun: mocks.claimNextSubagentRun,

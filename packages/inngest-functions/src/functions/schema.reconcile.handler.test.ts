@@ -21,21 +21,53 @@ vi.mock("@oxagen/database", () => ({
   // schema is aliased as "db" in the source; exported as "schema"
   schema: {
     agentExecutions: { id: "id", orgId: "org_id" },
-    schemaVersions: { publicId: "public_id", orgId: "org_id", workspaceId: "workspace_id" },
-    schemas: { versionId: "version_id", orgId: "org_id", workspaceId: "workspace_id", deletedAt: "deleted_at" },
-    schemaActivations: { orgId: "org_id", workspaceId: "workspace_id", deletedAt: "deleted_at", schemaName: "schema_name" },
-    nodeLabels: { versionId: "version_id", schemaId: "schema_id", orgId: "org_id", deletedAt: "deleted_at" },
-    relationshipTypes: { versionId: "version_id", schemaId: "schema_id", orgId: "org_id", deletedAt: "deleted_at" },
-    schemaProperties: { versionId: "version_id", orgId: "org_id", deletedAt: "deleted_at" },
+    schemaVersions: {
+      publicId: "public_id",
+      orgId: "org_id",
+      workspaceId: "workspace_id",
+    },
+    schemas: {
+      versionId: "version_id",
+      orgId: "org_id",
+      workspaceId: "workspace_id",
+      deletedAt: "deleted_at",
+    },
+    schemaActivations: {
+      orgId: "org_id",
+      workspaceId: "workspace_id",
+      deletedAt: "deleted_at",
+      schemaName: "schema_name",
+    },
+    nodeLabels: {
+      versionId: "version_id",
+      schemaId: "schema_id",
+      orgId: "org_id",
+      deletedAt: "deleted_at",
+    },
+    relationshipTypes: {
+      versionId: "version_id",
+      schemaId: "schema_id",
+      orgId: "org_id",
+      deletedAt: "deleted_at",
+    },
+    schemaProperties: {
+      versionId: "version_id",
+      orgId: "org_id",
+      deletedAt: "deleted_at",
+    },
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((...args: unknown[]) => args),
-  and: vi.fn((...args: unknown[]) => args),
-  isNull: vi.fn((arg: unknown) => arg),
-  inArray: vi.fn((...args: unknown[]) => args),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    eq: vi.fn((...args: unknown[]) => args),
+    and: vi.fn((...args: unknown[]) => args),
+    isNull: vi.fn((arg: unknown) => arg),
+    inArray: vi.fn((...args: unknown[]) => args),
+  };
+});
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
@@ -58,7 +90,10 @@ type StepCtx = {
   run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
 };
 
-type HandlerFn = (ctx: { event: { data: unknown }; step: StepCtx }) => Promise<unknown>;
+type HandlerFn = (ctx: {
+  event: { data: unknown };
+  step: StepCtx;
+}) => Promise<unknown>;
 
 let capturedHandler: HandlerFn | null = null;
 
@@ -107,7 +142,9 @@ function makeTx(): { tx: unknown; m: TxMocks } {
   const nodeLabelsFindMany = vi.fn().mockResolvedValue([]);
   const relTypesFindMany = vi.fn().mockResolvedValue([]);
   const propertiesFindMany = vi.fn().mockResolvedValue([]);
-  const agentExecsFindFirst = vi.fn().mockResolvedValue({ startedAt: new Date() });
+  const agentExecsFindFirst = vi
+    .fn()
+    .mockResolvedValue({ startedAt: new Date() });
 
   const tx = {
     update: updateFn,
@@ -125,9 +162,13 @@ function makeTx(): { tx: unknown; m: TxMocks } {
   return {
     tx,
     m: {
-      schemaVersionsFindFirst, schemasFindMany,
-      schemaActivationsFindMany, nodeLabelsFindMany, relTypesFindMany,
-      propertiesFindMany, agentExecsFindFirst,
+      schemaVersionsFindFirst,
+      schemasFindMany,
+      schemaActivationsFindMany,
+      nodeLabelsFindMany,
+      relTypesFindMany,
+      propertiesFindMany,
+      agentExecsFindFirst,
     },
   };
 }
@@ -137,7 +178,10 @@ function makeNodeRecord(nodeId: string, label: string, propertiesJson: string) {
   return {
     get: (key: string): unknown => {
       const map: Record<string, unknown> = {
-        nodeId, label, properties: propertiesJson, displayName: nodeId,
+        nodeId,
+        label,
+        properties: propertiesJson,
+        displayName: nodeId,
       };
       return map[key];
     },
@@ -169,7 +213,9 @@ function makeSessionRunSequence(
 describe("schemaReconcile Inngest handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => fn(),
+    );
     mocks.sessionClose.mockResolvedValue(undefined);
     mocks.scopedSession.mockImplementation(() => ({
       run: mocks.sessionRun,
@@ -181,7 +227,9 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("throws 'schema version not found' when the version row is missing", async () => {
     const { tx } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
     await expect(
       capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() }),
@@ -190,11 +238,19 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("exits early with status:completed, totalNodes:0 when no schemas exist for the version", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([]); // no schemas
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     expect(result).toEqual({
       executionId: "exec-1",
@@ -206,12 +262,22 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("exits early with status:completed when all schemas are disabled", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
-    m.schemaActivationsFindMany.mockResolvedValue([{ schemaName: "mySchema", enabled: false }]);
+    m.schemaActivationsFindMany.mockResolvedValue([
+      { schemaName: "mySchema", enabled: false },
+    ]);
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     expect(result).toEqual({
       executionId: "exec-1",
@@ -223,15 +289,28 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("happy path: 1 label, 1 node with no missing props → processedNodes:1, updatedNodes:0", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]); // empty → enabled by default
     m.nodeLabelsFindMany.mockResolvedValue([{ id: "l-1", name: "MyLabel" }]);
     m.relTypesFindMany.mockResolvedValue([]);
     m.propertiesFindMany.mockResolvedValue([
-      { id: "p-1", nodeLabelId: "l-1", relationshipTypeId: null, key: "name", dataType: "string", required: false, description: null },
+      {
+        id: "p-1",
+        nodeLabelId: "l-1",
+        relationshipTypeId: null,
+        key: "name",
+        dataType: "string",
+        required: false,
+        description: null,
+      },
     ]);
 
     // count(1), batch with 1 node, batch end
@@ -239,12 +318,15 @@ describe("schemaReconcile Inngest handler", () => {
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count nodes
-        { records: [nodeRecord] },         // batch 1
-        { records: [] },                   // batch 2 end
+        { records: [nodeRecord] }, // batch 1
+        { records: [] }, // batch 2 end
       ]),
     );
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     const r = result as Record<string, unknown>;
     expect(r.status).toBe("completed");
@@ -257,29 +339,45 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("prune=true: node with off-schema property → updatedNodes:1, prunedNodes:1", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]);
     m.nodeLabelsFindMany.mockResolvedValue([{ id: "l-1", name: "MyLabel" }]);
     m.relTypesFindMany.mockResolvedValue([]);
     // Schema only has "name", not "extra"
     m.propertiesFindMany.mockResolvedValue([
-      { id: "p-1", nodeLabelId: "l-1", relationshipTypeId: null, key: "name", dataType: "string", required: false, description: null },
+      {
+        id: "p-1",
+        nodeLabelId: "l-1",
+        relationshipTypeId: null,
+        key: "name",
+        dataType: "string",
+        required: false,
+        description: null,
+      },
     ]);
 
     // Node has an extra off-schema property
-    const nodeProps = JSON.stringify({ name: "Acme", extra: "should be pruned" });
+    const nodeProps = JSON.stringify({
+      name: "Acme",
+      extra: "should be pruned",
+    });
     const nodeRecord = makeNodeRecord("node-1", "MyLabel", nodeProps);
 
     // count(1), batch 1 node, SET update (returns []), batch end ([])
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count nodes
-        { records: [nodeRecord] },         // batch 1
-        { records: [] },                   // SET n.properties (prune update)
-        { records: [] },                   // batch 2 end
+        { records: [nodeRecord] }, // batch 1
+        { records: [] }, // SET n.properties (prune update)
+        { records: [] }, // batch 2 end
       ]),
     );
 
@@ -295,16 +393,29 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("AI derivation is called for missing required props and updates the node", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]);
     m.nodeLabelsFindMany.mockResolvedValue([{ id: "l-1", name: "MyLabel" }]);
     m.relTypesFindMany.mockResolvedValue([]);
     // Required property missing from node
     m.propertiesFindMany.mockResolvedValue([
-      { id: "p-1", nodeLabelId: "l-1", relationshipTypeId: null, key: "summary", dataType: "string", required: true, description: "A brief summary" },
+      {
+        id: "p-1",
+        nodeLabelId: "l-1",
+        relationshipTypeId: null,
+        key: "summary",
+        dataType: "string",
+        required: true,
+        description: "A brief summary",
+      },
     ]);
 
     mocks.generateObjectFor.mockResolvedValue({
@@ -315,13 +426,16 @@ describe("schemaReconcile Inngest handler", () => {
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count
-        { records: [nodeRecord] },         // batch 1
-        { records: [] },                   // SET (AI-derived props written)
-        { records: [] },                   // batch 2 end
+        { records: [nodeRecord] }, // batch 1
+        { records: [] }, // SET (AI-derived props written)
+        { records: [] }, // batch 2 end
       ]),
     );
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
     const r = result as Record<string, unknown>;
@@ -330,15 +444,28 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("logs a warning and skips AI derivation when generateObjectFor throws", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]);
     m.nodeLabelsFindMany.mockResolvedValue([{ id: "l-1", name: "MyLabel" }]);
     m.relTypesFindMany.mockResolvedValue([]);
     m.propertiesFindMany.mockResolvedValue([
-      { id: "p-1", nodeLabelId: "l-1", relationshipTypeId: null, key: "summary", dataType: "string", required: true, description: "A brief summary" },
+      {
+        id: "p-1",
+        nodeLabelId: "l-1",
+        relationshipTypeId: null,
+        key: "summary",
+        dataType: "string",
+        required: true,
+        description: "A brief summary",
+      },
     ]);
 
     mocks.generateObjectFor.mockRejectedValue(new Error("AI gateway timeout"));
@@ -347,12 +474,15 @@ describe("schemaReconcile Inngest handler", () => {
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count
-        { records: [nodeRecord] },         // batch 1
-        { records: [] },                   // batch 2 end (no SET since AI skipped)
+        { records: [nodeRecord] }, // batch 1
+        { records: [] }, // batch 2 end (no SET since AI skipped)
       ]),
     );
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     // AI step skipped, node NOT updated
     const r = result as Record<string, unknown>;
@@ -365,22 +495,36 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("relationship reconcile with prune=true removes off-schema relationship props", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]);
     m.nodeLabelsFindMany.mockResolvedValue([]); // no node labels
     m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
     // Schema defines only "weight" for this rel type
     m.propertiesFindMany.mockResolvedValue([
-      { id: "p-1", nodeLabelId: null, relationshipTypeId: "rt-1", key: "weight", dataType: "number", required: false, description: null },
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
     ]);
 
     const relRecord = {
       get: (key: string): unknown => {
         const map: Record<string, unknown> = {
-          relElemId: "elem-1", relType: "RELATES_TO",
+          relElemId: "elem-1",
+          relType: "RELATES_TO",
           props: { weight: 0.9, extra: "off-schema" }, // extra should be pruned
         };
         return map[key];
@@ -391,9 +535,9 @@ describe("schemaReconcile Inngest handler", () => {
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count rels (no labels → no node count)
-        { records: [relRecord] },          // batch 1
-        { records: [] },                   // SET r +=
-        { records: [] },                   // batch 2 end
+        { records: [relRecord] }, // batch 1
+        { records: [] }, // SET r +=
+        { records: [] }, // batch 2 end
       ]),
     );
 
@@ -409,16 +553,24 @@ describe("schemaReconcile Inngest handler", () => {
 
   it("returns 0 processedNodes when labelNames is empty (no node reconcile)", async () => {
     const { tx, m } = makeTx();
-    mocks.withTenantDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
 
-    m.schemaVersionsFindFirst.mockResolvedValue({ id: "ver-1", versionNumber: 1 });
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
     m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
     m.schemaActivationsFindMany.mockResolvedValue([]);
     m.nodeLabelsFindMany.mockResolvedValue([]);
     m.relTypesFindMany.mockResolvedValue([]);
     m.propertiesFindMany.mockResolvedValue([]);
 
-    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
 
     const r = result as Record<string, unknown>;
     expect(r.totalNodes).toBe(0);
