@@ -3,7 +3,16 @@ import { createMDX } from "fumadocs-mdx/next";
 const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
+/**
+ * `standalone` emits `.next/standalone/server.js` with only the modules the
+ * server actually loads, which is what makes this shippable to a small
+ * instance without copying the whole dependency tree. Gated on an environment
+ * variable so local development and other targets are unaffected.
+ */
+const isStandalone = process.env.STANDALONE === "1";
+
 const nextConfig = {
+  ...(isStandalone ? { output: "standalone" } : {}),
   // Cache Components (Next 16): `use cache` + cacheLife/cacheTag with Partial
   // Prerendering as the default. The docs site is fully static (MDX +
   // generateStaticParams), so pages prerender into the static shell; the model

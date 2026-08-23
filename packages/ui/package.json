@@ -6,6 +6,7 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./styles/globals.css": "./src/styles/globals.css",
