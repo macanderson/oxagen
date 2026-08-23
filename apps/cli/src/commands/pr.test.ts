@@ -290,11 +290,24 @@ describe("handlePrFix", () => {
   );
 
   it("hands the loop working callbacks: onRound prints, fetchFailingContext pulls gh logs", async () => {
-    let deps: Record<string, any> = {};
-    fixMock.runFixToGreen.mockImplementationOnce(async (d: any) => {
-      deps = d;
-      d.onStatus("polling");
-      d.onRound({
+    interface CapturedDeps {
+      fetchFailingContext: (
+        pr: { number: number; url: string },
+        failing: Array<{ name: string; url?: string }>,
+      ) => Promise<string>;
+      onStatus: (line: string) => void;
+      onRound: (round: {
+        round: number;
+        failing: string[];
+        diagnosis: string;
+        filesChanged: string[];
+      }) => void;
+    }
+    let deps!: CapturedDeps;
+    fixMock.runFixToGreen.mockImplementationOnce(async (d: unknown) => {
+      deps = d as CapturedDeps;
+      deps.onStatus("polling");
+      deps.onRound({
         round: 1,
         failing: ["test"],
         diagnosis: "root cause\nsecond line",

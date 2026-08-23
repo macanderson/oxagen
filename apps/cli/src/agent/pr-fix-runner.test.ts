@@ -103,12 +103,17 @@ function makeRunner(over: Partial<Parameters<typeof createPrFixRunner>[0]> = {})
 }
 
 const originalIsTty = process.stdout.isTTY;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
+// The generic ReturnType<typeof vi.spyOn> collapses process.stderr.write's
+// overloads into an incompatible MockInstance — infer the concrete type from
+// the call instead.
+let stderrSpy: ReturnType<typeof spyOnStderr>;
+const spyOnStderr = () =>
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
 beforeEach(() => {
   runTurnMock.mockReset().mockResolvedValue({ text: "patched" });
   asMock(resolveApiContext).mockReset().mockReturnValue(null);
-  stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  stderrSpy = spyOnStderr();
 });
 
 afterEach(() => {
