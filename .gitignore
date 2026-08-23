@@ -16,6 +16,7 @@ yarn-debug.log*
 # Build artifacts
 dist
 .next
+.open-next
 .turbo
 out
 build

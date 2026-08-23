@@ -37,6 +37,10 @@ const config = [
   {
     ignores: [
       ".next/**",
+      // OpenNext's deploy bundle (apps/docs). Same class as .next/**: build
+      // output that exists only on a machine that has packaged the app, and
+      // that turned a local full-gate lint into 3,062 phantom errors.
+      ".open-next/**",
       "node_modules/**",
       "dist/**",
       ".turbo/**",
