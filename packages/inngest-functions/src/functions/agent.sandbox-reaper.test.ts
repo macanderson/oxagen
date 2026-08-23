@@ -21,14 +21,17 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
   schema: { sandboxSessions: { id: "id_col" } },
 }));
-vi.mock("drizzle-orm", () => {
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
   const sql = (strings: TemplateStringsArray, ...values: unknown[]) => ({
     text: strings.join("?"),
     values,
   });
-  return { sql, eq: (col: unknown, val: unknown) => ({ col, val }) };
+  return { ...actual, sql, eq: (col: unknown, val: unknown) => ({ col, val }) };
 });
-vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mocks.runInTenantScope }));
+vi.mock("@oxagen/tenancy", () => ({
+  runInTenantScope: mocks.runInTenantScope,
+}));
 vi.mock("@oxagen/telemetry", () => ({ insertEvents: mocks.insertEvents }));
 vi.mock("@oxagen/agent", () => ({
   recoverSandboxSession: mocks.recoverSandboxSession,
@@ -38,7 +41,9 @@ vi.mock("@oxagen/agent", () => ({
 vi.mock("../logger", () => ({ logger: mocks.logger }));
 
 // ── Capture handler ───────────────────────────────────────────────────────────
-type StepCtx = { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
+type StepCtx = {
+  run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+};
 type HandlerFn = (ctx: { step: StepCtx }) => Promise<unknown>;
 
 let reapHandler: HandlerFn | null = null;
@@ -55,7 +60,8 @@ await import("./agent.sandbox-reaper");
 function makeTx() {
   return {
     execute: vi.fn().mockImplementation((q: { text: string }) => {
-      if (q.text.includes("FOR UPDATE SKIP LOCKED")) return Promise.resolve(mocks.candidates);
+      if (q.text.includes("FOR UPDATE SKIP LOCKED"))
+        return Promise.resolve(mocks.candidates);
       if (q.text.includes("grace_past")) return Promise.resolve(mocks.recheck);
       return Promise.resolve([]);
     }),
@@ -93,8 +99,12 @@ describe("agent.sandbox-reaper", () => {
     mocks.candidates = [];
     mocks.recheck = [{ status: "idle", grace_past: true, stale: false }];
     mocks.updates = [];
-    mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(makeTx()));
-    mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+    mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(makeTx()),
+    );
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => fn(),
+    );
     mocks.agentSandboxStopHandler.mockResolvedValue({ stopped: true });
   });
 
@@ -143,7 +153,10 @@ describe("agent.sandbox-reaper", () => {
 
   it("clean session → terminated AND marked flushed with recovery_status 'none'", async () => {
     mocks.candidates = [candidate()];
-    mocks.recoverSandboxSession.mockResolvedValue({ kind: "clean", dirty: false });
+    mocks.recoverSandboxSession.mockResolvedValue({
+      kind: "clean",
+      dirty: false,
+    });
     await runReaper();
 
     expect(mocks.agentSandboxStopHandler).toHaveBeenCalledTimes(1);
@@ -154,7 +167,11 @@ describe("agent.sandbox-reaper", () => {
 
   it("gone session → flushed (dead sandbox) with recovery_status 'failed'", async () => {
     mocks.candidates = [candidate()];
-    mocks.recoverSandboxSession.mockResolvedValue({ kind: "gone", dirty: null, error: "sandbox gone before recovery" });
+    mocks.recoverSandboxSession.mockResolvedValue({
+      kind: "gone",
+      dirty: null,
+      error: "sandbox gone before recovery",
+    });
     await runReaper();
 
     expect(mocks.agentSandboxStopHandler).toHaveBeenCalledTimes(1);
@@ -165,7 +182,10 @@ describe("agent.sandbox-reaper", () => {
 
   it("flush writes terminal state itself: status stopped + soft-deleted", async () => {
     mocks.candidates = [candidate()];
-    mocks.recoverSandboxSession.mockResolvedValue({ kind: "clean", dirty: false });
+    mocks.recoverSandboxSession.mockResolvedValue({
+      kind: "clean",
+      dirty: false,
+    });
     await runReaper();
 
     const flushWrite = mocks.updates.find((u) => "flushedAt" in u);
@@ -176,10 +196,15 @@ describe("agent.sandbox-reaper", () => {
 
   it("flush RETIRES the row even when terminate throws (no lingering idle/running)", async () => {
     mocks.candidates = [candidate()];
-    mocks.recoverSandboxSession.mockResolvedValue({ kind: "clean", dirty: false });
+    mocks.recoverSandboxSession.mockResolvedValue({
+      kind: "clean",
+      dirty: false,
+    });
     // The best-effort stop throws (e.g. no durable driver configured) — the
     // reaper must still write terminal state so the sandbox never lingers.
-    mocks.agentSandboxStopHandler.mockRejectedValue(new Error("no durable driver"));
+    mocks.agentSandboxStopHandler.mockRejectedValue(
+      new Error("no durable driver"),
+    );
     await runReaper();
 
     const flushWrite = mocks.updates.find((u) => "flushedAt" in u);

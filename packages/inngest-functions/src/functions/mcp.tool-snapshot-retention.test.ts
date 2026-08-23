@@ -16,9 +16,16 @@ vi.mock("@oxagen/database", () => ({
   schema: {},
 }));
 
-vi.mock("drizzle-orm", () => ({
-  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+      strings,
+      values,
+    })),
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: mocks.logger,
@@ -56,12 +63,14 @@ describe("mcpToolSnapshotRetention Inngest handler", () => {
   });
 
   it("returns purgedSnapshots: 0 when no expired snapshots exist", async () => {
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const fakeTx = {
-        execute: vi.fn().mockResolvedValue([]),
-      };
-      return fn(fakeTx);
-    });
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => {
+        const fakeTx = {
+          execute: vi.fn().mockResolvedValue([]),
+        };
+        return fn(fakeTx);
+      },
+    );
 
     const result = await capturedHandler!({ step: makeStep() });
 
@@ -74,12 +83,14 @@ describe("mcpToolSnapshotRetention Inngest handler", () => {
 
   it("returns purgedSnapshots: N when expired snapshots are deleted", async () => {
     const deletedRows = [{ id: "snap-1" }, { id: "snap-2" }, { id: "snap-3" }];
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const fakeTx = {
-        execute: vi.fn().mockResolvedValue(deletedRows),
-      };
-      return fn(fakeTx);
-    });
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => {
+        const fakeTx = {
+          execute: vi.fn().mockResolvedValue(deletedRows),
+        };
+        return fn(fakeTx);
+      },
+    );
 
     const result = await capturedHandler!({ step: makeStep() });
 
@@ -93,16 +104,20 @@ describe("mcpToolSnapshotRetention Inngest handler", () => {
   it("propagates DB errors from the purge query", async () => {
     mocks.withSystemDb.mockRejectedValue(new Error("DB connection lost"));
 
-    await expect(capturedHandler!({ step: makeStep() })).rejects.toThrow("DB connection lost");
+    await expect(capturedHandler!({ step: makeStep() })).rejects.toThrow(
+      "DB connection lost",
+    );
   });
 
   it("logs the cutoff ISO string and duration on success", async () => {
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      const fakeTx = {
-        execute: vi.fn().mockResolvedValue([{ id: "snap-1" }]),
-      };
-      return fn(fakeTx);
-    });
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => {
+        const fakeTx = {
+          execute: vi.fn().mockResolvedValue([{ id: "snap-1" }]),
+        };
+        return fn(fakeTx);
+      },
+    );
 
     await capturedHandler!({ step: makeStep() });
 

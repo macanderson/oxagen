@@ -41,9 +41,13 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("drizzle-orm", () => ({
-  eq: (col: unknown, val: unknown) => ({ col, val }),
-}));
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    eq: (col: unknown, val: unknown) => ({ col, val }),
+  };
+});
 
 vi.mock("../logger", () => ({
   logger: {
