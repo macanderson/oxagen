@@ -173,14 +173,27 @@ export const baseEnvSchema = z.object({
   // docs/guides/storage-driver-authoring.md.
   STORAGE_FS_ROOT: z.string().min(1).optional(),
 
-  // Vercel AI Gateway — the platform's single AI auth boundary. AI_GATEWAY_API_KEY
-  // authenticates every model call (text, image, embeddings, video); @oxagen/ai
-  // routes 100% through the gateway with no direct-provider fallback. The
-  // OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen Mini/Plus/Max")
-  // that resolve to concrete gateway model ids in `creator/model` form. Defaults
-  // mirror the registry staticValues so local dev and tests resolve a tier
-  // without extra configuration.
+  // Vercel AI Gateway — the platform's default AI auth boundary.
+  // AI_GATEWAY_API_KEY authenticates every model call (text, image, embeddings,
+  // video). The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
+  // Mini/Plus/Max") resolving to concrete model ids in `creator/model` form.
+  // Defaults mirror the registry staticValues so local dev and tests resolve a
+  // tier without extra configuration.
   AI_GATEWAY_API_KEY: z.string().optional(),
+  // Which provider serves LANGUAGE models. The gateway is the default and the
+  // metered path; "openrouter" selects a direct OpenAI-compatible provider for
+  // a deployment that cannot reach the gateway — the AWS instance behind
+  // app.oxagen.sh, whose gateway credential 401s while the Vercel account is
+  // suspended. Never an automatic fallback: an operator opting out says so
+  // here, because a silent failover would move spend to another vendor's bill
+  // and skip the metering the gateway exists to provide.
+  //
+  // Image, video and embeddings stay on the gateway either way — OpenRouter
+  // serves none of them. See packages/ai/src/models.ts.
+  OXAGEN_MODEL_PROVIDER: z.enum(["gateway", "openrouter"]).default("gateway"),
+  // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
+  // other deployment stays valid without it.
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
   OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
   OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),
