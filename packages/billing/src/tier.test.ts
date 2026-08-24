@@ -13,11 +13,19 @@ import { describe, it, expect, vi } from "vitest";
 interface TxState {
   subRows: { tier: string }[];
   orgRows: { planType: string | null }[];
+  /**
+   * Times resolveOrgTier opened a database transaction. The mocked tx returns
+   * empty rows, which resolve to 'free' by the normal path too — so asserting
+   * only on the return value cannot tell "returned early" from "queried and
+   * found nothing". Counting the trip to the database is what separates them.
+   */
+  dbCalls: number;
 }
 
 const txState: TxState = {
   subRows: [],
   orgRows: [],
+  dbCalls: 0,
 };
 
 function makeTx() {
@@ -41,8 +49,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
-    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx()),
+    withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => {
+      txState.dbCalls += 1;
+      return fn(makeTx());
+    },
+    withTenantDb: async (fn: (tx: ReturnType<typeof makeTx>) => unknown) => {
+      txState.dbCalls += 1;
+      return fn(makeTx());
+    },
   };
 });
 
@@ -52,6 +66,27 @@ describe("resolveOrgTier", () => {
   beforeEach(() => {
     txState.subRows = [];
     txState.orgRows = [];
+    txState.dbCalls = 0;
+  });
+
+  // `create_org` is user-scoped and runs before an org exists, so checkIAM
+  // calls this with an empty orgId. Both columns it filters on are `uuid`, and
+  // Postgres raises 22P02 rather than returning no rows — the IAM check then
+  // catches, fails closed, and a brand-new account is told it may not create
+  // its first organization.
+  //
+  // The assertion that matters is dbCalls: the mocked tx yields empty rows,
+  // which reach 'free' by the ordinary path as well, so the return value alone
+  // is true either way and proves nothing.
+  it("resolves an absent org to 'free' without querying the database", async () => {
+    expect(await resolveOrgTier("")).toBe("free");
+    expect(txState.dbCalls).toBe(0);
+  });
+
+  it("still queries the database for a real org id", async () => {
+    txState.subRows = [{ tier: "scale" }];
+    expect(await resolveOrgTier("org-1")).toBe("scale");
+    expect(txState.dbCalls).toBe(1);
   });
 
   it("returns the subscription plan tier when active subscription exists", async () => {
