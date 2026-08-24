@@ -759,18 +759,6 @@ jobs:
             hostname: api.oxagen.sh
           - service: mcp
             hostname: mcp.oxagen.sh
-    # These are compiled INTO the client bundle, so they are build inputs, not
-    # runtime configuration — setting them in Parameter Store beside the
-    # secrets would be too late. They are hostnames, not credentials.
-    #
-    # The other NEXT_PUBLIC_* values this repository reads (PostHog, the Stripe
-    # publishable key, Google Maps) are not set here and the affected features
-    # degrade. Wiring them is tracked separately; guessing at them would bake a
-    # wrong value into a bundle where it is invisible.
-    env:
-      NEXT_PUBLIC_APP_URL: https://app.oxagen.sh
-      NEXT_PUBLIC_API_URL: https://api.oxagen.sh
-      NEXT_PUBLIC_DOCS_URL: https://docs.oxagen.sh
     steps:
       - uses: actions/checkout@v5
 
@@ -788,13 +776,51 @@ jobs:
       - name: pnpm install
         run: pnpm install --frozen-lockfile
 
-      - name: Package ${{ matrix.service }}
-        run: tools/scripts/package-for-node.sh ${{ matrix.service }}
-
+      # Credentials are assumed before packaging, not after: the build itself
+      # needs Parameter Store now, where previously only the upload did.
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: arn:aws:iam::578673726240:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
+
+      # `next build` imports route modules to collect page data and several of
+      # them validate the environment at import time, so a build with three
+      # hostnames and nothing else dies at `/api/command-menu/search` (#1190).
+      # NEXT_PUBLIC_* values are inlined into the client bundle, which is why
+      # they cannot wait for container start like every other secret does.
+      #
+      # The set is derived from ENV_REGISTRY rather than written out here.
+      # A list of names in a workflow drifts the moment a route reads a new
+      # variable, and its failure is a build crash naming a route instead of
+      # the variable; the registry already knows which service needs what.
+      - name: Resolve the build environment for ${{ matrix.service }}
+        env:
+          PARAMETER_PREFIX: /oxagen/production
+        run: |
+          set -euo pipefail
+          aws ssm get-parameters-by-path \
+            --path "$PARAMETER_PREFIX" \
+            --recursive \
+            --with-decryption \
+            --output json \
+            --query 'Parameters[].{Name:Name,Value:Value}' \
+          | pnpm exec tsx tools/scripts/build-env.ts \
+              --service ${{ matrix.service }} \
+              --env production \
+              --prefix "$PARAMETER_PREFIX" \
+              --out "$RUNNER_TEMP/build-env"
+
+      # Sourced into this one step rather than exported through $GITHUB_ENV:
+      # the values are the whole production configuration for this service, and
+      # `pnpm install` above — which runs third-party lifecycle scripts — has no
+      # business seeing them.
+      - name: Package ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          set -a
+          . "$RUNNER_TEMP/build-env"
+          set +a
+          tools/scripts/package-for-node.sh ${{ matrix.service }}
 
       - uses: ./.github/actions/ship-to-node
         with:
