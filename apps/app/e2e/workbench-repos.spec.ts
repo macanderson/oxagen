@@ -24,7 +24,7 @@ const SCREENSHOT_DIR = path.join(
   "screenshots",
 );
 
-test("Repos list renders header actions + empty state; an unknown repo id 404s", async ({
+test("Repos list renders the empty state without the toolbar; an unknown repo id 404s", async ({
   page,
 }) => {
   const user = await signUpFreshUser(page, { orgPrefix: "e2e-repos" });
@@ -36,14 +36,21 @@ test("Repos list renders header actions + empty state; an unknown repo id 404s",
     timeout: 20_000,
   });
 
-  // Header actions render for the workspace-owner fresh signup created.
-  await expect(page.getByTestId("repos-create-btn")).toBeVisible();
-  await expect(page.getByTestId("repos-fork-btn")).toBeVisible();
-  await expect(page.getByTestId("repos-edit-file-btn")).toBeVisible();
-
   // No GitHub connections in a fresh workspace → the empty state, not a table.
   await expect(page.getByTestId("repos-empty-state")).toBeVisible();
   await expect(page.getByTestId("repos-table")).toHaveCount(0);
+
+  // With zero repos the top toolbar is deliberately absent: Refresh, Fork and
+  // Edit file have nothing to act on, so repos-client.tsx gates the whole strip
+  // on `repos.length > 0` and offers Create inside the empty card instead. The
+  // unit test "hides the inoperable toolbar and puts Create repo inside the
+  // empty state" pins the same contract. Asserting the absence keeps this spec
+  // honest about which of the two Create buttons a fresh workspace gets.
+  await expect(page.getByTestId("repos-empty-create-btn")).toBeVisible();
+  await expect(page.getByTestId("repos-create-btn")).toHaveCount(0);
+  await expect(page.getByTestId("repos-fork-btn")).toHaveCount(0);
+  await expect(page.getByTestId("repos-edit-file-btn")).toHaveCount(0);
+  await expect(page.getByTestId("repos-refresh-btn")).toHaveCount(0);
 
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   await page.screenshot({
