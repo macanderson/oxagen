@@ -46,6 +46,13 @@ const config = [
       ".turbo/**",
       "coverage/**",
       "**/e2e/screenshots/**",
+      // Playwright's other two outputs, same class as e2e/screenshots/** above
+      // and gitignored beside it (.gitignore:38-39). playwright-report/ embeds
+      // a bundled trace viewer — minified vendor JS that eslint reads as
+      // thousands of real errors, so running e2e and then lint turned the
+      // whole gate red on a tree nobody had edited.
+      "**/playwright-report/**",
+      "**/test-results/**",
     ],
   },
   ...nextPlugin,
