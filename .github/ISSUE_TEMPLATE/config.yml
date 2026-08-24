@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/oxageninc/oxagen-platform/security/advisories/new
+    url: https://github.com/macanderson/oxagen/security/advisories/new
     about: Report privately — never in a public issue. See SECURITY.md.
   - name: Documentation
     url: https://docs.oxagen.sh
     about: Product, API, and CLI documentation.
   - name: Support
-    url: https://github.com/oxageninc/oxagen-platform/blob/main/SUPPORT.md
+    url: https://github.com/macanderson/oxagen/blob/main/SUPPORT.md
     about: How to get help.

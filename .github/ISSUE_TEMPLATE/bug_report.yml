@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/oxageninc/oxagen-platform/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
+        **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/macanderson/oxagen/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
   - type: dropdown
     id: surface
     attributes:

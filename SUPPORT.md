@@ -14,8 +14,8 @@ Start with the docs — they cover the platform, every capability, and the CLI:
 
 | Need | Channel |
 |---|---|
-| Bug in the platform or CLI | [Open a bug report](https://github.com/oxageninc/oxagen-platform/issues/new?template=bug_report.yml) |
-| Feature request | [Open a feature request](https://github.com/oxageninc/oxagen-platform/issues/new?template=feature_request.yml) |
+| Bug in the platform or CLI | [Open a bug report](https://github.com/macanderson/oxagen/issues/new?template=bug_report.yml) |
+| Feature request | [Open a feature request](https://github.com/macanderson/oxagen/issues/new?template=feature_request.yml) |
 | Security vulnerability | **Never a public issue** — see [`SECURITY.md`](SECURITY.md) |
 | Account, billing, or anything else | `support@oxagen.sh` |
 

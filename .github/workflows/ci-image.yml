@@ -68,8 +68,8 @@ jobs:
           target: base
           push: true
           tags: |
-            ghcr.io/oxageninc/oxagen-ci-base:latest
-            ghcr.io/oxageninc/oxagen-ci-base:sha-${{ github.sha }}
+            ghcr.io/macanderson/oxagen-ci-base:latest
+            ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }}
           build-args: |
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
             ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
@@ -83,8 +83,8 @@ jobs:
           target: e2e
           push: true
           tags: |
-            ghcr.io/oxageninc/oxagen-ci-e2e:latest
-            ghcr.io/oxageninc/oxagen-ci-e2e:sha-${{ github.sha }}
+            ghcr.io/macanderson/oxagen-ci-e2e:latest
+            ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }}
           build-args: |
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
             ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
@@ -94,7 +94,7 @@ jobs:
 
       - name: Smoke-test published images
         run: |
-          docker run --rm ghcr.io/oxageninc/oxagen-ci-base:sha-${{ github.sha }} \
+          docker run --rm ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }} \
             sh -c 'node --version && pnpm --version && atlas version && psql --version && git --version'
-          docker run --rm ghcr.io/oxageninc/oxagen-ci-e2e:sha-${{ github.sha }} \
+          docker run --rm ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }} \
             sh -c 'ls "$PLAYWRIGHT_BROWSERS_PATH" | grep -q chromium'

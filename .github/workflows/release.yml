@@ -16,7 +16,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      image: ghcr.io/macanderson/oxagen-ci-base:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

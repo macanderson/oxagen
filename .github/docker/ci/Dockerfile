@@ -2,9 +2,9 @@
 # CI toolchain image for the Oxagen monorepo.
 #
 # Two published targets (see .github/workflows/ci-image.yml):
-#   ghcr.io/oxageninc/oxagen-ci-base — Node 24 + pnpm (corepack) + Atlas +
+#   ghcr.io/macanderson/oxagen-ci-base — Node 24 + pnpm (corepack) + Atlas +
 #     postgresql-client. Used by every non-e2e CI job.
-#   ghcr.io/oxageninc/oxagen-ci-e2e  — base + Playwright Chromium and its OS
+#   ghcr.io/macanderson/oxagen-ci-e2e  — base + Playwright Chromium and its OS
 #     deps, pinned to apps/app's @playwright/test version. Used by e2e jobs.
 #
 # Version pins arrive as build args from ci-image.yml, which reads them from
