@@ -1,0 +1,16 @@
+-- iam.bump_deny_generation must not be callable by the application role.
+--
+-- 20260813110000_agent_run_authorization_foundation.sql revoked the function
+-- from PUBLIC, but 20260612052000_regrant_oxagen_app.sql had already installed
+-- ALTER DEFAULT PRIVILEGES ... GRANT EXECUTE ON FUNCTIONS TO oxagen_app for
+-- every schema — so the moment CREATE FUNCTION ran, oxagen_app held EXECUTE,
+-- on every database that replays this directory in order. Any tenant able to
+-- run SQL as the app role could bump another tenant's deny generation — a
+-- denial-of-service on authorization. The integration witness
+-- (authorization-foundation.test.ts "the application role cannot execute it
+-- either") has failed on a replayed database since the function landed;
+-- Actions being down meant no CI run ever surfaced it.
+--
+-- The trigger functions stay as they are: they run as trigger owners, and the
+-- foundation migration already revoked their PUBLIC execute.
+REVOKE EXECUTE ON FUNCTION "iam"."bump_deny_generation"(uuid, uuid) FROM oxagen_app;

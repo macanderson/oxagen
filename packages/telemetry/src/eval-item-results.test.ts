@@ -111,6 +111,16 @@ describe("selectEvalItemResults", () => {
     const result = await selectEvalItemResults("run-empty");
     expect(result).toEqual([]);
   });
+
+  it("coerces the Int64 cost_usd_micros the wire hands back as a string", async () => {
+    // ClickHouse's JSON format serialises Int64 as a string; uncoerced it
+    // failed get_eval_run's own output schema at results[].costUsdMicros.
+    chSelect.mockResolvedValueOnce({
+      data: [{ ...row, cost_usd_micros: "500" }],
+    });
+    const result = await selectEvalItemResults("run-1");
+    expect(result[0]?.cost_usd_micros).toBe(500);
+  });
 });
 
 describe("selectEvalRunCostRollup", () => {

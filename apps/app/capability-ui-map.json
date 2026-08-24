@@ -75,7 +75,7 @@
     },
     "search_references": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
-      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/ask/page.tsx",
+      "page": "apps/app/src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-page.tsx",
       "entry": "Composer @-mention picker (type '@' → pick a reference type → scoped search) and mention-chip hover hydration → POST /api/reference-search → invoke(\"search_references\")",
       "testid": "mention-menu",
       "proof": "apps/app/e2e/chat-mentions.spec.ts",

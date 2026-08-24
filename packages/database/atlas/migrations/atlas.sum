@@ -1,4 +1,4 @@
-h1:psTbRcltmzpbNdHDsQDCCzZfgHSwNRjhA1ZgqIVYBQ0=
+h1:zCmyiWPgDNDlvYXMWYPpxk8B9LHDxqPRrZIYiiqwDHM=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:rkdyIpu+hw+f+fGZHzpXyfm5feAL2GK9qitZROPXTpo=
@@ -86,3 +86,4 @@ h1:psTbRcltmzpbNdHDsQDCCzZfgHSwNRjhA1ZgqIVYBQ0=
 20260813120000_agent_run_authorization_security_events.sql h1:Ba5OIqa9dp7M/NQAzZaTTMHx1jHCZkp+rM4oaznEpQY=
 20260813130000_drop_agent_triggers.sql h1:h1NBahP9vRCvnkUp/1BWIcDsOglH91rK0gbu6s9kBNU=
 20260820120000_billing_budget_updated_security_event.sql h1:oJyvTrNJ21ReocVs1gsVNQUWmXnyOawZ/YLWklkXI3M=
+20260823230000_revoke_bump_deny_generation_from_app.sql h1:U+ETsAPBuTcQUwkXkygs6KdGuKTIBWVZxLXXQ9VtDhA=

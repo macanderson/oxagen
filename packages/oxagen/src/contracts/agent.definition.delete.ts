@@ -13,7 +13,11 @@ export const agentDefinitionDelete = registerCapability({
     "Soft-delete an agent definition and its delegated IAM principal together — the row is retained for audit but the agent stops appearing in every list and can no longer run",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
+  // No "app" layer yet: nothing in apps/app invokes this capability and no
+  // page carries a delete-agent control, so declaring it made the UI-parity
+  // gate red the moment the strict ratchet landed. Declare the layer again in
+  // the change that ships the page, binding and proof — never before.
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "mutation" },
   sensitivity: "destructive",

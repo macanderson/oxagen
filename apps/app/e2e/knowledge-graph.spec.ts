@@ -61,7 +61,11 @@ test.describe("Knowledge → Graph", () => {
     await expect(page.locator('[aria-label="View mode"]')).toBeVisible();
 
     // The new side panel: header + stat boxes + tab strip.
-    await expect(page.getByRole("heading", { name: "Graph" })).toBeVisible();
+    // exact: the empty state's "No graph data yet" h3 also substring-matches
+    // "Graph", and both render while the canvas decides what it has.
+    await expect(
+      page.getByRole("heading", { name: "Graph", exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("tab", { name: "Browse" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Search" })).toBeVisible();

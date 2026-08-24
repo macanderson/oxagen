@@ -325,17 +325,20 @@ describe("GraphExplorer — empty and filtered-empty states", () => {
     edgesByType: [],
   });
 
-  it("offers to reveal agent activity when the seed is empty but nodes exist", () => {
+  it("shows the empty state when the seed is empty, whatever the stats say", () => {
+    // #1087 retired the workspace graph authority's server-side "hide agent
+    // activity" toggle, and with it the "Show agent activity" reveal this
+    // test used to demand — the component now renders EmptyState on an empty
+    // seed unconditionally. This pins the post-#1087 contract; the old
+    // assertion outlived its feature because CI was down when #1087 merged.
     explorerState.nodes = [];
     explorerState.edges = [];
     explorerState.stats = statsWith(4);
     render(<GraphExplorer />);
-    // Must NOT claim "no data" while the stats rail reports 4 nodes.
-    expect(screen.queryByText(/no graph data yet/i)).toBeNull();
-    expect(screen.getByText(/4 nodes hidden by filters/i)).toBeInTheDocument();
+    expect(screen.getByText(/no graph data yet/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /show agent activity/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /show agent activity/i }),
+    ).toBeNull();
   });
 
   it("shows the true empty state when the whole graph is empty", () => {

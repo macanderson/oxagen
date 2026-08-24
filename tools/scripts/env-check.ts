@@ -36,6 +36,14 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
+  // Process-placement knobs for the self-hosted API (apps/api/src/index.ts):
+  // supplied by whatever runs the process — Caddy/systemd on the shared
+  // instance — never configured through env-manager. HOSTNAME doubles as the
+  // POSIX machine name the OS sets, which is why it can never be a registry
+  // entry with a schema.
+  "PORT",
+  "HOST",
+  "HOSTNAME",
   // no-color.org standard — set by the terminal/shell, not by operators
   "NO_COLOR",
   // Oxagen internal platform version tag

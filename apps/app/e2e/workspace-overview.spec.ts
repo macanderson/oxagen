@@ -59,12 +59,16 @@ test("workspace overview HUD: renders every section in its zero state", async ({
     sourcesTile.getByText(/no sources connected yet/i),
   ).toBeVisible();
 
-  // The "Needs attention" quick links are always present (static, not data-driven).
+  // The "Needs attention" quick links are always present (static, not
+  // data-driven). The current pair is Review memories / Open Sessions —
+  // "review inferred edges" left with the graph-authority retirement (#1087)
+  // and "ask" became Sessions; this spec pinned the old pair through the
+  // weeks CI was down.
   await expect(
-    reviewLinks.getByRole("link", { name: /review inferred edges/i }),
+    reviewLinks.getByRole("link", { name: /review memories/i }),
   ).toBeVisible();
   await expect(
-    reviewLinks.getByRole("link", { name: /open ask/i }),
+    reviewLinks.getByRole("link", { name: /open sessions/i }),
   ).toBeVisible();
 
   await page.screenshot({

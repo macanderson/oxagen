@@ -137,7 +137,11 @@ export function AutomationsTable({
         description="Create an automation to run a playbook on a graph event, a schedule, or on demand. Nothing fires until you enable it."
         action={
           canManage ? (
-            <NewAutomationButton orgSlug={orgSlug} workspaceSlug={workspaceSlug} />
+            <NewAutomationButton
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+              testId="new-automation-empty"
+            />
           ) : undefined
         }
       />

@@ -51,7 +51,17 @@ export async function insertEvalItemResults(
 export async function selectEvalItemResults(
   runId: string,
 ): Promise<EvalItemResultRow[]> {
-  const res = await chSelect<EvalItemResultRow>({
+  const res = await chSelect<
+    Omit<EvalItemResultRow, "cost_usd_micros"> & {
+      // ClickHouse's JSON format serialises Int64 as a string to protect JS
+      // precision; every other numeric column here is 32-bit and arrives as a
+      // number. Uncoerced, this string flowed into eval.run.get's output and
+      // failed the capability's own schema ("Expected number, received
+      // string" at results[].costUsdMicros) — the rollup selector below
+      // already coerces for exactly this reason.
+      cost_usd_micros: string | number;
+    }
+  >({
     query: `
       SELECT
         run_id, dataset_id, item_id, target_kind, model, judge_model,
@@ -66,7 +76,10 @@ export async function selectEvalItemResults(
     `,
     params: { runId },
   });
-  return res.data;
+  return res.data.map((row) => ({
+    ...row,
+    cost_usd_micros: Number(row.cost_usd_micros),
+  }));
 }
 
 /** Per-run cost + token rollup (in the ClickHouse-native micros / token units). */
