@@ -54,10 +54,20 @@ resource "aws_iam_role_policy" "node_read_artifacts" {
 # only through Parameter Store, so it cannot decrypt anything this role cannot
 # already read as a parameter. Same construction as the data stack's own.
 data "aws_iam_policy_document" "node_read_app_config" {
+  # Both ARNs, because the two call shapes authorize against different
+  # resources. `GetParameter` names a leaf and is authorized against that
+  # leaf, which the wildcard covers. `GetParametersByPath` names the *path*
+  # and is authorized against the path's own ARN, which the wildcard does not
+  # match — with only the wildcard the node's deploy script fails with
+  # AccessDeniedException on `ssm:GetParametersByPath`, and every service
+  # declaring a `config_prefix` starts with no configuration at all.
   statement {
-    sid       = "ReadApplicationConfig"
-    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-    resources = ["${local.ssm_arn_prefix}:parameter${var.app_parameter_prefix}/*"]
+    sid     = "ReadApplicationConfig"
+    actions = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+    resources = [
+      "${local.ssm_arn_prefix}:parameter${var.app_parameter_prefix}",
+      "${local.ssm_arn_prefix}:parameter${var.app_parameter_prefix}/*",
+    ]
   }
 
   statement {
