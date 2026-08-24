@@ -118,7 +118,11 @@ export default defineConfig({
       cwd: resolve(dirname(fileURLToPath(import.meta.url)), "../.."),
       url: "http://localhost:4000/health",
       reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
+      // tsx transpiles the whole API on boot; on a loaded machine that takes
+      // over a minute cold (measured ~75s locally), and a 60s ceiling turned
+      // that into "Timed out waiting from config.webServer" with zero output.
+      // A ceiling, not a wait — a fast boot still proceeds immediately.
+      timeout: 180_000,
       env: { ...process.env, E2E_TEST: "true" },
       // Forward the API's pino output into the Playwright (and CI) log — a
       // sanitized 500 from a route is undebuggable without the server stack.
