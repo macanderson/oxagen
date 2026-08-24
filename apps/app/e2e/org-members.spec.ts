@@ -84,9 +84,12 @@ test("org members: fresh-org roster, seat banner, and the real seat-limit gate",
   await expect(page.getByText("owner", { exact: true })).toBeVisible();
 
   // Seat usage banner — free tier, 1 license, already consumed by the creator.
-  const seatAlert = page.getByRole("alert");
+  // Filtered: Next's route announcer is a second, permanent role="alert"
+  // (#__next-route-announcer__), so the bare role locator is never unique.
+  const seatAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "You have 1 user license" });
   await expect(seatAlert).toBeVisible();
-  await expect(seatAlert).toContainText("You have 1 user license");
 
   // Role-gated control: "Add member" is visible because the viewer is owner.
   const addMemberButton = page.getByRole("button", { name: "Add member" });
@@ -140,7 +143,9 @@ test("org members: invite → pending list with live badge → revoke", async ({
     await invitedTab.click();
     await expect(page).toHaveURL(new RegExp(`/${orgSlug}/members/pending`));
 
-    await expect(page.getByText(inviteeEmail)).toBeVisible({
+    // .first(): the "Invitation sent" toast still carries the email while the
+    // pending row appears, so the bare text locator matches both.
+    await expect(page.getByText(inviteeEmail).first()).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByText("Admin", { exact: true })).toBeVisible();
