@@ -1,0 +1,10 @@
+name: smoke
+on:
+  push:
+    branches: [ci/smoke]
+  workflow_dispatch:
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "runner works"
