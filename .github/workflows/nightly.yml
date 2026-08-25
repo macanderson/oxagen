@@ -7,7 +7,7 @@ on:
   # signal). Use the schedule for the daily full-tree regression sweep.
   workflow_dispatch: {}
 
-# Atlas is baked into the ghcr.io/oxageninc/oxagen-ci-* images (pin lives in
+# Atlas is baked into the ghcr.io/macanderson/oxagen-ci-* images (pin lives in
 # pipeline.yml's ATLAS_VERSION, read by ci-image.yml at image build time).
 env:
   # Container jobs: see the identical block in pipeline.yml — git in the
@@ -23,7 +23,7 @@ jobs:
   full:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      image: ghcr.io/macanderson/oxagen-ci-base:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -143,7 +143,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/oxageninc/oxagen-ci-e2e:latest
+      image: ghcr.io/macanderson/oxagen-ci-e2e:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

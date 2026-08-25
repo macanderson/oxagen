@@ -8,7 +8,7 @@ Oxagen is a governed control plane for AI agents — security is the product, no
 
 Report privately through either channel:
 
-1. **GitHub private vulnerability reporting** (preferred): [Report a vulnerability](https://github.com/oxageninc/oxagen-platform/security/advisories/new) on this repository.
+1. **GitHub private vulnerability reporting** (preferred): [Report a vulnerability](https://github.com/macanderson/oxagen/security/advisories/new) on this repository.
 2. **Email**: `security@oxagen.sh`
 
 Include what you can of:

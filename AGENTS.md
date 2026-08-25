@@ -174,7 +174,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory). CI runs inside `ghcr.io/oxageninc/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory). CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 **Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:contracts` + `env:check` only — no test suites (those run in CI).
 

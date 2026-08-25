@@ -3,7 +3,7 @@ description: >-
   Restore the pnpm content-addressable store cache and install with a frozen
   lockfile. Replaces the pnpm/action-setup + actions/setup-node(cache pnpm) +
   pnpm install triplet now that CI jobs run inside the
-  ghcr.io/oxageninc/oxagen-ci-* toolchain images, which already ship Node and
+  ghcr.io/macanderson/oxagen-ci-* toolchain images, which already ship Node and
   corepack-managed pnpm.
 
 runs:

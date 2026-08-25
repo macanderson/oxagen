@@ -29,7 +29,7 @@ Top MCP Servers:
 ## Your Setup Checklist
 
 ### Codebases
-- [ ] oxagen-platform — https://github.com/oxageninc/oxagen-platform (the monorepo; app, api, mcp, cli, packages)
+- [ ] oxagen-platform — https://github.com/macanderson/oxagen (the monorepo; app, api, mcp, cli, packages)
 
 ### MCP Servers to Activate
 - [ ] Playwright — drives a real browser for E2E tests and UI verification. Bundled as a Claude Code plugin; enable it with `/mcp`.
