@@ -5,6 +5,7 @@
  *
  * TagInput:        chip/tag entry (comma or Enter separated)
  * MultiSelectWidget: toggle-button group for multi-select fields
+ * JsonCodeField:   a `code` widget whose text is JSON (format: json)
  *
  * Both are self-contained stateful controls; they do not read from ConnectorSchemaContext
  * directly — the parent FieldRenderer handles context and passes values via props.
@@ -13,7 +14,12 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { cn } from "@oxagen/ui";
-import type { TagInputProps, MultiSelectWidgetProps } from "./field-renderer-types";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  TagInputProps,
+  MultiSelectWidgetProps,
+  JsonCodeFieldProps,
+} from "./field-renderer-types";
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
 
@@ -143,5 +149,95 @@ export function MultiSelectWidget({ id, value, onChange, onBlur, options, disabl
         );
       })}
     </div>
+  );
+}
+
+// ── JsonCodeField ─────────────────────────────────────────────────────────────
+
+/**
+ * A `code` widget whose text is JSON (`format: json` in the connector schema).
+ *
+ * The form stores the PARSED value, because that is what the connector's own
+ * connection schema declares — `recordTypes: z.array(...)` for custom-webhook,
+ * `queries: z.array(...)` for custom-sql. A raw string could never satisfy
+ * either, so neither connector could be configured through the wizard, and
+ * connection.preview then died inside the connector on
+ * `config.recordTypes.map is not a function`.
+ *
+ * The textarea keeps its own draft: a half-typed object is not valid JSON, so
+ * storing only the parsed value would delete the user's text on every
+ * keystroke. The draft is the text; the form gets the parse of it.
+ */
+export function JsonCodeField({
+  id,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  disabled,
+  invalid,
+  ariaDescribedBy,
+}: JsonCodeFieldProps) {
+  const serialize = React.useCallback(
+    (v: unknown) => (v === undefined || v === null ? "" : JSON.stringify(v, null, 2)),
+    [],
+  );
+
+  const [draft, setDraft] = React.useState(() => serialize(value));
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Re-sync when the value arrives from outside (an existing connection loading
+  // after mount), but never while the draft is mid-edit and unparseable —
+  // that would overwrite what the user is typing.
+  const lastEmitted = React.useRef<string>(serialize(value));
+  React.useEffect(() => {
+    const incoming = serialize(value);
+    if (incoming !== lastEmitted.current && error === null) {
+      lastEmitted.current = incoming;
+      setDraft(incoming);
+    }
+  }, [value, serialize, error]);
+
+  const handleChange = (text: string) => {
+    setDraft(text);
+    if (text.trim() === "") {
+      setError(null);
+      onChange(undefined);
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(text);
+      lastEmitted.current = JSON.stringify(parsed, null, 2);
+      setError(null);
+      onChange(parsed);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Invalid JSON";
+      setError(message);
+      // Clear the stored value: keeping the last good parse would let a user
+      // submit config the textarea no longer shows.
+      onChange(undefined);
+    }
+  };
+
+  return (
+    <>
+      <Textarea
+        id={id}
+        value={draft}
+        onChange={(e) => handleChange(e.currentTarget.value)}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="resize-y min-h-[140px] font-mono text-xs"
+        spellCheck={false}
+        aria-invalid={Boolean(invalid || error)}
+        aria-describedby={ariaDescribedBy}
+      />
+      {error ? (
+        <p className="mt-1 text-xs text-destructive" role="status">
+          {error}
+        </p>
+      ) : null}
+    </>
   );
 }
