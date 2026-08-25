@@ -109,6 +109,8 @@ export const baseEnvSchema = z.object({
   GITHUB_APP_CLIENT_ID: z.string().optional(),
   GITHUB_APP_CLIENT_SECRET: z.string().optional(),
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
+  // Second App (oxagen-sh) — same endpoint, different signer. See #1200.
+  GITHUB_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
   GITHUB_APP_SLUG: z.string().optional(),
   // ADR-020: per-workspace write credential resolution. When set, the

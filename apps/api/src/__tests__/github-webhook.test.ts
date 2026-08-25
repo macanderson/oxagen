@@ -94,13 +94,14 @@ import { makeRequest } from "./_helpers";
 import { logger } from "../middleware/logger";
 
 const SECRET = "test-webhook-secret";
+const SECOND_SECRET = "second-app-webhook-secret-for-tests";
 const PATH = "/webhooks/github/app";
 
 /** Build a signed POST with the correct x-hub-signature-256 header. */
 function signedPost(
   event: string,
   bodyObj: unknown,
-  opts: { secret?: string; badSig?: boolean } = {},
+  opts: { secret?: string; badSig?: boolean; targetId?: string } = {},
 ): Request {
   const body = JSON.stringify(bodyObj);
   const sig =
@@ -111,6 +112,7 @@ function signedPost(
       "content-type": "application/json",
       "x-github-event": event,
       "x-hub-signature-256": opts.badSig ? "sha256=deadbeef" : sig,
+      ...(opts.targetId ? { "x-github-hook-installation-target-id": opts.targetId } : {}),
     },
     body,
   });
@@ -155,6 +157,8 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.GITHUB_APP_WEBHOOK_SECRET;
+  delete process.env.GITHUB_WEBHOOK_SECRET;
+  delete process.env.GITHUB_APP_ID;
 });
 
 describe("github app webhook – configuration & signature", () => {
@@ -216,6 +220,63 @@ describe("github app webhook – configuration & signature", () => {
     );
     expect(res.status).toBe(401);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  // ── Second App (#1200) ────────────────────────────────────────────────────
+  // Two GitHub Apps deliver to this one endpoint. oxagen-sh (4055615) signs
+  // with GITHUB_WEBHOOK_SECRET, confirmed by HMAC-verifying a captured
+  // delivery; every one of its deliveries was rejected 401 because the route
+  // only ever knew the primary App's secret.
+
+  it("accepts the second App's delivery, signed with its own secret", async () => {
+    process.env.GITHUB_APP_ID = "4168398";
+    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+
+    const res = await app.fetch(
+      signedPost(
+        "pull_request",
+        {
+          action: "opened",
+          installation: { id: 555 },
+          repository: { full_name: "acme/widgets" },
+          pull_request: { number: 7 },
+        },
+        { secret: SECOND_SECRET, targetId: "4055615" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not let the second App's secret authorise a delivery claiming to be the primary App", async () => {
+    // The whole point of keying on the sender: accepting whichever secret
+    // happens to match would mean either secret authorises either App.
+    process.env.GITHUB_APP_ID = "4168398";
+    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+
+    const res = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }, {
+        secret: SECOND_SECRET,
+        targetId: "4168398",
+      }),
+    );
+
+    expect(res.status).toBe(401);
+  });
+
+  it("acks a second-App delivery when no secret is configured for it", async () => {
+    process.env.GITHUB_APP_ID = "4168398";
+    delete process.env.GITHUB_WEBHOOK_SECRET;
+
+    const res = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }, {
+        secret: SECOND_SECRET,
+        targetId: "4055615",
+      }),
+    );
+
+    // 200, not 401 — an unknown signer must not become a retry flood.
+    expect(res.status).toBe(200);
   });
 
   it("returns 401 when signed with the wrong secret", async () => {

@@ -538,6 +538,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  GITHUB_WEBHOOK_SECRET: {
+    group: "github",
+    description:
+      "Webhook signing secret for the SECOND GitHub App (oxagen-sh, app id " +
+      "4055615), which delivers to the same /webhooks/github/app endpoint as " +
+      "oxagen-code-agent. Confirmed by HMAC against a captured delivery — see " +
+      "issue #1200. Optional: unset means that App's deliveries are rejected.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
     description:
