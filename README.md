@@ -95,7 +95,7 @@ Model resolution goes through `modelIdOf()` and an AI gateway — no hard-coded 
 ## Monorepo Layout
 
 ```
-oxagen-platform/
+oxagen/
 ├── apps/
 │   ├── api          REST API + Inngest handler (Hono) — api.oxagen.sh
 │   ├── app          Next.js web app (App Router, RSC) — app.oxagen.sh
@@ -159,7 +159,7 @@ Tenant isolation is enforced at every layer: Postgres RLS (raw `db()` is banned 
 
 ```bash
 git clone https://github.com/macanderson/oxagen.git
-cd oxagen-platform
+cd oxagen
 
 cp .env.example .env.local    # fill in required values
 pnpm install
