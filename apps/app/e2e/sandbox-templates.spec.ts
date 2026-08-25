@@ -161,12 +161,26 @@ test.describe("sandbox templates — create, set-default, export/import, bind ag
     // Open the agent's detail page (where the Environments card renders).
     await page.goto(`/${orgSlug}/default/workbench/agents`);
     // The row itself is not clickable — the name cell's link navigates to the
-    // agent detail page.
-    await page
+    // agent detail page. Address that link by its test id rather than by DOM
+    // order: the row renders three (`agent-link-`, `agent-launch-`,
+    // `agent-edit-`), so `.first()` rested on an order nothing here pins.
+    const detailLink = page
       .getByTestId(`agent-row-${agentSlug}`)
-      .getByRole("link")
-      .first()
-      .click();
+      .getByTestId(`agent-link-${agentSlug}`);
+    const detailHref = await detailLink.getAttribute("href");
+    expect(detailHref).toBeTruthy();
+
+    // Register the navigation wait before the click and assert the navigation
+    // itself. Asserting only the destination card made a click that never
+    // navigated look like a card that never rendered: the Playwright error
+    // context for the failure this replaces shows the agents LIST still on
+    // screen ("Agents", "All (2)") after 20 s of waiting for a card that only
+    // exists on the detail page.
+    await Promise.all([
+      page.waitForURL(`**${detailHref}`, { timeout: 20_000 }),
+      detailLink.click(),
+    ]);
+
     await expect(page.getByTestId("agent-environments-card")).toBeVisible({
       timeout: 20_000,
     });
