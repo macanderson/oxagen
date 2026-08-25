@@ -345,7 +345,7 @@ export class PermissionBroker {
       reason = this.mode === "acceptEdits" ? "shell command needs approval" : "approval required";
     }
 
-    // 3. Safety escalations downgrade an `allow` to `ask` so a catastrophic
+    // 4. Safety escalations downgrade an `allow` to `ask` so a catastrophic
     //    command or a write outside the workspace is never run silently — even
     //    when a broad allow rule would otherwise pass it. An explicit `deny`
     //    still denies; bypass already returned above.

@@ -753,9 +753,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── Google Maps / Places ────────────────────────────────────────────────────
   // Used by the onboarding billing-address autocomplete. The KEY is the only
   // value the feature needs in the browser (lock it down with HTTP-referrer
-  // restrictions in the Google Cloud console). The SECRET var is unused by our
-  // code; note that its NEXT_PUBLIC_ prefix means Next.js would still inline it
-  // into the client bundle — a real signing secret belongs in a server-only var.
+  // restrictions in the Google Cloud console). The SECRET var has no current
+  // consumer in the codebase; it is a plain server-only var (no NEXT_PUBLIC_
+  // prefix) — renamed from NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET specifically so
+  // Next.js would stop inlining a signing secret into the client bundle.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: {
     group: "Google Maps",
     description:

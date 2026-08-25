@@ -80,21 +80,21 @@ export type GeneratedAssetRow = InferSelectModel<typeof generatedAssets>;
 
 // ── IAM row types ────────────────────────────────────────────────────────────
 
-/** Row type for `org.principals`. */
+/** Row type for `iam.principals`. */
 export type IamPrincipalRow = InferSelectModel<typeof principals>;
 
-/** Row type for `org.roles`. */
+/** Row type for `iam.roles`. */
 export type IamRoleRow = InferSelectModel<typeof roles>;
 
-/** Row type for `org.role_grants`. */
+/** Row type for `iam.role_grants`. */
 export type IamRoleGrantRow = InferSelectModel<typeof roleGrants>;
 
-/** Row type for `org.principal_role_assignments`. */
+/** Row type for `iam.principal_role_assignments`. */
 export type IamPrincipalRoleAssignmentRow = InferSelectModel<
   typeof principalRoleAssignments
 >;
 
-/** Row type for `org.access_requests`. */
+/** Row type for `iam.access_requests`. */
 export type IamAccessRequestRow = InferSelectModel<typeof accessRequests>;
 
 // ── User preferences row types & enum unions ─────────────────────────────────

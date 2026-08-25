@@ -58,7 +58,7 @@ export const agents = agentSchema.table(
     // current config, the summary is stale and gets regenerated.
     summaryChecksum: text("summary_checksum"),
     // Agent RBAC Phase 1 (docs/specs/agent-rbac/spec.md §3.1): the delegated
-    // IAM principal (org.principals, kind='agent') for this agent IDENTITY —
+    // IAM principal (iam.principals, kind='agent') for this agent IDENTITY —
     // one per agent, never per version/run. App-enforced reference (no
     // cross-schema FK per CLAUDE.md storage rules); provisioned by
     // agent.definition.create and soft-deleted together with the agent.

@@ -294,17 +294,6 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
 }
 
 // ---------------------------------------------------------------------------
-// Credit pack purchase grant (checkout.session.completed)
-// ---------------------------------------------------------------------------
-
-/**
- * Grant a one-time credit pack's credits when its Checkout session completes.
- * Purchase packs expire 1 year from the grant date.
- *
- * Idempotency is atomic: INSERT … ON CONFLICT DO NOTHING on the ledger row
- * keyed by (org_id, reason, "stripe_checkout_session", deterministicUuid(sessionId)).
- */
-// ---------------------------------------------------------------------------
 // Mid-cycle plan upgrade prorated credit grant
 // ---------------------------------------------------------------------------
 
@@ -422,6 +411,17 @@ export async function grantProratedPlanUpgradeCredits(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Credit pack purchase grant (checkout.session.completed)
+// ---------------------------------------------------------------------------
+
+/**
+ * Grant a one-time credit pack's credits when its Checkout session completes.
+ * Purchase packs expire 1 year from the grant date.
+ *
+ * Idempotency is atomic: INSERT … ON CONFLICT DO NOTHING on the ledger row
+ * keyed by (org_id, reason, "stripe_checkout_session", deterministicUuid(sessionId)).
+ */
 export async function grantCreditPackForCheckout(session: BillingCheckoutSession): Promise<void> {
   if (session.mode !== "payment" || session.paymentStatus !== "paid") return;
   const orgId = session.metadata?.org_id;

@@ -11,11 +11,11 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       exclude: [
         ...coverageConfigDefaults.exclude,
-        // Bin-style process entrypoint (signal wiring + process.exit + the
-        // not-yet-wired store/driver TODO). Not meaningfully unit-testable
-        // in-process; worker.ts carries the real behavior and is fully
-        // covered. Same house pattern as packages/inngest-functions
-        // excluding its untested plugin.*.ts functions.
+        // Bin-style process entrypoint (signal wiring + process.exit). Not
+        // meaningfully unit-testable in-process; worker.ts carries the real
+        // behavior and is fully covered. Same house pattern as
+        // packages/inngest-functions excluding its untested plugin.*.ts
+        // functions.
         "src/main.ts",
       ],
       // Ratcheted after the fenced-attempt worker path landed (measured:

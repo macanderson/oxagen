@@ -35,8 +35,8 @@
  *      cache (`resolveCredential({ persistRemote: false })`). They live in memory
  *      for the turn only and are re-resolved (fresh) next turn.
  *
- * A full server-side proxy remains the stronger long-term design; it is tracked
- * as a TODO below.
+ * A full server-side proxy remains the stronger long-term design; it is a known
+ * follow-up, not implemented here.
  */
 import {
   mcpServerSchema,

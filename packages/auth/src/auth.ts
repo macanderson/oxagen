@@ -150,26 +150,21 @@ const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
   ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
   : [];
 
-// Production app origins trusted for CSRF / OAuth redirect validation.
-// Interim Vercel-managed domains AND the branded oxagen.sh domains are both
-// listed so the brand-domain cutover needs no auth code change. Additional
-// per-environment origins can still be appended via BETTER_AUTH_TRUSTED_ORIGINS.
+// Production app origins trusted for CSRF / OAuth redirect validation. The
+// brand-domain cutover already landed (both the app and marketing surfaces
+// live under oxagen.sh), so this is a single flat list rather than separate
+// "interim" and "branded" sets. Additional per-environment origins can still
+// be appended via BETTER_AUTH_TRUSTED_ORIGINS.
 const PROD_ORIGINS = [
-  // Interim Vercel-managed domains.
   "https://app.oxagen.sh",
   "https://www.oxagen.sh",
   "https://api.oxagen.sh",
   "https://admin.oxagen.sh",
-  // Branded oxagen.sh domains.
-  "https://app.oxagen.sh",
+  "https://oxagen.sh",
   // Stable preview alias — a Vercel branch-tracking domain that always serves
   // the latest preview deployment, so Google OAuth (which forbids wildcard
   // redirect URIs) works on previews via this one fixed hostname.
   "https://preview-app.oxagen.sh",
-  "https://oxagen.sh",
-  "https://www.oxagen.sh",
-  "https://api.oxagen.sh",
-  "https://admin.oxagen.sh",
 ];
 
 // Local dev origins — only included in non-production so they cannot

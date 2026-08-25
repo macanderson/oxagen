@@ -206,11 +206,6 @@ export const accessRequests = iamSchema.table(
 );
 
 // ---------------------------------------------------------------------------
-// sessions (IAM) — principal session lifecycle (active + revoked)
-//
-// APPEND-LEANING: no updated_at / updated_by columns. Sessions are created
-// once; revocation is tracked via revoked_at + revoked_by, never via UPDATE
-// ---------------------------------------------------------------------------
 // principal_role_assignments — maps a principal to a role within an org
 // (and optionally a workspace) scope. Replaces the prior "grant everyone
 // every role" shortcut. OXA-1498.
@@ -227,9 +222,9 @@ export const principalRoleAssignments = iamSchema.table(
     ...idMixin("pra"),
     ...auditMixin(),
     ...softDeleteMixin(),
-    // FK to org.principals — the subject being assigned a role.
+    // FK to iam.principals — the subject being assigned a role.
     principalId: uuid("principal_id").notNull(),
-    // FK to org.roles — the role being assigned.
+    // FK to iam.roles — the role being assigned.
     roleId: uuid("role_id").notNull(),
     // Org this assignment lives in.
     orgId: uuid("org_id").notNull(),

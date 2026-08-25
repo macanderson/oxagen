@@ -398,9 +398,9 @@ function passthroughResult(pinnedSchema: PinnedSchema): SchemaValidationResult {
 /**
  * Map (valid, score, enforcementMode) → the validation outcome.
  *
- * - Any hard error (`!valid`) → `rejected` under strict, else surfaced as
- *   `written_below_floor` only when the score is also below the floor;
- *   otherwise still `rejected` (errors mean non-conformant).
+ * - Any hard error (`!valid`) → `rejected` under strict; under lenient/off →
+ *   `written_below_floor`, regardless of where the score sits relative to the
+ *   conformance floor (a hard error is always surfaced, not just a low score).
  * - No errors but score below the conformance floor → `written_below_floor`.
  * - Otherwise → `accepted`.
  *
