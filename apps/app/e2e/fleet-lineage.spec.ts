@@ -5,7 +5,7 @@
  * Signs up a fresh user (a brand-new workspace has zero fleet dispatches) and
  * asserts:
  *  - the page renders under the shared Automations tab strip (Automations ·
- *    Triggers · Workflows · Lineage) with Lineage selected, via the real
+ *    Workflows · Lineage) with Lineage selected, via the real
  *    RSC → invoke → agent.subagent_fanout.list path (list_subagent_fanouts);
  *  - with no dispatches yet, the dispatch picker's empty state renders (never
  *    a blank page or a crash) alongside the always-available paste-a-
