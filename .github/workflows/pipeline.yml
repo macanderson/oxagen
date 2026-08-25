@@ -493,9 +493,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 15
     concurrency:
-      # Production is one global group: `atlas migrate apply` against the real
-      # database must never run twice at once, and must never be interrupted —
-      # hence cancel-in-progress: false.
+      # Everything that is not a pull request shares one group. It holds no
+      # production migration any more — see the note on `env:` below, and
+      # #1275 — but the group is what will serialize one once that lands, and
+      # `atlas migrate apply` against a real database must never run twice at
+      # once or be interrupted, hence cancel-in-progress: false.
       #
       # Preview is scoped PER PR, which is the fix for #1223. Every PR migrates
       # its own throwaway service container, so there is nothing for a shared
@@ -512,15 +514,29 @@ jobs:
       # DB_MIGRATE_STORES is set per-store on the "Migrate ClickHouse and Neo4j"
       # step from the change-detection output — only the stores whose migration
       # sources changed are migrated.
-      DATABASE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
-      NEO4J_URI: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_URI || secrets.PREVIEW_NEO4J_URI }}
-      NEO4J_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_USERNAME || secrets.PREVIEW_NEO4J_USERNAME }}
-      NEO4J_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_PASSWORD || secrets.PREVIEW_NEO4J_PASSWORD }}
-      NEO4J_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_DATABASE || secrets.PREVIEW_NEO4J_DATABASE }}
-      CLICKHOUSE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_URL || secrets.PREVIEW_CLICKHOUSE_URL }}
-      CLICKHOUSE_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_USERNAME || secrets.PREVIEW_CLICKHOUSE_USERNAME }}
-      CLICKHOUSE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_PASSWORD || secrets.PREVIEW_CLICKHOUSE_PASSWORD }}
-      CLICKHOUSE_DATABASE: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_CLICKHOUSE_DATABASE || secrets.PREVIEW_CLICKHOUSE_DATABASE }}
+      #
+      # Only the preview datastores are reachable from a GitHub-hosted runner.
+      # Production Postgres, ClickHouse and Neo4j run on the oxagen-data node
+      # now; Postgres binds to loopback and answers only through SSM, so there
+      # is no production connection string for CI to hold. The PRODUCTION_*
+      # secrets still name the decommissioned ClickHouse Cloud host, which no
+      # longer resolves, and every push to main died in psql with "could not
+      # translate host name".
+      #
+      # Empty on anything but a pull request, which takes the "not configured"
+      # branch of the step below: the job skips the migration and succeeds, so
+      # `deploy-node`'s `needs:` on it still resolves. Production migrations
+      # are applied on the box with oxagen-aws-infra's run-db-migrations.sh
+      # until #1275 wires that path into this job.
+      DATABASE_URL: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_DATABASE_URL || '' }}
+      NEO4J_URI: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_URI || '' }}
+      NEO4J_USERNAME: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_USERNAME || '' }}
+      NEO4J_PASSWORD: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_PASSWORD || '' }}
+      NEO4J_DATABASE: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_DATABASE || '' }}
+      CLICKHOUSE_URL: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_URL || '' }}
+      CLICKHOUSE_USERNAME: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_USERNAME || '' }}
+      CLICKHOUSE_PASSWORD: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_PASSWORD || '' }}
+      CLICKHOUSE_DATABASE: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_DATABASE || '' }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v5
