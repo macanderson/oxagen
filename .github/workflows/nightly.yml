@@ -239,6 +239,11 @@ jobs:
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OXAGEN_MODEL_PROVIDER: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Pinned for its output ceiling, not its ability — nothing sets
+      # maxOutputTokens, so OpenRouter reserves credit against the model's full
+      # ceiling and declines claude-sonnet-5's 65536 up front. See the longer
+      # note on pipeline.yml's e2e job.
+      OXAGEN_LLM_BALANCED: openai/gpt-4o-mini
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
