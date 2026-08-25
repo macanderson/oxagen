@@ -31,5 +31,13 @@ test("billing invoices: fresh org renders the empty state inside the billing tab
   await expect(
     page.getByRole("heading", { name: "Invoices", level: 3 }),
   ).toBeVisible();
-  await expect(page.getByText("No invoices yet.")).toBeVisible();
+  // Asserted as the component renders it: the title carries no trailing
+  // period, the description does. The spec looked for "No invoices yet." and
+  // Playwright's substring match never found it, because that period is not in
+  // the DOM. invoice-list.test.tsx asserts these same two strings, so the unit
+  // test and this spec now agree about one component instead of contradicting.
+  await expect(page.getByText("No invoices yet")).toBeVisible();
+  await expect(
+    page.getByText("Invoices appear here after your first billing cycle."),
+  ).toBeVisible();
 });
