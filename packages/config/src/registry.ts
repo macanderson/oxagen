@@ -937,13 +937,41 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
     description:
-      "Vercel AI Gateway token — the platform's single AI auth. @oxagen/ai routes " +
-      "every model call (text, image, embeddings, video) through the gateway; there " +
-      "is no direct-provider fallback, so this is required wherever AI runs.",
+      "Vercel AI Gateway token — the platform's default AI auth. @oxagen/ai routes " +
+      "image, embeddings and video through the gateway always, and text too unless " +
+      "OXAGEN_MODEL_PROVIDER opts that deployment out, so this is required " +
+      "wherever AI runs.",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: DEPLOYED,
+    valueOrigin: "manual",
+  },
+  OXAGEN_MODEL_PROVIDER: {
+    group: "AI providers",
+    description:
+      "Which provider serves language models: the gateway (default, and the metered " +
+      "path) or 'openrouter' for a deployment that cannot reach the gateway. Never " +
+      "an automatic fallback — an operator opts out explicitly, because a silent " +
+      "failover would move spend to another vendor's bill and skip metering. Image, " +
+      "video and embeddings stay on the gateway either way.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "gateway" },
+  },
+  OPENROUTER_API_KEY: {
+    group: "AI providers",
+    description:
+      "OpenRouter token for language models. Read only when " +
+      "OXAGEN_MODEL_PROVIDER=openrouter; every other deployment stays valid " +
+      "without it.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
     valueOrigin: "manual",
   },
   ANTHROPIC_API_KEY: {

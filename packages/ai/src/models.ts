@@ -1,4 +1,5 @@
 import { gateway } from "@ai-sdk/gateway";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
 import type { Experimental_VideoModelV4, LanguageModelV4 } from "@ai-sdk/provider";
@@ -186,7 +187,58 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
   ] as const);
   const modelId =
     selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
-  return applyDevtools(gateway.languageModel(modelId));
+  return applyDevtools(languageProvider().languageModel(modelId));
+}
+
+/**
+ * The language-model provider.
+ *
+ * The gateway is the default and remains the platform's metered path. Setting
+ * `OXAGEN_MODEL_PROVIDER=openrouter` selects a direct OpenAI-compatible
+ * provider instead, for a deployment that cannot reach the gateway — the AWS
+ * instance behind app.oxagen.sh, whose gateway credential 401s because the
+ * Vercel account is suspended.
+ *
+ * Selection is EXPLICIT, never a fallback. An automatic failover on gateway
+ * error would silently move spend onto a different vendor's bill and bypass
+ * the metering the gateway exists to provide, and the first anyone would know
+ * of it is the invoice. An operator opting out says so in the environment.
+ *
+ * Only the language path is redirected. `imageModel`, `video` and
+ * `embeddingModel` stay on the gateway because OpenRouter serves none of
+ * them — so image, video and embedding calls still fail on such a deployment,
+ * and that is visible rather than papered over.
+ *
+ * Model ids are NOT rewritten between providers. The gateway spells a version
+ * `claude-sonnet-4-6` and OpenRouter spells it `claude-sonnet-4.6`; mapping
+ * the customer-facing tier to a vendor id is exactly what the `OXAGEN_LLM_*`
+ * env vars are for, so the id is whatever the environment says and a typo
+ * fails loudly at call time.
+ */
+function languageProvider(): { languageModel: (id: string) => LanguageModelV4 } {
+  const { OXAGEN_MODEL_PROVIDER, OPENROUTER_API_KEY } = requireEnv([
+    "OXAGEN_MODEL_PROVIDER",
+    "OPENROUTER_API_KEY",
+  ] as const);
+
+  if (OXAGEN_MODEL_PROVIDER !== "openrouter") return gateway;
+
+  // Checked here rather than in the schema: the key is required only for this
+  // one value of OXAGEN_MODEL_PROVIDER, and making it unconditionally required
+  // would invalidate every gateway deployment. Failing here means a
+  // misconfigured opt-out surfaces as a precise message instead of a 401 from
+  // a provider the operator did not think they were calling.
+  if (!OPENROUTER_API_KEY) {
+    throw new Error(
+      "OXAGEN_MODEL_PROVIDER=openrouter requires OPENROUTER_API_KEY",
+    );
+  }
+
+  return createOpenAICompatible({
+    name: "openrouter",
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: OPENROUTER_API_KEY,
+  });
 }
 
 /** The platform default model — the balanced tier through the gateway. */
