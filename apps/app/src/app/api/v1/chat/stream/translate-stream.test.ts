@@ -10,7 +10,7 @@
  *   (d) assistantText is accumulated from text-delta parts correctly
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ── Stub @oxagen/billing so we can control what meterCreditsForUsage returns
 //    without requiring a real Stripe/DB stack.
@@ -471,6 +471,19 @@ describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", 
 describe("createTurnTranslator — parity with the single-pass wrapper", () => {
   beforeEach(() => {
     vi.mocked(meterCreditsForUsage).mockReturnValue(7n);
+    // reasoning-end carries `durationMs = Date.now() - startedAt`, so the two
+    // passes below are timed independently against the real clock. Whenever one
+    // straddled a millisecond boundary and the other did not, the deep-equal
+    // compared durationMs 1 against 0 and the suite failed for no reason the
+    // code had changed. Freeze Date only — real timers and microtasks still run,
+    // so the awaited generator drains normally — and both passes read one
+    // instant, which keeps durationMs inside the parity assertion instead of
+    // exempting the field and no longer checking it at all.
+    vi.useFakeTimers({ toFake: ["Date"] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("stateful step-by-step drive == single-pass translateAgentStream (minus usage/error position)", async () => {
