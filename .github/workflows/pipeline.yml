@@ -493,7 +493,20 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 15
     concurrency:
-      group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
+      # Production is one global group: `atlas migrate apply` against the real
+      # database must never run twice at once, and must never be interrupted —
+      # hence cancel-in-progress: false.
+      #
+      # Preview is scoped PER PR, which is the fix for #1223. Every PR migrates
+      # its own throwaway service container, so there is nothing for a shared
+      # group to protect. What the shared group did instead was lose jobs:
+      # GitHub keeps only one *pending* entry per group, so with three or more
+      # PRs in flight the queued migrate was cancelled outright — and a
+      # cancelled job renders identically to a failed one, so PRs showed a red
+      # `migrate` that had never run.
+      group: >-
+        db-migrate-${{ github.event_name != 'pull_request' && 'production'
+        || format('preview-{0}', github.ref) }}
       cancel-in-progress: false
     env:
       # DB_MIGRATE_STORES is set per-store on the "Migrate ClickHouse and Neo4j"
