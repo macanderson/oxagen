@@ -28,6 +28,21 @@ function isTier(value: unknown): value is PlanTier {
  * un-subscribed orgs are always in the most restricted tier (fail-safe).
  */
 export async function resolveOrgTier(orgId: string): Promise<PlanTier> {
+  // No org yet. `create_org` is user-scoped and runs before an org exists, so
+  // checkIAM reaches here with an empty orgId — and both columns below are
+  // `uuid`, which Postgres will not compare against ''. The query does not
+  // return nothing, it raises 22P02 (invalid input syntax for type uuid), the
+  // IAM check catches it and fails closed, and the user is told
+  // `create_org` is forbidden. The symptom is that a brand-new account can
+  // never create its first organization.
+  //
+  // Returning early is the documented step 3, not a new rule: an org with no
+  // subscription row resolves to 'free', and an org that does not exist yet
+  // has strictly less entitlement than that. 'free' is also the most
+  // restricted tier, so this widens nothing — `canAccessACL('free')` is false,
+  // which routes the caller into the non-enterprise bypass above.
+  if (!orgId) return "free";
+
   const { activeSub, org } = await withSystemDb(async (tx) => {
     const sub = await tx
       .select({ tier: schema.plans.tier })
