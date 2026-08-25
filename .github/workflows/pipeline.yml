@@ -311,16 +311,27 @@ jobs:
       # mapping suggestions — Unauthenticated. Configure AI_GATEWAY_API_KEY",
       # which is the one genuine failure left in knowledge-connect-wizard.
       #
-      # Only the gateway key is wired here. OXAGEN_MODEL_PROVIDER is
-      # `z.enum(["gateway","openrouter"])` and OPENROUTER_API_KEY is
-      # `z.string().min(1)`, while `env:` cannot omit a key conditionally — an
-      # unset variable or secret arrives as "" and normalizeEnv passes it
-      # through, so `.default("gateway")` never fires and requireEnv throws on
-      # EVERY language call. Wiring those two speculatively would break more
-      # than it fixed. Opting out of the gateway (see packages/ai/src/models.ts
-      # and #1295) means adding both here in the same change that adds the
-      # secret, so neither is ever empty.
+      # CI opts out of the AI Gateway. The gateway credential belongs to the
+      # Vercel account being decommissioned and is refused: #1297 wired
+      # AI_GATEWAY_API_KEY in and the next run still failed
+      # knowledge-connect-wizard with "Unauthenticated", while the job log
+      # showed `AI_GATEWAY_API_KEY: ***` — a non-empty value that arrived and
+      # was rejected, not a missing one (#1295).
+      #
+      # These two are set TOGETHER and never from an unset variable.
+      # OXAGEN_MODEL_PROVIDER is `z.enum(["gateway","openrouter"])` and
+      # OPENROUTER_API_KEY is `z.string().min(1)`, `env:` cannot omit a key
+      # conditionally, and normalizeEnv passes "" through rather than dropping
+      # it — so a blank either side makes `.default("gateway")` never fire and
+      # requireEnv throw on EVERY language call.
+      #
+      # The tier defaults (anthropic/claude-haiku-4.5, -sonnet-5, -fable-5)
+      # resolve on OpenRouter under the same ids the gateway uses, so no
+      # OXAGEN_LLM_* override is needed. models.ts does not rewrite ids
+      # between providers, so that is checked, not assumed.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+      OXAGEN_MODEL_PROVIDER: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     timeout-minutes: 45
     strategy:
       # One shard's failure must not cancel the other three. The shards are
