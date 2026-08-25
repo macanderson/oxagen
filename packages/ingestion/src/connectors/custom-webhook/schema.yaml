@@ -57,10 +57,15 @@ config:
 
     - key: signatureStrategy
       label: Signature Verification Strategy
-      widget: multi-select
+      # One strategy, so a single-value control. It was a multi-select whose
+      # validation said minItems/maxItems 1 — "exactly one" spelled as a list —
+      # and a list is what it stored, which the connector's own
+      # `signatureStrategy: z.enum(...)` can never accept. Connection preview
+      # rejected every custom-webhook connection with
+      # "Expected 'none' | 'hmac_sha256_header' | ..., received array".
+      widget: select
       description: How to verify the authenticity of inbound webhook payloads.
-      defaultValue:
-        - hmac_sha256_header
+      defaultValue: hmac_sha256_header
       options:
         - label: HMAC-SHA256 Header
           value: hmac_sha256_header
@@ -71,8 +76,7 @@ config:
         - label: None (public)
           value: none
       validation:
-        minItems: 1
-        maxItems: 1
+        required: true
 
     - key: signatureHeader
       label: Signature Header Name (optional)
