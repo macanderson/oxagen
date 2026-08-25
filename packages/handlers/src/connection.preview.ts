@@ -58,7 +58,31 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
 
   // Load connector and fetch preview data
   const connector = getConnector(row.connectorId);
+
+  // Validate the stored config before handing it to the connector, exactly as
+  // integration.install does on the way in. Without this the connector reads
+  // whatever shape the row happens to hold and fails deep inside its own
+  // logic: a `code` config field is stored as raw text, so custom-webhook hit
+  // `config.recordTypes.map is not a function` and the wizard showed a bare
+  // TypeError where a validation message belongs. Validating on read as well
+  // as on write matters because a row outlives the schema that admitted it.
   const deliveryConfig = (row.deliveryConfig ?? {}) as Record<string, unknown>;
+  const parsedConfig = connector.connectionConfigSchema.safeParse(deliveryConfig);
+  if (!parsedConfig.success) {
+    const issues = parsedConfig.error.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+    logger.warn(
+      { connectionId: row.id, connectorId: row.connectorId, orgId: ctx.orgId, issues },
+      "connection.preview: stored config does not satisfy the connector schema",
+    );
+    throw new HTTPException(422, {
+      message: `This connection's configuration is not valid for ${row.connectorId}: ${issues}`,
+    });
+  }
+  // The connector still receives the stored config, not `parsedConfig.data`:
+  // parsing is the gate here, and handing over the parsed value would quietly
+  // start applying schema defaults a caller never wrote.
 
   logger.info(
     { connectionId: row.id, connectorId: row.connectorId, orgId: ctx.orgId },

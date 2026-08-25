@@ -40,4 +40,16 @@ describe("api.key.rotate capability", () => {
   it("is registered in the capability registry", () => {
     expect(getCapability("rotate_api_key")).toBe(apiKeyRotate);
   });
+
+  // The app's token page (apps/app/.../developer/tokens/api-key.ts) invokes
+  // this on the "agent" surface — there is no "app" surface in
+  // CapabilitySurface, so that is the surface every app-initiated call uses.
+  // Omitting it made the kernel's surface gate refuse the call outright
+  // (`is not exposed on the "agent" surface`) while this contract still
+  // advertised an "app" layer. The handler test cannot catch that: it calls
+  // the handler directly and never crosses the gate.
+  it("is exposed on the surface the app invokes it from", () => {
+    expect(apiKeyRotate.surfaces).toContain("agent");
+    expect(apiKeyRotate.layers).toContain("app");
+  });
 });

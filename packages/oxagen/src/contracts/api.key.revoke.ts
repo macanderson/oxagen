@@ -13,7 +13,10 @@ export const apiKeyRevoke = registerCapability({
   description:
     "Revoke an API key by its public ID or internal ID. The key is soft-deleted and immediately invalid. Audited as api_key.revoked.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  // See api.key.rotate.ts: the app's token page invokes on the "agent"
+  // surface and the "app" layer below declares that page, so omitting the
+  // surface made every revoke from the UI fail the kernel's surface gate.
+  surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // API key management does not consume AI tokens — billing gate must not

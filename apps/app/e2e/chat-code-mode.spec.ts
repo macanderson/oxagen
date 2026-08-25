@@ -3,16 +3,16 @@
  *
  * Code mode no longer has a manual toggle — it derives SOLELY from the
  * selected agent's definition (`selectedAgent.isCode`, see
- * message-composer.tsx). Picking a code agent through the picker (gallery /
- * composer chip) always forces the inline repo + environment setup step
- * before applying (see agent-picker-panel.tsx's `applyAgent`/`confirmSetup`),
+ * message-composer.tsx). Picking a code agent through the chip's picker always
+ * forces the inline repo + environment setup step before applying (see
+ * agent-picker-panel.tsx's `applyAgent`/`confirmSetup`),
  * so the composer's own send-gate (`codeGateBlocked` / the
  * `code-mode-gate-hint` testid) is unreachable through that path — the
  * picker itself won't let you finish selecting a code agent without both.
  *
  * The gate IS reachable through the other documented way to enter code mode:
- * a `?agent=<publicId>` URL binding (see ask/page.tsx, "binds this session to
- * a published agent"). That path seeds `selectedAgentId` directly, so code
+ * a `?agent=<publicId>` URL binding (see sessions/page.tsx, "binds this
+ * session to a published agent"). That path seeds `selectedAgentId`, so code
  * mode turns on with only the environment auto-defaulted (workspace default)
  * — the repo stays unpicked whenever there is more than one candidate (see
  * message-composer.tsx's auto-fill effect, which only auto-picks a *sole*
@@ -20,16 +20,15 @@
  *
  *   - Deep-linking `?agent=<codeAgentId>` with two seeded repos and no
  *     workspace-default repo preference: send stays BLOCKED with the
- *     "Select a repository and environment…" hint until a repo is picked.
+ *     "Select a repository and environment…" hint until a repo is picked in
+ *     the chip's setup step (the composer's own repo/environment selectors
+ *     were removed in #1046 — context is chosen once, not per turn).
  *   - Submitting the first turn POSTs /api/v1/chat/stream with a `code` field
  *     carrying { connectionId, owner, name, defaultBranch, environmentId,
  *     sandboxSessionId: null } matching the selected repo — asserted by
  *     intercepting the outgoing request (no real sandbox execution).
  *   - After that first send, the conversation's coding target LOCKS: the
- *     repo/environment selectors render disabled inside a
- *     `locked-context-control` wrapper (`composer-context-controls`'s
- *     `data-locked="true"`), and the agent chip swaps to its read-only
- *     `agent-context-chip-locked` variant.
+ *     agent chip swaps to its read-only `agent-context-chip-locked` variant.
  *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored).
  */
@@ -141,7 +140,7 @@ test.describe("chat.code-mode", () => {
         slug,
       });
 
-      // `?agent=<publicId>` binds the session directly (ask/page.tsx) — the
+      // `?agent=<publicId>` binds the session directly (sessions/page.tsx) — the
       // one path that turns code mode on WITHOUT going through the picker's
       // own repo+environment setup step, so the composer's own gate is
       // exercised.
@@ -153,15 +152,10 @@ test.describe("chat.code-mode", () => {
       const chip = page.getByRole("button", { name: "Agent: Repo Coder" });
       await expect(chip).toBeVisible();
 
-      const repoTrigger = page.getByRole("combobox", {
-        name: "Select repository",
-      });
-      const envTrigger = page.getByRole("combobox", {
-        name: "Select environment",
-      });
-      await expect(repoTrigger).toBeVisible();
-      await expect(envTrigger).toBeVisible();
-
+      // The composer's own repo/environment selectors are gone (#1046): chat
+      // context is chosen once, in the chip's setup step, and is immutable for
+      // the conversation. What the composer still owns is the send GATE, which
+      // is what this test is about.
       const sendBtn = page.getByRole("button", { name: /send message/i });
       const gateHint = page.getByTestId("code-mode-gate-hint");
 
@@ -176,7 +170,16 @@ test.describe("chat.code-mode", () => {
         path: path.join(SCREENSHOT_DIR, "code-mode-gate-blocked.png"),
       });
 
-      // Select repo A.
+      // Select repo A through the chip's setup step — the one surface that
+      // binds a code agent's target now. Re-picking the already-selected code
+      // agent slides the step in; the environment is prefilled from the
+      // composer's auto-filled workspace default, so only the repo is left.
+      await chip.click();
+      const picker = page.locator('[data-agent-picker="popover"]');
+      await picker.getByRole("option", { name: /Repo Coder/ }).click();
+      const repoTrigger = page.getByLabel("Session repository");
+      await expect(repoTrigger).toBeVisible();
+      await expect(page.getByLabel("Session environment")).toBeVisible();
       await repoTrigger.click();
       await page
         .getByRole("option", {
@@ -184,6 +187,7 @@ test.describe("chat.code-mode", () => {
           exact: true,
         })
         .click();
+      await page.getByRole("button", { name: /Chat with Repo Coder/ }).click();
 
       await expect(sendBtn).toBeEnabled();
       await expect(gateHint).toHaveCount(0);
@@ -228,16 +232,11 @@ test.describe("chat.code-mode", () => {
       });
 
       // The conversation's coding target is now LOCKED for its lifetime
-      // (lockSelection() fires synchronously in onSubmit — no reload
-      // needed): the repo/environment selectors render disabled inside a
-      // `locked-context-control` wrapper, and the agent chip swaps to its
-      // read-only locked variant.
-      const contextControls = page.getByTestId("composer-context-controls");
-      await expect(contextControls).toHaveAttribute("data-locked", "true");
-      await expect(repoTrigger).toBeDisabled();
-      await expect(envTrigger).toBeDisabled();
-      await expect(page.getByTestId("locked-context-control")).toHaveCount(2);
-
+      // (lockSelection() fires synchronously in onSubmit — no reload needed).
+      // The lock used to also be visible as disabled selectors in a
+      // `composer-context-controls` row; that row went with the composer's
+      // selectors (#1046) and ComposerContextControls has no caller left, so
+      // the chip's read-only variant is the whole of what the lock renders.
       const lockedChip = page.getByTestId("agent-context-chip-locked");
       await expect(lockedChip).toBeVisible();
       await expect(lockedChip).toHaveAttribute(
@@ -259,7 +258,7 @@ test.describe("chat.code-mode", () => {
       orgPrefix: "code-mode-off",
     });
 
-    await page.goto(`/${orgSlug}/default/chat`);
+    await page.goto(`/${orgSlug}/default/sessions`);
     const composer = page.getByPlaceholder(/send a message/i);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 

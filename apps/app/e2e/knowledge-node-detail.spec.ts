@@ -18,9 +18,14 @@ import {
  *      id is present, but only inside the metadata section's CopyableId.
  *   2. The Neighbors section renders an adjacent node, grouped under its
  *      relationship type, once one is seeded.
- *   3. An org owner (admin) sees the admin-actions panel (Delete node).
- *   4. A never-seeded node id renders the friendly not-found state, not a
+ *   3. A never-seeded node id renders the friendly not-found state, not a
  *      raw 500 or crash.
+ *
+ * #1087 ("retire unsafe workspace graph authority") deleted the node-detail
+ * admin-actions panel — node-admin-actions.tsx and its server actions are
+ * gone, and nothing under apps/app/src renders "Admin actions" or a Delete
+ * node control any more. The org-owner admin assertion this spec carried was
+ * an assertion it outlived; page.tsx is now a read-only detail view.
  *
  * Seeding: setupAgentRuntimeFixture gives a real org + workspace + owner
  * session (org.org_users.role = 'owner' — the exact row getOrgRole /
@@ -29,7 +34,14 @@ import {
  * mirroring the shape graph.node.get / ontology.neighbors read (see
  * packages/handlers/src/graph.node.get.ts and ontology.neighbors.ts): label
  * :GraphNode, {orgId, workspaceId, publicId, label, displayName, description,
- * properties, createdAt, updatedAt} per node, plus a typed relationship.
+ * properties, is_system, createdAt, updatedAt} per node, plus a typed
+ * relationship.
+ *
+ * `is_system = false` is required, not decorative: every workspace-graph read
+ * filters on it (graph.node.get, graph.node_label.get, ontology.neighbors,
+ * graph.stats), and in Cypher a missing property compares as null, so a node
+ * seeded without it is invisible to all of them. The real writer sets it on
+ * every entity it upserts (packages/ingestion/src/mutations/upsert-entity.ts).
  */
 
 function deQuote(raw: string | undefined, fallback: string): string {
@@ -65,6 +77,7 @@ async function seedGraph(orgId: string, workspaceId: string): Promise<void> {
            n.displayName = $displayName,
            n.description = $description,
            n.properties = $properties,
+           n.is_system = false,
            n.createdAt = datetime(),
            n.updatedAt = datetime()`,
       {
@@ -83,6 +96,7 @@ async function seedGraph(orgId: string, workspaceId: string): Promise<void> {
            n.displayName = $displayName,
            n.description = $description,
            n.properties = $properties,
+           n.is_system = false,
            n.createdAt = datetime(),
            n.updatedAt = datetime()`,
       {
@@ -123,7 +137,7 @@ async function teardownGraph(orgId: string): Promise<void> {
   }
 }
 
-test.describe("knowledge node detail — citation rule + neighbors + admin actions", () => {
+test.describe("knowledge node detail — citation rule + neighbors", () => {
   test.beforeAll(async () => {
     fixture = await setupAgentRuntimeFixture({
       orgSlug: ORG_SLUG,
@@ -144,7 +158,7 @@ test.describe("knowledge node detail — citation rule + neighbors + admin actio
     await teardownFixture({ orgSlug: ORG_SLUG });
   });
 
-  test("header shows the human label (not the raw node id); neighbors render; admin actions are visible", async ({
+  test("header shows the human label (not the raw node id); neighbors render", async ({
     page,
     context,
     baseURL,
@@ -157,7 +171,11 @@ test.describe("knowledge node detail — citation rule + neighbors + admin actio
     await page.waitForLoadState("domcontentloaded");
 
     // ── Citation rule: displayName + domain label, never the raw id ─────────
-    const heading = page.getByRole("heading", { level: 1 });
+    // Two h1s render on this route: the Knowledge layout's page header
+    // ("Knowledge", from layout.tsx's PageHeader) and the node card's own
+    // heading, which page.tsx renders after {children}. Take the last one —
+    // an unscoped level-1 locator resolves to both and trips strict mode.
+    const heading = page.getByRole("heading", { level: 1 }).last();
     await expect(heading).toHaveText("E2E Node Detail Primary", { timeout: 15_000 });
     await expect(heading).not.toContainText(PRIMARY_NODE_ID);
     await expect(page.getByText("Feature", { exact: true }).first()).toBeVisible();
@@ -174,9 +192,8 @@ test.describe("knowledge node detail — citation rule + neighbors + admin actio
       timeout: 15_000,
     });
 
-    // ── Admin actions (org owner) ────────────────────────────────────────────
-    await expect(page.getByText("Admin actions")).toBeVisible();
-    await expect(page.getByRole("button", { name: /delete node/i })).toBeVisible();
+    // No admin-actions assertion: #1087 deleted the panel outright (see the
+    // file header). The node-detail route is a read-only view now.
   });
 
   test("a never-seeded node id renders the friendly not-found state, not a crash", async ({

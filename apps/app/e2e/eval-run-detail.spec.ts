@@ -18,7 +18,7 @@
  * Two scenarios:
  *   1. A seeded completed run renders its summary (status, avg score, pass
  *      rate, judge, target) and its per-item results table.
- *   2. An unknown runId renders the friendly not-found state, not a crash.
+ *   2. An unknown runId renders the shared ErrorState, not a crash.
  *
  * Screenshots go to apps/app/e2e/screenshots/eval-run-detail/ (gitignored).
  */
@@ -278,8 +278,11 @@ test.describe("eval run detail", () => {
     // Per-item results table.
     const table = page.getByTestId("eval-run-results-table");
     await expect(table).toBeVisible();
-    await expect(table.getByText("Passed")).toHaveCount(2);
-    await expect(table.getByText("Failed")).toHaveCount(1);
+    // Count the pass/fail BADGES, not every "Passed" on screen: the table grew
+    // a "Passed" column header, so a plain text match counts three (header +
+    // two rows). Cells exclude the <th>.
+    await expect(table.getByRole("cell", { name: "Passed" })).toHaveCount(2);
+    await expect(table.getByRole("cell", { name: "Failed" })).toHaveCount(1);
     await expect(table.getByText("0.95")).toBeVisible();
     await expect(table.getByText("850 ms")).toBeVisible();
 
@@ -289,13 +292,20 @@ test.describe("eval run detail", () => {
     });
   });
 
-  test("shows the not-found state for an unknown runId", async ({ page, context }) => {
+  test("shows an error state for an unknown runId", async ({ page, context }) => {
     await loginWithSession(context, fixture.sessionToken);
 
     await gotoStable(page, `/${ORG_SLUG}/${WS_SLUG}/evals/runs/evr_does_not_exist`);
 
-    await expect(page.getByTestId("eval-run-empty-state")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/run not found/i)).toBeVisible();
+    // An unknown run id makes eval.run.get throw, and run-detail-section.tsx
+    // treats a failed read — "run not found" included — as an error rather
+    // than empty data, so this route renders the shared ErrorState. Reaching
+    // RunDetailClient's own `eval-run-empty-state` needs a SUCCESSFUL read
+    // that returns `run: null`, which this route cannot produce.
+    const errorState = page.getByRole("main").getByRole("alert");
+    await expect(errorState).toBeVisible({ timeout: 20_000 });
+    await expect(errorState).toContainText("Couldn't load this run");
+    await expect(errorState).toContainText(/may have been deleted/i);
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "run-not-found.png"),
