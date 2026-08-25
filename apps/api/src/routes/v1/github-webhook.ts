@@ -113,8 +113,16 @@ githubAppWebhookRoute.post("/", async (c) => {
   // Pick the secret by SENDER. A delivery from the primary App is verified
   // against the primary secret and nothing else; anything else that arrives
   // here is verified against the second App's secret, when one is configured.
+  //
+  // GITHUB_APP_ID is what tells the two Apps apart, and it is optional. With
+  // it unset there is no second App to route to, so every delivery is the
+  // primary App's — which is what this route did before it learned about a
+  // second one. Reading an absent id as "not the primary App" instead sent
+  // real primary deliveries to the second App's secret, where they failed
+  // signature verification (401) or, with no second secret configured either,
+  // were acked and dropped (200).
   const targetId = c.req.header("x-github-hook-installation-target-id");
-  const fromPrimaryApp = !targetId || (!!appId && targetId === appId);
+  const fromPrimaryApp = !targetId || !appId || targetId === appId;
   const secret = fromPrimaryApp ? appSecret : secondAppSecret;
 
   if (!secret && !fromPrimaryApp) {

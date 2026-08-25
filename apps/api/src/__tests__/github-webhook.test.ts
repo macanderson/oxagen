@@ -279,6 +279,25 @@ describe("github app webhook – configuration & signature", () => {
     expect(res.status).toBe(200);
   });
 
+  it("treats a delivery as the primary App's when GITHUB_APP_ID is not configured", async () => {
+    // GITHUB_APP_ID is what tells the two Apps apart and it is optional, so a
+    // deployment that never set it has only the primary App. GitHub still
+    // sends the target-id header, and reading that as "not the primary App"
+    // routed real primary deliveries to the second App's secret: 401 here,
+    // or an acked-and-dropped 200 with no second secret configured.
+    delete process.env.GITHUB_APP_ID;
+    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+
+    const res = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }, {
+        secret: SECRET,
+        targetId: "4168398",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   it("returns 401 when signed with the wrong secret", async () => {
     const res = await app.fetch(
       signedPost("pull_request", { installation: { id: 555 } }, { secret: "wrong" }),
