@@ -81,7 +81,29 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // Step 4 — mappings, LLM-suggested and editable. Real suggest_connection_mappings
   // call — give it a generous timeout.
   await expect(page.getByText("Step 4 of 5")).toBeVisible();
-  await expect(page.getByTestId("mapping-row-webhook_event")).toBeVisible({ timeout: 60_000 });
+
+  // Same treatment as the preview step above, for the same reason. This step
+  // has four terminal states (mappings-step.tsx): the draft rows, a loading
+  // placeholder, ErrorState ("Couldn't generate mapping suggestions") when the
+  // model call fails, and EmptyState ("No mappings to review") when it returns
+  // nothing. Waiting only for a row cannot tell a slow call from a failed one
+  // from an empty one, and #1188 spent a long time not knowing which.
+  const mappingRow = page.getByTestId("mapping-row-webhook_event");
+  const mappingsFailed = page.getByText("Couldn't generate mapping suggestions");
+  const mappingsEmpty = page.getByText("No mappings to review");
+
+  await expect(mappingRow.or(mappingsFailed).or(mappingsEmpty).first()).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(
+    mappingsFailed,
+    "suggest_connection_mappings failed — read the description for the provider error",
+  ).toHaveCount(0);
+  await expect(
+    mappingsEmpty,
+    "suggest_connection_mappings returned no drafts for webhook_event (fieldSchema is {} for custom-webhook)",
+  ).toHaveCount(0);
+  await expect(mappingRow).toBeVisible();
   const entityTypeInput = page.getByLabel("Entity type");
   await expect(entityTypeInput).not.toHaveValue("");
   // The suggestion is editable — prove it, not just displayed.
