@@ -45,7 +45,12 @@ test.describe("evals — datasets page", () => {
     await expect(page.getByRole("heading", { name: "Evals", exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(/score what actually ran and got billed/i)).toBeVisible();
+    // The rendered description, not the wedge sentence. "score what actually
+    // ran and got billed" appears only in comments (lib/sidebar.ts:159,
+    // lib/routes.ts:274) — it has never been page copy, so this assertion
+    // could not have passed. Matched on a distinctive clause rather than the
+    // whole sentence, which is long enough that any edit would break it.
+    await expect(page.getByText(/graded by an LLM judge/i)).toBeVisible();
 
     // ── 4. The datasets section resolves to either the table or the empty
     //        state — a fresh workspace has zero datasets, so assert whichever
