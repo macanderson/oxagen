@@ -298,6 +298,13 @@ jobs:
       # webServers — which have different cwds — resolve the SAME directory.
       STORAGE_DRIVER: fs
       STORAGE_FS_ROOT: /tmp/oxagen-storage
+      # apps/api/src/index.ts binds to HOST ?? HOSTNAME ?? 127.0.0.1, and Docker
+      # sets HOSTNAME to the container id. This job happens to bind 127.0.0.1
+      # today — the variable does not reach the process here, while it does in
+      # nightly.yml's identically-configured job, which timed out for exactly
+      # that reason (#1206). The address Playwright polls should not depend on
+      # which variables happen to survive into the process.
+      HOST: 127.0.0.1
     timeout-minutes: 45
     strategy:
       # One shard's failure must not cancel the other three. The shards are

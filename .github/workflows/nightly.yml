@@ -203,6 +203,15 @@ jobs:
       # config.webServer" having run zero tests, which is how the full sweep
       # came to be unmeasurable (#1206).
       VERCEL_ENV: preview
+      # apps/api/src/index.ts picks its bind address as
+      #   process.env.HOST ?? process.env.HOSTNAME ?? "127.0.0.1"
+      # and Docker sets HOSTNAME to the container id, so the API can bind to
+      # something like `8cc3e27a34f9` while Playwright's second webServer polls
+      # http://localhost:4000/health. Nothing answers, and the job times out at
+      # 180s having run no tests — the second cause behind #1206, found after
+      # the first was fixed. Setting HOST makes the bind address deterministic
+      # instead of depending on whether HOSTNAME reaches the process.
+      HOST: 127.0.0.1
       # No Vercel Blob token exists in CI, so file uploads use the hermetic
       # filesystem storage driver. Without it the attachment upload route 500s
       # and chat-attachments.spec.ts fails. The root is an absolute container
