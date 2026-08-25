@@ -192,6 +192,24 @@ jobs:
           --health-retries 10
 
     env:
+      # next start hardcodes NODE_ENV=production regardless of this job's env,
+      # which isProductionRuntime() (packages/config/src/env.ts:15) would read
+      # as a real prod deployment: the tenancy guard then refuses to boot,
+      # because this Postgres service is a throwaway superuser role and never
+      # gets the non-superuser oxagen_app role a real deployment requires.
+      # VERCEL_ENV is checked first and is the correct signal that this is not
+      # production. pipeline.yml's e2e job carries the same two lines; without
+      # them this job dies with "Timed out waiting 120000ms from
+      # config.webServer" having run zero tests, which is how the full sweep
+      # came to be unmeasurable (#1206).
+      VERCEL_ENV: preview
+      # No Vercel Blob token exists in CI, so file uploads use the hermetic
+      # filesystem storage driver. Without it the attachment upload route 500s
+      # and chat-attachments.spec.ts fails. The root is an absolute container
+      # path so the app (next start) and API (tsx) webServers — which have
+      # different cwds — resolve the SAME directory.
+      STORAGE_DRIVER: fs
+      STORAGE_FS_ROOT: /tmp/oxagen-storage
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
