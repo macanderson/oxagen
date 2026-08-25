@@ -48,6 +48,20 @@ const schemaFieldSchema = z.object({
     .optional(),
   dependsOn: z.object({ field: z.string(), value: z.unknown() }).optional(),
   validation: fieldValidationSchema.optional(),
+  // What the field's text MEANS, where the widget alone cannot say.
+  //
+  // A "code" widget holds SQL for google-bigquery and JSON for custom-webhook
+  // and custom-sql, so the widget cannot decide whether to parse. Without this
+  // the JSON ones were stored as raw text, which their own connection schemas
+  // (`recordTypes: z.array(...)`, `queries: z.array(...)`) can never accept —
+  // so neither connector could be configured through the wizard at all, and
+  // connection.preview died inside the connector on
+  // `config.recordTypes.map is not a function`.
+  //
+  // This object strips unknown keys, so a field the contract does not declare
+  // never reaches the client — the same way omitting "code" from the widget
+  // enum above once turned get_plugin_schema into a 500.
+  format: z.enum(["json"]).optional(),
 });
 
 // Auth scheme definition
