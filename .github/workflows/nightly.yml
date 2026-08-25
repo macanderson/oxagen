@@ -226,6 +226,15 @@ jobs:
       # different cwds — resolve the SAME directory.
       STORAGE_DRIVER: fs
       STORAGE_FS_ROOT: /tmp/oxagen-storage
+      # The connect-source wizard's Mappings step calls a language model for
+      # real, so this job needs a language credential exactly as pipeline.yml's
+      # e2e job does; without one the step renders "Unauthenticated. Configure
+      # AI_GATEWAY_API_KEY" and knowledge-connect-wizard fails. The gateway is
+      # the default. OXAGEN_MODEL_PROVIDER and OPENROUTER_API_KEY are left out
+      # on purpose: `env:` cannot omit a key conditionally, an unset one
+      # arrives as "", and their schemas reject "" — which would throw on every
+      # language call. Opt out by adding both in the same change as the secret.
+      AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
