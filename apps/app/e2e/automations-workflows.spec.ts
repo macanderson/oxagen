@@ -46,7 +46,10 @@ test("workflows page renders, tab strip + Launch CTA present, empty state for a 
     timeout: 20_000,
   });
   await expect(page.getByRole("tab", { name: "Automations" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Triggers" })).toBeVisible();
+  // Lineage, not Triggers. automations-header.tsx builds the strip from
+  // Automations / Workflows / Lineage, and the Triggers board this asserted
+  // no longer exists anywhere under apps/app/src.
+  await expect(page.getByRole("tab", { name: "Lineage" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Workflows" })).toHaveAttribute(
     "aria-selected",
     "true",

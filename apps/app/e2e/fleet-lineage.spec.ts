@@ -44,8 +44,10 @@ test("lineage page renders under the tab strip; fresh workspace shows the dispat
   await expect(page.getByRole("tab", { name: "Lineage" })).toBeVisible({
     timeout: 20_000,
   });
+  // The strip is Automations / Workflows / Lineage — the Triggers tab this
+  // also asserted was removed from automations-header.tsx and no longer
+  // exists anywhere under apps/app/src.
   await expect(page.getByRole("tab", { name: "Automations" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Triggers" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Workflows" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Lineage" })).toHaveAttribute(
     "aria-selected",
