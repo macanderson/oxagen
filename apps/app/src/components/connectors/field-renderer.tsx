@@ -16,6 +16,8 @@
  *   slider                → Slider with live value display
  *   key-value             → KeyValueEditor
  *   secret-file           → SecretFileUpload
+ *   code                  → Textarea (monospace); with `format: json` a
+ *                           JsonCodeField that stores the PARSED value
  *
  * Validation: required, pattern, itemPattern, min/max, minItems/maxItems
  * Errors shown on blur + after form submit attempt.
@@ -24,7 +26,7 @@
  *   field-renderer-types.ts     — shared TypeScript interfaces/types
  *   field-renderer-helpers.ts   — validateField (pure, no React)
  *   field-wrapper.tsx           — FieldWrapper layout component
- *   field-renderer-widgets.tsx  — TagInput, MultiSelectWidget
+ *   field-renderer-widgets.tsx  — TagInput, MultiSelectWidget, JsonCodeField
  */
 
 import * as React from "react";
@@ -43,7 +45,7 @@ import { KeyValueEditor } from "./key-value-editor";
 import { SecretFileUpload } from "./secret-file-upload";
 import { useConnectorSchema } from "./connector-schema-provider";
 import { FieldWrapper } from "./field-wrapper";
-import { TagInput, MultiSelectWidget } from "./field-renderer-widgets";
+import { TagInput, MultiSelectWidget, JsonCodeField } from "./field-renderer-widgets";
 import { validateField } from "./field-renderer-helpers";
 import type { FieldRendererProps } from "./field-renderer-types";
 
@@ -174,13 +176,39 @@ export function FieldRenderer({ field, namespace = "config", disabled = false }:
     );
   }
 
-  // ── textarea ─────────────────────────────────────────────────────────────────
   // ── textarea / code ──────────────────────────────────────────────────────────
   // "code" is a multi-line monospace variant used for SQL / JSON / payload
   // config (custom-sql, custom-webhook, google-bigquery). It shares the textarea
   // input surface but renders larger with a monospace font.
   if (widget === "textarea" || widget === "code") {
     const isCode = widget === "code";
+    // A `code` field declaring `format: json` holds structured config, not
+    // text: its connector's connection schema expects the parsed value
+    // (custom-webhook's recordTypes and custom-sql's queries are both arrays).
+    // google-bigquery's `query` is SQL and carries no format, so it stays a
+    // plain string on this same widget.
+    if (isCode && field.format === "json") {
+      return (
+        <FieldWrapper
+          id={fieldId}
+          label={field.label}
+          description={field.description}
+          error={showError ? fieldError.message : undefined}
+          required={required}
+        >
+          <JsonCodeField
+            id={fieldId}
+            value={rawValue}
+            onChange={(parsed) => setFieldValue(field.key, parsed)}
+            onBlur={handleBlur}
+            placeholder={field.placeholder}
+            disabled={disabled}
+            invalid={Boolean(showError)}
+            ariaDescribedBy={ariaDescribedBy}
+          />
+        </FieldWrapper>
+      );
+    }
     return (
       <FieldWrapper
         id={fieldId}

@@ -81,7 +81,9 @@ test.describe("chat.connection-create-inline", () => {
   }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "conn-inline" });
 
-    await page.goto(`/${orgSlug}/default/chat`);
+    // /sessions is the conversation route; /chat is a 301 shim onto it since
+    // the Ask→Sessions rename (src/proxy.ts WS_RENAMES).
+    await page.goto(`/${orgSlug}/default/sessions`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const composer = page.getByPlaceholder(/send a message/i);
@@ -132,7 +134,7 @@ test.describe("chat.connection-create-inline", () => {
   }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "conn-unknown" });
 
-    await page.goto(`/${orgSlug}/default/chat`);
+    await page.goto(`/${orgSlug}/default/sessions`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const composer = page.getByPlaceholder(/send a message/i);

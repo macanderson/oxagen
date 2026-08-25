@@ -42,4 +42,16 @@ describe("api.key.revoke capability", () => {
     expect(apiKeyRevoke.defaultEffect).toBe("deny");
     expect(apiKeyRevoke.agent?.requiresApproval).toBe(true);
   });
+
+  // The app's token page (apps/app/.../developer/tokens/api-key.ts) invokes
+  // this on the "agent" surface — there is no "app" surface in
+  // CapabilitySurface, so that is the surface every app-initiated call uses.
+  // Omitting it made the kernel's surface gate refuse the call outright
+  // (`is not exposed on the "agent" surface`) while this contract still
+  // advertised an "app" layer. The handler test cannot catch that: it calls
+  // the handler directly and never crosses the gate.
+  it("is exposed on the surface the app invokes it from", () => {
+    expect(apiKeyRevoke.surfaces).toContain("agent");
+    expect(apiKeyRevoke.layers).toContain("app");
+  });
 });

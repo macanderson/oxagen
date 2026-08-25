@@ -90,8 +90,15 @@ export async function interceptAgentStream(
   if (opts.holdRefresh ?? true) {
     // Hold the post-turn RSC refresh of the conversation page so the live
     // streamed bubbles persist through the assertions (see holdRefresh docs).
-    // Match only RSC GETs (header `rsc: 1`) to the /ask or /chat route; the
+    // Match only RSC GETs (header `rsc: 1`) to the conversation route; the
     // full-document page.goto has no RSC header and falls through to continue().
+    //
+    // The route is /sessions — `/ask` and `/chat` are 301 shims onto it
+    // (src/proxy.ts WS_RENAMES, the Ask→Sessions rename). Matching the two
+    // shims alone held nothing: every spec lands on /sessions, whether it
+    // navigates there or is redirected, so the post-turn reconcile ran and
+    // reset() wiped the streamed bubbles before the assertions read them.
+    // All three are matched so a spec still on a legacy path behaves the same.
     //
     // On a conversation's FIRST turn, chat-shell-client.tsx also calls
     // `router.replace(pathname + "?c=" + publicId)` to pin the new
@@ -121,7 +128,7 @@ export async function interceptAgentStream(
       return `${u.pathname}${u.search}`;
     };
     await page.route(
-      (url) => /\/(ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
+      (url) => /\/(sessions|ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
       async (route: Route) => {
         const req = route.request();
         const isSameUrlRefresh = logicalUrl(req.url()) === logicalUrl(page.url());

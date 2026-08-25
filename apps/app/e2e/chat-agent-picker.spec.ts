@@ -3,9 +3,9 @@
  *
  * Against the real stack:
  *   1. Create an agent via the Agent Builder so the workspace has one to pick.
- *   2. On a new chat, the empty-state gallery ("Choose your assistant") is
- *      visible; picking the agent updates the composer chip to reflect it and
- *      the outgoing /api/v1/chat/stream body carries the chosen agentId.
+ *   2. On a new chat, the composer's agent chip opens the picker; picking the
+ *      agent updates the chip to reflect it and the outgoing
+ *      /api/v1/chat/stream body carries the chosen agentId.
  *   3. The picker's per-agent star sets the workspace default assistant, which
  *      survives a reload (persisted via update_workspace_user_preferences).
  *   4. For a code agent (with a seeded GitHub repo), the picker slides in the
@@ -70,7 +70,7 @@ test.describe("chat.agent-picker", () => {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   });
 
-  test("gallery picks an agent, the chip reflects it, and it is sent + set as default", async ({
+  test("the chip's picker picks an agent, the chip reflects it, and it is sent + set as default", async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -84,19 +84,26 @@ test.describe("chat.agent-picker", () => {
     const slug = `chat-${Date.now().toString(36)}`;
     await createAgent(page, orgSlug, { name: "Chat Helper", slug });
 
-    // New chat — the empty-state gallery leads with "Choose your assistant".
-    await page.goto(`/${orgSlug}/default/chat?new=1`);
-    const gallery = page.getByTestId("agent-gallery");
-    await expect(gallery).toBeVisible({ timeout: 15_000 });
-    await expect(
-      gallery.getByRole("heading", { name: "Choose your assistant" }),
-    ).toBeVisible();
+    // New chat — the empty state is a quiet welcome line. The "Choose your
+    // assistant" gallery this spec outlived was removed in #1046: agent choice
+    // moved into the composer's chip, which opens the same AgentPickerPanel as
+    // a popover (`data-agent-picker="popover"`).
+    await page.goto(`/${orgSlug}/default/sessions?new=1`);
+    await expect(page.getByTestId("chat-empty-state")).toBeVisible({
+      timeout: 15_000,
+    });
+    // Nothing picked yet, so the chip reads "Agent: Assistant".
+    const chipTrigger = page.getByRole("button", { name: /^Agent: / });
+    await expect(chipTrigger).toBeVisible({ timeout: 15_000 });
+    await chipTrigger.click();
+    const picker = page.locator('[data-agent-picker="popover"]');
+    await expect(picker).toBeVisible();
     await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "agent-gallery.png"),
+      path: path.join(SCREENSHOT_DIR, "agent-picker.png"),
     });
 
-    // Pick the agent from the gallery — a chat agent applies immediately.
-    await gallery.getByRole("option", { name: /Chat Helper/ }).click();
+    // Pick the agent from the picker — a chat agent applies immediately.
+    await picker.getByRole("option", { name: /Chat Helper/ }).click();
 
     // The composer chip now reflects the selected agent.
     const chip = page.getByRole("button", { name: "Agent: Chat Helper" });
@@ -137,7 +144,7 @@ test.describe("chat.agent-picker", () => {
     });
 
     // The default survives a reload: a brand-new chat pre-selects it.
-    await page.goto(`/${orgSlug}/default/chat?new=1`);
+    await page.goto(`/${orgSlug}/default/sessions?new=1`);
     await expect(
       page.getByRole("button", { name: "Agent: Chat Helper" }),
     ).toBeVisible({
@@ -161,13 +168,16 @@ test.describe("chat.agent-picker", () => {
         codeFeatures: true,
       });
 
-      await page.goto(`/${orgSlug}/default/chat?new=1`);
-      const gallery = page.getByTestId("agent-gallery");
-      await expect(gallery).toBeVisible({ timeout: 15_000 });
+      // Same as above: the picker opens from the composer chip, not from the
+      // removed empty-state gallery (#1046).
+      await page.goto(`/${orgSlug}/default/sessions?new=1`);
+      await page.getByRole("button", { name: /^Agent: / }).click();
+      const picker = page.locator('[data-agent-picker="popover"]');
+      await expect(picker).toBeVisible({ timeout: 15_000 });
 
       // The code agent's row carries a "code" badge; picking it slides in the
       // inline repo + environment setup step instead of applying immediately.
-      const coderRow = gallery.getByRole("option", { name: /Repo Coder/ });
+      const coderRow = picker.getByRole("option", { name: /Repo Coder/ });
       await expect(coderRow).toBeVisible();
       await coderRow.click();
 

@@ -148,7 +148,10 @@ test("org members: invite → pending list with live badge → revoke", async ({
     await expect(page.getByText(inviteeEmail).first()).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText("Admin", { exact: true })).toBeVisible();
+    // Lowercase: the pending row's role badge prints the raw DB value and only
+    // capitalizes it in CSS (`className="capitalize"` in pending/page.tsx), so
+    // the text content is "admin" — same shape as the roster's "owner" above.
+    await expect(page.getByText("admin", { exact: true })).toBeVisible();
 
     const revokeButton = page.getByRole("button", {
       name: `Revoke invitation for ${inviteeEmail}`,
@@ -162,9 +165,12 @@ test("org members: invite → pending list with live badge → revoke", async ({
     // revalidates BOTH /members and /members/pending (see actions.ts fix);
     // previously it only revalidated /members, so a Revoke performed from
     // this page never removed the row until an unrelated navigation.
-    await expect(page.getByText(inviteeEmail)).toHaveCount(0, {
-      timeout: 10_000,
-    });
+    // Scoped to the row's own control rather than a bare text match: the
+    // toasts carry the invitee's address too (the assertion above needs
+    // .first() for exactly that reason), so counting page text counts them.
+    // The Revoke button exists only inside a pending row, so this still fails
+    // if the row survives — which is the behaviour under test.
+    await expect(revokeButton).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByText("No pending invitations")).toBeVisible();
   } finally {
     await cleanup();

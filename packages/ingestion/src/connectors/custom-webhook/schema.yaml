@@ -46,6 +46,7 @@ config:
     - key: recordTypes
       label: Record Type Definitions
       widget: code
+      format: json
       description: >
         JSON array of record type mappings. Each entry requires sourceRecordType (string),
         eventTypeJsonPath (JSONPath to extract the event type, default "$.event"),

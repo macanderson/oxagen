@@ -43,3 +43,19 @@ export interface MultiSelectWidgetProps {
   options: Array<{ value: string; label: string }>;
   disabled?: boolean;
 }
+
+export interface JsonCodeFieldProps {
+  id: string;
+  /** The parsed value the form holds — an object/array once valid, else undefined. */
+  value: unknown;
+  /**
+   * Called with the PARSED value, and with undefined while the draft does not
+   * parse — so the form never holds a stale value the textarea contradicts.
+   */
+  onChange: (parsed: unknown) => void;
+  onBlur: () => void;
+  placeholder?: string;
+  disabled?: boolean;
+  invalid?: boolean;
+  ariaDescribedBy?: string;
+}

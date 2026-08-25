@@ -32,6 +32,7 @@ config:
     - key: queries
       label: SQL Queries
       widget: code
+      format: json
       description: >
         JSON array of query definitions. Each entry must have sourceRecordType (string),
         query (SQL with optional :cursor placeholder), and idColumn (default "id").
