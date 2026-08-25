@@ -473,6 +473,18 @@ describe("createTurnTranslator — parity with the single-pass wrapper", () => {
     vi.mocked(meterCreditsForUsage).mockReturnValue(7n);
   });
 
+/**
+ * Deep-copy with every `durationMs` removed. The translator measures elapsed
+ * wall-clock for reasoning and tool blocks, so two independent runs of the
+ * same input legitimately disagree by a millisecond; comparing them for deep
+ * equality makes an otherwise deterministic parity test load-sensitive.
+ */
+function withoutDurations<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (key, v) => (key === "durationMs" ? undefined : v)),
+  ) as T;
+}
+
   it("stateful step-by-step drive == single-pass translateAgentStream (minus usage/error position)", async () => {
     // A non-colliding sequence: the two paths must emit identical events for
     // everything except finish/error (which the engine caller emits itself).
@@ -508,10 +520,24 @@ describe("createTurnTranslator — parity with the single-pass wrapper", () => {
     const { events: statefulEvents, turn: statefulTurn } = runTranslator(parts);
 
     // The wrapper adds NO usage/error here (no finish/error parts present), so
-    // the two event streams must be byte-identical.
-    expect(statefulEvents).toEqual(wrapperEvents);
+    // the two event streams must match everywhere except `durationMs`.
+    //
+    // That field is measured wall-clock (translate-stream.ts:186, :260, :407),
+    // and these are two independent runs, so it can differ by a millisecond —
+    // CI caught them as 1 vs 0. Parity here is about structure and ordering,
+    // so the measurement is stripped for the comparison and its shape asserted
+    // separately rather than left to make the test flake forever.
+    expect(withoutDurations(statefulEvents)).toEqual(
+      withoutDurations(wrapperEvents),
+    );
+    for (const event of [...statefulEvents, ...wrapperEvents]) {
+      const measured = (event as { durationMs?: unknown }).durationMs;
+      if (measured !== undefined) expect(typeof measured).toBe("number");
+    }
     expect(statefulTurn.assistantText).toBe(wrapperTurn.assistantText);
-    expect(statefulTurn.persistedBlocks).toEqual(wrapperTurn.persistedBlocks);
+    expect(withoutDurations(statefulTurn.persistedBlocks)).toEqual(
+      withoutDurations(wrapperTurn.persistedBlocks),
+    );
     expect(statefulTurn.assistantText).toBe("answer done");
   });
 });
