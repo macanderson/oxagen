@@ -7,9 +7,20 @@
  * payload's `installation.id` + `repository.full_name`, rather than from a
  * per-connection path segment like the generic `/webhooks/:connector/:conn` route.
  *
- * Security boundary: HMAC-SHA256 over the raw body, verified against the App's
- * single webhook secret (`GITHUB_APP_WEBHOOK_SECRET`) using the
+ * Security boundary: HMAC-SHA256 over the raw body, verified against the
+ * secret belonging to the App that SENT the delivery, using the
  * `x-hub-signature-256` header. There is no HTTP auth on this route.
+ *
+ * Two Apps deliver here. `oxagen-code-agent` signs with
+ * `GITHUB_APP_WEBHOOK_SECRET`; a second App, `oxagen-sh`, signs with
+ * `GITHUB_WEBHOOK_SECRET` — confirmed by HMAC-verifying a captured delivery
+ * (#1200), which is why that parameter existed in Parameter Store while no
+ * code read it. Every one of its deliveries was rejected 401.
+ *
+ * The sender is identified by `x-github-hook-installation-target-id`, and each
+ * App is verified against its OWN secret — not against whichever one happens to
+ * match, which would let either secret authorise a payload claiming to be from
+ * the other.
  *
  * Flow:
  *   1. Verify the signature against GITHUB_APP_WEBHOOK_SECRET.
@@ -89,7 +100,46 @@ async function pauseGithubConnections(installationId: string): Promise<void> {
 }
 
 githubAppWebhookRoute.post("/", async (c) => {
-  const { GITHUB_APP_WEBHOOK_SECRET: secret } = requireEnv(["GITHUB_APP_WEBHOOK_SECRET"] as const);
+  const {
+    GITHUB_APP_WEBHOOK_SECRET: appSecret,
+    GITHUB_WEBHOOK_SECRET: secondAppSecret,
+    GITHUB_APP_ID: appId,
+  } = requireEnv([
+    "GITHUB_APP_WEBHOOK_SECRET",
+    "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_ID",
+  ] as const);
+
+  // Pick the secret by SENDER. A delivery from the primary App is verified
+  // against the primary secret and nothing else; anything else that arrives
+  // here is verified against the second App's secret, when one is configured.
+  //
+  // GITHUB_APP_ID is what tells the two Apps apart, and it is optional. With
+  // it unset there is no second App to route to, so every delivery is the
+  // primary App's — which is what this route did before it learned about a
+  // second one. Reading an absent id as "not the primary App" instead sent
+  // real primary deliveries to the second App's secret, where they failed
+  // signature verification (401) or, with no second secret configured either,
+  // were acked and dropped (200).
+  const targetId = c.req.header("x-github-hook-installation-target-id");
+  const fromPrimaryApp = !targetId || !appId || targetId === appId;
+  const secret = fromPrimaryApp ? appSecret : secondAppSecret;
+
+  if (!secret && !fromPrimaryApp) {
+    // A second App is delivering and we hold no secret for it. Ack so GitHub
+    // stops retrying — the same reasoning as the branch below — and name the
+    // sender so this is one log line rather than an investigation.
+    logger.error(
+      { reason: "webhook_secret_missing_for_sender", targetId },
+      "GitHub App webhook from an App this deployment holds no secret for — " +
+        "acking with 200 to stop retries; set GITHUB_WEBHOOK_SECRET for it",
+    );
+    return c.json(
+      { received: true, dispatched: 0, reason: "no secret for sender" },
+      200,
+    );
+  }
+
   if (!secret) {
     // Missing webhook secret is a SERVER misconfiguration, not something the
     // request can fix. GitHub records every non-2xx (4xx AND 5xx, including
