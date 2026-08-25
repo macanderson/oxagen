@@ -33,10 +33,13 @@ test("Marketplace → Integrations links to the in-app connector setup wizard", 
     `/${user.orgSlug}/default/marketplace/integrations/google-drive`,
   );
 
-  // GitHub keeps its bespoke Knowledge → Repos OAuth-App flow, not this wizard.
+  // GitHub keeps its bespoke Knowledge → Sources OAuth-App flow, not this
+  // wizard. The page was renamed repos → sources by web-app-2.0 Phase 2
+  // (proxy.ts:189 still redirects the old path), and the link points at the
+  // new one — this assertion was still reading the pre-rename href.
   await expect(page.getByTestId("integration-connect-github")).toHaveAttribute(
     "href",
-    /\/default\/knowledge\/repos\?setup=github/,
+    /\/default\/knowledge\/sources\?setup=github/,
   );
 });
 
@@ -108,9 +111,11 @@ test("Connector setup wizard renders the schema-driven form and installs the con
   expect(body.pluginId).toBe("google-drive");
   expect(body.status).toBe("queued");
 
-  // Success redirects to Knowledge → Repos, where the pending_setup connection
-  // is managed (auth completion, first sync).
+  // Success redirects to Knowledge → Sources, where the pending_setup
+  // connection is managed (auth completion, first sync). Asserted on the
+  // post-rename path: navigating to knowledge/repos still works, but it
+  // redirects, so the URL that settles is knowledge/sources.
   await page.waitForURL(
-    new RegExp(`/${user.orgSlug}/default/knowledge/repos$`),
+    new RegExp(`/${user.orgSlug}/default/knowledge/sources$`),
   );
 });
