@@ -300,6 +300,13 @@ jobs:
       STORAGE_FS_ROOT: /tmp/oxagen-storage
     timeout-minutes: 45
     strategy:
+      # One shard's failure must not cancel the other three. The shards are
+      # independent slices of one suite, and cancelling them turns "here are
+      # the specs that fail" into "one spec fails and three shards are
+      # unknown" — which is how a run that had the answer to #1188's remaining
+      # list reported only a quarter of it. `deploy-node` sets this already,
+      # for the same reason.
+      fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
     services:
