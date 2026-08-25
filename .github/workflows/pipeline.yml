@@ -589,6 +589,25 @@ jobs:
           if [ "$EVENT_NAME" = "push" ]; then
             PG=true
           fi
+          # ...but a safety net still needs a database to reconcile against.
+          # #1280 emptied the connection strings on everything that is not a
+          # pull request, because production moved to the oxagen-data node and
+          # answers only through SSM — CI holds no production string any more.
+          # The PG=true above is unconditional, so the steps below still ran and
+          # `psql ""` failed at "Bootstrap Postgres extensions" before Atlas was
+          # ever reached: main went red on the job #1280 had just made a no-op.
+          # Detect the absence here instead, where every store is decided at
+          # once, so the job skips and succeeds and deploy-node's `needs:` still
+          # resolves. When #1275 gives this job a reachable production database,
+          # setting the secret restores the safety net with no change here.
+          if [ -z "$DATABASE_URL" ]; then
+            echo "no DATABASE_URL configured for event=${EVENT_NAME} — skipping Postgres"
+            PG=false
+          fi
+          if [ -z "$CLICKHOUSE_URL" ] && [ -z "$NEO4J_URI" ]; then
+            echo "no ClickHouse/Neo4j configured for event=${EVENT_NAME} — skipping both"
+            CH=false; NEO=false
+          fi
           STORES=""
           [ "$CH" = "true" ] && STORES="clickhouse"
           [ "$NEO" = "true" ] && STORES="${STORES:+$STORES,}neo4j"
