@@ -6,7 +6,7 @@
  *  - the page renders through the real RSC → invoke → agent.execution.list
  *    path (workflow-run rows filtered client-side — see lib/automations/
  *    workflows.ts) and shows the empty state + Launch CTA;
- *  - the shared Automations tab strip (Automations / Triggers / Workflows) is
+ *  - the shared Automations tab strip (Automations / Workflows / Lineage) is
  *    present;
  *  - the launch dialog opens with the Workflow tab's goal field, and
  *    client-side validation blocks an empty-goal submit inline
@@ -46,7 +46,10 @@ test("workflows page renders, tab strip + Launch CTA present, empty state for a 
     timeout: 20_000,
   });
   await expect(page.getByRole("tab", { name: "Automations" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Triggers" })).toBeVisible();
+  // Lineage, not Triggers. automations-header.tsx builds the strip from
+  // Automations / Workflows / Lineage, and the Triggers board this asserted
+  // no longer exists anywhere under apps/app/src.
+  await expect(page.getByRole("tab", { name: "Lineage" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Workflows" })).toHaveAttribute(
     "aria-selected",
     "true",

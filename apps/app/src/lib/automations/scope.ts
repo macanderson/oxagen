@@ -1,11 +1,11 @@
 /**
  * automations/scope.ts — shared server-side scope + IAM resolution for the
- * Automations cluster (Automations list/editor, Triggers board, Workflows).
+ * Automations cluster (Automations list/editor, Workflows, Lineage).
  *
  * apps/app does NOT bootstrap the IAM kernel (see CLAUDE.md gotcha), so every
  * server surface must gate explicitly. This centralizes the
  * session → org → workspace → member/role resolution so the Automations,
- * Triggers, and Workflows pages all gate identically. Mirrors the canonical
+ * Workflows and Lineage pages all gate identically. Mirrors the canonical
  * pattern in lib/workbench/scope.ts but decoupled from the Workbench module.
  *
  * The `ctx.surface` is "app" for attribution/metering. invoke() is called with
