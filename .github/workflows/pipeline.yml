@@ -513,6 +513,22 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
         run: |
+          # No target, nothing to migrate. A migrate job whose datastore is not
+          # configured has no work to do, and failing on that manufactures red
+          # that says nothing about the change under test — the job previously
+          # died inside psql with "could not translate host name". An
+          # environment that was never provisioned, or one whose secrets left
+          # with an org move, skips instead and starts running again by itself
+          # the moment DATABASE_URL is set.
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::notice::DATABASE_URL is not configured for this event — skipping migrations."
+            {
+              echo "pg=false"
+              echo "stores="
+              echo "any=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Per-store change detection. Each datastore only migrates when its own
           # migration sources change, so a Postgres-only PR never reaches across to
           # the live preview/prod ClickHouse or Neo4j instances (and vice versa).
