@@ -147,7 +147,14 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 30
+    # 75m, measured rather than guessed. This job runs the whole Playwright
+    # suite in one shard, where pipeline.yml splits the same 121 tests across
+    # four jobs that take ~7m each; it also builds apps/app first, and turbo's
+    # remote cache currently answers 402 so that build is always cold. At 30m
+    # the job was cancelled mid-suite with no result at all — the third and
+    # last thing standing between #1206 and a measurable full sweep, after the
+    # tenancy refusal and the API bind address.
+    timeout-minutes: 75
 
     services:
       postgres:
