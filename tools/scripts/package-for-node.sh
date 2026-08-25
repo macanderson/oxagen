@@ -138,8 +138,16 @@ case $SERVICE in
     # `pnpm deploy` is what produces a real, non-symlinked node_modules for one
     # workspace package; a plain copy of the monorepo's would be a tree of
     # symlinks into a store that does not ship.
+    # --no-optional drops `duckdb`, which @oxagen/engram declares optional and
+    # this artifact carried at 123 MB a release — 369 MB at KEEP_RELEASES=3, on
+    # a 20 GB volume (#1193). Nothing in `app` constructs a DuckDB store: every
+    # createStore() call site is in apps/cli. And the adapter loads it lazily
+    # via require() inside its constructor, throwing a named
+    # NativeModuleUnavailableError rather than failing at import — so importing
+    # @oxagen/engram without duckdb present is already a supported state, by
+    # the design store/errors.ts spells out.
     log "installing runtime dependencies for the externalised packages"
-    pnpm deploy --filter @oxagen/app --prod --legacy "$ROOT/.deploy-app"
+    pnpm deploy --filter @oxagen/app --prod --no-optional --legacy "$ROOT/.deploy-app"
     # Merged rather than replaced: the standalone trace's node_modules holds
     # what Next bundled for it, and dropping that in favour of the install
     # would lose exactly the modules the trace was for.
