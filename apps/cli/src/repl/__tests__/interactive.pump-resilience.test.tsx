@@ -203,6 +203,13 @@ describe("REPL pump resilience", () => {
     ).toBe(true);
 
     // And the failure was surfaced, not swallowed.
+    //
+    // Waited for rather than asserted straight away: the check above waits on
+    // the *spy*, which settles the moment the pump calls runTurn, while Ink
+    // repaints on its own schedule. On a loaded machine the current frame can
+    // still be the one from before the throw — the CI failure this guards
+    // against read a frame that was still showing the splash and "first task".
+    await waitFor(() => (lastFrame() ?? "").includes("kaboom"));
     expect(lastFrame() ?? "").toContain("kaboom");
   });
 });
