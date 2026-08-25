@@ -42,15 +42,6 @@ function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] }
   };
 }
 
-/** Poll until `cond` holds (Ink/test convention: deadlines, never sleeps). */
-async function until(cond: () => boolean, timeoutMs = 3000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!cond()) {
-    if (Date.now() > deadline) throw new Error("until(): condition not met in time");
-    await new Promise((r) => setTimeout(r, 25));
-  }
-}
-
 let base: string;
 let projectCwd: string;
 let store: SessionStore;
@@ -287,10 +278,30 @@ describe("fleet watch", () => {
       writer,
     );
     // Append AFTER the watch starts — watch-all tails from each session's end.
+    //
+    // "After the watch starts" is not "after the watch adopted this session",
+    // and only the second one is a cursor. Roster adoption reads lastSeq at
+    // the moment it fires, so a single append races that read and lands on one
+    // of two sides: adopted first, and the event is tailed; or appended first,
+    // in which case lastSeq already counts it, adoption begins at the seq after
+    // it, and it is never emitted at all. The second side cannot recover, so
+    // the old single append timed out rather than ran slow — a longer deadline
+    // would not have helped it.
+    //
+    // Appending until one is observed removes the race rather than widening
+    // it: whenever adoption lands, the next append is past the cursor.
     const w = store.openWriter({ ...meta, lastSeq: 3 });
-    w.append({ type: "message.delta", text: "live!", turn: 2 });
-    await w.flush();
-    await until(() => out.some((l) => l.includes('"message.delta"') && l.includes("live!")));
+    const sawLive = (): boolean =>
+      out.some((l) => l.includes('"message.delta"') && l.includes("live!"));
+    const deadline = Date.now() + 10_000;
+    while (!sawLive()) {
+      if (Date.now() > deadline) {
+        throw new Error("fleet watch never emitted an event appended after adoption");
+      }
+      w.append({ type: "message.delta", text: "live!", turn: 2 });
+      await w.flush();
+      await new Promise((r) => setTimeout(r, 50));
+    }
     abort.abort();
     await done;
     expect(out.every((l) => parseSessionEventLine(l) !== null)).toBe(true);
