@@ -327,11 +327,29 @@ jobs:
       #
       # The tier defaults (anthropic/claude-haiku-4.5, -sonnet-5, -fable-5)
       # resolve on OpenRouter under the same ids the gateway uses, so no
-      # OXAGEN_LLM_* override is needed. models.ts does not rewrite ids
-      # between providers, so that is checked, not assumed.
+      # OXAGEN_LLM_* override is needed for the ids to resolve. models.ts does
+      # not rewrite ids between providers, so that is checked, not assumed.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OXAGEN_MODEL_PROVIDER: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # The balanced tier is pinned to a smaller model for CI, and the reason
+      # is the output ceiling rather than the model's ability.
+      #
+      # Nothing in this repository sets maxOutputTokens, so the SDK sends no
+      # max_tokens and OpenRouter reserves credit against the model's full
+      # ceiling. claude-sonnet-5's is 65536, which the account declines up
+      # front — "requires more credits, or fewer max_tokens. You requested up
+      # to 65536 tokens, but can only afford 31910" — so the mappings step of
+      # knowledge-connect-wizard never got a response at all.
+      #
+      # gpt-4o-mini's ceiling is 16384 and it supports structured outputs,
+      # which is what generateObjectFor needs; a 16384-token request against
+      # this balance was verified to return before this was pinned. Mapping a
+      # tier onto a vendor id is what these variables are for, per models.ts,
+      # so this is configuration and not a change to how the product calls a
+      # model. Bounding maxOutputTokens in the product would be the better fix
+      # and belongs to whoever owns that call's truncation risk.
+      OXAGEN_LLM_BALANCED: openai/gpt-4o-mini
     timeout-minutes: 45
     strategy:
       # One shard's failure must not cancel the other three. The shards are
