@@ -27,20 +27,26 @@ vi.mock("./api-key", () => ({
 }));
 
 const { TokensPanel } = await import("./tokens-panel");
+type ApiKeyRow = import("./tokens-panel").ApiKeyRow;
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-const KEY = {
+// Annotated, not a bare literal: ApiKeyRow gained `scope` and `deletedAt`, and
+// an unannotated fixture would have kept compiling while drifting from the type
+// it stands in for. That is the failure ADR-037 is about, and this fixture hit
+// it — typecheck caught it in CI, which is the ADR working.
+const KEY: ApiKeyRow = {
   publicId: "key_1",
   name: "e2e key",
   keyPrefix: "ox_abcdefgh",
+  scope: null,
   createdAt: new Date("2026-01-01").toISOString(),
   lastUsedAt: null,
   expiresAt: null,
-  revokedAt: null,
+  deletedAt: null,
 };
 
 describe("TokensPanel — a rejected action surfaces", () => {

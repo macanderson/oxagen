@@ -22,7 +22,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ApiKeyRow {
+export interface ApiKeyRow {
   publicId: string;
   name: string;
   keyPrefix: string;
