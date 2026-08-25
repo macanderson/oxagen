@@ -79,9 +79,14 @@ locals {
       repo_id     = 1304589599
       description = "Publishes the CGP schema and specification artifacts."
     }
+    # The key is the IAM role name (`gha-deploy-oxagen-platform`), which the
+    # workflow names by ARN, so it stays put even though the repository moved
+    # to `macanderson/oxagen`. The transfer kept `repo_id` and changed only the
+    # owner; a trust policy still naming `oxageninc` refuses every deploy with
+    # `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
     oxagen-platform = {
-      repository  = "oxageninc/oxagen-platform"
-      owner_id    = 294371946
+      repository  = "macanderson/oxagen"
+      owner_id    = 542881
       repo_id     = 1252628274
       description = "Publishes oxagen.sh and the four services on the node."
     }

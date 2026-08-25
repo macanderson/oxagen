@@ -218,6 +218,38 @@ data "aws_iam_policy_document" "oxagen_platform" {
     actions   = ["ssm:GetCommandInvocation", "ssm:ListCommandInvocations"]
     resources = ["*"]
   }
+
+  # `next build` reads the production environment out of Parameter Store, so
+  # the credentials are assumed before packaging rather than only for the
+  # upload. The path node is granted alongside its children because
+  # GetParametersByPath authorizes against the path itself, and a grant of
+  # only `/oxagen/production/*` fails the call that lists it.
+  statement {
+    sid = "ReadBuildEnvironment"
+    actions = [
+      "ssm:GetParametersByPath",
+      "ssm:GetParameters",
+      "ssm:GetParameter",
+    ]
+    resources = [
+      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/oxagen/production/*",
+      "arn:aws:ssm:${var.region}:${var.account_id}:parameter/oxagen/production",
+    ]
+  }
+
+  # Those parameters are SecureString, so reading them is a KMS decrypt. The
+  # condition keeps the grant to decrypts made through Parameter Store.
+  statement {
+    sid       = "DecryptThroughParameterStore"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.region}.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "oxagen_platform" {
