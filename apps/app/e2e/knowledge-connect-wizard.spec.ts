@@ -55,7 +55,27 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // Step 3 — preview. custom-webhook's previewRecordTypes() is a pure
   // function of config, so this resolves without any external network call.
   await expect(page.getByText("Step 3 of 5")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("preview-record-type-webhook_event")).toBeVisible({ timeout: 30_000 });
+
+  // Wait for the preview to reach one of its three terminal states before
+  // asserting which one, so a failure names the cause instead of a missing
+  // testid. preview-step.tsx renders ErrorState ("Couldn't preview this
+  // connection") when preview_connection throws and EmptyState ("No records
+  // found") when it returns nothing, and both are invisible to an assertion
+  // that only looks for the populated card — which is why #1188 could say the
+  // record type was absent but not why.
+  const populated = page.getByTestId("preview-record-type-webhook_event");
+  const previewFailed = page.getByText("Couldn't preview this connection");
+  const previewEmpty = page.getByText("No records found");
+
+  await expect(populated.or(previewFailed).or(previewEmpty).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(previewFailed, "preview_connection threw").toHaveCount(0);
+  await expect(
+    previewEmpty,
+    "preview_connection returned no record types for the declared config",
+  ).toHaveCount(0);
+  await expect(populated).toBeVisible();
   await page.getByTestId("preview-next-btn").click();
 
   // Step 4 — mappings, LLM-suggested and editable. Real suggest_connection_mappings
