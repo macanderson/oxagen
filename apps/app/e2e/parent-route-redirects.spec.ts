@@ -41,8 +41,11 @@ test("parent routes resolve to their default sub-page without erroring", async (
 
   // Each bare parent → the sub-page it must land on.
   const redirects: { from: string; to: RegExp }[] = [
-    // Org root → first workspace (which renders the workspace Overview page).
-    { from: `/${orgSlug}`, to: new RegExp(`/${orgSlug}/${ws}$`) },
+    // Org root → the org dashboard, the usage/metering home (#1053 moved it
+    // there from the first workspace; apps/app/src/app/[orgSlug]/page.tsx
+    // redirects unconditionally so an org with zero workspaces still lands
+    // somewhere real). What the dashboard renders is org-dashboard.spec.ts.
+    { from: `/${orgSlug}`, to: new RegExp(`/${orgSlug}/dashboard$`) },
     // Workspace-scope section parents → first tab.
     {
       from: `/${orgSlug}/${ws}/workbench`,
@@ -62,13 +65,13 @@ test("parent routes resolve to their default sub-page without erroring", async (
     },
     // Org-scope section parents → first tab.
     // Access is enterprise-only: its layout redirects non-enterprise orgs to
-    // the org root (apps/app/src/app/[orgSlug]/access/layout.tsx), which then
-    // forwards to the first workspace. A fresh signup is not enterprise, so
-    // the healthy landing for bare /access is the workspace root — the point
+    // the org root (apps/app/src/app/[orgSlug]/access/layout.tsx), which now
+    // forwards to the dashboard. A fresh signup is not enterprise, so the
+    // healthy landing for bare /access is the org dashboard — the point
     // stands: it must resolve cleanly, never 500.
     {
       from: `/${orgSlug}/access`,
-      to: new RegExp(`/${orgSlug}/${ws}$`),
+      to: new RegExp(`/${orgSlug}/dashboard$`),
     },
     {
       from: `/${orgSlug}/billing`,

@@ -97,7 +97,9 @@ test.describe("chat.automation-create-inline", () => {
       orgPrefix: "auto-inline",
     });
 
-    await page.goto(`/${orgSlug}/default/chat`);
+    // /sessions is the conversation route; /chat is a 301 shim onto it since
+    // the Ask→Sessions rename (src/proxy.ts WS_RENAMES).
+    await page.goto(`/${orgSlug}/default/sessions`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const composer = page.getByPlaceholder(/send a message/i);

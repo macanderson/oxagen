@@ -45,14 +45,21 @@ test.describe("evals — datasets page", () => {
     await expect(page.getByRole("heading", { name: "Evals", exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText(/score what actually ran and got billed/i)).toBeVisible();
+    // The header copy was rewritten (evals/page.tsx's PageHeader description);
+    // "score what actually ran and got billed" survives only as a comment in
+    // lib/routes.ts and is on no page.
+    await expect(
+      page.getByText(/graded by an LLM judge, every call metered/i),
+    ).toBeVisible();
 
-    // ── 4. The datasets section resolves to either the table or the empty
+    // ── 4. The datasets section resolves to either the grid or the empty
     //        state — a fresh workspace has zero datasets, so assert whichever
-    //        actually rendered rather than a specific one. ────────────────────
-    const table = page.getByTestId("evals-datasets-table");
+    //        actually rendered rather than a specific one. The populated half
+    //        is a card grid now (`evals-datasets-grid`), not a table; the
+    //        `evals-datasets-table` this spec waited on is on no page. ───────
+    const grid = page.getByTestId("evals-datasets-grid");
     const emptyState = page.getByTestId("evals-datasets-empty-state");
-    await expect(table.or(emptyState)).toBeVisible({ timeout: 15_000 });
+    await expect(grid.or(emptyState)).toBeVisible({ timeout: 15_000 });
 
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "01-evals-page.png"),

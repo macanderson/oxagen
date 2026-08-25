@@ -148,7 +148,10 @@ test("org members: invite → pending list with live badge → revoke", async ({
     await expect(page.getByText(inviteeEmail).first()).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText("Admin", { exact: true })).toBeVisible();
+    // Lowercase: the pending row's role badge prints the raw DB value and only
+    // capitalizes it in CSS (`className="capitalize"` in pending/page.tsx), so
+    // the text content is "admin" — same shape as the roster's "owner" above.
+    await expect(page.getByText("admin", { exact: true })).toBeVisible();
 
     const revokeButton = page.getByRole("button", {
       name: `Revoke invitation for ${inviteeEmail}`,

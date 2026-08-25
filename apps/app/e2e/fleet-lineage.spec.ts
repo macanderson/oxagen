@@ -5,7 +5,7 @@
  * Signs up a fresh user (a brand-new workspace has zero fleet dispatches) and
  * asserts:
  *  - the page renders under the shared Automations tab strip (Automations ·
- *    Triggers · Workflows · Lineage) with Lineage selected, via the real
+ *    Workflows · Lineage) with Lineage selected, via the real
  *    RSC → invoke → agent.subagent_fanout.list path (list_subagent_fanouts);
  *  - with no dispatches yet, the dispatch picker's empty state renders (never
  *    a blank page or a crash) alongside the always-available paste-a-
@@ -45,7 +45,8 @@ test("lineage page renders under the tab strip; fresh workspace shows the dispat
     timeout: 20_000,
   });
   await expect(page.getByRole("tab", { name: "Automations" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Triggers" })).toBeVisible();
+  // automations-header.tsx renders three tabs — Automations · Workflows ·
+  // Lineage. The "Triggers" tab this spec asserted is a tab it outlived.
   await expect(page.getByRole("tab", { name: "Workflows" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Lineage" })).toHaveAttribute(
     "aria-selected",

@@ -3,7 +3,7 @@
  *
  * E2E for the Automations list + editor
  * (`/{orgSlug}/{workspaceSlug}/automations` and `.../automations/[automationId]`):
- *   1. The list renders under the Automations · Triggers · Workflows tab strip
+ *   1. The list renders under the Automations · Workflows · Lineage tab strip
  *      and a fresh workspace shows the "No automations yet" empty state (not an
  *      error or blank page), with the "New automation" CTA.
  *   2. Creating an automation via the New-automation dialog lands on the editor
@@ -41,8 +41,9 @@ test.describe("Automations list + editor", () => {
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).toHaveURL(/\/automations$/);
 
-    // Tab strip: Automations · Triggers · Workflows.
-    for (const label of ["Automations", "Triggers", "Workflows"]) {
+    // Tab strip: Automations · Workflows · Lineage (automations-header.tsx).
+    // "Triggers" was a tab this spec outlived — it is not rendered anywhere.
+    for (const label of ["Automations", "Workflows", "Lineage"]) {
       await expect(
         page.getByRole("tab", { name: label }).or(page.getByRole("link", { name: label })).first(),
       ).toBeVisible({ timeout: 20_000 });

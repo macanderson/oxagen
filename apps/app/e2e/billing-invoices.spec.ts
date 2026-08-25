@@ -31,5 +31,11 @@ test("billing invoices: fresh org renders the empty state inside the billing tab
   await expect(
     page.getByRole("heading", { name: "Invoices", level: 3 }),
   ).toBeVisible();
-  await expect(page.getByText("No invoices yet.")).toBeVisible();
+  // The bare "No invoices yet." paragraph became a shared EmptyState with a
+  // title + supporting line (components/billing/invoice-list.tsx), which drops
+  // the trailing period. Assert both halves so the copy stays pinned.
+  await expect(page.getByText("No invoices yet", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Invoices appear here after your first billing cycle."),
+  ).toBeVisible();
 });

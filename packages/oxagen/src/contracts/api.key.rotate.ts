@@ -13,7 +13,14 @@ export const apiKeyRotate = registerCapability({
   description:
     "Atomically issue a replacement API key and revoke the old one. The replacement inherits the old key's scope/workspace/expiry and is returned once — never recoverable after this call. Audited as api_key.created + api_key.revoked.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  // "agent" is the surface the app's own token page invokes on
+  // (apps/app/src/app/[orgSlug]/developer/tokens/api-key.ts), and the "app"
+  // layer below already declares that page exists. Without it the kernel's
+  // surface gate refused every rotate from the UI —
+  // `Capability "rotate_api_key" is not exposed on the "agent" surface`.
+  // ff4bbb233 widened create and left its two siblings behind; the handler
+  // test calls the handler directly, so it never crossed the gate.
+  surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // API key management does not consume AI tokens — billing gate must not block.

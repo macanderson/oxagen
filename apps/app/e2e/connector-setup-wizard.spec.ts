@@ -7,7 +7,7 @@
  * the new [connectorId] route, the page SSR-prefetches the connector schema
  * (get_plugin_schema) and renders the dynamic form, a field interaction
  * updates form state, and submitting calls the real install_integration
- * capability (POST /integrations) and redirects to Knowledge → Repos.
+ * capability (POST /integrations) and redirects to Knowledge → Sources.
  *
  * google-drive is used because its only auth scheme is OAuth (no auth
  * fields to fill) and every config field either has a defaultValue or is
@@ -33,10 +33,13 @@ test("Marketplace → Integrations links to the in-app connector setup wizard", 
     `/${user.orgSlug}/default/marketplace/integrations/google-drive`,
   );
 
-  // GitHub keeps its bespoke Knowledge → Repos OAuth-App flow, not this wizard.
+  // GitHub keeps its bespoke OAuth-App flow rather than this wizard, and that
+  // flow now lands on Knowledge → Sources: the integrations grid builds the
+  // href from workspace.knowledge.sources (integrations/page.tsx), and there
+  // is no /knowledge/repos route left — repos moved to /workbench/repos.
   await expect(page.getByTestId("integration-connect-github")).toHaveAttribute(
     "href",
-    /\/default\/knowledge\/repos\?setup=github/,
+    /\/default\/knowledge\/sources\?setup=github/,
   );
 });
 
@@ -108,9 +111,11 @@ test("Connector setup wizard renders the schema-driven form and installs the con
   expect(body.pluginId).toBe("google-drive");
   expect(body.status).toBe("queued");
 
-  // Success redirects to Knowledge → Repos, where the pending_setup connection
-  // is managed (auth completion, first sync).
+  // Success redirects to Knowledge → Sources, where the pending_setup
+  // connection is managed (auth completion, first sync). connector-setup-
+  // client.tsx pushes workspace.knowledge.sources on install success; the
+  // Repos destination this spec asserted is a route that no longer exists.
   await page.waitForURL(
-    new RegExp(`/${user.orgSlug}/default/knowledge/repos$`),
+    new RegExp(`/${user.orgSlug}/default/knowledge/sources$`),
   );
 });

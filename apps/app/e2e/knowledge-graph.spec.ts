@@ -13,10 +13,15 @@
  *      (Neo4j pre-seeded), it asserts real rows instead.
  *   3. Search filters: typing into the Search tab's box drives a query
  *      without crashing the page (fuzzy search over an empty/seeded graph).
- *   4. Query console runs a query and renders a result table: `RETURN 1 AS
- *      one` is a deterministic, always-safe read that doesn't depend on any
- *      ingested data, so this assertion never needs Neo4j to be pre-seeded —
- *      only running.
+ *   4. Query console runs a typed traversal and renders its outcome. #1087
+ *      ("retire unsafe workspace graph authority") replaced the raw Cypher
+ *      box with an ontology.query traversal from a known start node —
+ *      query-console.tsx accepts no database query language at all, so the
+ *      old `RETURN 1 AS one` probe has nothing left to type into. Traversing
+ *      from a publicId that cannot exist is the equivalent always-safe read:
+ *      the handler returns startNode:null for an unknown id rather than
+ *      erroring (packages/handlers/src/ontology.query.ts), so the assertion
+ *      needs Neo4j running but never pre-seeded.
  *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored, recreated each run).
  */
@@ -131,7 +136,7 @@ test.describe("Knowledge → Graph", () => {
     await shot(page, "03-search-results");
   });
 
-  test("Query console runs a query and renders a result table", async ({ page }) => {
+  test("Query console runs a typed traversal and reports an unknown start node", async ({ page }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-query" });
     const ws = "default";
 
@@ -140,17 +145,27 @@ test.describe("Knowledge → Graph", () => {
     await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("tab", { name: "Query" }).click();
-    const cypherInput = page.getByLabel("Cypher query");
-    await expect(cypherInput).toBeVisible({ timeout: 10_000 });
 
-    // A deterministic, always-safe read — doesn't depend on any ingested
-    // data, so this assertion is reliable on a brand new signup.
-    await cypherInput.fill("RETURN 1 AS one");
-    await page.getByRole("button", { name: "Run" }).click();
+    // The Query tab is a typed ontology.query traversal since #1087 — a start
+    // node plus relationship types / direction / depth. There is no Cypher
+    // box and no "Run" button to drive one.
+    const startNodeInput = page.getByLabel("Start node ID");
+    await expect(startNodeInput).toBeVisible({ timeout: 10_000 });
+    const traverse = page.getByRole("button", { name: "Traverse" });
+    await expect(traverse).toBeDisabled();
 
-    await expect(page.getByRole("columnheader", { name: "one" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("cell", { name: "1" })).toBeVisible();
+    // A publicId that cannot exist in a workspace created seconds ago — the
+    // traversal still round-trips through ontologyQueryAction → query_ontology
+    // and comes back startNode:null, which the console reports honestly
+    // instead of erroring or blanking the panel.
+    await startNodeInput.fill("e2e-no-such-public-id");
+    await expect(traverse).toBeEnabled();
+    await traverse.click();
 
-    await shot(page, "04-query-console-result-table");
+    await expect(
+      page.getByText("Start node not found in this workspace."),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await shot(page, "04-query-console-unknown-start-node");
   });
 });
