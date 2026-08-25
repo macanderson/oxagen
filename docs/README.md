@@ -5,29 +5,33 @@ stay in the code; this directory is for the *durable* explanations that
 describe how the platform is shaped, what was decided and why, what's
 planned, and how to operate it.
 
+**New here? Start at [`ONBOARDING.md`](./ONBOARDING.md)** — one page
+covering how we write code, the current database schema, and an indexed
+map of every architecture decision. Everything below is supporting detail.
+
 ## Layout
 
 ```
 docs/
 ├── README.md                ← you are here
-├── VISION.md                 product north star (metered/governed/graph-grounded control plane)
-├── adr/                      architectural decision records
-├── audits/                   committed release-audit HTML reports
-├── brand/                    brand assets
-├── capabilities/             contract surface documentation (per-capability)
-├── cli/                      CLI-specific docs (incl. point-in-time competitive snapshots)
-├── compliance/                SOC 2 / compliance references
-├── erd/                       entity-relationship diagrams
-├── guides/                    how-to guides
-├── ops/                       operational runbooks
-├── queries/                   canonical SQL / Cypher / ClickHouse queries
-├── reference/                  generated-artifact-shaped reference docs
-├── site/                       static marketing/reference page(s)
-├── specs/                      per-topic spec.md / plan.md (the actual home of
-│                                design specs — see below)
-├── superpowers/                 plans/specs (candidate for folding into specs/)
-├── CODEMAPS/                    generated architecture codemaps
-└── health-checks.md             draft (unfinished)
+├── ONBOARDING.md              start here — principles, schema, ADR index
+├── VISION.md                  product north star (metered/governed/graph-grounded control plane)
+├── adr/                       architectural decision records
+├── audits/                    committed release-audit HTML reports
+├── brand/                     brand assets
+├── capabilities/              contract surface documentation (per-capability)
+├── cli/                       CLI-specific docs (incl. point-in-time competitive snapshots)
+├── compliance/                 SOC 2 / compliance references
+├── erd/                        entity-relationship diagrams
+├── guides/                     how-to guides
+├── ops/                        operational runbooks
+├── queries/                    canonical SQL / Cypher / ClickHouse queries
+├── reference/                   generated-artifact-shaped reference docs
+├── site/                        static marketing/reference page(s)
+├── specs/                       per-topic spec.md / plan.md (the actual home of
+│                                 design specs — see below)
+├── superpowers/                  plans/specs (candidate for folding into specs/)
+└── CODEMAPS/                     generated architecture codemaps
 ```
 
 ### `adr/` — Architectural Decision Records
