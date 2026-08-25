@@ -34,6 +34,19 @@ import userEvent from "@testing-library/user-event";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { McpServerSummary } from "./mcp-types";
 
+// The first test in this file pays the jsdom environment setup that the other
+// 105 then reuse: measured locally at 2438ms for "renders textarea with default
+// placeholder" against 381ms for the next comparable render test. Vitest's
+// default 5000ms leaves ~2.5s of headroom on an idle machine and none on a
+// 2-core CI runner executing the full turbo graph, where this file has failed
+// the nightly sweep twice.
+//
+// The knock-on is what makes it worth raising rather than retrying: a test that
+// times out mid-render leaves its DOM mounted, and the next test fails with
+// "Found multiple elements with the placeholder text", which points at the
+// component instead of at the timeout that caused it.
+vi.setConfig({ testTimeout: 15_000 });
+
 afterEach(cleanup);
 
 // ── mocks ──────────────────────────────────────────────────────────────────────
