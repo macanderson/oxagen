@@ -1,11 +1,49 @@
 # AWS Deployment Plan — oxagen.sh website + platform infrastructure
 
-**Status:** Proposed · **Owner:** Platform · **Target account:** `578673726240` (`us-east-2`, already bootstrapped for OpenTofu state)
+**Status: STALE — never executed, describes an architecture this account
+does not run.** Verified 2026-08-26 against live account state, not
+assumed: this plan's central claim in §2 ("the AWS account is not
+greenfield... `infra/environments/production` already manages two KMS
+keys") does not hold — `aws kms list-aliases` against `578673726240`
+(`us-east-2`) returns zero custom aliases. Only `infra/bootstrap`'s state
+backend (the `oxagen-tfstate-578673726240` bucket + `oxagen-tflock` table)
+was ever actually applied; the KMS module, and everything in §3 onward
+(ECS Fargate, Aurora, Neptune, ALB+CloudFront+WAF), was written but never
+run. The account instead moved off Vercel through a completely separate
+repository and a completely different architecture — see below.
+
+**Where the real plan and current state live:** `oxagen-aws-infra` (a
+sibling repo, not a directory of this one). Its `README.md` documents what
+is actually running in `578673726240` today — one self-hosted EC2 node
+behind Caddy running Postgres/Neo4j/ClickHouse in Docker, plus the five
+platform services as plain Node processes, not the ECS/managed-store
+architecture this document specifies. A second migration to a new account
+(`916294258235`) is in progress there now; `docs/new-account-migration-plan.md`
+in that repo is the live decision record and cutover checklist — Aurora
+Serverless v2 and Redshift Serverless replace Postgres and ClickHouse,
+Neo4j stays self-hosted, and the app node sits behind a VPC/ALB. Read that
+repo before making any AWS infrastructure decision; do not resume executing
+the plan below.
+
+**Why this is being left in place rather than deleted:** §4's code-level
+TODOs (an S3 storage driver behind `packages/storage`, an `output:
+"standalone"` Next.js build, distributed rate limiting, the KMS-IAM-user
+finding in §4.8) are about this repository's own application code, are
+independent of which infrastructure ultimately hosts it, and may still be
+unaddressed. Read them as an application-level backlog, not as a
+description of any infrastructure that exists or will be built as specified
+here.
+
+---
 
 This is the migration plan for moving the Oxagen website and platform off the
 current Vercel + managed-SaaS footprint and onto AWS. It is written to be
 executed incrementally: every phase ships independently, and every phase is
 reversible by a DNS weight change until the final cutover.
+
+**(Everything below this line is the original, unexecuted plan — kept for
+its application-level TODOs per the note above. Its infrastructure
+sections do not describe reality; see the banner at the top of this file.)**
 
 ---
 
@@ -44,13 +82,14 @@ migration completes, and is a prerequisite for customer-hosted deployments.
 | Jobs | Inngest Cloud | ADR-002 |
 | Sandbox | Modal (prod) / Vercel Sandbox / Docker | `packages/sandbox` |
 | Secrets | Env vars, fanned out to Vercel projects | ADR-004 |
-| KMS | **Already AWS** — `oxagen/ingestion-prod`, `oxagen/auth-tokens-prod` | `infra/environments/production` |
+| KMS | **Planned, never applied** — `infra/environments/production` declares `oxagen/ingestion-prod` and `oxagen/auth-tokens-prod`, but no such aliases exist in the account (verified via `aws kms list-aliases`, 2026-08-26) | `infra/environments/production` |
 | CI | GitHub Actions, `ghcr.io/oxageninc/oxagen-ci-*` images | `.github/workflows/pipeline.yml` |
 
-The AWS account is not greenfield: `infra/bootstrap` already provisions the
-S3 state bucket + DynamoDB lock table, and `infra/environments/production`
-already manages two KMS keys. This plan extends that tree rather than
-starting a new one.
+Only `infra/bootstrap` was ever actually applied — the state backend
+(`oxagen-tfstate-578673726240` + `oxagen-tflock`) exists and is shared with
+`oxagen-aws-infra`'s own stacks under different state keys.
+`infra/environments/production`'s KMS module was written but never run, and
+neither was anything past it in this plan. See the file-level banner above.
 
 ---
 
