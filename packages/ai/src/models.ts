@@ -238,6 +238,19 @@ function languageProvider(): { languageModel: (id: string) => LanguageModelV4 } 
     name: "openrouter",
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: OPENROUTER_API_KEY,
+    // Without this, `generateObject` cannot return an object on this provider
+    // at all. The SDK declines to send a JSON response format — it warns
+    // "JSON response format schema is only supported with structuredOutputs" —
+    // and falls back to a tool call, whose arguments come back from Anthropic
+    // through OpenRouter double-encoded:
+    //
+    //   {"suggestions": "{\"suggestions\": [{\"sourceRecordType\": ...}]}"}
+    //
+    // a string where the schema declares an array. Every generateObjectFor
+    // caller then failed with "No object generated: could not parse the
+    // response" — in production as well as CI, since the AWS deployment runs
+    // on this provider (/oxagen/production/OXAGEN_MODEL_PROVIDER=openrouter).
+    supportsStructuredOutputs: true,
   });
 }
 
