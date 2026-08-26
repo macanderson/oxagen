@@ -24,7 +24,11 @@
     },
     "linear": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.linear.app/sse"
+      ]
     },
     "vercel": {
       "type": "http",
@@ -73,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" lint 20 'pnpm lint --filter=...[HEAD] >/dev/null 2>&1 && echo \"✓ Lint passed\" || echo \"⚠ Lint found issues\"'",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" lint 20 'pnpm lint --filter=...[HEAD] >/dev/null 2>&1 && echo \"\u2713 Lint passed\" || echo \"\u26a0 Lint found issues\"'",
             "timeout": 60,
             "statusMessage": "Linting changed packages...",
             "async": true
@@ -98,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'ℹ CI runs the authoritative full gate on every push/PR (GitHub Actions). The local pre-commit/push full-gate hook is intentionally disabled — running turbo test:coverage+build on every commit across concurrent sessions saturated RAM and ballooned swap/compressor to ~100GB. Run `pnpm gate` manually before marking a body of work ready to merge.'",
+            "command": "echo '\u2139 CI runs the authoritative full gate on every push/PR (GitHub Actions). The local pre-commit/push full-gate hook is intentionally disabled \u2014 running turbo test:coverage+build on every commit across concurrent sessions saturated RAM and ballooned swap/compressor to ~100GB. Run `pnpm gate` manually before marking a body of work ready to merge.'",
             "timeout": 5,
             "statusMessage": "CI gate runs on push/PR (local full-gate hook disabled)...",
             "async": true
@@ -135,6 +139,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/no-full-test-builds.sh"
+          }
+        ]
+      }
     ]
   },
   "worktree": {
@@ -147,7 +162,13 @@
       "target",
       "dist"
     ],
-    "sparsePaths": ["apps", "packages", "tools", ".agents", ".claude"],
+    "sparsePaths": [
+      "apps",
+      "packages",
+      "tools",
+      ".agents",
+      ".claude"
+    ],
     "baseRef": "fresh",
     "bgIsolation": "none"
   },

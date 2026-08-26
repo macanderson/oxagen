@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+@AGENTS.md
+
 ## Mission
 
 Oxagen is a metered, governed, graph-grounded control plane for teams that build and resell AI agents. The full positioning and drift tests live in `docs/VISION.md`, the reference for feature direction. The platform centers on three things:
