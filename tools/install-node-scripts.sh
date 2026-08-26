@@ -17,9 +17,20 @@
 
 set -euo pipefail
 
-REGION=us-east-1
-INSTANCE=i-023d002d6e44f8f84
-BUCKET=oxagen-deploy-578673726240
+# Old account's node by default, unchanged behaviour for anyone who runs this
+# with no environment set. Point it at the new account with:
+#   REGION=us-east-1 INSTANCE=<new-instance-id> BUCKET=oxagen-deploy-916294258235 \
+#   CADDYFILE=Caddyfile.alb LOG_DRIVER=awslogs tools/install-node-scripts.sh
+REGION="${REGION:-us-east-1}"
+INSTANCE="${INSTANCE:-i-023d002d6e44f8f84}"
+BUCKET="${BUCKET:-oxagen-deploy-578673726240}"
+# Which file under tools/caddy/ this node runs. The new account's node
+# terminates no TLS of its own — see Caddyfile.alb's header — so it takes a
+# different file from the old account's `Caddyfile`.
+CADDYFILE="${CADDYFILE:-Caddyfile}"
+# json-file on the old node (unchanged); the new node's IAM role is granted
+# CloudWatch Logs write access and should use it — see deploy-service.sh.
+LOG_DRIVER="${LOG_DRIVER:-json-file}"
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
@@ -27,14 +38,23 @@ echo "==> uploading tools/node -> s3://$BUCKET/_bin/"
 aws s3 sync "$HERE/node" "s3://$BUCKET/_bin/" \
   --region "$REGION" --exclude '*.md' --delete --only-show-errors
 
-echo "==> uploading tools/caddy -> s3://$BUCKET/_caddy/"
-aws s3 sync "$HERE/caddy" "s3://$BUCKET/_caddy/" \
-  --region "$REGION" --delete --only-show-errors
+# node.env tells deploy-service.sh which bucket and region this node's own
+# artifacts live in — see that script's header. Generated here rather than
+# hand-maintained on the box, so it can never drift from what this run
+# actually targeted.
+NODE_ENV_FILE=$(mktemp "${TMPDIR:-/tmp}/oxagen-node-env-XXXXXX")
+printf 'DEPLOY_BUCKET=%s\nREGION=%s\nLOG_DRIVER=%s\n' "$BUCKET" "$REGION" "$LOG_DRIVER" > "$NODE_ENV_FILE"
+aws s3 cp "$NODE_ENV_FILE" "s3://$BUCKET/_bin/node.env" --region "$REGION" --only-show-errors
+rm -f "$NODE_ENV_FILE"
 
-read -r -d '' REMOTE <<'REMOTE_EOF' || true
+echo "==> uploading tools/caddy/$CADDYFILE -> s3://$BUCKET/_caddy/Caddyfile"
+aws s3 cp "$HERE/caddy/$CADDYFILE" "s3://$BUCKET/_caddy/Caddyfile" \
+  --region "$REGION" --only-show-errors
+
+read -r -d '' REMOTE_TEMPLATE <<'REMOTE_EOF' || true
 set -euxo pipefail
 mkdir -p /opt/oxagen/bin /opt/oxagen/services
-aws s3 sync s3://oxagen-deploy-578673726240/_bin/ /opt/oxagen/bin/ --region us-east-1 --delete
+aws s3 sync s3://__BUCKET__/_bin/ /opt/oxagen/bin/ --region __REGION__ --delete
 chmod 0755 /opt/oxagen/bin/*.sh
 # Fail the install rather than the first deploy if a dependency is missing.
 for tool in jq python3 curl docker aws; do
@@ -48,7 +68,7 @@ ls -l /opt/oxagen/bin
 # if it does not parse. `caddy reload` would refuse a bad config too, but by
 # then the file on disk is already wrong and the next container restart picks
 # it up — which turns a typo into an outage that appears hours later.
-aws s3 cp s3://oxagen-deploy-578673726240/_caddy/Caddyfile /tmp/Caddyfile.incoming --region us-east-1
+aws s3 cp s3://__BUCKET__/_caddy/Caddyfile /tmp/Caddyfile.incoming --region __REGION__
 docker run --rm -v /tmp/Caddyfile.incoming:/etc/caddy/Caddyfile:ro caddy:2 \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
@@ -62,6 +82,14 @@ else
 fi
 rm -f /tmp/Caddyfile.incoming
 REMOTE_EOF
+
+# __BUCKET__/__REGION__ in the template are substituted here rather than
+# being shell variables inside the heredoc, so the script that lands on the
+# instance has this run's literal values baked in — the instance never needs
+# to know REGION or BUCKET at all, only /opt/oxagen/bin/node.env does (via
+# deploy-service.sh, at deploy time).
+REMOTE=${REMOTE_TEMPLATE//__BUCKET__/$BUCKET}
+REMOTE=${REMOTE//__REGION__/$REGION}
 
 # The script goes to SSM as a JSON file, not as an inline shell-interpolated
 # argument. Interpolating it collapsed every newline into a literal "n" during

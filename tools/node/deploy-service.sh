@@ -27,8 +27,22 @@
 
 set -euo pipefail
 
-readonly DEPLOY_BUCKET=oxagen-deploy-578673726240
-readonly REGION=us-east-1
+# node.env carries this node's own account-specific values — the bucket and
+# region differ between the old account's node and the new account's, and
+# this one script is installed on both by install-node-scripts.sh. Its
+# absence (an old-account node this repository hasn't touched since the
+# new account existed) falls back to the values that were hardcoded here
+# before node.env existed, so an untouched node keeps working unchanged.
+[[ -f /opt/oxagen/bin/node.env ]] && source /opt/oxagen/bin/node.env
+
+readonly DEPLOY_BUCKET="${DEPLOY_BUCKET:-oxagen-deploy-578673726240}"
+readonly REGION="${REGION:-us-east-1}"
+# json-file is the old account's node — unchanged behaviour there. The new
+# account's node.env sets this to awslogs, because that node's IAM role
+# (unlike the old node's) is actually granted logs:PutLogEvents on
+# /oxagen-app/*; switching the default here would break the old node's
+# containers on their next deploy with no permission to write anywhere.
+readonly LOG_DRIVER="${LOG_DRIVER:-json-file}"
 readonly ROOT=/opt/oxagen/services
 readonly KEEP_RELEASES=3
 
@@ -214,12 +228,25 @@ start_container() {
   # holding the port while the new one fails to bind it.
   docker rm -f "oxagen-web-$SERVICE" >/dev/null 2>&1 || true
 
+  local log_args=()
+  if [[ $LOG_DRIVER == awslogs ]]; then
+    log_args=(
+      --log-driver awslogs
+      --log-opt "awslogs-region=$REGION"
+      --log-opt "awslogs-group=/oxagen-app/$SERVICE"
+      --log-opt awslogs-create-group=true
+      --log-opt "awslogs-stream=$SERVICE"
+    )
+  else
+    log_args=(--log-opt max-size=10m --log-opt max-file=3)
+  fi
+
   docker run -d \
     --name "$CONTAINER" \
     --restart unless-stopped \
     --network host \
     --memory "$memory" \
-    --log-opt max-size=10m --log-opt max-file=3 \
+    "${log_args[@]}" \
     -e NODE_ENV=production \
     -e PORT="$port" \
     -e HOSTNAME=127.0.0.1 \

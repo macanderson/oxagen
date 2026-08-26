@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#
+# Bootstrap for the Oxagen app node.
+#
+# Runs once on first boot, and again whenever this file changes — the
+# instance is replaced on edit, which is safe because Neo4j's data lives on a
+# separate EBS volume that survives the replacement. Written to be re-runnable
+# rather than assumed-once, same discipline as the old account's data-node
+# bootstrap: it formats the data volume only if it has no filesystem, and
+# `docker compose up -d` converges rather than recreates.
+
+set -euxo pipefail
+
+exec > >(tee /var/log/oxagen-bootstrap.log) 2>&1
+
+NAME="${name}"
+REGION="${region}"
+
+# ---------------------------------------------------------------------------
+# Packages
+# ---------------------------------------------------------------------------
+
+dnf -y update
+dnf -y install docker
+
+COMPOSE_VERSION=v2.32.4
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL \
+  "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-aarch64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+systemctl enable --now docker
+
+# ---------------------------------------------------------------------------
+# Neo4j's data volume
+# ---------------------------------------------------------------------------
+
+DATA_DEV=""
+for _ in $(seq 1 60); do
+  for candidate in /dev/nvme1n1 /dev/sdf /dev/xvdf; do
+    if [[ -b $candidate ]]; then
+      DATA_DEV=$candidate
+      break 2
+    fi
+  done
+  sleep 5
+done
+
+if [[ -z $DATA_DEV ]]; then
+  echo "FATAL: data volume never appeared; refusing to start Neo4j on the root disk" >&2
+  exit 1
+fi
+
+if ! blkid "$DATA_DEV"; then
+  mkfs.xfs "$DATA_DEV"
+fi
+
+mkdir -p /data
+DATA_UUID=$(blkid -s UUID -o value "$DATA_DEV")
+if ! grep -q "$DATA_UUID" /etc/fstab; then
+  echo "UUID=$DATA_UUID /data xfs defaults,nofail 0 2" >> /etc/fstab
+fi
+mount -a
+
+mkdir -p /data/neo4j/data /data/neo4j/logs
+
+# ---------------------------------------------------------------------------
+# Neo4j credential, read from Parameter Store rather than baked into this
+# file: user data is readable from the instance metadata service by anything
+# running on the box.
+# ---------------------------------------------------------------------------
+
+NEO4J_PASSWORD=$(aws ssm get-parameter \
+  --region "$REGION" \
+  --name "/$NAME/neo4j/password" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text)
+
+mkdir -p /opt/oxagen/neo4j
+umask 077
+cat > /opt/oxagen/neo4j/.env <<ENVEOF
+NEO4J_PASSWORD=$NEO4J_PASSWORD
+ENVEOF
+chmod 600 /opt/oxagen/neo4j/.env
+
+cat > /opt/oxagen/neo4j/docker-compose.yml <<'COMPOSEEOF'
+name: oxagen-neo4j
+
+services:
+  neo4j:
+    image: neo4j:${neo4j_version}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/$${NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: 768m
+      NEO4J_server_memory_heap_max__size: 768m
+      NEO4J_server_memory_pagecache_size: 512m
+    volumes:
+      - /data/neo4j/data:/data
+      - /data/neo4j/logs:/logs
+    mem_limit: 1792m
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "${region}"
+        awslogs-group: /oxagen-app/neo4j
+        awslogs-create-group: "true"
+        awslogs-stream: neo4j
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+COMPOSEEOF
+
+cd /opt/oxagen/neo4j
+docker compose --env-file .env up -d
+
+# ---------------------------------------------------------------------------
+# Caddy — a placeholder config that answers /healthz, so the ALB's health
+# check goes green before tools/install-node-scripts.sh has ever run. The
+# real Caddyfile and the platform's own services arrive by the deploy path.
+# ---------------------------------------------------------------------------
+
+mkdir -p /opt/oxagen/bin /opt/oxagen/services /opt/oxagen/caddy
+
+cat > /opt/oxagen/caddy/Caddyfile <<'CADDYEOF'
+:80 {
+	respond /healthz 200
+	respond 503
+}
+CADDYEOF
+
+docker run -d \
+  --name oxagen-caddy \
+  --restart unless-stopped \
+  --network host \
+  --log-driver awslogs \
+  --log-opt awslogs-region="${region}" \
+  --log-opt awslogs-group=/oxagen-app/caddy \
+  --log-opt awslogs-create-group=true \
+  --log-opt awslogs-stream=caddy \
+  -v /opt/oxagen/caddy:/etc/caddy \
+  caddy:2
+
+echo "oxagen app node bootstrap complete"
