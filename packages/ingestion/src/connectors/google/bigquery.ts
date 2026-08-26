@@ -36,7 +36,8 @@ const googleBigQuery: ConnectorDefinition<Config> = {
     throw new Error("google-bigquery.previewRecordTypes: not yet implemented");
   },
 
-  normalizeRecord(sourceRecordType: string, raw: unknown): NormalizedRecord {
+  // connector treats all rows as the configured recordType — sourceRecordType unused.
+  normalizeRecord(_sourceRecordType: string, raw: unknown): NormalizedRecord {
     const r = asRecord(raw);
     // BigQuery rows are free-form — pass all columns through as properties.
     // The customer's property mapping config handles field renaming.
@@ -48,7 +49,6 @@ const googleBigQuery: ConnectorDefinition<Config> = {
         Object.entries(r).filter(([, v]) => v !== null && v !== undefined),
       ),
     };
-    void sourceRecordType; // connector treats all rows as the configured recordType
   },
 };
 

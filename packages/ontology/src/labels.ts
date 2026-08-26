@@ -69,7 +69,7 @@ export function assertValidLabel(label: string): string {
  *   "PULL_REQUEST"              → "PullRequest"
  *   "issue"                     → "Issue"
  *   "GraphNode"                 → "GraphNode"   (idempotent)
- *   "3D model"                  → "N3DModel"
+ *   "3D model"                  → "N3dModel"
  *   "!!!"                       → null
  */
 export function sanitizeLabel(raw: string): string | null {

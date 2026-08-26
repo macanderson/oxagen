@@ -175,11 +175,10 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
   },
   (t) => ({
     // workspace_memory_policy_workspace_idx was dropped (2026-07-11 audit
-    // §4.2): duplicate of the workspaceId.unique() constraint above (identical
-    // single column, both unique).
-    workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(
-      t.workspaceId,
-    ),
+    // §4.2, migration 20260802150000_index_constraint_hardening): duplicate of
+    // the workspaceId.unique() constraint above (identical single column,
+    // both unique). Not redeclared here — see workspaces_org_idx above for
+    // the same documented-removal pattern.
     orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
@@ -229,11 +228,10 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
   },
   (t) => ({
     // workspace_budget_policy_workspace_idx was dropped (2026-07-11 audit
-    // §4.2): duplicate of the workspaceId.unique() constraint above (identical
-    // single column, both unique).
-    workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(
-      t.workspaceId,
-    ),
+    // §4.2, migration 20260802150000_index_constraint_hardening): duplicate of
+    // the workspaceId.unique() constraint above (identical single column,
+    // both unique). Not redeclared here — see workspaces_org_idx above for
+    // the same documented-removal pattern.
     orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,

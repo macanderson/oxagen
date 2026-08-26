@@ -62,7 +62,6 @@ import {
   type AccountLinkingLogger,
   type AccountDatabaseHooks,
 } from "./account-linking";
-import { logger } from "./logger";
 
 // A chainable, thenable drizzle-query stub that resolves to queued results.
 function makeTx(queue: unknown[]): Record<string, unknown> {

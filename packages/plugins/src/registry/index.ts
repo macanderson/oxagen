@@ -1,5 +1,6 @@
 // @oxagen/plugins/registry — MCP registry client, catalog mapping, and README
-// rendering. Registries are read LIVE over HTTP; there is no catalog sync.
+// rendering. `listServers`/`getServerVersion` hit the registry LIVE over HTTP;
+// the periodic upsert into mcp.catalog_servers lives in ../catalog-sync.ts.
 export { listServers, getServerVersion } from "./registry-client";
 export type { ListServersOptions, ListServersResult } from "./registry-client";
 export {

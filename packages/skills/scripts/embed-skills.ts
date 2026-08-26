@@ -31,14 +31,12 @@ async function main(): Promise<void> {
   const module = renderGeneratedModule(files);
   await writeFile(GENERATED_FILE, module, "utf8");
   const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-   
   console.log(
     `[embed-skills] wrote ${files.length} builtin skills → ${relative(pkgRoot, GENERATED_FILE)}`,
   );
 }
 
 main().catch((err: unknown) => {
-   
   console.error("[embed-skills] failed", err);
   process.exit(1);
 });

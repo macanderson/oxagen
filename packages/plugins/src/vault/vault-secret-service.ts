@@ -645,7 +645,6 @@ async function loadKeyByKeyName(
 // ── provisioning reuse (Spec §11/§12) ─────────────────────────────────────────
 
 /**
-/**
  * A sandbox-template secret selection: every live key ('all') or an explicit
  * allow-list of key public ids. Mirrors the contract's SandboxSecretSelection
  * (kept structurally local so the vault service takes no contract dependency).

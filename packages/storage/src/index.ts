@@ -5,7 +5,7 @@
  *   storage()                  → the configured StorageAdapter (singleton)
  *   createVercelBlobAdapter()  → construct the Vercel Blob driver explicitly
  *   StorageAdapter, Put*       → the adapter contract types
- *   AssetKind                  → "avatar" | "image" | "document"
+ *   AssetKind                  → "avatar" | "image" | "document" | "video"
  *   ASSET_LIMITS               → max byte sizes per kind
  *   ASSET_ALLOWED_TYPES        → allowed MIME types per kind
  *   assertAllowedAssetType()   → validate MIME type or throw

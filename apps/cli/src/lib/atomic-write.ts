@@ -15,7 +15,7 @@ import { writeFileSync, renameSync, unlinkSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
- * Write `data` to `path` atomically: write to `<dir>/.<basename>.<pid>.<ts>.tmp`
+ * Write `data` to `path` atomically: write to `<dir>/.<pid>.<ts>.<rand>.tmp`
  * then `rename()` it over `path`. On failure, best-effort removes the temp
  * file and rethrows — the original `path` is never touched until the temp
  * write has fully succeeded.

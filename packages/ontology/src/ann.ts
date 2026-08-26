@@ -44,7 +44,7 @@ export const DEFAULT_OVERSAMPLE_CAP = 500;
 /**
  * Compute the over-sampled index fetch size for a tenant-filtered ANN query.
  *
- * Returns `min(ceil(limit) × factor, max(limit, cap))` — never fewer than the
+ * Returns `min(trunc(limit) × factor, max(limit, cap))` — never fewer than the
  * requested `limit` (so a small cap can't under-fetch below what the caller
  * asked for) and never more than `cap`. Non-positive or non-finite `limit`
  * yields `0` (an empty request stays empty).

@@ -117,19 +117,6 @@
   animation: lp-rise 0.42s ease-out forwards;
 }
 
-/* Context-window cell field — a token grid that fills (full) then drains (free). */
-.lp-cell {
-  fill: color-mix(in oklch, var(--foreground) 9%, transparent);
-  transition: fill 0.5s ease, opacity 0.5s ease;
-}
-.lp-cell[data-lit="true"] {
-  fill: var(--_ember-b);
-  filter: drop-shadow(0 0 3px color-mix(in oklch, var(--_ember-b) 70%, transparent));
-}
-.lp-cell[data-lit="cool"] {
-  fill: var(--ox-indigo-bright, #9ca3e8);
-}
-
 /* Lit hexagons in the section backgrounds — breathe slowly, out of phase. */
 .lp-hex-lit {
   animation: lp-hexpulse 6s ease-in-out infinite;
