@@ -134,7 +134,26 @@ test("role picker: select Operator → review effective scope → save → list 
   });
 
   // ── 6. Reopen the builder: the persisted role is current + preselected ────
-  await row.getByRole("link").first().click();
+  //
+  // Address the builder link by its test id. `getByRole("link").first()` took
+  // whichever link the row rendered first, and the row renders three
+  // (`agent-link-`, `agent-launch-`, `agent-edit-`), so the step depended on
+  // DOM order that nothing in this spec pins.
+  const builderLink = row.getByTestId(`agent-link-${slug}`);
+  const builderHref = await builderLink.getAttribute("href");
+  expect(builderHref).toBeTruthy();
+
+  // Register the navigation wait BEFORE the click, and assert the navigation
+  // itself rather than only the destination element. The old step asserted
+  // `step-identity` straight after clicking, so a click that never navigated
+  // was indistinguishable from a builder that rendered slowly: it failed 20
+  // seconds later as a missing element, with the agents list still on screen
+  // and nothing saying the navigation was what went wrong.
+  await Promise.all([
+    page.waitForURL(`**${builderHref}`, { timeout: 20_000 }),
+    builderLink.click(),
+  ]);
+
   // Edit mode has no Describe step — Identity is the first stage.
   await expect(page.getByTestId("step-identity")).toBeVisible({
     timeout: 20_000,

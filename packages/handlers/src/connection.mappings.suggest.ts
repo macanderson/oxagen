@@ -73,6 +73,20 @@ Return suggestions for all ${input.recordTypes.length} record types.`;
     model: selectModel(),
     schema: SuggestionSchema,
     prompt,
+    // One suggestion per record type — an entity-type name, a flat map of
+    // field names, a number and a sentence or two. A connection with a dozen
+    // record types is a large one and still lands far inside 8192 tokens.
+    //
+    // Bounded because the alternative is not "no cap" but "the model's cap".
+    // Sending no max_tokens makes a metered provider reserve credit against
+    // the full ceiling — 65536 for claude-sonnet-5 — regardless of how short
+    // the answer will be, and OpenRouter refuses the call outright when the
+    // balance cannot cover the reservation, before generating a token.
+    //
+    // The cost of this being wrong is visible rather than silent: too low and
+    // the object is truncated, which fails SuggestionSchema and surfaces as a
+    // failed suggestion, not as quietly missing mappings.
+    maxOutputTokens: 8192,
     telemetry: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,

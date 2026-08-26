@@ -22,7 +22,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface ApiKeyRow {
+export interface ApiKeyRow {
   publicId: string;
   name: string;
   keyPrefix: string;
@@ -56,15 +56,21 @@ function CreateKeyDialog({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    setError(null);
     startTransition(async () => {
-      const result = await createApiKeyAction({ orgSlug, name: name.trim() });
-      onCreated(result.rawKey, result.name);
-      setName("");
-      setOpen(false);
+      try {
+        const result = await createApiKeyAction({ orgSlug, name: name.trim() });
+        onCreated(result.rawKey, result.name);
+        setName("");
+        setOpen(false);
+      } catch (e) {
+        setError(messageFor(e));
+      }
     });
   }
 
@@ -82,7 +88,16 @@ function CreateKeyDialog({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
+      {error ? (
+        <p
+          role="alert"
+          data-testid="api-key-create-error"
+          className="basis-full text-xs text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1">
         <label
           htmlFor="key-name"
@@ -158,6 +173,17 @@ function RawKeyBanner({ rawKey, label }: { rawKey: string; label: string }) {
 
 // ── Key row (active) ──────────────────────────────────────────────────────────
 
+/**
+ * A server action rejected inside `startTransition` has nowhere to surface:
+ * React swallows it, the transition ends, and the UI simply does not change.
+ * Every action on this panel did that, which is why a rotation that failed
+ * looked identical to one that succeeded and left the previous secret on
+ * screen (#1225).
+ */
+function messageFor(e: unknown): string {
+  return e instanceof Error && e.message ? e.message : "Something went wrong.";
+}
+
 function ActiveKeyRow({
   keyRow,
   orgSlug,
@@ -169,21 +195,32 @@ function ActiveKeyRow({
 }) {
   const [isPending, startTransition] = useTransition();
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function handleRevoke() {
+    setError(null);
     startTransition(async () => {
-      await revokeApiKeyAction({ orgSlug, keyPublicId: keyRow.publicId });
-      setConfirmRevoke(false);
+      try {
+        await revokeApiKeyAction({ orgSlug, keyPublicId: keyRow.publicId });
+        setConfirmRevoke(false);
+      } catch (e) {
+        setError(messageFor(e));
+      }
     });
   }
 
   function handleRotate() {
+    setError(null);
     startTransition(async () => {
-      const result = await rotateApiKeyAction({
-        orgSlug,
-        keyPublicId: keyRow.publicId,
-      });
-      onRotated(result.rawKey, result.name);
+      try {
+        const result = await rotateApiKeyAction({
+          orgSlug,
+          keyPublicId: keyRow.publicId,
+        });
+        onRotated(result.rawKey, result.name);
+      } catch (e) {
+        setError(messageFor(e));
+      }
     });
   }
 
@@ -255,6 +292,15 @@ function ActiveKeyRow({
           </button>
         )}
       </div>
+      {error ? (
+        <p
+          role="alert"
+          data-testid="api-key-action-error"
+          className="text-xs text-destructive sm:basis-full"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

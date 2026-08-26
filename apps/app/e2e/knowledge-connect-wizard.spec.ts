@@ -55,13 +55,55 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // Step 3 — preview. custom-webhook's previewRecordTypes() is a pure
   // function of config, so this resolves without any external network call.
   await expect(page.getByText("Step 3 of 5")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("preview-record-type-webhook_event")).toBeVisible({ timeout: 30_000 });
+
+  // Wait for the preview to reach one of its three terminal states before
+  // asserting which one, so a failure names the cause instead of a missing
+  // testid. preview-step.tsx renders ErrorState ("Couldn't preview this
+  // connection") when preview_connection throws and EmptyState ("No records
+  // found") when it returns nothing, and both are invisible to an assertion
+  // that only looks for the populated card — which is why #1188 could say the
+  // record type was absent but not why.
+  const populated = page.getByTestId("preview-record-type-webhook_event");
+  const previewFailed = page.getByText("Couldn't preview this connection");
+  const previewEmpty = page.getByText("No records found");
+
+  await expect(populated.or(previewFailed).or(previewEmpty).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(previewFailed, "preview_connection threw").toHaveCount(0);
+  await expect(
+    previewEmpty,
+    "preview_connection returned no record types for the declared config",
+  ).toHaveCount(0);
+  await expect(populated).toBeVisible();
   await page.getByTestId("preview-next-btn").click();
 
   // Step 4 — mappings, LLM-suggested and editable. Real suggest_connection_mappings
   // call — give it a generous timeout.
   await expect(page.getByText("Step 4 of 5")).toBeVisible();
-  await expect(page.getByTestId("mapping-row-webhook_event")).toBeVisible({ timeout: 60_000 });
+
+  // Same treatment as the preview step above, for the same reason. This step
+  // has four terminal states (mappings-step.tsx): the draft rows, a loading
+  // placeholder, ErrorState ("Couldn't generate mapping suggestions") when the
+  // model call fails, and EmptyState ("No mappings to review") when it returns
+  // nothing. Waiting only for a row cannot tell a slow call from a failed one
+  // from an empty one, and #1188 spent a long time not knowing which.
+  const mappingRow = page.getByTestId("mapping-row-webhook_event");
+  const mappingsFailed = page.getByText("Couldn't generate mapping suggestions");
+  const mappingsEmpty = page.getByText("No mappings to review");
+
+  await expect(mappingRow.or(mappingsFailed).or(mappingsEmpty).first()).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(
+    mappingsFailed,
+    "suggest_connection_mappings failed — read the description for the provider error",
+  ).toHaveCount(0);
+  await expect(
+    mappingsEmpty,
+    "suggest_connection_mappings returned no drafts for webhook_event (fieldSchema is {} for custom-webhook)",
+  ).toHaveCount(0);
+  await expect(mappingRow).toBeVisible();
   const entityTypeInput = page.getByLabel("Entity type");
   await expect(entityTypeInput).not.toHaveValue("");
   // The suggestion is editable — prove it, not just displayed.

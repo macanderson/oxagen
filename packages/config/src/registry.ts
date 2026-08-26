@@ -1550,13 +1550,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   AUDIT_EXPORT_SIGNING_SECRET: {
     group: "Security",
     description:
-      "HMAC-SHA256 secret for signing audit-log export tokens. Required by the audit " +
-      "export route (apps/app) so exported files can be verified as untampered. " +
-      "Generate with `openssl rand -base64 32`.",
+      "HMAC-SHA256 secret for signing audit-log export tokens, so exported files " +
+      "can be verified as untampered. OPTIONAL: baseEnvSchema declares it " +
+      "`.optional()` and the audit export route falls back to " +
+      "BETTER_AUTH_SECRET when it is unset, which is the behaviour in " +
+      "production today. Whether that fallback should be replaced by a " +
+      "dedicated secret is #1197 — setting one changes the signing key and " +
+      "invalidates outstanding export download URLs. Generate with " +
+      "`openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
     services: ["app"],
-    requiredIn: ["production"],
+    // Was ["production"], which contradicted the schema and the route. The
+    // build-environment resolver enforces this field, so the contradiction
+    // stopped the first app deploy that ever reached it — a registry claiming
+    // a variable is required is a promise the running code has to keep.
+    requiredIn: [],
     valueOrigin: "generate",
     placeholder: "",
   },
