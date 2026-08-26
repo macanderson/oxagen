@@ -19,4 +19,4 @@ crash.log
 
 # Built by `data.archive_file` from lambda/*/index.py on every plan; the
 # source is what's reviewable, the zip is a deterministic derivative of it.
-*/lambda/*.zip
+**/lambda/*.zip
