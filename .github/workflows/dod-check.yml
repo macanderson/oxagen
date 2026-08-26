@@ -46,13 +46,22 @@ jobs:
     steps:
       # A reusable workflow's steps run against the *caller's* repository, so
       # the checker module is not present in the four consumer repos. Fetch it
-      # from oxagen explicitly, always from the same ref this workflow was
-      # resolved at, so logic and workflow move together.
+      # from oxagen explicitly.
+      #
+      # The ref is the whole subtlety. When oxagen runs this check on its own
+      # pull request, `github.sha` is that pull request's merge commit and the
+      # module travels in it, so the workflow and the logic it drives are read
+      # from one tree. Pinning `main` here instead made the check unsatisfiable
+      # by the pull request that introduced it: the module does not reach main
+      # until that merge, so every run could only fail with
+      # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
+      # calling repo, `github.sha` is a commit oxagen does not have, and main
+      # is both correct and the only ref a caller can rely on.
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
           repository: macanderson/oxagen
-          ref: main
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
           sparse-checkout-cone-mode: false

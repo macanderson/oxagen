@@ -36,11 +36,14 @@ jobs:
     # loop. The state_reason filter is applied inside the script, where the
     # payload is easier to read than in a workflow-level `if`.
     steps:
+      # Same resolution as dod-check.yml: in oxagen take the checker from the
+      # commit being run, so it can never lag this file; in a calling repo
+      # `github.sha` names a commit oxagen does not have, so fetch main.
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
           repository: macanderson/oxagen
-          ref: main
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
           sparse-checkout-cone-mode: false
