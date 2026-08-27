@@ -21,7 +21,7 @@ import { describe, expect, test } from "vitest";
 
 import { StellaSidecarClient } from "./sidecar-transport.js";
 import {
-  isCompleteEvent,
+  isTurnCompleteEvent,
   isEventFrame,
   isProviderRequestFrame,
   isTextEvent,
@@ -226,8 +226,13 @@ describe("StellaSidecarClient wire contract", () => {
     expect(isToolResultEvent({ type: "tool_result" })).toBe(true);
     expect(isTextEvent({ type: "text", delta: "hi" })).toBe(true);
     expect(isTextEvent({ type: "text_delta", text: "hi" })).toBe(false);
-    expect(isCompleteEvent({ type: "complete", cost_usd: 1 })).toBe(true);
-    expect(isCompleteEvent({ type: "stage" })).toBe(false);
+    expect(isTurnCompleteEvent({ type: "turn_complete", cost_usd: 1 })).toBe(
+      true,
+    );
+    expect(isTurnCompleteEvent({ type: "stage" })).toBe(false);
+    // The tag this guard used to carry. Stella emits no such AgentEvent, so a
+    // guard matching it matched nothing on a live stream.
+    expect(isTurnCompleteEvent({ type: "complete" })).toBe(false);
   });
 
   test("the bearer token is sent on every authenticated route", async () => {
