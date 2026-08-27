@@ -290,12 +290,29 @@ CREATE INDEX "authorization_decisions_request_idx"
 -- SOURCE transaction, so a principal suspension would simply not apply. Whether
 -- the deploy role is a superuser or the plain table owner must not decide that.
 --
--- The SET clause is FUNCTION-SCOPED: PostgreSQL saves the previous value on
--- entry and restores it on exit, so the bypass cannot leak into the caller's
--- transaction. (`set_config(..., true)` inside the body would be TRANSACTION-
--- scoped and WOULD leak — never do that here.) It is safe because the function
--- is EXECUTE-revoked from PUBLIC below and writes exactly one row, whose scope
--- it receives from the trigger rather than from any caller.
+-- SECURITY-SENSITIVE CHANGE — needs a human security review, not a rubber
+-- stamp. The function-scoped `SET app.rls_bypass = 'on'` clause below this
+-- comment used to be on the function signature itself (PostgreSQL restores
+-- a function-scoped SET automatically on exit). That requires the defining
+-- role to be a real Postgres superuser to persist ANY custom GUC via
+-- ALTER/CREATE FUNCTION's SET clause — and RDS/Aurora's connecting role is
+-- never a real superuser (only rds_superuser), so this failed with 42501
+-- on every RDS/Aurora target (verified migrating oxagen-aws-infra to a new
+-- account). Worse: BYPASSRLS itself can never be granted to any role on
+-- RDS/Aurora either — only an actual superuser can grant it, and RDS never
+-- hands one out — so no role-attribute-based bypass is possible there at
+-- all, on any current or future migration.
+--
+-- This rewrite moves the same guarantee into the function body: capture
+-- the prior value, set the bypass transaction-locally (`set_config(...,
+-- true)`, reverts at COMMIT/ROLLBACK of the caller's transaction), then
+-- explicitly restore the prior value before every exit path — including
+-- exceptions, via the EXCEPTION block below. This is transactionally
+-- equivalent to the native function-scoped SET (auto-restore on exit) and
+-- does not require superuser. It is NOT equivalent to the naive
+-- `set_config(..., true)`-with-no-restore this comment used to warn
+-- against: that leaks the bypass to every later statement in the same
+-- transaction; this restores it before control returns to the trigger.
 CREATE OR REPLACE FUNCTION "iam"."bump_deny_generation"(
   p_org_id uuid,
   p_workspace_id uuid
@@ -304,32 +321,38 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
-SET app.rls_bypass = 'on'
 AS $$
+DECLARE
+  prev_bypass text := current_setting('app.rls_bypass', true);
 BEGIN
-  IF p_org_id IS NULL THEN
-    RETURN;
-  END IF;
+  PERFORM set_config('app.rls_bypass', 'on', true);
 
-  -- Org scope. ON CONFLICT targets the partial unique index, so the row is
-  -- created on first bump rather than requiring a backfill.
-  INSERT INTO iam.authorization_deny_generations
-    (org_id, workspace_id, scope_kind, generation, updated_at)
-  VALUES (p_org_id, NULL, 'org', 1, now())
-  ON CONFLICT (org_id) WHERE workspace_id IS NULL
-  DO UPDATE SET
-    generation = iam.authorization_deny_generations.generation + 1,
-    updated_at = now();
-
-  IF p_workspace_id IS NOT NULL THEN
+  IF p_org_id IS NOT NULL THEN
+    -- Org scope. ON CONFLICT targets the partial unique index, so the row is
+    -- created on first bump rather than requiring a backfill.
     INSERT INTO iam.authorization_deny_generations
       (org_id, workspace_id, scope_kind, generation, updated_at)
-    VALUES (p_org_id, p_workspace_id, 'workspace', 1, now())
-    ON CONFLICT (org_id, workspace_id) WHERE workspace_id IS NOT NULL
+    VALUES (p_org_id, NULL, 'org', 1, now())
+    ON CONFLICT (org_id) WHERE workspace_id IS NULL
     DO UPDATE SET
       generation = iam.authorization_deny_generations.generation + 1,
       updated_at = now();
+
+    IF p_workspace_id IS NOT NULL THEN
+      INSERT INTO iam.authorization_deny_generations
+        (org_id, workspace_id, scope_kind, generation, updated_at)
+      VALUES (p_org_id, p_workspace_id, 'workspace', 1, now())
+      ON CONFLICT (org_id, workspace_id) WHERE workspace_id IS NOT NULL
+      DO UPDATE SET
+        generation = iam.authorization_deny_generations.generation + 1,
+        updated_at = now();
+    END IF;
   END IF;
+
+  PERFORM set_config('app.rls_bypass', COALESCE(prev_bypass, ''), true);
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.rls_bypass', COALESCE(prev_bypass, ''), true);
+  RAISE;
 END;
 $$;
 

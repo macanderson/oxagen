@@ -189,6 +189,62 @@ async function privilegeRole(): Promise<string> {
   return rows[0]?.exists ? "oxagen_app" : APP_ROLE;
 }
 
+/**
+ * Run `fn` with a row trigger installed on the deny-generation counter table,
+ * so a statement runs INSIDE `iam.bump_deny_generation`'s body.
+ *
+ * The bypass no longer sits on the function signature, so `pg_proc.proconfig`
+ * cannot show it, and the CI cluster's owning role is a superuser, so an
+ * RLS-filtering assertion would pass whether the body sets it or not. A trigger
+ * that fires during the bump is the only place the live value can be read.
+ *
+ * `observe` records `app.rls_bypass` as the body sees it; `raise` fails the
+ * bump instead, which is how the exception path gets exercised.
+ */
+async function withBumpProbe<T>(
+  mode: "observe" | "raise",
+  fn: () => Promise<T>,
+): Promise<T> {
+  const body =
+    mode === "observe"
+      ? `INSERT INTO iam.azf_bypass_probe (observed)
+         VALUES (pg_catalog.current_setting('app.rls_bypass', true));
+         RETURN NULL;`
+      : `RAISE EXCEPTION 'azf probe: forced bump failure';`;
+
+  await sql.unsafe(
+    `CREATE TABLE IF NOT EXISTS iam.azf_bypass_probe (observed text)`,
+  );
+  await sql.unsafe(`TRUNCATE iam.azf_bypass_probe`);
+  // Fully qualified: bump pins search_path to pg_catalog, public, and this runs
+  // under that.
+  await sql.unsafe(`
+    CREATE OR REPLACE FUNCTION iam.azf_bypass_probe_fn() RETURNS trigger
+    LANGUAGE plpgsql AS $probe$
+    BEGIN
+      ${body}
+    END
+    $probe$
+  `);
+  await sql.unsafe(`
+    CREATE OR REPLACE TRIGGER azf_bypass_probe
+    AFTER INSERT OR UPDATE ON iam.authorization_deny_generations
+    FOR EACH ROW EXECUTE FUNCTION iam.azf_bypass_probe_fn()
+  `);
+
+  try {
+    return await fn();
+  } finally {
+    for (const stmt of [
+      `DROP TRIGGER IF EXISTS azf_bypass_probe ON iam.authorization_deny_generations`,
+      `DROP FUNCTION IF EXISTS iam.azf_bypass_probe_fn()`,
+      `DROP TABLE IF EXISTS iam.azf_bypass_probe`,
+    ]) {
+      await sql.unsafe(stmt).catch(() => undefined);
+    }
+  }
+}
+
 /** Current generation for a scope, or null when no row exists yet. */
 async function generationOf(
   orgId: string,
@@ -385,25 +441,52 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
     }
   });
 
-  it("bump_deny_generation carries a function-scoped rls_bypass so a non-superuser owner still bumps", async () => {
-    // The counter table has FORCE ROW LEVEL SECURITY, so a NON-superuser
-    // definer would be subject to tenant_isolation. A failed bump aborts the
-    // SOURCE transaction, meaning a principal suspension would simply not
-    // apply — that must not depend on whether the deploy role is a superuser.
-    // The SET is function-scoped (saved/restored around the call), so it cannot
-    // leak into the caller's transaction.
+  it("bump_deny_generation carries no signature-scoped rls_bypass", async () => {
+    // A custom GUC on the signature (`CREATE FUNCTION ... SET app.rls_bypass`)
+    // can only be persisted by a real Postgres superuser. RDS/Aurora hands out
+    // rds_superuser and never that, so the clause failed 42501 there and wedged
+    // the migration directory. The bypass moved into the body; a reintroduced
+    // SET clause would wedge Aurora again, which is what this pins.
     const rows = await sql<{ proconfig: string[] | null }[]>`
       SELECT p.proconfig
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'iam' AND p.proname = 'bump_deny_generation'
     `;
-    expect(rows[0]?.proconfig ?? []).toContain("app.rls_bypass=on");
+    const proconfig = rows[0]?.proconfig ?? [];
+    expect(proconfig.some((c) => c.startsWith("search_path="))).toBe(true);
+    expect(proconfig.some((c) => c.startsWith("app.rls_bypass"))).toBe(false);
+  });
+
+  it("the bypass IS in force inside the function body", async () => {
+    // The counter table has FORCE ROW LEVEL SECURITY, so a NON-superuser
+    // definer would be subject to tenant_isolation. A failed bump aborts the
+    // SOURCE transaction, meaning a principal suspension would simply not
+    // apply — that must not depend on whether the deploy role is a superuser.
+    // The guarantee used to be the executor's; it is the body's now, so this
+    // reads the live value from inside the bump rather than from the catalog.
+    const observed = await withBumpProbe("observe", async () => {
+      await asSystem(async (tx) => {
+        await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
+        await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
+        await tx`SELECT set_config('app.current_workspace_id', ${WS_A}, true)`;
+        await tx`UPDATE iam.principals SET display_name = 'AZF Human' WHERE id = ${HUMAN_PRINCIPAL}`;
+      });
+      return sql<
+        { observed: string | null }[]
+      >`SELECT observed FROM iam.azf_bypass_probe`;
+    });
+    expect(observed.length).toBeGreaterThan(0);
+    for (const row of observed) {
+      expect(row.observed).toBe("on");
+    }
   });
 
   it("the bypass does NOT leak into the caller's transaction", async () => {
-    // If the migration ever used set_config(..., true) in the body instead of
-    // the CREATE FUNCTION SET clause, the bypass would be transaction-scoped
-    // and every statement after an IAM write would silently run unfiltered.
+    // `set_config(..., true)` is TRANSACTION-scoped: it reverts at the caller's
+    // COMMIT/ROLLBACK, not at function exit. Restoring the captured prior value
+    // before returning is what makes the body equivalent to the signature-scoped
+    // SET the executor used to restore. Without that restore, every statement
+    // after an IAM write would silently run unfiltered.
     const after = await asSystem(async (tx) => {
       await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
       await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
@@ -413,6 +496,39 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
         { v: string | null }[]
       >`SELECT current_setting('app.rls_bypass', true) AS v`;
     });
+    expect(after[0]?.v).toBe("off");
+  });
+
+  it("the bypass does NOT leak when the bump raises", async () => {
+    // The exception path is the one the executor used to own and the body now
+    // must: a bump that fails still hands the caller back its own value.
+    //
+    // What this does and does not distinguish: PostgreSQL's GUC stack is
+    // savepoint-aware, so rolling back to the savepoint restores the value even
+    // if the function's EXCEPTION handler did nothing. The assertion is on the
+    // caller-visible guarantee — no statement outside the function ever observes
+    // the bypass — not on which of the two mechanisms delivered it.
+    const after = await withBumpProbe("raise", () =>
+      asSystem(async (tx) => {
+        await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
+        await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
+        await tx`SELECT set_config('app.current_workspace_id', ${WS_A}, true)`;
+
+        let raised: unknown;
+        try {
+          await tx.savepoint(async (sp) => {
+            await sp`UPDATE iam.principals SET display_name = 'AZF Human' WHERE id = ${HUMAN_PRINCIPAL}`;
+          });
+        } catch (error) {
+          raised = error;
+        }
+        expect(String(raised)).toMatch(/forced bump failure/);
+
+        return tx<
+          { v: string | null }[]
+        >`SELECT current_setting('app.rls_bypass', true) AS v`;
+      }),
+    );
     expect(after[0]?.v).toBe("off");
   });
 
