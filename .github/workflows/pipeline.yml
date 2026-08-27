@@ -526,9 +526,9 @@ jobs:
       # `atlas migrate apply` against a real database must never run twice at
       # once or be interrupted, hence cancel-in-progress: false.
       #
-      # Preview is scoped PER PR, which is the fix for #1223. Every PR migrates
-      # its own throwaway service container, so there is nothing for a shared
-      # group to protect. What the shared group did instead was lose jobs:
+      # Preview is scoped PER PR, which is the fix for #1223. It protects
+      # nothing today — the preview datastores are gone too, see `env:` below —
+      # and a shared group actively lost jobs:
       # GitHub keeps only one *pending* entry per group, so with three or more
       # PRs in flight the queued migrate was cancelled outright — and a
       # cancelled job renders identically to a failed one, so PRs showed a red
@@ -542,28 +542,46 @@ jobs:
       # step from the change-detection output — only the stores whose migration
       # sources changed are migrated.
       #
-      # Only the preview datastores are reachable from a GitHub-hosted runner.
-      # Production Postgres, ClickHouse and Neo4j run on the oxagen-data node
-      # now; Postgres binds to loopback and answers only through SSM, so there
-      # is no production connection string for CI to hold. The PRODUCTION_*
-      # secrets still name the decommissioned ClickHouse Cloud host, which no
-      # longer resolves, and every push to main died in psql with "could not
-      # translate host name".
+      # No datastore this job can reach exists on any event today, so every
+      # value below is empty and the change-detection step takes its "not
+      # configured" branch: the job skips and succeeds, and `deploy-node`'s
+      # `needs:` on it still resolves.
       #
-      # Empty on anything but a pull request, which takes the "not configured"
-      # branch of the step below: the job skips the migration and succeeds, so
-      # `deploy-node`'s `needs:` on it still resolves. Production migrations
-      # are applied on the box with oxagen-aws-infra's run-db-migrations.sh
-      # until #1275 wires that path into this job.
-      DATABASE_URL: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_DATABASE_URL || '' }}
-      NEO4J_URI: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_URI || '' }}
-      NEO4J_USERNAME: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_USERNAME || '' }}
-      NEO4J_PASSWORD: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_PASSWORD || '' }}
-      NEO4J_DATABASE: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_NEO4J_DATABASE || '' }}
-      CLICKHOUSE_URL: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_URL || '' }}
-      CLICKHOUSE_USERNAME: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_USERNAME || '' }}
-      CLICKHOUSE_PASSWORD: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_PASSWORD || '' }}
-      CLICKHOUSE_DATABASE: ${{ github.event_name == 'pull_request' && secrets.PREVIEW_CLICKHOUSE_DATABASE || '' }}
+      # Production Postgres, ClickHouse and Neo4j moved to the oxagen-data node;
+      # Postgres binds to loopback and answers only through SSM, so there is no
+      # production connection string for CI to hold. #1280 and #1291 emptied the
+      # production side for that reason.
+      #
+      # Preview went the same way, one account move later. PREVIEW_DATABASE_URL
+      # still names the decommissioned ClickHouse Cloud dev Postgres and no
+      # longer resolves: run 33035005969's `migrate` job died in psql with
+      # "could not translate host name ...-pg-dev-....aws.pg.clickhouse.cloud"
+      # on PR #1333, the first PR to touch packages/database/atlas/migrations
+      # since the move — the Postgres steps are gated on that path, which is why
+      # every other PR stayed green over a target that was already gone.
+      # oxagen-aws-infra's tools/migrate-secrets.py classifies every
+      # PREVIEW_*/PRODUCTION_* datastore secret SUPERSEDED for the same reason,
+      # and all nine PREVIEW_* secrets still carry their June timestamps.
+      #
+      # What is NOT lost by emptying these: `rls-integration` applies the whole
+      # Atlas directory to a fresh Postgres on every pull request and runs the
+      # RLS suite against it, so "the migrations apply from empty" is still
+      # proved per PR. What IS lost is the only check that ran them against a
+      # database holding real rows — a migration that fails only on non-empty
+      # data now reaches production unproven. Restoring that is #1275's job, and
+      # a service container would not restore it: a fresh container is empty by
+      # construction, so swapping one in would look like a fix and prove less
+      # than the line above already does. Setting the secrets again is the whole
+      # change needed here once a reachable target exists.
+      DATABASE_URL: ""
+      NEO4J_URI: ""
+      NEO4J_USERNAME: ""
+      NEO4J_PASSWORD: ""
+      NEO4J_DATABASE: ""
+      CLICKHOUSE_URL: ""
+      CLICKHOUSE_USERNAME: ""
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DATABASE: ""
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v5
@@ -583,8 +601,27 @@ jobs:
           # environment that was never provisioned, or one whose secrets left
           # with an org move, skips instead and starts running again by itself
           # the moment DATABASE_URL is set.
+          #
+          # The skip is announced as a WARNING, not a notice, and repeated into
+          # the run summary. A green `migrate` used to be able to mean two
+          # different things — "the migrations applied" and "nothing ever
+          # connected" — and the check surface showed only a tick either way,
+          # which is how an unreachable database went unnoticed for two months
+          # (#1341). A warning renders as an annotation on the pull request, so
+          # the second meaning is now visible without opening the log.
           if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::notice::DATABASE_URL is not configured for this event — skipping migrations."
+            echo "::warning title=migrate did not run::No datastore is configured for this event, so no migration was applied and nothing was verified. This job is green because it had nothing to do — see #1275."
+            {
+              echo "### migrate: skipped"
+              echo
+              echo "No datastore is configured for \`${EVENT_NAME}\`, so **no migration ran"
+              echo "and no database was reached**. This job's green says only that it had"
+              echo "nothing to do."
+              echo
+              echo "The Atlas directory is still applied from empty on every pull request by"
+              echo "the \`rls-integration\` job. What is NOT covered while this job skips is"
+              echo "applying it to a database holding real rows — see #1275."
+            } >> "$GITHUB_STEP_SUMMARY"
             {
               echo "pg=false"
               echo "stores="
