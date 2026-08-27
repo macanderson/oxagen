@@ -182,7 +182,7 @@
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
+    --ui-radius: 0.5rem; /* moderate rounding — Stella is confident, not brutal. */
     --ui-shadow: 0 1px 2px oklch(0.15 0 0 / 0.07); /* subtle neutral shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
@@ -195,8 +195,9 @@
     --brand-foreground: var(--ox-ink);
 
     /* ════════════════════════════════════════════════════════════════════════
-     * CORE SEMANTIC — LIGHT. Graphite: off-white page, crisp white panels,
-     * neutral graphite grays. Warmth lives only in the ember accent + ring.
+     * CORE SEMANTIC — LIGHT. Stella's warm paper ramp: #F7F4ED page, #FDFAF3
+     * panels, #E0DDD7 hairlines. The gold appears only as primary + ring, and
+     * as its ink shade in link/accent copy.
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
@@ -396,8 +397,8 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — Graphite. Neutral near-black page, stepped charcoal panels, ember
-   * accent. Re-declares core tokens + the two header bgs (which point at fixed
+   * DARK — Stella's cool canvas. #0A0A0C page, stepped #0F0F12/#17171B panels,
+   * gold accent. Re-declares core tokens + the two header bgs (which point at fixed
    * primitives); the rest of the component-token surface inherits the flip.
    * ════════════════════════════════════════════════════════════════════════ */
   .dark {
