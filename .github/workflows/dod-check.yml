@@ -1,0 +1,129 @@
+# DoD merge check (oxagen #1321) — SCR-003 enforcement.
+#
+# SCR-003: an issue closes only when every definition-of-done item is satisfied
+# and verified. The task issue template makes a DoD exist; this check makes it
+# binding. Two halves:
+#
+#   1. A pull request must link the issue it closes (escape hatch: the
+#      `no-issue` label, for genuinely trivial changes).
+#   2. Every linked issue's DoD checklist must be fully ticked before the PR
+#      can merge — which is what stops the close from happening early.
+#
+# ## Why this is a reusable workflow rather than five copies
+#
+# SCR-003 applies in all five org repos. Copying this file into each would put
+# five drifting implementations of a rule whose sibling check (scr-corpus-check)
+# exists to police drift. Instead this is a `workflow_call` workflow living once
+# in oxagen; the other four repos carry a ~12-line caller. All five repos are
+# public, so `uses: macanderson/oxagen/.github/workflows/dod-check.yml@main`
+# resolves with no extra credentials. See ADR-039.
+#
+# ## Why the check runs on the PR, not on the close
+#
+# GitHub closes an issue the instant a PR containing `Closes #N` merges, and no
+# webhook can veto that — an `issues: closed` handler only ever arrives after
+# the fact. Gating the PR inverts the ordering: unchecked boxes fail a required
+# check, the merge is blocked, and the premature close never happens. The
+# `issues: closed` safety net for hand-closed issues lives in dod-close-guard.yml.
+name: dod-check
+
+on:
+  workflow_call: {}
+  # oxagen runs the check on its own PRs through the same file it exports, so
+  # this implementation can never be stale relative to the callers'.
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  dod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # A reusable workflow's steps run against the *caller's* repository, so
+      # the checker module is not present in the four consumer repos. Fetch it
+      # from oxagen explicitly.
+      #
+      # The ref is the whole subtlety. When oxagen runs this check on its own
+      # pull request, `github.sha` is that pull request's merge commit and the
+      # module travels in it, so the workflow and the logic it drives are read
+      # from one tree. Pinning `main` here instead made the check unsatisfiable
+      # by the pull request that introduced it: the module does not reach main
+      # until that merge, so every run could only fail with
+      # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
+      # calling repo, `github.sha` is a commit oxagen does not have, and main
+      # is both correct and the only ref a caller can rely on.
+      - name: Fetch the SCR tooling
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          path: .scr-tools
+          sparse-checkout: tools/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify the definition of done
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { linkedIssues, verdict, formatVerdict } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
+
+            const pr = context.payload.pull_request
+            const labels = pr.labels.map(l => (typeof l === 'string' ? l : l.name))
+
+            // Resolve each linked issue's body. A reference to an issue that
+            // does not exist, or that lives somewhere unreadable, is reported
+            // as a failure rather than skipped — a typo'd `Closes #13221`
+            // must not read as "no DoD problems found".
+            const issues = []
+            for (const link of linkedIssues(pr.body)) {
+              const owner = link.owner ?? context.repo.owner
+              const repo = link.repo ?? context.repo.repo
+              const ref = `${owner}/${repo}#${link.number}`
+              try {
+                const { data } = await github.rest.issues.get({
+                  owner, repo, issue_number: link.number })
+                // A PR is an issue to this endpoint; a PR "closing" a PR is a
+                // stacked branch, not a DoD claim, so it carries no checklist.
+                if (data.pull_request) continue
+                issues.push({ ref, body: data.body })
+              } catch (error) {
+                issues.push({ ref, body: null })
+                core.warning(`Could not read ${ref}: ${error.message}`)
+              }
+            }
+
+            const result = verdict({ body: pr.body, labels }, issues)
+            const summary = formatVerdict(result)
+            core.summary.addRaw(summary).write()
+
+            // One sticky comment, edited in place. A fresh comment per push
+            // would bury the PR under a running commentary of a checklist the
+            // author is actively ticking.
+            const MARKER = '<!-- scr-dod-check -->'
+            const body = `${MARKER}\n${summary}`
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: pr.number, per_page: 100 })
+            const mine = comments.find(c => c.body?.startsWith(MARKER))
+            if (mine) {
+              if (mine.body !== body) {
+                await github.rest.issues.updateComment({
+                  ...context.repo, comment_id: mine.id, body })
+              }
+            } else if (!result.ok) {
+              // Stay silent while passing: a green check needs no comment, and
+              // an unconditional "all good" note on every PR is noise.
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: pr.number, body })
+            }
+
+            if (!result.ok) core.setFailed(summary)

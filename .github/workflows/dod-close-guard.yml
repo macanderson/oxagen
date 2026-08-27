@@ -1,0 +1,104 @@
+# DoD close guard (oxagen #1321) — SCR-003 enforcement, manual-close path.
+#
+# dod-check.yml gates the *merge* path: a PR whose linked issue still has
+# unchecked DoD items cannot merge, so it cannot trigger the close. This file
+# covers the other way an issue closes — somebody pressing "Close issue".
+#
+# ## Why this one is after-the-fact, and why that is acceptable
+#
+# There is no pre-close hook in GitHub. By the time `issues: closed` fires, the
+# issue is already closed, so the only available move is to reopen it and say
+# why. That is weaker than the merge gate, which is exactly why the merge gate
+# carries the load and this is a net rather than a wall.
+#
+# ## Why `not_planned` is exempt
+#
+# Closing as "not planned" is a decision that the work should not happen at
+# all — a duplicate, an obsolete idea, a wrong premise. Demanding a ticked DoD
+# there would force people to fake-tick a checklist for work nobody intends to
+# do, which corrupts the one signal this whole check depends on. Only closes
+# marked "completed" claim the DoD was met, so only those are verified.
+name: dod-close-guard
+
+on:
+  workflow_call: {}
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Reopening an issue fires `issues: reopened`, not `closed`, so this cannot
+    # loop. The state_reason filter is applied inside the script, where the
+    # payload is easier to read than in a workflow-level `if`.
+    steps:
+      # Same resolution as dod-check.yml: in oxagen take the checker from the
+      # commit being run, so it can never lag this file; in a calling repo
+      # `github.sha` names a commit oxagen does not have, so fetch main.
+      - name: Fetch the SCR tooling
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen
+          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          path: .scr-tools
+          sparse-checkout: tools/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Reopen if the definition of done was not met
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { dodStatus } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
+
+            const issue = context.payload.issue
+
+            if (issue.state_reason === 'not_planned') {
+              core.notice('Closed as not planned — DoD not required (SCR-003).')
+              return
+            }
+
+            const status = dodStatus(issue.body)
+
+            // An issue with no DoD section at all predates the task template.
+            // Reopening those would relitigate the whole backlog on the first
+            // day this workflow runs, so they are noted and left closed.
+            if (!status.present) {
+              core.notice(`#${issue.number} has no DoD section; nothing to verify.`)
+              return
+            }
+
+            if (status.unchecked.length === 0) {
+              core.notice(`#${issue.number} closed with a fully verified DoD.`)
+              return
+            }
+
+            const items = status.unchecked.map(item => `- [ ] ${item}`).join('\n')
+            await github.rest.issues.update({
+              ...context.repo, issue_number: issue.number, state: 'open' })
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: issue.number,
+              body: [
+                '<!-- scr-dod-close-guard -->',
+                `**Reopened — ${status.unchecked.length} definition-of-done item(s) are still unchecked.**`,
+                '',
+                items,
+                '',
+                'SCR-003: an issue closes only when every DoD item is satisfied *and verified*.',
+                'Tick each item once it is genuinely done, or split the remainder into a new',
+                'issue (`triage` label only, SCR-004) and close this one referencing it.',
+                '',
+                'If this work should not happen at all, close it as **not planned** instead —',
+                'that path is exempt from this check.',
+              ].join('\n'),
+            })
+            core.setFailed(`Reopened #${issue.number}: ${status.unchecked.length} unchecked DoD item(s).`)
