@@ -22,6 +22,8 @@ import { describe, expect, test } from "vitest";
 import { StellaSidecarClient } from "./sidecar-transport.js";
 import {
   isCompleteEvent,
+  isTerminalTurnEvent,
+  isTurnCompleteEvent,
   isEventFrame,
   isProviderRequestFrame,
   isTextEvent,
@@ -228,6 +230,21 @@ describe("StellaSidecarClient wire contract", () => {
     expect(isTextEvent({ type: "text_delta", text: "hi" })).toBe(false);
     expect(isCompleteEvent({ type: "complete", cost_usd: 1 })).toBe(true);
     expect(isCompleteEvent({ type: "stage" })).toBe(false);
+
+    // Stella renamed the terminal AgentEvent after the pinned 0.6.2 build, so
+    // both tags reach us depending on which workflow is running. Each guard
+    // matches only its own tag; `isTerminalTurnEvent` is what a consumer
+    // should call, and it is the assertion that fails against a build whose
+    // terminal event this package does not model.
+    expect(isTurnCompleteEvent({ type: "turn_complete", cost_usd: 1 })).toBe(
+      true,
+    );
+    expect(isTurnCompleteEvent({ type: "complete" })).toBe(false);
+    expect(isCompleteEvent({ type: "turn_complete" })).toBe(false);
+
+    expect(isTerminalTurnEvent({ type: "complete" })).toBe(true);
+    expect(isTerminalTurnEvent({ type: "turn_complete" })).toBe(true);
+    expect(isTerminalTurnEvent({ type: "stage" })).toBe(false);
   });
 
   test("the bearer token is sent on every authenticated route", async () => {

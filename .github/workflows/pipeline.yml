@@ -731,9 +731,10 @@ jobs:
   #   apps/web is files. It goes to S3 behind CloudFront.
   #
   #   docs, app, api and mcp are processes. They go to the shared instance,
-  #   which is where they have to be: three of them reach Postgres, Neo4j and
-  #   ClickHouse over loopback, and those are bound to 127.0.0.1 with the
-  #   security group opening no port to them at all.
+  #   which is where they have to be: some of them reach Neo4j and ClickHouse
+  #   over loopback, and those are bound to 127.0.0.1 with the security group
+  #   opening no port to them at all. Postgres moved to Aurora Serverless v2
+  #   (network, not loopback) in the new AWS account this instance now runs in.
   #
   # Both jobs authenticate with OIDC rather than a stored key, against a role
   # that trusts exactly `repo:macanderson/oxagen:environment:production`.
@@ -761,13 +762,13 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
-          role-to-assume: arn:aws:iam::578673726240:role/gha-deploy-oxagen-platform
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
       - name: Publish the marketing site
         env:
-          BUCKET: oxagen-web-578673726240
-          DISTRIBUTION: E291NC0ETAP42G
+          BUCKET: oxagen-web-916294258235
+          DISTRIBUTION: E2NYX5PXV8HXB3
         run: |
           set -euo pipefail
 
@@ -840,8 +841,9 @@ jobs:
       id-token: write
     strategy:
       # One at a time. All four land on the same 4 GB instance, which also runs
-      # Postgres, Neo4j and ClickHouse; four concurrent container starts is the
-      # one moment this node is most likely to run out of memory.
+      # Neo4j and ClickHouse (Postgres moved to Aurora Serverless v2); four
+      # concurrent container starts is the one moment this node is most likely
+      # to run out of memory.
       max-parallel: 1
       # A failure in one service must not cancel the others' deploys. They are
       # independent processes and a broken `mcp` is no reason to leave `api` on
@@ -869,7 +871,7 @@ jobs:
       # needs Parameter Store now, where previously only the upload did.
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
-          role-to-assume: arn:aws:iam::578673726240:role/gha-deploy-oxagen-platform
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
       # `next build` imports route modules to collect page data and several of
