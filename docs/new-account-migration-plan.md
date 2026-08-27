@@ -1,14 +1,31 @@
 # New-account migration plan — from `578673726240` to `916294258235`
 
-**Status:** Infrastructure live, cutover not started · **Old account:** `578673726240` (`us-east-1`/`us-east-2`) · **New account:** `916294258235` (`us-east-1`)
+**Status:** Cutover in progress — nameservers delegated, propagating · **Old account:** `578673726240` (`us-east-1`/`us-east-2`) · **New account:** `916294258235` (`us-east-1`)
 
 **What's actually running today (2026-08-26):** the VPC/ALB/app node, Aurora
-Postgres, Redshift Serverless, both DNS zones (nameservers NOT yet
-delegated), the CloudWatch/EventBridge/S3 observability pipeline, and the
-`stella`/`cgp` brand stacks. ACM certificates sit in `PENDING_VALIDATION` by
-design (see §6) and `stacks-new/ci-deploy` is deliberately not yet applied —
-its IAM policies need CloudFront distribution ids that do not exist until
-those certs validate.
+Postgres (all 88 Atlas migrations applied), Redshift Serverless, self-hosted
+Neo4j + ClickHouse on the app node, both DNS zones, the
+CloudWatch/EventBridge/S3 observability pipeline, and the `stella`/`cgp`
+brand stacks. All five nodeservices (`docs`/`stella`/`app`/`api`/`mcp`) are
+deployed and verified healthy — individually on the node and end-to-end
+through the ALB (via a temporary listener, since deleted). The marketing
+site's and CGP's static content are synced into their new S3 buckets.
+Nameservers for `oxagen.sh`, `oxagen.ai`, and `contextgraphprotocol.org` were
+repointed at the new zones via the Vercel registrar API
+(`PATCH /v1/registrar/domains/{domain}/nameservers`) — propagation to public
+resolvers is in progress. ACM certificates sit in `PENDING_VALIDATION` until
+that propagates; once they validate, re-apply `stacks-new/oxagen` and
+`stacks-new/cgp` without the `-exclude` flags to create the CloudFront
+distributions and the ALB's HTTPS listener, then apply
+`stacks-new/ci-deploy` (blocked until those distribution ids exist) and
+point the four GitHub repos' deploy workflows at the new roles/bucket/node.
+
+**Two migration bugs found and fixed while bootstrapping Aurora**, both as
+PRs in `oxagen-platform` rather than hand-patched silently:
+[#1333](https://github.com/macanderson/oxagen/pull/1333) makes two Atlas
+migrations RDS/Aurora-compatible — one is flagged for a human security
+review before merge (it touches an RLS-bypass mechanism). See that PR's
+description for the full reasoning.
 
 This is the record of what changed and why in moving Oxagen's, Stella's, and
 the Context Graph Protocol's AWS infrastructure to a new account, and the
