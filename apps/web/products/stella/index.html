@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stella — the open-source coding agent that shows its work | Oxagen</title>
+<meta name="description" content="Stella is Oxagen's open-source terminal coding agent, written in Rust. Bring your own model keys, run any provider, and watch every turn, tool call, gate and cost on one deck.">
+<link rel="canonical" href="https://oxagen.sh/products/stella">
+<meta name="theme-color" content="#0A0A0C">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://oxagen.sh/products/stella">
+<meta property="og:site_name" content="Oxagen">
+<meta property="og:title" content="Stella — the open-source coding agent that shows its work">
+<meta property="og:description" content="A fast, BYOK, model-agnostic terminal coding agent in Rust. Every turn, tool call, gate and dollar on one deck.">
+<meta property="og:image" content="https://oxagen.sh/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@oxagenai">
+<meta name="twitter:title" content="Stella — the open-source coding agent that shows its work">
+<meta name="twitter:description" content="A fast, BYOK, model-agnostic terminal coding agent in Rust.">
+<meta name="twitter:image" content="https://oxagen.sh/og.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/fonts/Aeonik-VF.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/AeonikMono-VF.woff2" as="font" type="font/woff2" crossorigin>
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="/assets/oxagen.css">
+<style>
+.hero{position:relative;padding:calc(var(--nav-h) + 68px) 0 72px;overflow:clip}
+.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:48px;align-items:center}
+@media (max-width:1000px){.hero-in{grid-template-columns:1fr;gap:38px}.hero{padding-top:calc(var(--nav-h) + 42px)}}
+.hero h1{font-size:clamp(37px,5.2vw,62px);font-weight:680}
+.hero-sub{margin:20px 0 30px;color:var(--ink-3);font-size:clamp(16px,1.7vw,18.5px);max-width:54ch}
+.hero-sub strong{color:var(--ink);font-weight:560}
+.hero-ctas{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.hero-note{margin-top:15px;font-size:13.5px;color:var(--ink-3)}
+.hero-note a{color:var(--gold)}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.badge{font-family:"Aeonik Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);border:1px solid var(--line);padding:4px 9px;border-radius:var(--r)}
+.badge.on{color:var(--gold);border-color:var(--gold)}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:20px}
+@media (max-width:700px){.stat-row{grid-template-columns:1fr 1fr}}
+.stat{background:var(--panel);padding:18px}
+.stat b{display:block;font-family:"Aeonik Mono",monospace;font-size:24px;color:var(--gold);font-weight:560;letter-spacing:-.01em}
+.stat span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:4px}
+.gates{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.gate{background:var(--panel);display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+  padding:12px 15px;font-family:"Aeonik Mono",monospace;font-size:12.5px}
+.gate .g{color:var(--pass)}.gate .b{color:var(--fail)}
+.gate .n{color:var(--ink-2)}.gate .t{color:var(--ink-3)}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="/" aria-label="Oxagen home">
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#E8E8EC" stroke-width="1"/></svg>
+      oxagen
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <div class="drop" data-open="false">
+        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
+        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
+          <a href="/products/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
+          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
+          <a href="/products/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
+          <div class="drop-sep"></div>
+          <div class="drop-foot">one loop · three deployments</div>
+        </div>
+      </div>
+      <a href="/#field-manual">Field manual</a>
+      <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
+      <a class="btn btn-primary btn-sm" href="/#demo">Get a demo</a>
+      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
+    </div>
+  </div>
+</header>
+
+<div class="drawer" id="drawer" data-open="false">
+  <div class="wrap">
+    <h5>Products</h5>
+    <a href="/products/stella">Stella — the terminal agent</a>
+    <a href="/products/oxagen">Oxagen — the control plane</a>
+    <a href="/products/private-llms">Private LLMs</a>
+    <h5>More</h5>
+    <a href="/#field-manual">Field manual</a>
+    <a href="https://docs.oxagen.sh">Docs</a>
+    <a href="https://app.oxagen.sh">Log in</a>
+    <a class="btn btn-primary" href="/#demo">Get a demo</a>
+  </div>
+</div>
+
+<main id="main">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero tex tex-hex" id="top">
+    <div class="wrap hero-in">
+      <div>
+        <p class="eyebrow">Products · Stella</p>
+        <h1>The agent that <span class="gold">shows its work</span>.</h1>
+        <p class="hero-sub">
+          Stella is our <strong>open-source coding agent for the terminal</strong> — fast, written
+          in Rust, and model-agnostic. Bring your own keys. Every turn, every tool call, every
+          gate and every cent lands on one deck you can read while it runs.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="#install">Install Stella <span class="arr">→</span></a>
+          <a class="btn btn-ghost ext" href="https://github.com/macanderson/stella" target="_blank" rel="noopener">Read the source</a>
+        </div>
+        <p class="hero-note">AGPL-3.0 · bring your own model keys · <a class="ext" href="https://stella.oxagen.sh" target="_blank" rel="noopener">stella.oxagen.sh</a></p>
+
+        <div class="stat-row">
+          <div class="stat"><b>AGPL</b><span>open source, all of it</span></div>
+          <div class="stat"><b>$0</b><span>telemetry sent anywhere</span></div>
+          <div class="stat"><b>BYOK</b><span>your keys, your bill</span></div>
+          <div class="stat"><b>Rust</b><span>one static binary</span></div>
+        </div>
+      </div>
+
+      <figure class="app reveal">
+        <div class="app-bar">
+          <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">stella — ~/repo</span>
+          <span class="app-meta">ISSUES · w start work</span>
+        </div>
+        <div class="app-view">
+          <img src="/assets/tui/10-start-work.svg" width="680" height="520" alt="The Stella deck on its ISSUES tab: a backlog row is selected and a draft plan has been built from the issue text, the code graph, and a remembered rule — three numbered steps, each with a &quot;done means&quot; line.">
+          <span class="app-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="app-foot" aria-hidden="true">
+          <span class="pr">&gt;&gt;&gt;</span>
+          <span class="typed" data-typewriter="w start work OXA-151|plan r1 · 3 steps · each with a done-means|approve plan · begin task 1"></span><span class="caret"></span>
+          <span class="tail">det · $0.00</span>
+        </div>
+        <figcaption>Pick an issue. Stella drafts the plan from the issue text, the code graph, and what
+        it already learned in this repo — and writes down what <b>done</b> means before it starts.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= TICKER ================= -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span class="tick-item">
+        <span><b>stella</b> run</span><span class="sep">·</span>
+        <span><b>stella</b> fleet</span><span class="sep">·</span>
+        <span><b>stella</b> observe</span><span class="sep">·</span>
+        <span><b>stella</b> context</span><span class="sep">·</span>
+        <span><b>stella</b> graph</span><span class="sep">·</span>
+        <span><b>stella</b> skills</span><span class="sep">·</span>
+        <span><b>stella</b> mcp</span><span class="sep">·</span>
+        <span><b>stella</b> plugin</span><span class="sep">·</span>
+        <span><b>stella</b> stats</span><span class="sep">·</span>
+        <span><b>stella</b> usage</span><span class="sep">·</span>
+        <span><b>stella</b> models</span><span class="sep">·</span>
+        <span><b>stella</b> init</span><span class="sep">·</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ================= THE DECK ================= -->
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">The Command Deck</p>
+        <h2>One deck. Nothing hidden behind a spinner.</h2>
+        <p>Most agents give you a wall of scrolling text and a bill at the end. Stella gives you a
+        deck: what it planned, what it read, what it changed, what the gates said, and what each
+        step cost — live, in the terminal you already have open.</p>
+      </div>
+
+      <div class="deck reveal" data-tabs>
+        <div class="deck-tabs" role="tablist" aria-label="Deck tabs">
+          <button role="tab" id="t-session" aria-controls="p-session" aria-selected="true" type="button">Session</button>
+          <button role="tab" id="t-task" aria-controls="p-task" aria-selected="false" type="button">Task</button>
+          <button role="tab" id="t-graph" aria-controls="p-graph" aria-selected="false" type="button">Graph</button>
+          <button role="tab" id="t-skills" aria-controls="p-skills" aria-selected="false" type="button">Skills</button>
+          <button role="tab" id="t-mcp" aria-controls="p-mcp" aria-selected="false" type="button">MCP</button>
+          <button role="tab" id="t-issues" aria-controls="p-issues" aria-selected="false" type="button">Issues</button>
+          <button role="tab" id="t-events" aria-controls="p-events" aria-selected="false" type="button">Events</button>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-session" aria-labelledby="t-session" tabindex="0">
+          <p class="lede"><b>Session.</b> One turn, unrolled. The skill it pulled in, the files it read,
+          the edits it made, and what each of them cost — in order, as it happens.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — session</span><span class="app-meta">turn 14 · execute</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/01-session-turn-lifecycle.svg" width="680" height="520" loading="lazy" alt="The SESSION tab showing one turn: an injected skill, a file read, and an edit, each with its own timing and token cost.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">◆</span>
+              <span class="typed" data-typewriter="execute · kimi-k3 · budget $0.60|read …/lifecycle.rs · 221 lines · 3ms|edit …/self_driving_cmd.rs · +3"></span><span class="caret"></span>
+              <span class="tail">tab · expand</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-task" aria-labelledby="t-task" tabindex="0" hidden>
+          <p class="lede"><b>Task.</b> Zoom into one unit of work and the deck tells you the thing
+          nobody else will: <b>what has to be true for this to count as done</b> — and which of those
+          checks are deterministic rather than a model's opinion.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — task 3</span><span class="app-meta">0:01:12</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/03-task-zoom.svg" width="680" height="520" loading="lazy" alt="A single task zoomed in: a done-means contract, four checks with two deterministic, and an evidence trail where every event is tagged to the task.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">◆</span>
+              <span class="typed" data-typewriter="done means: the contract, checked not vibed|3 checks · 2 deterministic · 0 model-judged|evidence: every event tagged task:3"></span><span class="caret"></span>
+              <span class="tail">esc · back</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-graph" aria-labelledby="t-graph" tabindex="0" hidden>
+          <p class="lede"><b>Graph.</b> Stella indexes your repo with tree-sitter, so it can answer
+          "what is in this file, and what touches it" by looking it up — not by grepping and hoping.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — graph</span><span class="app-meta">438 nodes · 12ms · det</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/04-graph.svg" width="680" height="468" loading="lazy" alt="The GRAPH tab: a file query returning its symbols — structs, enums and functions — with a hot marker on the one being edited.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">q</span>
+              <span class="typed" data-typewriter="file:stella-protocol/src/lib.rs|callers of classify_media_type|impls of AttachmentSource"></span><span class="caret"></span>
+              <span class="tail">438 nodes · det</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-skills" aria-labelledby="t-skills" tabindex="0" hidden>
+          <p class="lede"><b>Skills.</b> The conventions your repo actually follows, kept as small
+          injectable notes — and measured, so you can see which ones earn their tokens and prune
+          the ones that never fire.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — skills</span><span class="app-meta">installed · 43</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/05-skills.svg" width="680" height="480" loading="lazy" alt="The SKILLS tab: installed skills with version, source, description, use count and average tokens injected.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">/</span>
+              <span class="typed" data-typewriter="rust async|uses · avg tok per inject|prune what never fires"></span><span class="caret"></span>
+              <span class="tail">registry · 6 hits</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-mcp" aria-labelledby="t-mcp" tabindex="0" hidden>
+          <p class="lede"><b>MCP.</b> Every external tool server, its transport, its tool count, its
+          latency and its auth state — on one screen, so a slow server is visible instead of just
+          making the agent feel slow.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — mcp</span><span class="app-meta">4 servers · 3 connected</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/06-mcp.svg" width="680" height="420" loading="lazy" alt="The MCP tab: four tool servers listed with transport, tool count, latency and auth status.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">◆</span>
+              <span class="typed" data-typewriter="graph · stdio · 14 tools · 8ms|linear · http · 9 tools · oauth ✓|github · http · 12 tools"></span><span class="caret"></span>
+              <span class="tail">oxagen · pinned</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-issues" aria-labelledby="t-issues" tabindex="0" hidden>
+          <p class="lede"><b>Issues.</b> Your tracker, in the terminal, through MCP. Sort by heat, hit
+          <span class="mono">w</span>, and the work starts as a plan you can read rather than a
+          prompt you have to trust.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — issues</span><span class="app-meta">14 open</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/07-issues.svg" width="680" height="470" loading="lazy" alt="The ISSUES tab: a backlog pulled from Linear over MCP, filtered to mine and sorted by heat, one issue in progress and one blocked on a red gate.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">f</span>
+              <span class="typed" data-typewriter="filter: mine · sort: heat|OXA-142 token refresh race · in progress|OXA-148 blocked · gate e2e red"></span><span class="caret"></span>
+              <span class="tail">linear via mcp</span></div>
+          </figure>
+        </div>
+
+        <div class="deck-panel" role="tabpanel" id="p-events" aria-labelledby="t-events" tabindex="0" hidden>
+          <p class="lede"><b>Events.</b> A write is not a mystery. The deck shows the file, the size,
+          the timing and the actual source it put on disk — the same event stream the audit trail
+          is built from.</p>
+          <figure class="app">
+            <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+              <span class="app-title">stella — write</span><span class="app-meta">new file · 34 lines</span></div>
+            <div class="app-view">
+              <img src="/assets/tui/02-event-vocabulary.svg" width="680" height="508" loading="lazy" alt="A write event expanded: a new Rust file with its full source shown inline, syntax highlighted, with the line count and timing in the header.">
+              <span class="app-sweep" aria-hidden="true"></span>
+            </div>
+            <div class="app-foot" aria-hidden="true"><span class="pr">＋</span>
+              <span class="typed" data-typewriter="write crates/stella-cli/src/dedup.rs|new file · 34 lines · 1ms|pub struct DigestKey(pub u64);"></span><span class="caret"></span>
+              <span class="tail">stable dedup key</span></div>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= GATES ================= -->
+  <section class="sec sec-alt tex tex-hatch">
+    <div class="wrap split split-wide">
+      <div class="reveal">
+        <p class="eyebrow">Verified done</p>
+        <h2>A red gate is an automatic "not yet".</h2>
+        <p class="sec-head" style="margin:16px 0 0;color:var(--ink-3);font-size:17px">
+          Ask most agents whether they finished and they will say yes. Stella runs the checks and
+          shows you the board: which gates passed, which failed, which case failed, and what it
+          cost to find out. When the answer is no, it says no — with the failing case attached.
+        </p>
+        <div class="gates" style="margin-top:26px">
+          <div class="gate"><span class="g">✓</span><span class="n">types</span><span class="t">pass</span></div>
+          <div class="gate"><span class="g">✓</span><span class="n">lint + format</span><span class="t">pass</span></div>
+          <div class="gate"><span class="g">✓</span><span class="n">unit 214/214</span><span class="t">pass</span></div>
+          <div class="gate"><span class="g">✓</span><span class="n">graph parity</span><span class="t">pass</span></div>
+          <div class="gate"><span class="b">✗</span><span class="n">e2e smoke</span><span class="t">failed · 1/3 cases · 41s</span></div>
+        </div>
+        <p style="margin-top:18px;font-size:13.5px;color:var(--ink-3)" class="mono">
+          verify · det only · $0.00 — the gates are deterministic, so checking costs nothing
+        </p>
+      </div>
+
+      <figure class="app reveal reveal-d1">
+        <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">stella — verify</span><span class="app-meta">turn 15 · gates</span></div>
+        <div class="app-view">
+          <img src="/assets/tui/09-gate-failure.svg" width="680" height="520" loading="lazy" alt="The gate board for a patch: four gates green, the end-to-end smoke gate failed on one of three cases in 41 seconds, with the failure detail expanded below.">
+          <span class="app-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="app-foot" aria-hidden="true"><span class="pr">◇</span>
+          <span class="typed" data-typewriter="gate board · patch-7 · 4/5 green|e2e smoke failed · 1/3 cases|not yet — here is the case"></span><span class="caret"></span>
+          <span class="tail bad">1 red</span></div>
+        <figcaption>Four green and one red is not "done with a caveat". It is <b>not yet</b>.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= PALETTE ================= -->
+  <section class="sec">
+    <div class="wrap split split-flip">
+      <figure class="app reveal">
+        <div class="app-bar"><span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">stella — palette</span><span class="app-meta">6 of 129 · fuzzy</span></div>
+        <div class="app-view">
+          <img src="/assets/tui/08-command-palette.svg" width="680" height="312" loading="lazy" alt="The command palette open over the deck: a fuzzy search across 129 commands, grouped into relevant-now, plan, graph and recent.">
+          <span class="app-sweep" aria-hidden="true"></span>
+        </div>
+        <div class="app-foot" aria-hidden="true"><span class="pr">&gt;&gt;&gt;</span>
+          <span class="typed" data-typewriter="/ga|/gates|/graph query|/theme stella-gold"></span><span class="caret"></span>
+          <span class="tail">↑↓ move · ↵ run</span></div>
+      </figure>
+      <div class="reveal reveal-d1">
+        <p class="eyebrow">Everything is a keystroke</p>
+        <h2>One slash. Then fuzzy.</h2>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
+          Every command in the deck is in one palette, ranked by what is actually happening right
+          now — the gate board floats to the top while verify is running. Type two letters, hit
+          enter. No menu diving, no mouse.
+        </p>
+        <ul class="mono" style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:11px;font-size:13.5px;color:var(--ink-3)">
+          <li><span class="gold">↑↓</span> move · <span class="gold">↵</span> run · <span class="gold">⇥</span> arguments</li>
+          <li><span class="gold">w</span> start work on the selected issue</li>
+          <li><span class="gold">esc</span> back out of any zoom, always</li>
+          <li><span class="gold">/</span> the palette, from anywhere</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHY ================= -->
+  <section class="sec sec-alt">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">How it is built</p>
+        <h2>Boring on purpose, where it counts</h2>
+        <p>Stella is the reference implementation of the field manual we write from. The interesting
+        parts are the ones that stop it surprising you.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card reveal">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-2.9 8.2-7 9.5C7.9 19.2 5 15.4 5 11V6l7-3z"/><path d="M9.2 12l2 2 3.6-3.8"/></svg></div>
+          <h3>Nothing leaves by default</h3>
+          <p>No telemetry, no update pings, no analytics. The only network traffic is the model
+          provider you chose, with the key you supplied.</p>
+        </article>
+        <article class="card reveal reveal-d1">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg></div>
+          <h3>Any model, same agent</h3>
+          <p>Anthropic, OpenAI, Gemini, Vertex, Bedrock, z.ai, DeepSeek, OpenRouter — or a model on
+          your own machine. Swapping providers is a flag, not a rewrite.</p>
+        </article>
+        <article class="card reveal reveal-d2">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 9h6v6H9z"/></svg></div>
+          <h3>One tool, one job</h3>
+          <p>One shell, the file operations, one search, and the coordination tools. A tool that does
+          two things teaches the model neither — so it gets split.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v5"/><path d="M12 9l-6 4M12 9l6 4M12 9v4"/><circle cx="12" cy="4" r="1.6"/><circle cx="6" cy="15" r="1.6"/><circle cx="12" cy="15" r="1.6"/><circle cx="18" cy="15" r="1.6"/></svg></div>
+          <h3>Fan out to a fleet</h3>
+          <p>One goal becomes several tasks, each in its own copy of the repo, each with its own
+          ledger of commits and spend. They report back as one.</p>
+        </article>
+        <article class="card reveal reveal-d1">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2"/></svg></div>
+          <h3>Every cent is counted</h3>
+          <p>Per call, per step, per task, per repo. Locally in SQLite you own — and the deck shows
+          the running total while the turn is still going.</p>
+        </article>
+        <article class="card reveal reveal-d2">
+          <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></div>
+          <h3>Replay any run</h3>
+          <p>Every event is written to a local store, so a run can be re-read, re-scored and argued
+          with after the fact instead of being a story about what happened.</p>
+        </article>
+      </div>
+
+      <div class="install reveal" id="install">
+        <code><span class="p">$</span> brew install macanderson/tap/stella</code>
+        <button class="copy-btn" type="button" data-copy="brew install macanderson/tap/stella">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="1"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+          <span>Copy</span>
+        </button>
+        <span class="note">Or <span class="mono">curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh</span> — then <span class="mono">stella init</span> in any repo.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SPEC ================= -->
+  <section class="sec">
+    <div class="wrap split">
+      <div class="reveal">
+        <p class="eyebrow">The short version</p>
+        <h2>What you are actually installing</h2>
+        <p style="color:var(--ink-3);font-size:17px;margin-top:16px">
+          One binary. It reads your repo, talks to the model you pay for, and writes its own history
+          to a file in your project you can delete at any time.
+        </p>
+        <p style="margin-top:22px">
+          <a class="btn btn-ghost ext" href="https://stella.oxagen.sh" target="_blank" rel="noopener">Full documentation <span class="arr">→</span></a>
+        </p>
+      </div>
+      <dl class="spec reveal reveal-d1">
+        <div><dt>Language</dt><dd>Rust, edition 2024. One static binary, no runtime to install.</dd></div>
+        <div><dt>Licence</dt><dd>AGPL-3.0-only, dual-licensed. The source is the product.</dd></div>
+        <div><dt>Keys</dt><dd>Yours. Stella never proxies a model call through us.</dd></div>
+        <div><dt>Providers</dt><dd>Anthropic · OpenAI · Gemini · Vertex · Bedrock · z.ai · DeepSeek · OpenRouter · local</dd></div>
+        <div><dt>Tools</dt><dd>Shell, file read/write/edit/delete, search, sub-agents, task board, scratch state.</dd></div>
+        <div><dt>Extends via</dt><dd>MCP servers, workspace tools, and plugins that can take a whole turn.</dd></div>
+        <div><dt>Stores</dt><dd>SQLite, in <span class="mono">.stella/private/</span>. Local, yours, prunable.</dd></div>
+        <div><dt>Egress</dt><dd>Your model provider. Nothing else, unless you enrol a workspace.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= NEXT ================= -->
+  <section class="sec-tight sec-alt tex">
+    <div class="wrap" style="display:grid;gap:20px;justify-items:center;text-align:center">
+      <p class="eyebrow reveal">Then what</p>
+      <h2 class="reveal" style="font-size:clamp(26px,3.6vw,38px);max-width:22ch">Stella is the agent. Oxagen is the part that makes it a team sport.</h2>
+      <p class="reveal reveal-d1" style="color:var(--ink-3);max-width:60ch;font-size:17px">
+        Same loop, same deck — plus one shared context map, rules that are approved before an action
+        runs, metering across every agent, and an audit trail your security review will accept.
+      </p>
+      <div class="reveal reveal-d2" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <a class="btn btn-primary" href="/products/oxagen">See the control plane <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="/products/private-llms">Or run it on your own hardware</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="/" aria-label="Oxagen home">
+          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#E8E8EC" stroke-width="1"/></svg>
+          oxagen
+        </a>
+        <p>Everyone has the same models.<br>Your edge is context.</p>
+        <div class="socials">
+          <a href="https://x.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on X"><svg viewBox="0 0 24 24"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.4 22H3.3l7.3-8.3L1.6 2H8l4.4 5.9L18.9 2zm-1.1 18.2h1.7L7.1 3.7H5.3l12.5 16.5z"/></svg></a>
+          <a href="https://www.linkedin.com/company/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.4 20.4h-3.6v-5.6c0-1.3 0-3-1.9-3-1.9 0-2.1 1.4-2.1 2.9v5.7H9.2V9h3.4v1.6h.1c.5-.9 1.6-1.9 3.4-1.9 3.6 0 4.3 2.4 4.3 5.5v6.2zM5.2 7.4a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2zM7 20.4H3.4V9H7v11.4z"/></svg></a>
+          <a href="https://github.com/oxagenai" target="_blank" rel="noopener" aria-label="Oxagen on GitHub"><svg viewBox="0 0 24 24"><path d="M12 1.8A10.2 10.2 0 0 0 1.8 12c0 4.5 2.9 8.3 7 9.7.5.1.7-.2.7-.5v-1.9c-2.9.6-3.5-1.2-3.5-1.2-.4-1.2-1.1-1.5-1.1-1.5-1-.6.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.7-1.4-2.3-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.8-.1-.2-.4-1.3.1-2.7 0 0 .9-.3 2.8 1a9.8 9.8 0 0 1 5.2 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.5.1 2.7.7.7 1 1.7 1 2.8 0 3.9-2.4 4.8-4.6 5 .4.3.7 1 .7 1.9v2.8c0 .3.2.6.7.5a10.2 10.2 0 0 0 7-9.7A10.2 10.2 0 0 0 12 1.8z"/></svg></a>
+        </div>
+      </div>
+
+      <nav class="foot-col" aria-label="Products">
+        <h4>Products</h4>
+        <ul>
+          <li><a href="/products/stella">Stella</a></li>
+          <li><a href="/products/oxagen">Oxagen</a></li>
+          <li><a href="/products/private-llms">Private LLMs</a></li>
+          <li><a href="/#demo">Get a demo</a></li>
+        </ul>
+      </nav>
+
+      <nav class="foot-col" aria-label="Resources">
+        <h4>Resources</h4>
+        <ul>
+          <li><a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Documentation</a></li>
+          <li><a class="ext" href="https://stella.oxagen.sh" target="_blank" rel="noopener">Stella docs</a></li>
+          <li><a href="/#field-manual">Field manual</a></li>
+          <li><a class="ext" href="https://github.com/macanderson/stella" target="_blank" rel="noopener">Source</a></li>
+        </ul>
+      </nav>
+
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <address>
+          Oxagen, Inc.<br>
+          2261 Market Street STE 87168<br>
+          San Francisco, CA 94114<br>
+          <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>
+        </address>
+      </div>
+    </div>
+
+    <div class="foot-base">
+      <span>© 2026 Oxagen, Inc. All rights reserved.</span>
+      <span class="mono">ship deterministic · <a href="/#field-manual">read the manual</a></span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/oxagen.js" defer></script>
+</body>
+</html>
