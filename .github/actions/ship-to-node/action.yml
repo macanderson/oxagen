@@ -55,8 +55,8 @@ runs:
       shell: bash
       env:
         SERVICE: ${{ inputs.service }}
-        INSTANCE: i-023d002d6e44f8f84
-        BUCKET: oxagen-deploy-578673726240
+        INSTANCE: i-094fcb34c7e715cf8
+        BUCKET: oxagen-deploy-916294258235
       run: |
         set -euo pipefail
         aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
