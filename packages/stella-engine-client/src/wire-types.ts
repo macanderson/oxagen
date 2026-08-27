@@ -120,18 +120,34 @@ export interface TextEvent extends AgentEventEnvelope {
 }
 
 /**
- * The engine's own terminal `AgentEvent`, carried inside an `event` frame.
+ * The engine's own terminal `AgentEvent` as stella 0.6.2 — the pinned version
+ * in `sidecar.config.json` — emits it. Distinct from `TurnCompleteFrame`.
  *
- * Distinct from `TurnCompleteFrame` despite sharing the tag string: that one
- * is the transport frame that ends the stream, this one is an event on it.
- * Stella tags both `turn_complete` for the same reason — they are the same
- * word about two layers (`AgentEvent::TurnComplete` in
- * `stella-protocol/src/event/tags.rs`, `ServerFrame::TurnComplete` in
- * `stella-serve/src/frame.rs`).
+ * Stella renamed this tag to `turn_complete` after 0.6.2; see
+ * {@link TurnCompleteEvent}. Both are modelled because the two CI workflows
+ * see different stella builds, and neither tag is wrong.
+ */
+export interface CompleteEvent extends AgentEventEnvelope {
+  readonly type: "complete";
+}
+
+/**
+ * The same terminal `AgentEvent` as stella `main` emits it.
  *
- * This was `"complete"` until the nightly drift check caught it: stella has no
- * bare `complete` tag and never had one on this layer, so the guard below
- * matched nothing and the smoke test's assertion could only fail.
+ * `stella-sidecar.yml` boots the pinned 0.6.2 build, which sends `complete`;
+ * `stella-sidecar-nightly.yml` builds stella `main`, which sends
+ * `turn_complete` (and `run_complete` beside it). Its `AgentEvent` vocabulary
+ * is generated from one table — `crates/stella-protocol/src/event/tags.rs` —
+ * and that table has `TurnComplete => "turn_complete"` with no bare `complete`
+ * arm left.
+ *
+ * It shares a tag string with `TurnCompleteFrame` and is still a different
+ * type: one is an event carried on the stream, the other the frame that ends
+ * it. Stella does the same, for the same reason.
+ *
+ * Both this and {@link CompleteEvent} stay until `stellaVersion` moves past
+ * the rename — bumping that pin is its own deliberate commit, per
+ * `sidecar.config.json`. Prefer {@link isTerminalTurnEvent} over either guard.
  */
 export interface TurnCompleteEvent extends AgentEventEnvelope {
   readonly type: "turn_complete";
@@ -392,8 +408,27 @@ export function isTextEvent(event: AgentEventEnvelope): event is TextEvent {
   return event.type === "text";
 }
 
+export function isCompleteEvent(
+  event: AgentEventEnvelope,
+): event is CompleteEvent {
+  return event.type === "complete";
+}
+
 export function isTurnCompleteEvent(
   event: AgentEventEnvelope,
 ): event is TurnCompleteEvent {
   return event.type === "turn_complete";
+}
+
+/**
+ * The terminal `AgentEvent` under whichever tag this stella build uses.
+ *
+ * Call this rather than either guard alone: which one matches depends on the
+ * `stellaVersion` pin, and a consumer that waits on only one silently never
+ * terminates against the other build.
+ */
+export function isTerminalTurnEvent(
+  event: AgentEventEnvelope,
+): event is CompleteEvent | TurnCompleteEvent {
+  return isCompleteEvent(event) || isTurnCompleteEvent(event);
 }
