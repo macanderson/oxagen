@@ -29,6 +29,11 @@ export default tseslint.config(
       "apps/admin/**",
       "apps/website/**",
       "apps/docs/**",
+      // apps/web is the static oxagen.sh site: no build step, no tsconfig,
+      // and its one script is browser vanilla JS. The project service has no
+      // project to resolve it against, so linting it here is a parse error
+      // rather than a finding.
+      "apps/web/**",
     ],
   },
   // Base TS config without type-checking (fast; runs on all TS files).

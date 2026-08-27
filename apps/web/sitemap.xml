@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://oxagen.sh/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://oxagen.sh/products/stella</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://oxagen.sh/products/oxagen</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://oxagen.sh/products/private-llms</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://oxagen.sh/read</loc><changefreq>monthly</changefreq></url>
 </urlset>

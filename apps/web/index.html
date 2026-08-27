@@ -6,7 +6,7 @@
 <title>Oxagen — AI coding agents with your context. Governed, metered, on the record.</title>
 <meta name="description" content="Oxagen is an AI coding agent for your terminal and a control plane for your whole fleet. It turns your code and business data into one connected map, so agents get the right answer the first time — and every action is approved, measured, and on the record.">
 <link rel="canonical" href="https://oxagen.sh/">
-<meta name="theme-color" content="#0B0D16">
+<meta name="theme-color" content="#0A0A0C">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/">
@@ -50,552 +50,150 @@
   ]
 }
 </script>
+<script>document.documentElement.classList.add("js")</script>
+<link rel="stylesheet" href="/assets/oxagen.css">
 <style>
-/* ============ tokens ============ */
-:root{
-  --bg:#0B0D16;
-  --bg-raise:#13101E;
-  --surface:#15131F;
-  --card:#171424;
-  --line:#2B2640;
-  --line-strong:#363050;
-  --ink:#F5F4F2;
-  --ink-soft:#D9D4E3;
-  --muted:#B6AFC9;
-  --faint:#7E7791;
-  --ember-a:#C2185B;
-  --ember-b:#FF7E5F;
-  --ember-c:#F9D423;
-  --ember-soft:#261507;
-  --indigo:#A78BFA;
-  --indigo-soft:#1E1A2E;
-  --ok:#7BC98A;
-  --grad-ember:linear-gradient(92deg,var(--ember-a) 0%,var(--ember-b) 46%,var(--ember-c) 100%);
-  --radius:14px;
-  --nav-h:64px;
-  --ease-out:cubic-bezier(.22,1,.36,1);
-}
-@font-face{
-  font-family:"Aeonik";
-  src:url("/fonts/Aeonik-VF.woff2") format("woff2-variations"),
-      url("/fonts/Aeonik-VF.woff2") format("woff2");
-  font-weight:100 900;font-style:normal;font-display:swap;
-}
-@font-face{
-  font-family:"Aeonik Mono";
-  src:url("/fonts/AeonikMono-VF.woff2") format("woff2-variations"),
-      url("/fonts/AeonikMono-VF.woff2") format("woff2");
-  font-weight:100 900;font-style:normal;font-display:swap;
-}
+/* ---- page-specific: hero, product strip, field manual, demo ---- */
+.hero{position:relative;padding:calc(var(--nav-h) + 72px) 0 80px;overflow:clip}
+.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);gap:52px;align-items:center}
+@media (max-width:1000px){.hero-in{grid-template-columns:1fr;gap:40px}.hero{padding-top:calc(var(--nav-h) + 44px)}}
+.hero h1{font-size:clamp(38px,5.5vw,66px);font-weight:680}
+.hero-sub{margin:22px 0 32px;color:var(--ink-3);font-size:clamp(16.5px,1.7vw,19px);max-width:56ch}
+.hero-sub strong{color:var(--ink);font-weight:560}
+.hero-ctas{display:flex;flex-wrap:wrap;gap:13px;align-items:center}
+.hero-note{margin-top:16px;font-size:13.5px;color:var(--ink-3)}
+.hero-note a{color:var(--gold)}
+.hero .term{min-height:330px}
+@media (max-width:960px){.hero .term{min-height:300px}}
 
-/* ============ base ============ */
-*,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-body{
-  margin:0;background:var(--bg);color:var(--ink);
-  font:400 16px/1.6 "Aeonik",system-ui,-apple-system,"Segoe UI",sans-serif;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-  overflow-x:hidden;
-}
-::selection{background:var(--ember-b);color:#150803}
-h1,h2,h3{margin:0;font-weight:640;letter-spacing:-.02em;line-height:1.08;text-wrap:balance}
-p{margin:0}
-a{color:inherit;text-decoration:none}
-img,svg{display:block;max-width:100%}
-button,input,textarea{font:inherit;color:inherit}
-.mono{font-family:"Aeonik Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
-.wrap{width:min(1180px,calc(100% - 40px));margin-inline:auto}
-.grad-text{
-  background:var(--grad-ember);-webkit-background-clip:text;background-clip:text;color:transparent;
-  background-size:200% 100%;
-}
-:focus-visible{outline:2px solid var(--ember-c);outline-offset:3px;border-radius:4px}
-.skip{
-  position:fixed;left:12px;top:-64px;z-index:200;background:var(--ember-c);color:#150803;
-  padding:10px 16px;border-radius:10px;font-weight:600;transition:top .2s;
-}
-.skip:focus{top:12px}
+/* the three products, side by side */
+.prod-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start}
+@media (max-width:980px){.prod-grid{grid-template-columns:1fr}}
+.prod{display:block;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden;
+  transition:border-color .2s,transform .2s var(--ease)}
+.prod:hover{border-color:var(--gold);transform:translateY(-3px)}
+.prod .shot{border-bottom:1px solid var(--line);background:var(--ground);position:relative;line-height:0;
+  height:190px;overflow:hidden}
+.prod .shot img{width:100%;height:auto}
+.prod .shot::after{content:"";position:absolute;inset:0;background:var(--tex-scan);pointer-events:none}
+.prod .meta{padding:22px}
+.prod .kicker{font-family:"Aeonik Mono",monospace;font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.prod h3{font-size:21px;margin:11px 0 8px}
+.prod p{color:var(--ink-3);font-size:14.8px}
+.prod .go{display:inline-flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;color:var(--gold);font-weight:560}
+.prod .go .arr{transition:transform .16s var(--ease)}
+.prod:hover .go .arr{transform:translateX(3px)}
 
-/* eyebrow + section head */
-.eyebrow{
-  font-family:"Aeonik Mono",monospace;font-size:12px;font-weight:520;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--ember-c);display:inline-flex;align-items:center;gap:10px;
-}
-.eyebrow::before{content:"";width:22px;height:2px;background:var(--grad-ember);border-radius:2px}
-.sec{padding:104px 0}
-.sec-head{max-width:720px;margin-bottom:56px}
-.sec-head h2{font-size:clamp(30px,4.4vw,46px);margin:16px 0 14px}
-.sec-head p{color:var(--muted);font-size:18px;max-width:60ch}
-
-/* ============ buttons ============ */
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:9px;
-  padding:13px 24px;border-radius:11px;font-weight:600;font-size:15.5px;
-  border:1px solid transparent;cursor:pointer;white-space:nowrap;
-  transition:transform .18s var(--ease-out),box-shadow .18s,border-color .18s,background-color .18s,filter .18s;
-}
-.btn svg{flex:none}
-.btn-primary{background:var(--grad-ember);color:#1A0D08;box-shadow:0 8px 28px -10px rgba(240,118,80,.55)}
-.btn-primary:hover{transform:translateY(-1px);filter:brightness(1.07);box-shadow:0 12px 34px -10px rgba(240,118,80,.7)}
-.btn-primary:active{transform:translateY(0)}
-.btn-ghost{border-color:var(--line-strong);color:var(--ink-soft);background:rgba(255,255,255,.02)}
-.btn-ghost:hover{border-color:var(--faint);color:var(--ink);transform:translateY(-1px)}
-.btn-sm{padding:9px 16px;font-size:14px;border-radius:9px}
-.btn .arr{transition:transform .18s var(--ease-out)}
-.btn:hover .arr{transform:translateX(3px)}
-
-/* ============ nav ============ */
-.nav{
-  position:fixed;inset:0 0 auto 0;z-index:100;height:var(--nav-h);
-  display:flex;align-items:center;
-  background:color-mix(in srgb,var(--bg) 72%,transparent);
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-  border-bottom:1px solid transparent;transition:border-color .25s,background-color .25s;
-}
-.nav.scrolled{border-bottom-color:var(--line);background:color-mix(in srgb,var(--bg) 88%,transparent)}
-.nav-in{display:flex;align-items:center;gap:28px;width:min(1180px,calc(100% - 40px));margin-inline:auto}
-.brand{display:flex;align-items:center;gap:10px;font-weight:660;font-size:19px;letter-spacing:-.02em}
-.brand svg{width:30px;height:30px}
-.nav-links{display:flex;gap:26px;margin-inline:auto}
-.nav-links a{font-size:14.5px;color:var(--muted);transition:color .15s;position:relative}
-.nav-links a:hover{color:var(--ink)}
-.nav-cta{display:flex;align-items:center;gap:16px;margin-left:auto}
-.nav-cta .login{font-size:14.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
-.nav-cta .login:hover{color:var(--ink)}
-.ext::after{content:"↗";font-size:.82em;color:var(--faint);margin-left:3px}
-@media (max-width:860px){
-  .nav-links{display:none}
-  .nav-in{gap:14px}
-  .nav-cta{gap:12px}
-}
-
-/* ============ hero ============ */
-.hero{position:relative;padding:calc(var(--nav-h) + 72px) 0 84px;overflow:clip}
-.hero-glow{
-  position:absolute;left:50%;top:18%;width:900px;height:620px;transform:translateX(-38%);
-  background:radial-gradient(closest-side,rgba(240,118,80,.14),transparent 70%);
-  filter:blur(10px);pointer-events:none;
-}
-.hexfield{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.9}
-.hexfield .hx{stroke:var(--line);fill:none;stroke-width:1}
-.hexfield .hx.dim{opacity:.45}
-.hexfield .lit{fill:url(#emberFill);opacity:0;animation:hexLit 1.2s .9s var(--ease-out) forwards}
-@keyframes hexLit{to{opacity:.92}}
-.hexfield .float-a{animation:floatA 13s ease-in-out infinite alternate}
-.hexfield .float-b{animation:floatB 17s ease-in-out infinite alternate}
-@keyframes floatA{from{transform:translateY(0)}to{transform:translateY(-14px)}}
-@keyframes floatB{from{transform:translateY(0)}to{transform:translateY(11px)}}
-
-.hero-in{position:relative;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);gap:56px;align-items:center}
-.hero-copy .eyebrow{margin-bottom:22px}
-.hero h1{font-size:clamp(38px,5.6vw,68px);font-weight:680}
-.hero h1 .grad-text{animation:gradShift 7s ease-in-out infinite}
-@keyframes gradShift{0%,100%{background-position:0% 0}50%{background-position:100% 0}}
-.hero-sub{margin:22px 0 34px;color:var(--muted);font-size:clamp(16.5px,1.7vw,19px);max-width:56ch}
-.hero-sub strong{color:var(--ink-soft);font-weight:560}
-.hero-ctas{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
-.hero-note{margin-top:16px;font-size:13.5px;color:var(--faint)}
-.hero-note a{color:var(--indigo);border-bottom:1px solid transparent}
-.hero-note a:hover{border-bottom-color:var(--indigo)}
-
-/* terminal */
-.term{
-  background:#0B0E15;border:1px solid var(--line-strong);border-radius:var(--radius);
-  box-shadow:0 30px 80px -30px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.02) inset;
-  overflow:hidden;font-family:"Aeonik Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.75;
-  min-height:328px;display:flex;flex-direction:column;
-}
-.term-bar{
-  display:flex;align-items:center;gap:8px;padding:11px 14px;
-  background:#111521;border-bottom:1px solid var(--line);
-}
-.term-bar .dot{width:11px;height:11px;border-radius:50%}
-.term-bar .dot:nth-child(1){background:#FF5F57}
-.term-bar .dot:nth-child(2){background:#FEBC2E}
-.term-bar .dot:nth-child(3){background:#28C840}
-.term-bar .title{margin-inline:auto;color:var(--faint);font-size:12px;letter-spacing:.06em}
-.term-body{padding:18px 20px;flex:1}
-.term-line{white-space:pre-wrap;word-break:break-word;min-height:1.75em}
-.t-prompt{color:var(--ember-c)}
-.t-cmd{color:var(--ink)}
-.t-dim{color:var(--faint)}
-.t-plan{color:var(--indigo)}
-.t-diff{color:var(--ink-soft)}
-.t-ok{color:var(--ok)}
-.caret{
-  display:inline-block;width:8px;height:1.05em;background:var(--ember-c);
-  vertical-align:text-bottom;margin-left:2px;animation:blink 1.05s steps(1) infinite;
-}
-@keyframes blink{50%{opacity:0}}
-
-@media (max-width:960px){
-  .hero-in{grid-template-columns:1fr;gap:44px}
-  .hero{padding-top:calc(var(--nav-h) + 48px)}
-  .term{min-height:300px}
-}
-
-/* ============ ticker ============ */
-.ticker{
-  border-block:1px solid var(--line);background:var(--bg-raise);
-  overflow:hidden;padding:14px 0;position:relative;
-}
-.ticker::before,.ticker::after{
-  content:"";position:absolute;top:0;bottom:0;width:90px;z-index:2;pointer-events:none;
-}
-.ticker::before{left:0;background:linear-gradient(90deg,var(--bg-raise),transparent)}
-.ticker::after{right:0;background:linear-gradient(-90deg,var(--bg-raise),transparent)}
-.ticker-track{display:flex;gap:36px;width:max-content;animation:tick 42s linear infinite}
-.ticker:hover .ticker-track{animation-play-state:paused}
-@keyframes tick{to{transform:translateX(-50%)}}
-.tick-item{
-  font-family:"Aeonik Mono",monospace;font-size:13px;color:var(--faint);white-space:nowrap;
-  display:inline-flex;align-items:center;gap:36px;
-}
-.tick-item b{color:var(--ink-soft);font-weight:520}
-.tick-item .sep{color:var(--line-strong)}
-
-/* ============ cards ============ */
-.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
-@media (max-width:820px){.grid-2{grid-template-columns:1fr}}
-.card{
-  position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:26px;overflow:hidden;
-  transition:transform .25s var(--ease-out),border-color .25s,box-shadow .25s;
-}
-.card:hover{transform:translateY(-3px);border-color:var(--line-strong);box-shadow:0 20px 50px -24px rgba(0,0,0,.7)}
-.card::before{
-  content:"";position:absolute;inset:0 0 auto 0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(253,154,76,.5),transparent);
-  opacity:0;transition:opacity .25s;
-}
-.card:hover::before{opacity:1}
-.card h3{font-size:19px;margin:16px 0 8px;font-weight:620}
-.card p{color:var(--muted);font-size:15px}
-.card-icon{
-  width:44px;height:44px;border-radius:11px;display:grid;place-items:center;
-  background:var(--surface);border:1px solid var(--line);
-}
-.card-icon svg{width:22px;height:22px;stroke:var(--ember-c);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.card-viz{margin-top:18px;border-top:1px dashed var(--line);padding-top:16px}
-
-/* mini terminal snippet inside cards */
-.snippet{font-family:"Aeonik Mono",monospace;font-size:12.5px;line-height:1.8;color:var(--faint)}
-.snippet .p{color:var(--ember-c)}
-.snippet .c{color:var(--ink-soft)}
-.snippet .g{color:var(--ok)}
-.snippet .r{color:var(--ember-a)}
-.snippet .i{color:var(--indigo)}
-
-/* fleet svg */
-.fleet-svg .lane{stroke:var(--line-strong);stroke-width:1.4;fill:none;stroke-dasharray:4 5;animation:lanes 1.4s linear infinite}
-@keyframes lanes{to{stroke-dashoffset:-9}}
-.fleet-svg .node{fill:var(--surface);stroke:var(--indigo);stroke-width:1.5}
-.fleet-svg .root{stroke:var(--ember-c)}
-.fleet-svg text{font-family:"Aeonik Mono",monospace;font-size:9.5px;fill:var(--faint)}
-.fleet-svg .pulse{animation:fleetPulse 2.4s ease-in-out infinite}
-@keyframes fleetPulse{0%,100%{opacity:.5}50%{opacity:1}}
-
-/* install strip */
-.install{
-  margin-top:26px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;
-}
-.install code{
-  font-family:"Aeonik Mono",monospace;font-size:14.5px;color:var(--ink);
-  display:inline-flex;align-items:center;gap:10px;
-}
-.install code .p{color:var(--ember-c)}
-.copy-btn{
-  margin-left:auto;display:inline-flex;align-items:center;gap:7px;
-  border:1px solid var(--line-strong);background:transparent;border-radius:8px;
-  padding:7px 13px;font-size:13px;color:var(--muted);cursor:pointer;transition:color .15s,border-color .15s;
-}
-.copy-btn:hover{color:var(--ink);border-color:var(--faint)}
-.copy-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
-.install .note{width:100%;font-size:13px;color:var(--faint)}
-@media (max-width:640px){.copy-btn{margin-left:0}}
-
-/* ============ platform ============ */
-.platform-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:48px;align-items:center}
-@media (max-width:960px){.platform-grid{grid-template-columns:1fr}}
-.pillars{display:flex;flex-direction:column;gap:6px}
-.pillar{
-  display:flex;gap:18px;padding:20px;border-radius:var(--radius);border:1px solid transparent;
-  transition:background-color .2s,border-color .2s;
-}
-.pillar:hover{background:var(--surface);border-color:var(--line)}
-.pillar-icon{
-  flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;
-  background:var(--indigo-soft);border:1px solid rgba(156,163,232,.25);
-}
-.pillar-icon svg{width:20px;height:20px;stroke:var(--indigo);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.pillar h3{font-size:17.5px;font-weight:620;margin-bottom:5px}
-.pillar p{color:var(--muted);font-size:14.5px}
-
-/* control-plane panel */
-.panel{
-  background:#0B0E15;border:1px solid var(--line-strong);border-radius:var(--radius);
-  box-shadow:0 30px 80px -30px rgba(0,0,0,.75);overflow:hidden;
-  font-family:"Aeonik Mono",monospace;
-}
-.panel-bar{
-  display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);
-  background:#111521;font-size:12px;color:var(--faint);letter-spacing:.05em;
-}
-.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:live 2s ease-in-out infinite}
-@keyframes live{0%,100%{box-shadow:0 0 0 0 rgba(123,201,138,.5)}50%{box-shadow:0 0 0 5px rgba(123,201,138,0)}}
-.panel-body{padding:20px;display:grid;gap:22px}
-.meters{display:grid;gap:14px}
-.meter label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase}
-.meter label b{color:var(--ink-soft);font-weight:520}
-.meter .track{height:7px;border-radius:5px;background:var(--surface);border:1px solid var(--line);overflow:hidden}
-.meter .fill{
-  height:100%;border-radius:5px;background:var(--grad-ember);
-  transform-origin:left;transform:scaleX(0);animation:fillUp 2.4s var(--ease-out) forwards;
-}
-.meter:nth-child(2) .fill{background:linear-gradient(90deg,var(--indigo),#7A82D9);animation-delay:.25s}
-.meter:nth-child(3) .fill{animation-delay:.5s}
-@keyframes fillUp{to{transform:scaleX(var(--w,.7))}}
-.audit{border-top:1px dashed var(--line);padding-top:16px;display:grid;gap:8px;font-size:12.5px}
-.audit-line{display:flex;gap:10px;color:var(--faint);opacity:0;transform:translateY(4px);animation:logIn .5s var(--ease-out) forwards}
-.audit-line .tag{color:var(--ok)}
-.audit-line .tag.deny{color:var(--ember-a)}
-.audit-line .who{color:var(--indigo)}
-.audit-line .what{color:var(--ink-soft)}
-.audit-line:nth-child(1){animation-delay:.9s}
-.audit-line:nth-child(2){animation-delay:1.5s}
-.audit-line:nth-child(3){animation-delay:2.1s}
-.audit-line:nth-child(4){animation-delay:2.7s}
-.audit-line:nth-child(5){animation-delay:3.3s}
-@keyframes logIn{to{opacity:1;transform:none}}
-
-/* ============ how it works ============ */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;position:relative}
-@media (max-width:820px){.steps{grid-template-columns:1fr}}
-.step{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
-.step-num{
-  font-family:"Aeonik Mono",monospace;font-size:12px;letter-spacing:.18em;color:var(--ember-c);
-  display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;
-}
-.step-num::before{
-  content:"";width:8px;height:8px;border-radius:50%;
-  background:var(--grad-ember);box-shadow:0 0 10px rgba(253,154,76,.6);
-}
-.step h3{font-size:19px;margin-bottom:8px;font-weight:620}
-.step p{color:var(--muted);font-size:15px}
-
-/* ============ field manual ============ */
-#field-manual{background:var(--bg-raise);border-block:1px solid var(--line)}
-.manual-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:56px;align-items:center}
-@media (max-width:960px){.manual-grid{grid-template-columns:1fr;gap:40px}}
+/* field manual */
+#field-manual{background:var(--panel);border-block:1px solid var(--line)}
+.manual-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:52px;align-items:center}
+@media (max-width:960px){.manual-grid{grid-template-columns:1fr;gap:38px}}
 .book-scene{perspective:1200px;display:grid;place-items:center;padding:16px 0}
 .book{
-  width:min(320px,78%);aspect-ratio:10/15;border-radius:10px;position:relative;
-  background:linear-gradient(160deg,#110F1A 0%,#0B0D16 60%,#140E17 100%);
-  border:1px solid var(--line-strong);
-  box-shadow:24px 34px 70px -30px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.03) inset;
-  transform:rotateY(-9deg) rotateX(2deg);
-  transition:transform .5s var(--ease-out),box-shadow .5s;
-  padding:26px 24px;display:flex;flex-direction:column;
+  width:min(320px,78%);aspect-ratio:10/15;border-radius:var(--r);position:relative;
+  background:var(--ground);border:1px solid var(--rule);
+  box-shadow:22px 32px 66px -30px rgba(0,0,0,.9);
+  transform:rotateY(-9deg) rotateX(2deg);transition:transform .45s var(--ease);
+  padding:26px 24px;display:flex;flex-direction:column;overflow:hidden;
 }
-.book-scene:hover .book{transform:rotateY(-3deg) rotateX(1deg) translateY(-6px);box-shadow:28px 44px 90px -30px rgba(0,0,0,.9)}
-.book::before{
-  content:"";position:absolute;left:0;top:0;bottom:0;width:7px;border-radius:10px 0 0 10px;
-  background:linear-gradient(180deg,var(--ember-a),var(--ember-b),var(--ember-c));opacity:.85;
-}
-.book-kicker{font-family:"Aeonik Mono",monospace;font-size:9.5px;letter-spacing:.24em;color:var(--ember-c);text-transform:uppercase;margin-bottom:14px}
+.book::after{content:"";position:absolute;inset:0;background:var(--tex-scan);pointer-events:none}
+.book-scene:hover .book{transform:rotateY(-3deg) rotateX(1deg) translateY(-6px)}
+.book::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--gold)}
+.book-kicker{font-family:"Aeonik Mono",monospace;font-size:9.5px;letter-spacing:.24em;color:var(--gold);
+  text-transform:uppercase;margin-bottom:14px}
 .book-title{font-size:clamp(20px,2.4vw,25px);font-weight:680;letter-spacing:-.015em;line-height:1.14}
-.book-sub{margin-top:10px;font-size:11.5px;color:var(--muted);line-height:1.55}
-.book-hex{margin-top:auto;opacity:.9}
-.book-hex .hx{stroke:var(--line-strong);fill:none;stroke-width:1}
-.book-hex .lit{fill:url(#emberFillB);opacity:.9}
-.book-hex .pth{stroke:url(#emberStrokeB);stroke-width:2;fill:none;stroke-linecap:round;filter:drop-shadow(0 0 4px rgba(253,154,76,.4))}
-.book-hex .nd{fill:#0B0D13;stroke:var(--ember-c);stroke-width:1.6}
+.book-sub{margin-top:10px;font-size:11.5px;color:var(--ink-3);line-height:1.55}
+.book-hex{margin-top:auto}
+.book-hex .hx{stroke:var(--rule);fill:none;stroke-width:1}
+.book-hex .lit{fill:var(--gold);opacity:.9;stroke:none}
+.book-hex .pth{stroke:var(--gold);stroke-width:1.6;fill:none;stroke-linecap:round}
+.book-hex .nd{fill:var(--ground);stroke:var(--gold);stroke-width:1.4}
 .book-author{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .book-author b{display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:620}
-.book-author span{font-size:11px;color:var(--faint)}
+.book-author span{font-size:11px;color:var(--ink-3)}
 .manual-copy .free-tag{
-  display:inline-flex;align-items:center;gap:8px;font-family:"Aeonik Mono",monospace;font-size:11.5px;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ok);
-  border:1px solid rgba(123,201,138,.3);background:rgba(123,201,138,.07);border-radius:99px;padding:5px 12px;
-  margin-bottom:18px;
+  display:inline-flex;align-items:center;gap:8px;font-family:"Aeonik Mono",monospace;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--pass);
+  border:1px solid var(--pass);border-radius:var(--r);padding:5px 11px;margin-bottom:18px;
 }
 .manual-copy h2{font-size:clamp(28px,3.8vw,40px);margin-bottom:14px}
-.manual-copy>p{color:var(--muted);font-size:17px;max-width:56ch}
-.manual-points{margin:22px 0 30px;padding:0;list-style:none;display:grid;gap:10px}
-.manual-points li{display:flex;gap:11px;color:var(--ink-soft);font-size:15px;align-items:baseline}
-.manual-points li::before{content:"—";color:var(--ember-c);flex:none}
-.manual-cta{margin:-8px 0 26px}
+.manual-copy>p{color:var(--ink-3);font-size:17px;max-width:56ch}
+.manual-points{margin:22px 0 28px;padding:0;list-style:none;display:grid;gap:10px}
+.manual-points li{display:flex;gap:11px;color:var(--ink-2);font-size:15px;align-items:baseline}
+.manual-points li::before{content:"—";color:var(--gold);flex:none}
+.manual-cta{margin:-6px 0 24px}
 
-/* ============ forms ============ */
-.lead-form{display:grid;gap:14px;max-width:520px}
-.f-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media (max-width:560px){.f-row{grid-template-columns:1fr}}
-.field{display:grid;gap:6px}
-.field label{font-size:13px;color:var(--ink-soft);font-weight:520}
-.field label .opt{color:var(--faint);font-weight:400}
-.field input,.field textarea{
-  background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
-  padding:11px 14px;font-size:15px;color:var(--ink);width:100%;
-  transition:border-color .15s,box-shadow .15s;
-}
-.field input::placeholder,.field textarea::placeholder{color:var(--faint)}
-.field input:focus,.field textarea:focus{
-  outline:none;border-color:var(--ember-b);box-shadow:0 0 0 3px rgba(240,118,80,.18);
-}
-.field textarea{resize:vertical;min-height:88px}
-.hp-wrap{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
-.form-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.form-status{font-size:14px;color:var(--muted);min-height:1.5em}
-.form-status.err{color:var(--ember-a)}
-.form-status a{color:var(--indigo);border-bottom:1px solid rgba(156,163,232,.4)}
-.btn[disabled]{opacity:.6;cursor:progress;transform:none}
-.unlocked{
-  display:grid;gap:16px;max-width:520px;background:var(--card);border:1px solid var(--line);
-  border-radius:var(--radius);padding:26px;
-}
-.unlocked .ok-line{display:flex;align-items:center;gap:10px;font-weight:620;font-size:17px}
-.unlocked .ok-line .ok-dot{
-  width:22px;height:22px;border-radius:50%;background:rgba(123,201,138,.15);
-  display:grid;place-items:center;color:var(--ok);font-size:13px;border:1px solid rgba(123,201,138,.4);
-}
-.unlocked p{color:var(--muted);font-size:14.5px}
-.unlocked .row{display:flex;gap:12px;flex-wrap:wrap}
-
-/* ============ demo cta ============ */
+/* demo */
 #demo .demo-box{
-  position:relative;border:1px solid var(--line-strong);border-radius:20px;overflow:hidden;
-  background:
-    radial-gradient(600px 300px at 85% -10%,rgba(240,118,80,.13),transparent 65%),
-    radial-gradient(500px 300px at 10% 110%,rgba(156,163,232,.09),transparent 65%),
-    var(--surface);
-  padding:clamp(28px,5vw,64px);
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:center;
+  position:relative;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--panel);
+  padding:clamp(28px,5vw,60px);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:46px;align-items:center;
 }
+#demo .demo-box::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:var(--tex-hatch);opacity:.5}
+#demo .demo-box>*{position:relative;z-index:1}
 @media (max-width:960px){#demo .demo-box{grid-template-columns:1fr}}
 #demo h2{font-size:clamp(30px,4.2vw,44px);margin:14px 0 12px}
-#demo .demo-sub{color:var(--muted);font-size:17.5px;max-width:48ch}
+#demo .demo-sub{color:var(--ink-3);font-size:17.5px;max-width:48ch}
 .demo-hints{margin:24px 0 0;padding:0;list-style:none;display:grid;gap:9px}
-.demo-hints li{display:flex;gap:10px;font-size:14.5px;color:var(--ink-soft);align-items:baseline}
-.demo-hints li::before{content:"→";color:var(--ember-c);flex:none;font-family:"Aeonik Mono",monospace}
-
-/* ============ footer ============ */
-footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 0 40px}
-.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:40px}
-@media (max-width:860px){.foot-grid{grid-template-columns:1fr 1fr}}
-@media (max-width:560px){.foot-grid{grid-template-columns:1fr}}
-.foot-brand p{color:var(--faint);font-size:14px;margin-top:14px;max-width:30ch}
-.foot-col h4{
-  font-family:"Aeonik Mono",monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--faint);margin:0 0 16px;font-weight:520;
-}
-.foot-col ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.foot-col a,.foot-col li{font-size:14.5px;color:var(--muted)}
-.foot-col a:hover{color:var(--ink)}
-.foot-col address{font-style:normal;font-size:14.5px;color:var(--muted);line-height:1.7}
-.socials{display:flex;gap:14px;margin-top:18px}
-.socials a{
-  width:36px;height:36px;border-radius:9px;border:1px solid var(--line);display:grid;place-items:center;
-  color:var(--muted);transition:color .15s,border-color .15s,transform .15s;
-}
-.socials a:hover{color:var(--ink);border-color:var(--faint);transform:translateY(-2px)}
-.socials svg{width:16px;height:16px;fill:currentColor}
-.foot-base{
-  margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
-  display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;
-  font-size:13px;color:var(--faint);
-}
-.foot-base .mono{font-size:12px}
-
-/* ============ reveal ============ */
-.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease-out),transform .7s var(--ease-out)}
-.reveal.in-view{opacity:1;transform:none}
-.reveal-d1{transition-delay:.08s}.reveal-d2{transition-delay:.16s}.reveal-d3{transition-delay:.24s}
-
-/* ============ reduced motion ============ */
-@media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
-  .ticker-track{animation:none;transform:none}
-  .hexfield .lit{opacity:.92;animation:none}
-  .meter .fill{transform:scaleX(var(--w,.7));animation:none}
-  .audit-line{opacity:1;transform:none;animation:none}
-  .reveal{opacity:1;transform:none}
-  .caret{animation:none}
-}
+.demo-hints li{display:flex;gap:10px;font-size:14.5px;color:var(--ink-2);align-items:baseline}
+.demo-hints li::before{content:"→";color:var(--gold);flex:none;font-family:"Aeonik Mono",monospace}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- shared svg defs -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <linearGradient id="emberStroke" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#C2185B"/><stop offset=".5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#F9D423"/>
-    </linearGradient>
-    <linearGradient id="emberFill" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#F9D423"/><stop offset="1" stop-color="#C2185B"/>
-    </linearGradient>
-    <linearGradient id="emberStrokeB" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#C2185B"/><stop offset=".5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#F9D423"/>
-    </linearGradient>
-    <linearGradient id="emberFillB" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#F9D423"/><stop offset="1" stop-color="#C2185B"/>
-    </linearGradient>
-  </defs>
-</svg>
-
 <header class="nav" id="nav">
   <div class="nav-in">
     <a class="brand" href="#top" aria-label="Oxagen home">
-      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgA" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgB" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgA)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgB)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F5F4F2" stroke-width="1"/></svg>
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#E8E8EC" stroke-width="1"/></svg>
       oxagen
     </a>
-    <nav class="nav-links" aria-label="Sections">
-      <a href="#agent">The agent</a>
-      <a href="#platform">The platform</a>
+    <nav class="nav-links" aria-label="Primary">
+      <div class="drop" data-open="false">
+        <button class="drop-btn" id="productsBtn" type="button" aria-expanded="false" aria-haspopup="true">Products <i class="chev"></i></button>
+        <div class="drop-menu" role="menu" aria-labelledby="productsBtn">
+          <a href="/products/stella" role="menuitem"><span class="dm-mark">✦</span><b>Stella</b><span>The open-source terminal agent. Rust, BYOK, every turn on the record.</span></a>
+          <a href="/products/oxagen" role="menuitem"><span class="dm-mark">⬡</span><b>Oxagen</b><span>The control plane. One context map — approved, metered, logged.</span></a>
+          <a href="/products/private-llms" role="menuitem"><span class="dm-mark">▣</span><b>Private LLMs</b><span>Models on hardware you control — laptop, your VPC, or air-gapped.</span></a>
+          <div class="drop-sep"></div>
+          <div class="drop-foot">one loop · three deployments</div>
+        </div>
+      </div>
       <a href="#field-manual">Field manual</a>
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
     </nav>
     <div class="nav-cta">
       <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
       <a class="btn btn-primary btn-sm" href="#demo">Get a demo</a>
+      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
     </div>
   </div>
 </header>
 
+<div class="drawer" id="drawer" data-open="false">
+  <div class="wrap">
+    <h5>Products</h5>
+    <a href="/products/stella">Stella — the terminal agent</a>
+    <a href="/products/oxagen">Oxagen — the control plane</a>
+    <a href="/products/private-llms">Private LLMs</a>
+    <h5>More</h5>
+    <a href="#agent">The agent</a>
+    <a href="#platform">The platform</a>
+    <a href="#field-manual">Field manual</a>
+    <a href="https://docs.oxagen.sh">Docs</a>
+    <a class="btn btn-primary" href="#demo">Get a demo</a>
+  </div>
+</div>
+
 <main id="main">
 
   <!-- ================= HERO ================= -->
-  <section class="hero" id="top">
-    <div class="hero-glow" aria-hidden="true"></div>
-    <svg class="hexfield" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <polygon id="hx6" points="45,26 0,52 -45,26 -45,-26 0,-52 45,-26"/>
-      </defs>
-      <g class="float-a">
-        <use class="hx dim" href="#hx6" x="120" y="120"/>
-        <use class="hx" href="#hx6" x="320" y="150"/>
-        <use class="hx dim" href="#hx6" x="880" y="90"/>
-        <use class="hx dim" href="#hx6" x="1080" y="140"/>
-        <use class="hx" href="#hx6" x="980" y="480"/>
-        <use class="hx dim" href="#hx6" x="180" y="420"/>
-      </g>
-      <g class="float-b">
-        <use class="hx dim" href="#hx6" x="620" y="80"/>
-        <use class="hx" href="#hx6" x="220" y="640"/>
-        <use class="hx dim" href="#hx6" x="520" y="600"/>
-        <use class="hx" href="#hx6" x="1120" y="420"/>
-        <use class="hx dim" href="#hx6" x="760" y="660"/>
-      </g>
-      <use class="hx lit" href="#hx6" x="948" y="268"/>
-    </svg>
-
+  <section class="hero tex tex-hex" id="top">
     <div class="wrap hero-in">
       <div class="hero-copy">
         <p class="eyebrow">AI coding agents · grounded in your context</p>
-        <h1>Everyone has the same models.<br><span class="grad-text">Your edge is context.</span></h1>
+        <h1>Everyone has the same models.<br><span class="gold">Your edge is context.</span></h1>
         <p class="hero-sub">
           Oxagen is an <strong>AI coding agent for your terminal</strong> and a
           <strong>control plane for your whole fleet</strong>. It turns your code and business
@@ -610,18 +208,49 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       </div>
 
       <div class="term" aria-label="Oxagen CLI demo (simulated)">
-        <div class="term-bar" aria-hidden="true">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-          <span class="title">oxagen — zsh</span>
+        <div class="app-bar" aria-hidden="true">
+          <span class="tl"></span><span class="tl"></span><span class="tl live"></span>
+          <span class="app-title">oxagen — zsh</span>
+          <span class="app-meta">live</span>
         </div>
-        <div class="term-body" id="termBody" aria-live="off"></div>
+        <div class="term-body" id="termBody" data-term="#heroScript" aria-live="off"></div>
       </div>
+      <script type="application/json" id="heroScript">
+      [
+        [
+          {"cls":"cmd","text":"oxagen \"fix the failing auth test\""},
+          {"cls":"t-dim","text":"◆ reading your workspace map · 34 files · 12 services linked"},
+          {"cls":"t-note","text":"◆ plan: patch token refresh in auth/session.ts, update the test"},
+          {"cls":"t-diff","text":"✎ src/auth/session.ts        +9 −3"},
+          {"cls":"t-diff","text":"✎ src/auth/session.test.ts   +4 −1"},
+          {"cls":"t-ok","text":"▶ tests: 8 passed · 0 failed"},
+          {"cls":"t-ok","text":"✔ done in 41s — every step logged"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen agents \"migrate billing to the new schema\""},
+          {"cls":"t-note","text":"◆ plan: 4 tasks · 4 workers · isolated copies of the repo"},
+          {"cls":"t-dim","text":"worker/1  schema + migration          ▮▮▮▮▮▮▮▮ done"},
+          {"cls":"t-dim","text":"worker/2  api routes                  ▮▮▮▮▮▮▮▮ done"},
+          {"cls":"t-dim","text":"worker/3  webhooks                    ▮▮▮▮▮▮▯▯ running"},
+          {"cls":"t-dim","text":"worker/4  tests + docs                ▮▮▮▮▮▮▮▯ running"},
+          {"cls":"t-ok","text":"✔ 2 pull requests open · 2 on the way"}
+        ],
+        [
+          {"cls":"cmd","text":"oxagen graph search -q \"who owns the billing policy?\""},
+          {"cls":"t-dim","text":"◆ live workspace query · RBAC scoped · bounded results"},
+          {"cls":"t-diff","text":"1. Billing Platform team        owner · directory source"},
+          {"cls":"t-diff","text":"2. Subscription Policy          document · Drive source"},
+          {"cls":"t-diff","text":"3. PR #842                      provider metadata · GitHub"},
+          {"cls":"t-ok","text":"✔ 3 results · each answer cites its source"}
+        ]
+      ]
+      </script>
     </div>
   </section>
 
   <!-- ================= TICKER ================= -->
   <div class="ticker" aria-hidden="true">
-    <div class="ticker-track" id="tickerTrack">
+    <div class="ticker-track">
       <span class="tick-item">
         <span><b>oxagen</b> solve</span><span class="sep">·</span>
         <span><b>oxagen</b> agents</span><span class="sep">·</span>
@@ -642,8 +271,62 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     </div>
   </div>
 
+  <!-- ================= PRODUCTS ================= -->
+  <section class="sec" id="products">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="eyebrow">Products</p>
+        <h2>One loop. Three ways to run it.</h2>
+        <p>The agent is open source and free. The control plane is what turns it into something a
+        company can run. And when the code cannot leave the building, the whole thing runs on
+        hardware you own.</p>
+      </div>
+
+      <div class="prod-grid">
+        <a class="prod reveal" href="/products/stella">
+          <div class="shot">
+            <img src="/assets/tui/10-start-work.svg" width="680" height="520" loading="lazy" alt="The Stella deck picking an issue off the backlog and drafting a plan from it.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Open source</span>
+            <h3>Stella</h3>
+            <p>The terminal agent. Rust, one binary, your own model keys — and a deck that shows
+            every turn, tool call, gate and cent while it runs.</p>
+            <span class="go">Meet the agent <span class="arr">→</span></span>
+          </div>
+        </a>
+
+        <a class="prod reveal reveal-d1" href="/products/oxagen">
+          <div class="shot">
+            <img src="/assets/tui/04-graph.svg" width="680" height="468" loading="lazy" alt="A graph query returning a source file's symbols in twelve milliseconds.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Platform</span>
+            <h3>Oxagen</h3>
+            <p>The control plane. One shared context map, rules enforced before an action runs,
+            every model call metered, and a record your security review will accept.</p>
+            <span class="go">See mission control <span class="arr">→</span></span>
+          </div>
+        </a>
+
+        <a class="prod reveal reveal-d2" href="/products/private-llms">
+          <div class="shot">
+            <img src="/assets/tui/06-mcp.svg" width="680" height="420" loading="lazy" alt="Tool servers listed with their transport, tool count, latency and authentication state.">
+          </div>
+          <div class="meta">
+            <span class="kicker">Private</span>
+            <h3>Private LLMs</h3>
+            <p>Models on your own hardware — the laptop, your VPC, or a box with no route out.
+            Same agent, same deck, nothing leaving the building.</p>
+            <span class="go">Run it on your metal <span class="arr">→</span></span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
   <!-- ================= THE AGENT ================= -->
-  <section class="sec" id="agent">
+  <section class="sec sec-alt" id="agent">
     <div class="wrap">
       <div class="sec-head reveal">
         <p class="eyebrow">The agent — in your terminal</p>
@@ -674,23 +357,16 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           <h3>Dispatch a fleet</h3>
           <p>One goal becomes many tasks. Several agents work in parallel, each safely in
           its own copy of the repo, and report back as one.</p>
-          <div class="card-viz" aria-hidden="true">
-            <svg class="fleet-svg" viewBox="0 0 320 92" role="img">
-              <path class="lane" d="M160 16 v14 M160 30 H60 V46 M160 30 V46 M160 30 H260 V46"/>
-              <circle class="node root" cx="160" cy="12" r="7"/>
-              <rect class="node pulse" x="42" y="46" width="36" height="22" rx="5"/>
-              <rect class="node pulse" x="142" y="46" width="36" height="22" rx="5" style="animation-delay:.5s"/>
-              <rect class="node pulse" x="242" y="46" width="36" height="22" rx="5" style="animation-delay:1s"/>
-              <text x="60" y="84" text-anchor="middle">worker/1</text>
-              <text x="160" y="84" text-anchor="middle">worker/2</text>
-              <text x="260" y="84" text-anchor="middle">worker/3</text>
-            </svg>
+          <div class="card-viz snippet" aria-hidden="true">
+            <div><span class="p">◆</span> <span class="c">4 tasks · 4 workers · isolated worktrees</span></div>
+            <div>worker/1 schema <span class="g">done</span> · worker/2 routes <span class="g">done</span></div>
+            <div>worker/3 webhooks <span class="i">running</span> · worker/4 tests <span class="i">running</span></div>
           </div>
         </article>
 
         <article class="card reveal reveal-d1">
           <div class="card-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
+            <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/><circle cx="12" cy="12" r="2.2"/></svg>
           </div>
           <h3>Private by default</h3>
           <p>Run the agent on a model that lives on your own machine. Works offline,
@@ -720,7 +396,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       <div class="install reveal" id="install">
         <code><span class="p">$</span> npm install -g @oxagen/cli</code>
         <button class="copy-btn" type="button" data-copy="npm install -g @oxagen/cli">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="12" rx="1"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
           <span>Copy</span>
         </button>
         <span class="note">Bring your own model keys — or run fully on-device. Your account plugs in when you want the shared map.</span>
@@ -729,7 +405,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   </section>
 
   <!-- ================= THE PLATFORM ================= -->
-  <section class="sec" id="platform" style="background:var(--bg-raise);border-block:1px solid var(--line)">
+  <section class="sec" id="platform">
     <div class="wrap">
       <div class="sec-head reveal">
         <p class="eyebrow">The platform — mission control</p>
@@ -738,7 +414,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         so the whole team and every agent work from one governed place.</p>
       </div>
 
-      <div class="platform-grid">
+      <div class="split split-wide">
         <div class="pillars reveal">
           <div class="pillar">
             <div class="pillar-icon" aria-hidden="true">
@@ -780,9 +456,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
               with citations you can open — in the app, over the API, or in your tools.</p>
             </div>
           </div>
+          <p style="margin-top:16px;padding-left:18px">
+            <a class="btn btn-ghost btn-sm" href="/products/oxagen">Everything the control plane does <span class="arr">→</span></a>
+          </p>
         </div>
 
-        <div class="panel reveal reveal-d1" aria-label="Control plane preview (simulated)">
+        <div class="panel reveal reveal-d1" aria-label="Control plane preview (illustrative)">
           <div class="panel-bar">
             <span class="live-dot" aria-hidden="true"></span>
             <span>control plane — live</span>
@@ -796,11 +475,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
               </div>
               <div class="meter">
                 <label><span>map coverage — sources connected</span><b>growing</b></label>
-                <div class="track"><div class="fill" style="--w:.58"></div></div>
+                <div class="track"><div class="fill alt" style="--w:.58"></div></div>
               </div>
               <div class="meter">
                 <label><span>agent runs — this week</span><b>all logged</b></label>
-                <div class="track"><div class="fill" style="--w:.84"></div></div>
+                <div class="track"><div class="fill pass" style="--w:.84"></div></div>
               </div>
             </div>
             <div class="audit" aria-hidden="true">
@@ -817,7 +496,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
   </section>
 
   <!-- ================= HOW IT WORKS ================= -->
-  <section class="sec" id="how">
+  <section class="sec sec-alt tex tex-hatch" id="how">
     <div class="wrap">
       <div class="sec-head reveal">
         <p class="eyebrow">How it works</p>
@@ -852,7 +531,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       <div class="book-scene reveal" aria-hidden="true">
         <div class="book">
           <span class="book-kicker">A field manual in 14 parts</span>
-          <span class="book-title">Engineering <span class="grad-text">Deterministic</span> AI&nbsp;Coding&nbsp;Agents</span>
+          <span class="book-title">Engineering <span class="gold">Deterministic</span> AI&nbsp;Coding&nbsp;Agents</span>
           <span class="book-sub">Systems that ask the model to think the least — and get the most from every model that exists.</span>
           <svg class="book-hex" viewBox="0 0 260 120">
             <defs><polygon id="hxb" points="22,13 0,26 -22,13 -22,-13 0,-26 22,-13"/></defs>
@@ -860,7 +539,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
             <use class="hx" href="#hxb" x="86" y="60"/>
             <use class="hx" href="#hxb" x="136" y="86"/>
             <use class="hx" href="#hxb" x="186" y="60"/>
-            <use class="hx lit" href="#hxb" x="228" y="34"/>
+            <use class="lit" href="#hxb" x="228" y="34"/>
             <path class="pth" d="M36 86 L86 60 L136 86 L186 60 L228 34"/>
             <circle class="nd" cx="36" cy="86" r="3.4"/>
             <circle class="nd" cx="86" cy="60" r="3.4"/>
@@ -993,7 +672,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="#top" aria-label="Oxagen home">
-          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgC" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgD" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#F9D423"/><stop offset="0.5" stop-color="#FF7E5F"/><stop offset="1" stop-color="#C2185B"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F5F4F2" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgC)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgD)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F5F4F2" stroke-width="1"/></svg>
+          <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#E8E8EC" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="#EFC53F"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="#EFC53F" opacity="0.45"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#E8E8EC" stroke-width="1"/></svg>
           oxagen
         </a>
         <p>Everyone has the same models.<br>Your edge is context.</p>
@@ -1013,12 +692,12 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         </div>
       </div>
 
-      <nav class="foot-col" aria-label="Product">
-        <h4>Product</h4>
+      <nav class="foot-col" aria-label="Products">
+        <h4>Products</h4>
         <ul>
-          <li><a href="#agent">The agent</a></li>
-          <li><a href="#platform">The platform</a></li>
-          <li><a href="#field-manual">Field manual</a></li>
+          <li><a href="/products/stella">Stella — the agent</a></li>
+          <li><a href="/products/oxagen">Oxagen — the platform</a></li>
+          <li><a href="/products/private-llms">Private LLMs</a></li>
           <li><a href="#demo">Get a demo</a></li>
         </ul>
       </nav>
@@ -1028,7 +707,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
         <ul>
           <li><a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Documentation</a></li>
           <li><a class="ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Customer login</a></li>
-          <li><a class="ext" href="https://oxagen.ai" target="_blank" rel="noopener">Company</a></li>
+          <li><a href="#field-manual">Field manual</a></li>
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
       </nav>
@@ -1046,306 +725,11 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 
     <div class="foot-base">
       <span>© 2026 Oxagen, Inc. All rights reserved.</span>
-      <span class="mono">ship deterministic · <a href="#field-manual" style="color:var(--indigo)">read the manual</a></span>
+      <span class="mono">ship deterministic · <a href="#field-manual">read the manual</a></span>
     </div>
   </div>
 </footer>
 
-<script>
-(function () {
-  "use strict";
-
-  /* Single place the site knows its API. oxagen.sh domain migration = update here + MARKETING_URL env on the API. */
-  var API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-    ? "http://localhost:4000"
-    : "https://api.oxagen.sh";
-  var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  function buildTrackingCode() {
-    var qs = new URLSearchParams(location.search);
-    var keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "tc", "tracking_code"];
-    var parts = [];
-    keys.forEach(function (k) {
-      var v = qs.get(k);
-      if (v) { parts.push(k + "=" + v); }
-    });
-    return parts.length ? parts.join("&") : undefined;
-  }
-
-  /* ---------- nav scroll state ---------- */
-  var nav = document.getElementById("nav");
-  var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 8); };
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
-
-  /* ---------- reveal on scroll ---------- */
-  var revealEls = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
-  if ("IntersectionObserver" in window && !reduceMotion) {
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) { e.target.classList.add("in-view"); io.unobserve(e.target); }
-      });
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-    revealEls.forEach(function (el) { io.observe(el); });
-  } else {
-    revealEls.forEach(function (el) { el.classList.add("in-view"); });
-  }
-
-  /* ---------- ticker: duplicate track for seamless loop ---------- */
-  var track = document.getElementById("tickerTrack");
-  if (track) { track.innerHTML += track.innerHTML; }
-
-  /* ---------- terminal typewriter ---------- */
-  var SCRIPTS = [
-    [
-      { cls: "cmd", text: 'oxagen "fix the failing auth test"' },
-      { cls: "t-dim", text: "◆ reading your workspace map · 34 files · 12 services linked" },
-      { cls: "t-plan", text: "◆ plan: patch token refresh in auth/session.ts, update the test" },
-      { cls: "t-diff", text: "✎ src/auth/session.ts        +9 −3" },
-      { cls: "t-diff", text: "✎ src/auth/session.test.ts   +4 −1" },
-      { cls: "t-ok", text: "▶ tests: 8 passed · 0 failed" },
-      { cls: "t-ok", text: "✔ done in 41s — every step logged" }
-    ],
-    [
-      { cls: "cmd", text: 'oxagen agents "migrate billing to the new schema"' },
-      { cls: "t-plan", text: "◆ plan: 4 tasks · 4 workers · isolated copies of the repo" },
-      { cls: "t-dim", text: "worker/1  schema + migration          ▮▮▮▮▮▮▮▮ done" },
-      { cls: "t-dim", text: "worker/2  api routes                  ▮▮▮▮▮▮▮▮ done" },
-      { cls: "t-dim", text: "worker/3  webhooks                    ▮▮▮▮▮▮▯▯ running" },
-      { cls: "t-dim", text: "worker/4  tests + docs                ▮▮▮▮▮▮▮▯ running" },
-      { cls: "t-ok", text: "✔ 2 pull requests open · 2 on the way" }
-    ],
-    [
-      { cls: "cmd", text: 'oxagen graph search -q "who owns the billing policy?"' },
-      { cls: "t-dim", text: "◆ live workspace query · RBAC scoped · bounded results" },
-      { cls: "t-diff", text: "1. Billing Platform team        owner · directory source" },
-      { cls: "t-diff", text: "2. Subscription Policy          document · Drive source" },
-      { cls: "t-diff", text: "3. PR #842                      provider metadata · GitHub" },
-      { cls: "t-ok", text: "✔ 3 results · each answer cites its source" }
-    ]
-  ];
-
-  var termBody = document.getElementById("termBody");
-
-  function line(cls) {
-    var el = document.createElement("div");
-    el.className = "term-line " + (cls === "cmd" ? "" : cls);
-    termBody.appendChild(el);
-    return el;
-  }
-
-  function renderStatic(script) {
-    termBody.innerHTML = "";
-    script.forEach(function (row) {
-      var el = line(row.cls);
-      if (row.cls === "cmd") {
-        el.innerHTML = '<span class="t-prompt">$ </span><span class="t-cmd"></span>';
-        el.querySelector(".t-cmd").textContent = row.text;
-      } else {
-        el.textContent = row.text;
-      }
-    });
-  }
-
-  if (reduceMotion || !termBody) {
-    if (termBody) renderStatic(SCRIPTS[0]);
-  } else {
-    var si = 0;
-    var playScript = function () {
-      termBody.innerHTML = "";
-      var script = SCRIPTS[si];
-      si = (si + 1) % SCRIPTS.length;
-
-      var cmdLine = line("cmd");
-      cmdLine.innerHTML = '<span class="t-prompt">$ </span><span class="t-cmd"></span><span class="caret"></span>';
-      var cmdSpan = cmdLine.querySelector(".t-cmd");
-      var caret = cmdLine.querySelector(".caret");
-      var text = script[0].text;
-      var ci = 0;
-
-      var typeTick = function () {
-        if (ci <= text.length) {
-          cmdSpan.textContent = text.slice(0, ci);
-          ci += 1;
-          setTimeout(typeTick, 26 + Math.random() * 40);
-          return;
-        }
-        caret.remove();
-        var li = 1;
-        var nextLine = function () {
-          if (li < script.length) {
-            var el = line(script[li].cls);
-            el.textContent = script[li].text;
-            el.style.opacity = "0";
-            el.style.transition = "opacity .3s";
-            requestAnimationFrame(function () { el.style.opacity = "1"; });
-            li += 1;
-            setTimeout(nextLine, li <= 2 ? 620 : 430);
-            return;
-          }
-          setTimeout(playScript, 4200);
-        };
-        setTimeout(nextLine, 500);
-      };
-      typeTick();
-    };
-    playScript();
-  }
-
-  /* ---------- copy button ---------- */
-  document.querySelectorAll(".copy-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var txt = btn.getAttribute("data-copy") || "";
-      var label = btn.querySelector("span");
-      var done = function () {
-        label.textContent = "Copied";
-        setTimeout(function () { label.textContent = "Copy"; }, 1600);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(done, done);
-      } else { done(); }
-    });
-  });
-
-  /* ---------- lead forms ---------- */
-  function setStatus(form, msg, isErr) {
-    var status = form.querySelector(".form-status");
-    status.innerHTML = msg;
-    status.classList.toggle("err", !!isErr);
-  }
-
-  /* demo form: posts to the CMS leads endpoint with intent:"demo" — the lead is
-     captured in cms.leads without minting a book code or sending the book email. */
-  function wireForm(form) {
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var btn = form.querySelector('button[type="submit"]');
-      var source = form.getAttribute("data-source");
-
-      if (!form.reportValidity()) { return; }
-
-      var fd = new FormData(form);
-      var fullName = String(fd.get("name") || "").trim();
-      var spaceIdx = fullName.indexOf(" ");
-      var firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
-      var lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
-      var payload = {
-        intent: "demo",
-        firstName: firstName,
-        lastName: lastName || firstName,
-        email: String(fd.get("email") || "").trim().toLowerCase(),
-        source: source,
-        pagePath: location.pathname + location.hash
-      };
-      var trackingCode = buildTrackingCode();
-      if (trackingCode) { payload.trackingCode = trackingCode; }
-      var company = String(fd.get("company") || "").trim();
-      if (company) { payload.company = company; }
-      var role = String(fd.get("role") || "").trim();
-      if (role) { payload.jobTitle = role; }
-      var message = String(fd.get("message") || "").trim();
-      if (message) { payload.message = message; }
-      var website = String(fd.get("website") || "").trim();
-      if (website) { payload.website = website; }
-
-      btn.disabled = true;
-      setStatus(form, "Sending…");
-
-      fetch(CMS_LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).then(function (res) {
-        if (!res.ok && res.status !== 204) { throw new Error("status " + res.status); }
-        form.reset();
-        setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
-        btn.disabled = false;
-      }).catch(function () {
-        btn.disabled = false;
-        setStatus(
-          form,
-          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
-          true
-        );
-      });
-    });
-  }
-
-  /* field-manual gate form: posts to the CMS lead-gate endpoint. Success never reveals a
-     book link — the server emails a single-use /read link. */
-  function wireManualForm(form) {
-    var successPanel = document.getElementById("manualSuccess");
-    var successMsg = document.getElementById("manualSuccessMsg");
-    var trackingCode = buildTrackingCode();
-
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var btn = form.querySelector('button[type="submit"]');
-
-      if (!form.reportValidity()) { return; }
-
-      var fd = new FormData(form);
-      var fullName = String(fd.get("name") || "").trim();
-      var spaceIdx = fullName.indexOf(" ");
-      var firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
-      var lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
-
-      var payload = {
-        firstName: firstName,
-        lastName: lastName || firstName,
-        email: String(fd.get("email") || "").trim().toLowerCase(),
-        source: "field-manual",
-        pagePath: location.pathname + location.search + location.hash,
-        website: String(fd.get("website") || "")
-      };
-      var role = String(fd.get("role") || "").trim();
-      var company = String(fd.get("company") || "").trim();
-      if (company) { payload.company = company; }
-      if (role) { payload.jobTitle = role; }
-      if (trackingCode) { payload.trackingCode = trackingCode; }
-
-      btn.disabled = true;
-      setStatus(form, "Sending…");
-
-      fetch(CMS_LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).then(function (res) {
-        return res.json().then(function (data) { return { status: res.status, data: data }; });
-      }).then(function (r) {
-        var data = r.data || {};
-        if (r.status >= 200 && r.status < 300 && data.ok) {
-          form.reset();
-          setStatus(form, "");
-          form.hidden = true;
-          if (successMsg) { successMsg.textContent = data.message || "The link to the book has been sent to your email."; }
-          if (successPanel) { successPanel.hidden = false; successPanel.classList.add("in-view"); try { successPanel.focus(); } catch (_) { /* ignore */ } }
-        } else {
-          btn.disabled = false;
-          setStatus(
-            form,
-            'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
-            true
-          );
-        }
-      }).catch(function () {
-        btn.disabled = false;
-        setStatus(
-          form,
-          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
-          true
-        );
-      });
-    });
-  }
-
-  var manualForm = document.getElementById("manualForm");
-  var demoForm = document.getElementById("demoForm");
-  if (manualForm) wireManualForm(manualForm);
-  if (demoForm) wireForm(demoForm);
-}());
-</script>
+<script src="/assets/oxagen.js" defer></script>
 </body>
 </html>
