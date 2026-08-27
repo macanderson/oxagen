@@ -34,6 +34,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { StellaSidecarClient } from "./sidecar-transport.js";
 import { readSidecarConfig, resolveStellaBinary } from "./stella-binary.js";
+import { isTerminalTurnEvent } from "./wire-types.js";
 import type {
   CompletionRequest,
   CompletionResult,
@@ -232,17 +233,22 @@ if (skipReason) {
 
       // --- the AgentEvent stream reached the host ---
       const eventTypes = new Set(run.events.map((e) => e.type));
-      for (const expected of [
-        "tool_start",
-        "tool_result",
-        "text",
-        "complete",
-      ]) {
+      for (const expected of ["tool_start", "tool_result", "text"]) {
         expect(
           eventTypes.has(expected),
           `expected a \`${expected}\` AgentEvent; saw ${[...eventTypes].join(", ")}`,
         ).toBe(true);
       }
+
+      // The terminal event, under whichever tag this build uses. The pinned
+      // 0.6.2 build sends `complete`; stella `main` renamed it `turn_complete`.
+      // Asserting one tag passes against one workflow and fails against the
+      // other — which is how this assertion reddened stella-sidecar-nightly
+      // while stella-sidecar stayed green.
+      expect(
+        run.events.some(isTerminalTurnEvent),
+        `expected a terminal AgentEvent (\`complete\` or \`turn_complete\`); saw ${[...eventTypes].join(", ")}`,
+      ).toBe(true);
     });
 
     test("every route except /healthz refuses an absent bearer token", async () => {

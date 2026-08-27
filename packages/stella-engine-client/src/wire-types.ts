@@ -119,9 +119,38 @@ export interface TextEvent extends AgentEventEnvelope {
   readonly type: "text";
 }
 
-/** The engine's own terminal `AgentEvent`. Distinct from `TurnCompleteFrame`. */
+/**
+ * The engine's own terminal `AgentEvent` as stella 0.6.2 — the pinned version
+ * in `sidecar.config.json` — emits it. Distinct from `TurnCompleteFrame`.
+ *
+ * Stella renamed this tag to `turn_complete` after 0.6.2; see
+ * {@link TurnCompleteEvent}. Both are modelled because the two CI workflows
+ * see different stella builds, and neither tag is wrong.
+ */
 export interface CompleteEvent extends AgentEventEnvelope {
   readonly type: "complete";
+}
+
+/**
+ * The same terminal `AgentEvent` as stella `main` emits it.
+ *
+ * `stella-sidecar.yml` boots the pinned 0.6.2 build, which sends `complete`;
+ * `stella-sidecar-nightly.yml` builds stella `main`, which sends
+ * `turn_complete` (and `run_complete` beside it). Its `AgentEvent` vocabulary
+ * is generated from one table — `crates/stella-protocol/src/event/tags.rs` —
+ * and that table has `TurnComplete => "turn_complete"` with no bare `complete`
+ * arm left.
+ *
+ * It shares a tag string with `TurnCompleteFrame` and is still a different
+ * type: one is an event carried on the stream, the other the frame that ends
+ * it. Stella does the same, for the same reason.
+ *
+ * Both this and {@link CompleteEvent} stay until `stellaVersion` moves past
+ * the rename — bumping that pin is its own deliberate commit, per
+ * `sidecar.config.json`. Prefer {@link isTerminalTurnEvent} over either guard.
+ */
+export interface TurnCompleteEvent extends AgentEventEnvelope {
+  readonly type: "turn_complete";
 }
 
 /**
@@ -383,4 +412,23 @@ export function isCompleteEvent(
   event: AgentEventEnvelope,
 ): event is CompleteEvent {
   return event.type === "complete";
+}
+
+export function isTurnCompleteEvent(
+  event: AgentEventEnvelope,
+): event is TurnCompleteEvent {
+  return event.type === "turn_complete";
+}
+
+/**
+ * The terminal `AgentEvent` under whichever tag this stella build uses.
+ *
+ * Call this rather than either guard alone: which one matches depends on the
+ * `stellaVersion` pin, and a consumer that waits on only one silently never
+ * terminates against the other build.
+ */
+export function isTerminalTurnEvent(
+  event: AgentEventEnvelope,
+): event is CompleteEvent | TurnCompleteEvent {
+  return isCompleteEvent(event) || isTurnCompleteEvent(event);
 }
