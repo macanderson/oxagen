@@ -8,7 +8,12 @@
 # `/healthz` answers unconditionally so the ALB's target group health check
 # does not depend on any one upstream service being up — see
 # modules/app-node/user-data.sh.tftpl, which installs the same route as a
-# placeholder before this file is ever deployed.
+# placeholder before this file is ever deployed. Everything lives inside one
+# `route` block rather than mixing a bare top-level directive with `handle`:
+# Caddy sorts directives by its own internal precedence, not file order, and
+# a bare `respond` alongside `handle` blocks lost to the catch-all `handle {}`
+# in practice — `/healthz` came back 404 until this was a `route`, which
+# evaluates its matchers top-to-bottom exactly as written.
 #
 # Every upstream is on 127.0.0.1 because Caddy runs with `--network host`,
 # as do the services. Neo4j is reached the same way, over loopback — it is
@@ -16,63 +21,63 @@
 # bridge network at all.
 
 :80 {
-	respond /healthz 200
+	route {
+		respond /healthz 200
 
-	# --- Websites ---------------------------------------------------------
+		# --- Websites -------------------------------------------------------
 
-	@stella host stella.oxagen.sh
-	handle @stella {
-		encode gzip zstd
-		reverse_proxy 127.0.0.1:3001
-	}
+		@stella host stella.oxagen.sh
+		handle @stella {
+			encode gzip zstd
+			reverse_proxy 127.0.0.1:3001
+		}
 
-	@docs host docs.oxagen.sh
-	handle @docs {
-		encode gzip zstd
-		reverse_proxy 127.0.0.1:3002
-	}
+		@docs host docs.oxagen.sh
+		handle @docs {
+			encode gzip zstd
+			reverse_proxy 127.0.0.1:3002
+		}
 
-	# --- Applications -------------------------------------------------------
-	# These hold sessions and reach Aurora/Redshift/Neo4j over the network or
-	# loopback respectively.
+		# --- Applications -----------------------------------------------------
+		# These hold sessions and reach Aurora/Redshift/Neo4j over the network or
+		# loopback respectively.
 
-	@app host app.oxagen.sh
-	handle @app {
-		encode gzip zstd
-		reverse_proxy 127.0.0.1:3000 {
-			transport http {
-				response_header_timeout 60s
+		@app host app.oxagen.sh
+		handle @app {
+			encode gzip zstd
+			reverse_proxy 127.0.0.1:3000 {
+				transport http {
+					response_header_timeout 60s
+				}
 			}
 		}
-	}
 
-	@api host api.oxagen.sh
-	handle @api {
-		encode gzip zstd
-		reverse_proxy 127.0.0.1:4000 {
-			transport http {
-				response_header_timeout 60s
+		@api host api.oxagen.sh
+		handle @api {
+			encode gzip zstd
+			reverse_proxy 127.0.0.1:4000 {
+				transport http {
+					response_header_timeout 60s
+				}
 			}
 		}
-	}
 
-	@mcp host mcp.oxagen.sh
-	handle @mcp {
-		# Deliberately NOT encoded — see the old account's Caddyfile for why:
-		# MCP's streamable HTTP transport is `text/event-stream`, and a
-		# compressor in front of it batches events instead of streaming them.
-		reverse_proxy 127.0.0.1:4100 {
-			flush_interval -1
+		@mcp host mcp.oxagen.sh
+		handle @mcp {
+			# Deliberately NOT encoded — see the old account's Caddyfile for why:
+			# MCP's streamable HTTP transport is `text/event-stream`, and a
+			# compressor in front of it batches events instead of streaming them.
+			reverse_proxy 127.0.0.1:4100 {
+				flush_interval -1
 
-			transport http {
-				response_header_timeout 60s
-				read_timeout 30m
-				write_timeout 30m
+				transport http {
+					response_header_timeout 60s
+					read_timeout 30m
+					write_timeout 30m
+				}
 			}
 		}
-	}
 
-	handle {
 		respond 404
 	}
 }
