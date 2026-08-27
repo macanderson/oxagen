@@ -11,10 +11,10 @@ runs:
   using: composite
   steps:
     # A bare runner has no pnpm. Provisioning it here rather than in each caller
-    # is what stops the next non-container job repeating oxagen #1319: the store
-    # path resolved to nothing, actions/cache rejected the empty input with
-    # "Input required and not supplied: path", and the job died 11s in on an
-    # error that named neither pnpm nor the missing toolchain image.
+    # is what stops the next non-container job repeating the failure #1326
+    # fixed: the store path resolved to nothing, actions/cache rejected the
+    # empty input with "Input required and not supplied: path", and the job
+    # died 11s in on an error that named neither pnpm nor the toolchain image.
     - name: Probe for pnpm
       id: probe
       shell: bash
