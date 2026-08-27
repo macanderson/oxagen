@@ -601,8 +601,27 @@ jobs:
           # environment that was never provisioned, or one whose secrets left
           # with an org move, skips instead and starts running again by itself
           # the moment DATABASE_URL is set.
+          #
+          # The skip is announced as a WARNING, not a notice, and repeated into
+          # the run summary. A green `migrate` used to be able to mean two
+          # different things — "the migrations applied" and "nothing ever
+          # connected" — and the check surface showed only a tick either way,
+          # which is how an unreachable database went unnoticed for two months
+          # (#1341). A warning renders as an annotation on the pull request, so
+          # the second meaning is now visible without opening the log.
           if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::notice::DATABASE_URL is not configured for this event — skipping migrations."
+            echo "::warning title=migrate did not run::No datastore is configured for this event, so no migration was applied and nothing was verified. This job is green because it had nothing to do — see #1275."
+            {
+              echo "### migrate: skipped"
+              echo
+              echo "No datastore is configured for \`${EVENT_NAME}\`, so **no migration ran"
+              echo "and no database was reached**. This job's green says only that it had"
+              echo "nothing to do."
+              echo
+              echo "The Atlas directory is still applied from empty on every pull request by"
+              echo "the \`rls-integration\` job. What is NOT covered while this job skips is"
+              echo "applying it to a database holding real rows — see #1275."
+            } >> "$GITHUB_STEP_SUMMARY"
             {
               echo "pg=false"
               echo "stores="
