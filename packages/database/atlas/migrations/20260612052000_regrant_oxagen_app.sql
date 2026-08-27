@@ -26,8 +26,28 @@ BEGIN
 END
 $$;
 
--- RLS safety invariants — re-assert even if the role pre-existed.
-ALTER ROLE oxagen_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+-- RLS safety invariants — re-assert only if the role's actual attributes
+-- have drifted from these, never unconditionally. On RDS/Aurora the
+-- connecting role is never a true Postgres superuser (only rds_superuser),
+-- and Postgres gates ALTER ROLE's SUPERUSER/BYPASSRLS clauses on the
+-- actor's own superuser bit regardless of the target value — so this
+-- statement failed with 42501 on every RDS/Aurora target even though
+-- CREATE ROLE above had already set the same safe values. Guarding it
+-- keeps the repair this migration exists for (a role that pre-existed with
+-- elevated privileges, fixable by an actual superuser on self-hosted
+-- Postgres) while making it a true no-op everywhere the role already has
+-- these defaults.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname = 'oxagen_app'
+      AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)
+  ) THEN
+    ALTER ROLE oxagen_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  END IF;
+END
+$$;
 
 DO $$
 DECLARE
