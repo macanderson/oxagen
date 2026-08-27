@@ -78,38 +78,58 @@ SQL
 say "Bootstrapping extensions as superuser"
 psql "$SUPER_ON_SIM" -v ON_ERROR_STOP=1 -q -f tools/scripts/init-postgres.sql
 
-# On RDS one role does both halves: the master user installs the extensions AND
-# runs the migrations, so anything the bootstrap creates is already owned by the
-# role that later replaces it. Splitting that across two roles here is an
-# artefact of the simulation, not a property of RDS — `init-postgres.sql` leaves
-# a plain `public.uuid_generate_v7()` behind on Postgres 16, and the baseline
-# migration re-runs the same block, so without this the run dies at file 1 of 88
-# with `must be owner of function uuid_generate_v7`. That failure says nothing
-# about Aurora, and a harness that fails for its own reasons teaches the next
-# reader to ignore it.
+# On RDS **one role does everything**: the master user runs CREATE EXTENSION and
+# then runs the migrations, so it owns the extensions, their member functions,
+# and anything else the bootstrap left behind. Only the superuser bit is missing.
 #
-# Extension *members* keep their owner — that half is faithful, since
-# rds_superuser installs from the allowlist and does not own what it installs.
-say "Handing bootstrap-created objects to ${SIM_ROLE}, as RDS would have"
+# Reproducing that is the whole trick, and getting it wrong produces failures
+# that say nothing about Aurora. Two such, both seen on this branch before this
+# block existed:
+#
+#   file 1/88   must be owner of function uuid_generate_v7
+#               (bootstrap left a plain SQL function owned by the superuser; the
+#                baseline re-runs the same block as the sim role)
+#   file 3/88   permission denied for function pg_stat_statements_reset
+#               (the regrant migration does GRANT EXECUTE ON ALL FUNCTIONS IN
+#                SCHEMA public, and you cannot grant on what you do not own)
+#
+# Neither is an Aurora finding — on Aurora the master user owns both — and a
+# harness that fails for its own reasons teaches the next reader to ignore it.
+#
+# So: hand the whole database to the sim role, extension members included. What
+# stays behind is exactly the one thing RDS withholds, which is the point.
+say "Handing the database to ${SIM_ROLE}, as RDS gives it to the master user"
 psql "$SUPER_ON_SIM" -v ON_ERROR_STOP=1 -q <<SQL
 GRANT ALL ON SCHEMA public TO ${SIM_ROLE};
 ALTER SCHEMA public OWNER TO ${SIM_ROLE};
 DO \$\$
-DECLARE fn record;
+DECLARE obj record;
 BEGIN
-  FOR fn IN
-    SELECT p.oid::regprocedure AS sig
+  FOR obj IN
+    SELECT p.oid::regprocedure::text AS sig
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
-      -- Skip anything owned by an extension; those stay where CREATE EXTENSION
-      -- put them, exactly as on RDS.
-      AND NOT EXISTS (
-        SELECT 1 FROM pg_depend d
-        WHERE d.objid = p.oid AND d.deptype = 'e'
-      )
   LOOP
-    EXECUTE format('ALTER FUNCTION %s OWNER TO ${SIM_ROLE}', fn.sig);
+    EXECUTE format('ALTER FUNCTION %s OWNER TO ${SIM_ROLE}', obj.sig);
+  END LOOP;
+
+  FOR obj IN
+    SELECT c.oid::regclass::text AS rel
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v', 'm', 'S')
+  LOOP
+    EXECUTE format('ALTER TABLE %s OWNER TO ${SIM_ROLE}', obj.rel);
+  END LOOP;
+
+  FOR obj IN
+    SELECT t.oid::regtype::text AS typ
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typtype = 'd'
+  LOOP
+    EXECUTE format('ALTER DOMAIN %s OWNER TO ${SIM_ROLE}', obj.typ);
   END LOOP;
 END
 \$\$;
