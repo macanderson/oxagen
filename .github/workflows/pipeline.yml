@@ -511,6 +511,50 @@ jobs:
       - name: RLS isolation proof and manifest coverage
         run: pnpm --filter @oxagen/database test:integration
 
+  # Every Postgres container above runs as a real superuser. RDS never gives you
+  # one — the master user gets rds_superuser, which is not the same bit — so the
+  # whole class of migration that only works as a superuser passes CI here and
+  # fails the first time the directory meets Aurora. #1333 is the proof: two
+  # migrations sat on main for months, green every run, and both failed 42501 on
+  # a real cluster, the first wedging the directory at file 3 of 88.
+  #
+  # This applies the directory from empty as a role that is refused what RDS
+  # refuses, and self-tests that it is still refusing before trusting its own
+  # pass. Its own database, so the RLS suite above is untouched. See #1347.
+  rds-compatibility:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/macanderson/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Apply the migration directory without a superuser
+        env:
+          PGHOST: postgres
+          PGPORT: "5432"
+          PGSUPERUSER: oxagen
+          PGSUPERPASS: oxagen
+        run: ./tools/scripts/rds-sim-check.sh
+
   migrate:
     runs-on: ubuntu-latest
     container:
