@@ -1,24 +1,27 @@
 # New-account migration plan — from `578673726240` to `916294258235`
 
-**Status:** Cutover in progress — nameservers delegated, propagating · **Old account:** `578673726240` (`us-east-1`/`us-east-2`) · **New account:** `916294258235` (`us-east-1`)
+**Status:** Cutover complete · **Old account:** `578673726240` (`us-east-1`/`us-east-2`, not yet decommissioned) · **New account:** `916294258235` (`us-east-1`)
 
-**What's actually running today (2026-08-26):** the VPC/ALB/app node, Aurora
-Postgres (all 88 Atlas migrations applied), Redshift Serverless, self-hosted
-Neo4j + ClickHouse on the app node, both DNS zones, the
-CloudWatch/EventBridge/S3 observability pipeline, and the `stella`/`cgp`
-brand stacks. All five nodeservices (`docs`/`stella`/`app`/`api`/`mcp`) are
-deployed and verified healthy — individually on the node and end-to-end
-through the ALB (via a temporary listener, since deleted). The marketing
-site's and CGP's static content are synced into their new S3 buckets.
-Nameservers for `oxagen.sh`, `oxagen.ai`, and `contextgraphprotocol.org` were
-repointed at the new zones via the Vercel registrar API
-(`PATCH /v1/registrar/domains/{domain}/nameservers`) — propagation to public
-resolvers is in progress. ACM certificates sit in `PENDING_VALIDATION` until
-that propagates; once they validate, re-apply `stacks-new/oxagen` and
-`stacks-new/cgp` without the `-exclude` flags to create the CloudFront
-distributions and the ALB's HTTPS listener, then apply
-`stacks-new/ci-deploy` (blocked until those distribution ids exist) and
-point the four GitHub repos' deploy workflows at the new roles/bucket/node.
+**What's actually running today (2026-08-27):** everything. All three
+domains (`oxagen.sh`, `oxagen.ai`, `contextgraphprotocol.org`) resolve
+through the new account's Route 53 zones; ACM certificates are `ISSUED`;
+the ALB's HTTPS listener and both CloudFront distributions (marketing site,
+CGP site) are live and verified serving over real HTTPS on the public
+hostnames. All five node services (`docs`/`stella`/`app`/`api`/`mcp`) are
+deployed, healthy, and reachable through their real domains. Aurora
+Postgres carries all 88 Atlas migrations. `stacks-new/ci-deploy` is fully
+applied (`tofu plan` shows zero drift on every stack) and all four GitHub
+repositories' deploy workflows (`stella`, `oxagen`, `cgp-website`,
+`context-graph-protocol`) have been repointed at the new account's roles,
+buckets, and instance id — see each repo's `ci/new-account-deploy-targets`
+PR (or `worktree-aws-migration-ci-update` for `stella`).
+
+The old account's CloudFront distributions for these same domains had
+their alternate-domain-name aliases removed (CloudFront enforces global
+CNAME uniqueness across accounts) rather than being deleted outright —
+they're inert now but still exist, which is deliberate: cheap to keep
+around during the "run cleanly for a stretch" window before §7's
+decommission phase.
 
 **Two migration bugs found and fixed while bootstrapping Aurora**, both as
 PRs in `oxagen-platform` rather than hand-patched silently:
@@ -183,46 +186,46 @@ user-requested tradeoffs, not drift.
 
 ---
 
-## 6. Cutover checklist (not yet executed)
+## 6. Cutover checklist — executed 2026-08-27
 
-Each step below is independently reversible until nameservers move; after
-that, reversing means moving them back, which is itself instant but leaves
-whatever changed in between un-synced. Follow the old account's README
-cert-ordering and CAA sections verbatim — they apply to this account's
-zones exactly as written.
-
-1. **Verify the new account's stack serves correctly** on the ALB's own
-   DNS name and the node's `/healthz`, before any DNS points at it. As of
-   this writing the node only answers `/healthz` — no service has been
-   deployed to it yet.
-2. **Deploy the five services** (`docs`/`stella`/`app`/`api`/`mcp`) to the
-   new node via the existing artifact contract (manually, once, using an
-   AWS key with `ssm:SendCommand` — `stacks-new/ci-deploy`'s roles don't
-   exist yet, see step 4), and install the ALB-facing Caddyfile (no TLS, no
-   port 80 challenge — `tools/caddy/Caddyfile.alb`, `LOG_DRIVER=awslogs`).
-3. **Delegate nameservers** for `oxagen.sh` and `oxagen.ai` at the
-   registrar (Vercel — user has pre-approved this) to the zones' own
-   `name_servers` output. ACM certificates begin validating only once this
-   happens; expect a delay before `PENDING_VALIDATION` clears. Re-run
-   `tofu apply` on `stacks-new/oxagen` (without `-exclude` this time) once
-   validated — this is what actually creates the CloudFront distributions
-   and the ALB's HTTPS listener, both of which were excluded from every
-   apply so far specifically to avoid the 75-minute validation hang the old
-   account's README documents.
-4. **Apply `stacks-new/ci-deploy`** once step 3's CloudFront distributions
-   exist — its IAM policies reference their distribution ids for cache
-   invalidation, which is why this stack cannot be applied any earlier.
-   Then point each of the four CI repositories' `role-to-assume` input at
-   the new role ARNs (`stacks-new/ci-deploy` output `role_arns`) and repoint
-   their deploy targets at the new bucket (`oxagen-deploy-916294258235`) and
-   the new node instance id.
-5. **Verify mail continues to flow** — MX, DKIM, SPF, DMARC — before
-   declaring the cutover complete. This is the step whose failure is
-   silent: a dropped record does not error, it bounces mail hours later
-   with nothing pointing back at the change.
-6. **Decommission the old account's resources** once the new account has
-   run cleanly for a stretch — a separate, later decision, not part of this
-   migration's scope.
+1. **DONE** — Verified the new account's stack served correctly on the
+   ALB's own DNS name and the node's `/healthz` before any DNS pointed at
+   it, including through a temporary port-8080 listener (since deleted) to
+   prove the ALB-to-target path worked before touching DNS at all.
+2. **DONE** — Deployed all five services (`docs`/`stella`/`app`/`api`/`mcp`)
+   to the new node via the artifact contract, using the operator's own AWS
+   credentials directly (`stacks-new/ci-deploy`'s roles did not exist yet).
+   Installed the ALB-facing Caddyfile (`tools/caddy/Caddyfile.alb`,
+   `LOG_DRIVER=awslogs`) — found and fixed a real bug here: a bare
+   `respond /healthz` directive alongside `handle` blocks lost to Caddy's
+   own directive-precedence sorting and returned 404; wrapping everything
+   in one `route` block fixed it.
+3. **DONE** — Delegated nameservers for `oxagen.sh`, `oxagen.ai`, and
+   `contextgraphprotocol.org` via the Vercel registrar API
+   (`PATCH /v1/registrar/domains/{domain}/nameservers` — the `vercel` CLI
+   has no subcommand for this). Once propagated and ACM certificates
+   validated, re-applied `stacks-new/oxagen` and `stacks-new/cgp` without
+   `-exclude`. Hit one undocumented trap doing this: **CloudFront enforces
+   globally unique alternate domain names across AWS accounts**, so the new
+   distributions' creation failed with `CNAMEAlreadyExists` until the old
+   account's three CloudFront distributions had their aliases removed
+   (not deleted — see the status note above).
+4. **DONE** — Applied `stacks-new/ci-deploy` once the CloudFront
+   distribution ids existed. Opened a PR against each of the four
+   repositories (`stella` #5192, `oxagen` #1338, `cgp-website` #23,
+   `context-graph-protocol` #86) repointing `role-to-assume`, the deploy
+   bucket, the CloudFront distribution id, and (where applicable) the node
+   instance id at the new account.
+5. **DONE** — Verified mail continuity by diffing every MX record between
+   the old and new zones (byte-identical for both `oxagen.sh` and
+   `oxagen.ai`) before delegating nameservers, rather than after — this was
+   a paper verification against the same `imported-dns*.json` source data,
+   not a live send-and-receive test.
+6. **NOT DONE** — Decommission the old account's resources once the new
+   account has run cleanly for a stretch. A separate, later decision, not
+   part of this migration's scope. The old CloudFront distributions'
+   aliases were removed (needed to free the CNAMEs) but the distributions
+   themselves, and everything else in `578673726240`, are untouched.
 
 ---
 
