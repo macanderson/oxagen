@@ -236,7 +236,9 @@ if (skipReason) {
         "tool_start",
         "tool_result",
         "text",
-        "complete",
+        // `turn_complete`, not `complete`: stella has no bare `complete`
+        // AgentEvent. The nightly drift check caught this one.
+        "turn_complete",
       ]) {
         expect(
           eventTypes.has(expected),
