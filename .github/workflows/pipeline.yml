@@ -8,11 +8,13 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Auto-cancel superseded runs for PRs only. A push-to-main run contains the
-  # prod migrate job — cancelling the whole run mid-`atlas migrate apply`
-  # (the job-level db-migrate concurrency group only serializes migrate jobs,
-  # it does not shield them from run-level cancellation) would strand prod
-  # behind the committed migrations. Main runs always run to completion.
+  # Auto-cancel superseded runs for PRs only. A push-to-main run used to carry
+  # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
+  # would strand prod behind the committed migrations. That job is retired
+  # (#1341) and production migrates over SSM from oxagen-aws-infra instead, so
+  # nothing in a main run is mid-flight against a real database today. Main runs
+  # still run to completion: the deploy jobs are, and half a deploy is worse
+  # than a slow one.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -555,275 +557,27 @@ jobs:
           PGSUPERPASS: oxagen
         run: ./tools/scripts/rds-sim-check.sh
 
-  migrate:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 15
-    concurrency:
-      # Everything that is not a pull request shares one group. It holds no
-      # production migration any more — see the note on `env:` below, and
-      # #1275 — but the group is what will serialize one once that lands, and
-      # `atlas migrate apply` against a real database must never run twice at
-      # once or be interrupted, hence cancel-in-progress: false.
-      #
-      # Preview is scoped PER PR, which is the fix for #1223. It protects
-      # nothing today — the preview datastores are gone too, see `env:` below —
-      # and a shared group actively lost jobs:
-      # GitHub keeps only one *pending* entry per group, so with three or more
-      # PRs in flight the queued migrate was cancelled outright — and a
-      # cancelled job renders identically to a failed one, so PRs showed a red
-      # `migrate` that had never run.
-      group: >-
-        db-migrate-${{ github.event_name != 'pull_request' && 'production'
-        || format('preview-{0}', github.ref) }}
-      cancel-in-progress: false
-    env:
-      # DB_MIGRATE_STORES is set per-store on the "Migrate ClickHouse and Neo4j"
-      # step from the change-detection output — only the stores whose migration
-      # sources changed are migrated.
-      #
-      # No datastore this job can reach exists on any event today, so every
-      # value below is empty and the change-detection step takes its "not
-      # configured" branch: the job skips and succeeds, and `deploy-node`'s
-      # `needs:` on it still resolves.
-      #
-      # Production Postgres, ClickHouse and Neo4j moved to the oxagen-data node;
-      # Postgres binds to loopback and answers only through SSM, so there is no
-      # production connection string for CI to hold. #1280 and #1291 emptied the
-      # production side for that reason.
-      #
-      # Preview went the same way, one account move later. PREVIEW_DATABASE_URL
-      # still names the decommissioned ClickHouse Cloud dev Postgres and no
-      # longer resolves: run 33035005969's `migrate` job died in psql with
-      # "could not translate host name ...-pg-dev-....aws.pg.clickhouse.cloud"
-      # on PR #1333, the first PR to touch packages/database/atlas/migrations
-      # since the move — the Postgres steps are gated on that path, which is why
-      # every other PR stayed green over a target that was already gone.
-      # oxagen-aws-infra's tools/migrate-secrets.py classifies every
-      # PREVIEW_*/PRODUCTION_* datastore secret SUPERSEDED for the same reason,
-      # and all nine PREVIEW_* secrets still carry their June timestamps.
-      #
-      # What is NOT lost by emptying these: `rls-integration` applies the whole
-      # Atlas directory to a fresh Postgres on every pull request and runs the
-      # RLS suite against it, so "the migrations apply from empty" is still
-      # proved per PR. What IS lost is the only check that ran them against a
-      # database holding real rows — a migration that fails only on non-empty
-      # data now reaches production unproven. Restoring that is #1275's job, and
-      # a service container would not restore it: a fresh container is empty by
-      # construction, so swapping one in would look like a fix and prove less
-      # than the line above already does. Setting the secrets again is the whole
-      # change needed here once a reachable target exists.
-      DATABASE_URL: ""
-      NEO4J_URI: ""
-      NEO4J_USERNAME: ""
-      NEO4J_PASSWORD: ""
-      NEO4J_DATABASE: ""
-      CLICKHOUSE_URL: ""
-      CLICKHOUSE_USERNAME: ""
-      CLICKHOUSE_PASSWORD: ""
-      CLICKHOUSE_DATABASE: ""
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Detect migration changes
-        id: changes
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_BEFORE: ${{ github.event.before }}
-        run: |
-          # No target, nothing to migrate. A migrate job whose datastore is not
-          # configured has no work to do, and failing on that manufactures red
-          # that says nothing about the change under test — the job previously
-          # died inside psql with "could not translate host name". An
-          # environment that was never provisioned, or one whose secrets left
-          # with an org move, skips instead and starts running again by itself
-          # the moment DATABASE_URL is set.
-          #
-          # The skip is announced as a WARNING, not a notice, and repeated into
-          # the run summary. A green `migrate` used to be able to mean two
-          # different things — "the migrations applied" and "nothing ever
-          # connected" — and the check surface showed only a tick either way,
-          # which is how an unreachable database went unnoticed for two months
-          # (#1341). A warning renders as an annotation on the pull request, so
-          # the second meaning is now visible without opening the log.
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::warning title=migrate did not run::No datastore is configured for this event, so no migration was applied and nothing was verified. This job is green because it had nothing to do — see #1275."
-            {
-              echo "### migrate: skipped"
-              echo
-              echo "No datastore is configured for \`${EVENT_NAME}\`, so **no migration ran"
-              echo "and no database was reached**. This job's green says only that it had"
-              echo "nothing to do."
-              echo
-              echo "The Atlas directory is still applied from empty on every pull request by"
-              echo "the \`rls-integration\` job. What is NOT covered while this job skips is"
-              echo "applying it to a database holding real rows — see #1275."
-            } >> "$GITHUB_STEP_SUMMARY"
-            {
-              echo "pg=false"
-              echo "stores="
-              echo "any=false"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Per-store change detection. Each datastore only migrates when its own
-          # migration sources change, so a Postgres-only PR never reaches across to
-          # the live preview/prod ClickHouse or Neo4j instances (and vice versa).
-          # A manual workflow_dispatch run forces all stores (full prod migrate).
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            {
-              echo "pg=true"
-              echo "stores=clickhouse,neo4j"
-              echo "any=true"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            BASE="origin/main"
-          else
-            BASE="$EVENT_BEFORE"
-            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-              BASE="$(git rev-parse HEAD~1)"
-            fi
-          fi
-          DIFF="$(git diff --name-only "${BASE}"...HEAD)"
-          echo "migration change-detection base=${BASE} event=${EVENT_NAME}"
-          echo "changed files:"; echo "$DIFF"
-          PG=false; CH=false; NEO=false
-          echo "$DIFF" | grep -qE '^packages/database/atlas/migrations/' && PG=true
-          echo "$DIFF" | grep -qE '^packages/telemetry/' && CH=true
-          echo "$DIFF" | grep -qE '^packages/ontology/src/.*\.cypher$' && NEO=true
-          # Prod Postgres safety net: on push to main, ALWAYS reconcile Postgres
-          # via `atlas migrate apply` regardless of the diff. Atlas applies only
-          # PENDING revisions and no-ops when the DB is current, so this is
-          # idempotent and cheap. Relying on git-diff detection silently skipped
-          # prod migrations whenever the computed base drifted (e.g. squash-merge
-          # base mismatch), leaving the live schema behind deployed code — the
-          # root cause of the two_factor_enabled auth outage. Atlas's revision
-          # ledger, not a git diff, is the source of truth for what prod is
-          # missing. (push only fires on main — see on.push.branches above.)
-          if [ "$EVENT_NAME" = "push" ]; then
-            PG=true
-          fi
-          # ...but a safety net still needs a database to reconcile against.
-          # #1280 emptied the connection strings on everything that is not a
-          # pull request, because production moved to the oxagen-data node and
-          # answers only through SSM — CI holds no production string any more.
-          # The PG=true above is unconditional, so the steps below still ran and
-          # `psql ""` failed at "Bootstrap Postgres extensions" before Atlas was
-          # ever reached: main went red on the job #1280 had just made a no-op.
-          # Detect the absence here instead, where every store is decided at
-          # once, so the job skips and succeeds and deploy-node's `needs:` still
-          # resolves. When #1275 gives this job a reachable production database,
-          # setting the secret restores the safety net with no change here.
-          if [ -z "$DATABASE_URL" ]; then
-            echo "no DATABASE_URL configured for event=${EVENT_NAME} — skipping Postgres"
-            PG=false
-          fi
-          if [ -z "$CLICKHOUSE_URL" ] && [ -z "$NEO4J_URI" ]; then
-            echo "no ClickHouse/Neo4j configured for event=${EVENT_NAME} — skipping both"
-            CH=false; NEO=false
-          fi
-          STORES=""
-          [ "$CH" = "true" ] && STORES="clickhouse"
-          [ "$NEO" = "true" ] && STORES="${STORES:+$STORES,}neo4j"
-          ANY=false
-          { [ "$PG" = "true" ] || [ "$CH" = "true" ] || [ "$NEO" = "true" ]; } && ANY=true
-          {
-            echo "pg=$PG"
-            echo "stores=$STORES"
-            echo "any=$ANY"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: ./.github/actions/pnpm-install
-        if: steps.changes.outputs.any == 'true'
-
-      - name: Bootstrap Postgres extensions (idempotent)
-        if: steps.changes.outputs.pg == 'true'
-        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
-
-      # Legacy data backfill — MUST run before Atlas apply.
-      #
-      # Before the agent_executions_origin_type_check CHECK existed in the
-      # migration SQL, schema.reconcile.dispatch wrote a non-canonical
-      # origin_type ('schema.reconcile.dispatch'). Migration 20260703150000
-      # adds that CHECK; on a DB holding such rows the ADD CONSTRAINT fails
-      # ("violated by some row"), aborting the whole migration transaction — so
-      # every later migration (incl. Better Auth's two_factor) never applies.
-      # That is exactly what took production login down.
-      #
-      # This idempotent normalization maps any pre-existing non-canonical
-      # origin_type to the canonical 'event_trigger' so the CHECK can be added.
-      # The source bug is fixed in schema.reconcile.dispatch.ts, so once prod is
-      # migrated this is a permanent no-op (0 rows). Guarded on table existence
-      # so it is safe on a not-yet-migrated / fresh DB.
-      - name: Normalize legacy agent_executions.origin_type (idempotent)
-        if: steps.changes.outputs.pg == 'true'
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
-            DO \$\$
-            BEGIN
-              IF to_regclass('agent.agent_executions') IS NOT NULL THEN
-                UPDATE agent.agent_executions
-                   SET origin_type = 'event_trigger'
-                 WHERE origin_type NOT IN
-                   ('chat','event_trigger','scheduled_job','mcp_request','workflow_run','fanout');
-              END IF;
-            END
-            \$\$;"
-
-      - name: Migrate Postgres (Atlas)
-        if: steps.changes.outputs.pg == 'true'
-        working-directory: packages/database
-        run: atlas migrate apply --env ci
-
-      - name: Migrate ClickHouse and Neo4j
-        if: steps.changes.outputs.stores != ''
-        env:
-          DB_MIGRATE_STORES: ${{ steps.changes.outputs.stores }}
-        run: npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
-
-      - name: Seed platform defaults (idempotent)
-        if: steps.changes.outputs.pg == 'true'
-        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
-
-      - name: Sync billing plans to Stripe (workflow_dispatch only)
-        if: steps.changes.outputs.pg == 'true' && github.event_name == 'workflow_dispatch'
-        run: pnpm billing:stripe-sync --apply
-
-  # ==========================================================================
-  # Production deploy
+  # The `migrate` job was retired here (#1341). It had been unable to act on any
+  # event since #1280: every step below its change-detection step is gated on
+  # `pg` / `stores`, and that step's first branch returns them all false when
+  # DATABASE_URL is empty — which it was for push and workflow_dispatch from
+  # #1280, and for pull_request from #1345, once the preview host it named was
+  # found to be decommissioned too.
   #
-  # This was an `echo` saying Vercel's GitHub integration would handle it.
-  # Vercel suspended the account over an unpaid balance — every site behind it
-  # answers 402 — so nothing had deployed this repository since the migration,
-  # and `main` could drift from production with no signal.
+  # What now covers the Postgres half, per pull request:
+  #   rls-integration     applies the directory to a fresh Postgres, runs the
+  #                       RLS suite, and seeds platform defaults
+  #   rds-compatibility   applies it again from empty as a NON-superuser role,
+  #                       which is what a managed target actually is (#1347)
+  # and in production, oxagen-aws-infra's run-db-migrations.sh over SSM.
   #
-  # Two targets, because the repository holds two kinds of thing:
-  #
-  #   apps/web is files. It goes to S3 behind CloudFront.
-  #
-  #   docs, app, api and mcp are processes. They go to the shared instance,
-  #   which is where they have to be: some of them reach Neo4j and ClickHouse
-  #   over loopback, and those are bound to 127.0.0.1 with the security group
-  #   opening no port to them at all. Postgres moved to Aurora Serverless v2
-  #   (network, not loopback) in the new AWS account this instance now runs in.
-  #
-  # Both jobs authenticate with OIDC rather than a stored key, against a role
-  # that trusts exactly `repo:macanderson/oxagen:environment:production`.
-  # The `environment: production` line is therefore load-bearing: removing it
-  # breaks the deploy rather than loosening it.
-  #
-  # The old job had no `needs:` at all, so a real deploy in its place would
-  # have raced the test jobs and shipped whatever merged. These wait.
+  # What is NOT covered, named so its absence is trackable rather than merely
+  # true — retiring a job silently is how the last two months happened:
+  #   ClickHouse / Neo4j migrations   tools/scripts/db-migrate.ts   #1370
+  #   Stripe billing plan sync        pnpm billing:stripe-sync      #1371
+  # Both were already unreachable before this deletion; neither becomes more
+  # broken by it, and both now have a home.
+
   # ==========================================================================
 
   deploy-web:
@@ -907,10 +661,13 @@ jobs:
   deploy-node:
     name: deploy ${{ matrix.service }}.oxagen.sh
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # Also waits on `migrate`: api and app read a schema that the same merge may
-    # have changed, and deploying code ahead of its migration is what took
-    # production login down once already.
-    needs: [checks, test, migrate]
+    # This used to also wait on `migrate`, because api and app read a schema the
+    # same merge may have changed, and deploying code ahead of its migration is
+    # what took production login down once already. That job is retired (#1341)
+    # and had applied nothing since #1280, so the wait had been decorative for
+    # months — the ordering guarantee is gone either way. Restoring it is part of
+    # giving production migrations a real trigger again (#1275).
+    needs: [checks, test]
     # arm64, matching the t4g.medium these ship to. An x86 build passes every
     # check here and fails to load a native module there, at first request
     # rather than at build.
