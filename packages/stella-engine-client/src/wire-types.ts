@@ -119,9 +119,22 @@ export interface TextEvent extends AgentEventEnvelope {
   readonly type: "text";
 }
 
-/** The engine's own terminal `AgentEvent`. Distinct from `TurnCompleteFrame`. */
-export interface CompleteEvent extends AgentEventEnvelope {
-  readonly type: "complete";
+/**
+ * The engine's own terminal `AgentEvent`, carried inside an `event` frame.
+ *
+ * Distinct from `TurnCompleteFrame` despite sharing the tag string: that one
+ * is the transport frame that ends the stream, this one is an event on it.
+ * Stella tags both `turn_complete` for the same reason — they are the same
+ * word about two layers (`AgentEvent::TurnComplete` in
+ * `stella-protocol/src/event/tags.rs`, `ServerFrame::TurnComplete` in
+ * `stella-serve/src/frame.rs`).
+ *
+ * This was `"complete"` until the nightly drift check caught it: stella has no
+ * bare `complete` tag and never had one on this layer, so the guard below
+ * matched nothing and the smoke test's assertion could only fail.
+ */
+export interface TurnCompleteEvent extends AgentEventEnvelope {
+  readonly type: "turn_complete";
 }
 
 /**
@@ -379,8 +392,8 @@ export function isTextEvent(event: AgentEventEnvelope): event is TextEvent {
   return event.type === "text";
 }
 
-export function isCompleteEvent(
+export function isTurnCompleteEvent(
   event: AgentEventEnvelope,
-): event is CompleteEvent {
-  return event.type === "complete";
+): event is TurnCompleteEvent {
+  return event.type === "turn_complete";
 }
