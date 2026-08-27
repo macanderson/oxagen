@@ -1,26 +1,71 @@
 name: pnpm install (cached store)
 description: >-
   Restore the pnpm content-addressable store cache and install with a frozen
-  lockfile. Replaces the pnpm/action-setup + actions/setup-node(cache pnpm) +
-  pnpm install triplet now that CI jobs run inside the
-  ghcr.io/macanderson/oxagen-ci-* toolchain images, which already ship Node and
-  corepack-managed pnpm.
+  lockfile. Jobs inside the ghcr.io/macanderson/oxagen-ci-* toolchain images
+  already ship Node and corepack-managed pnpm and use them as they are; a job on
+  a bare runner (one that needs a toolchain the image does not carry, such as
+  Rust or an arm64 build) gets Node and pnpm installed here, pinned to
+  .node-version and to the root package.json `packageManager` field.
 
 runs:
   using: composite
   steps:
+    # A bare runner has no pnpm. Provisioning it here rather than in each caller
+    # is what stops the next non-container job repeating oxagen #1319: the store
+    # path resolved to nothing, actions/cache rejected the empty input with
+    # "Input required and not supplied: path", and the job died 11s in on an
+    # error that named neither pnpm nor the missing toolchain image.
+    - name: Probe for pnpm
+      id: probe
+      shell: bash
+      run: |
+        if command -v pnpm >/dev/null 2>&1; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::pnpm is not on PATH — this job is not running in an oxagen-ci-* image, so Node and pnpm are being installed for it."
+        fi
+
+    - name: Install pnpm
+      if: steps.probe.outputs.present != 'true'
+      uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+    - name: Install Node
+      if: steps.probe.outputs.present != 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      with:
+        node-version-file: .node-version
+        # setup-node caches the pnpm store itself unless told not to, and the
+        # next step already does that on a key this action owns. One cache, one
+        # key.
+        package-manager-cache: false
+
+    # Assigned to a variable rather than interpolated into the echo, so that a
+    # failing `pnpm store path` fails this step: in `echo "path=$(...)"` the exit
+    # status is echo's, so the step passed and handed actions/cache an empty
+    # path.
     - name: Resolve pnpm store path
       id: store
       shell: bash
-      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      run: |
+        store_path="$(pnpm store path --silent)"
+        if [ -z "$store_path" ]; then
+          echo "::error::pnpm store path resolved to nothing; pnpm cannot be used in this job." >&2
+          exit 1
+        fi
+        echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
     - name: Restore pnpm store
       uses: actions/cache@v4
       with:
         path: ${{ steps.store.outputs.path }}
-        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        # Keyed on the architecture as well as the OS: `runner.os` is `Linux`
+        # for both x86_64 and arm64, and the store holds the platform-specific
+        # binaries of every optional native dependency, so one key for both
+        # would serve an arm job an x86 store.
+        key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: |
-          pnpm-store-${{ runner.os }}-
+          pnpm-store-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Install dependencies
       shell: bash

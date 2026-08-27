@@ -34,6 +34,26 @@ function Probe({ cwd, enabled }: { cwd: string; enabled: boolean }): React.React
 
 const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Poll the rendered frame until it contains `needle`. The assertions that use
+ * this are on state that arrives through a resolved promise and then an ink
+ * re-render; sleeping a fixed 10ms and asserting once passed on a quiet machine
+ * and lost the race on a loaded CI runner, which is how ci-nightly run
+ * 32949930979 went red with the frame still reading `pr=pending`. On timeout it
+ * reports the frame it gave up on, so a real regression says what it saw.
+ */
+async function waitForFrame(frame: () => string | undefined, needle: string, timeoutMs = 3000): Promise<void> {
+  const start = Date.now();
+  while (!(frame() ?? "").includes(needle)) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(
+        `waitForFrame: timed out waiting for ${JSON.stringify(needle)}; last frame was ${JSON.stringify(frame() ?? "")}`,
+      );
+    }
+    await tick();
+  }
+}
+
 beforeEach(() => {
   resolveGitInfoMock.mockReset();
   fetchPrNumberMock.mockReset();
@@ -72,17 +92,15 @@ describe("useRepoInfo", () => {
     expect(lastFrame()).toContain("pr=pending");
 
     resolveFetch(123);
-    await tick();
-    expect(lastFrame()).toContain("pr=123");
+    await waitForFrame(lastFrame, "pr=123");
     unmount();
   });
 
   it("shows pr=null (never blocks) when there's no branch to look up", async () => {
     resolveGitInfoMock.mockReturnValue({ root: "/repo", branch: undefined });
     const { lastFrame, unmount } = render(<Probe cwd="/repo" enabled={true} />);
-    await tick();
+    await waitForFrame(lastFrame, "pr=null");
     expect(lastFrame()).toContain("branch=none");
-    expect(lastFrame()).toContain("pr=null");
     expect(fetchPrNumberMock).not.toHaveBeenCalled(); // never shells out for a branch-less repo
     unmount();
   });

@@ -860,19 +860,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Not `./.github/actions/pnpm-install`: that action assumes the job runs
-      # inside the ghcr.io/macanderson/oxagen-ci-* toolchain image, which already
-      # ships Node and pnpm. This job runs on a bare arm runner, because the
-      # artifact's architecture has to match the instance's.
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
+      # This job runs on a bare arm runner (the artifact's architecture has to
+      # match the instance's), so the action installs Node and pnpm rather than
+      # taking the oxagen-ci-* image's, and keys its store cache on the arch.
+      - uses: ./.github/actions/pnpm-install
 
       # Credentials are assumed before packaging, not after: the build itself
       # needs Parameter Store now, where previously only the upload did.
