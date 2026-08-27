@@ -82,9 +82,9 @@ export function HexField({
     >
       <defs>
         <linearGradient id="oxHexEmber" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#A37200" />
-          <stop offset="0.5" stopColor="#FFB000" />
-          <stop offset="1" stopColor="#FFCB66" />
+          <stop offset="0" stopColor="#725A00" />
+          <stop offset="0.5" stopColor="#EFC53F" />
+          <stop offset="1" stopColor="#F7D96B" />
         </linearGradient>
       </defs>
       {FIELD.map((c, i) => {
@@ -104,7 +104,7 @@ export function HexField({
         const fill =
           c.variant === "lit"
             ? "url(#oxHexEmber)"
-            : "var(--ox-indigo-bright, #9CA3E8)";
+            : "var(--ox-ember-light, #F7D96B)";
         return (
           <polygon
             key={i}

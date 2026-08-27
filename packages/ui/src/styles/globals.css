@@ -231,10 +231,11 @@
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
-    /* Ember text ink — the shade of the ember accent that is legible as TEXT on
-       the current background. #FFB000 is the MARK colour and is only 1.8:1 on
-       paper, so accent copy must not use it directly: light mode takes a deep
-       ember (5.5:1) and dark mode the site's own --ember-c (13.1:1). */
+    /* Accent text ink — the shade of the gold that is legible as TEXT on the
+       current background. #EFC53F is the MARK colour and is only 1.6:1 on
+       paper, so accent copy must not use it directly: light mode takes the
+       gold's own ink shade (#725A00, 6.0:1) and dark mode the gold itself
+       (12.0:1). This is exactly Stella's --stella-accent-text. */
     --ember-ink: var(--ox-ember-deep);      /* #725A00 — = Stella --stella-accent-text (light) */
 
     /* Ember mark gradient (theme-independent — never recolor the mark).
@@ -1023,9 +1024,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #A37200) 0%,
-      var(--_ember-b, #FFB000) 46%,
-      var(--_ember-c, #FFCB66) 100%
+      var(--_ember-a, #725A00) 0%,
+      var(--_ember-b, #EFC53F) 46%,
+      var(--_ember-c, #F7D96B) 100%
     );
   }
 

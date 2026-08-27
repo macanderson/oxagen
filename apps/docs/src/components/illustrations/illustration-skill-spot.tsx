@@ -17,18 +17,18 @@ export function IllustrationSkillSpot({ className }: { className?: string }) {
       </title>
       <defs>
         <linearGradient id="ill-skill-spot-g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--_ember-a, #A37200)" />
-          <stop offset="1" stopColor="var(--_ember-c, #FFCB66)" />
+          <stop offset="0" stopColor="var(--_ember-a, #725A00)" />
+          <stop offset="1" stopColor="var(--_ember-c, #F7D96B)" />
         </linearGradient>
         <radialGradient id="ill-skill-spot-glow">
           <stop
             offset="0"
-            stopColor="var(--_ember-b, #FFB000)"
+            stopColor="var(--_ember-b, #EFC53F)"
             stopOpacity={0.8}
           />
           <stop
             offset="1"
-            stopColor="var(--_ember-b, #FFB000)"
+            stopColor="var(--_ember-b, #EFC53F)"
             stopOpacity={0}
           />
         </radialGradient>

@@ -91,8 +91,8 @@ export function ContextWindow() {
             style={{
               background: governed
                 ? "var(--ox-indigo-bright, #9CA3E8)"
-                : "var(--_ember-b, #FFB000)",
-              boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(255,126,95,.8)"}`,
+                : "var(--_ember-b, #EFC53F)",
+              boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(239,197,63,.8)"}`,
             }}
           />
           <span className="font-mono text-xs font-medium tracking-wide text-muted-foreground">
@@ -105,7 +105,7 @@ export function ContextWindow() {
             style={{
               color: governed
                 ? "var(--ox-indigo-bright, #9CA3E8)"
-                : "var(--_ember-b, #FFB000)",
+                : "var(--_ember-b, #EFC53F)",
             }}
           >
             {used}%
@@ -122,7 +122,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "linear-gradient(90deg, var(--_ember-a,#A37200), var(--_ember-b,#FFB000), var(--_ember-c,#FFCB66))",
+              : "linear-gradient(90deg, var(--_ember-a,#725A00), var(--_ember-b,#EFC53F), var(--_ember-c,#F7D96B))",
           }}
         />
       </div>
@@ -139,7 +139,7 @@ export function ContextWindow() {
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "var(--_ember-b, #FFB000)";
+              : "var(--_ember-b, #EFC53F)";
           return (
             <span
               key={i}
@@ -147,7 +147,7 @@ export function ContextWindow() {
               style={{
                 background: bg,
                 boxShadow: lit
-                  ? `0 0 8px ${governed ? "rgba(156,163,232,.55)" : "rgba(255,126,95,.6)"}`
+                  ? `0 0 8px ${governed ? "rgba(156,163,232,.55)" : "rgba(239,197,63,.6)"}`
                   : "none",
                 transition: "background-color .55s ease, box-shadow .55s ease",
                 transitionDelay: `${(i % COLS) * 9}ms`,

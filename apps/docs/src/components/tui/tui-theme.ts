@@ -34,14 +34,14 @@ export const TUI_MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
 /** Terminal-window chrome, matched to `.lp-term` in apps/docs/src/app/global.css. */
 export const tuiChrome = {
-  background: "#121318",
+  background: "#0F0F12",
   backgroundOpacity: 0.94,
   border: "rgba(255,255,255,0.12)",
   titleColor: "rgba(255,255,255,0.4)",
   trafficRed: "#ff5f57",
   trafficAmber: "#febc2e",
   trafficGreen: "#28c840",
-  shadowColor: "#FFCB66",
+  shadowColor: "#F7D96B",
 } as const;
 
 /** The CLI version string shown in the banner (apps/cli/package.json). */
