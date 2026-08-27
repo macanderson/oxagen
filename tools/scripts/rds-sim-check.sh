@@ -43,14 +43,34 @@ SIM_PW="${SIM_PW:-rds_sim}"
 SSLMODE="${SSLMODE:-disable}"
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-packages/database/atlas/migrations}"
 
-url() { # url <user> <password> <database>
-  printf 'postgres://%s:%s@%s:%s/%s?sslmode=%s' \
-    "$1" "$2" "$PGHOST" "$PGPORT" "$3" "$SSLMODE"
+url() { # url <user> <password> <database> [extra query]
+  printf 'postgres://%s:%s@%s:%s/%s?sslmode=%s%s' \
+    "$1" "$2" "$PGHOST" "$PGPORT" "$3" "$SSLMODE" "${4:-}"
 }
+
+# The migration connection carries the RLS bypass, because the role applying
+# migrations legitimately needs it and a superuser was silently supplying it.
+#
+# `mcp.registries` has FORCE ROW LEVEL SECURITY, and its tenant_isolation
+# WITH CHECK has no `org_id IS NULL` arm even though its USING does. The seed in
+# 20260614000000 inserts exactly that global row with `org_id = NULL`, so the
+# check evaluates NULL and the insert is refused — for the table's own owner.
+# A superuser bypasses RLS entirely, which is the only reason this directory has
+# ever applied. Anything that is not a superuser needs the bypass set, the same
+# `app.rls_bypass` the application's own withSystemDb path sets for system
+# writes. Granting it costs no privilege the guard is looking for: it is a GUC
+# the policies read, not a permission.
+#
+# TODAY'S PRODUCTION DOES NOT SET IT and does not need to — oxagen-aws-infra's
+# run-db-migrations.sh applies against the Dockerised Postgres on the oxagen-data
+# node as `oxagen`, which is that container's superuser. An Aurora rebuild has no
+# superuser and would be refused here. That is a real finding about the deploy
+# rather than about this script, and it is filed.
+SIM_OPTS="&options=-c%20app.rls_bypass%3Don"
 
 SUPERUSER_URL="$(url "$PGSUPERUSER" "$PGSUPERPASS" "$PGSUPERDB")"
 SUPER_ON_SIM="$(url "$PGSUPERUSER" "$PGSUPERPASS" "$SIM_DB")"
-SIM_URL="$(url "$SIM_ROLE" "$SIM_PW" "$SIM_DB")"
+SIM_URL="$(url "$SIM_ROLE" "$SIM_PW" "$SIM_DB" "$SIM_OPTS")"
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
