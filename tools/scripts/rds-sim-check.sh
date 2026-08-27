@@ -77,7 +77,43 @@ SQL
 # deliberately more permissive than the role under test.
 say "Bootstrapping extensions as superuser"
 psql "$SUPER_ON_SIM" -v ON_ERROR_STOP=1 -q -f tools/scripts/init-postgres.sql
-psql "$SUPER_ON_SIM" -v ON_ERROR_STOP=1 -q -c "GRANT ALL ON SCHEMA public TO ${SIM_ROLE};"
+
+# On RDS one role does both halves: the master user installs the extensions AND
+# runs the migrations, so anything the bootstrap creates is already owned by the
+# role that later replaces it. Splitting that across two roles here is an
+# artefact of the simulation, not a property of RDS — `init-postgres.sql` leaves
+# a plain `public.uuid_generate_v7()` behind on Postgres 16, and the baseline
+# migration re-runs the same block, so without this the run dies at file 1 of 88
+# with `must be owner of function uuid_generate_v7`. That failure says nothing
+# about Aurora, and a harness that fails for its own reasons teaches the next
+# reader to ignore it.
+#
+# Extension *members* keep their owner — that half is faithful, since
+# rds_superuser installs from the allowlist and does not own what it installs.
+say "Handing bootstrap-created objects to ${SIM_ROLE}, as RDS would have"
+psql "$SUPER_ON_SIM" -v ON_ERROR_STOP=1 -q <<SQL
+GRANT ALL ON SCHEMA public TO ${SIM_ROLE};
+ALTER SCHEMA public OWNER TO ${SIM_ROLE};
+DO \$\$
+DECLARE fn record;
+BEGIN
+  FOR fn IN
+    SELECT p.oid::regprocedure AS sig
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      -- Skip anything owned by an extension; those stay where CREATE EXTENSION
+      -- put them, exactly as on RDS.
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_depend d
+        WHERE d.objid = p.oid AND d.deptype = 'e'
+      )
+  LOOP
+    EXECUTE format('ALTER FUNCTION %s OWNER TO ${SIM_ROLE}', fn.sig);
+  END LOOP;
+END
+\$\$;
+SQL
 
 # ---------------------------------------------------------------------------
 # Prove the harness can still fail.
