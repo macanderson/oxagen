@@ -93,6 +93,16 @@ pnpm db:migrate          # apply locally
 
 Never create migration files manually — always use `atlas migrate diff`. Migration files go in `packages/database/atlas/migrations/`, never in `apps/`.
 
+**A migration may not require a superuser.** Production runs on Aurora, where the connecting role gets `rds_superuser` — which creates roles, databases and allowlisted extensions, but is **not** a Postgres superuser and can never be granted `BYPASSRLS`. Postgres gates some statements on the actor holding the real superuser bit whatever the values involved, so these fail `42501` on Aurora while passing on a local container:
+
+| Don't write | Because | Instead |
+| --- | --- | --- |
+| `ALTER ROLE x NOSUPERUSER` / `NOBYPASSRLS` | gated on the *actor* being a superuser even when the value is unchanged | guard it on `pg_roles` so it is reached only when the role has actually drifted |
+| `CREATE FUNCTION … SET my.custom_guc` | persisting a custom GUC on a signature needs the superuser bit (`SET search_path` is fine) | set it in the body with `set_config(…, true)` and restore the caller's prior value before every exit |
+| anything assuming `BYPASSRLS` can be granted | Aurora grants it to no role, by any means | test `current_setting('app.rls_bypass', true) = 'on'` in the policy, as the existing tables do |
+
+Both of the first two shipped and passed CI for months before Aurora rejected them (#1333). The `rds-compatibility` job now applies the whole directory from empty as a role with those limits, so it is caught on the pull request rather than on a real cluster — `tools/scripts/rds-sim-check.sh`. It does **not** check extension availability; that still needs a real cluster (#1341).
+
 **Target check before any mutation script:** echo the DB URL first; local = `localhost:5433`. `tsx --env-file=.env.local` does **not** override a shell-exported `DATABASE_URL` — `unset DATABASE_URL` to force local targeting. **Verify with a `SELECT` after migration** — don't trust logs alone.
 
 ### New Inngest Function
