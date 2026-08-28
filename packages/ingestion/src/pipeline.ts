@@ -197,7 +197,7 @@ export async function runPipeline(
   // The guard above guarantees a written node — capture the non-null id.
   const principalNodeId = dedup.principalNodeId;
 
-  // ── Stage 5: Embed (honor the legacy persisted opt-out) ──────────────────
+  // ── Stage 5: Embed (honor the tenant's embedding opt-out) ─────────────────
   const embeddingEnabled = shouldRunInference(
     event.sourceRecordType,
     deliveryConfig?.semanticInference,
