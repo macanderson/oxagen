@@ -13,10 +13,11 @@ const config: XmcpConfig = {
     prompts: false,
     resources: false,
   },
-  // Risk 2 mitigation: rspack cannot resolve .js → .ts for workspace
-  // packages that use verbatimModuleSyntax / ESM relative imports with
-  // .js extensions in TypeScript source. extensionAlias maps each .js
-  // import to its .ts equivalent so rspack finds the TypeScript source.
+  // rspack cannot resolve .js -> .ts for workspace packages that use
+  // verbatimModuleSyntax / ESM relative imports with .js extensions in
+  // TypeScript source. extensionAlias maps each .js import to its .ts
+  // equivalent so rspack finds the TypeScript source.
+  // See docs/specs/mcp/xmcp-migration-plan.md ("Risk 2").
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
 

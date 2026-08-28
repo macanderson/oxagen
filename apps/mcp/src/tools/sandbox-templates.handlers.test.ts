@@ -1,10 +1,8 @@
 // sandbox-templates.handlers.test.ts — handler invocation tests for the
-// sandbox.template.* and agent.environment.* MCP tools (ADR-025 parity gap:
-// these 12 capabilities declare api+mcp surfaces but previously lacked tool
-// files, breaking the tool-registry parity test).
+// sandbox.template.* and agent.environment.* MCP tools.
 //
-// Pattern: vi.mock the kernel `invoke` and context seam `buildContext`,
-// mirroring plugin.handlers.test.ts.
+// Mocks the kernel `invoke` and the context seam `buildContext`, mirroring
+// plugin.handlers.test.ts.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

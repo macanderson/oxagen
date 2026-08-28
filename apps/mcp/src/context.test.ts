@@ -4,14 +4,13 @@
 //   - McpUnauthorizedError construction and reason field
 //   - extractBearerToken: valid / invalid / missing / edge-case inputs
 //   - resolveMcpContext: unauthenticated, API key path, session token path
-//     (now rejected at edge — OXA-1515), expired and invalid token errors
+//     (rejected at the edge), expired and invalid token errors
 //   - buildContext: header extraction, UUID fallback, clientIp from xff,
 //     authorization-as-array, throws McpUnauthorizedError on auth failure
 //   - firstHeader / extractClientIp behaviour exercised indirectly via buildContext
 //
-// resolveApiKey is vi.mock()'d so no network / DB hits occur.
-// resolveSession is intentionally no longer called by context.ts (session
-// tokens are rejected at the MCP edge before any resolver is invoked).
+// resolveApiKey is vi.mock()'d so no network / DB hits occur. Session tokens
+// are rejected at the MCP edge before any session resolver would be invoked.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -21,10 +20,12 @@ vi.mock("@oxagen/auth", () => ({
 }));
 
 // Mock the security-event emitter — context.ts fires api_key.used on a
-// successful resolveMcpContext (OXA-1594). The emit is fire-and-forget; we
-// assert it was called with the right shape, never that it blocks resolution.
+// successful resolveMcpContext. The emit is fire-and-forget; we assert it
+// was called with the right shape, never that it blocks resolution.
 // vi.hoisted lets the mock fn be referenced inside the hoisted vi.mock factory.
-const { emitSecurityEventMock } = vi.hoisted(() => ({ emitSecurityEventMock: vi.fn() }));
+const { emitSecurityEventMock } = vi.hoisted(() => ({
+  emitSecurityEventMock: vi.fn(),
+}));
 vi.mock("@oxagen/database/security", () => ({
   emitSecurityEvent: emitSecurityEventMock,
 }));
@@ -96,7 +97,9 @@ describe("extractBearerToken", () => {
   });
 
   it("returns a token that contains underscores (API key format)", () => {
-    expect(extractBearerToken("Bearer oxk_secretkeyvalue")).toBe("oxk_secretkeyvalue");
+    expect(extractBearerToken("Bearer oxk_secretkeyvalue")).toBe(
+      "oxk_secretkeyvalue",
+    );
   });
 });
 
@@ -155,7 +158,9 @@ describe("resolveMcpContext", () => {
     await resolveMcpContext("Bearer oxk_mysecret", requestId, "203.0.113.7");
 
     expect(emitSecurityEventMock).toHaveBeenCalledOnce();
-    const [event] = emitSecurityEventMock.mock.calls[0] as [Record<string, unknown>];
+    const [event] = emitSecurityEventMock.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(event.eventType).toBe("api_key.used");
     expect(event.outcome).toBe("success");
     expect(event.orgId).toBe("org-1");
@@ -193,7 +198,7 @@ describe("resolveMcpContext", () => {
     expect(result).toEqual({ ok: false, reason: "expired_token" });
   });
 
-  // ── Session token path (OXA-1515): rejected at edge with invalid_token ────
+  // ── Session token path: rejected at edge with invalid_token ───────────────
   //
   // Session tokens (Better Auth opaque tokens, no underscore) carry no
   // org/workspace scope. Accepting them would produce orgId:"" which the
@@ -208,11 +213,14 @@ describe("resolveMcpContext", () => {
   });
 
   it("rejects any token without an underscore as invalid_token regardless of content", async () => {
-    const result = await resolveMcpContext("Bearer anothersessiontoken", requestId);
+    const result = await resolveMcpContext(
+      "Bearer anothersessiontoken",
+      requestId,
+    );
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
 
-  // ── Empty orgId defense in depth (OXA-2056) ───────────────────────────────
+  // ── Empty orgId is always rejected ─────────────────────────────────────────
   //
   // resolveApiKey() should never return ok:true with an empty orgId (the
   // apiKeys.org_id column is populated at key creation), but if it ever did
@@ -464,7 +472,9 @@ describe("buildContext", () => {
 
   it("throws McpUnauthorizedError with reason 'unauthenticated' when no auth header", async () => {
     await expect(buildContext({})).rejects.toThrow(McpUnauthorizedError);
-    await expect(buildContext({})).rejects.toMatchObject({ reason: "unauthenticated" });
+    await expect(buildContext({})).rejects.toMatchObject({
+      reason: "unauthenticated",
+    });
   });
 
   it("throws McpUnauthorizedError with reason 'invalid_token' for a session token (no underscore)", async () => {
