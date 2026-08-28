@@ -32,7 +32,8 @@ export interface GitHubWorkspaceScope {
 }
 
 // ---------------------------------------------------------------------------
-// Per-workspace GitHub token resolution chain (ADR-020)
+// Per-workspace GitHub token resolution chain
+// (see docs/adr/ADR-020-per-workspace-github-write-credentials.md)
 //
 // Resolution order:
 //   1. GitHub App installation access token — when the workspace connection
@@ -127,14 +128,10 @@ export async function resolveGitHubToken(
   // ── Path 3: local-only dev/demo env-var fallback ──────────────────────
   const envToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
   if (envToken) {
-    // The per-workspace credential chain above (Path 1: GitHub App installation
-    // token; Path 2: KMS-decrypted per-workspace OAuth token) is live, so a
-    // process-wide PAT must NOT be set in production — it would let ANY
-    // workspace act with one shared identity, bypassing per-workspace scoping.
-    // Loud WARN on resolve (registry doc says "MUST NOT be set in production").
-    // Not a hard throw: no prod-forbidden env var in packages/config/src/registry.ts
-    // is enforced by refusal, and refusing here could newly break a running
-    // deployment — the warning makes the misconfiguration visible instead.
+    // This PAT is shared by the whole process, so using it in production would
+    // let any workspace act with one identity instead of its own. We warn
+    // instead of throwing: refusing outright could break a running deployment,
+    // so we make the misconfiguration visible and let the operator fix it.
     if (process.env.NODE_ENV === "production") {
       console.warn(
         "[github-token] GITHUB_PERSONAL_ACCESS_TOKEN is set in production and is being used as a fallback. " +
