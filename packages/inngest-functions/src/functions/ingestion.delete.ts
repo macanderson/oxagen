@@ -195,10 +195,9 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             // connectionId — SourceFile, SourceSymbol, Feature, and any future
             // connector-derived label. EntityNode is handled in Pass 2 (it carries
             // ALIAS_OF promotion semantics); everything else is removed
-            // unconditionally. Previously only SourceFile/SourceSymbol were swept,
-            // so :Feature nodes (and others) leaked, leaving thousands of orphans
-            // after a "delete data". DETACH DELETE also drops CONTAINS / SOURCED_FROM
-            // and any other edges.
+            // unconditionally, so no connector-derived node type can leak as an
+            // orphan after a delete. DETACH DELETE also drops CONTAINS /
+            // SOURCED_FROM and any other edges.
             const sourceDeleteResult = await session.run(
               `
             MATCH (n {connectionId: $connectionId, orgId: $orgId})
@@ -329,9 +328,8 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
       // ── Step 5: Finalize the deletion_jobs row ───────────────────────────────
       // Mark the tracking row created by connection.delete as terminally
       // 'completed' with completed_at and the observed graph-deletion progress.
-      // Without this the row sat at status='running' forever (schema audit O-1).
-      // Guarded on deletionJobId so legacy events (sent before the id was wired)
-      // still complete without throwing.
+      // Guarded on deletionJobId so an event with no id set still completes
+      // without throwing.
       if (deletionJobId) {
         await step.run("finalize-deletion-job", () =>
           runInTenantScope({ orgId, workspaceId }, () =>

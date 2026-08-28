@@ -1,4 +1,3 @@
- 
 import { createFunction } from "../create-function";
 import { inngest } from "../inngest";
 import { withSystemDb } from "@oxagen/database";
@@ -31,7 +30,7 @@ interface SourceConnectionRow {
  * Retries: 3 (Inngest default). Idempotent — re-dispatching an already-running
  * `ingestion/github.initial-sync` for the same connection is safe: the
  * initial-sync function marks the connection `active` at the end, so a
- * duplicate dispatch will simply re-run the full tree fetch and overwrite.
+ * duplicate dispatch re-runs the full tree fetch and overwrites.
  */
 export const [ingestionSyncRequested] = createFunction(
   {
@@ -41,7 +40,15 @@ export const [ingestionSyncRequested] = createFunction(
   },
   { event: "ingestion/sync.requested" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, integrationId, mode, syncMethod, jobId } = event.data as {
+    const {
+      connectionId,
+      orgId,
+      workspaceId,
+      integrationId,
+      mode,
+      syncMethod,
+      jobId,
+    } = event.data as {
       connectionId: string;
       orgId: string;
       workspaceId: string;
@@ -52,9 +59,11 @@ export const [ingestionSyncRequested] = createFunction(
     };
 
     // ── Step 1: Resolve the source connection ────────────────────────────────
-    const conn = await step.run("resolve-connection", async (): Promise<SourceConnectionRow | null> => {
-      const rows = await withSystemDb(async (tx) => {
-        const result = await tx.execute(sql`
+    const conn = await step.run(
+      "resolve-connection",
+      async (): Promise<SourceConnectionRow | null> => {
+        const rows = await withSystemDb(async (tx) => {
+          const result = await tx.execute(sql`
           SELECT id,
                  connector_id,
                  delivery_method,
@@ -66,10 +75,11 @@ export const [ingestionSyncRequested] = createFunction(
           AND    deleted_at IS NULL
           LIMIT  1
         `);
-        return Array.from(result) as unknown as SourceConnectionRow[];
-      });
-      return rows[0] ?? null;
-    });
+          return Array.from(result) as unknown as SourceConnectionRow[];
+        });
+        return rows[0] ?? null;
+      },
+    );
 
     if (!conn) {
       logger.warn(
@@ -97,7 +107,9 @@ export const [ingestionSyncRequested] = createFunction(
         const owner = typeof dc?.["owner"] === "string" ? dc["owner"] : "";
         const repo = typeof dc?.["repo"] === "string" ? dc["repo"] : "";
         const defaultBranch =
-          typeof dc?.["defaultBranch"] === "string" ? dc["defaultBranch"] : "main";
+          typeof dc?.["defaultBranch"] === "string"
+            ? dc["defaultBranch"]
+            : "main";
 
         if (!owner || !repo) {
           logger.warn(
@@ -120,14 +132,32 @@ export const [ingestionSyncRequested] = createFunction(
         });
 
         logger.info(
-          { connectionId, orgId, workspaceId, owner, repo, defaultBranch, mode, syncMethod, jobId },
+          {
+            connectionId,
+            orgId,
+            workspaceId,
+            owner,
+            repo,
+            defaultBranch,
+            mode,
+            syncMethod,
+            jobId,
+          },
           "ingestion-sync-requested: dispatched ingestion/github.initial-sync",
         );
       } else {
         // For other connectors, polling sync is not yet implemented. This stub
         // logs the request so it is traceable and the slot can be filled per-connector.
         logger.info(
-          { connectionId, orgId, workspaceId, connectorId: conn.connector_id, mode, syncMethod, jobId },
+          {
+            connectionId,
+            orgId,
+            workspaceId,
+            connectorId: conn.connector_id,
+            mode,
+            syncMethod,
+            jobId,
+          },
           "ingestion-sync-requested: connector does not support sync dispatch yet — integration must implement its own polling handler",
         );
       }
@@ -147,7 +177,15 @@ export const [ingestionSyncRequested] = createFunction(
     );
 
     logger.info(
-      { connectionId, orgId, workspaceId, integrationId, mode, syncMethod, jobId },
+      {
+        connectionId,
+        orgId,
+        workspaceId,
+        integrationId,
+        mode,
+        syncMethod,
+        jobId,
+      },
       "ingestion-sync-requested: completed",
     );
 

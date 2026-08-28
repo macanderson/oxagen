@@ -49,10 +49,8 @@ const SWEEP_BATCH_LIMIT = 500;
 
 /**
  * Attempt cap for legacy V1 `agent.agent_runs`. Imported from the run store
- * rather than hand-mirrored — this package already depends on
- * @oxagen/agent-runner for `reclaimExpiredAttempts`, so the duplicate constant
- * that used to live here (and could silently drift from the store's own cap)
- * has no reason to exist.
+ * instead of hand-mirrored, so this value can never drift from the store's
+ * own cap.
  *
  * V2 rows do NOT use this: their cap is `agent_runs.max_attempts`, pinned per
  * run at admission and enforced inside `reclaimExpiredAttempts`.
