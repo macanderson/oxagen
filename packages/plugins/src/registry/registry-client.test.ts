@@ -166,9 +166,8 @@ describe("registry-client", () => {
 
   it("parses a server whose repository omits url/source without dropping the page", async () => {
     // The live MCP Registry returns records whose `repository` object is present
-    // but omits `url`/`source`. When those were required, a SINGLE such server
-    // threw a ZodError that rejected the ENTIRE /v0.1/servers page (catalog
-    // browse/sync returned 0 results). They are now nullish.
+    // but omits `url`/`source`. These fields must stay optional, or one such
+    // server would fail validation and drop the entire /v0.1/servers page.
     mockFetchOnce({
       servers: [
         {

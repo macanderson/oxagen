@@ -17,11 +17,11 @@ export const iconSchema = z.object({
 export const repositorySchema = z.object({
   // .nullish() (accepts `undefined` AND `null`), NOT z.string(): the live MCP
   // Registry (registry.modelcontextprotocol.io) returns server records whose
-  // `repository` object is present but omits `url`/`source`. Because these were
-  // required, a SINGLE such server threw a ZodError that rejected the entire
+  // `repository` object is present but omits `url`/`source`. If these were
+  // required, one such server would fail validation and drop the entire
   // /v0.1/servers page (listServers throws → catalog browse/sync returns 0
-  // results). Same failure mode already documented for icons/packages/remotes
-  // below. Downstream reads are null-safe (catalog-sync: `repository?.url ?? null`).
+  // results). Same reasoning applies to icons/packages/remotes below.
+  // Downstream reads are null-safe (catalog-sync: `repository?.url ?? null`).
   url: z.string().nullish(),
   source: z.string().nullish(),
   id: z.string().optional(),
@@ -43,7 +43,9 @@ export const packageSchema = z
     transport: z.object({ type: z.string() }).passthrough().optional(),
     runtimeHint: z.string().optional(),
     environmentVariables: z
-      .array(z.object({ name: z.string() }).merge(secretFlagSchema).passthrough())
+      .array(
+        z.object({ name: z.string() }).merge(secretFlagSchema).passthrough(),
+      )
       .optional(),
   })
   .passthrough();
@@ -61,7 +63,9 @@ export const remoteSchema = z
           .passthrough(),
       )
       .optional(),
-    variables: z.record(z.object({}).merge(secretFlagSchema).passthrough()).optional(),
+    variables: z
+      .record(z.object({}).merge(secretFlagSchema).passthrough())
+      .optional(),
   })
   .passthrough();
 
