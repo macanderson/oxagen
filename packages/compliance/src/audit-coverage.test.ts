@@ -1,4 +1,4 @@
-// audit-coverage.test.ts — SOC2 audit-trail invariant guard (OXA-1594).
+// audit-coverage.test.ts — SOC2 audit-trail invariant guard.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // THE SOC2 BOUNDARY THIS TEST ENFORCES
@@ -6,8 +6,8 @@
 // Every capability invocation is already audited generically by the kernel: each
 // call through invoke() emits a `capability.invoke_allowed` / `_denied` /
 // `_error` security event (the SECURITY_EVENT_TYPES "Capability authz" group).
-// That kernel audit covers WHO invoked WHAT and whether it was permitted — for
-// ALL ~64 mutating handlers, with no per-handler code.
+// That kernel audit covers WHO invoked WHAT and whether it was permitted, for
+// every mutating handler, with no per-handler code.
 //
 // On top of that baseline, a SMALL set of privileged-mutation domains warrant a
 // DOMAIN-SPECIFIC audit row (e.g. `api_key.revoked`, `org.member_removed`,
@@ -64,8 +64,7 @@ const INFRA_SKIP = new Set<string>([
 // ─────────────────────────────────────────────────────────────────────────────
 // REQUIRED-EMIT allowlist — the security-relevant privileged-mutation domains.
 // A handler file is in scope iff its basename starts with one of these prefixes.
-// Prefixes are tuned to the files that actually exist (verified against the
-// directory listing). Read-only / list / preview handlers that share a prefix
+// Read-only / list / preview handlers that share a prefix
 // (e.g. plugin.org.list, plugin.registry.list, billing.subscription.read) are
 // still in scope — they satisfy the invariant via an `// audit-exempt:` comment,
 // which keeps the decision explicit rather than silently skipping them.
@@ -92,7 +91,8 @@ const REQUIRED_EMIT_PREFIXES: readonly string[] = [
 // Matches any of the four emit helpers exported from @oxagen/database/security
 // (sync + async + the older record* aliases). Word-boundaried so a substring in
 // a comment like "emit a security event" does not false-positive.
-const EMIT_RE = /\b(emitSecurityEvent|emitSecurityEventAsync|recordSecurityEvent|recordSecurityEventAsync)\b/;
+const EMIT_RE =
+  /\b(emitSecurityEvent|emitSecurityEventAsync|recordSecurityEvent|recordSecurityEventAsync)\b/;
 
 // Matches `// audit-exempt: <reason>` — the reason must be non-empty.
 const AUDIT_EXEMPT_RE = /\/\/\s*audit-exempt:\s*\S+/;

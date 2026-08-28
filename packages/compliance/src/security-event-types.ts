@@ -1,17 +1,11 @@
 // security-event-types.ts — THE single source of truth for the SOC2 audit
 // event taxonomy.
 //
-// Historically this const-union was copy-pasted in three places:
-//   - packages/database/src/schema/security.ts   (Drizzle CHECK constraint)
-//   - packages/telemetry/src/security.ts          (emit-helper input type)
-//   - the migration SQL CHECK constraint DDL
-// Adding an event type meant a three-way manual sync; one copy always drifted.
-//
-// Now `@oxagen/database` and `@oxagen/telemetry` both import from here, and the
-// DB CHECK clause is generated programmatically from this array (see db-check.ts).
-// Adding a new event type = one edit, in this file. The drift tests in
-// @oxagen/compliance and @oxagen/database fail closed if the migration falls
-// out of sync.
+// `@oxagen/database` and `@oxagen/telemetry` both import the types from here,
+// and the DB CHECK clause is generated programmatically from this array (see
+// db-check.ts). Adding a new event type is one edit, in this file. The drift
+// tests in @oxagen/compliance and @oxagen/database fail if the migration
+// falls out of sync with this list.
 //
 // RULES (do not relax):
 //   - Group values by domain (auth / api_key / billing / capability / org / plugin);
