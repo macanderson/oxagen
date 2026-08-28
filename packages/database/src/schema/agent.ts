@@ -153,10 +153,10 @@ export const skills = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // Fast-path list display (OXA-1750): last invocation + total usage count.
+    // Fast-path list display: last invocation + total usage count.
     lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
     usageCount: integer("usage_count").notNull().default(0),
-    // Provenance for workspace-owned copies installed from a template (OXA-1748).
+    // Provenance for workspace-owned copies installed from a template.
     installedFromSlug: citext("installed_from_slug"),
   },
   (t) => ({
@@ -1084,8 +1084,8 @@ export const agentRunEvents = agentSchema.table(
     eventDigest: text("event_digest"),
     // EXACTLY ONE of these two carries the body. Inline is allow-listed receipt
     // metadata only; anything large or sensitive is an encrypted blob reference
-    // (an `evb_` public id — app-enforced text, the blob index lands in the
-    // evidence-ledger PR).
+    // (an `evb_` public id — app-enforced text; the blob index is planned in
+    // docs/specs/run-evidence-ingress/03-evidence-ledger-plan.md).
     payloadInline: jsonb("payload_inline"),
     encryptedPayloadRef: text("encrypted_payload_ref"),
     observedAt: timestamp("observed_at", { withTimezone: true, mode: "date" }),

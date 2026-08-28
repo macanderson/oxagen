@@ -22,11 +22,6 @@ export interface PolicyEntry {
 
 // Source of truth for which RLS policy each tenant-owned table gets.
 //
-// Rewritten for the 2026-06-11 Atlas baseline (OXA-1700): the schema rebuild
-// moved IAM to the `iam.*` Postgres schema, replaced the automation tables
-// with the playbook domain in `workflow.*`, added `privacy.*` and `graph.*`,
-// and dropped the pre-rewrite orphans this manifest used to track.
-//
 // Policy classes are derived from the actual scoping-column nullability in
 // information_schema (org_id / workspace_id, NN vs nullable) — not from
 // domain intuition. A CI test (integration/manifest-coverage.test.ts) asserts
@@ -124,16 +119,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "billing.credit_lots", policyClass: "org_only" },
   { table: "billing.org_billing_settings", policyClass: "org_only" },
   { table: "billing.billing_disputes", policyClass: "org_only" },
-  // Period-to-date spend ceiling (OXA-1079, 20260806120000_spend_budgets.sql).
-  // org_id NOT NULL + workspace_id NULLABLE (a NULL-workspace row is the
-  // org-level ceiling) → workspace_nullable, matching the RLS DDL that
-  // migration already shipped inline. The manifest entry was missed when the
-  // migration landed, so a future re-baseline would have silently dropped the
-  // policy — the same defect class the reseller/routing-policy notes below
-  // record.
+  // Period-to-date spend ceiling. org_id NOT NULL + workspace_id NULLABLE
+  // (a NULL-workspace row is the org-level ceiling) → workspace_nullable.
   { table: "billing.spend_budgets", policyClass: "workspace_nullable" },
-  // Reseller Revenue — org-only tenant_isolation RLS created in
-  // 20260725120000_reseller_revenue.sql (Stripe-for-agents re-bill loop).
+  // Reseller revenue (Stripe-for-agents re-bill loop) — org-only RLS.
   { table: "billing.reseller_price_plans", policyClass: "org_only" },
   { table: "billing.reseller_customers", policyClass: "org_only" },
   { table: "billing.reseller_attribution_rules", policyClass: "org_only" },
@@ -147,13 +136,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "content.generated_assets", policyClass: "standard" },
   { table: "content.documents", policyClass: "standard" },
 
-  // ── graph.* — the transactional-outbox tables (graph.outbox,
-  //   graph.projection_checkpoints) were dropped 2026-06-21: never wired
-  //   (zero writers/readers; projection runs directly from the Inngest
-  //   sync-execution-to-graph function). No graph.* tenant tables remain.
+  // ── graph.* — no graph.* tenant tables. Projection runs directly from the
+  //   Inngest sync-execution-to-graph function; there is no outbox table.
 
-  // ── iam.* — the 2026-06-11 rebuild moved IAM out of org.* into iam.*.
-  //   principals and principal_role_assignments have nullable workspace_id
+  // ── iam.* — principals and principal_role_assignments have nullable workspace_id
   //   (NULL = org-wide principal/assignment); the rest are org-keyed.
   { table: "iam.principals", policyClass: "workspace_nullable" },
   {
@@ -204,9 +190,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.credentials", policyClass: "standard" },
   { table: "mcp.mcp_servers", policyClass: "standard" },
   { table: "mcp.registries", policyClass: "standard" },
-  // External-MCP first-use consent grants + tool-descriptor snapshots
-  // (OXA-816 / OXA-820). Both carry orgScopeMixin (org_id + workspace_id NOT
-  // NULL) → standard.
+  // External-MCP first-use consent grants + tool-descriptor snapshots.
+  // Both carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
   { table: "mcp.consents", policyClass: "standard" },
   { table: "mcp.tool_snapshots", policyClass: "standard" },
 
@@ -217,11 +202,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   organizations.id IS the tenant key, there is no org_id column). ───────
   { table: "org.org_users", policyClass: "org_only" },
   { table: "org.invitations", policyClass: "org_only" },
-  // Slug-rename audit (OXA-1779). org_id NOT NULL, no workspace_id → org_only.
+  // Slug-rename audit. org_id NOT NULL, no workspace_id → org_only.
   // Resolver reads via withSystemDb (bypass); writes happen inside tenant scope.
   { table: "org.org_slug_history", policyClass: "org_only" },
 
-  // ── plugin.* (workspace-scoped; org_denylist was removed 2026-06-17) ────────
+  // ── plugin.* (workspace-scoped) ────────────────────────────────────────────
   { table: "plugin.installed_plugins", policyClass: "standard" },
 
   // ── privacy.* — GDPR Art.17/20 request queues (org_id NN, no workspace) ──
@@ -232,11 +217,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   partitioned parent — children inherit enforcement) ────────────────────
   { table: "security.security_events", policyClass: "workspace_nullable" },
   { table: "security.org_security_policy", policyClass: "org_only" },
-  // External-MCP server lifecycle audit (OXA-820). Append-only, but org_id +
+  // External-MCP server lifecycle audit. Append-only, but org_id +
   // workspace_id are both NOT NULL (servers are workspace-scoped) → standard.
   { table: "security.mcp_server_changes", policyClass: "standard" },
 
-  // ── workflow.* — playbook domain (2026-06-11 rebuild). Versions/steps/edges
+  // ── workflow.* — playbook domain. Versions/steps/edges
   //   carry no org cols (immutable children of playbooks → transitive). ──────
   { table: "workflow.playbooks", policyClass: "standard" },
   { table: "workflow.playbook_triggers", policyClass: "standard" },
@@ -265,19 +250,18 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   RLS and member rows leak across tenants.
   { table: "workspace.workspaces", policyClass: "org_only" },
   { table: "workspace.workspace_users", policyClass: "workspace_only" },
-  // Slug-rename audit (OXA-1779). org_id + workspace_id both NOT NULL →
+  // Slug-rename audit. org_id + workspace_id both NOT NULL →
   // standard. Resolver reads via withSystemDb (bypass) — workspace slugs are
   // only unique within an org, so the read filters on (org_id, old_slug).
   { table: "workspace.workspace_slug_history", policyClass: "standard" },
-  // Agent-memory decay policy (OXA-1374). org_id + workspace_id both NOT NULL
+  // Agent-memory decay policy. org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
-  // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
+  // Per-turn budget governance. org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_budget_policy", policyClass: "standard" },
-  // Verified-Outcome Market Router governance (PR #903,
-  // 20260731130700_routing_policy.sql). org_id NOT NULL + workspace_id NULLABLE
-  // → workspace_nullable tenant_isolation RLS.
+  // Verified-Outcome Market Router governance. org_id NOT NULL + workspace_id
+  // NULLABLE → workspace_nullable tenant_isolation RLS.
   { table: "workspace.routing_policy", policyClass: "workspace_nullable" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).

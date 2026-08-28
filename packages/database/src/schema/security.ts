@@ -142,35 +142,29 @@ export type NewSecurityEvent = typeof securityEvents.$inferInsert;
 // via security_events (security.mfa_policy_updated).
 // ---------------------------------------------------------------------------
 
-export const orgSecurityPolicy = securitySchema.table(
-  "org_security_policy",
-  {
-    orgId: uuid("org_id").primaryKey().notNull(),
-    // When true, members who lack MFA are blocked from accessing org resources
-    // after the grace period expires.
-    mfaRequired: boolean("mfa_required").notNull().default(false),
-    // How many hours a member can access the org after MFA is required before
-    // they are forced to enroll. 0 = immediate enforcement.
-    mfaGraceHours: integer("mfa_grace_hours").notNull().default(48),
-    updatedByUserId: uuid("updated_by_user_id"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  // org_security_policy_org_idx was dropped (2026-07-11 audit §4.2):
-  // duplicate of the PK on org_id declared above (orgId.primaryKey()) — the
-  // table needs no ExtraConfigBuilder now that its only extra index is gone.
-);
+export const orgSecurityPolicy = securitySchema.table("org_security_policy", {
+  orgId: uuid("org_id").primaryKey().notNull(),
+  // When true, members who lack MFA are blocked from accessing org resources
+  // after the grace period expires.
+  mfaRequired: boolean("mfa_required").notNull().default(false),
+  // How many hours a member can access the org after MFA is required before
+  // they are forced to enroll. 0 = immediate enforcement.
+  mfaGraceHours: integer("mfa_grace_hours").notNull().default(48),
+  updatedByUserId: uuid("updated_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
 
 export type OrgSecurityPolicy = typeof orgSecurityPolicy.$inferSelect;
 export type NewOrgSecurityPolicy = typeof orgSecurityPolicy.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // security.mcp_server_changes — append-only audit of external-MCP server
-// enable / disable / delete events (OXA-820).
+// enable / disable / delete events.
 //
 // Every lifecycle mutation of an external MCP server lands one immutable row
 // here so an auditor can reconstruct who turned a server on/off or deleted it,

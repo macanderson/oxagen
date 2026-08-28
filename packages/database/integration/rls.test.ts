@@ -1,5 +1,5 @@
 /**
- * RLS Tenant Isolation Proof — Task 14 (OXA-1515 §9.2)
+ * RLS Tenant Isolation Proof
  *
  * This is the ONE place tenant isolation is asserted end-to-end against a real
  * migrated Postgres database. It seeds two orgs (A/B) each with a workspace
@@ -66,9 +66,13 @@ beforeAll(async () => {
 
   // Grant privileges so the role can see tables (but RLS still gates rows).
   await sql.unsafe(`GRANT USAGE ON SCHEMA chat TO "${APP_ROLE}"`);
-  await sql.unsafe(`GRANT SELECT, INSERT ON chat.conversations TO "${APP_ROLE}"`);
+  await sql.unsafe(
+    `GRANT SELECT, INSERT ON chat.conversations TO "${APP_ROLE}"`,
+  );
   await sql.unsafe(`GRANT USAGE ON SCHEMA workspace TO "${APP_ROLE}"`);
-  await sql.unsafe(`GRANT SELECT ON workspace.workspace_users TO "${APP_ROLE}"`);
+  await sql.unsafe(
+    `GRANT SELECT ON workspace.workspace_users TO "${APP_ROLE}"`,
+  );
 
   // 2. Seed minimal fixture rows. All inserts run as superuser (bypass on).
   await sql.begin(async (tx) => {
@@ -133,10 +137,18 @@ afterAll(async () => {
   });
 
   // Drop the test role (best-effort; revoking grants first).
-  await sql.unsafe(`REVOKE ALL ON chat.conversations FROM "${APP_ROLE}"`).catch(() => undefined);
-  await sql.unsafe(`REVOKE ALL ON workspace.workspace_users FROM "${APP_ROLE}"`).catch(() => undefined);
-  await sql.unsafe(`REVOKE USAGE ON SCHEMA chat FROM "${APP_ROLE}"`).catch(() => undefined);
-  await sql.unsafe(`REVOKE USAGE ON SCHEMA workspace FROM "${APP_ROLE}"`).catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE ALL ON chat.conversations FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE ALL ON workspace.workspace_users FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE USAGE ON SCHEMA chat FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE USAGE ON SCHEMA workspace FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
   await sql.unsafe(`DROP ROLE IF EXISTS "${APP_ROLE}"`).catch(() => undefined);
 
   await sql.end({ timeout: 5 });
@@ -188,7 +200,9 @@ describe("RLS tenant isolation (policies enforced, non-superuser via SET ROLE, b
       (tx) => tx<{ org_id: string }[]>`SELECT org_id FROM chat.conversations`,
     );
 
-    expect(rows.length, "Expected at least one row for Org A").toBeGreaterThan(0);
+    expect(rows.length, "Expected at least one row for Org A").toBeGreaterThan(
+      0,
+    );
     expect(
       rows.every((r) => r.org_id === ORG_A),
       `All returned rows must belong to ORG_A; got: ${JSON.stringify(rows.map((r) => r.org_id))}`,
@@ -198,8 +212,10 @@ describe("RLS tenant isolation (policies enforced, non-superuser via SET ROLE, b
   // G2 — Even an explicit WHERE for the other tenant returns nothing; the
   // policy's USING predicate filters it before the WHERE clause is evaluated.
   it("G2: explicit WHERE for ORG_B under ORG_A scope returns 0 rows", async () => {
-    const rows = await asTenant(ORG_A, WS_A, (tx) =>
-      tx`SELECT 1 FROM chat.conversations WHERE org_id = ${ORG_B}`,
+    const rows = await asTenant(
+      ORG_A,
+      WS_A,
+      (tx) => tx`SELECT 1 FROM chat.conversations WHERE org_id = ${ORG_B}`,
     );
     expect(rows.length).toBe(0);
   });
@@ -208,8 +224,11 @@ describe("RLS tenant isolation (policies enforced, non-superuser via SET ROLE, b
   // where the org_id/workspace_id don't match the GUC values.
   it("G3: WITH CHECK blocks inserting a cross-tenant row", async () => {
     await expect(
-      asTenant(ORG_A, WS_A, (tx) =>
-        tx`
+      asTenant(
+        ORG_A,
+        WS_A,
+        (tx) =>
+          tx`
           INSERT INTO chat.conversations
             (id, public_id, org_id, workspace_id, user_id, status, title)
           VALUES
@@ -249,10 +268,15 @@ describe("RLS tenant isolation (policies enforced, non-superuser via SET ROLE, b
           set_config('app.current_workspace_id', ${WS_A}, true),
           set_config('app.rls_bypass',           'off',   true)
       `;
-      return tx<{ workspace_id: string }[]>`SELECT workspace_id FROM workspace.workspace_users`;
+      return tx<
+        { workspace_id: string }[]
+      >`SELECT workspace_id FROM workspace.workspace_users`;
     });
 
-    expect(rows.length, "Expected at least one workspace_users row for WS_A").toBeGreaterThan(0);
+    expect(
+      rows.length,
+      "Expected at least one workspace_users row for WS_A",
+    ).toBeGreaterThan(0);
     expect(
       rows.every((r) => r.workspace_id === WS_A),
       `All rows must belong to WS_A; got: ${JSON.stringify(rows.map((r) => r.workspace_id))}`,

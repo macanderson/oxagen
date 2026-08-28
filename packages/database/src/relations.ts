@@ -144,7 +144,7 @@ export const mcpServersRelations = relations(mcpServers, ({ one, many }) => ({
   toolSnapshots: many(mcpToolSnapshots),
 }));
 
-// External-MCP consent grants (OXA-816). Each row links a server + the granting
+// External-MCP consent grants. Each row links a server + the granting
 // user; the server link is the in-domain relation.
 export const mcpConsentsRelations = relations(mcpConsents, ({ one }) => ({
   org: one(organizations, {
@@ -158,7 +158,7 @@ export const mcpConsentsRelations = relations(mcpConsents, ({ one }) => ({
   user: one(users, { fields: [mcpConsents.userId], references: [users.id] }),
 }));
 
-// External-MCP tool-descriptor snapshots (OXA-820).
+// External-MCP tool-descriptor snapshots.
 export const mcpToolSnapshotsRelations = relations(
   mcpToolSnapshots,
   ({ one }) => ({
@@ -173,7 +173,7 @@ export const mcpToolSnapshotsRelations = relations(
   }),
 );
 
-// External-MCP server lifecycle audit (OXA-820). Append-only; references the
+// External-MCP server lifecycle audit. Append-only; references the
 // server + the acting user, both app-enforced.
 export const mcpServerChangesRelations = relations(
   mcpServerChanges,

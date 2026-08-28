@@ -1,5 +1,5 @@
 // unscoped-meter.integration.test.ts — end-to-end wiring check for
-// recordIfUnscoped (OXA-2056).
+// recordIfUnscoped.
 //
 // tenant.test.ts already asserts withSystemDb calls a MOCKED recordIfUnscoped
 // with the right args. That proves the call site exists but not that the
@@ -19,7 +19,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 mocks.transaction.mockImplementation(
-  async (cb: (tx: unknown) => Promise<unknown>) => cb({ execute: mocks.execute }),
+  async (cb: (tx: unknown) => Promise<unknown>) =>
+    cb({ execute: mocks.execute }),
 );
 
 vi.mock("./client", () => ({
@@ -36,7 +37,7 @@ beforeEach(() => {
   mocks.rlsEnforced.mockReturnValue(false);
 });
 
-describe("unscoped-meter wiring (real counter, no mock) — OXA-2056", () => {
+describe("unscoped-meter wiring (real counter, no mock)", () => {
   it("increments the REAL unscoped counter when withSystemDb runs", async () => {
     const before = __unscopedCountForTests();
 

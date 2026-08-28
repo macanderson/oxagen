@@ -1,11 +1,10 @@
 /**
- * Seed cms.book_editions from the relocated book HTML sources.
+ * Seed cms.book_editions from the book HTML sources.
  *
- * The two editions of "Engineering Deterministic AI Coding Agents" used to be
- * static files under apps/web (publicly readable). They now live out of the
- * public tree in packages/database/seed-assets/books/ and are served ONLY
- * through the code-gated /v1/cms/book/redeem route — so this seed loads their
- * HTML into Postgres, where the redeem route reads it.
+ * The two editions of "Engineering Deterministic AI Coding Agents" live in
+ * packages/database/seed-assets/books/, outside any public tree, and are
+ * served ONLY through the code-gated /v1/cms/book/redeem route — so this seed
+ * loads their HTML into Postgres, where the redeem route reads it.
  *
  * Idempotent: upserts on the edition slug, so re-running refreshes content
  * (e.g. after editing a source file) without creating duplicates.
@@ -37,11 +36,11 @@ interface EditionSeed {
 }
 
 /**
- * The field-manual edition ships with a small client-side "lead gate" script at
- * the top of <head> that redirects to /#field-manual. That gate is obsolete now
- * that access is enforced server-side, and it would redirect the reader away the
- * instant we inject the HTML — so strip it. Matches the single <script> block
- * that references the old ox_fm_unlocked localStorage key.
+ * The field-manual edition ships with a small client-side script at the top
+ * of <head> that redirects to /#field-manual. Access is enforced server-side,
+ * so that script would redirect the reader away the instant we inject the
+ * HTML — strip it. Matches the single <script> block that references the
+ * ox_fm_unlocked localStorage key.
  */
 function stripLegacyGate(html: string): string {
   return html.replace(

@@ -1,5 +1,5 @@
 /**
- * RLS Manifest Coverage — Task 13 (OXA-1515)
+ * RLS Manifest Coverage
  *
  * Asserts that:
  * 1. Every table with an org_id column (outside the allowlist and system schemas)
@@ -21,10 +21,10 @@ const sql = postgres(process.env["DATABASE_URL"]!, { max: 1, prepare: false });
 afterAll(() => sql.end({ timeout: 5 }));
 
 // Tables that legitimately have org_id but are intentionally NOT row-scoped.
-// Empty after OXA-1700: every org_id-bearing table in the rebuilt schema is in
-// the manifest (workspace.workspaces is org_only; org.organizations,
-// billing.plans, billing.stripe_events have no org_id column so they never
-// match the coverage query). Add entries here ONLY with a written reason.
+// Empty: every org_id-bearing table in the schema is in the manifest
+// (workspace.workspaces is org_only; org.organizations, billing.plans,
+// billing.stripe_events have no org_id column so they never match the
+// coverage query). Add entries here ONLY with a written reason.
 const ALLOWLIST = new Set<string>([]);
 
 // Tables that have workspace_id but no org_id and are allowlisted (not
@@ -37,7 +37,7 @@ describe("RLS manifest coverage", () => {
     // Exclude child partitions (relispartition = true): they inherit their
     // parent's RLS policy when accessed through the parent and are never
     // independently policied. The partitioned parent itself (relispartition =
-    // false) is still required to be in the manifest. — OXA-1515
+    // false) is still required to be in the manifest.
     const rows = await sql<{ schema_name: string; table_name: string }[]>`
       SELECT col.table_schema AS schema_name, col.table_name
       FROM information_schema.columns col
@@ -58,7 +58,10 @@ describe("RLS manifest coverage", () => {
     const covered = new Set(POLICY_MANIFEST.map((e) => e.table));
     const missing = owned.filter((t) => !covered.has(t) && !ALLOWLIST.has(t));
 
-    expect(missing, `Tables with org_id not in manifest or allowlist: ${missing.join(", ")}`).toEqual([]);
+    expect(
+      missing,
+      `Tables with org_id not in manifest or allowlist: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("every table with workspace_id but no org_id is manifest workspace_only or ws-allowlisted", async () => {
@@ -83,9 +86,9 @@ describe("RLS manifest coverage", () => {
 
     // Every such table must be in the manifest as workspace_only or in the ws allowlist.
     const manifestWsOnly = new Set(
-      POLICY_MANIFEST
-        .filter((e) => e.policyClass === "workspace_only")
-        .map((e) => e.table),
+      POLICY_MANIFEST.filter((e) => e.policyClass === "workspace_only").map(
+        (e) => e.table,
+      ),
     );
 
     const missing = wsOnly.filter(
@@ -111,9 +114,9 @@ describe("RLS manifest coverage", () => {
     `;
 
     const forced = new Set(rows.map((r) => r.rel));
-    const notForced = POLICY_MANIFEST
-      .filter((e) => !forced.has(e.table))
-      .map((e) => e.table);
+    const notForced = POLICY_MANIFEST.filter((e) => !forced.has(e.table)).map(
+      (e) => e.table,
+    );
 
     expect(
       notForced,
@@ -121,14 +124,13 @@ describe("RLS manifest coverage", () => {
     ).toEqual([]);
   });
 
-  it("every manifest table carries a tenant_isolation policy (OXA-1700)", async () => {
+  it("every manifest table carries a tenant_isolation policy", async () => {
     // FORCE RLS without a policy is default-deny — the app would brick, not
     // leak — but the dangerous failure mode is the opposite: an Atlas
-    // re-baseline regenerating tables WITHOUT the policy DDL (how the
-    // 2026-06-11 rebuild shipped with zero RLS). relforcerowsecurity alone
-    // would also be lost in that case, but assert the policy explicitly so a
-    // partial loss (table recreated, FORCE re-added by hand, policy forgotten)
-    // is caught too.
+    // re-baseline that regenerates tables WITHOUT the policy DDL.
+    // relforcerowsecurity alone would also be lost in that case, but assert
+    // the policy explicitly so a partial loss (table recreated, FORCE
+    // re-added by hand, policy forgotten) is caught too.
     const rows = await sql<{ rel: string }[]>`
       SELECT (schemaname || '.' || tablename) AS rel
       FROM pg_policies
