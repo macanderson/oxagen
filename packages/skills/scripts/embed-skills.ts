@@ -5,7 +5,7 @@
  * WHY THIS EXISTS: builtin skill manifests are data, not imported code.
  * Serverless bundlers (Vercel/esbuild/Next) trace the `import` graph and drop a
  * sibling package's data files, so a runtime `readdir(packages/skills/skills)`
- * returns ENOENT in prod — which silently broke workspace skill seeding AND the
+ * returns ENOENT in prod, silently breaking workspace skill seeding and the
  * `create-agent` fallback ("no tenant copy and no builtin on disk"). Embedding
  * the raw file contents as a committed TS module makes builtins travel with
  * every bundle, identically in dev, test, and prod.

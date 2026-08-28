@@ -14,8 +14,8 @@ export default defineConfig({
       // smoke runs, not unit-testable in-process; counting it at 0% masks
       // the real src coverage (~95%).
       include: ["src/**"],
-      // lines floor 90 (reduced from 94 for CI stability); target 75
-      // branches floor 86 (measured 91.07); target 70
+      // Thresholds keep at least 2.5% headroom below measured coverage so a
+      // small environment-noise dip does not fail CI.
       thresholds: {
         lines: 90,
         branches: 86,
