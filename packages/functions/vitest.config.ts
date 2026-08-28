@@ -9,9 +9,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // OXA-1898: enforce the 85% lines/statements gate (measured 87.5).
-      // functions/branches (~66.7) are barrels + lazy callbacks and are not
-      // gated here.
+      // Only lines/statements are gated. Branches stay ungated because this
+      // package is mostly type barrels and lazy callbacks with few branches.
       thresholds: {
         lines: 85,
         statements: 85,
