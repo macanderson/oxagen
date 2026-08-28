@@ -1,11 +1,9 @@
 -- 0005_session_telemetry.sql
 --
--- OXA-1700: Session-scoped observability.
+-- Session-scoped observability.
 -- - token_usage: add conversation_id (session linkage) + cache_misses
 -- - session_recaps: new table for aggregated telemetry + LLM-powered recap
---
--- Recap generation: async Inngest job every 10 min. Reads token_usage for
--- conversations with recent activity, aggregates stats, calls Claude, inserts recap.
+--   (dropped in 0010_drop_dead_tables.sql — it had no readers or writers)
 
 ALTER TABLE token_usage
   ADD COLUMN IF NOT EXISTS conversation_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),

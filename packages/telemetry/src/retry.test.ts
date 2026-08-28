@@ -1,9 +1,7 @@
-// retry.test.ts — unit tests for retryWithBackoff() (OXA-2058).
-//
-// This helper backs the durability fix for security-audit writes
-// (security.ts) and the IAM tamper-evident audit chain (@oxagen/iam
-// emit-audit.ts): a transient DB/ClickHouse failure must be retried before a
-// caller treats the write as dropped.
+// Unit tests for retryWithBackoff(). This helper backs durable writes for
+// security-audit events (security.ts) and the IAM tamper-evident audit chain
+// (@oxagen/iam emit-audit.ts): a transient DB/ClickHouse failure must be
+// retried before a caller treats the write as dropped.
 
 import { describe, expect, it, vi } from "vitest";
 import { retryWithBackoff } from "./retry";
@@ -20,21 +18,29 @@ describe("retryWithBackoff", () => {
     let calls = 0;
     const fn = vi.fn(() => {
       calls += 1;
-      return calls < 3 ? Promise.reject(new Error(`fail ${calls}`)) : Promise.resolve("recovered");
+      return calls < 3
+        ? Promise.reject(new Error(`fail ${calls}`))
+        : Promise.resolve("recovered");
     });
 
-    await expect(retryWithBackoff(fn, { attempts: 3, baseDelayMs: 5 })).resolves.toBe("recovered");
+    await expect(
+      retryWithBackoff(fn, { attempts: 3, baseDelayMs: 5 }),
+    ).resolves.toBe("recovered");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
   it("rethrows the LAST error once every attempt is exhausted", async () => {
-    const errors = [new Error("first"), new Error("second"), new Error("third — the last one")];
+    const errors = [
+      new Error("first"),
+      new Error("second"),
+      new Error("third — the last one"),
+    ];
     let call = 0;
     const fn = vi.fn(() => Promise.reject(errors[call++]));
 
-    await expect(retryWithBackoff(fn, { attempts: 3, baseDelayMs: 5 })).rejects.toThrow(
-      "third — the last one",
-    );
+    await expect(
+      retryWithBackoff(fn, { attempts: 3, baseDelayMs: 5 }),
+    ).rejects.toThrow("third — the last one");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
@@ -49,7 +55,9 @@ describe("retryWithBackoff", () => {
   it("respects a custom attempts count (single attempt = no retry)", async () => {
     const fn = vi.fn(() => Promise.reject(new Error("one shot")));
 
-    await expect(retryWithBackoff(fn, { attempts: 1 })).rejects.toThrow("one shot");
+    await expect(retryWithBackoff(fn, { attempts: 1 })).rejects.toThrow(
+      "one shot",
+    );
     expect(fn).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,5 @@
-// tracer.ts — OpenTelemetry distributed tracing for @oxagen/telemetry
-//
-// OXA-1544: Vendor-neutral OTLP trace exporter with head-based sampling.
+// OpenTelemetry distributed tracing for @oxagen/telemetry.
+// Vendor-neutral OTLP trace exporter with head-based sampling.
 //
 // Design:
 // - @opentelemetry/api provides a global no-op tracer when the SDK is not

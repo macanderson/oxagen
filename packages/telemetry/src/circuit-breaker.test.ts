@@ -82,7 +82,7 @@ describe("CircuitBreaker", () => {
     expect(b.getState()).toBe("closed");
   });
 
-  it("getState() surfaces a matured open→half-open transition without a call (OXA-2059)", async () => {
+  it("getState() surfaces a matured open→half-open transition without a call", async () => {
     const clock = fakeClock();
     const b = new CircuitBreaker("k", {
       failureThreshold: 1,
@@ -99,7 +99,7 @@ describe("CircuitBreaker", () => {
     expect(b.getState()).toBe("half-open");
   });
 
-  it("reset() forces the breaker back to a healthy closed state (OXA-2059)", async () => {
+  it("reset() forces the breaker back to a healthy closed state", async () => {
     const b = new CircuitBreaker("k", { failureThreshold: 1 });
     await expect(b.exec(boom)).rejects.toThrow(); // trips open
     expect(b.getState()).toBe("open");
@@ -112,7 +112,7 @@ describe("CircuitBreaker", () => {
     expect(b.getState()).toBe("closed");
   });
 
-  it("stringifies a non-Error rejection in the transition's error field (OXA-2059)", async () => {
+  it("stringifies a non-Error rejection in the transition's error field", async () => {
     const transitions: BreakerTransition[] = [];
     const b = new CircuitBreaker("k", {
       failureThreshold: 1,
@@ -175,7 +175,11 @@ describe("CircuitBreaker", () => {
       "open->half-open",
       "half-open->closed",
     ]);
-    expect(transitions[0]).toMatchObject({ key: "neo4j", failureCount: 2, error: "dependency down" });
+    expect(transitions[0]).toMatchObject({
+      key: "neo4j",
+      failureCount: 2,
+      error: "dependency down",
+    });
   });
 
   it("never lets a throwing onTransition sink destabilise the breaker", async () => {

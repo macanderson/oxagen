@@ -1,12 +1,12 @@
 -- 0026_cache_write_tokens.sql
 --
--- Cache-aware metering (#1076): capture the fourth token class the providers
+-- Cache-aware metering: capture the fourth token class the providers
 -- actually bill on. token_usage already carries input_tokens, output_tokens,
 -- and cached_tokens (prompt-cache READS, ~0.1x base input). This adds the
 -- prompt-cache WRITE count (cache creation), which providers bill at a premium
--- (~1.25x base input on Anthropic at the 5-minute TTL). Before this column the
--- write tokens folded into input_tokens and were billed as fresh 1x input —
--- a systematic ~25% under-charge on every cache-write token.
+-- (~1.25x base input on Anthropic at the 5-minute TTL). Without this column,
+-- write tokens fold into input_tokens and bill as fresh 1x input — a
+-- systematic ~25% under-charge on every cache-write token.
 --
 -- Like cached_tokens, this is a SUBSET of input_tokens, not additive: the
 -- @oxagen/ai gateway normalizes input_tokens to the inclusive total
@@ -19,7 +19,7 @@
 --
 -- Backfill: none possible — historical rows cannot know their fresh/write split
 -- after the fact, so the DEFAULT 0 is the backfill. A pre-0026 row therefore
--- prices as "no cache writes", an honest lower bound that never over-charges a
+-- prices as "no cache writes", a safe lower bound that never over-charges a
 -- past period. New rows carry the real split from insertTokenUsage onward.
 ALTER TABLE token_usage
   ADD COLUMN IF NOT EXISTS cache_write_tokens UInt64 DEFAULT 0 CODEC(T64, ZSTD(1)) AFTER cached_tokens;

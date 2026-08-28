@@ -1,5 +1,5 @@
 // retry.ts — minimal backoff-retry helper for durability-critical
-// fire-and-forget writes (OXA-2058: security audit events, tamper-evident
+// fire-and-forget writes (security audit events, tamper-evident
 // audit chain hashes).
 //
 // This is deliberately small: fixed attempt count, exponential backoff, no

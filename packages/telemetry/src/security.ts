@@ -12,17 +12,14 @@
 //     field. `ip` and `user_agent` are allowed (network metadata), but
 //     do NOT store email addresses or usernames in `SecurityEventInput`.
 //
-// OXA-1515 tenancy analysis: this file contains NO direct db() call. All
-// writes are performed by the AuditInsertFn injected at call time. The
-// real inserter (makeSecurityEventInserter in @oxagen/database/security) uses
-// a raw Database instance on purpose:
-//
-//   tenancy: unscoped seam (audit write must succeed even on a no_tenant_scope
-//   deny — the kernel emits capability.invoke_denied for orgId:"" paths before
-//   a scope is ever established; requiring withTenantDb here would lose that
-//   audit record). — OXA-1515
-//
-// Do NOT wrap the AuditInsertFn or makeSecurityEventInserter in withTenantDb.
+// This file makes no direct db() call. All writes go through the
+// AuditInsertFn injected at call time. The real inserter
+// (makeSecurityEventInserter in @oxagen/database/security) uses a raw
+// Database instance on purpose: an audit write must succeed even on a
+// no_tenant_scope deny, since the kernel emits capability.invoke_denied for
+// orgId:"" paths before a scope is ever established. Wrapping the insert in
+// withTenantDb would lose that audit record, so do NOT wrap the
+// AuditInsertFn or makeSecurityEventInserter in withTenantDb.
 //
 // Shared taxonomy: SECURITY_EVENT_TYPES, SecurityEventType, and SecurityOutcome
 // are owned by @oxagen/compliance (the single source of truth). They are
@@ -87,13 +84,16 @@ function insertWithRetry(
   insert: AuditInsertFn,
   event: SecurityEventInput,
 ): Promise<void> {
-  return retryWithBackoff(() => insert(event), { attempts: 3, baseDelayMs: 25 });
+  return retryWithBackoff(() => insert(event), {
+    attempts: 3,
+    baseDelayMs: 25,
+  });
 }
 
 /**
  * Escalates an audit-write failure to durable, alertable telemetry — a
- * dropped security-audit row is a SOC2-relevant silent failure (OXA-2058), so
- * this must be observable beyond a stderr line nobody watches. `captureError`
+ * dropped security-audit row is a SOC2-relevant silent failure, so it must
+ * be observable beyond a stderr line nobody watches. `captureError`
  * writes to ClickHouse `error_events` and (when configured) an outbound
  * alert webhook; it is itself fire-and-forget and never throws.
  *
@@ -125,11 +125,11 @@ function escalateWriteFailure(event: SecurityEventInput, err: unknown): void {
  * The insert is retried with exponential backoff (see `insertWithRetry`)
  * before being treated as failed. Once every attempt is exhausted, the
  * failure is (1) escalated to `captureError` — ClickHouse `error_events` +
- * optional alert webhook, so a dropped audit write is genuinely observable
- * (OXA-2058) — and (2) forwarded to the optional `onError` callback / default
- * stderr line. Neither path re-throws: the capability invocation or auth
- * action must succeed even when the audit write is durably failing, but the
- * failure itself is never silently swallowed anymore.
+ * optional alert webhook, so a dropped audit write stays observable — and
+ * (2) forwarded to the optional `onError` callback / default stderr line.
+ * Neither path re-throws: the capability invocation or auth action must
+ * succeed even when the audit write is durably failing, but the failure
+ * itself is never silently swallowed.
  *
  * @param insert  - A function that persists the row. Wire the real DB insert
  *                  via `makeSecurityEventInserter(db)` from @oxagen/database;
@@ -154,8 +154,8 @@ export function recordSecurityEvent(
       // `event` here — it may contain ip / user_agent. Uses structured JSON
       // to stderr to match the rest of the telemetry package (no pino dep
       // in @oxagen/telemetry; process.stderr.write keeps the output
-      // machine-readable without adding a dependency). This is now a SECOND,
-      // local signal alongside captureError above — not the only one.
+      // machine-readable without adding a dependency). This is a second,
+      // local signal alongside the captureError escalation above.
       process.stderr.write(
         JSON.stringify({
           level: "error",

@@ -6,13 +6,16 @@
 // comment: "A query that genuinely must run unscoped must use the raw
 // clickhouse() client directly inside packages/telemetry — not this helper."
 //
-// @oxagen/bench is the sole external consumer. It never imports `clickhouse`
-// directly (OXA-1515's no-restricted-imports rule forbids that outside the
-// seam-owning packages) and calls these thin, tenant-free wrappers instead.
+// @oxagen/bench is the sole external consumer. A lint rule forbids it from
+// importing `clickhouse` directly, so it calls these thin, tenant-free
+// wrappers instead.
 import { clickhouse } from "./clickhouse";
 
 /** Batched JSONEachRow insert into a fully-qualified `bench.<table>` name. No-ops on an empty array. */
-export async function chBenchInsert<T extends object>(table: string, rows: ReadonlyArray<T>): Promise<void> {
+export async function chBenchInsert<T extends object>(
+  table: string,
+  rows: ReadonlyArray<T>,
+): Promise<void> {
   if (rows.length === 0) return;
   await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
 }
@@ -22,7 +25,11 @@ export async function chBenchQuery<T>(
   query: string,
   query_params: Record<string, unknown> = {},
 ): Promise<T[]> {
-  const result = await clickhouse().query({ query, query_params, format: "JSONEachRow" });
+  const result = await clickhouse().query({
+    query,
+    query_params,
+    format: "JSONEachRow",
+  });
   return (await result.json()) as T[];
 }
 

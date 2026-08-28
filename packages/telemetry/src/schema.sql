@@ -4,7 +4,7 @@
 -- baseline before versioned tracking began. Add new columns or tables via a
 -- new numbered migration file; do not edit this baseline.
 --
--- Spec §7. Append-only telemetry. Monthly partitions, 90-day TTL on raw
+-- Append-only telemetry. Monthly partitions, 90-day TTL on raw
 -- tables, materialized rollups retained longer (added in later migrations).
 
 CREATE TABLE IF NOT EXISTS execution_logs (
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
   -- Prompt-cache WRITE tokens (cache creation), billed by the provider at ~1.25x
   -- base input (5-min TTL). Also a subset of input_tokens (see cached_tokens).
   -- Migration 0026: pre-0026 rows default to 0 (their true split is unknowable),
-  -- which the cost formula treats as "no cache writes" — an honest lower bound.
+  -- which the cost formula treats as "no cache writes" — a safe lower bound.
   cache_write_tokens UInt64 CODEC(T64, ZSTD(1)),
   cost_usd_micros UInt64 CODEC(T64, ZSTD(1)),
   duration_ms UInt32 DEFAULT 0,
@@ -90,9 +90,9 @@ ORDER BY (org_id, created_at, execution_step_id)
 -- and dispute investigation routinely reach beyond 90 days.
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
 
--- Agent runtime epic (spec §6, §9). Separate from Postgres
--- execution.tool_calls (the durable record); this is the analytics-side
--- mirror for high-volume agent fanouts.
+-- Agent runtime (docs/specs/agent-runtime/spec.md §6, §9). Separate from
+-- Postgres execution.tool_calls (the durable record); this is the
+-- analytics-side mirror for high-volume agent fanouts.
 CREATE TABLE IF NOT EXISTS tool_invocations (
   invocation_id UUID,
   org_id UUID,
@@ -127,7 +127,7 @@ PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, capability_name, created_at)
 TTL toDateTime(created_at) + INTERVAL 180 DAY;
 
--- Skill lifecycle telemetry (OXA-1750). One row per skill load — emitted when a
+-- Skill lifecycle telemetry. One row per skill load — emitted when a
 -- workspace skill is loaded into an agent run (agent.skill.load) or surfaced
 -- through any other entry point. Powers the skill.metrics.read handler: loads
 -- per skill, loads per version, and last-used. org/workspace/skill are
@@ -168,8 +168,7 @@ TTL created_at + INTERVAL 365 DAY;
 --     so there is no org_id key — unlike the request-telemetry tables above.
 --   * run_id / task_id are String, never UUID: benchmark task ids are
 --     non-UUID (e.g. 'gpt2-codegolf__saXZwmX'); writing a non-UUID string into a
---     UUID column aborts the whole row — see clickhouse-execution-step-id memo.
--- Canonical improvement/regression queries live in docs/cli/eval-results-schema.md.
+--     UUID column aborts the whole row.
 
 -- One row per RUN (suite-level header + rollup). ReplacingMergeTree(updated_at)
 -- so the run can be written once at start and re-inserted finalized at end
@@ -189,7 +188,7 @@ CREATE TABLE IF NOT EXISTS eval_runs (
   git_branch LowCardinality(String) DEFAULT '',
   environment LowCardinality(String) DEFAULT '',
   config_hash String DEFAULT '',
-  -- ablation cell (runbook §5 2^3 factorial) + self-improvement axes (§7)
+  -- ablation cell (2^3 factorial: graph_code x graph_exec x graph_mem) + self-improvement axes
   graph_code UInt8 DEFAULT 0,
   graph_exec UInt8 DEFAULT 0,
   graph_mem UInt8 DEFAULT 0,
@@ -289,7 +288,7 @@ PARTITION BY toYYYYMMDD(ts)
 ORDER BY (dev_session, service, ts)
 TTL toDateTime(ts) + INTERVAL 14 DAY;
 
--- Durable-sandbox command output (spec: sandbox-session-lifecycle §5.2). One row
+-- Durable-sandbox command output (docs/specs/sandbox-session-lifecycle/spec.md §5.2). One row
 -- per line of a coding-session command's stdout/stderr, plus a 'system'/'debug'
 -- line per command (the command echo + exit code + duration). Powers the sandbox
 -- inspector's log console; the debug toggle filters on `level`. Tenant-scoped;

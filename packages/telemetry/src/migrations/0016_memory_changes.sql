@@ -2,7 +2,7 @@
 --
 -- Creates the memory_changes table for auditable memory weight/decay events.
 -- One row per memory confidence change (reinforced, decayed, manually_promoted,
--- manually_forgotten). Used by OXA-1374 memory-decay policies.
+-- manually_forgotten). Used by memory-decay policies.
 --
 -- Engine: MergeTree (append-only analytics). TTL 365 days.
 

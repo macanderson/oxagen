@@ -1,20 +1,22 @@
 -- 0003_iam_audit.sql
 --
--- OXA-1389: Phase 2 — IAM audit_events table in ClickHouse.
+-- IAM audit_events table in ClickHouse.
 --
 -- This is the rich IAM-specific audit trail, separate from the Postgres
--- `security.security_events` table which handles SOC2 authz events for Phase 1.
--- Phase 3 (OXA-1390) will wire the writer from within defineContract().invoke().
+-- `security.security_events` table which handles SOC2 authz events.
+-- @oxagen/iam's emit-audit.ts writes to this table from inside
+-- defineContract().invoke().
 --
 -- Engine: ReplacingMergeTree(occurred_at) — deduplicates lazily by event_id.
 -- Chain verification must use FINAL modifier or a materialised view because
 -- ReplacingMergeTree deduplication is background, not immediate.
 --
--- TTL: 7 years per spec §12 (IAM audit retention).
+-- TTL: 7 years (see docs/specs/iam/plan.md §12, IAM audit retention).
 --
--- Hash-chaining is implemented at write time by the application (emit-audit.ts
--- in Phase 3). ClickHouse stores the pre-computed chain hash as a plain String
--- column; tamper-evidence is a write-time concern, not a storage concern.
+-- Hash-chaining is implemented at write time by the application
+-- (@oxagen/iam's emit-audit.ts). ClickHouse stores the pre-computed chain
+-- hash as a plain String column; tamper-evidence is a write-time concern,
+-- not a storage concern.
 
 CREATE TABLE IF NOT EXISTS audit_events (
     occurred_at   DateTime64(3),

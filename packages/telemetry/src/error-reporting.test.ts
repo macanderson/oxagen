@@ -99,7 +99,7 @@ describe("buildAlertPayload", () => {
     expect(payload.text.startsWith("🛑")).toBe(true);
   });
 
-  it("uses a warn icon for warn severity (OXA-2059)", () => {
+  it("uses a warn icon for warn severity", () => {
     const payload = buildAlertPayload({
       severity: "warn",
       source: "app",
@@ -171,7 +171,11 @@ describe("captureError", () => {
   });
 
   it("prefixes the message with context when supplied", () => {
-    captureError({ error: new Error("failed"), source: "inngest", context: "fn x" });
+    captureError({
+      error: new Error("failed"),
+      source: "inngest",
+      context: "fn x",
+    });
     const row = lastRow();
     expect(row.message).toBe("fn x: failed");
   });
@@ -183,7 +187,7 @@ describe("captureError", () => {
     expect(row.message).toBe("string failure");
   });
 
-  it("falls back to defaults for an Error with empty name/message and no stack (OXA-2059)", () => {
+  it("falls back to defaults for an Error with empty name/message and no stack", () => {
     // Exercises the falsy arm of each `||`/`??` in normalizeError's Error
     // branch: `error.name || "Error"`, `error.message || ""`, `error.stack ?? ""`.
     const bare = new Error("");
@@ -196,7 +200,7 @@ describe("captureError", () => {
     expect(row.stack).toBe("");
   });
 
-  it("reads name/message/stack off a duck-typed error object (OXA-2059)", () => {
+  it("reads name/message/stack off a duck-typed error object", () => {
     const duckTyped = {
       name: "CustomLibError",
       message: "third-party failure",
@@ -209,7 +213,7 @@ describe("captureError", () => {
     expect(row.stack).toBe("at thirdPartyLib.js:1");
   });
 
-  it("falls back to UnknownError/safeStringify/empty-stack for an object with no error-shaped fields (OXA-2059)", () => {
+  it("falls back to UnknownError/safeStringify/empty-stack for an object with no error-shaped fields", () => {
     const shapeless = { code: 500, detail: "unexpected" };
     captureError({ error: shapeless, source: "api" });
     const row = lastRow();
@@ -244,19 +248,25 @@ describe("captureError", () => {
   });
 
   it("never throws even when the ClickHouse insert rejects", async () => {
-    insertErrorEvents.mockImplementationOnce(() => Promise.reject(new Error("ch down")));
-    expect(() => captureError({ error: new Error("z"), source: "api" })).not.toThrow();
+    insertErrorEvents.mockImplementationOnce(() =>
+      Promise.reject(new Error("ch down")),
+    );
+    expect(() =>
+      captureError({ error: new Error("z"), source: "api" }),
+    ).not.toThrow();
     await flush();
   });
 
   it("never throws even when the webhook fetch rejects", async () => {
     process.env.ALERT_WEBHOOK_URL = "https://hooks.example.com/abc";
     fetchSpy.mockImplementationOnce(() => Promise.reject(new Error("net")));
-    expect(() => captureError({ error: new Error("z"), source: "api" })).not.toThrow();
+    expect(() =>
+      captureError({ error: new Error("z"), source: "api" }),
+    ).not.toThrow();
     await flush();
   });
 
-  it("falls back to String(value) when the thrown value is undefined (OXA-2059)", () => {
+  it("falls back to String(value) when the thrown value is undefined", () => {
     // normalizeError()'s final branch calls safeStringify(undefined);
     // JSON.stringify(undefined) returns `undefined` (not a JSON string),
     // exercising the `?? String(value)` fallback arm.
@@ -266,11 +276,15 @@ describe("captureError", () => {
     expect(row.message).toBe("undefined");
   });
 
-  it("logs a non-Error sink failure via String(err) (OXA-2059)", async () => {
+  it("logs a non-Error sink failure via String(err)", async () => {
     // logCaptureFailure's `err instanceof Error ? err.message : String(err)` —
     // reject the ClickHouse insert with a plain string, not an Error.
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    insertErrorEvents.mockImplementationOnce(() => Promise.reject("ch-string-failure"));
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    insertErrorEvents.mockImplementationOnce(() =>
+      Promise.reject("ch-string-failure"),
+    );
     captureError({ error: new Error("z"), source: "api" });
     await flush();
     const line = writeSpy.mock.calls
@@ -282,7 +296,7 @@ describe("captureError", () => {
     writeSpy.mockRestore();
   });
 
-  it("falls back to String(value) when a non-Error error object can't be JSON.stringify'd (OXA-2059)", () => {
+  it("falls back to String(value) when a non-Error error object can't be JSON.stringify'd", () => {
     // A circular reference with no string `.message`/`.name` forces
     // normalizeError() into safeStringify(), which must swallow the
     // JSON.stringify throw and fall back to String(value).
@@ -294,7 +308,7 @@ describe("captureError", () => {
     expect(row.message).toBe(String(circular));
   });
 
-  it("never throws even when reading a property off the thrown value itself throws (OXA-2059)", () => {
+  it("never throws even when reading a property off the thrown value itself throws", () => {
     // A duck-typed error whose `.name` getter throws — exercises captureError's
     // own outer try/catch (the guard around normalizeError et al.), not just
     // the inner sink .catch()s.
@@ -307,12 +321,14 @@ describe("captureError", () => {
         },
       },
     );
-    expect(() => captureError({ error: poisoned, source: "api" })).not.toThrow();
+    expect(() =>
+      captureError({ error: poisoned, source: "api" }),
+    ).not.toThrow();
     // The ClickHouse insert never happens — capture failed before building the row.
     expect(insertErrorEvents).not.toHaveBeenCalled();
   });
 
-  it("swallows a failure in the last-resort logger itself (OXA-2059)", async () => {
+  it("swallows a failure in the last-resort logger itself", async () => {
     // logCaptureFailure's own JSON.stringify+stderr.write is wrapped in a
     // try/catch that does nothing on failure — simulate stderr.write throwing
     // when the ClickHouse insert sink already failed.
@@ -321,8 +337,12 @@ describe("captureError", () => {
       .mockImplementation(() => {
         throw new Error("stderr broken");
       });
-    insertErrorEvents.mockImplementationOnce(() => Promise.reject(new Error("ch down")));
-    expect(() => captureError({ error: new Error("z"), source: "api" })).not.toThrow();
+    insertErrorEvents.mockImplementationOnce(() =>
+      Promise.reject(new Error("ch down")),
+    );
+    expect(() =>
+      captureError({ error: new Error("z"), source: "api" }),
+    ).not.toThrow();
     await flush();
     writeSpy.mockRestore();
   });
