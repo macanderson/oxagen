@@ -8,12 +8,12 @@
  *
  * Credential files store tokens in a simple JSON structure. They are:
  *   - Never committed to VCS (live under ~/.config/oxagen/credentials/)
- *   - Written by `oxagen mcp auth <server>` (OAuth flow) or manually
- *   - Optionally encrypted at rest when OXAGEN_CREDENTIAL_KEY is set
+ *   - Written manually, or by whatever OAuth flow the caller runs
+ *   - Plaintext on disk, protected only by file mode 0600
  *
  * For OAuth servers, the credential file holds access + refresh tokens. The
- * refresh logic is handled by the caller (CLI auth command or the runtime
- * contributor) — this module only reads/writes the stored state.
+ * refresh logic is handled by the caller — this module only reads and writes
+ * the stored state.
  */
 import {
   readFileSync,
@@ -163,20 +163,13 @@ export async function resolveCredential(
 
   // ── Step 1: Check if envToken resolved to a value ───────────────────────────
   if (auth === "bearer" && "envToken" in config && config.envToken) {
-    // envToken was already expanded by resolve.ts. If it's non-empty after
-    // expansion, the env var was set and we use it directly as the token.
+    // envToken holds an env var name, not a token value. Look up the named
+    // var; if nothing is set, fall back to treating the field itself as the
+    // literal token (lets a config skip the indirection and inline a value).
     const envValue = config.envToken;
-    // After env expansion, envToken holds the actual token value (not the var name)
-    // But we need to distinguish: if the user wrote `"envToken": "MY_TOKEN"` and
-    // resolve.ts expanded it... actually envToken is the VAR NAME, not a ${}-wrapped
-    // value. The expansion happens on the entire config. So after expansion,
-    // envToken still holds the original var name string. The ACTUAL token is in
-    // the env. Let's check the env directly.
     const tokenFromEnv =
       process.env[envValue] ??
       (envValue.startsWith("$") ? undefined : envValue);
-    // If envToken was written as a raw string (not a var name pattern), treat it as the token.
-    // Convention: if the value looks like a var name (UPPER_SNAKE), look it up; otherwise use as-is.
     if (tokenFromEnv && tokenFromEnv.length > 0) {
       return {
         token: tokenFromEnv,
@@ -266,10 +259,9 @@ export interface RefreshResult {
 }
 
 /**
- * Attempt to refresh an OAuth token using the stored refresh_token.
- * This is a thin wrapper — the actual OAuth exchange is performed by the caller
- * (typically the MCP SDK's auth module). This function just manages the
- * credential file lifecycle around the refresh.
+ * Save the result of an OAuth token refresh to the credential file.
+ * The caller performs the actual OAuth exchange; this only persists the
+ * new tokens it got back.
  */
 export async function persistRefreshedTokens(
   serverName: string,
