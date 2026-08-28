@@ -160,14 +160,14 @@ import { pluginSetEnabledRoute } from "./routes/v1/plugin.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
 import { pluginCredentialRevokeRoute } from "./routes/v1/plugin.credential.revoke";
-// Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
+// Environments + credential vault.
 import { environmentCreateRoute } from "./routes/v1/environment.create";
 import { environmentListRoute } from "./routes/v1/environment.list";
 import { environmentGetRoute } from "./routes/v1/environment.get";
 import { environmentUpdateRoute } from "./routes/v1/environment.update";
 import { environmentDeleteRoute } from "./routes/v1/environment.delete";
 import { environmentSetDefaultRoute } from "./routes/v1/environment.set_default";
-// Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+// Sandbox templates + portable artifacts + agent-environment bindings.
 import { sandboxTemplateCreateRoute } from "./routes/v1/sandbox.template.create";
 import { sandboxTemplateListRoute } from "./routes/v1/sandbox.template.list";
 import { sandboxTemplateGetRoute } from "./routes/v1/sandbox.template.get";

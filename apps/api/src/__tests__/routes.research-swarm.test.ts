@@ -62,7 +62,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -123,7 +125,9 @@ describe("GET /research/swarm/status", () => {
     const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
     // Must be 404, not 500. A 500 would have caused the client to retry in a loop.
     expect(res.status).toBe(404);
-    const body = await res.json() as { error?: { code: string; message: string } };
+    const body = (await res.json()) as {
+      error?: { code: string; message: string };
+    };
     expect(body.error?.code).toBe("not_found");
   });
 
@@ -158,9 +162,10 @@ describe("GET /research/swarm/status", () => {
     );
 
     const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
-    // The route no longer over-matches on the string — only the typed error is a 404.
+    // Only the typed not-found error maps to a 404; a plain Error never does,
+    // even if its message happens to contain "not found".
     expect(res.status).toBe(500);
-    const body = await res.json() as { error?: { code: string } };
+    const body = (await res.json()) as { error?: { code: string } };
     expect(body.error?.code).toBe("internal_error");
   });
 
@@ -179,7 +184,7 @@ describe("GET /research/swarm/status", () => {
 
     const res = await app.fetch(get(`${PATH}?swarmId=${SWARM_ID}`));
     expect(res.status).toBe(200);
-    const body = await res.json() as typeof terminalPayload;
+    const body = (await res.json()) as typeof terminalPayload;
     expect(body.status).toBe("failed");
     expect(body.completedTasks).toBe(0);
   });

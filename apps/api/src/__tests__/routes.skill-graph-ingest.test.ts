@@ -1,5 +1,5 @@
 /**
- * Unit tests for two thin org-scoped routes that were previously uncovered:
+ * Unit tests for two thin org-scoped routes:
  *   - GET  /skill/export   (skill.export — streams canonical TOML as an attachment)
  *   - POST /skill/edit     (skill.edit)
  *
