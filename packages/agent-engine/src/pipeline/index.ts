@@ -1,8 +1,8 @@
 /**
  * The turn pipeline — what every user prompt flows through.
  *
- * This is the orchestrator that makes the engine excellent at context and honest
- * about completion. For each prompt it:
+ * This is the orchestrator that makes the engine excellent at context and
+ * accurate about completion. For each prompt it:
  *
  *   1. EVALUATE — a cheap model scores completeness + complexity and proposes
  *      context to pull and a noise-removed rewrite.
@@ -1343,7 +1343,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       }
     }
 
-    // Perf #10: don't spend a full execute+judge round on a low-confidence
+    // Don't spend a full execute+judge round on a low-confidence
     // "incomplete" verdict. `confidence` is the judge's confidence IN its
     // verdict, so a low value on an "incomplete" call is a coin-flip that leans
     // complete — revising it doubles turn cost for marginal expected gain.
