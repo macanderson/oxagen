@@ -147,13 +147,12 @@ const IN_PROGRESS_STATUSES = new Set(["pending", "running"]);
 type AggStatus = AgentSubagentAggregateOutput["status"];
 
 /**
- * Derive the honest aggregate status from the current snapshot — never a poll.
+ * Derive the aggregate status from the current snapshot — never a poll.
  *
- * OXA: the old handler busy-waited a 2s poll for up to 30 min, which exhausts
- * the serverless function timeout, and collapsed every failure into "failed"
- * while reporting still-running fanouts as terminal. This is a non-blocking
- * snapshot: callers (or the agent.aggregate-fanout Inngest function via
- * step.waitForEvent) decide when to read; we report exactly what is true now.
+ * A busy-wait poll here would exhaust the serverless function timeout on a
+ * long-running fanout. This is a non-blocking snapshot: callers (or the
+ * agent.aggregate-fanout Inngest function via step.waitForEvent) decide when
+ * to read; we report exactly what is true now.
  *
  *   - pending/running, within the snapshot window → "running"
  *   - pending/running, older than timeoutMs        → "timed_out"
@@ -273,7 +272,7 @@ export async function agentSubagentAggregateHandler(
   // Merge only completed children's output. For an all-failed or still-running
   // fanout we never surface partial data as if usable — aggregatedData is null.
   // A "partial" fanout DOES return the merged output of the children that
-  // succeeded, honestly labelled partial so callers never mistake it for done.
+  // succeeded, labelled partial so callers never mistake it for done.
   // conflicts[] is always computed for mergeable states (cheap, server-side);
   // aggregatedData itself ships only when includeMerged asks for it AND the
   // merge fits the size cap — an oversized merge is flagged, not relayed.

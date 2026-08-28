@@ -141,7 +141,7 @@ export function emitMcpRuleAudit(args: McpRuleAuditArgs): void {
   const result: ResolveResult =
     effect === "deny"
       ? // The rule ceiling rides the grant's conditions payload
-        // (resourceScope), so condition_failed is the honest deny reason.
+        // (resourceScope), so condition_failed is the correct deny reason.
         { outcome: "deny", reason: "condition_failed", trace }
       : { outcome: "pending_approval", trace };
 

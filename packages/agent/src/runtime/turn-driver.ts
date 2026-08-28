@@ -528,8 +528,8 @@ export function createPlatformTurnDriver(): TurnDriver {
           orgId: run.orgId,
           workspaceId: run.workspaceId,
           // The enqueuing human, when the enqueue surface captured one
-          // (delegation.userId) — honest attribution; null preserves the
-          // pre-delegation shape byte-for-byte.
+          // (delegation.userId); null preserves the pre-delegation shape
+          // byte-for-byte.
           userId: delegation?.userId ?? null,
           apiKeyId: null,
           requestId: run.runId,
