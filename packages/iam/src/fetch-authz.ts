@@ -1,18 +1,18 @@
-// fetch-authz.ts — fetch IAM authorization data from Postgres (OXA-1390, Phase 3).
+// fetch-authz.ts — fetch IAM authorization data from Postgres.
 //
 // Reads the IAM tables (principals, grants, role_grants, roles, policies) for
 // a given principal/scope, so the pure resolver can decide without any I/O.
 //
-// FAIL-CLOSED ON MISSING MIGRATION (OXA-2056): if the IAM tables do not exist
-// yet (Postgres error 42P01 — "relation does not exist"), this is "IAM
+// FAIL-CLOSED ON MISSING MIGRATION: if the IAM tables do not exist yet
+// (Postgres error 42P01 — "relation does not exist"), this is "IAM
 // enforcement is silently disabled" — a critical incident, not a benign dev
 // convenience. It is logged LOUDLY at error level (not warn) and the caller
 // gets a synthetic fail-closed DENY (see denyAuthz below), never EMPTY_AUTHZ.
 // EMPTY_AUTHZ would let the resolver fall through to rule 8 (each contract's
 // defaultEffect) — for any capability whose defaultEffect is "allow" that is
-// an unnoticed IAM bypass in prod. Previously only the API-key path failed
-// closed here; human-session callers silently degraded to defaultEffect. Run
-// `pnpm db:migrate` to apply the IAM foundation migration and clear the alert.
+// an unnoticed IAM bypass in prod. Every caller, human session or API key,
+// must fail closed the same way. Run `pnpm db:migrate` to apply the IAM
+// foundation migration and clear the alert.
 
 import { withTenantDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
@@ -40,7 +40,7 @@ const EMPTY_AUTHZ: AuthzData = {
 /**
  * Sentinel principal id used for a synthetic fail-closed deny — either an
  * API-key caller we cannot yet resolve to a real service principal, or ANY
- * caller when the IAM tables themselves are missing (42P01, OXA-2056).
+ * caller when the IAM tables themselves are missing (42P01).
  * Distinct from the all-zero principal the kernel substitutes so denials are
  * traceable.
  */
@@ -65,10 +65,10 @@ const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
  *    check-iam.ts bypasses it for everyone else).
  *
  * 2. ANY caller (human session or API key) when the IAM tables are missing
- *    (Postgres 42P01 — migration not applied, OXA-2056). This used to return
- *    EMPTY_AUTHZ for human sessions, silently degrading to defaultEffect —
- *    "IAM enforcement is silently disabled in prod" is a critical incident,
- *    not a benign dev convenience, so it now fails closed exactly like the
+ *    (Postgres 42P01 — migration not applied). Returning EMPTY_AUTHZ for
+ *    human sessions would silently degrade to defaultEffect — "IAM
+ *    enforcement is silently disabled in prod" is a critical incident, not a
+ *    benign dev convenience — so this fails closed exactly like the
  *    unresolved-API-key case.
  *
  * A dedicated service principal per key is the durable model; the
@@ -128,7 +128,7 @@ export interface FetchAuthzArgs {
 /**
  * Load all IAM authorization data needed by the resolver for a single
  * invocation. FAILS CLOSED (never EMPTY_AUTHZ) if the IAM tables are absent —
- * see denyAuthz() and the OXA-2056 module comment above.
+ * see denyAuthz() and the module comment above.
  */
 export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   try {
@@ -137,8 +137,7 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     if (isUndefinedTable(err)) {
       // IAM migration not yet applied. This is "IAM enforcement is silently
       // disabled in prod" — an operator-actionable incident, so it is logged
-      // LOUDLY at error level (OXA-2056; previously this was a warn that was
-      // easy to miss and the request silently degraded to defaultEffect).
+      // LOUDLY at error level rather than as a warning easy to miss.
       logger.error(
         { err, capability: args.capability, orgId: args.orgId },
         "[iam] SECURITY ALERT: IAM tables not found (Postgres 42P01) — IAM " +
@@ -148,9 +147,7 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           "this alert.",
       );
       // Fail closed for EVERY caller (human session or API key) — never
-      // degrade to EMPTY_AUTHZ/defaultEffect on a missing migration. Before
-      // OXA-2056 only the API-key branch failed closed here; a human-session
-      // request silently ran with defaultEffect while IAM was effectively off.
+      // degrade to EMPTY_AUTHZ/defaultEffect on a missing migration.
       return denyAuthz(args.orgId, args.workspaceId, args.capability);
     }
     throw err;
@@ -165,12 +162,12 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // (principal_role_assignments) can THEMSELVES be workspace-scoped, however,
   // so we must filter those by workspaceId here — see the PRA query below.
   //
-  // RLS over-filtering analysis (OXA-1515): IAM tables (principals, grants,
-  // roles, role_grants, policies, principal_role_assignments) have
-  // workspace_nullable RLS policies — rows where workspace_id IS NULL (org-wide
-  // IAM rows) pass through alongside current-workspace rows. All cross-workspace
-  // org-wide IAM reads (roles, policies, org-wide PRAs) therefore remain
-  // correctly visible inside withTenantDb. No query is over-filtered.
+  // IAM tables (principals, grants, roles, role_grants, policies,
+  // principal_role_assignments) have workspace_nullable RLS policies — rows
+  // where workspace_id IS NULL (org-wide IAM rows) pass through alongside
+  // current-workspace rows. All cross-workspace org-wide IAM reads (roles,
+  // policies, org-wide PRAs) therefore remain correctly visible inside
+  // withTenantDb. No query is over-filtered.
   const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
   // An API-key request authenticates with no session user (userId null,
@@ -271,8 +268,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
 
     // Batch 2: roleGrants depends on roleIds from the roles query above.
     // Also load principal_role_assignments for this principal to determine
-    // which roles they are actually a member of (OXA-1498 -- replaces the
-    // prior "all principals in this org are members of all roles" shortcut).
+    // which roles they are actually a member of.
     const roleIds = roleRows.map((r) => r.id);
 
     // Query 4a — role_grants for these roles and this capability.
@@ -334,8 +330,8 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       // org Owner role (rule 7.5 — org owner super-user). A user-created role
       // named "Owner" has is_system_default = false and does NOT qualify.
       isSystemDefault: r.isSystemDefault,
-      // Only include the principal if they have an explicit assignment to this
-      // role in the principal_role_assignments table (OXA-1498).
+      // Only include the principal if they have an explicit assignment to
+      // this role in the principal_role_assignments table.
       principalIds: principalRoleIdSet.has(r.id) ? [principalRow.id] : [],
     }));
 

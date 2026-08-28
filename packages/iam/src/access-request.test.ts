@@ -1,4 +1,4 @@
-// access-request.test.ts — unit tests for createAccessRequest() (OXA-1524).
+// access-request.test.ts — unit tests for createAccessRequest().
 //
 // Tests:
 //   - null principal → returns null (graceful degradation)
@@ -25,7 +25,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     ...real,
     db: mocks.dbFn,
     // withTenantDb: pass-through — invokes the callback with the same fake tx
-    // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+    // the handler expects. No scope GUC overhead in unit tests.
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(mocks.dbFn()),
   };

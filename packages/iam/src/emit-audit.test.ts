@@ -1,4 +1,4 @@
-// emit-audit.test.ts — unit tests for emitAudit() (OXA-1524, OXA-2058).
+// emit-audit.test.ts — unit tests for emitAudit().
 //
 // Tests:
 //   - sha256 chain hash is correctly computed
@@ -6,7 +6,7 @@
 //     but chain_hash itself is still computed and non-empty)
 //   - sha256 COMPUTATION failure (payload OR chain) is FATAL: emitAudit rejects
 //     and insertAuditEvent is never called — an audit row with an empty
-//     chain_hash must never be persisted (OXA-2058)
+//     chain_hash must never be persisted
 //   - the durable insert is retried with backoff before a write failure
 //     propagates to the caller
 //   - insertAuditEvent is called with correctly shaped row
@@ -429,7 +429,7 @@ describe("emitAudit()", () => {
     expect(row.chain_hash).toMatch(/^[a-f0-9]+$/);
   });
 
-  // ── sha256 (subtle.digest) failure is FATAL — never persist an empty chain_hash (OXA-2058) ──
+  // ── sha256 (subtle.digest) failure is FATAL — never persist an empty chain_hash ──
 
   it("OXA-2058: logs an error and REJECTS when sha256 fails — insertAuditEvent is never called, no empty chain_hash is ever persisted", async () => {
     const digestSpy = vi
@@ -457,7 +457,6 @@ describe("emitAudit()", () => {
       expect(loggerMocks.error).toHaveBeenCalled();
       const [, message] = loggerMocks.error.mock.calls[0] as [unknown, string];
       expect(message).toContain("sha256(payload) failed");
-      expect(message).toContain("OXA-2058");
 
       // No row — not even a degraded one — is ever written.
       expect(mocks.insertAuditEvent).not.toHaveBeenCalled();

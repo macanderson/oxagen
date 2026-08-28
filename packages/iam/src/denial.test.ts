@@ -1,5 +1,4 @@
 // denial.test.ts — unit tests for DenialResponse factory and isDenial guard.
-// OXA-1390, Phase 3.
 
 import { describe, expect, it } from "vitest";
 import { denial, isDenial } from "./denial";
@@ -22,7 +21,11 @@ describe("denial()", () => {
   });
 
   it("denial with pending_approval includes requestId when provided", () => {
-    const d = denial({ outcome: "pending_approval", reason: "require_approval", requestId: "arq_abc" });
+    const d = denial({
+      outcome: "pending_approval",
+      reason: "require_approval",
+      requestId: "arq_abc",
+    });
     expect(d.requestId).toBe("arq_abc");
   });
 
@@ -59,7 +62,10 @@ describe("isDenial()", () => {
   });
 
   it("returns true for pending_approval DenialResponse", () => {
-    const d = denial({ outcome: "pending_approval", reason: "require_approval" });
+    const d = denial({
+      outcome: "pending_approval",
+      reason: "require_approval",
+    });
     expect(isDenial(d)).toBe(true);
   });
 

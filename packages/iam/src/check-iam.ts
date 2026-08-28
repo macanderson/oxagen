@@ -1,4 +1,4 @@
-// check-iam.ts — combines fetchAuthz + resolve + emitAudit (OXA-1390, Phase 3).
+// check-iam.ts — combines fetchAuthz + resolve + emitAudit.
 //
 // Non-enterprise orgs receive an unconditional allow (zero DB queries, zero
 // latency) — FOR NON-AGENT PRINCIPALS ONLY. Enterprise orgs run the full
@@ -38,11 +38,11 @@ import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
 
 /**
- * OXA-2058: an audit-emission failure (durable write exhausted its retries,
- * or a hash computation failed and emitAudit refused to persist a corrupt
- * row — see emit-audit.ts) must be observable beyond a log line nobody
- * watches. Escalates to ClickHouse `error_events` + optional alert webhook
- * via `captureError`, which is itself fire-and-forget and never throws.
+ * An audit-emission failure (durable write exhausted its retries, or a hash
+ * computation failed and emitAudit refused to persist a corrupt row — see
+ * emit-audit.ts) must be observable beyond a log line nobody watches.
+ * Escalates to ClickHouse `error_events` + optional alert webhook via
+ * `captureError`, which is itself fire-and-forget and never throws.
  */
 function reportAuditEmissionFailure(
   capability: string,
@@ -61,8 +61,7 @@ function reportAuditEmissionFailure(
     workspaceId: ctx.workspaceId,
     capability,
     requestId: ctx.requestId,
-    context:
-      "iam:checkIAM — audit event emission failed after retries (OXA-2058)",
+    context: "iam:checkIAM — audit event emission failed after retries",
   });
 }
 
@@ -209,7 +208,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
   const result = resolve(resolveInput);
 
   // 3. Emit audit — fire-and-forget. Audit failures must be loud but NEVER
-  // block the user path (see reportAuditEmissionFailure — OXA-2058).
+  // block the user path (see reportAuditEmissionFailure).
   emitAudit({
     capability,
     ctx,
@@ -228,8 +227,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
 // (Agent RBAC spec §3.4/§3.5 + run-evidence spec §"Security and retention")
 // ═════════════════════════════════════════════════════════════════════════════
 //
-// The once-per-run resolution cache that used to live here is gone (launch
-// change #7). Every agent-run check now:
+// Every agent-run check:
 //
 //   - re-reads live principal/agent status, emergency denies, and the
 //     deny-generation vector under one MVCC snapshot;
@@ -354,8 +352,8 @@ function denyMissingAgentContext(args: CheckIAMArgs): CheckIAMResult {
  * MAY throw only if the evaluator itself throws unexpectedly — every EXPECTED
  * failure (unreadable authority, unwritable decision row) is already converted
  * to a deny inside `evaluateAgentRunAuthorization`. The kernel treats a throw as
- * an evaluation failure and fails closed unconditionally (OXA-2056), so both
- * paths land in the same place.
+ * an evaluation failure and fails closed unconditionally, so both paths land
+ * in the same place.
  */
 async function checkAgentRunIAM(
   args: CheckIAMArgs & { agentRun: AgentRunIAMContext },
@@ -379,7 +377,7 @@ async function checkAgentRunIAM(
 
   const result = agentResolveResult(evaluation);
 
-  // Audit — fire-and-forget, same OXA-2058 contract as the human path — with
+  // Audit — fire-and-forget, same contract as the human path — with
   // the AGENT as acting principal (principal_kind='agent'), the initiating
   // human's principal id, and run lineage (agentId/runId/parentRunId, §5).
   emitAudit({

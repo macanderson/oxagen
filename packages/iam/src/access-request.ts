@@ -1,6 +1,6 @@
-// access-request.ts — create JIT access requests (OXA-1390, Phase 3).
+// access-request.ts — create just-in-time access requests.
 //
-// When the resolver returns pending_approval, defineContract().invoke() calls
+// When the resolver returns pending_approval, the kernel calls
 // createAccessRequest() to create a row in org.access_requests and returns the
 // publicId in the DenialResponse so the caller can poll / display status.
 

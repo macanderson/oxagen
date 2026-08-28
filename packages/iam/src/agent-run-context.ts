@@ -173,17 +173,13 @@ export async function resolveAgentRunAuthzContext(
       // takes: the A2A bridge with no `ctx.userId`, or a v1 delegated run whose
       // `delegation.userId` is absent (the field is optional in RunSpec v1).
       //
-      // It is logged because the consequence is invisible otherwise. Before the
-      // run-evidence foundation landed, an absent delegator fell back to the
-      // agent's CREATOR (`principals.parentUserId`) and the run executed with
-      // that human's ceiling. It now resolves to the unprivileged sentinel, so
-      // such a run materializes no capability tools and fails closed. That is
-      // the intended, strictly-narrower behavior — the initiating human and the
-      // agent are an intersection, not alternative authorities — but a run that
-      // silently stops doing anything is indistinguishable from a broken one.
-      // Operators need this line to tell "correctly denied" from "mysteriously
-      // inert", and it is the signal for whether the legacy v1 path still needs
-      // a bounded creator fallback while v1 runs drain.
+      // The run resolves to the unprivileged sentinel, so it materializes no
+      // capability tools and fails closed. That is the intended,
+      // strictly-narrower behavior — the initiating human and the agent are
+      // an intersection, not alternative authorities — but a run that
+      // silently stops doing anything is indistinguishable from a broken
+      // one. This log line is what tells an operator "correctly denied"
+      // apart from "mysteriously inert".
       logger.warn(
         { orgId, agentId },
         "[iam] no initiating human supplied — the run's human ceiling resolves " +

@@ -1,4 +1,4 @@
-// check-iam.test.ts — unit tests for checkIAM() (OXA-1524).
+// check-iam.test.ts — unit tests for checkIAM().
 //
 // Tests the integration of fetchAuthz → resolve → emitAudit, covering:
 //   - Plan-tier ACL gate (non-enterprise bypass)
@@ -33,9 +33,9 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     canAccessACL: mocks.canAccessACL,
   };
 });
-// OXA-2058: checkIAM escalates an emitAudit failure via captureError (in
-// addition to logger.error) so a dropped/refused audit write is observable
-// in ClickHouse error_events, not just a log line.
+// checkIAM escalates an emitAudit failure via captureError (in addition to
+// logger.error) so a dropped/refused audit write is observable in
+// ClickHouse error_events, not just a log line.
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return { ...real, captureError: mocks.captureError };
@@ -73,18 +73,54 @@ const EMPTY_AUTHZ: AuthzData = {
 };
 
 const ALLOW_TRACE = {
-  steps: [{ rule: "7:role_grant", description: "allow via role", decided: true, outcome: "allow" as const }],
-  decidedBy: { rule: "7:role_grant", description: "allow via role", decided: true, outcome: "allow" as const },
+  steps: [
+    {
+      rule: "7:role_grant",
+      description: "allow via role",
+      decided: true,
+      outcome: "allow" as const,
+    },
+  ],
+  decidedBy: {
+    rule: "7:role_grant",
+    description: "allow via role",
+    decided: true,
+    outcome: "allow" as const,
+  },
 };
 
 const DENY_TRACE = {
-  steps: [{ rule: "8:default", description: "default deny", decided: true, outcome: "deny" as const }],
-  decidedBy: { rule: "8:default", description: "default deny", decided: true, outcome: "deny" as const },
+  steps: [
+    {
+      rule: "8:default",
+      description: "default deny",
+      decided: true,
+      outcome: "deny" as const,
+    },
+  ],
+  decidedBy: {
+    rule: "8:default",
+    description: "default deny",
+    decided: true,
+    outcome: "deny" as const,
+  },
 };
 
 const PENDING_TRACE = {
-  steps: [{ rule: "5:workspace_require_approval", description: "pending", decided: true, outcome: "pending_approval" as const }],
-  decidedBy: { rule: "5:workspace_require_approval", description: "pending", decided: true, outcome: "pending_approval" as const },
+  steps: [
+    {
+      rule: "5:workspace_require_approval",
+      description: "pending",
+      decided: true,
+      outcome: "pending_approval" as const,
+    },
+  ],
+  decidedBy: {
+    rule: "5:workspace_require_approval",
+    description: "pending",
+    decided: true,
+    outcome: "pending_approval" as const,
+  },
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -137,14 +173,20 @@ describe("checkIAM()", () => {
     await Promise.resolve();
 
     expect(mocks.captureError).toHaveBeenCalledTimes(1);
-    const call = mocks.captureError.mock.calls[0]?.[0] as { error: unknown; capability: string };
+    const call = mocks.captureError.mock.calls[0]?.[0] as {
+      error: unknown;
+      capability: string;
+    };
     expect(call.error).toBe(auditErr);
     expect(call.capability).toBe("iam.roles.list");
   });
 
   it("uses ctx.planTier when present (no resolveOrgTier call)", async () => {
     mocks.canAccessACL.mockReturnValue(false);
-    const ctxWithTier: CapabilityContext = { ...CTX, planTier: "scale" as const };
+    const ctxWithTier: CapabilityContext = {
+      ...CTX,
+      planTier: "scale" as const,
+    };
 
     const result = await checkIAM({
       capability: "iam.grants.read",
@@ -160,7 +202,10 @@ describe("checkIAM()", () => {
 
   it("falls through to the resolver for enterprise orgs on iam.* capabilities", async () => {
     mocks.canAccessACL.mockReturnValue(true); // enterprise
-    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+    });
     mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
 
     const result = await checkIAM({
@@ -200,7 +245,10 @@ describe("checkIAM()", () => {
   // ── Deny path ────────────────────────────────────────────────────────────
 
   it("returns deny result from the resolver", async () => {
-    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+    });
     mocks.resolve.mockReturnValue({
       outcome: "deny",
       reason: "no_grant",
@@ -222,8 +270,14 @@ describe("checkIAM()", () => {
   // ── pending_approval path ────────────────────────────────────────────────
 
   it("returns pending_approval result from the resolver", async () => {
-    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
-    mocks.resolve.mockReturnValue({ outcome: "pending_approval", trace: PENDING_TRACE });
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+    });
+    mocks.resolve.mockReturnValue({
+      outcome: "pending_approval",
+      trace: PENDING_TRACE,
+    });
 
     const result = await checkIAM({
       capability: "send_message",
@@ -238,7 +292,10 @@ describe("checkIAM()", () => {
   // ── emitAudit fire-and-forget ────────────────────────────────────────────
 
   it("calls emitAudit after the resolve step", async () => {
-    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+    });
     mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
 
     await checkIAM({
@@ -252,7 +309,10 @@ describe("checkIAM()", () => {
   });
 
   it("does NOT throw when emitAudit rejects — audit failure is non-fatal, but escalates via captureError (OXA-2058)", async () => {
-    mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
+    mocks.fetchAuthz.mockResolvedValue({
+      ...EMPTY_AUTHZ,
+      principal: PRINCIPAL,
+    });
     mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
     const auditErr = new Error("clickhouse down");
     mocks.emitAudit.mockRejectedValue(auditErr);
@@ -271,18 +331,21 @@ describe("checkIAM()", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    // OXA-2058: an audit-emission failure must be observable beyond a log
+    // An audit-emission failure must be observable beyond a log
     // line — escalated to captureError (ClickHouse error_events + optional
     // alert webhook) so it can never silently vanish.
     expect(mocks.captureError).toHaveBeenCalledTimes(1);
-    const call = mocks.captureError.mock.calls[0]?.[0] as { error: unknown; capability: string };
+    const call = mocks.captureError.mock.calls[0]?.[0] as {
+      error: unknown;
+      capability: string;
+    };
     expect(call.error).toBe(auditErr);
     expect(call.capability).toBe("send_message");
   });
 
   // ── isAclCapability boundary cases ──────────────────────────────────────
 
-  it('billing.acl.manage (enterprise ACL prefix) on non-enterprise → allow, resolver skipped', async () => {
+  it("billing.acl.manage (enterprise ACL prefix) on non-enterprise → allow, resolver skipped", async () => {
     // "billing.acl." prefix matches isAclCapability → non-enterprise bypass
     mocks.canAccessACL.mockReturnValue(false);
     mocks.resolveOrgTier.mockResolvedValue("scale");
@@ -316,7 +379,7 @@ describe("checkIAM()", () => {
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
   });
 
-  it('any capability on non-enterprise → allow, resolver skipped', async () => {
+  it("any capability on non-enterprise → allow, resolver skipped", async () => {
     mocks.canAccessACL.mockReturnValue(false);
     mocks.resolveOrgTier.mockResolvedValue("scale");
 
@@ -332,7 +395,7 @@ describe("checkIAM()", () => {
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
   });
 
-  it('non-enterprise fast-path covers iam.* capabilities too', async () => {
+  it("non-enterprise fast-path covers iam.* capabilities too", async () => {
     mocks.canAccessACL.mockReturnValue(false);
     mocks.resolveOrgTier.mockResolvedValue("build");
 
