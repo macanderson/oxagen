@@ -43,7 +43,7 @@ const _byProvider = new Map<SandboxProviderName, SandboxDriver>();
  * Single source of truth for whether a sandbox driver is usable.
  *
  * Returns true only when BOTH of the following hold:
- *   1. SANDBOX_ENABLED=true   — opt-in flag (off by default in prod, OXA-1348)
+ *   1. SANDBOX_ENABLED=true   — opt-in flag (off by default in prod)
  *   2. A driver is actually configured with its required credentials:
  *        vercel: SANDBOX_DRIVER=vercel (OIDC creds resolved lazily — flag alone
  *                is enough because the token is injected by the Vercel runtime)

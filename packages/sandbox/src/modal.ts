@@ -43,8 +43,8 @@ interface ModalRunRequest {
   env?: Record<string, string>;
   // Extra workspace files (relative path → contents) landed before the
   // entrypoint runs. The Modal runner shim (ops/modal-sandbox/runner.py) writes them
-  // into the sandbox workdir; older shims that ignore the field simply run with
-  // the entrypoint alone. Paths are pre-confined to the workspace upstream.
+  // into the sandbox workdir; older shims that ignore the field run with the
+  // entrypoint alone. Paths are pre-confined to the workspace upstream.
   files?: Record<string, string>;
   timeout_ms: number;
   memory_mb: number;
