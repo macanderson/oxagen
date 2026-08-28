@@ -34,18 +34,30 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Oxagen Ember" — the brand shipped on oxagen.sh. Surfaces are
- * NEUTRAL: neutral paper in light, and in dark the site's own steps — #0B0B0C
- * page → #141414 card → #161616 popover → #2A2A2A accent, all at chroma 0.000.
- * The INK on top of them is warm (#F1EDEA → #BCB2A9 → #6E6A5F), which is the
- * split that makes the brand read as black-and-gold rather than as grey. Card
- * and table HEADERS are flat — they sit on the surface with hairline borders,
- * never shaded bars. Colour is concentrated in ONE amber ember accent
- * (#FFB000 — CTAs, focus rings, the active-tab underline, the mark) plus a
- * cool indigo (#9CA3E8) that carries links, exactly as the site does — never
- * smeared across every surface. Errors use a true red and warning is pushed
- * to orange so neither reads as the ember primary. Brand mark gradient is the
- * site's ember ramp #A37200 → #FFB000 → #FFCB66.
+ * CURRENT SKIN: "Stella" — the palette shipped on stella.oxagen.sh, adopted so
+ * the app, the website and the docs read as one surface with it. Every hex was
+ * read off that site's live stylesheet (its --st-* primitive table) and its
+ * semantic layer is reproduced exactly, per theme:
+ *
+ *   LIGHT   page #F7F4ED → card #FDFAF3 → popover #FFFCF5, hairline #E0DDD7,
+ *           ink #0A0A0C, secondary ink #605F5C. A WARM paper ramp (hue ~87).
+ *   DARK    page #0A0A0C → card #0F0F12 → popover #17171B → hover #26262C,
+ *           ink #F4F1EA, secondary ink #A9AAB5. A COOL canvas (hue ~286).
+ *
+ * The two modes sit on opposite hue axes on purpose — that is Stella's own
+ * choice, and it is what makes the one accent read as METAL against both.
+ * Colour is concentrated in a single GOLD (#EFC53F — CTAs, focus rings, links,
+ * the active-tab underline, the mark) and nothing else; gold is identity and
+ * action only, never a state. Because gold is only 1.6:1 on paper it is never
+ * used as light-mode TEXT: accent copy takes the gold's own ink shade
+ * (#725A00, 6.0:1) in light and the gold itself (12.0:1) in dark, which is
+ * exactly what Stella's --stella-accent-text does. Card and table HEADERS stay
+ * flat — surface plus hairline, never shaded bars. Brand mark gradient is the
+ * gold ramp #725A00 → #EFC53F → #F7D96B.
+ *
+ * Out of scope for this skin (deliberately unchanged): the status ramp
+ * (error/warning/success/info), the #FF3D1F brand cursor, which must keep
+ * matching docs/brand/logos/, and typography.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
@@ -63,92 +75,97 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Ember", matching
-     * oxagen.sh: NEUTRAL near-black surfaces carrying no cast at all, a WARM
-     * ink ramp sitting on top of them, and one amber ember accent. That split
-     * is the brand — the site's surface steps measure chroma 0.000–0.002
-     * while its text ramp runs 0.006–0.018, so warmth reads in the type and
-     * the accent, never in the panels (design system stays flat, THEME.md §7).
-     * Every hex quoted here was read off the shipped oxagen.sh stylesheet.
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Stella", matching
+     * stella.oxagen.sh. Surfaces are NEUTRAL near-black on a cool axis (hue
+     * ~286, chroma 0.004–0.013) climbing a four-step elevation ladder; light
+     * mode is Stella's WARM paper ramp (hue ~87, chroma 0.010); and colour is
+     * concentrated in ONE gold accent (#EFC53F) that is identity and action
+     * only — never a state. Every hex quoted here was read off the shipped
+     * stella.oxagen.sh stylesheet's --st-* primitive table, and Stella's own
+     * semantic layer is reproduced exactly:
+     *   light  bg=paper-ground  fg=canvas     surface=paper-raised  border=paper-seam
+     *   dark   bg=canvas        fg=paper-text surface=panel         border=canvas-edge
+     * Gold is unreadable as TEXT on paper (1.6:1), so — exactly as Stella does
+     * with --stella-accent-text — light mode renders accent copy in the gold's
+     * own ink shade (#725A00, 6.0:1) and dark mode in the gold itself (12.0:1).
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — neutral paper, the site's page black as light-mode ink,
-       and the site's warm off-white as dark-mode ink. */
-    --_paper: oklch(0.985 0 0);          /* #FAFAFA — neutral paper */
-    --_ink: oklch(0.150 0.002 286);      /* #0B0B0C — site --bg, the light-mode ink */
-    --_ink-white: oklch(0.948 0.006 60); /* #F1EDEA — site --ink */
+    /* Brand anchors — Stella's paper ground, its canvas near-black (which is
+       both the light-mode ink and the dark-mode page), and its warm paper-text
+       off-white as the dark-mode ink. */
+    --_paper: oklch(0.968 0.010 87.5);     /* #F7F4ED — st-paper-ground, the light page */
+    --_ink: oklch(0.146 0.004 285.9);      /* #0A0A0C — st-bg, light-mode ink / dark page */
+    --_ink-white: oklch(0.959 0.010 87.5); /* #F4F1EA — st-paper-text, dark-mode ink */
 
-    /* Named brand swatches — the three ember stops are oxagen.sh's
-       --ember-a/b/c verbatim. --ox-ember is THE accent knob: it drives
-       --primary, --ring, tabs and chart-1. --ox-indigo* is the cool link
-       accent, which is what the site uses for links (never the ember).
-       The legacy tangerine/rose/teak/bronze/sunset/gold/wheat swatches are
-       gone rather than re-pointed: they named the old coral brand, had no
-       consumers outside this file, and a swatch called "rose" holding amber
-       is a comment that lies. */
+    /* Named brand swatches — the three gold stops are Stella's --st-gold-ink /
+       --st-gold / --st-gold-bright verbatim. --ox-ember is THE accent knob: it
+       drives --primary, --ring, links, tabs and chart-1. The `ember` spelling is
+       kept rather than renamed to `gold` because ~25 files across apps/docs bind
+       to these identifiers; a skin owns the values, not the names. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(0.992 0 0);              /* neutral near-white panel */
+    --ox-surface: oklch(0.985 0.010 87.5);       /* #FDFAF3 — st-paper-raised, light card */
     --ox-ink: var(--_ink);
-    --ox-ember-deep: oklch(0.587 0.122 78.7);    /* #A37200 — site --ember-a */
-    --ox-ember: oklch(0.812 0.170 76.4);         /* #FFB000 — site --ember-b, the brand mark */
-    --ox-ember-light: oklch(0.869 0.132 82.1);   /* #FFCB66 — site --ember-c, text-safe on dark (13.1:1) */
-    --ox-ember-soft: oklch(0.215 0.037 59.0);    /* #261507 — site --ember-soft, tinted fill */
+    --ox-ember-deep: oklch(0.478 0.098 90.6);    /* #725A00 — st-gold-ink, accent TEXT on paper (6.0:1) */
+    --ox-ember: oklch(0.839 0.152 90.8);         /* #EFC53F — st-gold, the brand metal */
+    --ox-ember-light: oklch(0.8893 0.1332 94.3); /* #F7D96B — st-gold-bright, live indicators */
+    --ox-ember-soft: oklch(0.215 0.030 90);      /* #1F1908 — tinted gold fill on the dark canvas */
 
-    /* Link accent. The site ships one indigo (#9CA3E8) because it is dark-only;
-       it clears 8.3:1 there but only 2.4:1 on paper, so light mode takes the
-       same hue darkened to a text-safe 6.9:1 rather than shipping the site
-       value where it would fail. */
-    --ox-indigo: oklch(0.477 0.137 277.4);        /* #4C51A8 — link accent (light) */
-    --ox-indigo-bright: oklch(0.736 0.100 279.2); /* #9CA3E8 — site --indigo (dark) */
+    /* Categorical CHART accent only. Stella ships no indigo — its links are gold
+       (--ox-ember-deep on paper, --ox-ember on canvas). This swatch survives
+       solely because a five-series chart ramp needs a hue that is not gold,
+       green, red or orange. It must never carry brand or link meaning again. */
+    --ox-indigo: oklch(0.477 0.137 277.4);        /* #4C51A8 — chart-2 (light) */
+    --ox-indigo-bright: oklch(0.736 0.100 279.2); /* #9CA3E8 — chart-2 (dark) */
 
-    /* Cursor block of the "o + cursor" logomark (docs/brand). This is the ONE
-       place the mark diverges from the ember accent: the brand asset set ships
-       the cursor in its own red-orange, and it is kept rather than recolored
-       so the mark matches the canonical files in docs/brand/logos/. */
+    /* Cursor block of the "o + cursor" logomark (docs/brand). Deliberately NOT
+       touched by this reskin: the brand asset set ships the cursor in its own
+       red-orange and the canonical files in docs/brand/logos/ must keep matching. */
     --ox-cursor: oklch(0.655 0.233 31.6);        /* #FF3D1F — brand cursor (light) */
 
-    /* Neutral ramp. The DARK steps are the site's own surface values and are
-       genuinely neutral (chroma 0.000) — that is the single biggest visual
-       change from the old skin, which tinted every panel warm. Light steps are
-       neutral to match. Stepped elevation in dark (950 page → 900 card →
-       850 popover → 800 accent) is preserved; 400/500/600 stay WARM because
-       they carry TEXT, and the site's ink ramp is warm. */
-    --_stone-50: oklch(0.99 0 0);           /* neutral near-white */
-    --_stone-100: oklch(0.965 0 0);         /* #F2F2F2 — muted / card-header */
-    --_stone-150: oklch(0.949 0 0);         /* surface-alt */
-    --_stone-200: oklch(0.925 0 0);         /* secondary surface */
-    --_stone-300: oklch(0.885 0 0);         /* input border (light) */
-    --_stone-400: oklch(0.769 0.017 64.6);  /* #BCB2A9 — site --muted, muted-foreground (dark) */
-    --_stone-500: oklch(0.525 0.018 90.3);  /* #6E6A5F — site --faint, tertiary text */
-    --_stone-600: oklch(0.47 0.014 78);     /* warm secondary text (light) — darker for contrast */
-    --_stone-700: oklch(0.35 0.012 75);     /* warm graphite */
-    --_stone-800: oklch(0.285 0 0);         /* #2A2A2A — site --line, accent surface (dark) */
-    --_stone-850: oklch(0.200 0 0);         /* #161616 — site --card, popover (dark) */
-    --_stone-900: oklch(0.191 0 0);         /* #141414 — site --surface, card / sidebar (dark) */
-    --_stone-950: oklch(0.150 0.002 286);   /* #0B0B0C — site --bg, page background (dark) */
+    /* Neutral ramp — Stella's elevation ladder, 1:1. The DARK steps are its
+       canvas values (950 page → 900 panel → 850 row → 800 edge); the LIGHT steps
+       its paper values (50 paper → 150 ground → 200 row → 300 seam). 400–700
+       carry TEXT and use Stella's silver → dim ink ramp. Note that light and
+       dark now sit on different hue axes on purpose: Stella's canvas is cool
+       and its paper is warm, which is what makes the gold read as metal on both. */
+    --_stone-50: oklch(0.991 0.010 87.5);   /* #FFFCF5 — st-paper, light popover */
+    --_stone-100: oklch(0.974 0.010 87.5);  /* #F9F6EF — st-paper-panel, muted / card-header */
+    --_stone-150: oklch(0.968 0.010 87.5);  /* #F7F4ED — st-paper-ground, surface-alt */
+    --_stone-200: oklch(0.926 0.009 84.6);  /* #E9E6E0 — st-paper-row, secondary / hover (light) */
+    --_stone-300: oklch(0.898 0.009 84.6);  /* #E0DDD7 — st-paper-seam, border / input (light) */
+    --_stone-400: oklch(0.741 0.016 281.9); /* #A9AAB5 — st-silver, muted-foreground (dark) */
+    --_stone-500: oklch(0.573 0.017 285.9); /* #777782 — st-muted, tertiary text */
+    --_stone-600: oklch(0.485 0.005 91.5);  /* #605F5C — st-ink-muted, secondary text (light) */
+    --_stone-700: oklch(0.417 0.018 285.6); /* #4B4B56 — st-dim, hints / line numbers */
+    --_stone-800: oklch(0.271 0.011 285.6); /* #26262C — st-border, hairline / accent surface (dark) */
+    --_stone-850: oklch(0.206 0.008 285.7); /* #17171B — st-hl, muted fill / popover (dark) */
+    --_stone-900: oklch(0.170 0.006 285.7); /* #0F0F12 — st-panel, card / sidebar (dark) */
+    --_stone-950: oklch(0.146 0.004 285.9); /* #0A0A0C — st-bg, page background (dark) */
 
-    /* Ember accent ramp — drives the accent-subtle backgrounds. Anchored on
-       #FFB000 at 400 so it matches --ox-ember exactly; tints run up, shades
-       down through the site's deep ember (#A37200) toward its soft fill. */
-    --_amber-50: oklch(0.975 0.022 85);
-    --_amber-100: oklch(0.950 0.045 84);
-    --_amber-200: oklch(0.910 0.085 82);
-    --_amber-300: oklch(0.869 0.132 82.1);  /* #FFCB66 — site --ember-c */
-    --_amber-400: oklch(0.812 0.170 76.4);  /* #FFB000 — site --ember-b (matches --ox-ember) */
-    --_amber-500: oklch(0.720 0.150 77.5);
-    --_amber-600: oklch(0.587 0.122 78.7);  /* #A37200 — site --ember-a */
-    --_amber-700: oklch(0.480 0.100 79);
-    --_amber-800: oklch(0.370 0.075 72);
-    --_amber-900: oklch(0.280 0.055 65);
+    /* Gold accent ramp — drives the accent-subtle backgrounds. Anchored on
+       #EFC53F at 400 so it matches --ox-ember exactly; 300 and 600 are Stella's
+       own --st-gold-bright and --st-gold-ink, so the ramp interpolates through
+       real brand stops rather than around them. */
+    --_amber-50: oklch(0.985 0.020 90);
+    --_amber-100: oklch(0.962 0.042 90);
+    --_amber-200: oklch(0.925 0.085 90.5);
+    --_amber-300: oklch(0.8893 0.1332 94.3); /* #F7D96B — st-gold-bright */
+    --_amber-400: oklch(0.839 0.152 90.8);   /* #EFC53F — st-gold (matches --ox-ember) */
+    --_amber-500: oklch(0.700 0.130 90.7);
+    --_amber-600: oklch(0.478 0.098 90.6);   /* #725A00 — st-gold-ink */
+    --_amber-700: oklch(0.400 0.082 90);     /* #594500 — link hover on paper */
+    --_amber-800: oklch(0.310 0.062 89);
+    --_amber-900: oklch(0.235 0.045 88);
 
-    /* Brand mark primitives — the site's ember gradient stops (a → b → c). */
-    --_ember-a: oklch(0.587 0.122 78.7);   /* #A37200 — gradient start */
-    --_ember-b: oklch(0.812 0.170 76.4);   /* #FFB000 — gradient midpoint, the solid mark */
-    --_ember-c: oklch(0.869 0.132 82.1);   /* #FFCB66 — gradient end */
-    --_ember-navy: oklch(0.150 0.002 286); /* #0B0B0C — site page black */
+    /* Brand mark primitives — the gold ramp's three stops (a → b → c). */
+    --_ember-a: oklch(0.478 0.098 90.6);     /* #725A00 — gradient start */
+    --_ember-b: oklch(0.839 0.152 90.8);     /* #EFC53F — gradient midpoint, the solid mark */
+    --_ember-c: oklch(0.8893 0.1332 94.3);   /* #F7D96B — gradient end */
+    --_ember-navy: oklch(0.146 0.004 285.9); /* #0A0A0C — st-bg, the canvas black */
 
-    /* Status hues. Success is the site's --ok; error stays a true red so it
-       never reads as the ember primary. */
+    /* Status hues. UNCHANGED by this reskin — recolouring state was explicitly
+       out of scope, and Stella agrees on the principle anyway: gold is identity
+       and action only, never a state, so the state ramp is free to differ. */
     --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
     --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
     --_moss: oklch(0.529 0.106 154.4);         /* #2F7D4F — success (light, 5.0:1 on paper) */
@@ -165,7 +182,7 @@
     /* ════════════════════════════════════════════════════════════════════════
      * CONTROLS — single global knobs (rounding + elevation). Flip in one place.
      * ════════════════════════════════════════════════════════════════════════ */
-    --ui-radius: 0.5rem; /* moderate rounding — Graphite is confident, not brutal. */
+    --ui-radius: 0.5rem; /* moderate rounding — Stella is confident, not brutal. */
     --ui-shadow: 0 1px 2px oklch(0.15 0 0 / 0.07); /* subtle neutral shadow — hairline borders do the real work. */
     --radius: var(--ui-radius);
 
@@ -178,30 +195,32 @@
     --brand-foreground: var(--ox-ink);
 
     /* ════════════════════════════════════════════════════════════════════════
-     * CORE SEMANTIC — LIGHT. Graphite: off-white page, crisp white panels,
-     * neutral graphite grays. Warmth lives only in the ember accent + ring.
+     * CORE SEMANTIC — LIGHT. Stella's warm paper ramp: #F7F4ED page, #FDFAF3
+     * panels, #E0DDD7 hairlines. The gold appears only as primary + ring, and
+     * as its ink shade in link/accent copy.
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
-    --card: oklch(1 0 0);              /* crisp white card (dramatic on off-white) */
+    --card: var(--ox-surface);         /* #FDFAF3 — st-paper-raised, raised above the ground */
     --card-foreground: var(--_ink);
-    --popover: oklch(1 0 0);
+    --popover: var(--_stone-50);       /* #FFFCF5 — st-paper, the top of the paper ladder */
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-ember);         /* tangerine */
+    --primary: var(--ox-ember);        /* #EFC53F — st-gold */
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.925 0 0);   /* quiet neutral fill (secondary buttons, badges) */
-    --secondary-foreground: oklch(0.30 0.010 75);
+    --secondary: var(--_stone-200);    /* #E9E6E0 — st-paper-row, quiet fill (buttons, badges) */
+    --secondary-foreground: var(--_ink);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.962 0.030 85);   /* barely-there ember-tinted hover/selected wash */
-    --accent-foreground: oklch(0.350 0.070 76);   /* deep ember ink on the tint */
+    --accent: var(--_stone-200);       /* #E9E6E0 — st-paper-row; Stella's row wash is NEUTRAL, not gold */
+    --accent-foreground: var(--_ink);  /* st-fg — ink stays neutral on the wash */
     --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.885 0 0 / 0.9);   /* neutral hairline */
+    --border: var(--_stone-300);       /* #E0DDD7 — st-paper-seam, the hairline */
     --input: var(--_stone-300);
     --ring: var(--ox-ember);
-    --link: var(--ox-indigo);   /* indigo — the site links in indigo, never the ember */
-    --link-hover: oklch(0.415 0.130 277);
+    --link: var(--ox-ember-deep);      /* #725A00 — st-gold-ink. Stella links in GOLD; on paper only
+                                          the gold's ink shade is legible (6.0:1 vs 1.6:1). */
+    --link-hover: var(--_amber-700);   /* #594500 */
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -213,11 +232,12 @@
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
 
-    /* Ember text ink — the shade of the ember accent that is legible as TEXT on
-       the current background. #FFB000 is the MARK colour and is only 1.8:1 on
-       paper, so accent copy must not use it directly: light mode takes a deep
-       ember (5.5:1) and dark mode the site's own --ember-c (13.1:1). */
-    --ember-ink: oklch(0.522 0.108 79.7);   /* #8A6100 — accent text (light) */
+    /* Accent text ink — the shade of the gold that is legible as TEXT on the
+       current background. #EFC53F is the MARK colour and is only 1.6:1 on
+       paper, so accent copy must not use it directly: light mode takes the
+       gold's own ink shade (#725A00, 6.0:1) and dark mode the gold itself
+       (12.0:1). This is exactly Stella's --stella-accent-text. */
+    --ember-ink: var(--ox-ember-deep);      /* #725A00 — = Stella --stella-accent-text (light) */
 
     /* Ember mark gradient (theme-independent — never recolor the mark).
        The site's own angle and stops: 92deg, 0% / 46% / 100%. */
@@ -230,7 +250,7 @@
     --chart-4: var(--_ochre);
     --chart-5: var(--_slate);
 
-    --surface: oklch(1 0 0);
+    --surface: var(--ox-surface);
     --surface-foreground: var(--_ink);
 
     /* Core sidebar surface — crisp white. */
@@ -240,7 +260,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.885 0 0 / 0.5);
+    --sidebar-border: oklch(0.898 0.009 84.6 / 0.6);   /* st-paper-seam, softened */
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -377,8 +397,8 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — Graphite. Neutral near-black page, stepped charcoal panels, ember
-   * accent. Re-declares core tokens + the two header bgs (which point at fixed
+   * DARK — Stella's cool canvas. #0A0A0C page, stepped #0F0F12/#17171B panels,
+   * gold accent. Re-declares core tokens + the two header bgs (which point at fixed
    * primitives); the rest of the component-token surface inherits the flip.
    * ════════════════════════════════════════════════════════════════════════ */
   .dark {
@@ -392,22 +412,22 @@
     --popover-foreground: var(--_ink-white);
     --primary: var(--ox-ember);
     --primary-foreground: var(--ox-ink);
-    --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
+    --secondary: var(--_stone-800);   /* #26262C — st-border, neutral chip fill */
     --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
     /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
+    --accent: var(--_stone-800);   /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
-    --input: oklch(0.360 0 0 / 0.7);
+    --border: var(--_stone-800);   /* #26262C — st-border, the hairline */
+    --input: oklch(0.296 0.013 285.6);   /* #2C2C33 — st-rule */
     --ring: var(--ox-ember);
-    --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+    --ember-ink: var(--ox-ember);   /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
     --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
-    --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
-    --link-hover: oklch(0.800 0.090 279);
+    --link: var(--ox-ember);   /* #EFC53F — st-gold, 12.0:1 on the canvas */
+    --link-hover: var(--ox-ember-light);   /* #F7D96B — st-gold-bright */
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -433,7 +453,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.42 0 0 / 0.45);
+    --sidebar-border: oklch(0.296 0.013 285.6 / 0.6);   /* #2C2C33 — st-rule, softened */
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -507,22 +527,22 @@
       --popover-foreground: var(--_ink-white);
       --primary: var(--ox-ember);
       --primary-foreground: var(--ox-ink);
-      --secondary: oklch(0.341 0 0);   /* #383838 — site --line-strong, neutral chip fill */
+      --secondary: var(--_stone-800);   /* #26262C — st-border, neutral chip fill */
       --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: oklch(0.265 0.045 62);   /* ember-tinted hover/selected, on the site --ember-soft line */
+      --accent: var(--_stone-800);   /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.341 0 0 / 0.9);   /* neutral hairline (site --line/--line-strong) */
-      --input: oklch(0.360 0 0 / 0.7);
+      --border: var(--_stone-800);   /* #26262C — st-border, the hairline */
+      --input: oklch(0.296 0.013 285.6);   /* #2C2C33 — st-rule */
       --ring: var(--ox-ember);
-      --ember-ink: var(--ox-ember-light);   /* #FFCB66 — accent text (dark) */
+      --ember-ink: var(--ox-ember);   /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
       --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
-      --link: var(--ox-indigo-bright);   /* #9CA3E8 — site --indigo */
-      --link-hover: oklch(0.800 0.090 279);
+      --link: var(--ox-ember);   /* #EFC53F — st-gold, 12.0:1 on the canvas */
+      --link-hover: var(--ox-ember-light);   /* #F7D96B — st-gold-bright */
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -548,7 +568,7 @@
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.42 0 0 / 0.45);
+      --sidebar-border: oklch(0.296 0.013 285.6 / 0.6);   /* #2C2C33 — st-rule, softened */
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -1005,9 +1025,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #A37200) 0%,
-      var(--_ember-b, #FFB000) 46%,
-      var(--_ember-c, #FFCB66) 100%
+      var(--_ember-a, #725A00) 0%,
+      var(--_ember-b, #EFC53F) 46%,
+      var(--_ember-c, #F7D96B) 100%
     );
   }
 

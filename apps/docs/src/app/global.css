@@ -51,9 +51,9 @@
      to render regardless of which token scope is active. */
   background-image: linear-gradient(
     100deg,
-    var(--_ember-a, #A37200) 0%,
-    var(--_ember-b, #FFB000) 46%,
-    var(--_ember-c, #FFCB66) 100%
+    var(--_ember-a, #725A00) 0%,
+    var(--_ember-b, #EFC53F) 46%,
+    var(--_ember-c, #F7D96B) 100%
   );
 }
 
@@ -94,10 +94,10 @@
    out on the light page. */
 .lp-term {
   border: 1px solid rgb(255 255 255 / 0.12);
-  background: rgb(20 20 20 / 0.94);
+  background: rgb(15 15 18 / 0.94);
   box-shadow:
     0 1px 0 0 rgb(255 255 255 / 0.06) inset,
-    0 30px 80px -28px color-mix(in oklch, var(--_ember-c, #FFCB66) 42%, transparent),
+    0 30px 80px -28px color-mix(in oklch, var(--_ember-c, #F7D96B) 42%, transparent),
     0 18px 50px -30px rgb(0 0 0 / 0.7);
   backdrop-filter: blur(8px);
 }

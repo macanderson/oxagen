@@ -9,7 +9,7 @@
  * cannot trip the `useContext` null crash that breaks `/_global-error` static
  * export when the default (provider-wrapped) error tree is used instead.
  *
- * Styling is fully self-contained (explicit Oxagen Ember light palette, no
+ * Styling is fully self-contained (explicit Stella paper palette, no
  * theme `class` dependency) so the fallback renders correctly with zero app
  * context. Flat: no radius, no shadow — matching the product skin. Keep these
  * hexes in lockstep with docs/brand/tokens.css when the brand changes.
@@ -31,8 +31,8 @@ export function GlobalErrorPage({
           alignItems: "center",
           justifyContent: "center",
           padding: "1.5rem",
-          background: "#FAFAFA",
-          color: "#0B0B0C",
+          background: "#F7F4ED",
+          color: "#0A0A0C",
           fontFamily:
             "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         }}
@@ -82,8 +82,8 @@ export function GlobalErrorPage({
               padding: "0 1.25rem",
               borderRadius: "0",
               border: "none",
-              background: "#FFB000",
-              color: "#0B0B0C",
+              background: "#EFC53F",
+              color: "#0A0A0C",
               fontSize: "0.875rem",
               fontWeight: 500,
               cursor: "pointer",

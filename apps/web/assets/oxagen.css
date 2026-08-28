@@ -1,29 +1,70 @@
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: the Stella v2 token table (crates/stella-tui-theme/src/token.rs),
-   byte-for-byte, so the site and the terminal it ships are one surface.
+   Palette: Stella's canonical token table, byte-for-byte, so the site, the app
+   (@oxagen/ui) and the terminal it ships are one surface. Values are verified
+   against the live stylesheet at stella.oxagen.sh, whose --st-* primitives this
+   file reproduces; the Rust source of the same table is
+   crates/stella-tui-theme/src/token.rs.
+   Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
+   Repoint an alias to reskin; never re-hex, and never hardcode a palette value
+   in a rule or a page.
    Gold is identity and action only — never a state. States are pass/fail.
    No gradients. Corners are 2px. Depth comes from texture and hairlines.
    ========================================================================== */
 
 :root{
-  /* ---- Stella v2 tokens ---- */
-  --ground:#0A0A0C;        /* canvas */
-  --panel:#0F0F12;         /* panels, cards, code blocks */
-  --raised:#17171B;        /* selected and hover rows */
-  --line:#26262C;          /* hairlines, dividers */
-  --rule:#2C2C33;          /* section rules, boundaries */
-  --gold:#EFC53F;          /* the brand metal: actions, active, money, the mark */
-  --gold-hi:#F7D96B;       /* tiny live indicators only */
-  --ink:#E8E8EC;           /* primary text */
-  --ink-2:#BFC1CC;         /* types, tertiary labels */
-  --ink-3:#A9AAB5;         /* secondary emphasis */
-  --muted:#777782;         /* secondary text */
-  --faint:#4B4B56;         /* hints, captions, line numbers */
-  --pass:#74C991;          /* pass, additive */
-  --fail:#E0687A;          /* fail, destructive */
-  --add-bg:#10201A;
-  --del-bg:#241019;
+  /* ── LAYER 1 · PRIMITIVES ────────────────────────────────────────────────
+     Stella's canonical --st-* table, byte-for-byte off the live stylesheet at
+     stella.oxagen.sh, so the site, the app and the terminal it ships all name
+     the same colours the same way. This is the ONLY place a hex appears.
+     The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
+     is dark-only, and a paper ramp here would be tokens nothing can consume. */
+  --st-void:#050507;         /* below the canvas */
+  --st-bg:#0A0A0C;           /* the canvas */
+  --st-panel:#0F0F12;        /* panels, cards, code blocks */
+  --st-hl:#17171B;           /* selected and hover rows */
+  --st-border:#26262C;       /* hairlines, dividers */
+  --st-rule:#2C2C33;         /* section rules, boundaries */
+  --st-gold:#EFC53F;         /* the brand metal: actions, active, money, the mark */
+  --st-gold-bright:#F7D96B;  /* tiny live indicators only */
+  --st-gold-ink:#725A00;     /* gold as TEXT where the metal itself is illegible */
+  --st-paper-text:#F4F1EA;   /* primary text (what --stella-fg resolves to in dark) */
+  --st-text:#E8E8EC;         /* cooler alternate ink */
+  --st-silver-type:#BFC1CC;  /* types, tertiary labels */
+  --st-silver:#A9AAB5;       /* secondary emphasis */
+  --st-muted:#777782;        /* secondary text */
+  --st-dim:#4B4B56;          /* hints, captions, line numbers */
+  --st-green:#74C991;        /* pass, additive */
+  --st-green-ink:#006933;
+  --st-red:#E0687A;          /* fail, destructive */
+  --st-red-ink:#96213C;
+  --st-amber:#E78D54;        /* warning — never the gold, which is not a state */
+  --st-amber-ink:#8A3F00;
+  --st-diff-add:#10201A;
+  --st-diff-del:#241019;
+
+  /* ── LAYER 2 · SEMANTIC ──────────────────────────────────────────────────
+     The names the rest of this stylesheet and every page actually consume.
+     Each is an alias onto the table above — repoint here, never re-hex. */
+  --ground:var(--st-bg);
+  --panel:var(--st-panel);
+  --raised:var(--st-hl);
+  --line:var(--st-border);
+  --rule:var(--st-rule);
+  --gold:var(--st-gold);
+  --gold-hi:var(--st-gold-bright);
+  --gold-ink:var(--st-gold-ink);
+  --ink:var(--st-paper-text);   /* was #E8E8EC — the live site resolves its
+                                   foreground to --st-paper-text, not --st-text */
+  --ink-2:var(--st-silver-type);
+  --ink-3:var(--st-silver);
+  --muted:var(--st-muted);
+  --faint:var(--st-dim);
+  --pass:var(--st-green);
+  --fail:var(--st-red);
+  --warn:var(--st-amber);
+  --add-bg:var(--st-diff-add);
+  --del-bg:var(--st-diff-del);
 
   --r:2px;
   --nav-h:60px;
@@ -61,7 +102,7 @@ body{
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overflow-x:hidden;
 }
-::selection{background:var(--gold);color:#0A0A0C}
+::selection{background:var(--gold);color:var(--ground)}
 h1,h2,h3,h4{margin:0;font-weight:640;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
 p{margin:0}
 a{color:inherit;text-decoration:none}
@@ -73,7 +114,7 @@ hr{border:0;height:1px;background:var(--line);margin:0}
 .gold{color:var(--gold)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:var(--r)}
 .skip{
-  position:fixed;left:12px;top:-64px;z-index:200;background:var(--gold);color:#0A0A0C;
+  position:fixed;left:12px;top:-64px;z-index:200;background:var(--gold);color:var(--ground);
   padding:10px 16px;border-radius:var(--r);font-weight:640;transition:top .2s;
 }
 .skip:focus{top:12px}
@@ -122,7 +163,7 @@ hr{border:0;height:1px;background:var(--line);margin:0}
   border:1px solid transparent;cursor:pointer;white-space:nowrap;
   transition:transform .16s var(--ease),border-color .16s,background-color .16s,color .16s;
 }
-.btn-primary{background:var(--gold);color:#0A0A0C;border-color:var(--gold)}
+.btn-primary{background:var(--gold);color:var(--ground);border-color:var(--gold)}
 .btn-primary:hover{background:var(--gold-hi);border-color:var(--gold-hi);transform:translateY(-1px)}
 .btn-primary:active{transform:translateY(0)}
 .btn-ghost{border-color:var(--rule);color:var(--ink-2);background:transparent}
@@ -141,7 +182,7 @@ hr{border:0;height:1px;background:var(--line);margin:0}
 }
 .nav.scrolled{border-bottom-color:var(--line);background:color-mix(in srgb,var(--ground) 94%,transparent)}
 .nav-in{display:flex;align-items:center;gap:24px;width:min(1180px,calc(100% - 40px));margin-inline:auto}
-.brand{display:flex;align-items:center;gap:9px;font-weight:660;font-size:18.5px;letter-spacing:-.02em}
+.brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:660;font-size:18.5px;letter-spacing:-.02em}
 .brand svg{width:28px;height:28px}
 .nav-links{display:flex;align-items:center;gap:22px;margin-inline:auto}
 .nav-links>a,.nav-links .drop-btn{

@@ -129,7 +129,7 @@ export function TypewriterTerminal({
         {lines.map((l) =>
           l.kind === "cmd" ? (
             <div key={l.id} className="lp-line flex items-start gap-2">
-              <span className="select-none text-[var(--_ember-b,#FFB000)]">
+              <span className="select-none text-[var(--_ember-b,#EFC53F)]">
                 $
               </span>
               <span className="break-all">

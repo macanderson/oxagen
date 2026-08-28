@@ -38,7 +38,7 @@ export const CHART_SERIES_TOKENS = [
 
 /** Light-theme values of `--chart-1..5`, for the pre-hydration frame. */
 export const CHART_SERIES_FALLBACK = [
-  "#FFB000",
+  "#EFC53F",
   "#4C51A8",
   "#2F7D4F",
   "#CA6719",
