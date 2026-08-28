@@ -3,16 +3,16 @@
  *
  * Ingested nodes live 100% in Neo4j — no Postgres dual-write of the instance.
  *
- * §3.3 dual-write (Workspace Schema Registry): the MERGE now writes the REAL
- * label as the PRIMARY label (`(n:`Customer` { … })`) while transitionally
- * retaining the generic `:EntityNode` secondary label + `entityType` property
- * for back-compat. Readers prefer the real label; the §3.3 batch relabel (v2)
- * removes the secondary label later.
+ * The MERGE writes the real entity-type label as the primary label
+ * (`(n:Customer { … })`) and also keeps the generic `:EntityNode` label plus
+ * an `entityType` property, so any reader that only knows about `:EntityNode`
+ * still finds the node. See docs/specs/workspace-schema-registry/spec.md §3.3.
  *
- * §8 property-level validation: before the MERGE, when a workspace pins a schema
- * version, `validateNodeAgainstSchema` runs and the write branches on the
- * workspace `enforcement_mode` (strict / lenient / off). Conformance telemetry
- * and observed-label signals are emitted to ClickHouse (§4.9, §4.10).
+ * When a workspace pins a schema version, `validateNodeAgainstSchema` runs
+ * before the MERGE and the write branches on the workspace's
+ * `enforcement_mode` (strict / lenient / off). Conformance telemetry and
+ * observed-label signals are emitted to ClickHouse. See
+ * docs/specs/workspace-schema-registry/spec.md §8, §4.9, §4.10.
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
@@ -279,7 +279,7 @@ export async function upsertEntityNode(
 // ── ClickHouse emit helpers (best-effort; never fail the write) ───────────────
 
 /**
- * Emit a `graph_observed_labels` row (§4.9). Append-only observation read by
+ * Emit a `graph_observed_labels` row. Append-only observation read by
  * `schema.recommend`. Best-effort: a telemetry failure is swallowed.
  */
 async function emitObservedLabel(
