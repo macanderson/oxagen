@@ -25,7 +25,9 @@ const NO_ATTRIBUTION = {
 
 describe("tenant scope", () => {
   it("exposes the active scope inside runInTenantScope", () => {
-    const seen = runInTenantScope({ orgId: ORG, workspaceId: WS }, () => getScope());
+    const seen = runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      getScope(),
+    );
     expect(seen).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
   });
 
@@ -37,10 +39,10 @@ describe("tenant scope", () => {
     expect(() => requireScope()).toThrowError(TenantScopeError);
   });
 
-  it("rejects an empty orgId (fixes MCP orgId:'' fail-open)", () => {
-    expect(() => runInTenantScope({ orgId: "", workspaceId: WS }, () => 1)).toThrowError(
-      /orgId/,
-    );
+  it("rejects an empty orgId", () => {
+    expect(() =>
+      runInTenantScope({ orgId: "", workspaceId: WS }, () => 1),
+    ).toThrowError(/orgId/);
   });
 
   it("rejects a non-uuid workspaceId", () => {
@@ -92,8 +94,16 @@ describe("tenant scope", () => {
     });
 
     expect(seenScopes).toHaveLength(2);
-    expect(seenScopes[0]).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
-    expect(seenScopes[1]).toEqual({ orgId: ORG, workspaceId: WS, ...NO_ATTRIBUTION });
+    expect(seenScopes[0]).toEqual({
+      orgId: ORG,
+      workspaceId: WS,
+      ...NO_ATTRIBUTION,
+    });
+    expect(seenScopes[1]).toEqual({
+      orgId: ORG,
+      workspaceId: WS,
+      ...NO_ATTRIBUTION,
+    });
   });
 
   // ── CONCURRENCY: parallel calls must not cross-leak ──────────────────────
@@ -115,13 +125,16 @@ describe("tenant scope", () => {
       observedA.push(getScope()?.orgId);
     });
 
-    const runB = runInTenantScope({ orgId: ORG_B, workspaceId: WS_B }, async () => {
-      observedB.push(getScope()?.orgId);
-      await Promise.resolve();
-      observedB.push(getScope()?.orgId);
-      await Promise.resolve();
-      observedB.push(getScope()?.orgId);
-    });
+    const runB = runInTenantScope(
+      { orgId: ORG_B, workspaceId: WS_B },
+      async () => {
+        observedB.push(getScope()?.orgId);
+        await Promise.resolve();
+        observedB.push(getScope()?.orgId);
+        await Promise.resolve();
+        observedB.push(getScope()?.orgId);
+      },
+    );
 
     await Promise.all([runA, runB]);
 
@@ -166,8 +179,9 @@ describe("tenant scope", () => {
     });
 
     it("getPrincipalAttribution is all-null inside an unattributed scope", () => {
-      const attribution = runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
-        getPrincipalAttribution(),
+      const attribution = runInTenantScope(
+        { orgId: ORG, workspaceId: WS },
+        () => getPrincipalAttribution(),
       );
       expect(attribution).toEqual(NO_ATTRIBUTION);
     });
@@ -183,7 +197,10 @@ describe("tenant scope", () => {
 
     it("rejects a non-uuid userId", () => {
       expect(() =>
-        runInTenantScope({ orgId: ORG, workspaceId: WS, userId: "mac" }, () => 1),
+        runInTenantScope(
+          { orgId: ORG, workspaceId: WS, userId: "mac" },
+          () => 1,
+        ),
       ).toThrowError(/userId/);
     });
 
@@ -204,16 +221,19 @@ describe("tenant scope", () => {
       runInTenantScope(
         { orgId: ORG, workspaceId: WS, userId: USER, capabilityName: "x.y" },
         () => {
-          runWithPrincipal({ principalId: PRINCIPAL, principalKind: "human" }, () => {
-            expect(requireScope()).toEqual({
-              orgId: ORG,
-              workspaceId: WS,
-              principalId: PRINCIPAL,
-              principalKind: "human",
-              userId: USER,
-              capabilityName: "x.y",
-            });
-          });
+          runWithPrincipal(
+            { principalId: PRINCIPAL, principalKind: "human" },
+            () => {
+              expect(requireScope()).toEqual({
+                orgId: ORG,
+                workspaceId: WS,
+                principalId: PRINCIPAL,
+                principalKind: "human",
+                userId: USER,
+                capabilityName: "x.y",
+              });
+            },
+          );
           // Enrichment is a nested snapshot — the outer scope is untouched.
           expect(requireScope().principalId).toBeNull();
         },
