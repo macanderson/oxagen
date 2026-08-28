@@ -351,7 +351,7 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
     expect(options).not.toHaveProperty("memory");
   });
 
-  // OXA-2070 (docs/specs/agent-file-locking/plan.md): agent.repo.edit is the
+  // agent.repo.edit (docs/specs/agent-file-locking/plan.md) is the
   // real fleet path (dispatched directly and as a subagent-fanout child), so
   // it must inject the lease-backed FileLockProvider — the same wiring point
   // write_file/edit_file in tools.ts acquire/release through.

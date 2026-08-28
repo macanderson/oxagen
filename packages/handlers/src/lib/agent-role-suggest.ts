@@ -52,14 +52,15 @@ export interface DraftAgentShape {
    * Trigger TYPES present in the draft — not their `enabled` flag. A
    * suggestion always comes back with every trigger `enabled: false` (the
    * suggest handler forces that), so the declared trigger *type* is the only
-   * honest signal of whether the agent is meant to run with a human present.
+   * signal of whether the agent is meant to run with a human present.
    */
   triggerTypes: ReadonlyArray<string>;
 }
 
 export interface AgentRoleSuggestion {
   /** One of the three system agent roles — never a custom role, and never the
-   *  back-compat "Agent Legacy" role, which is never seeded (spec §6 Q1). */
+   *  back-compat "Agent Legacy" role, which is never seeded
+   *  (see docs/specs/agent-rbac/spec.md). */
   roleName: AgentRoleName;
   /**
    * Provenance: why this role and not a narrower one. Rendered next to the
@@ -303,7 +304,7 @@ export function suggestNarrowestAgentRole(
   const chosenIdx = AGENT_ROLE_SPECS.indexOf(chosen);
 
   // Explain the escalation in terms of what the NEXT-NARROWER role could not
-  // do — that is the honest answer to "why not something smaller?".
+  // do — that answers "why not something smaller?".
   const narrower = chosenIdx > 0 ? AGENT_ROLE_SPECS[chosenIdx - 1]! : null;
   const blockersOfNarrower = narrower
     ? collectBlockers(

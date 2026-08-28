@@ -1,4 +1,4 @@
-// iam-provision.test.ts — unit tests for bootstrapOrgIAM / provisionMemberPrincipal (OXA-1524).
+// iam-provision.test.ts — unit tests for bootstrapOrgIAM / provisionMemberPrincipal.
 //
 // Tests verify:
 //   - bootstrapOrgIAM inserts 7 system roles with deterministic public_ids

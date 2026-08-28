@@ -1,19 +1,22 @@
-// audit-exempt: stores a plugin OAuth/secret credential. No fitting security-event type exists in the current taxonomy (there is no plugin.credential_* family); inventing one is out of scope per OXA-1594. The write itself goes through the @oxagen/plugins KMS-wrapping seam (its own envelope-encryption audit) and the kernel capability.invoke_* audit records the privileged invocation. Re-evaluate when a plugin.credential.* taxonomy is added.
+// audit-exempt: stores a plugin OAuth/secret credential. No fitting security-event type exists in the current taxonomy (there is no plugin.credential_* family). The write itself goes through the @oxagen/plugins KMS-wrapping seam (its own envelope-encryption audit) and the kernel capability.invoke_* audit records the privileged invocation. Re-evaluate when a plugin.credential.* taxonomy is added.
 import { setWorkspaceSecret } from "@oxagen/plugins";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const { orgListingId, authKind, secret, accessToken, refreshToken } = input as {
-    orgListingId: string;
-    authKind: "oauth" | "secret";
-    secret?: string;
-    accessToken?: string;
-    refreshToken?: string;
-  };
+  const { orgListingId, authKind, secret, accessToken, refreshToken } =
+    input as {
+      orgListingId: string;
+      authKind: "oauth" | "secret";
+      secret?: string;
+      accessToken?: string;
+      refreshToken?: string;
+    };
 
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.credential.set_secret] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.credential.set_secret] workspaceId is required (scoped capability)",
+    );
   }
 
   try {
@@ -28,7 +31,13 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     });
   } catch (err) {
     logger.error(
-      { err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, authKind },
+      {
+        err,
+        orgListingId,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        authKind,
+      },
       "plugin.credential.set_secret: failed",
     );
     throw err;

@@ -11,8 +11,8 @@ import { logger } from "./logger";
  * { status: "pending" }), then returns their ids. It does not call the model
  * or dispatch any background job. The LLM call and streaming happen in the
  * stream route (POST /api/v1/chat/stream), which is the single LLM caller
- * per turn (OXA-1509) and persists the assistant reply directly once the
- * stream finishes.
+ * per turn and persists the assistant reply directly once the stream
+ * finishes.
  *
  * For new conversations with a non-empty first message, a title is
  * generated asynchronously using generateObjectFor. This happens in the

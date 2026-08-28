@@ -1,13 +1,13 @@
 /**
  * skill.metrics.read handler
  *
- * OXA-1750: Aggregate skill usage metrics from two sources:
+ * Aggregate skill usage metrics from two sources:
  *   1. Postgres agent.skills table — fast-path usageCount + lastUsedAt + activeVersionId
  *      (denormalised columns maintained by the skill load path).
  *   2. ClickHouse skill_loads table — per-version load counts + last-used via
  *      readSkillMetrics from @oxagen/telemetry.
  *
- * approxTokenCost (OXA-1750 phase 2, now wired): each skill's cost is the sum of
+ * approxTokenCost: each skill's cost is the sum of
  * token_usage.cost_usd_micros over every execution step that loaded the skill,
  * joined on execution_step_id (see readSkillTokenCosts). Because a multi-skill
  * agent step loads several skills, that step's full cost is attributed to ALL of
@@ -29,10 +29,9 @@ import { logger } from "./logger";
 // 1 cent = 10_000 micros.
 const MICROS_PER_CENT = 10_000;
 
-export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead> = async (
-  input,
-  ctx,
-) => {
+export const skillMetricsReadHandler: CapabilityHandler<
+  typeof skillMetricsRead
+> = async (input, ctx) => {
   // ── 1. Postgres: skill identities, usageCount, lastUsedAt, activeVersionId ──
 
   const pgRows = await withTenantDb((tx) =>
@@ -84,7 +83,10 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
     skillId: input.skillId,
   }).catch((err) => {
     // Telemetry is best-effort; don't fail the read if ClickHouse is unavailable.
-    logger.warn({ err, skillId: input.skillId }, "skill.metrics.read: ClickHouse unavailable");
+    logger.warn(
+      { err, skillId: input.skillId },
+      "skill.metrics.read: ClickHouse unavailable",
+    );
     return null;
   });
 
@@ -96,7 +98,11 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
   if (chMetrics) {
     for (const vr of chMetrics.byVersion) {
       const existing = versionLoadsBySkillId.get(vr.skill_id) ?? [];
-      existing.push({ version: vr.skill_version, loads: vr.loads, lastUsed: vr.last_used });
+      existing.push({
+        version: vr.skill_version,
+        loads: vr.loads,
+        lastUsed: vr.last_used,
+      });
       versionLoadsBySkillId.set(vr.skill_id, existing);
     }
   }
@@ -115,7 +121,9 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
       workspaceId: ctx.workspaceId,
       skillId: input.skillId,
     });
-    costBySkillId = new Map(costRows.map((r) => [r.skill_id, r.cost_usd_micros]));
+    costBySkillId = new Map(
+      costRows.map((r) => [r.skill_id, r.cost_usd_micros]),
+    );
   } catch (err) {
     // Distinct from the "ClickHouse unavailable" load-metrics warning above:
     // this is specifically the token-cost join failing. Report null cost, not a
@@ -131,14 +139,18 @@ export const skillMetricsReadHandler: CapabilityHandler<typeof skillMetricsRead>
 
   const skills = pgRows.map((r) => {
     const activeVersion =
-      r.activeVersionId !== null ? (versionNumberById.get(r.activeVersionId) ?? null) : null;
+      r.activeVersionId !== null
+        ? (versionNumberById.get(r.activeVersionId) ?? null)
+        : null;
     const perVersionLoads = versionLoadsBySkillId.get(r.publicId) ?? [];
 
     // approxTokenCost in USD cents. null when the cost query failed
     // (costBySkillId === null) OR the skill has no attributable token rows.
     const costMicros = costBySkillId?.get(r.publicId);
     const approxTokenCost: number | null =
-      costBySkillId === null || costMicros === undefined ? null : costMicros / MICROS_PER_CENT;
+      costBySkillId === null || costMicros === undefined
+        ? null
+        : costMicros / MICROS_PER_CENT;
 
     return {
       skillId: r.publicId,

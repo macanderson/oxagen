@@ -1,5 +1,5 @@
 /**
- * skill.metrics.read handler tests (OXA-1750)
+ * skill.metrics.read handler tests
  *
  * Strategy:
  *   - Stub @oxagen/database (withTenantDb) and @oxagen/telemetry (readSkillMetrics)
@@ -75,7 +75,9 @@ const makeVersionRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const makeChMetrics = (overrides: Partial<ReturnType<typeof defaultChMetrics>> = {}) => ({
+const makeChMetrics = (
+  overrides: Partial<ReturnType<typeof defaultChMetrics>> = {},
+) => ({
   ...defaultChMetrics(),
   ...overrides,
 });
@@ -83,11 +85,26 @@ const makeChMetrics = (overrides: Partial<ReturnType<typeof defaultChMetrics>> =
 function defaultChMetrics() {
   return {
     bySkill: [
-      { skill_id: "skl_abc", skill_slug: "code-audit", loads: 10, last_used: "2026-06-18T12:00:00.000Z" },
+      {
+        skill_id: "skl_abc",
+        skill_slug: "code-audit",
+        loads: 10,
+        last_used: "2026-06-18T12:00:00.000Z",
+      },
     ],
     byVersion: [
-      { skill_id: "skl_abc", skill_version: 3, loads: 8, last_used: "2026-06-18T12:00:00.000Z" },
-      { skill_id: "skl_abc", skill_version: 2, loads: 2, last_used: "2026-06-10T08:00:00.000Z" },
+      {
+        skill_id: "skl_abc",
+        skill_version: 3,
+        loads: 8,
+        last_used: "2026-06-18T12:00:00.000Z",
+      },
+      {
+        skill_id: "skl_abc",
+        skill_version: 2,
+        loads: 2,
+        last_used: "2026-06-10T08:00:00.000Z",
+      },
     ],
     totalLoads: 10,
     lastUsed: "2026-06-18T12:00:00.000Z",
@@ -118,7 +135,7 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
   // ── workspace-wide aggregation ────────────────────────────────────────────
 
   it("returns one skill with correct shape for workspace-wide query", async () => {
-    mocks.withTenantDbCallResults.push([makeSkillRow()]);    // skills query
+    mocks.withTenantDbCallResults.push([makeSkillRow()]); // skills query
     mocks.withTenantDbCallResults.push([makeVersionRow()]); // version resolution
     mocks.readSkillMetrics.mockResolvedValue(makeChMetrics());
 
@@ -167,9 +184,13 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
   // ── nullable fields ────────────────────────────────────────────────────────
 
   it("returns null activeVersion when activeVersionId is null", async () => {
-    mocks.withTenantDbCallResults.push([makeSkillRow({ activeVersionId: null })]);
+    mocks.withTenantDbCallResults.push([
+      makeSkillRow({ activeVersionId: null }),
+    ]);
     // No second query since there are no activeVersionIds to resolve.
-    mocks.readSkillMetrics.mockResolvedValue(makeChMetrics({ byVersion: [], bySkill: [] }));
+    mocks.readSkillMetrics.mockResolvedValue(
+      makeChMetrics({ byVersion: [], bySkill: [] }),
+    );
 
     const result = await skillMetricsReadHandler({}, CTX);
     expect(result.skills[0]!.activeVersion).toBeNull();
@@ -191,7 +212,12 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
     mocks.readSkillMetrics.mockResolvedValue(
       makeChMetrics({
         byVersion: [
-          { skill_id: "skl_other", skill_version: 1, loads: 5, last_used: "2026-06-01T00:00:00.000Z" },
+          {
+            skill_id: "skl_other",
+            skill_version: 1,
+            loads: 5,
+            last_used: "2026-06-01T00:00:00.000Z",
+          },
         ],
       }),
     );
@@ -205,7 +231,9 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
   it("returns empty perVersionLoads and does not throw when ClickHouse is unavailable", async () => {
     mocks.withTenantDbCallResults.push([makeSkillRow()]);
     mocks.withTenantDbCallResults.push([makeVersionRow()]);
-    mocks.readSkillMetrics.mockRejectedValue(new Error("ClickHouse connection refused"));
+    mocks.readSkillMetrics.mockRejectedValue(
+      new Error("ClickHouse connection refused"),
+    );
 
     const result = await skillMetricsReadHandler({}, CTX);
 
@@ -221,8 +249,17 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
 
   it("handles multiple skills in workspace and maps each independently", async () => {
     mocks.withTenantDbCallResults.push([
-      makeSkillRow({ publicId: "skl_1", slug: "audit", activeVersionId: "vid_1" }),
-      makeSkillRow({ publicId: "skl_2", slug: "summarize", activeVersionId: "vid_2", usageCount: 5 }),
+      makeSkillRow({
+        publicId: "skl_1",
+        slug: "audit",
+        activeVersionId: "vid_1",
+      }),
+      makeSkillRow({
+        publicId: "skl_2",
+        slug: "summarize",
+        activeVersionId: "vid_2",
+        usageCount: 5,
+      }),
     ]);
     mocks.withTenantDbCallResults.push([
       makeVersionRow({ id: "vid_1", versionNumber: 2 }),
@@ -231,8 +268,18 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
     mocks.readSkillMetrics.mockResolvedValue({
       bySkill: [],
       byVersion: [
-        { skill_id: "skl_1", skill_version: 2, loads: 10, last_used: "2026-06-18T12:00:00.000Z" },
-        { skill_id: "skl_2", skill_version: 1, loads: 5, last_used: "2026-06-15T00:00:00.000Z" },
+        {
+          skill_id: "skl_1",
+          skill_version: 2,
+          loads: 10,
+          last_used: "2026-06-18T12:00:00.000Z",
+        },
+        {
+          skill_id: "skl_2",
+          skill_version: 1,
+          loads: 5,
+          last_used: "2026-06-15T00:00:00.000Z",
+        },
       ],
       totalLoads: 15,
       lastUsed: "2026-06-18T12:00:00.000Z",
@@ -254,8 +301,15 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
   // ── usageCount edge case ───────────────────────────────────────────────────
 
   it("returns usageCount=0 for a skill with no recorded invocations", async () => {
-    mocks.withTenantDbCallResults.push([makeSkillRow({ usageCount: 0, lastUsedAt: null, activeVersionId: null })]);
-    mocks.readSkillMetrics.mockResolvedValue({ bySkill: [], byVersion: [], totalLoads: 0, lastUsed: null });
+    mocks.withTenantDbCallResults.push([
+      makeSkillRow({ usageCount: 0, lastUsedAt: null, activeVersionId: null }),
+    ]);
+    mocks.readSkillMetrics.mockResolvedValue({
+      bySkill: [],
+      byVersion: [],
+      totalLoads: 0,
+      lastUsed: null,
+    });
 
     const result = await skillMetricsReadHandler({}, CTX);
     expect(result.skills[0]!.usageCount).toBe(0);
@@ -307,7 +361,9 @@ describe("skillMetricsReadHandler (@oxagen/handlers)", () => {
   it("returns null approxTokenCost (not zero) and does not throw when the cost query fails", async () => {
     mocks.withTenantDbCallResults.push([makeSkillRow()]);
     mocks.withTenantDbCallResults.push([makeVersionRow()]);
-    mocks.readSkillTokenCosts.mockRejectedValue(new Error("ClickHouse join failed"));
+    mocks.readSkillTokenCosts.mockRejectedValue(
+      new Error("ClickHouse join failed"),
+    );
 
     const result = await skillMetricsReadHandler({}, CTX);
 

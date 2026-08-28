@@ -1,6 +1,6 @@
 // audit-exempt: read-only usage aggregation (ClickHouse token_usage GROUP BY) — no state mutation; the kernel capability.invoke_* audit covers access.
 /**
- * billing.usage.breakdown handler — OXA-1585
+ * billing.usage.breakdown handler.
  *
  * Aggregates the ClickHouse `token_usage` table into per-model / per-surface /
  * per-workspace breakdowns plus a daily time series, over the requested window,

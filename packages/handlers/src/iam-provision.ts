@@ -1,5 +1,5 @@
 // audit-exempt: internal IAM-bootstrap helper, not a directly-invoked capability handler. It runs inside organization.create / workspace.create / org.member.invite.accept transactions, each of which already emits its own security event (organization.created / workspace.created / org.role_changed). Emitting here would double-count.
-// iam-provision.ts — IAM bootstrapping helpers for org/member creation (OXA-1524).
+// iam-provision.ts — IAM bootstrapping helpers for org/member creation.
 //
 // Two exported helpers, both idempotent (safe to re-run):
 //
@@ -130,7 +130,7 @@ export async function bootstrapOrgIAM(
   // tenancy: system bypass via withSystemDb (bootstrap — always called with an
   // explicit tx from the org/workspace creation transaction in normal kernel
   // flow; the withSystemDb fallback covers direct seeding calls outside the
-  // kernel scope where no ALS scope exists) — OXA-1515
+  // kernel scope where no ALS scope exists) (see docs/specs/tenancy-rls/spec.md)
   if (tx) {
     return bootstrapOrgIAMWithTx(orgId, ownerUserId, actorUserId, tx);
   }
@@ -541,7 +541,7 @@ export async function provisionMemberPrincipal(
   const { orgId, userId, actorUserId, tx } = args;
   // tenancy: system bypass via withSystemDb (always called with an explicit tx
   // from the invite-accept transaction in normal kernel flow; the withSystemDb
-  // fallback covers direct seeding calls outside the kernel scope) — OXA-1515
+  // fallback covers direct seeding calls outside the kernel scope) (see docs/specs/tenancy-rls/spec.md)
   if (tx) {
     return provisionMemberPrincipalWithTx(orgId, userId, actorUserId, tx);
   }

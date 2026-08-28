@@ -69,7 +69,12 @@ export interface AssetServeResult {
 
 /** Whether `principal` may read an asset under the given access policy. */
 async function authorize(
-  asset: { orgId: string; workspaceId: string; userId: string; accessPolicy: string },
+  asset: {
+    orgId: string;
+    workspaceId: string;
+    userId: string;
+    accessPolicy: string;
+  },
   principal: AssetServePrincipal,
 ): Promise<boolean> {
   if (asset.accessPolicy === "public") return true;
@@ -82,18 +87,24 @@ async function authorize(
   // org policy.
   if (principal.orgId) {
     if (asset.orgId !== principal.orgId) return false;
-    if (principal.workspaceId && asset.workspaceId !== principal.workspaceId) return false;
+    if (principal.workspaceId && asset.workspaceId !== principal.workspaceId)
+      return false;
     return true;
   }
   if (principal.userId) {
     // tenancy: system bypass via withSystemDb (not a kernel capability — no ALS
     // tenant scope; authz enforced in-code by access_policy + userId match,
-    // not by RLS) — OXA-1515
+    // not by RLS) (see docs/specs/tenancy-rls/spec.md)
     const membership = await withSystemDb((tx) =>
       tx
         .select({ id: schema.orgUsers.id })
         .from(schema.orgUsers)
-        .where(and(eq(schema.orgUsers.orgId, asset.orgId), eq(schema.orgUsers.userId, principal.userId!)))
+        .where(
+          and(
+            eq(schema.orgUsers.orgId, asset.orgId),
+            eq(schema.orgUsers.userId, principal.userId!),
+          ),
+        )
         .limit(1),
     );
     return membership.length > 0;
@@ -116,7 +127,7 @@ export async function serveGeneratedAsset(
   // tenancy: system bypass via withSystemDb (not a kernel capability — called
   // directly from the route layer without a kernel invocation; no ALS tenant
   // scope is present; authz is enforced in-code by access_policy + principal's
-  // orgId/userId, not by RLS) — OXA-1515
+  // orgId/userId, not by RLS) (see docs/specs/tenancy-rls/spec.md)
   const rows = await withSystemDb((tx) =>
     tx
       .select()
@@ -127,13 +138,20 @@ export async function serveGeneratedAsset(
 
   const asset = rows[0];
   if (!asset || asset.deletedAt !== null || asset.status !== "ready") {
-    logger.warn({ assetId, surface: principal.surface }, "asset.serve: not found or not ready");
+    logger.warn(
+      { assetId, surface: principal.surface },
+      "asset.serve: not found or not ready",
+    );
     throw new GeneratedAssetNotFoundError(assetId);
   }
 
   // A non-public asset with no identity at all is a forbidden (missing auth)
   // case; everything else that fails authz is a notFound (existence hidden).
-  if (asset.accessPolicy !== "public" && !principal.orgId && !principal.userId) {
+  if (
+    asset.accessPolicy !== "public" &&
+    !principal.orgId &&
+    !principal.userId
+  ) {
     throw new GeneratedAssetForbiddenError();
   }
 

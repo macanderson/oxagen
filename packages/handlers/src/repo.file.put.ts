@@ -13,7 +13,7 @@ export const repoFilePutHandler: CapabilityHandler<typeof repoFilePut> = async (
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
 
-  // Hard invariant (OXA-2117): commits land on a work branch, never the
+  // Hard invariant: commits land on a work branch, never the
   // default branch — omitting `branch` would silently target it.
   await assertNonDefaultBranchWrite(gh, {
     owner: input.owner,

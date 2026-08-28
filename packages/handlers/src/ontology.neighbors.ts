@@ -159,16 +159,14 @@ export const ontologyNeighborsHandler: CapabilityHandler<
       asKnownAt: input.asKnownAt,
     });
 
-    // Fetch one extra row beyond the cap so we can flag truncation honestly.
+    // Fetch one extra row beyond the cap so we can flag truncation correctly.
     // Under an agent scope the LIMIT must be a LITERAL (input.limit is a
     // contract-validated integer): the seam FAILS CLOSED on a parameterized
     // `LIMIT $x` because it cannot clamp it to the budget's maxNodes. Humans
     // keep the parameterized `$fetchLimit` (BigInt forces INTEGER on the Bolt
     // wire) so their path is byte-identical.
     const fetchLimit = BigInt(input.limit + 1);
-    const limitLine = scoped
-      ? `LIMIT ${input.limit + 1}`
-      : "LIMIT $fetchLimit";
+    const limitLine = scoped ? `LIMIT ${input.limit + 1}` : "LIMIT $fetchLimit";
 
     const session = scopedSession(scope);
     try {

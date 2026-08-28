@@ -1,5 +1,5 @@
 /**
- * billing.usage.breakdown handler tests (OXA-1585)
+ * billing.usage.breakdown handler tests
  *
  * Strategy: stub @oxagen/telemetry.readUsageBreakdown so no live ClickHouse is
  * required. Assert the tenant boundary (ctx.orgId, never the input), the

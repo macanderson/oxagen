@@ -13,8 +13,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/ingestion/connector-schema-loader", () => ({
   loadBuiltInSchema: mocks.loadBuiltInSchema,
 }));
-vi.mock("@oxagen/oxagen/plugins", () => ({ getOxagenPlugin: mocks.getOxagenPlugin }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("@oxagen/oxagen/plugins", () => ({
+  getOxagenPlugin: mocks.getOxagenPlugin,
+}));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { pluginVersionListHandler } from "./plugin.version.list";
 
@@ -35,23 +39,31 @@ function setup(opts: {
 }) {
   mocks.loadBuiltInSchema.mockReturnValue(opts.builtIn ?? null);
   mocks.getOxagenPlugin.mockReturnValue(opts.manifest);
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: (arg: Record<string, unknown>) => {
-        if ("pluginVersion" in arg) {
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: (arg: Record<string, unknown>) => {
+          if ("pluginVersion" in arg) {
+            return {
+              from: () => ({
+                where: () => ({
+                  orderBy: () => ({
+                    limit: () => Promise.resolve(opts.history),
+                  }),
+                }),
+              }),
+            };
+          }
           return {
             from: () => ({
-              where: () => ({ orderBy: () => ({ limit: () => Promise.resolve(opts.history) }) }),
+              where: () => ({
+                limit: () =>
+                  Promise.resolve(opts.installed ? [{ id: "x" }] : []),
+              }),
             }),
           };
-        }
-        return {
-          from: () => ({
-            where: () => ({ limit: () => Promise.resolve(opts.installed ? [{ id: "x" }] : []) }),
-          }),
-        };
-      },
-    }),
+        },
+      }),
   );
 }
 
@@ -62,18 +74,38 @@ describe("plugin.version.list handler", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("throws 404 for a plugin that is neither a built-in connector nor a registry manifest", async () => {
-    setup({ builtIn: null, manifest: undefined, history: [], installed: false });
+    setup({
+      builtIn: null,
+      manifest: undefined,
+      history: [],
+      installed: false,
+    });
     await expect(
-      pluginVersionListHandler({ pluginId: "nope", limit: 20, includeChangelog: false }, CTX),
+      pluginVersionListHandler(
+        { pluginId: "nope", limit: 20, includeChangelog: false },
+        CTX,
+      ),
     ).rejects.toThrow("Unknown plugin: nope");
   });
 
   it("returns the built-in current version with real cached history", async () => {
     setup({
-      builtIn: { metadata: { version: "2.1.0", schemaVersion: "oxagen.ai/v1alpha1" } },
+      builtIn: {
+        metadata: { version: "2.1.0", schemaVersion: "oxagen.ai/v1alpha1" },
+      },
       history: [
-        { pluginVersion: "2.1.0", schemaVersion: "oxagen.ai/v1alpha1", cachedAt: D2, schema: {} },
-        { pluginVersion: "2.0.0", schemaVersion: "oxagen.ai/v1alpha1", cachedAt: D1, schema: {} },
+        {
+          pluginVersion: "2.1.0",
+          schemaVersion: "oxagen.ai/v1alpha1",
+          cachedAt: D2,
+          schema: {},
+        },
+        {
+          pluginVersion: "2.0.0",
+          schemaVersion: "oxagen.ai/v1alpha1",
+          cachedAt: D1,
+          schema: {},
+        },
       ],
       installed: true,
     });
@@ -107,7 +139,7 @@ describe("plugin.version.list handler", () => {
       CTX,
     );
     expect(out.installedVersion).toBeNull();
-    // No cached schema versions yet → honestly empty history, real currentVersion.
+    // No cached schema versions yet → empty history, real currentVersion.
     expect(out.versions).toEqual([]);
     expect(out.currentVersion).toBe("2.1.0");
   });
@@ -135,7 +167,14 @@ describe("plugin.version.list handler", () => {
   it("omits changelog when requested but absent from the cached schema", async () => {
     setup({
       builtIn: { metadata: { version: "2.1.0", schemaVersion: "v1" } },
-      history: [{ pluginVersion: "2.1.0", schemaVersion: "v1", cachedAt: D2, schema: {} }],
+      history: [
+        {
+          pluginVersion: "2.1.0",
+          schemaVersion: "v1",
+          cachedAt: D2,
+          schema: {},
+        },
+      ],
       installed: false,
     });
     const out = await pluginVersionListHandler(
@@ -166,7 +205,12 @@ describe("plugin.version.list handler", () => {
   });
 
   it("falls back to the Oxagen plugin-registry manifest version for non-connector plugins", async () => {
-    setup({ builtIn: null, manifest: { version: "3.0.0" }, history: [], installed: false });
+    setup({
+      builtIn: null,
+      manifest: { version: "3.0.0" },
+      history: [],
+      installed: false,
+    });
     const out = await pluginVersionListHandler(
       { pluginId: "oxagen/media-video", limit: 20, includeChangelog: false },
       CTX,
@@ -177,13 +221,21 @@ describe("plugin.version.list handler", () => {
   it("returns empty history (not a 500) when the connector_schemas read is denied", async () => {
     // connector_schemas is a shared catalog the oxagen_app role may lack grants on
     // in some envs; the denied read must degrade to empty history, not throw.
-    mocks.loadBuiltInSchema.mockReturnValue({ metadata: { version: "2.1.0", schemaVersion: "v1" } });
+    mocks.loadBuiltInSchema.mockReturnValue({
+      metadata: { version: "2.1.0", schemaVersion: "v1" },
+    });
     mocks.getOxagenPlugin.mockReturnValue(undefined);
     mocks.withTenantDb
-      .mockRejectedValueOnce(new Error("permission denied for table connector_schemas"))
+      .mockRejectedValueOnce(
+        new Error("permission denied for table connector_schemas"),
+      )
       .mockImplementationOnce((fn: (tx: unknown) => Promise<unknown>) =>
         fn({
-          select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }) }),
+          select: () => ({
+            from: () => ({
+              where: () => ({ limit: () => Promise.resolve([]) }),
+            }),
+          }),
         }),
       );
 

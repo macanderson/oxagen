@@ -6,11 +6,10 @@ import { logger } from "../logger";
  * Nodes store their property bag as a JSON string, but real-world data drifts:
  * an ingestion bug can write invalid/double-encoded JSON, and some driver
  * paths return the value as a native Neo4j map object instead of a string.
- * `graph.node.get` / `graph.node.list` previously called `JSON.parse()`
- * unguarded, so a single bad blob rejected the whole handler — one corrupt
- * node 500'd the entire graph-explorer page. Decoding must therefore never
- * throw: a property bag we cannot read degrades to `{}` (with a warning) and
- * the node still renders by its label/displayName.
+ * Decoding must never throw: a single bad blob would otherwise reject the
+ * whole handler and 500 the entire graph-explorer page over one corrupt node.
+ * A property bag we cannot read degrades to `{}` (with a warning) and the
+ * node still renders by its label/displayName.
  */
 export function safeParseProperties(
   raw: unknown,
@@ -82,7 +81,9 @@ function normalizeDriverIntegers(
   return out;
 }
 
-function isDriverInteger(value: unknown): value is { low: number; high: number } {
+function isDriverInteger(
+  value: unknown,
+): value is { low: number; high: number } {
   return (
     isPlainObject(value) &&
     Object.keys(value).length === 2 &&

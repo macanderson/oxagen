@@ -56,15 +56,27 @@ describe("graphNodeSearchHandler", () => {
       ]),
     );
 
-    const result = await graphNodeSearchHandler({ query: "auth", limit: 10 }, CTX);
+    const result = await graphNodeSearchHandler(
+      { query: "auth", limit: 10 },
+      CTX,
+    );
 
     expect(result.nodes).toEqual([
-      { nodeId: "n-1", label: "Issue", displayName: "Auth bug", description: "broken", score: 1.0 },
+      {
+        nodeId: "n-1",
+        label: "Issue",
+        displayName: "Auth bug",
+        description: "broken",
+        score: 1.0,
+      },
     ]);
   });
 
   it("returns an empty array when nothing matches", async () => {
-    const result = await graphNodeSearchHandler({ query: "nope", limit: 10 }, CTX);
+    const result = await graphNodeSearchHandler(
+      { query: "nope", limit: 10 },
+      CTX,
+    );
     expect(result.nodes).toEqual([]);
   });
 
@@ -82,7 +94,10 @@ describe("graphNodeSearchHandler", () => {
   });
 
   it("appends the label filter when labels are supplied", async () => {
-    await graphNodeSearchHandler({ query: "x", limit: 5, labels: ["Issue"] }, CTX);
+    await graphNodeSearchHandler(
+      { query: "x", limit: 5, labels: ["Issue"] },
+      CTX,
+    );
     const cypher = mocks.run.mock.calls[0]?.[0] as string;
     const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(cypher).toContain("n.label IN $labels");
@@ -92,7 +107,7 @@ describe("graphNodeSearchHandler", () => {
     expect(params.limit).toBe(BigInt(5));
   });
 
-  // OXA-2062: the Cypher referenced $orgId/$workspaceId but the local params
+  // The Cypher references $orgId/$workspaceId but the local params
   // object omitted both, relying entirely on scopedSession()'s auto-injection.
   // A mocked scopedSession (as used here) does NOT auto-inject, so this bug
   // was invisible to this suite until orgId/workspaceId were bound explicitly.
@@ -105,9 +120,9 @@ describe("graphNodeSearchHandler", () => {
 
   it("closes the session even when run throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
-    await expect(graphNodeSearchHandler({ query: "x", limit: 5 }, CTX)).rejects.toThrow(
-      "Neo4j down",
-    );
+    await expect(
+      graphNodeSearchHandler({ query: "x", limit: 5 }, CTX),
+    ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
   });
 });

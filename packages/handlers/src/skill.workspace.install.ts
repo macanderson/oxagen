@@ -13,7 +13,7 @@ import {
 
 // Builtin templates are resolved from EMBEDDED module data, never a runtime
 // filesystem read: serverless bundlers drop packages/skills/skills data, so a
-// `readdir` there returns ENOENT in prod (postmortem 2026-06-12).
+// `readdir` there returns ENOENT in prod.
 
 /**
  * Derive a workspace-safe slug from a custom skill name. The name must already

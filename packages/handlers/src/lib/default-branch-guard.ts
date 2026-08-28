@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 
 /**
- * Hard write invariant (OXA-2117): Oxagen never writes directly to a
+ * Hard write invariant: Oxagen never writes directly to a
  * repository's default branch. Work lands on a dedicated branch and reaches
  * the default branch only through a pull request. Enforced here, at the
  * handler layer, so every surface (agent, api, mcp) inherits it — the
