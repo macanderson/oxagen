@@ -627,7 +627,7 @@ describe("fleet distill", () => {
     );
     expect(err.join("\n")).toContain("oxagen login");
     expect(process.exitCode).toBe(1);
-    // The local artifacts landed anyway, and the record is honest: not pushed.
+    // The local artifacts landed anyway, and the record reflects reality: not pushed.
     await expect(
       readFile(join(recordStore.rootDir, "distilled.json"), "utf8"),
     ).resolves.toContain("seeded prompt");

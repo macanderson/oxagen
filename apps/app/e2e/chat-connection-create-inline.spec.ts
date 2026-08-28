@@ -114,7 +114,7 @@ test.describe("chat.connection-create-inline", () => {
 
     // Clicking the button opens the GitHubConnectionWizard dialog. A fresh
     // user has no GitHub App installation, so the wizard opens at the gate
-    // step directing them to Workspace Settings (see #300).
+    // step directing them to Workspace Settings.
     await card.locator('[data-testid="connection-create-inline-github-btn"]').click();
 
     const dialog = page.getByRole("dialog");

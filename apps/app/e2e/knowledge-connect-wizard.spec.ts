@@ -61,8 +61,8 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // testid. preview-step.tsx renders ErrorState ("Couldn't preview this
   // connection") when preview_connection throws and EmptyState ("No records
   // found") when it returns nothing, and both are invisible to an assertion
-  // that only looks for the populated card — which is why #1188 could say the
-  // record type was absent but not why.
+  // that only looks for the populated card — so distinguish all three
+  // explicitly instead of just asserting the record type is absent.
   const populated = page.getByTestId("preview-record-type-webhook_event");
   const previewFailed = page.getByText("Couldn't preview this connection");
   const previewEmpty = page.getByText("No records found");
@@ -87,7 +87,7 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // placeholder, ErrorState ("Couldn't generate mapping suggestions") when the
   // model call fails, and EmptyState ("No mappings to review") when it returns
   // nothing. Waiting only for a row cannot tell a slow call from a failed one
-  // from an empty one, and #1188 spent a long time not knowing which.
+  // from an empty one, so distinguish all three explicitly.
   const mappingRow = page.getByTestId("mapping-row-webhook_event");
   const mappingsFailed = page.getByText("Couldn't generate mapping suggestions");
   const mappingsEmpty = page.getByText("No mappings to review");

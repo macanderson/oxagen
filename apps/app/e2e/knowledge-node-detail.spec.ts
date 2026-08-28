@@ -21,11 +21,10 @@ import {
  *   3. A never-seeded node id renders the friendly not-found state, not a
  *      raw 500 or crash.
  *
- * #1087 ("retire unsafe workspace graph authority") deleted the node-detail
- * admin-actions panel — node-admin-actions.tsx and its server actions are
- * gone, and nothing under apps/app/src renders "Admin actions" or a Delete
- * node control any more. The org-owner admin assertion this spec carried was
- * an assertion it outlived; page.tsx is now a read-only detail view.
+ * There is no node-detail admin-actions panel — node-admin-actions.tsx and
+ * its server actions do not exist, and nothing under apps/app/src renders
+ * "Admin actions" or a Delete node control. page.tsx is a read-only detail
+ * view.
  *
  * Seeding: setupAgentRuntimeFixture gives a real org + workspace + owner
  * session (org.org_users.role = 'owner' — the exact row getOrgRole /
@@ -192,8 +191,8 @@ test.describe("knowledge node detail — citation rule + neighbors", () => {
       timeout: 15_000,
     });
 
-    // No admin-actions assertion: #1087 deleted the panel outright (see the
-    // file header). The node-detail route is a read-only view now.
+    // No admin-actions assertion: there is no such panel (see the
+    // file header). The node-detail route is a read-only view.
   });
 
   test("a never-seeded node id renders the friendly not-found state, not a crash", async ({

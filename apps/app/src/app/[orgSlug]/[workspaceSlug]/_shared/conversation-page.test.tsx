@@ -210,7 +210,7 @@ vi.mock("@oxagen/handlers/budget.policy.read", () => ({
   })),
 }));
 
-// Code-mode picker options (repos + environments, #648). loadCodeModeOptions
+// Code-mode picker options (repos + environments). loadCodeModeOptions
 // never throws in the real page (degrades to empty lists); stub it to empty.
 vi.mock("./code-mode-data", () => ({
   loadCodeModeOptions: vi.fn(async () => ({ repos: [], environments: [] })),

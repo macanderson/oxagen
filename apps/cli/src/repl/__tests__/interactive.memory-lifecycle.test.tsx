@@ -43,8 +43,8 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
 // tree-sitter builder or touch the DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
-  // Mount-time warm-up (PR #654): a missing export here crashes ReplApp at
-  // mount and every waitFor starves on empty frames — keep in sync.
+  // Mount-time warm-up: a missing export here crashes ReplApp at mount and
+  // every waitFor starves on empty frames — keep in sync.
   warmCodeGraph: () => {},
 }));
 vi.mock("../../agent/trace-store.js", () => ({

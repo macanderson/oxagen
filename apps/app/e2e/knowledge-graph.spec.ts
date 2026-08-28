@@ -13,12 +13,11 @@
  *      (Neo4j pre-seeded), it asserts real rows instead.
  *   3. Search filters: typing into the Search tab's box drives a query
  *      without crashing the page (fuzzy search over an empty/seeded graph).
- *   4. Query console runs a typed traversal and renders its outcome. #1087
- *      ("retire unsafe workspace graph authority") replaced the raw Cypher
- *      box with an ontology.query traversal from a known start node —
- *      query-console.tsx accepts no database query language at all, so the
- *      old `RETURN 1 AS one` probe has nothing left to type into. Traversing
- *      from a publicId that cannot exist is the equivalent always-safe read:
+ *   4. Query console runs a typed traversal and renders its outcome. The
+ *      console runs an ontology.query traversal from a known start node —
+ *      query-console.tsx accepts no database query language at all, so there
+ *      is no raw query box to type into. Traversing from a publicId that
+ *      cannot exist is the equivalent always-safe read:
  *      the handler returns startNode:null for an unknown id rather than
  *      erroring (packages/handlers/src/ontology.query.ts), so the assertion
  *      needs Neo4j running but never pre-seeded.
@@ -146,9 +145,9 @@ test.describe("Knowledge → Graph", () => {
 
     await page.getByRole("tab", { name: "Query" }).click();
 
-    // The Query tab is a typed ontology.query traversal since #1087 — a start
-    // node plus relationship types / direction / depth. There is no Cypher
-    // box and no "Run" button to drive one.
+    // The Query tab is a typed ontology.query traversal — a start
+    // node plus relationship types / direction / depth. There is no raw
+    // query box and no "Run" button to drive one.
     const startNodeInput = page.getByLabel("Start node ID");
     await expect(startNodeInput).toBeVisible({ timeout: 10_000 });
     const traverse = page.getByRole("button", { name: "Traverse" });
@@ -156,7 +155,7 @@ test.describe("Knowledge → Graph", () => {
 
     // A publicId that cannot exist in a workspace created seconds ago — the
     // traversal still round-trips through ontologyQueryAction → query_ontology
-    // and comes back startNode:null, which the console reports honestly
+    // and comes back startNode:null, which the console reports plainly
     // instead of erroring or blanking the panel.
     await startNodeInput.fill("e2e-no-such-public-id");
     await expect(traverse).toBeEnabled();

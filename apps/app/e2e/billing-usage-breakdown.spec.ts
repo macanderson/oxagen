@@ -46,7 +46,7 @@ test("usage dashboard: renders KPIs, breakdown panels, and range picker for a fr
   await expect(page.getByText("Cached tokens", { exact: true })).toBeVisible();
   await expect(page.getByText("LLM calls", { exact: true })).toBeVisible();
 
-  // Cache-economics row (#1076) — cache hit % and net savings must be surfaced.
+  // Cache-economics row — cache hit % and net savings must be surfaced.
   await expect(page.getByText("Cache hit rate", { exact: true })).toBeVisible();
   await expect(page.getByText("Cache writes", { exact: true })).toBeVisible();
   await expect(page.getByText("Cache savings", { exact: true })).toBeVisible();

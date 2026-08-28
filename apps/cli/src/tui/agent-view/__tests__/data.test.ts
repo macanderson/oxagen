@@ -337,7 +337,7 @@ describe("collectAgentViewData", () => {
     expect(data.sourceError).toBeUndefined();
   });
 
-  it("absent-source path: empty store yields honest zeros and empty panels", async () => {
+  it("absent-source path: empty store yields real zeros and empty panels", async () => {
     const data = await collectAgentViewData({
       cwd: root,
       store,

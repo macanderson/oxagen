@@ -75,7 +75,7 @@ test("Describe step: skip reaches Identity and manual setup saves a draft", asyn
   await expect(page.getByTestId("step-review")).toBeVisible();
 
   // Create-mode agent key preview: the org/workspace namespaces are assigned
-  // server-side on save, so Review shows a slug-only preview honestly.
+  // server-side on save, so Review shows a plain slug-only preview.
   const keyPreview = page.getByTestId("agent-key-review");
   await expect(keyPreview).toBeVisible();
   await expect(keyPreview).toContainText(slug);

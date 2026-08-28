@@ -1,7 +1,7 @@
 /**
  * two-factor-enrollment.spec.ts
  *
- * Security-critical money-path E2E for TOTP 2FA (PR #561). Proves the full
+ * Security-critical money-path E2E for TOTP 2FA. Proves the full
  * enroll → sign-out → re-sign-in-with-second-factor loop against the real UI
  * and the real Better Auth twoFactor endpoints — no mocks.
  *
