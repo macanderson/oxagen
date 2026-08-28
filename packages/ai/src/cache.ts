@@ -52,7 +52,7 @@ export interface CachedUsage {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
-  /** Prompt-cache write tokens on the original call (#1076). 0 on legacy entries. */
+  /** Prompt-cache write tokens on the original call. Older stored entries may have 0. */
   cacheWriteTokens: number;
   costUsdMicros: number;
 }

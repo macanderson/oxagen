@@ -2,7 +2,10 @@ import { gateway } from "@ai-sdk/gateway";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
-import type { Experimental_VideoModelV4, LanguageModelV4 } from "@ai-sdk/provider";
+import type {
+  Experimental_VideoModelV4,
+  LanguageModelV4,
+} from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import type { MediaTier, ResolvedTierCatalog } from "./catalog";
 
@@ -19,13 +22,18 @@ import type { MediaTier, ResolvedTierCatalog } from "./catalog";
  * the catch swallows the error and returns the unwrapped model so the app
  * continues to work.
  */
-let _devToolsMiddleware: (() => import("@ai-sdk/provider").LanguageModelV4Middleware) | null = null;
+let _devToolsMiddleware:
+  | (() => import("@ai-sdk/provider").LanguageModelV4Middleware)
+  | null = null;
 if (process.env.NODE_ENV === "development") {
   // Eager synchronous-style load: Next.js dev mode processes this at module
   // evaluation time. We store the factory so selectModel() stays synchronous.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _devToolsMiddleware = (require("@ai-sdk/devtools") as { devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV4Middleware }).devToolsMiddleware;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- devtools is a devDependency, dynamic require avoids a static import in production builds
+    const devtools = require("@ai-sdk/devtools") as {
+      devToolsMiddleware: () => import("@ai-sdk/provider").LanguageModelV4Middleware;
+    };
+    _devToolsMiddleware = devtools.devToolsMiddleware;
   } catch {
     // devtools not available — silent no-op
   }
@@ -195,9 +203,8 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
  *
  * The gateway is the default and remains the platform's metered path. Setting
  * `OXAGEN_MODEL_PROVIDER=openrouter` selects a direct OpenAI-compatible
- * provider instead, for a deployment that cannot reach the gateway — the AWS
- * instance behind app.oxagen.sh, whose gateway credential 401s because the
- * Vercel account is suspended.
+ * provider instead, for a deployment that cannot reach the gateway (for
+ * example, no working `AI_GATEWAY_API_KEY`).
  *
  * Selection is EXPLICIT, never a fallback. An automatic failover on gateway
  * error would silently move spend onto a different vendor's bill and bypass
@@ -215,7 +222,9 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
  * env vars are for, so the id is whatever the environment says and a typo
  * fails loudly at call time.
  */
-function languageProvider(): { languageModel: (id: string) => LanguageModelV4 } {
+function languageProvider(): {
+  languageModel: (id: string) => LanguageModelV4;
+} {
   const { OXAGEN_MODEL_PROVIDER, OPENROUTER_API_KEY } = requireEnv([
     "OXAGEN_MODEL_PROVIDER",
     "OPENROUTER_API_KEY",
@@ -239,17 +248,14 @@ function languageProvider(): { languageModel: (id: string) => LanguageModelV4 } 
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: OPENROUTER_API_KEY,
     // Without this, `generateObject` cannot return an object on this provider
-    // at all. The SDK declines to send a JSON response format — it warns
-    // "JSON response format schema is only supported with structuredOutputs" —
-    // and falls back to a tool call, whose arguments come back from Anthropic
+    // at all. The SDK declines to send a JSON response format and falls back
+    // to a tool call instead, whose arguments come back from Anthropic
     // through OpenRouter double-encoded:
     //
     //   {"suggestions": "{\"suggestions\": [{\"sourceRecordType\": ...}]}"}
     //
-    // a string where the schema declares an array. Every generateObjectFor
-    // caller then failed with "No object generated: could not parse the
-    // response" — in production as well as CI, since the AWS deployment runs
-    // on this provider (/oxagen/production/OXAGEN_MODEL_PROVIDER=openrouter).
+    // a string where the schema declares an array, which every
+    // generateObjectFor caller fails to parse.
     supportsStructuredOutputs: true,
   });
 }
@@ -282,7 +288,9 @@ const IMAGE_DEFAULT_GATEWAY = "openai/gpt-image-1";
  * as `image.generate.ts` does — this never throws on a missing key, it builds a
  * client that surfaces the error at call time.
  */
-export function selectImageModel(selector: ImageModelSelector = {}): ImageModel {
+export function selectImageModel(
+  selector: ImageModelSelector = {},
+): ImageModel {
   return gateway.imageModel(selector.model ?? IMAGE_DEFAULT_GATEWAY);
 }
 

@@ -101,8 +101,6 @@ export function reasoningRequestConfig(
 
     case "openai":
       // Reasoning models (gpt-5.x / o-series) reject non-default temperature.
-      // `reasoningSummary: "auto"` causes the gateway to stream a reasoning
-      // summary chunk into fullStream.
       return {
         providerOptions: {
           openai: {
@@ -211,11 +209,11 @@ export interface StreamAgentReplyArgs {
    */
   maxRetries?: number;
   /**
-   * Required for OXA-1351 instrumentation. The caller's CapabilityContext
-   * carries `orgId`, `workspaceId`, and `surface`; pass them through so
-   * every LLM call lands in `token_usage` with provider, duration_ms,
-   * surface, and prompt_hash. `messageId` is the user message that
-   * initiated the turn — used as the execution_step_id correlation key.
+   * The caller's CapabilityContext carries `orgId`, `workspaceId`, and
+   * `surface`; pass them through so every LLM call lands in `token_usage`
+   * with provider, duration_ms, surface, and prompt_hash. `messageId` is the
+   * user message that initiated the turn — used as the execution_step_id
+   * correlation key.
    */
   telemetry: {
     orgId: string;
@@ -294,7 +292,7 @@ export function streamAgentReply(
   // ignored by every other vendor (OpenAI/Google/xAI/…), so this is a no-op —
   // never an error — for non-Anthropic models. Caching is keyed on the exact
   // prefix bytes and only engages above the provider's minimum cacheable size,
-  // so a short system prompt simply isn't cached (no harm). We carry the system
+  // so a short system prompt isn't cached (no harm). We carry the system
   // as a leading system message (rather than the `system` param) because only
   // message-level providerOptions can place a cache_control marker.
   const cachedSystem: ModelMessage[] = args.system
@@ -343,10 +341,11 @@ export function streamAgentReply(
       const inputTokens = event.totalUsage.inputTokens ?? 0;
       const outputTokens = event.totalUsage.outputTokens ?? 0;
       // Prompt-cache reads: the AI SDK v6 gateway normalizes the provider's
-      // cache-read count into `cachedInputTokens` (a subset of inputTokens).
-      // Forward it so the rate card prices those tokens at the cheaper cached
-      // rate — otherwise the customer is over-charged on the cached portion.
-      // Zero when caching didn't engage (small prefix / non-Anthropic / cold).
+      // cache-read count into `inputTokenDetails.cacheReadTokens` (a subset of
+      // inputTokens). Forward it so the rate card prices those tokens at the
+      // cheaper cached rate — otherwise the customer is over-charged on the
+      // cached portion. Zero when caching didn't engage (small prefix /
+      // non-Anthropic / cold).
       const cachedTokens =
         event.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0;
       // Prompt-cache WRITES (cache creation): the AI SDK v7 gateway exposes these
@@ -354,7 +353,7 @@ export function streamAgentReply(
       // is the raw Anthropic field name, renamed by the SDK). Also a subset of
       // `inputTokens`. Providers bill writes at a premium (Anthropic 1.25x base
       // input); forwarding the count lets the rate card price them correctly
-      // instead of billing them as fresh 1x input (#1076). Zero on non-Anthropic
+      // instead of billing them as fresh 1x input. Zero on non-Anthropic
       // or when no prefix was cached this turn.
       const cacheWriteTokens =
         event.totalUsage.inputTokenDetails?.cacheWriteTokens ?? 0;

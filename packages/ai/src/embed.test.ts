@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock at the gateway + telemetry seam — embedText routes 100% through the
 // Vercel AI Gateway (@ai-sdk/gateway) and must not expose vendor SDKs or
-// ClickHouse internals to callers (OXA-1425).
+// ClickHouse internals to callers.
 const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   embeddingModel: vi.fn(),
@@ -18,7 +18,9 @@ mocks.embed.mockImplementation(async () => ({
   embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
   usage: { tokens: 7 },
 }));
-mocks.embeddingModel.mockReturnValue({ modelId: "openai/text-embedding-3-small" });
+mocks.embeddingModel.mockReturnValue({
+  modelId: "openai/text-embedding-3-small",
+});
 // Telemetry stubs.
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
@@ -32,7 +34,9 @@ mocks.chargeUsageCredits.mockResolvedValue({
 });
 
 vi.mock("ai", () => ({ embed: mocks.embed }));
-vi.mock("@ai-sdk/gateway", () => ({ gateway: { embeddingModel: mocks.embeddingModel } }));
+vi.mock("@ai-sdk/gateway", () => ({
+  gateway: { embeddingModel: mocks.embeddingModel },
+}));
 // Stub pino so the usage-absent warning is observable.
 vi.mock("pino", () => ({
   default: vi.fn(() => ({ warn: mocks.warn, error: vi.fn(), info: vi.fn() })),
@@ -86,7 +90,9 @@ describe("embedText (@oxagen/ai)", () => {
   it("calls the gateway embedding model with the correct model id and returns a 1536-d vector", async () => {
     const v = await embedText("hello", { telemetry: BASE_TELEMETRY });
     expect(v).toHaveLength(1536);
-    expect(mocks.embeddingModel).toHaveBeenCalledWith("openai/text-embedding-3-small");
+    expect(mocks.embeddingModel).toHaveBeenCalledWith(
+      "openai/text-embedding-3-small",
+    );
     expect(mocks.embed).toHaveBeenCalledTimes(1);
     const args = mocks.embed.mock.calls[0]?.[0] as { value: string };
     expect(args.value).toBe("hello");
@@ -107,7 +113,10 @@ describe("embedText (@oxagen/ai)", () => {
       },
     });
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    const firstCall = mocks.insertTokenUsage.mock.calls[0] as [unknown[], ...unknown[]];
+    const firstCall = mocks.insertTokenUsage.mock.calls[0] as [
+      unknown[],
+      ...unknown[],
+    ];
     const rows: unknown[] = firstCall[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
@@ -160,7 +169,12 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockImplementationOnce(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 42, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 42,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     await embedText("inngest embed", { telemetry: BASE_TELEMETRY });
@@ -174,7 +188,12 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.chargeUsageCredits.mockImplementationOnce(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 42, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 42,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     await runInTenantScope(
@@ -204,9 +223,16 @@ describe("embedText (@oxagen/ai)", () => {
   // was typed `string`, callers sent `embed:<nodeId>`).
   it("passes null execution_step_id through to token_usage when there is no step", async () => {
     await embedText("ingestion embed", {
-      telemetry: { orgId: "00000000-0000-4000-8000-000000000001", workspaceId: "00000000-0000-4000-8000-000000000002", surface: "ingestion", executionStepId: null },
+      telemetry: {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000002",
+        surface: "ingestion",
+        executionStepId: null,
+      },
     });
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0];
+    const rows = (
+      mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]]
+    )[0];
     expect(rows[0]!.execution_step_id).toBeNull();
     // It must never be a synthesized correlation string.
     expect(typeof rows[0]!.execution_step_id).not.toBe("string");
@@ -214,10 +240,17 @@ describe("embedText (@oxagen/ai)", () => {
 
   it("charges credits with referenceId undefined (not a non-UUID string) when there is no step", async () => {
     await embedText("ingestion embed", {
-      telemetry: { orgId: "00000000-0000-4000-8000-000000000001", workspaceId: "00000000-0000-4000-8000-000000000002", surface: "ingestion", executionStepId: null },
+      telemetry: {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000002",
+        surface: "ingestion",
+        executionStepId: null,
+      },
     });
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
-    const arg = mocks.chargeUsageCredits.mock.calls[0]![0] as { referenceId?: string };
+    const arg = mocks.chargeUsageCredits.mock.calls[0]![0] as {
+      referenceId?: string;
+    };
     expect(arg.referenceId).toBeUndefined();
   });
 
@@ -230,11 +263,19 @@ describe("embedText (@oxagen/ai)", () => {
     expect(v).toHaveLength(1536);
     // The missing-usage gap must be logged, not silently zeroed.
     expect(mocks.warn).toHaveBeenCalledTimes(1);
-    const [meta, msg] = mocks.warn.mock.calls[0] as [Record<string, unknown>, string];
+    const [meta, msg] = mocks.warn.mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
     expect(msg).toContain("usage field absent");
-    expect(meta).toMatchObject({ model: "text-embedding-3-small", executionStepId: "req_abc" });
+    expect(meta).toMatchObject({
+      model: "text-embedding-3-small",
+      executionStepId: "req_abc",
+    });
     // token_usage row and credit charge still recorded, with zero input tokens.
-    const usageRow = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0][0]!;
+    const usageRow = (
+      mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]]
+    )[0][0]!;
     expect(usageRow.input_tokens).toBe(0);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
       expect.objectContaining({ inputTokens: 0 }),

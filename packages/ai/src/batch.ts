@@ -225,7 +225,7 @@ export async function pollBatch(args: PollBatchArgs): Promise<PollBatchResult> {
       // remainder; cache reads/writes are separate counts. Normalize to the
       // platform's INCLUSIVE convention (see the interface) so the rate card's
       // `fresh = inputTokens - reads - writes` recovers the true fresh count and
-      // prices cache writes at the provider premium (#1076).
+      // prices cache writes at the provider premium.
       const cacheReadTokens = message.usage?.cache_read_input_tokens ?? 0;
       const cacheWriteTokens = message.usage?.cache_creation_input_tokens ?? 0;
       const usage = {
