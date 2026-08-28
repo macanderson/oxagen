@@ -1,5 +1,5 @@
 // resolve.test.ts — comprehensive unit tests for the pure IAM resolver.
-// OXA-1390, Phase 3. No I/O — all data pre-fabricated.
+// No I/O — all data pre-fabricated.
 //
 // Target: >95% line coverage on resolve.ts.
 
@@ -135,11 +135,20 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
   // fell through to a `deny` defaultEffect). Explicit denial via config still
   // wins, because all deny rules (1, 2, 6, 7) run first.
   const ownerRole = (): Role =>
-    makeRole({ name: "Owner", scopeKind: "org", isSystemDefault: true, principalIds: [PRINCIPAL_ID] });
+    makeRole({
+      name: "Owner",
+      scopeKind: "org",
+      isSystemDefault: true,
+      principalIds: [PRINCIPAL_ID],
+    });
 
   it("ALLOWS an org owner for a capability with no grant, despite defaultEffect deny", () => {
     const result = resolve(
-      baseInput({ roles: [ownerRole()], roleGrants: [], defaultEffect: "deny" }),
+      baseInput({
+        roles: [ownerRole()],
+        roleGrants: [],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("allow");
     expect(result.trace.decidedBy.rule).toBe("7.5:org_owner_superuser");
@@ -147,29 +156,52 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
 
   it("ALLOWS an org owner on a workspace-scoped invocation with no grant", () => {
     const result = resolve(
-      baseInput({ scope: wsScope, roles: [ownerRole()], roleGrants: [], defaultEffect: "deny" }),
+      baseInput({
+        scope: wsScope,
+        roles: [ownerRole()],
+        roleGrants: [],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("allow");
     expect(result.trace.decidedBy.rule).toBe("7.5:org_owner_superuser");
   });
 
   it("does NOT apply to a non-system role merely named 'Owner' (falls to defaultEffect)", () => {
-    const fakeOwner = makeRole({ name: "Owner", scopeKind: "org", isSystemDefault: false });
-    const result = resolve(baseInput({ roles: [fakeOwner], defaultEffect: "deny" }));
+    const fakeOwner = makeRole({
+      name: "Owner",
+      scopeKind: "org",
+      isSystemDefault: false,
+    });
+    const result = resolve(
+      baseInput({ roles: [fakeOwner], defaultEffect: "deny" }),
+    );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("8:default");
   });
 
   it("does NOT apply to a system-default role that is not the org Owner (e.g. Admin)", () => {
-    const admin = makeRole({ name: "Admin", scopeKind: "org", isSystemDefault: true });
-    const result = resolve(baseInput({ roles: [admin], defaultEffect: "deny" }));
+    const admin = makeRole({
+      name: "Admin",
+      scopeKind: "org",
+      isSystemDefault: true,
+    });
+    const result = resolve(
+      baseInput({ roles: [admin], defaultEffect: "deny" }),
+    );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("8:default");
   });
 
   it("does NOT apply to a workspace-scoped role named 'Owner' (only org-scoped owners are super-users)", () => {
-    const wsOwner = makeRole({ name: "Owner", scopeKind: "workspace", isSystemDefault: true });
-    const result = resolve(baseInput({ roles: [wsOwner], defaultEffect: "deny" }));
+    const wsOwner = makeRole({
+      name: "Owner",
+      scopeKind: "workspace",
+      isSystemDefault: true,
+    });
+    const result = resolve(
+      baseInput({ roles: [wsOwner], defaultEffect: "deny" }),
+    );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("8:default");
   });
@@ -181,15 +213,25 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
       isSystemDefault: true,
       principalIds: ["prn_someone_else"],
     });
-    const result = resolve(baseInput({ roles: [ownerOtherPrincipal], defaultEffect: "deny" }));
+    const result = resolve(
+      baseInput({ roles: [ownerOtherPrincipal], defaultEffect: "deny" }),
+    );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("8:default");
   });
 
   it("an explicit org enforced DENY policy overrides owner super-user (config wins)", () => {
-    const denyPolicy = makePolicy({ effect: "deny", enforced: true, scopeId: ORG_ID });
+    const denyPolicy = makePolicy({
+      effect: "deny",
+      enforced: true,
+      scopeId: ORG_ID,
+    });
     const result = resolve(
-      baseInput({ roles: [ownerRole()], policies: [denyPolicy], defaultEffect: "deny" }),
+      baseInput({
+        roles: [ownerRole()],
+        policies: [denyPolicy],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("2:org_enforced_deny");
@@ -198,16 +240,29 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
   it("an explicit Owner-role DENY grant overrides owner super-user (config wins)", () => {
     const denyRoleGrant = makeRoleGrant({ roleId: ROLE_ID, effect: "deny" });
     const result = resolve(
-      baseInput({ roles: [ownerRole()], roleGrants: [denyRoleGrant], defaultEffect: "deny" }),
+      baseInput({
+        roles: [ownerRole()],
+        roleGrants: [denyRoleGrant],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("7:role_grant");
   });
 
   it("a workspace explicit DENY grant overrides owner super-user (config wins)", () => {
-    const wsDeny = makeGrant({ scopeKind: "workspace", scopeId: WORKSPACE_ID, effect: "deny" });
+    const wsDeny = makeGrant({
+      scopeKind: "workspace",
+      scopeId: WORKSPACE_ID,
+      effect: "deny",
+    });
     const result = resolve(
-      baseInput({ scope: wsScope, roles: [ownerRole()], grants: [wsDeny], defaultEffect: "deny" }),
+      baseInput({
+        scope: wsScope,
+        roles: [ownerRole()],
+        grants: [wsDeny],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("deny");
     expect(result.trace.decidedBy.rule).toBe("1:workspace_deny");
@@ -216,7 +271,11 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
   it("an explicit Owner-role ALLOW grant still decides at rule 7 (before 7.5)", () => {
     const allowRoleGrant = makeRoleGrant({ roleId: ROLE_ID, effect: "allow" });
     const result = resolve(
-      baseInput({ roles: [ownerRole()], roleGrants: [allowRoleGrant], defaultEffect: "deny" }),
+      baseInput({
+        roles: [ownerRole()],
+        roleGrants: [allowRoleGrant],
+        defaultEffect: "deny",
+      }),
     );
     expect(result.outcome).toBe("allow");
     expect(result.trace.decidedBy.rule).toBe("7:role_grant");
@@ -225,7 +284,11 @@ describe("resolve — Rule 7.5: org owner super-user", () => {
 
 describe("resolve — Rule 6: org default grant", () => {
   it("allows when org grant is allow and no workspace override", () => {
-    const grant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow" });
+    const grant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "allow",
+    });
     const result = resolve(baseInput({ grants: [grant] }));
     expect(result.outcome).toBe("allow");
     expect(result.trace.decidedBy.rule).toBe("6:org_grant");
@@ -243,7 +306,11 @@ describe("resolve — Rule 6: org default grant", () => {
   });
 
   it("denies when org grant effect is deny", () => {
-    const grant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "deny" });
+    const grant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "deny",
+    });
     const result = resolve(baseInput({ grants: [grant] }));
     expect(result.outcome).toBe("deny");
     if (result.outcome === "deny") {
@@ -254,7 +321,12 @@ describe("resolve — Rule 6: org default grant", () => {
 
   it("expired grant is skipped and falls through to rule 8 deny", () => {
     const past = new Date(Date.now() - 1000);
-    const grant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow", expiresAt: past });
+    const grant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "allow",
+      expiresAt: past,
+    });
     const result = resolve(baseInput({ grants: [grant] }));
     // The expired grant causes a deny at rule 6 with reason 'expired'.
     expect(result.outcome).toBe("deny");
@@ -285,7 +357,11 @@ describe("resolve — Rule 6: org default grant", () => {
     // capability in a workspace context (the kernel's default). The org grant
     // must be inherited via Rule 6 — it must NOT be discarded by the scope
     // filter and fall through to the contract defaultEffect (deny).
-    const orgGrant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow" });
+    const orgGrant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "allow",
+    });
     const result = resolve(
       baseInput({ grants: [orgGrant], scope: wsScope, defaultEffect: "deny" }),
     );
@@ -294,7 +370,11 @@ describe("resolve — Rule 6: org default grant", () => {
   });
 
   it("inherits org deny grant during a WORKSPACE-scoped invocation when no workspace override", () => {
-    const orgDeny = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "deny" });
+    const orgDeny = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "deny",
+    });
     const result = resolve(
       baseInput({ grants: [orgDeny], scope: wsScope, defaultEffect: "allow" }),
     );
@@ -305,7 +385,11 @@ describe("resolve — Rule 6: org default grant", () => {
 
 describe("resolve — Rule 1: workspace explicit deny", () => {
   it("denies when workspace deny overrides org allow (rule 1 before rule 3)", () => {
-    const orgGrant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow" });
+    const orgGrant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "allow",
+    });
     const wsDeny = makeGrant({
       scopeKind: "workspace",
       scopeId: WORKSPACE_ID,
@@ -381,7 +465,11 @@ describe("resolve — Rule 2: org enforced deny", () => {
 
 describe("resolve — Rule 3: workspace explicit allow", () => {
   it("workspace allow takes precedence over org deny", () => {
-    const orgDeny = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "deny" });
+    const orgDeny = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "deny",
+    });
     const wsAllow = makeGrant({
       scopeKind: "workspace",
       scopeId: WORKSPACE_ID,
@@ -426,7 +514,10 @@ describe("resolve — capability matching is exact", () => {
   it("does NOT match a role grant keyed by a different capability name", () => {
     // Capability names are matched exactly (no alias fallback): a role_grants
     // row keyed by a name other than the invoked capability never grants access.
-    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
+    const rg = makeRoleGrant({
+      capabilityId: "organization.create",
+      effect: "allow",
+    });
     const result = resolve(
       baseInput({
         capability: "create_org",
@@ -487,7 +578,9 @@ describe("resolve — Rule precedence: org enforced deny beats role grant allow"
       effect: "deny",
       enforced: true,
     });
-    const result = resolve(baseInput({ roles: [role], roleGrants: [rg], policies: [policy] }));
+    const result = resolve(
+      baseInput({ roles: [role], roleGrants: [rg], policies: [policy] }),
+    );
     expect(result.outcome).toBe("deny");
     if (result.outcome === "deny") {
       expect(result.reason).toBe("org_enforced_deny");
@@ -512,7 +605,11 @@ describe("resolve — trace integrity", () => {
   });
 
   it("trace decidedBy points to a step in the steps array", () => {
-    const grant = makeGrant({ scopeKind: "org", scopeId: ORG_ID, effect: "allow" });
+    const grant = makeGrant({
+      scopeKind: "org",
+      scopeId: ORG_ID,
+      effect: "allow",
+    });
     const result = resolve(baseInput({ grants: [grant] }));
     const { steps, decidedBy } = result.trace;
     // decidedBy must be one of the steps (same object reference).
@@ -520,7 +617,9 @@ describe("resolve — trace integrity", () => {
   });
 
   it("workspace scope includes workspace-specific rule steps", () => {
-    const result = resolve(baseInput({ scope: wsScope, defaultEffect: "deny" }));
+    const result = resolve(
+      baseInput({ scope: wsScope, defaultEffect: "deny" }),
+    );
     const rules = result.trace.steps.map((s) => s.rule);
     expect(rules).toContain("1:workspace_deny");
     expect(rules).toContain("3:workspace_allow");

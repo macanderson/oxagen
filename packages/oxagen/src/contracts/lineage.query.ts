@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
-// query_lineage — the data spine for the fleet-lineage explorer (issue #1078).
+// query_lineage is the data spine for the fleet-lineage explorer.
 // Returns the full dispatch tree rooted at one agent.subagent_fanouts row: a
 // flat, depth-annotated adjacency list of every subagent RUN in the tree, each
 // carrying its principal (+ delegation ceiling), observed ClickHouse spend,

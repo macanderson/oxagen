@@ -26,7 +26,7 @@ export const skillWorkspaceList = registerCapability({
         id: z.string(),
         // Kebab-case workspace-unique identifier. Required by the app: it is
         // the detail-route segment (…/skills/<slug>), the search key, and the
-        // metrics join key. Its absence is what previously blanked the list.
+        // metrics join key.
         slug: z.string(),
         name: z.string(),
         description: z.string(),

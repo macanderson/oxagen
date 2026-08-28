@@ -2,7 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 /**
- * billing.usage.breakdown — OXA-1585
+ * billing.usage.breakdown
  *
  * Grouped usage aggregates (tokens + cost + call counts) for a bounded window,
  * broken down by model, surface, and workspace, plus a daily time series. Powers
@@ -21,7 +21,8 @@ const totals = z.object({
   cachedTokens: z.number().int().nonnegative(),
   /**
    * Prompt-cache WRITE tokens (cache creation) — a subset of inputTokens billed
-   * at the provider premium (#1076). Zero on pre-migration-0026 rows.
+   * at the provider premium. Zero on rows recorded before cache-write tracking
+   * existed.
    */
   cacheWriteTokens: z.number().int().nonnegative(),
   /** Cost in micro-USD (1 USD = 1_000_000). */
@@ -116,7 +117,7 @@ export const billingUsageBreakdown = registerCapability({
      * inputPer1M per write token), summed across models via the provider rate card.
      * Positive = caching netted the org money; can go negative for a workload that
      * paid the write premium without reaping enough reads. Powers the dashboard's
-     * "cache savings" figure — the discount a cache-friendly agent earns (#1076).
+     * "cache savings" figure — the discount a cache-friendly agent earns.
      */
     cacheSavingsMicros: z.number().int(),
     series: z.array(

@@ -54,7 +54,7 @@ export function clearBillingAdmissionGate(): void {
 
 // ── Budget admission gate (injected at bootstrap) ────────────────────────────
 //
-// A hard PERIOD-TO-DATE spend ceiling (OXA-1079). Mirrors the billing admission
+// A hard PERIOD-TO-DATE spend ceiling. Mirrors the billing admission
 // gate: the kernel carries no dependency on @oxagen/billing — the gate is
 // injected once at service bootstrap (bootstrapBillingRuntime) via
 // `setBudgetAdmissionGate`, and throws @oxagen/billing's own BudgetExceededError
@@ -460,8 +460,8 @@ export interface KernelSecurityEvent {
   requestId: string;
   /**
    * The CapabilityErrorCode that caused a deny/error, if any. Includes
-   * "no_tenant_scope" for the fail-closed tenant-scope denial (OXA-1515) and
-   * "budget_exceeded" for the hard spend-ceiling denial (OXA-1079).
+   * "no_tenant_scope" for the fail-closed tenant-scope denial and
+   * "budget_exceeded" for the hard spend-ceiling denial.
    */
   errorCode: CapabilityErrorCode | "no_tenant_scope" | "budget_exceeded" | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
@@ -866,7 +866,7 @@ async function _invokeCore(
   // fetchAuthz (IAM) and consumeCredits/assertOrgCanConsume (billing) can
   // resolve the active scope. For UNSCOPED capabilities (cap.scoped === false,
   // e.g. user.preferences.write) we must NOT wrap — the ids are empty and
-  // runInTenantScope would throw TenantScopeError (OXA-1515). — OXA-1697
+  // runInTenantScope would throw TenantScopeError.
   //
   // BUT: "unscoped" describes the handler's data ownership, not the IAM gate.
   // The IAM check (checkIAM → fetchAuthz → withTenantDb) ALWAYS needs an active
@@ -931,10 +931,10 @@ async function _invokeCore(
   let authorizationDecision: AuthorizationDecisionRef | null = null;
   try {
     output = await withScope(async () => {
-      // ── IAM check (OXA-1498) ───────────────────────────────────────────────
+      // ── IAM check ────────────────────────────────────────────────────────
       // Run after input validation (we need the parsed input for the audit hash).
       // ALWAYS runs when checkFn is registered. Only BLOCKS when _iamEnforced=true.
-      // fetchAuthz uses withTenantDb, so the scope must be active here — OXA-1697.
+      // fetchAuthz uses withTenantDb, so the scope must be active here.
       const checkFn = _iamCheckFn;
       if (checkFn !== null) {
         let rawInputJson = "{}";
@@ -963,17 +963,16 @@ async function _invokeCore(
           // decision legitimately still respects _iamEnforced (would-deny +
           // log during the rollout window), but an UNEVALUATED check must
           // never silently grant access. Flag the throw; the unconditional
-          // fail-closed below does NOT consult _iamEnforced (OXA-2056 — the
-          // prior `iamCheckThrew && _iamEnforced` gate fell through to
-          // fail-open whenever enforcement was off, which defeats the entire
-          // point of failing closed on an evaluation failure).
+          // fail-closed below does NOT consult _iamEnforced — gating it on
+          // enforcement would fail open on an evaluation failure whenever
+          // enforcement was off, which defeats the point of failing closed.
           iamCheckThrew = true;
           console.error(`[kernel] IAM check threw for "${name}":`, err);
           return null;
         });
 
         // Fail closed on resolver error UNCONDITIONALLY — never gated on
-        // _iamEnforced. See OXA-2056.
+        // _iamEnforced.
         if (iamCheckThrew) {
           emitSecurityEvent({
             capability: canonical,
@@ -989,7 +988,7 @@ async function _invokeCore(
           throw new CapabilityError(
             name,
             "authz_denied",
-            `IAM check errored for "${name}" — failing closed (unconditional; independent of IAM_ENFORCEMENT_ENABLED, OXA-2056).`,
+            `IAM check errored for "${name}" — failing closed (unconditional; independent of IAM_ENFORCEMENT_ENABLED).`,
           );
         }
 
@@ -1126,7 +1125,7 @@ async function _invokeCore(
       // "No active tenant scope" and 500'd the call before the handler ran (this
       // broke the connector Configure form). Unscoped capabilities are global,
       // read-only fetches — never metered AI turns — so skipping the gate for them
-      // is correct as well as necessary. — OXA-1697.
+      // is correct as well as necessary.
       const skipBilling =
         (cap as { noBillingGate?: boolean }).noBillingGate === true;
       if (_billingGate !== null && ctx.orgId && !skipBilling && isScoped) {
@@ -1134,7 +1133,7 @@ async function _invokeCore(
       }
       // ── End billing admission gate ───────────────────────────────────────────
 
-      // ── Budget admission gate (OXA-1079) ─────────────────────────────────────
+      // ── Budget admission gate ────────────────────────────────────────────────
       // The hard period-to-date spend ceiling. Fires after the billing gate on
       // exactly the same skip conditions (unscoped / noBillingGate skip it — a
       // read of your own spend/budget must not be blocked by being over budget),
@@ -1193,9 +1192,9 @@ async function _invokeCore(
         ...ctx,
         principal: resolvedPrincipal,
         // Attached ONLY here, only from the IAM runtime's own insert, and only
-        // on the allow path — the handler is the one thing downstream of a
-        // successful check, so it is the only consumer that can honestly claim
-        // "this operation was decided".
+        // on the allow path — the handler is the one consumer downstream of a
+        // successful check, so it is the only place allowed to treat the
+        // operation as decided.
         ...(authorizationDecision !== null ? { authorizationDecision } : {}),
         ...(lifecycleExecution
           ? {
@@ -1224,7 +1223,7 @@ async function _invokeCore(
     // Duck-typed stable codes from errors the kernel deliberately does NOT
     // import (keeps it free of @oxagen/tenancy / @oxagen/billing deps): a
     // TenantScopeError ("no_tenant_scope") and a BudgetExceededError
-    // ("budget_exceeded", OXA-1079). Both are DENIALS, not server errors — a
+    // ("budget_exceeded"). Both are DENIALS, not server errors — a
     // spend-ceiling refusal is a policy decision that belongs in the audit
     // chain as a deny (SOC2), exactly like an IAM deny.
     const duckCode =
@@ -1326,7 +1325,7 @@ async function _invokeCore(
   return outputResult.data;
 }
 
-// ── External-tool IAM check helper (OXA-1390, agent-runtime gap-4) ──────────
+// ── External-tool IAM check helper ──────────────────────────────────────────
 //
 // The agent runtime dispatches external MCP tools under synthetic capability
 // ids of the form `mcp.<server>.<tool>`. Those ids are never registered in
@@ -1373,7 +1372,7 @@ export interface AuthorizeExternalCapabilityResult {
  *        - enforced=true  → allowed=false when outcome !== "allow"
  *        - enforced=false → allowed=true (but outcome/reason reflect would-deny)
  *      A checkFn THROW (evaluation failure, not a decision) always fails
- *      closed regardless of _iamEnforced — see OXA-2056.
+ *      closed regardless of _iamEnforced.
  *   3. Emits a KernelSecurityEvent for the audit trail (fire-and-forget).
  *
  * When no IAM runtime is registered (tests / local dev without bootstrap),
@@ -1411,17 +1410,16 @@ export async function authorizeExternalCapability(
   }).catch((err: unknown) => {
     // A throw is an evaluation failure, not a policy decision — it must
     // always fail closed, independent of _iamEnforced. See kernel.invoke()'s
-    // matching comment above; the same OXA-2056 rationale applies here.
+    // matching comment above; the same rationale applies here.
     iamCheckThrew = true;
     console.error(`[kernel:external] IAM check threw for "${name}":`, err);
     return null;
   });
 
   // Fail closed on resolver error UNCONDITIONALLY — never gated on
-  // _iamEnforced. See OXA-2056 (a prior `iamCheckThrew && _iamEnforced` gate
-  // here fell through to an unconditional allow whenever enforcement was
-  // off, silently disabling authorization for every external-tool call while
-  // the resolver was erroring).
+  // _iamEnforced. Gating this on enforcement would fall through to an
+  // unconditional allow whenever enforcement was off, silently disabling
+  // authorization for every external-tool call while the resolver errors.
   if (iamCheckThrew) {
     emitSecurityEvent({
       capability: canonical,

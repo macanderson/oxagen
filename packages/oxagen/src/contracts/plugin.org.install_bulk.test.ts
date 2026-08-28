@@ -20,14 +20,10 @@ describe("plugin.org.install_bulk contract", () => {
     expect(() => pluginOrgInstallBulk.input.parse({ items })).toThrow();
   });
 
-  // ── Output shape regression guard ───────────────────────────────────────────
   // The handler returns `{ pluginId, orgListingId, authKind, error }` per item
   // (installOne resolves { id, authKind }; the error path returns authKind: null).
-  // The output schema previously named the first field `catalogServerId`, so every
-  // real handler result failed output validation ("expected string, received
-  // undefined, path catalogServerId"), making bulk install unusable. These tests
-  // assert the schema matches the handler's actual return shape — including the
-  // authKind field the handler surfaces so the app can drive OAuth/secret setup.
+  // These tests assert the output schema matches that shape, including the
+  // authKind field the app needs to drive OAuth/secret setup.
   it("accepts the handler's real installed[] shape (pluginId, authKind, nullable)", () => {
     const parsed = pluginOrgInstallBulk.output.parse({
       installed: [
@@ -51,7 +47,9 @@ describe("plugin.org.install_bulk contract", () => {
     // The old, broken output shape — catalogServerId with no pluginId — must fail.
     expect(() =>
       pluginOrgInstallBulk.output.parse({
-        installed: [{ catalogServerId: "srv1", orgListingId: "listing-1", error: null }],
+        installed: [
+          { catalogServerId: "srv1", orgListingId: "listing-1", error: null },
+        ],
       }),
     ).toThrow();
   });
