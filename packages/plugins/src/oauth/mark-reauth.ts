@@ -5,7 +5,6 @@ import { notifyOrgManagers, reauthEmailTemplate } from "@oxagen/notifications";
 /**
  * Flip a credential row to needs_reauth and notify org managers.
  *
- * Plan 4 established this signature (status flip); Plan 5 wires notification.
  * Notification failure does NOT propagate — the credential flip is the
  * authoritative action; notification is best-effort.
  */

@@ -1,13 +1,13 @@
 /**
- * Workspace credential vault (Spec §7). Keys live at the workspace root with a
+ * Workspace credential vault. Keys live at the workspace root with a
  * `sensitive` flag (default true) and a default value; values are overridden
  * per environment. Sensitive values are envelope-encrypted via @oxagen/crypto;
  * non-sensitive values are plaintext config. Resolution: override ?? default.
  *
  * Every read/write is RLS-enforced through withTenantDb (the kernel establishes
- * the tenant scope for scoped capabilities, kernel.ts:528). NEVER log plaintext
- * values — lifecycle logging happens at the handler boundary with key names and
- * counts only.
+ * the tenant scope for scoped capabilities). NEVER log plaintext values —
+ * lifecycle logging happens at the handler boundary with key names and counts
+ * only.
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { decrypt, encrypt } from "@oxagen/crypto";
@@ -31,7 +31,11 @@ async function encOne(value: string, kms: ResolvedKms): Promise<Buffer> {
   return encrypt(value, kms.keyId, { adapter: kms.adapter });
 }
 
-async function decOne(buf: Buffer, keyId: string, kms: ResolvedKms): Promise<string> {
+async function decOne(
+  buf: Buffer,
+  keyId: string,
+  kms: ResolvedKms,
+): Promise<string> {
   return (await decrypt(buf, keyId, { adapter: kms.adapter })).toString("utf8");
 }
 
@@ -50,7 +54,11 @@ async function valueColumns(
   if (plaintext === null) return { enc: null, text: null, kmsKeyId: null };
   if (sensitive) {
     if (!kms) throw new VaultLockedError();
-    return { enc: await encOne(plaintext, kms), text: null, kmsKeyId: kms.keyId };
+    return {
+      enc: await encOne(plaintext, kms),
+      text: null,
+      kmsKeyId: kms.keyId,
+    };
   }
   return { enc: null, text: plaintext, kmsKeyId: null };
 }
@@ -90,12 +98,18 @@ async function resolveOne(
   if (value && (value.valueEnc !== null || value.valueText !== null)) {
     if (key.sensitive) {
       if (!kms) throw new VaultLockedError();
-      const plain = await decOne(value.valueEnc as Buffer, value.valueKmsKeyId ?? kms.keyId, kms);
+      const plain = await decOne(
+        value.valueEnc as Buffer,
+        value.valueKmsKeyId ?? kms.keyId,
+        kms,
+      );
       return { value: plain, source: "override" };
     }
     return { value: value.valueText, source: "override" };
   }
-  if (key.sensitive ? key.defaultValueEnc !== null : key.defaultValueText !== null) {
+  if (
+    key.sensitive ? key.defaultValueEnc !== null : key.defaultValueText !== null
+  ) {
     if (key.sensitive) {
       if (!kms) throw new VaultLockedError();
       const plain = await decOne(
@@ -118,7 +132,11 @@ async function existingDefaultPlaintext(
   if (row.sensitive) {
     if (row.defaultValueEnc === null) return null;
     if (!kms) throw new VaultLockedError();
-    return decOne(row.defaultValueEnc, row.defaultValueKmsKeyId ?? kms.keyId, kms);
+    return decOne(
+      row.defaultValueEnc,
+      row.defaultValueKmsKeyId ?? kms.keyId,
+      kms,
+    );
   }
   return row.defaultValueText;
 }
@@ -138,7 +156,11 @@ const keyColumns = () =>
     defaultValueKmsKeyId: schema.secretKeys.defaultValueKmsKeyId,
   }) as const;
 
-async function loadKeyByPublicId(tx: Tx, workspaceId: string, publicId: string): Promise<KeyRow> {
+async function loadKeyByPublicId(
+  tx: Tx,
+  workspaceId: string,
+  publicId: string,
+): Promise<KeyRow> {
   const [row] = await tx
     .select(keyColumns())
     .from(schema.secretKeys)
@@ -154,7 +176,11 @@ async function loadKeyByPublicId(tx: Tx, workspaceId: string, publicId: string):
   return row;
 }
 
-async function loadEnvironmentId(tx: Tx, workspaceId: string, publicId: string): Promise<string> {
+async function loadEnvironmentId(
+  tx: Tx,
+  workspaceId: string,
+  publicId: string,
+): Promise<string> {
   const [row] = await tx
     .select({ id: schema.environments.id })
     .from(schema.environments)
@@ -205,7 +231,11 @@ async function upsertSecretKeyTx(
   // caller did not pass a new default, re-encode the existing default into the
   // new storage so the DB storage check never trips and no value is lost.
   let plaintext: string | null | undefined = input.defaultValue;
-  if (existing && plaintext === undefined && existing.sensitive !== input.sensitive) {
+  if (
+    existing &&
+    plaintext === undefined &&
+    existing.sensitive !== input.sensitive
+  ) {
     plaintext = await existingDefaultPlaintext(existing, kms);
   }
 
@@ -271,7 +301,11 @@ async function setSecretValueTx(
   kms: ResolvedKms | null,
 ): Promise<void> {
   const key = await loadKeyByPublicId(tx, actor.workspaceId, input.keyId);
-  const environmentId = await loadEnvironmentId(tx, actor.workspaceId, input.environmentId);
+  const environmentId = await loadEnvironmentId(
+    tx,
+    actor.workspaceId,
+    input.environmentId,
+  );
   const cols = await valueColumns(input.value, key.sensitive, kms);
   await tx
     .insert(schema.secretValues)
@@ -287,7 +321,10 @@ async function setSecretValueTx(
       updatedByUserId: actor.userId ?? null,
     })
     .onConflictDoUpdate({
-      target: [schema.secretValues.secretKeyId, schema.secretValues.environmentId],
+      target: [
+        schema.secretValues.secretKeyId,
+        schema.secretValues.environmentId,
+      ],
       set: {
         valueEnc: cols.enc,
         valueText: cols.text,
@@ -313,7 +350,11 @@ export async function unsetSecretValue(
 ): Promise<{ ok: true }> {
   await withTenantDb(async (tx) => {
     const key = await loadKeyByPublicId(tx, actor.workspaceId, input.keyId);
-    const environmentId = await loadEnvironmentId(tx, actor.workspaceId, input.environmentId);
+    const environmentId = await loadEnvironmentId(
+      tx,
+      actor.workspaceId,
+      input.environmentId,
+    );
     await tx
       .delete(schema.secretValues)
       .where(
@@ -338,7 +379,9 @@ export interface SecretKeySummary {
   overrideEnvironmentIds: string[];
 }
 
-export async function listSecretKeys(actor: VaultActor): Promise<SecretKeySummary[]> {
+export async function listSecretKeys(
+  actor: VaultActor,
+): Promise<SecretKeySummary[]> {
   return withTenantDb(async (tx) => {
     const keys = await tx
       .select(keyColumns())
@@ -353,7 +396,10 @@ export async function listSecretKeys(actor: VaultActor): Promise<SecretKeySummar
     if (keys.length === 0) return [];
 
     const envs = await tx
-      .select({ id: schema.environments.id, publicId: schema.environments.publicId })
+      .select({
+        id: schema.environments.id,
+        publicId: schema.environments.publicId,
+      })
       .from(schema.environments)
       .where(
         and(
@@ -385,7 +431,9 @@ export async function listSecretKeys(actor: VaultActor): Promise<SecretKeySummar
       key: k.key,
       sensitive: k.sensitive,
       memo: k.memo,
-      hasDefault: k.sensitive ? k.defaultValueEnc !== null : k.defaultValueText !== null,
+      hasDefault: k.sensitive
+        ? k.defaultValueEnc !== null
+        : k.defaultValueText !== null,
       overrideEnvironmentIds: overridesByKey.get(k.id) ?? [],
     }));
   });
@@ -398,7 +446,9 @@ export async function deleteSecretKey(
   await withTenantDb(async (tx) => {
     const key = await loadKeyByPublicId(tx, actor.workspaceId, input.keyId);
     // Hard-remove overrides; soft-delete the key (audit trail on the key row).
-    await tx.delete(schema.secretValues).where(eq(schema.secretValues.secretKeyId, key.id));
+    await tx
+      .delete(schema.secretValues)
+      .where(eq(schema.secretValues.secretKeyId, key.id));
     await tx
       .update(schema.secretKeys)
       .set({ deletedAt: new Date(), deletedByUserId: actor.userId ?? null })
@@ -407,7 +457,7 @@ export async function deleteSecretKey(
   return { ok: true };
 }
 
-// ── reveal / export (audited; Spec §7.3) ──────────────────────────────────────
+// ── reveal / export (audited) ─────────────────────────────────────────────────
 
 async function writeAccessLog(
   tx: Tx,
@@ -440,7 +490,11 @@ export async function revealSecret(
     const key = await loadKeyByPublicId(tx, actor.workspaceId, input.keyId);
     let value: ValueRow | undefined;
     if (input.environmentId) {
-      const environmentId = await loadEnvironmentId(tx, actor.workspaceId, input.environmentId);
+      const environmentId = await loadEnvironmentId(
+        tx,
+        actor.workspaceId,
+        input.environmentId,
+      );
       const [v] = await tx
         .select({
           valueEnc: schema.secretValues.valueEnc,
@@ -493,7 +547,11 @@ export async function exportSecrets(
 
     let valuesByKeyId = new Map<string, ValueRow>();
     if (input.environmentId) {
-      const environmentId = await loadEnvironmentId(tx, actor.workspaceId, input.environmentId);
+      const environmentId = await loadEnvironmentId(
+        tx,
+        actor.workspaceId,
+        input.environmentId,
+      );
       const rows = await tx
         .select({
           secretKeyId: schema.secretValues.secretKeyId,
@@ -513,7 +571,8 @@ export async function exportSecrets(
         env.push({ key: key.key, value: resolved.value });
       }
     }
-    const dotenv = env.map((e) => `${e.key}=${renderEnvValue(e.value)}`).join("\n") + "\n";
+    const dotenv =
+      env.map((e) => `${e.key}=${renderEnvValue(e.value)}`).join("\n") + "\n";
 
     await writeAccessLog(tx, actor, "export", {
       environmentId: input.environmentId ?? null,
@@ -574,7 +633,11 @@ export async function importEnv(
     // For override targets, which keys already have a value in the target env.
     const overriddenKeyIds = new Set<string>();
     if (input.environmentId) {
-      const environmentId = await loadEnvironmentId(tx, actor.workspaceId, input.environmentId);
+      const environmentId = await loadEnvironmentId(
+        tx,
+        actor.workspaceId,
+        input.environmentId,
+      );
       const rows = await tx
         .select({ secretKeyId: schema.secretValues.secretKeyId })
         .from(schema.secretValues)
@@ -582,7 +645,9 @@ export async function importEnv(
       for (const r of rows) overriddenKeyIds.add(r.secretKeyId);
     }
 
-    const target: "default" | "override" = input.environmentId ? "override" : "default";
+    const target: "default" | "override" = input.environmentId
+      ? "override"
+      : "default";
     const rows: ImportPreviewRow[] = entries.map((e) => {
       const existing = byKeyName.get(e.key);
       const isNewKey = !existing;
@@ -593,7 +658,9 @@ export async function importEnv(
             ? overriddenKeyIds.has(existing.id)
             : false
           : existing
-            ? (existing.sensitive ? existing.defaultValueEnc !== null : existing.defaultValueText !== null)
+            ? existing.sensitive
+              ? existing.defaultValueEnc !== null
+              : existing.defaultValueText !== null
             : false;
       return { key: e.key, isNewKey, sensitive, target, willOverride };
     });
@@ -603,7 +670,12 @@ export async function importEnv(
         const existing = byKeyName.get(e.key);
         const sensitive = existing?.sensitive ?? true;
         if (target === "default") {
-          await upsertSecretKeyTx(tx, actor, { key: e.key, sensitive, defaultValue: e.value }, kms);
+          await upsertSecretKeyTx(
+            tx,
+            actor,
+            { key: e.key, sensitive, defaultValue: e.value },
+            kms,
+          );
         } else {
           // Ensure the key exists (preserving its sensitivity), then set the override.
           await upsertSecretKeyTx(tx, actor, { key: e.key, sensitive }, kms);
@@ -611,7 +683,11 @@ export async function importEnv(
           await setSecretValueTx(
             tx,
             actor,
-            { keyId: keyRow.publicId, environmentId: input.environmentId!, value: e.value },
+            {
+              keyId: keyRow.publicId,
+              environmentId: input.environmentId!,
+              value: e.value,
+            },
             kms,
           );
         }
@@ -638,11 +714,12 @@ async function loadKeyByKeyName(
       ),
     )
     .limit(1);
-  if (!row) throw new Error(`[vault] secret key not found after upsert: ${key}`);
+  if (!row)
+    throw new Error(`[vault] secret key not found after upsert: ${key}`);
   return row;
 }
 
-// ── provisioning reuse (Spec §11/§12) ─────────────────────────────────────────
+// ── provisioning reuse ─────────────────────────────────────────────────────────
 
 /**
  * A sandbox-template secret selection: every live key ('all') or an explicit
@@ -659,8 +736,8 @@ export type SecretSelection = "all" | { keyPublicIds: string[] };
  * access-logged — the run itself is metered. Callers outside a scoped handler
  * (e.g. Inngest steps) MUST wrap this in runInTenantScope.
  *
- * `selection` filters which keys resolve (Spec §5.2 secret_selection): 'all'
- * (default) resolves every live key; `{ keyPublicIds }` resolves only those
+ * `selection` filters which keys resolve: 'all' (default) resolves every live
+ * key; `{ keyPublicIds }` resolves only those
  * keys. A public id in the selection that no longer exists is silently skipped.
  */
 export async function resolveEnvironmentSecrets(actor: {
@@ -672,7 +749,11 @@ export async function resolveEnvironmentSecrets(actor: {
   const kms = resolveVaultKms();
   const selection = actor.selection ?? "all";
   return withTenantDb(async (tx) => {
-    const environmentId = await loadEnvironmentId(tx, actor.workspaceId, actor.environmentId);
+    const environmentId = await loadEnvironmentId(
+      tx,
+      actor.workspaceId,
+      actor.environmentId,
+    );
     const allKeys = await tx
       .select(keyColumns())
       .from(schema.secretKeys)
@@ -700,7 +781,8 @@ export async function resolveEnvironmentSecrets(actor: {
     const out: Record<string, string> = {};
     for (const key of keys) {
       const resolved = await resolveOne(key, valuesByKeyId.get(key.id), kms);
-      if (resolved.source !== "unset" && resolved.value !== null) out[key.key] = resolved.value;
+      if (resolved.source !== "unset" && resolved.value !== null)
+        out[key.key] = resolved.value;
     }
     return out;
   });

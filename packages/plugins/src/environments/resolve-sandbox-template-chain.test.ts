@@ -2,10 +2,9 @@
  * resolve-sandbox-template-chain.test.ts
  *
  * Covers the environment → binding → default resolution CHAIN of
- * resolveSandboxTemplateForRun (Spec §12) — everything BEYOND the explicit
+ * resolveSandboxTemplateForRun — everything BEYOND the explicit
  * `sandboxTemplateId` short-circuit, which resolve-sandbox-template.test.ts
- * already owns. That file's docstring claimed "the env→binding→default chain
- * has its own coverage" — it did not; this file makes that claim true.
+ * already owns.
  *
  * Resolution order exercised here:
  *   1. environment: explicit environmentId → agent's PRIMARY binding's
@@ -89,7 +88,13 @@ function tplRow(overrides: Record<string, unknown> = {}) {
 }
 
 function envRow(overrides: Record<string, unknown> = {}) {
-  return { id: "env-int", name: "Prod", slug: "prod", isActive: true, ...overrides };
+  return {
+    id: "env-int",
+    name: "Prod",
+    slug: "prod",
+    isActive: true,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
@@ -105,9 +110,15 @@ describe("resolveSandboxTemplateForRun — environment resolution chain", () => 
       [], // loadToolsFor
     ];
 
-    const result = await resolveSandboxTemplateForRun(actor, { environmentId: "env-pub" });
+    const result = await resolveSandboxTemplateForRun(actor, {
+      environmentId: "env-pub",
+    });
 
-    expect(result.environment).toEqual({ id: "env-pub", name: "Prod", slug: "prod" });
+    expect(result.environment).toEqual({
+      id: "env-pub",
+      name: "Prod",
+      slug: "prod",
+    });
     expect(result.template.id).toBe("sbx-pub");
   });
 
@@ -155,9 +166,15 @@ describe("resolveSandboxTemplateForRun — environment resolution chain", () => 
       [], // loadToolsFor
     ];
 
-    const result = await resolveSandboxTemplateForRun(actor, { agentId: "my-agent-slug" });
+    const result = await resolveSandboxTemplateForRun(actor, {
+      agentId: "my-agent-slug",
+    });
 
-    expect(result.environment).toEqual({ id: "env-pub-2", name: "Staging", slug: "staging" });
+    expect(result.environment).toEqual({
+      id: "env-pub-2",
+      name: "Staging",
+      slug: "staging",
+    });
     expect(result.template.id).toBe("sbx-pub-3");
   });
 
@@ -165,13 +182,27 @@ describe("resolveSandboxTemplateForRun — environment resolution chain", () => 
     state.selectQueue = [
       [{ environmentInternalId: "env-deleted-int", sandboxTemplateId: null }], // primary binding
       [], // environment lookup for that binding: row gone (deleted)
-      [{ id: "env-default-int", name: "Default", slug: "default", isActive: true }], // workspace default env
+      [
+        {
+          id: "env-default-int",
+          name: "Default",
+          slug: "default",
+          isActive: true,
+        },
+      ], // workspace default env
       [{ publicId: "sbx-pub-default" }], // environment default template lookup
-      [tplRow({ publicId: "sbx-pub-default", environmentPublicId: "env-pub-default" })], // loadTemplateRow
+      [
+        tplRow({
+          publicId: "sbx-pub-default",
+          environmentPublicId: "env-pub-default",
+        }),
+      ], // loadTemplateRow
       [], // loadToolsFor
     ];
 
-    const result = await resolveSandboxTemplateForRun(actor, { agentId: UUID_AGENT });
+    const result = await resolveSandboxTemplateForRun(actor, {
+      agentId: UUID_AGENT,
+    });
 
     expect(result.environment).toEqual({
       id: "env-pub-default",
@@ -197,9 +228,9 @@ describe("resolveSandboxTemplateForRun — environment resolution chain", () => 
       [], // workspace default environment lookup: none configured
     ];
 
-    await expect(resolveSandboxTemplateForRun(actor, { agentId: UUID_AGENT })).rejects.toThrow(
-      /no environment to run in/,
-    );
+    await expect(
+      resolveSandboxTemplateForRun(actor, { agentId: UUID_AGENT }),
+    ).rejects.toThrow(/no environment to run in/);
   });
 
   it("throws when the explicitly-resolved environment is inactive", async () => {
@@ -218,7 +249,10 @@ describe("resolveSandboxTemplateForRun — environment resolution chain", () => 
     ];
 
     await expect(
-      resolveSandboxTemplateForRun(actor, { environmentId: "env-pub", agentId: UUID_AGENT }),
+      resolveSandboxTemplateForRun(actor, {
+        environmentId: "env-pub",
+        agentId: UUID_AGENT,
+      }),
     ).rejects.toThrow(/bound template was deleted/);
   });
 

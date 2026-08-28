@@ -21,7 +21,10 @@ describe("registry-client", () => {
   it("lists servers and returns the next cursor", async () => {
     mockFetchOnce({
       servers: [
-        { server: { name: "io.x/a", description: "d", version: "1.0.0" }, _meta: { isLatest: true } },
+        {
+          server: { name: "io.x/a", description: "d", version: "1.0.0" },
+          _meta: { isLatest: true },
+        },
       ],
       metadata: { nextCursor: "cur-2", count: 1 },
     });
@@ -39,7 +42,11 @@ describe("registry-client", () => {
       text: async () => "{}",
     }));
     vi.stubGlobal("fetch", fetchMock);
-    await listServers(BASE, { cursor: "c1", search: "git", updatedSince: "2026-01-01T00:00:00Z" });
+    await listServers(BASE, {
+      cursor: "c1",
+      search: "git",
+      updatedSince: "2026-01-01T00:00:00Z",
+    });
     const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toContain("cursor=c1");
     expect(calledUrl).toContain("search=git");
@@ -62,7 +69,9 @@ describe("registry-client", () => {
 
   it("throws on a non-ok response", async () => {
     mockFetchOnce({ error: "boom" }, false);
-    await expect(listServers(BASE, {})).rejects.toThrow(/registry list failed/i);
+    await expect(listServers(BASE, {})).rejects.toThrow(
+      /registry list failed/i,
+    );
   });
 
   it("fetches a single server version", async () => {
@@ -74,11 +83,10 @@ describe("registry-client", () => {
     expect(res.server.version).toBe("2.0.0");
   });
 
-  // ── Null-field tolerance (root cause of "no MCP servers appear") ─────────────
+  // ── Null-field tolerance ──────────────────────────────────────────────────────
   // The live MCP Registry (registry.modelcontextprotocol.io) returns `null` for
-  // icons/packages/remotes on servers that haven't declared them. Previously these
-  // fields used `.optional()` which only accepts `undefined`, so the Zod parse
-  // threw and the entire registry fetch was silently dropped.
+  // icons/packages/remotes on servers that haven't declared them. The schema
+  // must accept `null`, not just `undefined`, or the whole registry fetch fails.
 
   it("parses a server with null packages and null remotes without throwing", async () => {
     mockFetchOnce({
@@ -172,7 +180,11 @@ describe("registry-client", () => {
           },
         },
         {
-          server: { name: "io.x/ok", description: "Fully-formed", version: "1.0.0" },
+          server: {
+            name: "io.x/ok",
+            description: "Fully-formed",
+            version: "1.0.0",
+          },
         },
       ],
     });
@@ -224,6 +236,8 @@ describe("registry-client", () => {
         title: "Broken",
       },
     });
-    await expect(getServerVersion(BASE, "io.x/a", "1.0.0")).rejects.toThrow(/failed validation/i);
+    await expect(getServerVersion(BASE, "io.x/a", "1.0.0")).rejects.toThrow(
+      /failed validation/i,
+    );
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Resolves the KMS adapter used to envelope-encrypt vault secrets (Spec §7.2).
+ * Resolves the KMS adapter used to envelope-encrypt vault secrets.
  *
  * Mirrors credentials/kms.ts but with the vault's own per-row key-version label
  * (`workspace_vault_v1`). Both share the AUTH_TOKEN_ENCRYPTION_KEY master key.

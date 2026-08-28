@@ -1,5 +1,5 @@
 /**
- * Pure `.env` parsing + key-name validation for the credential vault (Spec §7.4).
+ * Pure `.env` parsing + key-name validation for the credential vault.
  * No I/O, no secrets logging — kept separate so it is exhaustively unit-tested.
  */
 
@@ -16,7 +16,7 @@ export interface ParsedEnvEntry {
 }
 
 /**
- * Parse pasted `.env` text into entries (Spec §7.4):
+ * Parse pasted `.env` text into entries:
  *   - accepts `KEY=VALUE`, `export KEY=VALUE`, `KEY="value"`, `KEY='value'`, `KEY=`
  *   - strips surrounding quotes, preserving inner content (including `=` and `#`)
  *   - ignores blank lines and `#` comment lines
@@ -30,7 +30,9 @@ export function parseEnvText(text: string): ParsedEnvEntry[] {
     if (line === "" || line.startsWith("#")) continue;
 
     // Optional `export ` prefix.
-    const body = line.startsWith("export ") ? line.slice("export ".length) : line;
+    const body = line.startsWith("export ")
+      ? line.slice("export ".length)
+      : line;
 
     const eq = body.indexOf("=");
     if (eq === -1) continue;
