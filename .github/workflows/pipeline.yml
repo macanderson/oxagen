@@ -12,9 +12,22 @@ concurrency:
   # the prod migrate job, and cancelling the whole run mid-`atlas migrate apply`
   # would strand prod behind the committed migrations. That job is retired
   # (#1341) and production migrates over SSM from oxagen-aws-infra instead, so
-  # nothing in a main run is mid-flight against a real database today. Main runs
-  # still run to completion: the deploy jobs are, and half a deploy is worse
+  # nothing in a main run is mid-flight against a real database today. It stays
+  # off for main anyway, because the deploy jobs are, and half a deploy is worse
   # than a slow one.
+  #
+  # `false` protects a run that has STARTED. It does not protect one still
+  # queued: GitHub keeps a single pending entry per concurrency group, so a
+  # third push evicts the second while the first is still running, and the
+  # evicted run is cancelled having executed nothing. That happened to
+  # 71007b78's run on 2026-08-27 — cancelled with zero jobs, moments after
+  # 2a3fae4d was pushed behind it.
+  #
+  # It costs nothing operationally: the evicting commit contains the evicted
+  # one, so its run covers both and its deploy ships both. What it does mean is
+  # that "every commit on main had its own green run" is false, and anything
+  # assuming one run per commit — a bisect over run history, say — will find
+  # gaps that are not failures.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
