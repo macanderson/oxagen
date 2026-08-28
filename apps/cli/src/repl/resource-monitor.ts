@@ -8,7 +8,7 @@
  * the configured ceiling down when the machine is struggling — never above the
  * ceiling, never below 1.
  *
- * Two design rules keep it honest:
+ * Two design rules keep it reliable:
  *
  *   1. Injectable seams. `os` (freemem/totalmem/loadavg/availableParallelism)
  *      and the timer are injected, so the clamp table and hysteresis are
@@ -131,7 +131,11 @@ function clamp01(n: number): number {
   return n < 0 ? 0 : n > 1 ? 1 : n;
 }
 
-const RANK: Record<ResourcePressure, number> = { ok: 0, elevated: 1, critical: 2 };
+const RANK: Record<ResourcePressure, number> = {
+  ok: 0,
+  elevated: 1,
+  critical: 2,
+};
 function worst(a: ResourcePressure, b: ResourcePressure): ResourcePressure {
   return RANK[a] >= RANK[b] ? a : b;
 }

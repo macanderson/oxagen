@@ -93,7 +93,7 @@ export interface SessionMetaView extends SessionMeta {
   alive: boolean;
   /**
    * `meta.state`, except a non-terminal state whose owner is dead derives to
-   * `"orphaned"` — the honest roster state for a crashed/killed owner.
+   * `"orphaned"` — the correct roster state for a crashed/killed owner.
    */
   derivedState: SessionState | "orphaned";
 }

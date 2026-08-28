@@ -4,7 +4,7 @@
  *
  * The same visual language as the agents screen's roster (glyph · id · title ·
  * activity · tokens · cost) but keyed to sessions and their derived lifecycle
- * state, including the honest `orphaned` state a crashed owner derives to. Column
+ * state, including the `orphaned` state a crashed owner derives to. Column
  * widths are shared between the header and the rows so the two never drift.
  */
 import { Box, Text } from "ink";
@@ -65,7 +65,9 @@ function RosterRow({
   const glyph = stateGlyph(session.derivedState);
   const tokens = session.usage.inputTokens + session.usage.outputTokens;
   const active = isActiveState(session.derivedState);
-  const stateText = active ? formatElapsed(now - session.createdAt) : session.derivedState;
+  const stateText = active
+    ? formatElapsed(now - session.createdAt)
+    : session.derivedState;
 
   return (
     <Box paddingX={1}>
@@ -83,7 +85,11 @@ function RosterRow({
         <Text color={colorForSid(session.sid)}>{shortSid(session.sid)}</Text>
       </Box>
       <Box width={W.title}>
-        <Text color={selected ? "white" : undefined} bold={selected} wrap="truncate">
+        <Text
+          color={selected ? "white" : undefined}
+          bold={selected}
+          wrap="truncate"
+        >
           {session.title || "untitled"}
         </Text>
       </Box>
@@ -123,7 +129,12 @@ export function RosterView({
         </Box>
       ) : (
         sessions.map((s) => (
-          <RosterRow key={s.sid} session={s} selected={s.sid === selectedSid} now={now} />
+          <RosterRow
+            key={s.sid}
+            session={s}
+            selected={s.sid === selectedSid}
+            now={now}
+          />
         ))
       )}
     </Box>

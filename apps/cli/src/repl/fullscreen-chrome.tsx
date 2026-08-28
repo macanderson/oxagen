@@ -141,11 +141,11 @@ export function TranscriptViewport({
 
   // Row height per COMMITTED message, recomputed only when the committed
   // transcript (identity — see interactive.tsx's own memoized
-  // `committedMessages`) or `width` actually changes. This used to re-measure
-  // the ENTIRE transcript, including scrollback long off-screen, on every
-  // render of this component — including the 1Hz clock tick and every
-  // streamed token of the live message, neither of which touches anything
-  // BUT that live message. The live message's own height is cheap (a single
+  // `committedMessages`) or `width` actually changes. Re-measuring the ENTIRE
+  // transcript, including scrollback long off-screen, on every render of this
+  // component would waste work on the 1Hz clock tick and every streamed token
+  // of the live message, neither of which touches anything BUT that live
+  // message. The live message's own height is cheap (a single
   // message) and computed fresh below.
   const committedRowHeights = useMemo(
     () => committedMessages.map((m) => estimateMessageRows(m, width)),

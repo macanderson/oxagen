@@ -2,9 +2,9 @@
  * The process-wide running-agent registry — the single source of truth for
  * "what is running right now", powering the REPL's `/hud` heads-up display.
  *
- * The CLI has several things that run concurrently and were previously invisible
- * once dispatched: the active REPL turn and fleet subagents (CI/PR pollers that
- * fire-and-forget), and fleet subagents. Each producer registers here and gets a
+ * The CLI has several things that run concurrently once dispatched: the active
+ * REPL turn, CI/PR pollers that fire-and-forget, and fleet subagents. Each
+ * producer registers here and gets a
  * {@link AgentHandle} it updates as work progresses; consumers (the HUD) read a
  * {@link snapshot} and subscribe to `change` events for live updates.
  *

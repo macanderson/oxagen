@@ -16,7 +16,7 @@
  *      is what makes a second terminal's dispatch appear in Mission Control
  *      within a second, read-only but controllable (send/cancel via the inbox).
  *
- * The invariant that keeps the aggregate honest: an in-process session is fed to
+ * The invariant that keeps the aggregate correct: an in-process session is fed to
  * the bus by its runner's `onLocalEvent` and is NEVER also tailed from disk, so
  * its events are emitted exactly once (`ownSids` gates the tail).
  */
@@ -31,7 +31,11 @@ import {
   type SessionStore,
   type TailHandle,
 } from "./store.js";
-import { dispatchDetachedSession, titleFromPrompt, type DispatchDetachedOptions } from "./dispatch.js";
+import {
+  dispatchDetachedSession,
+  titleFromPrompt,
+  type DispatchDetachedOptions,
+} from "./dispatch.js";
 import { runSession, type SessionFate } from "./runner.js";
 import { debugLog } from "../lib/debug-log.js";
 
@@ -117,12 +121,18 @@ export class FleetSessionManager {
 
   // ── Typed event surface ─────────────────────────────────────────────────────
 
-  on<K extends keyof ManagerEvents>(event: K, listener: ManagerEvents[K]): this {
+  on<K extends keyof ManagerEvents>(
+    event: K,
+    listener: ManagerEvents[K],
+  ): this {
     this.emitter.on(event, listener as (...args: unknown[]) => void);
     return this;
   }
 
-  off<K extends keyof ManagerEvents>(event: K, listener: ManagerEvents[K]): this {
+  off<K extends keyof ManagerEvents>(
+    event: K,
+    listener: ManagerEvents[K],
+  ): this {
     this.emitter.off(event, listener as (...args: unknown[]) => void);
     return this;
   }
@@ -167,7 +177,10 @@ export class FleetSessionManager {
     return sid;
   }
 
-  private async initInProcess(sid: string, opts: DispatchOptions): Promise<void> {
+  private async initInProcess(
+    sid: string,
+    opts: DispatchOptions,
+  ): Promise<void> {
     const meta = await this.store.createSession({
       sid,
       title: titleFromPrompt(opts.prompt),
@@ -187,8 +200,14 @@ export class FleetSessionManager {
   /** Fill open concurrency slots with queued sessions (FIFO). */
   private maybeStart(): void {
     if (this.draining) return;
-    while (this.runners.size < this.concurrency && this.pendingQueue.length > 0) {
-      const item = this.pendingQueue.shift() as { sid: string; meta: SessionMeta };
+    while (
+      this.runners.size < this.concurrency &&
+      this.pendingQueue.length > 0
+    ) {
+      const item = this.pendingQueue.shift() as {
+        sid: string;
+        meta: SessionMeta;
+      };
       this.startRunner(item.sid, item.meta);
     }
   }
@@ -218,7 +237,11 @@ export class FleetSessionManager {
 
   /** Append a follow-up message to `sid`'s inbox (its owner consumes it). */
   async send(sid: string, text: string): Promise<void> {
-    await this.store.appendInbox(sid, { type: "message", text, ts: this.now() });
+    await this.store.appendInbox(sid, {
+      type: "message",
+      text,
+      ts: this.now(),
+    });
   }
 
   /**
@@ -230,7 +253,8 @@ export class FleetSessionManager {
   async cancel(sid: string): Promise<void> {
     await this.store.appendInbox(sid, { type: "cancel", ts: this.now() });
     if (this.ownSids.has(sid)) return;
-    const meta = this.roster.get(sid) ?? (await this.store.readMeta(sid)) ?? undefined;
+    const meta =
+      this.roster.get(sid) ?? (await this.store.readMeta(sid)) ?? undefined;
     if (meta && meta.owner === "worker" && meta.alive && meta.pid > 0) {
       try {
         process.kill(meta.pid, "SIGTERM");
@@ -246,7 +270,9 @@ export class FleetSessionManager {
   start(): void {
     if (this.started) return;
     this.started = true;
-    this.watchHandle = this.store.watchSessions((sessions) => this.onRoster(sessions));
+    this.watchHandle = this.store.watchSessions((sessions) =>
+      this.onRoster(sessions),
+    );
   }
 
   /** Tear down all tails and the roster watch. Runners are unaffected (see drain). */
@@ -305,7 +331,9 @@ export class FleetSessionManager {
   async drain(): Promise<void> {
     this.draining = true;
     const queued = this.pendingQueue.splice(0);
-    await Promise.all(queued.map(({ meta }) => this.cancelQueued(meta).catch(() => {})));
+    await Promise.all(
+      queued.map(({ meta }) => this.cancelQueued(meta).catch(() => {})),
+    );
     await Promise.allSettled([...this.runners.values()]);
   }
 

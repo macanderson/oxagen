@@ -38,19 +38,23 @@ export function estimateMessageRows(msg: Message, width: number): number {
       // Collapsed accordion is one line; expanded shows its buffered output
       // plus the card's own border/header rows.
       return msg.terminalExpanded && msg.terminalRun
-        ? Math.min(24, Math.max(3, msg.terminalRun.output.split("\n").length + 3))
+        ? Math.min(
+            24,
+            Math.max(3, msg.terminalRun.output.split("\n").length + 3),
+          )
         : 1;
     case "diff": {
       // Must track DiffMessage's REAL rendered height: marginY (2 rows) +
       // header (1) + one row per diff line up to DiffView's own truncation
-      // cap (+1 for its "… more lines" note past it). An earlier version
-      // capped this estimate at 60 rows while DiffView happily rendered 500 —
-      // one big diff then made ~440 rows of scroll positions vanish from the
-      // math, leaving everything above it unreachable. Tall diffs are
-      // line-scrollable now (clipTop), so the estimate should be honest, not
-      // capped.
+      // cap (+1 for its "… more lines" note past it). Capping this estimate
+      // below DiffView's real render would make scroll positions vanish from
+      // the math and leave everything above the cap unreachable. Tall diffs
+      // are line-scrollable (clipTop), so the estimate must match the real
+      // height, not an arbitrary cap.
       const lines = (msg.diff ?? "").split("\n").length;
-      const rendered = Math.min(lines, DIFF_VIEW_MAX_LINES) + (lines > DIFF_VIEW_MAX_LINES ? 1 : 0);
+      const rendered =
+        Math.min(lines, DIFF_VIEW_MAX_LINES) +
+        (lines > DIFF_VIEW_MAX_LINES ? 1 : 0);
       return Math.max(2, rendered + 3);
     }
     case "user": {
@@ -80,7 +84,10 @@ function wrappedRows(text: string, width: number): number {
 }
 
 /** Sum of {@link estimateMessageRows} across a whole transcript. */
-export function totalEstimatedRows(messages: readonly Message[], width: number): number {
+export function totalEstimatedRows(
+  messages: readonly Message[],
+  width: number,
+): number {
   let total = 0;
   for (const m of messages) total += estimateMessageRows(m, width);
   return total;
@@ -110,7 +117,10 @@ export type ScrollAction =
   | { type: "home" }
   | { type: "end" };
 
-export const INITIAL_SCROLL_STATE: ScrollState = { rawOffset: 0, stickyBottom: true };
+export const INITIAL_SCROLL_STATE: ScrollState = {
+  rawOffset: 0,
+  stickyBottom: true,
+};
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
@@ -138,7 +148,11 @@ export function effectiveOffset(state: ScrollState, ctx: ScrollCtx): number {
  * fresh on every dispatch (rather than stored in state) so it always reflects
  * the current viewport size and content length.
  */
-export function scrollReducer(state: ScrollState, action: ScrollAction, ctx: ScrollCtx): ScrollState {
+export function scrollReducer(
+  state: ScrollState,
+  action: ScrollAction,
+  ctx: ScrollCtx,
+): ScrollState {
   const max = maxOffsetFor(ctx);
   const cur = effectiveOffset(state, ctx);
   /** Land on `n`, clamped; re-engage sticky-bottom automatically at the max. */
@@ -207,7 +221,8 @@ export function computeVisibleWindow(
   offset: number,
   viewportHeight: number,
 ): VisibleWindow {
-  if (rowHeights.length === 0) return { startIndex: 0, endIndex: 0, hiddenAbove: 0, clipTop: 0 };
+  if (rowHeights.length === 0)
+    return { startIndex: 0, endIndex: 0, hiddenAbove: 0, clipTop: 0 };
 
   let acc = 0;
   let startIndex = 0;
@@ -228,7 +243,12 @@ export function computeVisibleWindow(
     if (shown >= needed) break;
     shown += rowHeights[endIndex] ?? 0;
   }
-  return { startIndex, endIndex: Math.max(endIndex, startIndex + 1), hiddenAbove: acc, clipTop };
+  return {
+    startIndex,
+    endIndex: Math.max(endIndex, startIndex + 1),
+    hiddenAbove: acc,
+    clipTop,
+  };
 }
 
 export interface BottomWindow {

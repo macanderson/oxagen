@@ -265,10 +265,9 @@ export async function runOneShot(
 
   // Workspace rules (Tier 1 prompt + Tier 2 gate denies), SessionStart/Pre/Post
   // hooks, and external MCP tools — assembled into the engine's extraTools /
-  // wrapTools seams so the primary one-shot path runs the ONE engine loop with
-  // the same wiring the legacy loop had. Permissions stay with the broker
-  // (gatePermissions:false), so this gate adds only rule-guard denies + hooks —
-  // no double-gating.
+  // wrapTools seams so the primary one-shot path runs the ONE engine loop.
+  // Permissions stay with the broker (gatePermissions:false), so this gate
+  // adds only rule-guard denies + hooks — no double-gating.
   const extras: TurnExtras = await buildTurnExtras({
     cwd,
     settings,
@@ -507,11 +506,11 @@ export async function runAgentOneShot(
           executionRef: `cli:agent-${agentName}-${Date.now()}`,
           projectName: cwd.split("/").pop() || undefined,
         });
-  // Route the named agent through the ONE engine loop (runTurn), not the legacy
-  // loop: the persona's systemPrompt replaces the default identity, `bare: true`
-  // makes it authoritative (no eval/enhance/judge), and its tool allowlist +
-  // permissions are enforced via the shared turn-extras gate. --agent has no
-  // interactive broker, so the gate owns permissions (gatePermissions: true).
+  // Route the named agent through the ONE engine loop (runTurn): the persona's
+  // systemPrompt replaces the default identity, `bare: true` makes it
+  // authoritative (no eval/enhance/judge), and its tool allowlist + permissions
+  // are enforced via the shared turn-extras gate. --agent has no interactive
+  // broker, so the gate owns permissions (gatePermissions: true).
   const settings = loadSettings({ cwd }).settings;
   const baseAi: AgentAi = options.session.synthetic
     ? createGatewayAgentAi({ cwd })

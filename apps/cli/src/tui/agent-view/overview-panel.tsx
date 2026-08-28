@@ -30,29 +30,44 @@ function Stat({
   );
 }
 
-export function OverviewPanel({ rollup }: { rollup: SessionRollup }): React.ReactElement {
+export function OverviewPanel({
+  rollup,
+}: {
+  rollup: SessionRollup;
+}): React.ReactElement {
   const { byState } = rollup;
   const hasSpend = rollup.costUsdTotal > 0;
   const hasTokens = rollup.inputTokens + rollup.outputTokens > 0;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.dim} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.dim}
+      paddingX={1}
+    >
       <Box marginBottom={1}>
         <Text bold color={theme.violet}>
           ◈ OVERVIEW
         </Text>
       </Box>
 
-      {/* Lifecycle tally — only non-zero states, so the row stays honest. */}
+      {/* Lifecycle tally — only non-zero states, so the row stays accurate. */}
       <Box gap={2} flexWrap="wrap">
         {rollup.active > 0 ? (
           <Text color={theme.cyan}>● {rollup.active} active</Text>
         ) : (
           <Text dimColor>● 0 active</Text>
         )}
-        {byState.done > 0 ? <Text color={theme.green}>✓ {byState.done} done</Text> : null}
-        {byState.failed > 0 ? <Text color={theme.red}>✖ {byState.failed} failed</Text> : null}
-        {byState.cancelled > 0 ? <Text dimColor>◼ {byState.cancelled} cancelled</Text> : null}
+        {byState.done > 0 ? (
+          <Text color={theme.green}>✓ {byState.done} done</Text>
+        ) : null}
+        {byState.failed > 0 ? (
+          <Text color={theme.red}>✖ {byState.failed} failed</Text>
+        ) : null}
+        {byState.cancelled > 0 ? (
+          <Text dimColor>◼ {byState.cancelled} cancelled</Text>
+        ) : null}
         {byState.orphaned > 0 ? (
           <Text color={theme.orange}>⚠ {byState.orphaned} orphaned</Text>
         ) : null}
@@ -77,8 +92,16 @@ export function OverviewPanel({ rollup }: { rollup: SessionRollup }): React.Reac
 
       {hasSpend ? (
         <Box gap={2} marginTop={1}>
-          <Stat label="spend today" value={formatUsd(rollup.costUsdToday)} color={theme.green} />
-          <Stat label="all-time" value={formatUsd(rollup.costUsdTotal)} color={theme.green} />
+          <Stat
+            label="spend today"
+            value={formatUsd(rollup.costUsdToday)}
+            color={theme.green}
+          />
+          <Stat
+            label="all-time"
+            value={formatUsd(rollup.costUsdTotal)}
+            color={theme.green}
+          />
         </Box>
       ) : null}
     </Box>
