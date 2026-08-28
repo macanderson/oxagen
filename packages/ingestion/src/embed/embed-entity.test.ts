@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Regression guard for the production ClickHouse insert flood
-// (CANNOT_PARSE_INPUT_ASSERTION_FAILED, code 27). embedEntity previously passed
-// `executionStepId: embed:<nodeId>` — a non-UUID string — straight into the
-// token_usage.execution_step_id UUID column (and credit_ledger.reference_id
-// Postgres uuid). It must now pass `null` (no execution step). This test asserts
-// the telemetry forwarded to embedText carries `executionStepId: null`, never a
-// synthesized string. It FAILS on the pre-fix code.
+// embedEntity has no execution step to report, so it must pass
+// `executionStepId: null` rather than a synthesized string like
+// `embed:<nodeId>` — token_usage.execution_step_id and
+// credit_ledger.reference_id are both UUID columns, and a non-UUID string
+// breaks the insert. This test asserts the telemetry forwarded to embedText
+// carries `executionStepId: null`.
 
 const mocks = vi.hoisted(() => ({
   embedText: vi.fn(),
@@ -14,7 +13,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/ai", () => ({ embedText: mocks.embedText }));
-vi.mock("../mutations/upsert-entity", () => ({ upsertEmbedding: mocks.upsertEmbedding }));
+vi.mock("../mutations/upsert-entity", () => ({
+  upsertEmbedding: mocks.upsertEmbedding,
+}));
 
 import { embedEntity } from "./index";
 

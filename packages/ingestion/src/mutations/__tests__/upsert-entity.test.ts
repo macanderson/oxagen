@@ -81,8 +81,8 @@ describe("upsertEntityNode", () => {
       string,
       Record<string, unknown>,
     ];
-    // §3.3 dual-write: the real label is PRIMARY, `:EntityNode` secondary. The
-    // entityType "task" is canonicalised to the PascalCase label `Task`.
+    // The real label is primary, `:EntityNode` secondary. The entityType
+    // "task" is canonicalized to the PascalCase label `Task`.
     expect(cypher).toContain("MERGE (n:`Task`:`EntityNode`");
     expect(cypher).toContain("naturalKey:");
     expect(cypher).toContain("orgId:");
@@ -176,15 +176,11 @@ describe("upsertEntityNode", () => {
     );
   });
 
-  // OXA-2062: the MERGE key is `{naturalKey: $naturalKey, orgId: $orgId}` but
-  // the local params object previously omitted `orgId` entirely (the second
-  // constructor arg was named `_orgId` and never threaded through), relying
-  // solely on scopedSession()'s auto-injection. This suite mocks
-  // scopedSession() directly (no auto-injection), so this bug was invisible
-  // until orgId was bound explicitly. This is the same defect class as
-  // OXA-2052 (packages/ingestion/src/dedup/resolve.ts), found here in the
-  // underlying mutation layer resolve.ts itself calls into.
-  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+  // The MERGE key is `{naturalKey: $naturalKey, orgId: $orgId}`, so `orgId`
+  // must be bound explicitly in the params object — scopedSession's own
+  // tenant-scope injection is not a substitute, since this suite mocks
+  // scopedSession directly and would not catch a missing binding otherwise.
+  it("binds orgId explicitly in the MERGE params", async () => {
     mocks.sessionRun.mockResolvedValueOnce({
       records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
     });
@@ -299,7 +295,7 @@ describe("upsertEntityNode", () => {
   });
 });
 
-// ── §8 enforcement-mode branches (strict / lenient / off) ────────────────────
+// ── Enforcement-mode branches (strict / lenient / off) ───────────────────────
 
 import type { PinnedSchema } from "../../validate/schema";
 
@@ -339,7 +335,7 @@ function pinnedSchema(
   };
 }
 
-describe("upsertEntityNode — §8 enforcement modes", () => {
+describe("upsertEntityNode — enforcement modes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.scopedSession.mockReturnValue({
@@ -413,15 +409,13 @@ describe("upsertEntityNode — §8 enforcement modes", () => {
     expect(tables).toContain("graph_observed_labels");
   });
 
-  // ── OXA-1932: idempotent conformance events under Inngest retries ─────────
+  // ── Idempotent conformance events under Inngest retries ──────────────────
   //
-  // Regression coverage for the double-counting defect: `event_id` used to be
-  // `crypto.randomUUID()`, so a retried Inngest step (which re-executes the
-  // WHOLE step.run body, including this ClickHouse insert) minted a brand new
-  // row for the exact same logical write. These tests fail on the pre-fix code
-  // (every call produces a distinct random event_id) and pass on the fix
-  // (event_id is a deterministic function of stable inputs).
-  describe("conformance-event idempotency (OXA-1932)", () => {
+  // A retried Inngest step re-executes the whole `step.run` body, including
+  // this ClickHouse insert. `event_id` must be a deterministic function of
+  // stable inputs so a retry re-derives the same row instead of minting a
+  // new one for the same logical write.
+  describe("conformance-event idempotency", () => {
     function conformanceRows(): Array<Record<string, unknown>> {
       return mocks.chInsert.mock.calls
         .filter(([table]) => table === "schema_conformance_events")
@@ -593,9 +587,9 @@ describe("upsertEmbedding", () => {
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
   });
 
-  // OXA-2062: the MATCH references $orgId but the local params object
-  // previously omitted it, relying solely on scopedSession auto-injection.
-  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+  // The MATCH references $orgId, so it must be bound explicitly in the local
+  // params object rather than relying on scopedSession's own tenant scoping.
+  it("binds orgId explicitly in the local params object", async () => {
     await upsertEmbedding("node-uuid", [0.1], "model", "org-77");
     const [, params] = mocks.sessionRun.mock.calls[0] as [
       string,
@@ -646,9 +640,10 @@ describe("createAliasEdge", () => {
     expect(params["validFrom"]).toBeNull();
   });
 
-  // OXA-2062: both MATCH clauses reference $orgId but the local params object
-  // previously omitted it, relying solely on scopedSession auto-injection.
-  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+  // Both MATCH clauses reference $orgId, so it must be bound explicitly in
+  // the local params object rather than relying on scopedSession's own
+  // tenant scoping.
+  it("binds orgId explicitly in the local params object", async () => {
     await createAliasEdge(
       "alias-id",
       "principal-id",
@@ -700,10 +695,10 @@ describe("upsertSourceConnectionMeta", () => {
     expect(params["workspaceId"]).toBe("ws-1");
   });
 
-  // OXA-2062: the MERGE key is `{id: $connectionId, orgId: $orgId}` but the
-  // local params object previously omitted `orgId` entirely, relying solely
-  // on scopedSession()'s auto-injection.
-  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+  // The MERGE key is `{id: $connectionId, orgId: $orgId}`, so `orgId` must be
+  // bound explicitly in the local params object rather than relying on
+  // scopedSession's own tenant scoping.
+  it("binds orgId explicitly in the MERGE params", async () => {
     await upsertSourceConnectionMeta(
       {
         connectionId: "conn-2",

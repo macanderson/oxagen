@@ -123,7 +123,7 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     expect(schema?.metadata.displayName).toBe("Google Drive");
   });
 
-  // ── Newly-added built-in connector schemas (OXA-1784) ─────────────────────
+  // ── Additional built-in connector schemas ─────────────────────────────────
 
   it("loads the google-calendar schema", () => {
     const schema = loadBuiltInSchema("google-calendar");
@@ -223,7 +223,7 @@ describe("loadBuiltInSchema — built-in plugins", () => {
 
   // Regression: set size must match the number of schema.yaml files on disk,
   // so this test catches drift in either direction.
-  it("BUILT_IN_PLUGIN_IDS contains the expected 16 connector ids (OXA-1784 coverage)", () => {
+  it("BUILT_IN_PLUGIN_IDS contains the expected 16 connector ids", () => {
     // Update this count whenever a new connector is added to BUILT_IN_PLUGIN_IDS.
     // Current set: github, linear, slack, google-drive, google-calendar, google-gmail,
     // google-meet, google-tasks, google-contacts, google-bigquery, microsoft, salesforce,
