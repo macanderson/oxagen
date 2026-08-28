@@ -77,7 +77,7 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
  * The cost meter that lives inside the gate. Converts one metered call into
  * (a) the provider cost we incurred and (b) the credits to debit, then charges
  * them. Inputs are exactly what providers bill on — tokens in/out for text,
- * images/seconds for media — so the meter stays honest against the invoice.
+ * images/seconds for media — so the meter matches the real invoice.
  *
  * Text, image, and video all funnel through one DB-charging chokepoint
  * ({@link chargeCostUsd}) so the markup → credits → atomic-debit path is solved

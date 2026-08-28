@@ -119,7 +119,7 @@ describe("providerCostUsd", () => {
     expect(cost).toBeGreaterThanOrEqual(0);
   });
 
-  it("bills cache-write tokens at the 1.25x premium, not fresh input (#1076)", () => {
+  it("bills cache-write tokens at the 1.25x premium, not fresh input", () => {
     // 6k fresh input + 4k cache writes + 2k output (inputTokens is the inclusive total):
     // 6000*3/1e6 + 4000*3.75/1e6 + 2000*15/1e6 = 0.018 + 0.015 + 0.03 = 0.063
     expect(
@@ -133,8 +133,8 @@ describe("providerCostUsd", () => {
   });
 
   it("charges a 25% premium on a cache-write token vs the same token as fresh input", () => {
-    // The core #1076 defect: folding cache writes into inputPer1M under-charges the
-    // Anthropic premium. The 4k write tokens must cost exactly 1.25x fresh input.
+    // Folding cache writes into inputPer1M would under-charge the Anthropic
+    // premium. The 4k write tokens must cost exactly 1.25x fresh input.
     const asFresh = providerCostUsd({
       model: "claude-sonnet-4-6",
       inputTokens: 10_000,
