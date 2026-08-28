@@ -8,7 +8,7 @@
  * is admitted to a governed run, so every field that could be forged, left
  * unpinned, or confused between an internal UUID and a public id gets an
  * explicit negative case. Table-driven mutations of one known-good fixture
- * keep those cases honest — a fixture that stopped being valid would fail the
+ * keep those cases valid — a fixture that stopped passing would fail the
  * happy-path test first, so a green negative case can never be green for the
  * wrong reason.
  */

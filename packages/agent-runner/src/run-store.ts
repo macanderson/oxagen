@@ -179,12 +179,11 @@ export interface ClaimedRunV2 extends ClaimedRun {
 }
 
 /**
- * The complete fencing reference for one attempt. Replaces the V1 notion of a
- * lease as "(runId, workerId)" — that pair cannot distinguish two executions of
- * the same run, which is precisely how a reclaimed run's events used to
- * interleave. Every fenced operation (renew, append, checkpoint, cancel check,
- * seal) echoes this whole tuple and is refused unless all of it matches an
- * unfenced, unexpired, unsealed lease.
+ * The complete fencing reference for one attempt. A bare `(runId, workerId)`
+ * pair cannot distinguish two executions of the same run, which is how a
+ * reclaimed run's events could interleave. Every fenced operation (renew,
+ * append, checkpoint, cancel check, seal) echoes this whole tuple and is
+ * refused unless all of it matches an unfenced, unexpired, unsealed lease.
  */
 export interface RunLeaseRef {
   runId: string;
@@ -541,7 +540,7 @@ export interface EnqueueRunV2Input {
  * `RunStore` and are owned by other tasks in this PR, so a new required method
  * there would break them in CI rather than here.
  * `createPostgresRunStore()` returns `RunStore & AttemptRunStore`, so a caller
- * that wants the V2 surface simply keeps the inferred type.
+ * that wants the V2 surface keeps the inferred type.
  */
 export interface AttemptRunStore {
   /** Trusted V2 admission. Verifies every typed column against the spec. */
@@ -1191,8 +1190,8 @@ export interface ExistingAttemptEventRow {
  * dropped: it means two writers observed different executions of the same
  * position, so the ordered stream is no longer one provable history. That
  * throws `RunEventIntegrityError`, which the caller reports through the
- * security-event sink AFTER the transaction rolls back. This is exactly what
- * `ON CONFLICT DO NOTHING` used to hide, and why the V2 insert has no
+ * security-event sink AFTER the transaction rolls back. `ON CONFLICT DO
+ * NOTHING` would hide exactly this, which is why the V2 insert has no
  * conflict clause at all.
  */
 export function reconcileReplayedEvents(
@@ -1438,7 +1437,7 @@ export function buildLockClaimableRunV2Sql(): SQL {
  * checkpoint is eligible — an unsealed attempt is still live or mid-reclaim,
  * and its checkpoint is not a settled position in the stream. The schema filter
  * means a checkpoint written by an engine build this worker cannot parse is
- * skipped rather than mis-read; the successor simply starts clean.
+ * skipped rather than mis-read; the successor starts clean.
  */
 export function buildSelectRestorableCheckpointSql(
   runId: string,
