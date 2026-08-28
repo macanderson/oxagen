@@ -38,11 +38,11 @@ export const CHART_SERIES_TOKENS = [
 
 /** Light-theme values of `--chart-1..5`, for the pre-hydration frame. */
 export const CHART_SERIES_FALLBACK = [
-  "#EFC53F",
-  "#4C51A8",
-  "#2F7D4F",
-  "#CA6719",
-  "#4E6A7A",
+  "#EFC53F", // ember  — the brand gold
+  "#4E6A7A", // slate  — the cool counterpoint (was the retired indigo #4C51A8)
+  "#2F7D4F", // moss
+  "#CA6719", // ochre
+  "#777782", // silver — achromatic fifth series
 ] as const;
 
 /**

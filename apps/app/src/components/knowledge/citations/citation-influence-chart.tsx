@@ -29,8 +29,8 @@ const INFLUENCE_LABEL: Record<InfluenceKey, string> = {
 
 // Fixed per-bar colours (not a cycled categorical order), now expressed as
 // SEMANTIC tokens rather than hexes so they carry the same meaning as the rest
-// of the UI: DECISIVE/CONTRIBUTING read as "useful" (success, categorical
-// blue), CONSIDERED as "recalled but not useful" (warning), IGNORED as neutral.
+// of the UI: DECISIVE/CONTRIBUTING read as "useful" (success, the categorical
+// slate), CONSIDERED as "recalled but not useful" (warning), IGNORED as neutral.
 // See lib/chart-colors.ts for why these resolve at runtime.
 const INFLUENCE_TOKENS = [
   "--success",
@@ -39,10 +39,10 @@ const INFLUENCE_TOKENS = [
   "--muted-foreground",
 ] as const;
 const INFLUENCE_FALLBACK = [
-  "#2F7D4F",
-  "#4C51A8",
-  "#CA6719",
-  "#5F5A52",
+  "#2F7D4F", // --success
+  "#4E6A7A", // --chart-2 (slate; was the retired indigo #4C51A8)
+  "#CA6719", // --warning
+  "#5F5A52", // --muted-foreground
 ] as const;
 const INFLUENCE_COLOR_ORDER: readonly InfluenceKey[] = [
   "DECISIVE",

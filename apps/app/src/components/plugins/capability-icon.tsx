@@ -73,7 +73,7 @@ export const PLUGIN_TYPE_DEFAULTS: Record<
   { iconName: string; color: string }
 > = {
   mcp_server: { iconName: "plug", color: "#3b82f6" },
-  integration: { iconName: "package", color: "#8b5cf6" },
+  integration: { iconName: "package", color: "#4E6A7A" },
   agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
   agent_skill: { iconName: "sparkles", color: "#10b981" },
   knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
@@ -91,7 +91,7 @@ interface CapabilityIconProps {
 
 export function CapabilityIcon({
   iconName,
-  color = "#6366f1",
+  color = "#777782",
   size = 32,
   className,
 }: CapabilityIconProps) {

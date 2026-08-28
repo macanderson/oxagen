@@ -90,7 +90,7 @@ interface WorkspacePluginsPanelProps {
 const INSTALLED_TYPE_ICON: Record<string, { iconName: string; color: string }> =
   {
     mcp_server: { iconName: "plug", color: "#3b82f6" },
-    integration: { iconName: "package", color: "#8b5cf6" },
+    integration: { iconName: "package", color: "#4E6A7A" },
     agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
     capability: { iconName: "brain-circuit", color: "#f59e0b" },
     agent_skill: { iconName: "sparkles", color: "#10b981" },

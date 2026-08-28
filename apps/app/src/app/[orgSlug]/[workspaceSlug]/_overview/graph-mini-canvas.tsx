@@ -6,7 +6,7 @@
  * bundle never ships in SSR or the initial payload. Deliberately minimal — no
  * toolbar, selection, hover, or drag; it is a "grounding is alive" glance, not
  * the full explorer (that lives at knowledge/graph). Node colour encodes the
- * domain label; dashed purple edges are LLM-inferred. Colours are shared with
+ * domain label; dashed gold edges are LLM-inferred. Colours are shared with
  * the explorer so the preview and the full canvas never drift.
  */
 "use client";
