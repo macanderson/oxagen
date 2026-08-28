@@ -42,7 +42,7 @@ const buttonVariants = cva(
         "destructive-outline":
           "border border-error/50 bg-background text-error hover:bg-error/10 focus-visible:ring-error disabled:text-button-disabled-fg",
         link: "text-foreground underline-offset-4 hover:underline hover:scale-100 focus-visible:ring-button-default-ring disabled:text-button-disabled-fg",
-        // Legacy alias — flat solid primary (no gradient/glow; FLAT policy).
+        // Alias of `primary` — resolves to the same flat solid style, no gradient.
         gradient:
           "border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg focus-visible:ring-button-primary-ring disabled:border-transparent disabled:bg-button-disabled-bg disabled:text-button-disabled-fg",
       },
@@ -142,7 +142,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     if (disabled && disabledTooltip != null) {
       return (
         <Tooltip>
-          <TooltipTrigger render={<span tabIndex={0} className="inline-flex" />}>
+          <TooltipTrigger
+            render={<span tabIndex={0} className="inline-flex" />}
+          >
             {element}
           </TooltipTrigger>
           <TooltipPopup>{disabledTooltip}</TooltipPopup>

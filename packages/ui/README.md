@@ -1,8 +1,8 @@
 # @oxagen/ui
 
-**coss ui** — the shared component system for every Oxagen app (`apps/app`,
-`apps/website`, `apps/admin`). Built on **[Base UI](https://base-ui.com/)** (not
-Radix) and **Tailwind v4** with a fully token-driven theme.
+**coss ui** — the shared component system for every Oxagen app (`app`, `docs`,
+`web`, and the rest of the monorepo's apps). Built on **[Base UI](https://base-ui.com/)**
+(not Radix) and **Tailwind v4** with a fully token-driven theme.
 
 The package ships **raw TypeScript source** — there is no build step. Apps
 consume it via `transpilePackages` and import either from the barrel
@@ -110,7 +110,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 |--------|------|-------|
 | `ThemeProvider`, `useTheme`, `THEME_COOKIE_NAME`, `parseTheme`, `themeClass` | `theme-provider.tsx`, `theme-config.ts` | self-hosted, cookie-based, no-flash theming. |
 | `MotionProvider` | `motion-provider.tsx` | motion config provider. |
-| `GlobalErrorPage`, `NotFoundPage`, `MarketingHeroPage` | resp. | full-page templates. |
+| `GlobalErrorPage`, `NotFoundPage` | `global-error.tsx`, `not-found.tsx` | full-page templates. |
 | `cn` | `lib/utils.ts` | `clsx` + `tailwind-merge`. |
 
 ## Styling
