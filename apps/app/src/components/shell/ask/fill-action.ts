@@ -23,7 +23,7 @@ export interface FillFormActionInput {
 
 /**
  * Server action: resolve tenant context from the session, then invoke the
- * form.fill capability through the enforced kernel.invoke() path (OXA-1498).
+ * form.fill capability through the enforced kernel.invoke() path.
  * Routing through kernel.invoke() ensures the full IAM check + ClickHouse
  * audit write run on every call — matching the behaviour of the API and MCP
  * surfaces (no-drift guarantee).

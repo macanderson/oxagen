@@ -23,9 +23,7 @@
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen";
 import type { ResourceScopeCondition } from "@oxagen/oxagen/iam";
-import type {
-  AgentRoleListOutput,
-} from "@oxagen/oxagen/contracts/agent.role.list";
+import type { AgentRoleListOutput } from "@oxagen/oxagen/contracts/agent.role.list";
 import type { AgentRoleGetOutput } from "@oxagen/oxagen/contracts/agent.role.get";
 import type { AgentRoleAssignOutput } from "@oxagen/oxagen/contracts/agent.role.assign";
 import type { AgentRoleRevokeOutput } from "@oxagen/oxagen/contracts/agent.role.revoke";
@@ -69,7 +67,7 @@ export type AgentRoleOption = {
    * subagents). Known statically for the three system agent roles (shared
    * AGENT_ROLE_SPECS — the same objects the seeder writes); null for custom
    * roles, whose conditions are not published through a read contract yet —
-   * the review panel renders that honestly as "ceiling not published".
+   * the review panel renders that as "ceiling not published".
    */
   resourceScope: ResourceScopeCondition | null;
   /**
@@ -94,8 +92,8 @@ export type AgentRoleOptionsResult = {
  * Static fallback options — the three system agent roles from the shared
  * AGENT_ROLE_SPECS, with no grant list and the ceiling assumed satisfied.
  * Used when `list_iam_roles` fails so the picker still renders (degraded,
- * honestly flagged via grantsKnown=false); assign_agent_role remains the
- * authority on every rule the pre-check could not evaluate.
+ * flagged via grantsKnown=false); assign_agent_role remains the authority
+ * on every rule the pre-check could not evaluate.
  */
 export function fallbackSystemRoleOptions(): AgentRoleOption[] {
   return AGENT_ROLE_SPECS.map((spec) => ({
@@ -159,7 +157,8 @@ export async function listAgentRoleOptions(
       options.push({
         roleName: row.name,
         description:
-          row.description ?? "Custom role — review its grants before assigning.",
+          row.description ??
+          "Custom role — review its grants before assigning.",
         isSystemDefault: false,
         scopeKind: row.scopeKind,
         grants: row.grants,
@@ -219,12 +218,9 @@ export async function getAssignedAgentRole(
   ctx: WorkbenchCtx,
   agentId: string,
 ): Promise<string | null> {
-  const out = (await invoke(
-    "list_agent_roles",
-    { agentId },
-    ctx,
-    { surface: "agent" },
-  )) as AgentRoleListOutput;
+  const out = (await invoke("list_agent_roles", { agentId }, ctx, {
+    surface: "agent",
+  })) as AgentRoleListOutput;
   return out.roles[0]?.roleName ?? null;
 }
 
@@ -260,12 +256,9 @@ export async function getAgentRolePreview(
   agentId: string,
   roleName: string,
 ): Promise<AgentRoleGetOutput> {
-  return (await invoke(
-    "get_agent_role",
-    { agentId, roleName },
-    ctx,
-    { surface: "agent" },
-  )) as AgentRoleGetOutput;
+  return (await invoke("get_agent_role", { agentId, roleName }, ctx, {
+    surface: "agent",
+  })) as AgentRoleGetOutput;
 }
 
 // ── Writes ────────────────────────────────────────────────────────────────────
@@ -275,12 +268,9 @@ export async function assignAgentRole(
   agentId: string,
   roleName: string,
 ): Promise<AgentRoleAssignOutput> {
-  return (await invoke(
-    "assign_agent_role",
-    { agentId, roleName },
-    ctx,
-    { surface: "agent" },
-  )) as AgentRoleAssignOutput;
+  return (await invoke("assign_agent_role", { agentId, roleName }, ctx, {
+    surface: "agent",
+  })) as AgentRoleAssignOutput;
 }
 
 export async function revokeAgentRole(
@@ -288,20 +278,15 @@ export async function revokeAgentRole(
   agentId: string,
   roleName: string,
 ): Promise<AgentRoleRevokeOutput> {
-  return (await invoke(
-    "revoke_agent_role",
-    { agentId, roleName },
-    ctx,
-    { surface: "agent" },
-  )) as AgentRoleRevokeOutput;
+  return (await invoke("revoke_agent_role", { agentId, roleName }, ctx, {
+    surface: "agent",
+  })) as AgentRoleRevokeOutput;
 }
 
 // ── Error narrowing ───────────────────────────────────────────────────────────
 
 /** The delegation-ceiling rejection's stable shape (code + capabilities). */
-export function isCeilingError(
-  err: unknown,
-): err is Error & {
+export function isCeilingError(err: unknown): err is Error & {
   code: "agent_role_ceiling_exceeded";
   capabilities: readonly string[];
 } {

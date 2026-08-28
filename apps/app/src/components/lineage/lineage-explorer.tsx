@@ -1,11 +1,10 @@
 /**
- * lineage-explorer.tsx — the fleet-lineage explorer orchestrator (issue
- * #1078).
+ * lineage-explorer.tsx — the fleet-lineage explorer orchestrator.
  *
  * Composes the reagraph canvas (lazily loaded, `ssr:false`) with the indented
- * run list, a root-dispatch summary strip, and honest truncation/violation
- * banners. Receives an already-fetched, already-validated `query_lineage`
- * result as plain props — this component NEVER imports `actions.ts` or any
+ * run list, a root-dispatch summary strip, and truncation/violation banners
+ * that are never hidden. Receives an already-fetched, already-validated
+ * `query_lineage` result as plain props — this component NEVER imports `actions.ts` or any
  * server-only module (it is "use client"; the data crossed the server→client
  * boundary once, in the parent Server Component).
  *
@@ -139,7 +138,7 @@ export function LineageExplorer({
         </Link>
       </div>
 
-      {/* Honesty banners — truncation / depth limits are never hidden. */}
+      {/* Truncation / depth-limit banners are never hidden. */}
       {data.truncated && (
         <Alert variant="warning" data-testid="truncated-banner">
           <AlertTriangle />
@@ -183,7 +182,7 @@ export function LineageExplorer({
         </Alert>
       )}
 
-      {/* Delegation-ceiling violation banner — unmistakable, per issue #1078. */}
+      {/* Make a delegation-ceiling violation impossible to miss. */}
       {violatingRefs.length > 0 && (
         <Alert variant="error" data-testid="violation-banner">
           <AlertTriangle />

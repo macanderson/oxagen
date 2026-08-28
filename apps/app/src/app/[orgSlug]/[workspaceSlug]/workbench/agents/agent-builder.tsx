@@ -22,8 +22,8 @@
  *   6. Review    — summary + effective scope (role ∩ config) + Save draft /
  *                  Publish / Publish & Deploy.
  *
- * Triggers belong to automations/playbooks, not agent definitions (#1010) —
- * the agent is a pure, portable definition with no trigger fields.
+ * Triggers belong to automations/playbooks, not agent definitions — the
+ * agent is a pure, portable definition with no trigger fields.
  *
  * All persistence flows through the server actions in ./actions.ts, which gate
  * every mutation on workspace Owner/Admin. A `readOnly` builder (managed agent

@@ -1,6 +1,5 @@
 /**
- * actions.test.ts — unit tests for the Spend Budgets server actions
- * (OXA-1079).
+ * actions.test.ts — unit tests for the Spend Budgets server actions.
  *
  * The gate is role-conditional: getSpendBudgetsAction reads at Member level
  * (assertOrgMember — mirrors get_spend_budget's own `defaultRoles`, which

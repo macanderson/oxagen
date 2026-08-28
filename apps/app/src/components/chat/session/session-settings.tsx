@@ -444,9 +444,9 @@ export function SessionSettings({
     : (TEXT_TIERS.find((t) => t.id === (state.tier ?? "fast"))?.name ??
       "Oxagen Fast");
 
-  // The v2 UI only exposes low/medium/high — a legacy xhigh/max value (still
-  // valid in ChatSessionState) displays as "high" without ever being written
-  // back until the user picks a segment explicitly.
+  // This UI only exposes low/medium/high. An xhigh/max value (still valid in
+  // ChatSessionState) displays as "high" without being written back until the
+  // user picks a segment explicitly.
   const effortDisplay: "low" | "medium" | "high" =
     state.effort === "low"
       ? "low"

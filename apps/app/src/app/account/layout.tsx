@@ -19,7 +19,7 @@ export default async function AccountLayout({
   //   1. Give AppShell an org to render (needed for "Back to app" sidebar link).
   //   2. Populate the OrgSwitcher in the topbar.
   // Cross-tenant identity resolution (pre-scope) — withSystemDb bypasses RLS
-  // deliberately. — OXA-1515
+  // deliberately.
   const orgsRows = await withSystemDb((tx) =>
     tx
       .select({

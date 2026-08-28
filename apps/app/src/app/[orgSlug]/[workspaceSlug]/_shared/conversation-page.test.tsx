@@ -78,7 +78,11 @@ vi.mock("@oxagen/database", () => ({
       workspaceId: "workspaceId",
       enabled: "enabled",
     },
-    pluginInstalledPlugins: { id: "id", enabled: "enabled", deletedAt: "deletedAt" },
+    pluginInstalledPlugins: {
+      id: "id",
+      enabled: "enabled",
+      deletedAt: "deletedAt",
+    },
     // @oxagen/agent's _agent-definition builds its column map at module scope,
     // so schema.agents must exist even though no test queries it.
     agents: {
@@ -101,7 +105,12 @@ vi.mock("@oxagen/tenancy", () => ({
 }));
 
 vi.mock("@/lib/resolve-org", () => ({
-  resolveOrg: vi.fn(async () => ({ id: "org-1", slug: "acme", name: "Acme", publicId: "org_1" })),
+  resolveOrg: vi.fn(async () => ({
+    id: "org-1",
+    slug: "acme",
+    name: "Acme",
+    publicId: "org_1",
+  })),
   resolveWorkspace: vi.fn(async () => ({
     id: "ws-1",
     orgId: "org-1",
@@ -113,15 +122,17 @@ vi.mock("@/lib/resolve-org", () => ({
 }));
 
 vi.mock("@/lib/session", () => ({
-  getSessionOrRedirect: vi.fn(async () => ({ user: { id: "u1", name: "Alice", email: "a@x.io" } })),
+  getSessionOrRedirect: vi.fn(async () => ({
+    user: { id: "u1", name: "Alice", email: "a@x.io" },
+  })),
 }));
 
 // Stub ChatShell so the test does not pull in the full streaming client tree.
 // Capture its props (into a hoisted spy) so a test can assert what the page
 // threaded down — notably the parsed `conversationCodeBinding`.
-const shellSpy = vi.hoisted(
-  () => ({ props: null as Record<string, unknown> | null }),
-);
+const shellSpy = vi.hoisted(() => ({
+  props: null as Record<string, unknown> | null,
+}));
 vi.mock("@/components/chat/chat-shell", () => ({
   ChatShell: (props: Record<string, unknown>) => {
     shellSpy.props = props;
@@ -138,7 +149,7 @@ vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: vi.fn(() => []),
   getSurfaces: vi.fn(() => []),
   // Workspace budget governance is resolved via invoke("workspace.budget.policy.read")
-  // (OXA-2081). Return a benign no-governance row; the page maps limitUsd → 0.
+  //. Return a benign no-governance row; the page maps limitUsd → 0.
   invoke: vi.fn(async () => ({
     enabled: false,
     limitUsd: null,
@@ -163,7 +174,10 @@ vi.mock("@oxagen/handlers/user.preferences.read", () => ({
 }));
 
 vi.mock("@oxagen/handlers/conversation.list", () => ({
-  conversationListHandler: vi.fn(async () => ({ conversations: [], nextCursor: null })),
+  conversationListHandler: vi.fn(async () => ({
+    conversations: [],
+    nextCursor: null,
+  })),
 }));
 
 vi.mock("./conversation-actions", () => ({
@@ -271,7 +285,9 @@ describe("ConversationPage — non-fatal degrade logging", () => {
     const { container } = await renderPage();
 
     // Page still rendered.
-    expect(container.querySelector('[data-testid="chat-shell"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="chat-shell"]'),
+    ).not.toBeNull();
 
     // Failure was logged with the degrade context.
     expect(mockLoggerWarn).toHaveBeenCalled();

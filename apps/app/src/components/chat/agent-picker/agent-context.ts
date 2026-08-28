@@ -39,7 +39,7 @@ export function readStoredAgentId(key: string): string | null {
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return null;
-    // Stored as a bare id string; guard against a legacy/corrupt JSON value.
+    // Stored as a bare id string; guard against a stored JSON value instead.
     if (raw.startsWith("{") || raw.startsWith("[")) return null;
     return raw;
   } catch {

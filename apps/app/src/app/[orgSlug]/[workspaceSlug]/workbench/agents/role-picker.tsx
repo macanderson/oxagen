@@ -28,7 +28,7 @@ export interface RolePickerProps {
   disabled?: boolean;
   /** True when the org tier allows custom (non-system) agent roles. */
   customRolesAvailable: boolean;
-  /** Non-null when role data failed to load — degraded, honestly rendered. */
+  /** Non-null when role data failed to load — renders a degraded state. */
   rolesError: string | null;
   /** The role currently persisted on the agent (badge on its card). */
   assignedRoleName: string | null;
@@ -75,9 +75,10 @@ const CEILING_TOOLTIP_MAX_CAPS = 3;
 function ceilingTooltipText(option: AgentRoleOption): string {
   const caps = option.exceededCapabilities;
   const shown = caps.slice(0, CEILING_TOOLTIP_MAX_CAPS).join(", ");
-  const more = caps.length > CEILING_TOOLTIP_MAX_CAPS
-    ? ` and ${caps.length - CEILING_TOOLTIP_MAX_CAPS} more`
-    : "";
+  const more =
+    caps.length > CEILING_TOOLTIP_MAX_CAPS
+      ? ` and ${caps.length - CEILING_TOOLTIP_MAX_CAPS} more`
+      : "";
   return (
     `You cannot delegate permissions you do not hold. This role grants ` +
     `capabilities beyond your own effective access` +
@@ -211,9 +212,7 @@ function RoleCard({
         }`}
         aria-hidden="true"
       >
-        {selected ? (
-          <span className="h-2 w-2 rounded-full bg-primary" />
-        ) : null}
+        {selected ? <span className="h-2 w-2 rounded-full bg-primary" /> : null}
       </span>
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex flex-wrap items-center gap-1.5">

@@ -1,6 +1,6 @@
 /**
  * dispatch-picker.tsx — "pick a dispatch to inspect" surface for the
- * fleet-lineage explorer (issue #1078). Shown when the page has no
+ * fleet-lineage explorer. Shown when the page has no
  * `?dispatchId=` yet, or when `query_lineage` fails to resolve one (not
  * found / denied).
  *

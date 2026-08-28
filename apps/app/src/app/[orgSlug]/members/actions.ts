@@ -18,7 +18,7 @@ const INVITER_ROLES = new Set(["owner", "admin"]);
 // at or above their own privilege (privilege-escalation guard).
 const OWNER_GRANTABLE_ROLES = new Set(["owner", "admin"]);
 
-// Sentinel workspaceId for org-only actions (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only actions (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -73,7 +73,8 @@ export async function inviteMemberAction(
     return {
       ok: false,
       code: "forbidden",
-      error: "You don't have permission to invite members to this organization.",
+      error:
+        "You don't have permission to invite members to this organization.",
     };
   }
   // Only an owner may grant owner/admin — an admin cannot escalate a peer.
@@ -102,91 +103,117 @@ export async function inviteMemberAction(
       };
     }
     logger.error({ err, orgSlug }, "members: seat check failed");
-    return { ok: false, code: "internal", error: "Could not verify seat availability" };
+    return {
+      ok: false,
+      code: "internal",
+      error: "Could not verify seat availability",
+    };
   }
 
-  return await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, async () => {
-    try {
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-      const [inserted] = await withTenantDb((tx) =>
-        tx
-          .insert(schema.invitations)
-          .values({
-            orgId: tenant.id,
-            email,
-            role,
-            status: "pending",
-            invitedByUserId: session.user.id,
-            expiresAt,
-          })
-          .returning({ publicId: schema.invitations.publicId }),
-      );
-
-      logger.info({ orgSlug, email: maskEmail(email), role }, "members: invitation created");
-
-      // Emit org.member_invited audit event (fire-and-forget).
-      emitSecurityEvent({
-        eventType: "org.member_invited",
-        actorUserId: session.user.id,
-        orgId: tenant.id,
-        workspaceId: null,
-        capability: "add_org_member",
-        outcome: "success",
-        ip: null,
-        userAgent: null,
-        requestId: null,
-      });
-
-      // Send the transactional invitation email (non-fatal: sendEmail throws when
-      // SMTP is unconfigured, e.g. local dev — the invite still succeeds).
+  return await runInTenantScope(
+    { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+    async () => {
       try {
-        if (!inserted) throw new Error("invitation insert returned no row");
-        const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
-        const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/members/accept?invitation=${inserted.publicId}`;
-        const inviterName = session.user.name ?? session.user.email;
-        const { subject, text, html } = invitationEmailTemplate({
-          inviteUrl,
-          inviterName,
-          orgName: tenant.name,
-          role,
-          email,
-        });
-        await sendEmail({ to: email, subject, text, html });
-        logger.info(
-          { orgSlug, email: maskEmail(email) },
-          "members: invitation email sent",
-        );
-      } catch (emailErr) {
-        logger.error(
-          { err: emailErr, orgSlug, email: maskEmail(email) },
-          "members: invitation email failed (non-fatal)",
-        );
-      }
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-      // Revalidate both routes: this action is called from the People page
-      // (AddMemberDialog) AND from the Invited tab (PendingInvitationsActions
-      // "Resend") — a mutation triggered from /members/pending must refresh
-      // that page too, not just /members, or the currently-viewed list and
-      // the layout's pending-count badge go stale until an unrelated nav.
-      revalidatePath(`/${orgSlug}/members`);
-      revalidatePath(`/${orgSlug}/members/pending`);
-      return { ok: true };
-    } catch (err) {
-      // Unique violation on (orgId, email) for pending invitations.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("invitations_org_email_pending_idx") || msg.includes("unique")) {
-        return { ok: false, code: "already_invited", error: `${email} already has a pending invitation.` };
+        const [inserted] = await withTenantDb((tx) =>
+          tx
+            .insert(schema.invitations)
+            .values({
+              orgId: tenant.id,
+              email,
+              role,
+              status: "pending",
+              invitedByUserId: session.user.id,
+              expiresAt,
+            })
+            .returning({ publicId: schema.invitations.publicId }),
+        );
+
+        logger.info(
+          { orgSlug, email: maskEmail(email), role },
+          "members: invitation created",
+        );
+
+        // Emit org.member_invited audit event (fire-and-forget).
+        emitSecurityEvent({
+          eventType: "org.member_invited",
+          actorUserId: session.user.id,
+          orgId: tenant.id,
+          workspaceId: null,
+          capability: "add_org_member",
+          outcome: "success",
+          ip: null,
+          userAgent: null,
+          requestId: null,
+        });
+
+        // Send the transactional invitation email (non-fatal: sendEmail throws when
+        // SMTP is unconfigured, e.g. local dev — the invite still succeeds).
+        try {
+          if (!inserted) throw new Error("invitation insert returned no row");
+          const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
+          const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/members/accept?invitation=${inserted.publicId}`;
+          const inviterName = session.user.name ?? session.user.email;
+          const { subject, text, html } = invitationEmailTemplate({
+            inviteUrl,
+            inviterName,
+            orgName: tenant.name,
+            role,
+            email,
+          });
+          await sendEmail({ to: email, subject, text, html });
+          logger.info(
+            { orgSlug, email: maskEmail(email) },
+            "members: invitation email sent",
+          );
+        } catch (emailErr) {
+          logger.error(
+            { err: emailErr, orgSlug, email: maskEmail(email) },
+            "members: invitation email failed (non-fatal)",
+          );
+        }
+
+        // Revalidate both routes: this action is called from the People page
+        // (AddMemberDialog) AND from the Invited tab (PendingInvitationsActions
+        // "Resend") — a mutation triggered from /members/pending must refresh
+        // that page too, not just /members, or the currently-viewed list and
+        // the layout's pending-count badge go stale until an unrelated nav.
+        revalidatePath(`/${orgSlug}/members`);
+        revalidatePath(`/${orgSlug}/members/pending`);
+        return { ok: true };
+      } catch (err) {
+        // Unique violation on (orgId, email) for pending invitations.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          msg.includes("invitations_org_email_pending_idx") ||
+          msg.includes("unique")
+        ) {
+          return {
+            ok: false,
+            code: "already_invited",
+            error: `${email} already has a pending invitation.`,
+          };
+        }
+        logger.error(
+          { err, orgSlug, email: maskEmail(email) },
+          "members: inviteMemberAction failed",
+        );
+        return {
+          ok: false,
+          code: "internal",
+          error: "Failed to create invitation",
+        };
       }
-      logger.error({ err, orgSlug, email: maskEmail(email) }, "members: inviteMemberAction failed");
-      return { ok: false, code: "internal", error: "Failed to create invitation" };
-    }
-  });
+    },
+  );
 }
 
 // ── declineInvitationAction ───────────────────────────────────────────────────
 
-export type InvitationActionResult = { ok: true } | { ok: false; error: string };
+export type InvitationActionResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
 export async function declineInvitationAction(input: {
   orgSlug: string;
@@ -195,39 +222,48 @@ export async function declineInvitationAction(input: {
   await getSessionOrRedirect();
   const tenant = await resolveOrg(input.orgSlug);
 
-  return await runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, async () => {
-    try {
-      const updated = await withTenantDb((tx) =>
-        tx
-          .update(schema.invitations)
-          .set({ status: "declined", updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.invitations.orgId, tenant.id),
-              eq(schema.invitations.publicId, input.invitationPublicId),
-              eq(schema.invitations.status, "pending"),
-            ),
-          )
-          .returning({ id: schema.invitations.id }),
-      );
+  return await runInTenantScope(
+    { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+    async () => {
+      try {
+        const updated = await withTenantDb((tx) =>
+          tx
+            .update(schema.invitations)
+            .set({ status: "declined", updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.invitations.orgId, tenant.id),
+                eq(schema.invitations.publicId, input.invitationPublicId),
+                eq(schema.invitations.status, "pending"),
+              ),
+            )
+            .returning({ id: schema.invitations.id }),
+        );
 
-      if (updated.length === 0) {
-        return { ok: false, error: "Invitation not found or already resolved." };
+        if (updated.length === 0) {
+          return {
+            ok: false,
+            error: "Invitation not found or already resolved.",
+          };
+        }
+
+        logger.info(
+          {
+            orgSlug: input.orgSlug,
+            invitationPublicId: input.invitationPublicId,
+          },
+          "members: invitation declined",
+        );
+        // See the matching comment in inviteMemberAction: this action is also
+        // called from the Invited tab (Revoke), which lives at a different
+        // route than /members — both must be revalidated.
+        revalidatePath(`/${input.orgSlug}/members`);
+        revalidatePath(`/${input.orgSlug}/members/pending`);
+        return { ok: true };
+      } catch (err) {
+        logger.error({ err }, "members: declineInvitationAction failed");
+        return { ok: false, error: "Failed to decline invitation" };
       }
-
-      logger.info(
-        { orgSlug: input.orgSlug, invitationPublicId: input.invitationPublicId },
-        "members: invitation declined",
-      );
-      // See the matching comment in inviteMemberAction: this action is also
-      // called from the Invited tab (Revoke), which lives at a different
-      // route than /members — both must be revalidated.
-      revalidatePath(`/${input.orgSlug}/members`);
-      revalidatePath(`/${input.orgSlug}/members/pending`);
-      return { ok: true };
-    } catch (err) {
-      logger.error({ err }, "members: declineInvitationAction failed");
-      return { ok: false, error: "Failed to decline invitation" };
-    }
-  });
+    },
+  );
 }

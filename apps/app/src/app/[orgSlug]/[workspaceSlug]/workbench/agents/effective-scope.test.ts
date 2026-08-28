@@ -4,7 +4,7 @@
  * resolver's exported helpers; these tests pin the view-model mapping around
  * them: mode min, budget element-wise min, labels from scopeToTypes,
  * capability grouping, MCP rule summaries, skills/subagent narrowing, and the
- * honest degraded states (unknown grants, unpublished custom-role ceiling).
+ * degraded states (unknown grants, unpublished custom-role ceiling).
  */
 import { describe, expect, it } from "vitest";
 import type { AgentTool } from "@oxagen/oxagen/agent-schema";
@@ -125,7 +125,7 @@ describe("computeEffectiveScopeView — capabilities dimension", () => {
     ]);
   });
 
-  it("flags unknown grants honestly when the role failed to load", () => {
+  it("flags unknown grants when the role failed to load", () => {
     const view = computeEffectiveScopeView({
       role: undefined,
       graph: GRAPH,

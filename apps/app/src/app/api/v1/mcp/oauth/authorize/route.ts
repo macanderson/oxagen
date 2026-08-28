@@ -115,7 +115,7 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
 
   if (!orgSlug || !workspaceSlug || !orgListingId) {
     // Missing params means the launcher built a bad URL — there's no valid
-    // surface to bounce back to, so a JSON 400 is the honest answer here.
+    // surface to bounce back to, so return a JSON 400 instead.
     return NextResponse.json(
       { error: "missing params: orgSlug, workspaceSlug, orgListingId" },
       { status: 400 },

@@ -4,9 +4,8 @@
  * branches-tab.tsx — create a branch (repo.branch.create).
  *
  * There is no repo.branch.list capability today, so this tab cannot show a
- * true branch list without fabricating data — see the builder's final
- * report for the gap. Instead it shows the branches created THIS session
- * (honestly labeled) plus the create form.
+ * true branch list without fabricating data. Instead it shows the branches
+ * created THIS session, labeled as such, plus the create form.
  */
 
 import * as React from "react";

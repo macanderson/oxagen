@@ -86,7 +86,7 @@ export interface BudgetControlValue {
 export interface BudgetControlProps extends BudgetControlValue {
   onChange: (patch: Partial<BudgetControlValue>) => void;
   /**
-   * Workspace-level budget governance (OXA-2081), resolved server-side via
+   * Workspace-level budget governance, resolved server-side via
    * `workspace.budget.policy.read`. `null`/`enabled: false` ⇒ no governance,
    * renders exactly as before. A `"default"` governance only ever pre-fills
    * an unset control (handled upstream, before this component ever sees the
@@ -111,13 +111,18 @@ export function BudgetControl({
   governance,
 }: BudgetControlProps) {
   const ceiling =
-    governance && governance.enabled && governance.enforcement === "ceiling" && governance.limitUsd > 0
+    governance &&
+    governance.enabled &&
+    governance.enforcement === "ceiling" &&
+    governance.limitUsd > 0
       ? governance
       : null;
   // Only offer modes at least as strict as the ceiling's — picking a laxer
   // mode from this list is structurally impossible rather than snapping back.
   const availableModes = ceiling
-    ? BUDGET_MODES.filter((m) => MODE_STRICTNESS[m.mode] >= MODE_STRICTNESS[ceiling.mode])
+    ? BUDGET_MODES.filter(
+        (m) => MODE_STRICTNESS[m.mode] >= MODE_STRICTNESS[ceiling.mode],
+      )
     : BUDGET_MODES;
   const [saveState, setSaveState] = React.useState<
     "idle" | "saving" | "saved" | "error"
@@ -173,14 +178,20 @@ export function BudgetControl({
         {ceiling ? (
           <p className="rounded-md bg-muted/60 px-2 py-1.5 text-xs text-muted-foreground">
             Your workspace caps turns at{" "}
-            <span className="font-medium text-foreground">{formatUsd(ceiling.limitUsd)}</span>
+            <span className="font-medium text-foreground">
+              {formatUsd(ceiling.limitUsd)}
+            </span>
             {" · "}
-            {BUDGET_MODES.find((m) => m.mode === ceiling.mode)?.label ?? ceiling.mode}
+            {BUDGET_MODES.find((m) => m.mode === ceiling.mode)?.label ??
+              ceiling.mode}
           </p>
         ) : null}
 
         <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="budget-enabled-switch" className="text-sm font-medium">
+          <Label
+            htmlFor="budget-enabled-switch"
+            className="text-sm font-medium"
+          >
             Per-turn budget
           </Label>
           <Switch
@@ -194,7 +205,10 @@ export function BudgetControl({
         {budgetEnabled ? (
           <>
             <div className="space-y-1">
-              <Label htmlFor="budget-limit-input" className="text-xs text-muted-foreground">
+              <Label
+                htmlFor="budget-limit-input"
+                className="text-xs text-muted-foreground"
+              >
                 Limit (USD)
               </Label>
               <Input
@@ -221,7 +235,9 @@ export function BudgetControl({
                   // A ceiling clamps down (never up) — the member may still
                   // dial in a TIGHTER limit than the ceiling.
                   onChange({
-                    budgetUsd: ceiling ? Math.min(parsedValue, ceiling.limitUsd) : parsedValue,
+                    budgetUsd: ceiling
+                      ? Math.min(parsedValue, ceiling.limitUsd)
+                      : parsedValue,
                   });
                 }}
               />
@@ -233,7 +249,9 @@ export function BudgetControl({
               </Label>
               <Select
                 value={budgetMode}
-                onValueChange={(v) => onChange({ budgetMode: v as TurnBudgetMode })}
+                onValueChange={(v) =>
+                  onChange({ budgetMode: v as TurnBudgetMode })
+                }
               >
                 <SelectTrigger size="sm" className="w-full">
                   <SelectValue />
@@ -247,13 +265,18 @@ export function BudgetControl({
                 </SelectPopup>
               </Select>
               {activeMeta ? (
-                <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {activeMeta.description}
+                </p>
               ) : null}
             </div>
 
             {budgetMode === "grace" ? (
               <div className="space-y-1">
-                <Label htmlFor="budget-grace-input" className="text-xs text-muted-foreground">
+                <Label
+                  htmlFor="budget-grace-input"
+                  className="text-xs text-muted-foreground"
+                >
                   Grace cushion (% above the limit)
                 </Label>
                 <Input

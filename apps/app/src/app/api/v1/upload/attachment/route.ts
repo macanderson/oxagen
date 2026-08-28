@@ -4,9 +4,16 @@ import {
   assertAllowedAssetType,
   type AssetKind as StorageAssetKind,
 } from "@oxagen/storage";
-import { persistGeneratedAsset, type AssetKind as GeneratedAssetKind } from "@oxagen/handlers";
+import {
+  persistGeneratedAsset,
+  type AssetKind as GeneratedAssetKind,
+} from "@oxagen/handlers";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // Chat/agent attachment upload runs on the default Node.js runtime (the storage
 // adapter uses Node crypto + the Vercel Blob SDK) and must never move to edge —
@@ -20,7 +27,11 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 // casts below are sound; the route needs no change when a later phase adds
 // video/document pickers.
 type AttachmentKind = "image" | "document" | "video";
-const ATTACHMENT_KINDS = new Set<AttachmentKind>(["image", "document", "video"]);
+const ATTACHMENT_KINDS = new Set<AttachmentKind>([
+  "image",
+  "document",
+  "video",
+]);
 
 /**
  * POST /api/v1/upload/attachment
@@ -60,7 +71,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Expected multipart/form-data" },
+      { status: 400 },
+    );
   }
 
   const file = form.get("file");
@@ -88,7 +102,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing orgSlug" }, { status: 400 });
   }
   if (typeof workspaceSlug !== "string" || workspaceSlug.length === 0) {
-    return NextResponse.json({ error: "Missing workspaceSlug" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing workspaceSlug" },
+      { status: 400 },
+    );
   }
   const conversationIdRaw = form.get("conversationId");
   const conversationId =
@@ -105,9 +122,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 415 },
     );
   }
-  // ext is derived purely for parity with the legacy blob-ingest path; the
-  // persistence chokepoint derives its own storage-key extension from the
-  // MIME type, so no further use is needed here beyond the validation above.
+  // ext is only used for the validation above; the persistence chokepoint
+  // derives its own storage-key extension from the MIME type.
   void ext;
 
   if (file.size === 0) {
@@ -117,7 +133,9 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (file.size > limit) {
     const limitMb = (limit / (1024 * 1024)).toFixed(0);
     return NextResponse.json(
-      { error: `File exceeds the ${limitMb} MiB limit for "${kind}" attachments` },
+      {
+        error: `File exceeds the ${limitMb} MiB limit for "${kind}" attachments`,
+      },
       { status: 413 },
     );
   }
@@ -135,7 +153,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     ]);
     workspace = resolvedWorkspace;
   } catch {
-    return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Org or workspace not found" },
+      { status: 404 },
+    );
   }
 
   try {

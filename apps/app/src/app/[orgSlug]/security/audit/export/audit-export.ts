@@ -1,5 +1,5 @@
 // audit-export.ts — serialization + HMAC signing for the signed audit-log
-// export (OXA-1558). Pure functions (node:crypto only) so they are unit-tested
+// export. Pure functions (node:crypto only) so they are unit-tested
 // without HTTP. The route handler reads the secret from env and sets the
 // signature + algorithm response headers; an auditor can re-compute the HMAC
 // over the downloaded bytes to prove the export was not tampered with in

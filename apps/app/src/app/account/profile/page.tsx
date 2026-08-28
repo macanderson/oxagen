@@ -13,7 +13,7 @@ export default async function AccountProfilePage() {
 
   // Fetch profile data, linked accounts, and preferences in parallel.
   // auth.users is global (no tenant scope) — withSystemDb bypasses RLS
-  // deliberately. — OXA-1515
+  // deliberately.
   const reqHeaders = await headers();
 
   const prefCtx: CapabilityContext = {
@@ -46,7 +46,9 @@ export default async function AccountProfilePage() {
   if (!user) {
     // Defensive: should never happen for an authenticated user
     return (
-      <p className="text-sm text-muted-foreground">Unable to load profile. Please sign in again.</p>
+      <p className="text-sm text-muted-foreground">
+        Unable to load profile. Please sign in again.
+      </p>
     );
   }
 

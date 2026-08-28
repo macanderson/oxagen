@@ -4,7 +4,7 @@
  * roles render with intent descriptions and grant counts, selection is a
  * radiogroup owned by the caller, delegation-ceiling-blocked options are
  * disabled (selection impossible) with the explanation reachable, the
- * degraded states (load error, tier hint, no custom roles) render honestly,
+ * degraded states (load error, tier hint, no custom roles) render correctly,
  * and the current role is badged.
  *
  * `@/components/ui/tooltip` is mocked to a plain stand-in (established repo
@@ -19,7 +19,9 @@ import { RolePicker, roleTestId } from "./role-picker";
 afterEach(cleanup);
 
 vi.mock("@/components/ui/tooltip", () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => (
     <span>{children}</span>
   ),
@@ -89,7 +91,7 @@ describe("RolePicker", () => {
     ).toBe("false");
   });
 
-  it("shows grant counts per role and reports unknown grants honestly", () => {
+  it("shows grant counts per role and reports unknown grants", () => {
     render(
       <RolePicker
         {...baseProps}

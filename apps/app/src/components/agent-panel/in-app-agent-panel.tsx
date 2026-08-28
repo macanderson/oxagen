@@ -358,8 +358,7 @@ function AgentChatShell({
   // first send `wandSendAction` creates the conversation and returns its ids; we
   // adopt them here and reload the persisted messages after every turn, so the
   // user's prompt and the assistant reply stay on screen and survive the next
-  // send (previously this shell was stateless, so the prompt never rendered and
-  // each turn wiped the last one).
+  // send.
   const [conversationId, setConversationId] = React.useState<string | null>(
     null,
   );

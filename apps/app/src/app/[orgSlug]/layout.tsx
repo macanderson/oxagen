@@ -13,7 +13,7 @@ import {
 import { loadMfaPolicy } from "@/app/[orgSlug]/security/mfa/actions";
 import { evaluateMfaGate } from "./mfa-enforcement";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
 import { isLowBalance } from "@oxagen/billing";
@@ -83,7 +83,7 @@ export default async function OrgLayout({
   // to the canonical slug, preserving the rest of the path and the query.
   // Next.js exposes the URL on the synthetic `x-url` / `next-url` header in
   // RSC; we fall back to a bare org root if neither is present (defensive —
-  // production always sets one). — OXA-1779
+  // production always sets one).
   const hdrs = await headers();
   const rawUrl =
     hdrs.get("x-url") ??
@@ -130,7 +130,7 @@ export default async function OrgLayout({
   // planTier gates which nav items the (immediately-rendered) sidebar shows, so
   // it CANNOT be deferred — fetch just the current org's active-subscription
   // tier with one small indexed query. The heavier org-list join, workspace
-  // list, and balance are streamed (navDataPromise) below. — OXA-1515
+  // list, and balance are streamed (navDataPromise) below.
   const planRows = await withSystemDb((tx) =>
     tx
       .select({ tier: schema.plans.tier })
@@ -153,7 +153,7 @@ export default async function OrgLayout({
   const navDataPromise: Promise<ShellNavData> = (async () => {
     const [orgRows, workspacesRows, lowBalance] = await Promise.all([
       // Cross-tenant read: the user's full org list (pre-scope, identity resolution).
-      // withSystemDb bypasses RLS deliberately — OXA-1515.
+      // withSystemDb bypasses RLS deliberately.
       withSystemDb((tx) =>
         tx
           .select({
@@ -182,7 +182,7 @@ export default async function OrgLayout({
           )
           .where(eq(schema.orgUsers.userId, session.user.id)),
       ),
-      // Org-scoped workspace list — sentinel workspace id (org_only table). — OXA-1515
+      // Org-scoped workspace list — sentinel workspace id (org_only table).
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         withTenantDb(
           (tx) =>
@@ -199,7 +199,7 @@ export default async function OrgLayout({
       ),
       // Always-visible credit balance for the shell header. credit_lots is org_only
       // under RLS → tenant scope. Degrade to null (pill hidden) on any failure so a
-      // billing read never blocks the whole app shell from rendering. — OXA-1515
+      // billing read never blocks the whole app shell from rendering.
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         isLowBalance(org.id),
       ).catch((err) => {

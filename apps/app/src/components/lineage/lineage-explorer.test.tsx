@@ -107,7 +107,7 @@ describe("LineageExplorer", () => {
     expect(screen.queryByTestId("violation-banner")).not.toBeInTheDocument();
   });
 
-  it("shows the truncated banner honestly when data.truncated is true", () => {
+  it("shows the truncated banner when data.truncated is true", () => {
     render(
       <LineageExplorer
         data={baseData({ truncated: true })}
@@ -117,7 +117,7 @@ describe("LineageExplorer", () => {
     expect(screen.getByTestId("truncated-banner")).toBeInTheDocument();
   });
 
-  it("shows the max-depth banner honestly when data.maxDepthReached is true", () => {
+  it("shows the max-depth banner when data.maxDepthReached is true", () => {
     render(
       <LineageExplorer
         data={baseData({ maxDepthReached: true })}

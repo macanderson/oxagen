@@ -13,7 +13,7 @@
  * opts.surface is explicitly set (kernel.ts:578), so omitting it keeps the
  * automation.* / workflow.* / research.swarm.* contracts (which
  * list "agent" but not "app" in surfaces[]) reachable from this trusted
- * first-party surface, with honest "app" attribution.
+ * first-party surface, with correct "app" attribution.
  *
  * Server-only: imports invoke handlers and tenant DB. Never import from a
  * "use client" module.

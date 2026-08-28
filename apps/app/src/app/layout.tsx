@@ -10,7 +10,7 @@
  * heading rules render in Aeonik with no per-app font config. Each stack keeps
  * a system fallback if a woff2 fails to load.
  *
- * Optional (OXA-1508): migrate to next/font/local for automatic preload +
+ * Optional: migrate to next/font/local for automatic preload +
  * size-adjust fallback metrics. Not required — the variable fonts are already
  * self-hosted and active via the shared CSS.
  */

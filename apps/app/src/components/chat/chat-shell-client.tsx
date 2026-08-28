@@ -241,7 +241,7 @@ export function ChatShellClient({
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
-  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+  /** Workspace-level per-turn budget governance. Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /** Bound published agent's public id (Ask page ?agent=…). Seeds the initial
@@ -617,7 +617,7 @@ export function ChatShellClient({
     [resolveApprovalAction],
   );
 
-  // Mirror wrappedResolveApproval for first-use external-MCP consent (OXA-816):
+  // Mirror wrappedResolveApproval for first-use external-MCP consent:
   // signal the consume loop first (so the paused stream unblocks immediately on
   // a `consent-required` pause), then call the server action.
   const wrappedResolveConsent = React.useCallback<

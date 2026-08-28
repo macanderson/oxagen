@@ -1,5 +1,5 @@
 /**
- * page.tsx — Workspace → Settings → Spend Budgets (OXA-1079).
+ * page.tsx — Workspace → Settings → Spend Budgets.
  *
  * Workspace-scoped (real workspaceId, not the org-level billing/* sentinel)
  * so getScopeBudgets' RLS narrowing returns BOTH the org-level ceiling and

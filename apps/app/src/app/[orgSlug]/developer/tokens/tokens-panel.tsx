@@ -176,9 +176,9 @@ function RawKeyBanner({ rawKey, label }: { rawKey: string; label: string }) {
 /**
  * A server action rejected inside `startTransition` has nowhere to surface:
  * React swallows it, the transition ends, and the UI simply does not change.
- * Every action on this panel did that, which is why a rotation that failed
- * looked identical to one that succeeded and left the previous secret on
- * screen (#1225).
+ * Every action on this panel must catch and surface its own errors, or a
+ * rotation that fails will look identical to one that succeeded and leave
+ * the previous secret on screen.
  */
 function messageFor(e: unknown): string {
   return e instanceof Error && e.message ? e.message : "Something went wrong.";

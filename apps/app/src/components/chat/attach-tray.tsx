@@ -69,8 +69,8 @@ export function AttachTray({
 
   return (
     <>
-      {/* Hidden native inputs — one per row, each with an honest `accept` so
-        the OS picker only ever offers what the server will actually take. */}
+      {/* Hidden native inputs — one per row, each with an `accept` matching
+        what the server will actually take. */}
       <input
         ref={cameraInputRef}
         type="file"

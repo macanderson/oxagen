@@ -2,7 +2,7 @@
 
 /**
  * actions.ts — server actions for Automations → Lineage, the fleet-lineage
- * explorer (issue #1078). Follows the exact pattern used by
+ * explorer. Follows the exact pattern used by
  * knowledge/graph/actions.ts:
  *   1. getSessionOrRedirect() → session guard
  *   2. resolveOrg / resolveWorkspace → IDOR + org/workspace resolution

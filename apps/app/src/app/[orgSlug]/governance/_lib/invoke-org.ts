@@ -4,7 +4,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 
-/** Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515 */
+/** Sentinel workspaceId for org-only routes (no workspace context). */
 export const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /**

@@ -22,7 +22,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { workspace as workspaceRoutes } from "@/lib/routes";
 import Link from "next/link";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 interface WorkspaceCardData {

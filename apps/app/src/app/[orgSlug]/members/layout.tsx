@@ -7,7 +7,7 @@ import { MobileSettingsNav } from "@/components/ui/settings-nav";
 import { resolveOrg } from "@/lib/resolve-org";
 import { org } from "@/lib/routes";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 export default async function MembersLayout({
@@ -23,7 +23,7 @@ export default async function MembersLayout({
   // Drive the Pending badge from real data: invitations sent but not yet
   // accepted (status "pending"). resolveOrg is request-cached, so this shares
   // the slug→tenant lookup with the page RSC.
-  // Org-only route — sentinel workspaceId. — OXA-1515
+  // Org-only route — sentinel workspaceId.
   const tenant = await resolveOrg(orgSlug);
   const pendingRows = await runInTenantScope(
     { orgId: tenant.id, workspaceId: ORG_ONLY_WS },

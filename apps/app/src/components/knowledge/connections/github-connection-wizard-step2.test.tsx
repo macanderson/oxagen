@@ -13,7 +13,14 @@
  */
 
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Step2SelectRepos } from "./github-connection-wizard-step2";
 import type { InstallationsResponse } from "./github-connection-wizard-types";
@@ -21,7 +28,9 @@ import type { InstallationsResponse } from "./github-connection-wizard-types";
 // ── primitive mocks ───────────────────────────────────────────────────────────
 
 vi.mock("@oxagen/ui", () => ({
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/ui/checkbox", () => ({
@@ -68,7 +77,12 @@ let reposBody: ReposResponse;
 
 function renderStep2(onNext = vi.fn()) {
   return render(
-    <Step2SelectRepos orgSlug={ORG} workspaceSlug={WS} connectionId={CONN} onNext={onNext} />,
+    <Step2SelectRepos
+      orgSlug={ORG}
+      workspaceSlug={WS}
+      connectionId={CONN}
+      onNext={onNext}
+    />,
   );
 }
 
@@ -91,7 +105,8 @@ beforeEach(() => {
         accountType: "Organization",
         repositorySelection: "selected",
         avatarUrl: null,
-        htmlUrl: "https://github.com/organizations/acme-org/settings/installations/111",
+        htmlUrl:
+          "https://github.com/organizations/acme-org/settings/installations/111",
       },
     ],
   };
@@ -232,10 +247,10 @@ describe("Step2SelectRepos — manage installations", () => {
     );
   });
 
-  it("calls onNext with SelectedRepoMeta[] including defaultBranch (OXA-1806)", async () => {
-    // OXA-1806: Step2 must forward defaultBranch to Step3 so the PUT body
-    // can carry it to the handler — the handler needs it to populate
-    // deliveryConfig before firing the ingestion event.
+  it("calls onNext with SelectedRepoMeta[] including defaultBranch", async () => {
+    // Step2 must forward defaultBranch to Step3 so the PUT body can carry it
+    // to the handler — the handler needs it to populate deliveryConfig before
+    // firing the ingestion event.
     const onNext = vi.fn();
     renderStep2(onNext);
 
@@ -250,9 +265,15 @@ describe("Step2SelectRepos — manage installations", () => {
     fireEvent.click(screen.getByTestId("select-repos-next-btn"));
 
     expect(onNext).toHaveBeenCalledOnce();
-    const [installationId, repos] = onNext.mock.calls[0] as [string, Array<{ fullName: string; defaultBranch: string }>];
+    const [installationId, repos] = onNext.mock.calls[0] as [
+      string,
+      Array<{ fullName: string; defaultBranch: string }>,
+    ];
     expect(installationId).toBe("111");
     expect(repos).toHaveLength(1);
-    expect(repos[0]).toMatchObject({ fullName: "acme-org/api", defaultBranch: "main" });
+    expect(repos[0]).toMatchObject({
+      fullName: "acme-org/api",
+      defaultBranch: "main",
+    });
   });
 });

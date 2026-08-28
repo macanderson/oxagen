@@ -7,7 +7,12 @@
 // system). A `"use client"` module's function exports become client references
 // when imported by a server component and throw if called there, so the pure
 // state logic lives here and `model-picker.tsx` re-exports it for client code.
-import type { TextTier, MediaTier, MediaKind, EffortLevel } from "@oxagen/ai/catalog";
+import type {
+  TextTier,
+  MediaTier,
+  MediaKind,
+  EffortLevel,
+} from "@oxagen/ai/catalog";
 // Type-only import — erased at compile time, so this never pulls @oxagen/billing's
 // Stripe/DB-touching barrel into the client bundle (see budget-control.tsx for
 // the same rationale on the literal mode copy).
@@ -110,7 +115,9 @@ export interface ModelStateSeed {
 }
 
 /** Build the initial ComposerModelState from seeded effective defaults. */
-export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState {
+export function buildSeededModelState(
+  seed: ModelStateSeed,
+): ComposerModelState {
   return {
     generate: null,
     tier: seed.textModel ? null : (seed.textTier ?? "fast"),
@@ -127,11 +134,12 @@ export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState 
     budgetEnabled: seed.budget?.enabled ?? BUDGET_OFF_DEFAULTS.budgetEnabled,
     budgetUsd: seed.budget?.enabled ? (seed.budget.limitUsd ?? null) : null,
     budgetMode: seed.budget?.mode ?? BUDGET_OFF_DEFAULTS.budgetMode,
-    budgetGracePct: seed.budget?.graceOveragePct ?? BUDGET_OFF_DEFAULTS.budgetGracePct,
+    budgetGracePct:
+      seed.budget?.graceOveragePct ?? BUDGET_OFF_DEFAULTS.budgetGracePct,
   };
 }
 
-// ── Workspace budget governance (OXA-2081) ──────────────────────────────────
+// ── Workspace budget governance ──────────────────────────────────
 // A workspace Owner/Admin may impose a governed budget on top of a member's
 // own per-turn budget — mirrors `GovernedBudget`/`resolveEffectiveTurnBudget`
 // in @oxagen/billing, but kept as a small dependency-light local type (same
@@ -184,7 +192,8 @@ export function applyWorkspaceBudgetGovernance(
   state: ComposerModelState,
   governance: WorkspaceBudgetGovernance | null,
 ): ComposerModelState {
-  if (!governance || !governance.enabled || governance.limitUsd <= 0) return state;
+  if (!governance || !governance.enabled || governance.limitUsd <= 0)
+    return state;
 
   if (governance.enforcement === "default") {
     if (state.budgetEnabled) return state;
@@ -210,7 +219,9 @@ export function applyWorkspaceBudgetGovernance(
   return {
     ...state,
     budgetEnabled: true,
-    budgetUsd: Number.isFinite(clampedLimit) ? clampedLimit : governance.limitUsd,
+    budgetUsd: Number.isFinite(clampedLimit)
+      ? clampedLimit
+      : governance.limitUsd,
     budgetMode: clampedMode,
   };
 }
