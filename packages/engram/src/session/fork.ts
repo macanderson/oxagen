@@ -77,8 +77,8 @@ function getFullHistoryInner(
     return { events: session.events, inherited: 0 };
   }
 
-  // Reconstruct the PARENT's full history first, so the grandparent prefix
-  // survives a multi-generation fork chain (a one-level slice used to drop it).
+  // Reconstruct the PARENT's full history first, so a multi-generation fork
+  // chain keeps the grandparent prefix instead of just a one-level slice.
   const parentFull = getFullHistoryInner(parent, resolveParent, visited);
   const parentIsFork =
     parent.parentId !== undefined && parent.forkPoint !== undefined;

@@ -75,10 +75,15 @@ function repoRoot(): string {
 }
 
 export async function writeRagDataset(outPath?: string): Promise<string> {
-  const dest = outPath ?? resolve(repoRoot(), "bench/rag-eval/dataset.engram.jsonl");
+  const dest =
+    outPath ?? resolve(repoRoot(), "bench/rag-eval/dataset.engram.jsonl");
   mkdirSync(dirname(dest), { recursive: true });
   const rows = await buildRagDataset();
-  writeFileSync(dest, rows.map((r) => JSON.stringify(r)).join("\n") + "\n", "utf8");
+  writeFileSync(
+    dest,
+    rows.map((r) => JSON.stringify(r)).join("\n") + "\n",
+    "utf8",
+  );
   return dest;
 }
 
@@ -94,17 +99,15 @@ async function main(): Promise<void> {
 
 // Run only when invoked directly (tsx src/eval/run-golden.ts), not on import.
 //
-// This module is re-exported from the `@oxagen/engram` barrel (runGoldenSuite /
-// buildRagDataset / RagDatasetRecord), so it is pulled into the CJS API bundle.
-// There `import.meta.url` is undefined, and a bare `fileURLToPath(import.meta.url)`
-// throws ERR_INVALID_ARG_TYPE *at module load* — taking down EVERY API route with
-// FUNCTION_INVOCATION_FAILED (postmortem 2026-06-12). A CJS bundle is never a direct
-// CLI entry, so guard the check and treat the throw as "not main".
-// A second bundle hazard (found 2026-07-02): in a single-file ESM bundle
-// (the CLI's dist-standalone/oxagen.mjs) EVERY module shares the bundle's
-// import.meta.url, so plain path equality is true for ANY bundle entry — the
-// golden suite (and its report banner) ran at every CLI startup. The entry
-// must additionally BE this source file by name.
+// This module is re-exported from the `@oxagen/engram` barrel, so it also
+// loads inside the CJS API bundle, where `import.meta.url` is undefined and
+// `fileURLToPath` throws at module load. Catch that and treat it as "not
+// main" — a CJS bundle can never be a direct CLI entry.
+//
+// In a single-file ESM bundle (the CLI's standalone build), every module
+// shares the bundle's own `import.meta.url`, so plain path equality would
+// match any bundle entry point, not just this file. Requiring the resolved
+// path to also end in `run-golden.(ts|js|mjs|cjs)` rules that out.
 export function isDirectCliEntry(
   argv1: string | undefined = process.argv[1],
 ): boolean {

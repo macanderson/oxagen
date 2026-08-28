@@ -666,8 +666,8 @@ describe("compile() — multi-engine recall (OXA-2061)", () => {
       },
     });
 
-    // A fresh, salient, unrelated record so temporal-only recall isn't
-    // simply returning an empty window in both cases.
+    // A fresh, salient, unrelated record so temporal-only recall doesn't
+    // return an empty window in both cases.
     await store.append({
       ...makeEpisodicRecord("tool_call", 0.9),
       createdAt: now - 1000,

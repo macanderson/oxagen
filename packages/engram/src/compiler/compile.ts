@@ -8,12 +8,19 @@
  * 4. Packs under budget (knapsack)
  * 5. Layouts for cache stability
  *
- * Always-on. No feature flags. If it fails, the caller's catch handler
- * falls back to legacy context assembly.
+ * Always-on. No feature flags.
  */
 import type { EpisodicStore } from "../store/episodic";
-import type { TaskFrame, RetrievalEngine, RetrievalQuery } from "../retrieval/types";
-import { fuseAndRank, type FusionWeights, DEFAULT_WEIGHTS } from "../retrieval/fusion";
+import type {
+  TaskFrame,
+  RetrievalEngine,
+  RetrievalQuery,
+} from "../retrieval/types";
+import {
+  fuseAndRank,
+  type FusionWeights,
+  DEFAULT_WEIGHTS,
+} from "../retrieval/fusion";
 import { pack, type TokenBudget, type PackResult } from "./packer";
 import { buildLayout, type ContextWindow } from "./layout";
 import { resolveFamily } from "./model-family";
@@ -40,8 +47,8 @@ export interface CompileOptions {
    * Optional error sink. Invoked (best-effort) whenever a retrieval engine or
    * the pinned-record query rejects, so a caller can wire a logger without this
    * pure compiler taking a hard logging dependency. Never throws control flow:
-   * a rejected retrieval still degrades to an empty result, but is no longer
-   * silent — the failure count is also surfaced in `metadata.retrievalFailures`.
+   * a rejected retrieval still degrades to an empty result, and the failure
+   * count is also surfaced in `metadata.retrievalFailures`.
    */
   onError?: (err: unknown, context: { phase: string; engine?: string }) => void;
   /**
@@ -157,13 +164,18 @@ export async function compile(
   const retrievalStart = Date.now();
   const engineResults = await Promise.all(
     options.engines.map((engine) =>
-      withTimeout(engine.retrieve(query), retrievalTimeoutMs, engine.name).catch(
-        (err: unknown) => {
-          retrievalFailures.push({ engine: engine.name, error: String(err) });
-          options.onError?.(err, { phase: "engine-retrieve", engine: engine.name });
-          return [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>;
-        },
-      ),
+      withTimeout(
+        engine.retrieve(query),
+        retrievalTimeoutMs,
+        engine.name,
+      ).catch((err: unknown) => {
+        retrievalFailures.push({ engine: engine.name, error: String(err) });
+        options.onError?.(err, {
+          phase: "engine-retrieve",
+          engine: engine.name,
+        });
+        return [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>;
+      }),
     ),
   );
   const retrievalMs = Date.now() - retrievalStart;
@@ -171,7 +183,10 @@ export async function compile(
   const totalCandidates = engineResults.reduce((sum, r) => sum + r.length, 0);
 
   // 3. Fuse and rank
-  const fused = fuseAndRank(engineResults, options.fusionWeights ?? DEFAULT_WEIGHTS);
+  const fused = fuseAndRank(
+    engineResults,
+    options.fusionWeights ?? DEFAULT_WEIGHTS,
+  );
 
   // 4. Get pinned procedural records (salience = 1.0)
   const pinnedRaw = await options.store
