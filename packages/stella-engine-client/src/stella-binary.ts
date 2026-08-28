@@ -2,22 +2,16 @@
  * Locates the `stella-serve` binary the sidecar transport should boot, and
  * checks it against the version pinned in sidecar.config.json.
  *
- * ## Why this is `stella-serve` and not `stella serve` (oxagen #1132)
- *
- * The previous revision looked for a `stella` binary and probed it with
- * `stella serve --help`. There is no such subcommand and there never was:
- * upstream, `stella-serve` is a **separate crate with its own binary**, and
- * `stella-cli` does not link it (stella's `stella-serve/README.md` says so
- * explicitly — "a change here never reaches a `stella` user"). So the old
- * capability probe could only ever fail, which is the mechanical reason
- * #1132's live round trip had never run: every environment, including one
- * with a perfectly good serve binary installed, took the skip branch.
+ * `stella-serve` is a separate crate with its own binary; `stella-cli` does
+ * not link it (stella's `stella-serve/README.md` says so explicitly — "a
+ * change here never reaches a `stella` user"). There is no `stella serve`
+ * subcommand, so this looks for the standalone `stella-serve` binary instead.
  *
  * Resolution order:
  *   1. `STELLA_SERVE_BIN` — absolute path to a `stella-serve` binary, highest
  *      precedence (mirrors stella's own convention of env over discovery).
- *   2. `STELLA_BIN` — accepted for continuity with the previous revision's
- *      variable name, so an existing environment keeps working.
+ *   2. `STELLA_BIN` — an older variable name, still honored so an existing
+ *      environment keeps working.
  *   3. `stella-serve` on PATH.
  *
  * If none resolves, callers should skip rather than fail — see
@@ -62,8 +56,8 @@ export interface StellaBinaryResolution {
 /**
  * Resolves a runnable `stella-serve` binary. Returns `undefined` if no
  * candidate can be executed at all (not installed in this environment) — this
- * is the SKIP signal callers must gate on, per oxagen #1081: absence of the
- * Stella binary must never fail the suite hard.
+ * is the SKIP signal callers must gate on: absence of the Stella binary must
+ * never fail the suite hard.
  *
  * A binary that runs but cannot report a version resolves successfully with
  * `reportedVersion: undefined`. Releases before stella 0.6.2 had no

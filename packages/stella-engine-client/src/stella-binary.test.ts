@@ -7,10 +7,8 @@
  * at all — using throwaway shell-script fixtures under the OS temp dir.
  *
  * The fixtures impersonate `stella-serve` by printing its own name, because
- * that is exactly how the resolver identifies the program: `node` is not a
- * valid stand-in here, which is the point. The previous revision used
- * `process.execPath`, and would have accepted any runnable file on the system
- * as a Stella engine server.
+ * that is exactly how the resolver identifies the program: any other runnable
+ * file, such as `node`, must not pass as a Stella engine server.
  */
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -140,9 +138,8 @@ describe("resolveStellaBinary", () => {
   });
 
   test("falls back to the configured command name on PATH", async () => {
-    // Point `binaryName` at an absolute fixture path: resolution must reach the
-    // third candidate at all, which the previous revision could not do once an
-    // env var was set.
+    // Point `binaryName` at an absolute fixture path to prove resolution
+    // reaches the third candidate at all, even with no env var set.
     const onPath = fakeServe("0.6.2");
     const res = await resolveStellaBinary(baseConfig({ binaryName: onPath }));
     expect(res?.path).toBe(onPath);
