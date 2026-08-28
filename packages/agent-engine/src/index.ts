@@ -35,9 +35,9 @@ export * from "./prompt/system-prompt";
 // Stage A5 — evaluator + judge + prompt enhancer.
 export * from "./evaluate/index";
 
-// Stage A7 — fleet task/plan/snapshot types. The engine's Fleet orchestrator
-// class itself was retired (the CLI's fleet/orchestrator.ts is the live one);
-// these types remain the shared vocabulary for the planner.
+// Fleet task/plan/snapshot types. The CLI's fleet/orchestrator.ts owns
+// orchestration; these types are the shared vocabulary between it and the
+// planner.
 export * from "./fleet/types";
 
 // Stage A7 — pipeline + planner.
