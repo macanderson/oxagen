@@ -70,7 +70,7 @@ export async function sendPaymentReceipt(
   // released back to the pool). Mirrors onInvoicePaymentFailed in dunning.ts.
   const notifyCtx = await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
-    // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
+    // context; billing is org_only; webhook path with no tenant scope).
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
       logger.warn(

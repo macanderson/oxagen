@@ -1,6 +1,6 @@
 /**
- * spend-budget.ts — the PURE core of the hard period-to-date spend ceiling
- * (OXA-1079). This module owns the budget's shape, the period-window math, the
+ * spend-budget.ts — the PURE core of the hard period-to-date spend ceiling.
+ * This module owns the budget's shape, the period-window math, the
  * threshold ladder, and the pure evaluator every surface runs, so a ceiling
  * behaves identically wherever it is read (the kernel gate, the app panel, the
  * CLI). No I/O, no clock of its own — the caller passes `now` — so the identical

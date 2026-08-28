@@ -117,7 +117,7 @@ export async function assertOrgCanConsume(orgId: string): Promise<void> {
  * rather than duplicating the lookup.
  *
  * tenancy: system bypass via withSystemDb (resolves org from external Stripe invoice id
- * before a tenant scope exists) — OXA-1515.
+ * before a tenant scope exists).
  */
 export async function resolveOrgFromInvoice(
   tx: Tx,
@@ -156,7 +156,7 @@ export async function onInvoicePaymentFailed(
   // the notifyLowBalance pattern in autoreload.ts.
   const notifyCtx = await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
-    // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
+    // context; billing is org_only; webhook path with no tenant scope).
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
       logger.warn(
@@ -284,7 +284,7 @@ export async function onInvoiceRecovered(
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (org resolved from Stripe invoice, no workspace
-    // context; billing is org_only; webhook path with no tenant scope) — OXA-1515
+    // context; billing is org_only; webhook path with no tenant scope).
     const orgId = await resolveOrgFromInvoice(tx, invoice);
     if (!orgId) {
       logger.warn(
@@ -347,7 +347,7 @@ export async function sweepDunning(): Promise<{ suspended: number }> {
 
   return withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (scheduled cron sweeps all orgs,
-    // no per-org scope; billing is org_only) — OXA-1515
+    // no per-org scope; billing is org_only).
     const toSuspend = await tx.query.orgBillingSettings.findMany({
       where: and(
         eq(schema.orgBillingSettings.dunningState, "grace"),

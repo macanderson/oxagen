@@ -1,6 +1,6 @@
 // tenancy: system bypass via withSystemDb (webhook arrives with a Stripe event id, no org
 // scope yet; stripe_events/stripe_event_processing are global audit tables; upsertPaymentMethod
-// resolves orgId from a subscription lookup before writing) — OXA-1515
+// resolves orgId from a subscription lookup before writing).
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
@@ -243,7 +243,7 @@ async function upsertPaymentMethod(
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (org resolved from Stripe customer id before
-    // a tenant scope exists; payment_method events precede subscription scope) — OXA-1515
+    // a tenant scope exists; payment_method events precede subscription scope).
     //
     // Org resolution: locate any subscription tied to this customer to get
     // the org id. New customers may not have a subscription yet; in that

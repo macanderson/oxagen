@@ -196,7 +196,7 @@ function resolveSubscriptionRef(
  * nulls `BillingInvoice.subscriptionId`, which makes `grantPlanCreditsForInvoicePaid`
  * return at its `!invoice.subscriptionId` guard and `syncInvoiceFromStripe` fail to
  * resolve a tenant — so a free→paid upgrade's included credits are silently never
- * granted. Resolve the subscription id and the org id from BOTH shapes. — OXA-1611
+ * granted. Resolve the subscription id and the org id from BOTH shapes.
  */
 interface InvoiceSubscriptionParent {
   subscription_details?: {

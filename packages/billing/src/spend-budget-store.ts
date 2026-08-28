@@ -1,6 +1,6 @@
 /**
  * spend-budget-store.ts — the Postgres CRUD for the hard period-to-date spend
- * ceiling (billing.spend_budgets, OXA-1079). All reads/writes go through
+ * ceiling (billing.spend_budgets). All reads/writes go through
  * withTenantDb so RLS (`workspace_nullable`) scopes them: a read inside a
  * workspace scope returns BOTH the org-level ceiling (workspace_id IS NULL) and
  * that workspace's own ceiling.

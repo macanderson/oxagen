@@ -7,7 +7,12 @@ import { logger } from "./logger";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { meetsMinimumTier } from "./entitlements";
 
-const VALID_PLAN_TIERS: ReadonlySet<string> = new Set(["free", "build", "scale", "enterprise"]);
+const VALID_PLAN_TIERS: ReadonlySet<string> = new Set([
+  "free",
+  "build",
+  "scale",
+  "enterprise",
+]);
 
 function isPlanTier(value: string): value is PlanTier {
   return VALID_PLAN_TIERS.has(value);
@@ -27,9 +32,11 @@ function checkPlanTier(actual: string, minimum: string): boolean {
  * table mirrors the provider within one round trip.
  *
  * tenancy: system bypass via withSystemDb (called from webhook dispatch, no tenant
- * scope; org resolved from Stripe subscription metadata) — OXA-1515.
+ * scope; org resolved from Stripe subscription metadata).
  */
-export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<void> {
+export async function syncSubscriptionFromStripe(
+  stripeSubId: string,
+): Promise<void> {
   const start = Date.now();
   const sub = await billingProvider().getSubscription(stripeSubId);
 
@@ -37,7 +44,10 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
   if (!orgId) {
     // No tenant metadata = subscription was created outside our flow.
     // Bail silently; later events may carry the tenant once attached.
-    logger.warn({ stripeSubId }, "billing: subscription has no org_id metadata, skipping sync");
+    logger.warn(
+      { stripeSubId },
+      "billing: subscription has no org_id metadata, skipping sync",
+    );
     return;
   }
 
@@ -46,12 +56,12 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
   // billing.subscription_canceled when a USER cancels; a subscription can also
   // be canceled by Stripe itself (dunning exhaustion, non-payment, or an action
   // in the Stripe dashboard) with no UI path — those would otherwise leave no
-  // SOC2 audit trail. We detect the transition INTO "canceled" here. — OXA-N1
+  // SOC2 audit trail. We detect the transition INTO "canceled" here.
   let canceledTransition = false;
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (webhook path, resolves plan from Stripe
-    // product id before a tenant scope exists; billing tables are org_only) — OXA-1515
+    // product id before a tenant scope exists; billing tables are org_only).
     const plan = await tx.query.plans.findFirst({
       where: eq(schema.plans.stripeProductId, sub.productId ?? ""),
       columns: { id: true },
@@ -59,7 +69,10 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
     const planId = plan?.id ?? null;
 
     if (!planId) {
-      logger.warn({ stripeSubId, productId: sub.productId }, "billing: unknown product id, cannot sync subscription");
+      logger.warn(
+        { stripeSubId, productId: sub.productId },
+        "billing: unknown product id, cannot sync subscription",
+      );
       return; // Unknown plan; cannot upsert without referential integrity.
     }
 
@@ -70,7 +83,8 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       where: eq(schema.subscriptions.stripeSubscriptionId, sub.id),
       columns: { status: true },
     });
-    canceledTransition = sub.status === "canceled" && existing?.status !== "canceled";
+    canceledTransition =
+      sub.status === "canceled" && existing?.status !== "canceled";
 
     const row = {
       orgId,
@@ -107,13 +121,18 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       });
 
     logger.info(
-      { orgId, stripeSubId, status: sub.status, durationMs: Date.now() - start },
+      {
+        orgId,
+        stripeSubId,
+        status: sub.status,
+        durationMs: Date.now() - start,
+      },
       "billing: subscription synced",
     );
   });
 
   // Provider-confirmed cancellation audit (system actor; no user session at the
-  // webhook boundary). Fire-and-forget — never blocks the sync. — OXA-N1
+  // webhook boundary). Fire-and-forget — never blocks the sync.
   if (canceledTransition) {
     emitSecurityEvent({
       eventType: "billing.subscription_canceled",
@@ -126,11 +145,17 @@ export async function syncSubscriptionFromStripe(stripeSubId: string): Promise<v
       userAgent: null,
       requestId: null,
     });
-    logger.info({ orgId, stripeSubId }, "billing: subscription canceled (provider-confirmed) — audit emitted");
+    logger.info(
+      { orgId, stripeSubId },
+      "billing: subscription canceled (provider-confirmed) — audit emitted",
+    );
   }
 }
 
-export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true): Promise<void> {
+export async function cancelSubscription(
+  stripeSubId: string,
+  atPeriodEnd = true,
+): Promise<void> {
   const provider = billingProvider();
   if (atPeriodEnd) {
     await provider.updateSubscription(stripeSubId, { cancelAtPeriodEnd: true });
@@ -140,8 +165,12 @@ export async function cancelSubscription(stripeSubId: string, atPeriodEnd = true
   await syncSubscriptionFromStripe(stripeSubId);
 }
 
-export async function reactivateSubscription(stripeSubId: string): Promise<void> {
-  await billingProvider().updateSubscription(stripeSubId, { cancelAtPeriodEnd: false });
+export async function reactivateSubscription(
+  stripeSubId: string,
+): Promise<void> {
+  await billingProvider().updateSubscription(stripeSubId, {
+    cancelAtPeriodEnd: false,
+  });
   await syncSubscriptionFromStripe(stripeSubId);
 }
 
@@ -161,7 +190,10 @@ export async function cancelOrgSubscription(orgId: string): Promise<void> {
     }),
   );
   if (!row) throw new Error(`No active subscription found for org ${orgId}`);
-  logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: cancelling org subscription at period end");
+  logger.info(
+    { orgId, stripeSubId: row.stripeSubscriptionId },
+    "billing: cancelling org subscription at period end",
+  );
   await cancelSubscription(row.stripeSubscriptionId, true);
 }
 
@@ -180,12 +212,16 @@ export async function reactivateOrgSubscription(orgId: string): Promise<void> {
       columns: { stripeSubscriptionId: true },
     }),
   );
-  if (!row) throw new Error(`No cancellable subscription found for org ${orgId}`);
-  logger.info({ orgId, stripeSubId: row.stripeSubscriptionId }, "billing: reactivating org subscription");
+  if (!row)
+    throw new Error(`No cancellable subscription found for org ${orgId}`);
+  logger.info(
+    { orgId, stripeSubId: row.stripeSubscriptionId },
+    "billing: reactivating org subscription",
+  );
   await reactivateSubscription(row.stripeSubscriptionId);
 
   // SOC2 audit: a user undid a scheduled cancellation — a privileged billing
-  // state change. Fire-and-forget — never blocks the reactivation. — OXA-1594
+  // state change. Fire-and-forget — never blocks the reactivation.
   emitSecurityEvent({
     eventType: "billing.subscription_reactivated",
     actorUserId: null,
@@ -204,7 +240,10 @@ export async function upgradeSubscription(
   newPriceId: string,
   prorationBehavior: "always_invoice" | "none" = "always_invoice",
 ): Promise<void> {
-  logger.info({ stripeSubId, newPriceId, prorationBehavior }, "billing: upgrading subscription price");
+  logger.info(
+    { stripeSubId, newPriceId, prorationBehavior },
+    "billing: upgrading subscription price",
+  );
   // Idempotency: dedupe a double-submitted plan change (double-click / client
   // retry) so we never fire two proration invoices. Bucketed to a 10s window —
   // dedupes rapid resubmits, still allows a deliberate later change (Stripe
@@ -228,7 +267,10 @@ export async function upgradeSubscription(
  * On success, updates the Stripe subscription item quantity (with immediate
  * proration invoicing) and syncs `seatCount` back to our DB.
  */
-export async function setSubscriptionSeats(orgId: string, seats: number): Promise<void> {
+export async function setSubscriptionSeats(
+  orgId: string,
+  seats: number,
+): Promise<void> {
   if (seats < 1) throw new Error("seats must be >= 1");
 
   const row = await withTenantDb((tx) =>
@@ -290,12 +332,17 @@ export async function changeOrgPlan(
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
   // read via withSystemDb to match the catalog-read convention used everywhere
   // else (public-plans.ts, subscription/page.tsx). billing.subscriptions IS
-  // org-scoped under RLS, so it stays on withTenantDb. — OXA-1515
+  // org-scoped under RLS, so it stays on withTenantDb.
   const [targetPlan, activeSubRow] = await Promise.all([
     withSystemDb((tx) =>
       tx.query.plans.findFirst({
         where: eq(schema.plans.slug, targetPlanSlug),
-        columns: { id: true, tier: true, stripePriceIdMonthly: true, stripePriceIdAnnual: true },
+        columns: {
+          id: true,
+          tier: true,
+          stripePriceIdMonthly: true,
+          stripePriceIdAnnual: true,
+        },
       }),
     ),
     // billing.subscriptions IS org-scoped — keep it tenant-scoped under RLS.
@@ -317,8 +364,11 @@ export async function changeOrgPlan(
   if (!targetPlan) throw new Error(`Plan '${targetPlanSlug}' not found`);
 
   const newPriceId =
-    interval === "year" ? targetPlan.stripePriceIdAnnual : targetPlan.stripePriceIdMonthly;
-  if (!newPriceId) throw new Error(`Plan '${targetPlanSlug}' has no ${interval} price`);
+    interval === "year"
+      ? targetPlan.stripePriceIdAnnual
+      : targetPlan.stripePriceIdMonthly;
+  if (!newPriceId)
+    throw new Error(`Plan '${targetPlanSlug}' has no ${interval} price`);
 
   if (!activeSubRow) {
     // No active subscription — start a Checkout session.
@@ -337,7 +387,7 @@ export async function changeOrgPlan(
     return { checkoutUrl: result.url };
   }
 
-  // Resolve current plan tier for proration decision. Shared catalog (no RLS) → system. — OXA-1515
+  // Resolve current plan tier for proration decision. Shared catalog (no RLS) → system.
   const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSubRow.planId),
@@ -347,8 +397,13 @@ export async function changeOrgPlan(
 
   // Active subscription — swap the price in-place.
   // Determine proration behavior by comparing tier order.
-  const isUpgrade = checkPlanTier(targetPlan.tier, currentPlanRow?.tier || "free");
-  const prorationBehavior: "always_invoice" | "none" = isUpgrade ? "always_invoice" : "none";
+  const isUpgrade = checkPlanTier(
+    targetPlan.tier,
+    currentPlanRow?.tier || "free",
+  );
+  const prorationBehavior: "always_invoice" | "none" = isUpgrade
+    ? "always_invoice"
+    : "none";
 
   // Use activeSubRow from now on (renamed to avoid confusion).
   const activeSub = activeSubRow;
@@ -366,13 +421,17 @@ export async function changeOrgPlan(
     "billing: changeOrgPlan — swapping price on active subscription",
   );
 
-  await upgradeSubscription(activeSub.stripeSubscriptionId, newPriceId, prorationBehavior);
+  await upgradeSubscription(
+    activeSub.stripeSubscriptionId,
+    newPriceId,
+    prorationBehavior,
+  );
 
   // SOC2 audit: an org's plan tier changed on an active subscription (upgrade
   // OR downgrade) — a privileged billing mutation. The no-active-sub branch
   // above returns a Checkout URL and does NOT change a plan in place, so it is
   // not emitted here (the resulting checkout.session.completed webhook syncs a
-  // brand-new subscription). Fire-and-forget — never blocks the swap. — OXA-1594
+  // brand-new subscription). Fire-and-forget — never blocks the swap.
   emitSecurityEvent({
     eventType: "billing.plan_changed",
     actorUserId: null,
@@ -393,7 +452,11 @@ export async function changeOrgPlan(
   if (isUpgrade) {
     try {
       const { grantProratedPlanUpgradeCredits } = await import("./grants");
-      await grantProratedPlanUpgradeCredits(orgId, activeSub.planId, targetPlan.id);
+      await grantProratedPlanUpgradeCredits(
+        orgId,
+        activeSub.planId,
+        targetPlan.id,
+      );
     } catch (err) {
       // Grant failure must never fail the plan swap — log and continue.
       logger.error(
@@ -460,7 +523,11 @@ export async function previewSeatChange(
 
   const currentSeats = row.seatCount;
   const direction: "increase" | "decrease" | "none" =
-    seats > currentSeats ? "increase" : seats < currentSeats ? "decrease" : "none";
+    seats > currentSeats
+      ? "increase"
+      : seats < currentSeats
+        ? "decrease"
+        : "none";
 
   // No-change path — no provider call needed.
   if (direction === "none") {
@@ -526,7 +593,10 @@ export async function previewSeatChange(
       if (pm) card = { brand: pm.brand, last4: pm.last4 };
     }
   } catch (err) {
-    logger.warn({ orgId, err }, "billing: could not resolve default card for seat preview");
+    logger.warn(
+      { orgId, err },
+      "billing: could not resolve default card for seat preview",
+    );
   }
 
   logger.info(
@@ -587,7 +657,7 @@ export async function previewPlanChange(
   const start = Date.now();
 
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) →
-  // read via withSystemDb; billing.subscriptions is org-scoped → withTenantDb. — OXA-1515
+  // read via withSystemDb; billing.subscriptions is org-scoped → withTenantDb.
   const [targetPlan, activeSub] = await Promise.all([
     withSystemDb((tx) =>
       tx.query.plans.findFirst({
@@ -656,7 +726,10 @@ export async function previewPlanChange(
       const pm = methods.find((m) => m.id === defaultPmId);
       return pm ? { brand: pm.brand, last4: pm.last4 } : null;
     } catch (err) {
-      logger.warn({ orgId, err }, "billing: could not resolve default card for plan preview");
+      logger.warn(
+        { orgId, err },
+        "billing: could not resolve default card for plan preview",
+      );
       return null;
     }
   }
@@ -676,13 +749,22 @@ export async function previewPlanChange(
       // incident. Log every caught error rather than silently claiming "no card
       // on file" during an outage, but preserve the no-card fallback so the
       // preview still renders.
-      logger.warn({ orgId, err }, "billing: plan-change preview card lookup failed — proceeding as no card");
+      logger.warn(
+        { orgId, err },
+        "billing: plan-change preview card lookup failed — proceeding as no card",
+      );
     }
 
     const prorationDate = Math.floor(Date.now() / 1000);
 
     logger.info(
-      { orgId, targetPlanSlug, interval, requiresCheckout: true, durationMs: Date.now() - start },
+      {
+        orgId,
+        targetPlanSlug,
+        interval,
+        requiresCheckout: true,
+        durationMs: Date.now() - start,
+      },
       "billing: plan change preview — no active sub, checkout required",
     );
 
@@ -698,7 +780,7 @@ export async function previewPlanChange(
     };
   }
 
-  // Active subscription — in-place swap preview. Shared catalog (no RLS) → system. — OXA-1515
+  // Active subscription — in-place swap preview. Shared catalog (no RLS) → system.
   const currentPlanRow = await withSystemDb((tx) =>
     tx.query.plans.findFirst({
       where: eq(schema.plans.id, activeSub.planId),
@@ -706,7 +788,10 @@ export async function previewPlanChange(
     }),
   );
 
-  const isUpgrade = checkPlanTier(targetPlan.tier, currentPlanRow?.tier || "free");
+  const isUpgrade = checkPlanTier(
+    targetPlan.tier,
+    currentPlanRow?.tier || "free",
+  );
   const prorationBehavior: "always_invoice" | "none" = isUpgrade
     ? "always_invoice"
     : "none";
