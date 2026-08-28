@@ -1,7 +1,6 @@
----
-title: "Agent Execution"
-description: "Archived spec & plan — PostgreSQL trace survives; Neo4j projection retired."
----
+# Agent Execution
+
+Archived spec & plan — PostgreSQL trace survives; Neo4j projection retired.
 
 > **Status: Partially superseded (2026-07-21).** PostgreSQL execution, step,
 > tool-call, and durable trace paths remain. The automatic Neo4j execution

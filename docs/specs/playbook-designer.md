@@ -1,7 +1,6 @@
----
-title: "Playbook Designer"
-description: "Archived spec & plan — status: not started (audited 2026-07-03)."
----
+# Playbook Designer
+
+Archived spec & plan — status: not started (audited 2026-07-03).
 
 > **Status: Not started** — verified against the codebase on 2026-07-03 by an automated audit.
 >

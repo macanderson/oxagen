@@ -1,7 +1,6 @@
----
-title: "Graph-Mediated Fan-out (Phases 1 & 2)"
-description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
----
+# Graph-Mediated Fan-out (Phases 1 & 2)
+
+Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Partially superseded** — compact Postgres summaries, claims, leases,
 > sibling reads, and scaling remain. The automatic Neo4j execution projection

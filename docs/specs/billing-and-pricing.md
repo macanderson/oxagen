@@ -1,7 +1,6 @@
----
-title: "Billing, Pricing & Metering"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
----
+# Billing, Pricing & Metering
+
+Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >

@@ -1,7 +1,6 @@
----
-title: "Two-Axis Memory"
-description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
----
+# Two-Axis Memory
+
+Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >

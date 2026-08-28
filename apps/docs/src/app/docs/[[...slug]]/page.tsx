@@ -8,25 +8,7 @@ import {
 } from "fumadocs-ui/page";
 import { getMDXComponents } from "@/mdx-components";
 import { PageActions } from "@/components/docs/page-actions";
-import { source } from "@/lib/source";
-
-// Page-tree node type, inferred from the loader output so it stays in sync with
-// fumadocs-core without importing internal type paths.
-type TreeNode = (typeof source.pageTree)["children"][number];
-
-// Collect page URLs in sidebar order (depth-first, respecting meta.json `pages`).
-// A folder contributes its index page first (if any), then its children.
-function collectPageUrls(nodes: readonly TreeNode[]): string[] {
-  const urls: string[] = [];
-  for (const node of nodes) {
-    if (node.type === "page") urls.push(node.url);
-    else if (node.type === "folder") {
-      if (node.index) urls.push(node.index.url);
-      urls.push(...collectPageUrls(node.children));
-    }
-  }
-  return urls;
-}
+import { collectOrderedPageUrls, source } from "@/lib/source";
 
 // A section folder with no index page (e.g. /docs/connections) would otherwise
 // 404. Resolve it to the section's first page so section roots are always
@@ -34,7 +16,7 @@ function collectPageUrls(nodes: readonly TreeNode[]): string[] {
 function resolveSectionLanding(slug: string[]): string | undefined {
   if (slug.length === 0) return undefined;
   const prefix = `/docs/${slug.join("/")}`;
-  return collectPageUrls(source.pageTree.children).find((url) =>
+  return collectOrderedPageUrls(source.pageTree.children).find((url) =>
     url.startsWith(`${prefix}/`),
   );
 }

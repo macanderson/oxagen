@@ -1,7 +1,6 @@
----
-title: "Execution Layer"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
----
+# Execution Layer
+
+Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Status: Partially superseded** — PostgreSQL execution recording and durable
 > trace reads remain. The automatic Neo4j execution mirror was retired for

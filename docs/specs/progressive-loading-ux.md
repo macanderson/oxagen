@@ -1,7 +1,6 @@
----
-title: "Progressive Loading UX"
-description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
----
+# Progressive Loading UX
+
+Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >

@@ -1,7 +1,6 @@
----
-title: "Installable Plugins & Capability Packs"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
----
+# Installable Plugins & Capability Packs
+
+Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >

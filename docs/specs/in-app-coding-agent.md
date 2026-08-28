@@ -1,7 +1,6 @@
----
-title: "In-App Coding Agent"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
----
+# In-App Coding Agent
+
+Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Superseded for launch (2026-07-21).** This archived document is retained as
 > historical design context. The exact live code graph stays local to the agent's

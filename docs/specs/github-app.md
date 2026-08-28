@@ -1,7 +1,6 @@
----
-title: "GitHub App Setup"
-description: "Archived spec & plan — status: shipped (audited 2026-07-03)."
----
+# GitHub App Setup
+
+Archived spec & plan — status: shipped (audited 2026-07-03).
 
 > **Superseded for launch (2026-07-21).** This archived document preserves the
 > pre-pruning implementation record. GitHub now contributes governed provider metadata;

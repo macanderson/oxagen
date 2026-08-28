@@ -1,7 +1,6 @@
----
-title: "GitHub Event → Graph Mapping"
-description: "Archived spec & plan — status: not started (audited 2026-07-03)."
----
+# GitHub Event → Graph Mapping
+
+Archived spec & plan — status: not started (audited 2026-07-03).
 
 > **Superseded for launch (2026-07-21).** This archived document is retained as
 > historical design context, not as an implementation plan. The exact live code

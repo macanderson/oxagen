@@ -1,7 +1,6 @@
----
-title: "Information Architecture"
-description: "Archived spec & plan — status: partially shipped (audited 2026-07-03)."
----
+# Information Architecture
+
+Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > **Status: Partially shipped** — verified against the codebase on 2026-07-03 by an automated audit.
 >
