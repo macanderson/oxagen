@@ -11,9 +11,9 @@
  * module-load time on a local box:
  *   - `next dev` sets process.env.NODE_ENV='development', but the auth module can
  *     be evaluated during an early boot window before that assignment lands, so
- *     the betterAuth config (built ONCE at import) occasionally snapshotted
- *     NODE_ENV='production' → requireEmailVerification=true → every local sign-in
- *     404'd until an unrelated recompile re-evaluated the module (OXA-1752).
+ *     the betterAuth config (built ONCE at import) can snapshot
+ *     NODE_ENV='production' → requireEmailVerification=true → every local
+ *     sign-in fails until an unrelated recompile re-evaluates the module.
  *   - tsx-run services (apps/api, apps/mcp) don't set NODE_ENV at all.
  *
  * The fix mirrors the existing E2E_TEST escape hatch: an explicit, deterministic
@@ -38,7 +38,8 @@ export interface LocalEnvSignals {
 
 export function resolveIsLocalEnv(signals: LocalEnvSignals): boolean {
   const isVercelDeploy = Boolean(signals.vercel);
-  const localDevFlag = signals.localDevFlag === "1" || signals.localDevFlag === "true";
+  const localDevFlag =
+    signals.localDevFlag === "1" || signals.localDevFlag === "true";
 
   return (
     // Deterministic local signal — but never trust it on a real deployment.
@@ -59,8 +60,7 @@ export function resolveIsLocalEnv(signals: LocalEnvSignals): boolean {
  * (Better Auth's `requireEmailVerification`). True on deployed Vercel envs,
  * false on local/CI. Mirrors the exact predicate that gates the auth config
  * in `auth.ts` — keep them in lockstep so callers (e.g. the API `/health`
- * gate, OXA-1753) evaluate the same condition the runtime auth actually
- * enforces.
+ * gate) evaluate the same condition the runtime auth actually enforces.
  *
  * Defaults to reading `process.env`; pass an explicit env object for tests.
  */

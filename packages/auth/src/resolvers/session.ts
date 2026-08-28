@@ -25,9 +25,6 @@ export interface SessionResult {
  * making the actual cookie name "oxagen.session_token" — NOT the default
  * "better-auth.session_token". Callers (API middleware, E2E helpers, tests)
  * should reference this constant rather than hardcoding the string.
- *
- * OXA-1497: was hardcoded as "better-auth.session_token" which never matched
- * the real cookie, breaking all session-based authentication.
  */
 export const SESSION_COOKIE_NAME = "oxagen.session_token" as const;
 
@@ -41,8 +38,7 @@ export const SESSION_COOKIE_NAME = "oxagen.session_token" as const;
  * dev/E2E (http, no prefix). `__Host-` is included for forward-compat in case
  * the cookie config tightens to host-locked cookies. The parser must accept
  * the prefixed name or EVERY browser→API call 401s with "Missing credentials"
- * in production while passing locally — the prod-only failure behind the
- * GitHub-connection and conversation-files-drawer 401s.
+ * in production while passing locally.
  *
  * Order matters only for readability; each candidate is an exact-match check.
  */
@@ -107,10 +103,12 @@ export function stripCookieSignature(signedValue: string): string {
  * @returns SessionResult on success, null when the token is unknown or
  *   expired.
  */
-export async function resolveSession(token: string): Promise<SessionResult | null> {
+export async function resolveSession(
+  token: string,
+): Promise<SessionResult | null> {
   if (!token) return null;
 
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
   // Resolves a session token → userId. This IS the resolution step: the
   // sessions table is a global auth table (no RLS) and the userId produced here
   // is the input to every downstream scope resolver. No tenant context exists
@@ -147,7 +145,9 @@ export async function resolveSession(token: string): Promise<SessionResult | nul
  * @returns The decoded, unsigned session token, or null if the cookie is
  *   not present.
  */
-export function parseSessionCookie(cookieHeader: string | undefined): string | null {
+export function parseSessionCookie(
+  cookieHeader: string | undefined,
+): string | null {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(";")) {
     const eqIdx = part.indexOf("=");

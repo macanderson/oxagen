@@ -82,16 +82,18 @@ type OrgScopeResolution =
   | { ok: false; kind: "not_found" };
 ```
 
-#### `resolveWorkspaceScope(orgId: string, slug: string): Promise<WorkspaceScopeResolution>`
+#### `resolveWorkspaceScope(orgId: string, slug: string, userId?: string | null): Promise<WorkspaceScopeResolution>`
 
 Resolves a workspace slug within a confirmed org to `{ workspaceId }`. The
 lookup is always scoped to the provided `orgId` via the composite unique index
 `(org_id, slug)`, so a slug that exists in another org returns `not_found`.
+When `userId` is given, it also checks that the user is a member of the
+workspace and returns `not_member` if not.
 
 ```ts
 type WorkspaceScopeResolution =
   | { ok: true; workspaceId: string }
-  | { ok: false; kind: "not_found" };
+  | { ok: false; kind: "not_found" | "not_member" };
 ```
 
 ## Design principles

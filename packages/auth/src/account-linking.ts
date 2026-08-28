@@ -101,7 +101,7 @@ export interface LinkTargetFacts {
  * Persistence seam — injected so the orchestration is unit-testable without a
  * live database. The default implementation (createDbAccountLinkingStore) runs
  * through withSystemDb because auth.users / auth.accounts are global identity
- * tables resolved before any tenant scope exists (OXA-1515).
+ * tables resolved before any tenant scope exists.
  */
 export interface AccountLinkingStore {
   /** Returns the link-target facts, or null when no such user row exists. */
@@ -143,7 +143,7 @@ export function createDbAccountLinkingStore(): AccountLinkingStore {
   return {
     async loadLinkTargetFacts(userId) {
       // tenancy: system bypass — auth.users / auth.accounts are global identity
-      // tables, resolved before any tenant scope exists (OXA-1515).
+      // tables, resolved before any tenant scope exists.
       return withSystemDb(async (tx) => {
         const userRow = (
           await tx
@@ -212,7 +212,11 @@ export async function hardenTrustedProviderLink(
   // Only a trusted-provider link to an existing user can ever trigger a
   // revocation. Everything else (credential sign-up, untrusted provider,
   // brand-new OAuth user with no userId yet) is a no-op with zero DB cost.
-  if (!isTrustedOAuthProvider(providerId) || typeof userId !== "string" || userId.length === 0) {
+  if (
+    !isTrustedOAuthProvider(providerId) ||
+    typeof userId !== "string" ||
+    userId.length === 0
+  ) {
     return false;
   }
 
@@ -282,7 +286,9 @@ export function withTrustedLinkHardening(
           await hardenTrustedProviderLink(account, store, log);
         } catch (err) {
           // Best-effort — never block sign-in for a hardening failure.
-          log.error("[auth] trusted-link password-revocation hook failed", { err });
+          log.error("[auth] trusted-link password-revocation hook failed", {
+            err,
+          });
         }
         return result;
       },
