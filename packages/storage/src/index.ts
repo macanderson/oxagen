@@ -11,8 +11,7 @@
  *   assertAllowedAssetType()   → validate MIME type or throw
  *   deriveAssetKey()           → server-controlled storage key
  *
- * Never import `@vercel/blob` outside this package. See
- * [[storage-vercel-blob-adapter]].
+ * Never import `@vercel/blob` outside this package.
  */
 export { storage } from "./client";
 export { createVercelBlobAdapter, publicBaseUrlFromToken } from "./vercel-blob";

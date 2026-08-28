@@ -12,15 +12,18 @@
 // asset-serve route streams the bytes back via `storage().get(storageKey)`. This
 // round-trips a real PNG through the singleton exactly as those routes do, using
 // the same key shape persistGeneratedAsset builds
-// (`generated/<kind>s/<orgId>/<uuid>.<ext>`), proving the fix end-to-end at the
-// storage seam without a browser, a database, or a Vercel Blob token.
-//
-// Before this driver existed, resolveAdapter() only knew "vercel-blob" and threw
-// on a missing BLOB_READ_WRITE_TOKEN — which is precisely why the upload route
-// 500'd and the e2e chip went to data-status="error". A green run here is a
-// direct regression guard for that failure.
+// (`generated/<kind>s/<orgId>/<uuid>.<ext>`), proving the storage seam works end
+// to end without a browser, a database, or a Vercel Blob token.
 
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -81,7 +84,6 @@ async function drain(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
 describe("fs storage driver — chat-attachment route seam (integration)", () => {
   it("storage() resolves the fs adapter with NO Vercel Blob token", async () => {
     const { storage } = await import("./client");
-    // Before the fix this threw "BLOB_READ_WRITE_TOKEN is not set".
     expect(() => storage()).not.toThrow();
     expect(storage().driver).toBe("fs");
   });

@@ -10,7 +10,11 @@ vi.mock("@vercel/blob", () => ({
   get: (...args: unknown[]): unknown => getMock(...args) as unknown,
 }));
 
-import { createVercelBlobAdapter, publicBaseUrlFromToken, StorageNotFoundError } from "./vercel-blob";
+import {
+  createVercelBlobAdapter,
+  publicBaseUrlFromToken,
+  StorageNotFoundError,
+} from "./vercel-blob";
 
 describe("createVercelBlobAdapter", () => {
   beforeEach(() => {
@@ -34,7 +38,11 @@ describe("createVercelBlobAdapter", () => {
     const adapter = createVercelBlobAdapter("tok-123");
     const body = new Uint8Array([1, 2, 3, 4, 5]);
 
-    const result = await adapter.put({ key: "avatars/u/x.webp", body, contentType: "image/webp" });
+    const result = await adapter.put({
+      key: "avatars/u/x.webp",
+      body,
+      contentType: "image/webp",
+    });
 
     // access defaults to "public" when omitted
     expect(result).toEqual({
@@ -43,13 +51,17 @@ describe("createVercelBlobAdapter", () => {
       bytes: 5,
       access: "public",
     });
-    expect(putMock).toHaveBeenCalledWith("avatars/u/x.webp", Buffer.from(body), {
-      access: "public",
-      token: "tok-123",
-      contentType: "image/webp",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
+    expect(putMock).toHaveBeenCalledWith(
+      "avatars/u/x.webp",
+      Buffer.from(body),
+      {
+        access: "public",
+        token: "tok-123",
+        contentType: "image/webp",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      },
+    );
   });
 
   // ── put() — private ───────────────────────────────────────────────────────
@@ -88,7 +100,9 @@ describe("createVercelBlobAdapter", () => {
   it("reports access='public' when a private put falls back on a public-only store", async () => {
     // First call (private) rejects as on a public-only store; retry (public) succeeds.
     putMock
-      .mockRejectedValueOnce(new Error("Cannot use private access on this store"))
+      .mockRejectedValueOnce(
+        new Error("Cannot use private access on this store"),
+      )
       .mockResolvedValueOnce({
         url: "https://store.public.blob.vercel-storage.com/generated/images/org/abc.png",
         pathname: "generated/images/org/abc.png",
@@ -126,7 +140,11 @@ describe("createVercelBlobAdapter", () => {
     const adapter = createVercelBlobAdapter("tok");
     const blob = new Blob([new Uint8Array(10)], { type: "image/webp" });
 
-    const result = await adapter.put({ key: "k", body: blob, contentType: "image/webp" });
+    const result = await adapter.put({
+      key: "k",
+      body: blob,
+      contentType: "image/webp",
+    });
 
     expect(result.bytes).toBe(10);
   });
@@ -139,7 +157,10 @@ describe("createVercelBlobAdapter", () => {
 
     await adapter.delete("https://blob.example/avatars/u/x.webp");
 
-    expect(delMock).toHaveBeenCalledWith("https://blob.example/avatars/u/x.webp", { token: "tok-9" });
+    expect(delMock).toHaveBeenCalledWith(
+      "https://blob.example/avatars/u/x.webp",
+      { token: "tok-9" },
+    );
   });
 
   // ── get() ─────────────────────────────────────────────────────────────────
@@ -161,7 +182,9 @@ describe("createVercelBlobAdapter", () => {
       },
     });
 
-    const adapter = createVercelBlobAdapter("vercel_blob_rw_abc123_supersecret");
+    const adapter = createVercelBlobAdapter(
+      "vercel_blob_rw_abc123_supersecret",
+    );
     const result = await adapter.get("uploads/fil_XYZ/file.png");
 
     // SDK get() called with the token and access:"private" (authenticated path)
@@ -227,7 +250,9 @@ describe("createVercelBlobAdapter", () => {
 
     const adapter = createVercelBlobAdapter("vercel_blob_rw_store42_secret");
 
-    await expect(adapter.get("missing/key.bin")).rejects.toBeInstanceOf(StorageNotFoundError);
+    await expect(adapter.get("missing/key.bin")).rejects.toBeInstanceOf(
+      StorageNotFoundError,
+    );
   });
 
   it("get: throws StorageNotFoundError when stream is null (304 not modified case)", async () => {
@@ -246,13 +271,13 @@ describe("createVercelBlobAdapter", () => {
 
     const adapter = createVercelBlobAdapter("vercel_blob_rw_store42_secret");
 
-    await expect(adapter.get("some/key.png")).rejects.toBeInstanceOf(StorageNotFoundError);
+    await expect(adapter.get("some/key.png")).rejects.toBeInstanceOf(
+      StorageNotFoundError,
+    );
   });
 });
 
 // ── publicBaseUrlFromToken ────────────────────────────────────────────────────
-// Retained as a utility export and documented via these tests (used by external
-// tooling and diagnostics even though get() no longer uses public CDN URLs).
 
 describe("publicBaseUrlFromToken", () => {
   it("derives the correct base URL from a well-formed token", () => {

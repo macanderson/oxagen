@@ -13,8 +13,6 @@ import type {
   StorageBody,
 } from "./types";
 
-// Re-export for symmetry with vercel-blob.ts -- consumers that import the error
-// from a concrete driver keep working.
 export { StorageNotFoundError } from "./errors";
 
 /**
@@ -114,7 +112,14 @@ export function createFsAdapter(rootDir: string | undefined): StorageAdapter {
       await writeFile(target, buf);
 
       logger.info(
-        { driver: "fs", key: input.key, access, contentType: input.contentType, bytes: buf.length, durationMs: Date.now() - start },
+        {
+          driver: "fs",
+          key: input.key,
+          access,
+          contentType: input.contentType,
+          bytes: buf.length,
+          durationMs: Date.now() - start,
+        },
         "storage: object written",
       );
       // `url === key` (no CDN); callers read private bytes back via get(key).
@@ -151,7 +156,11 @@ export function createFsAdapter(rootDir: string | undefined): StorageAdapter {
       );
       // The fs backend does not persist a content-type; the serving layer reads
       // MIME from the Postgres asset row, so a null here is contract-legal.
-      return { body, contentType: null, sizeBytes: sizeBytes > 0 ? sizeBytes : null };
+      return {
+        body,
+        contentType: null,
+        sizeBytes: sizeBytes > 0 ? sizeBytes : null,
+      };
     },
 
     async delete(urlOrKey: string): Promise<void> {
