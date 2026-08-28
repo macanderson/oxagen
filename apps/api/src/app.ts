@@ -587,7 +587,7 @@ orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
 orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // Fleet-lineage explorer data spine: the dispatch tree rooted at one fan-out,
-// flattened with per-node principal/delegation-ceiling/spend/outcome (#1078).
+// flattened with per-node principal/delegation-ceiling/spend/outcome.
 orgScoped.route("/lineage/query", lineageQueryRoute);
 // Fleet-wide error triage overview — clusters ClickHouse error_events by
 // fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
