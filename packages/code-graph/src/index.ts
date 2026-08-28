@@ -9,7 +9,8 @@
  * parsed fully without a separate grammar.
  *
  * Language coverage: TypeScript / JavaScript / JSX / TSX, Python, Markdown/MDX.
- * Go / Rust / Java are a documented follow-up (separate grammar packages).
+ * Go, Rust, and Java each need their own tree-sitter grammar package and are
+ * not supported yet.
  */
 
 import { extname } from "path";

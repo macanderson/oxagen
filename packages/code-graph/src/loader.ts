@@ -34,7 +34,7 @@ function moduleDir(): string {
     // fall through to the CJS path
   }
   // esbuild CJS bundle: the Node module-wrapper __dirname global exists and
-  // points at the function directory (where build.mjs copies the .wasm files).
+  // points at the function directory (where bundle.mjs copies the .wasm files).
   if (typeof __dirname === "string") return __dirname;
   return process.cwd();
 }
@@ -63,7 +63,7 @@ function moduleRequire(): NodeRequire | null {
 
 /**
  * Locate a tree-sitter .wasm blob. Checks, in order:
- *  1. next to this module (bundle — build.mjs copies the wasm files
+ *  1. next to this module (bundle — bundle.mjs copies the wasm files
  *     into the function/bundle directory),
  *  2. require.resolve of the owning package (dev / vitest — resolves through
  *     pnpm's symlinked store, the only path that works locally),
@@ -75,7 +75,7 @@ function resolveWasm(pkgRelativePath: string): string {
   const pkgName = pkgRelativePath.slice(0, pkgRelativePath.indexOf("/"));
 
   const candidates: string[] = [
-    // 1. Bundle: build.mjs copies the wasm next to this module.
+    // 1. Bundle: bundle.mjs copies the wasm next to this module.
     resolve(dir, fileName),
   ];
 

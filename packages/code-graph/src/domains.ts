@@ -8,9 +8,8 @@
  * The AI call is injected by the local CLI caller.
  *
  * The resulting application-domain slug (for example `payments` or `auth`) is
- * stored only on local DuckDB code nodes. A future shared canonical-ref
- * projector may consume a separately verified coarse projection; this module
- * does not publish one.
+ * stored only on local DuckDB code nodes. It never flows into the shared
+ * Oxagen workspace graph.
  */
 import { z } from "zod";
 
