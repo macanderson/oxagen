@@ -207,7 +207,7 @@ export async function reconstructHistory(
   const value = await store.getJsonBlob(target.end.historyRef);
   if (value === null || isTruncatedBlob(value) || !Array.isArray(value))
     return null;
-  // Array.isArray narrows `unknown` to `any[]`; the honest element type is unknown.
+  // Array.isArray narrows `unknown` to `any[]`; the real element type is unknown.
   return value as unknown[];
 }
 
