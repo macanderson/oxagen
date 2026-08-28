@@ -107,8 +107,9 @@ function serializeSnapshot(value: JsonWireValue): string {
 }
 
 export function jcsBytes(value: unknown): Uint8Array {
-  // This generic primitive intentionally has no envelope policy. Task 2B owns
-  // the 1 MiB envelope guard; O(k log k) ordering prevents key-sort amplification.
+  // This function has no size limit of its own — callers enforce the 1 MiB
+  // envelope cap. Keys are sorted with the array sort, so large objects don't
+  // hash in quadratic time.
   const encoder = new intrinsicTextEncoderConstructor();
   return Reflect.apply(intrinsicTextEncoderEncode, encoder, [
     serializeSnapshot(snapshotJsonWire(value)),

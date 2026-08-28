@@ -1161,9 +1161,9 @@ describe("canonical token accounting (§B3)", () => {
     ).toBe(true);
   });
 
-  it("keeps honesty a conformance predicate, not a parse gate", () => {
-    // The pinned golden fixtures predate #33's honesty rule, so a dishonest
-    // cost still parses — and is caught by the predicate.
+  it("keeps the token-cost check a conformance predicate, not a parse gate", () => {
+    // A fixture with a token_cost that does not match its content still
+    // parses. The mismatch check below catches it separately.
     const normalized = normalizeContextFrameV1(
       minimalFrame({ token_cost: 999 }),
     );
