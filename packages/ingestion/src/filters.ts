@@ -47,8 +47,8 @@ export interface DeliveryConfig {
   syncIntervalSeconds?: number;
 
   /**
-   * Legacy embedding opt-out retained only to honor existing tenant config.
-   * New connector schemas do not expose this shape.
+   * Per-tenant embedding opt-out. Connector schemas do not expose this in
+   * their UI; it only applies when a tenant's stored config sets it.
    */
   semanticInference?: {
     enabled: boolean;
@@ -205,7 +205,7 @@ export function applyLabelFilter(
 // ---------------------------------------------------------------------------
 
 /**
- * Stage 5 — embed gate: legacy opt-out compatibility.
+ * Stage 5 — embed gate.
  *
  * Returns true when embedding should proceed for this record,
  * false when it should be skipped.

@@ -9,9 +9,9 @@
  *              → label filter: skip if record.properties.labels matches deliveryConfig.labelFilters
  *   3. Map        ctx.getMapping() → EntityTypeMapping | null (skip if null)
  *   4. Dedup      resolveEntity() → DeduplicationResult
- *   5. Embed      embedEntity() → vector stored on :EntityNode. A legacy
- *                 semanticInference opt-out is still honored as an embedding
- *                 opt-out, but no relationship-inference job is scheduled.
+ *   5. Embed      embedEntity() → vector stored on :EntityNode. The
+ *                 `semanticInference` flag on delivery config turns embedding
+ *                 off per record type; no relationship-inference job runs.
  *
  * Filtered records (record-type / path / label) return null with a reason
  * attached so callers can emit the `pipeline:record:filtered` telemetry event.
@@ -53,14 +53,14 @@ export interface PipelineContext {
   /** Optional: connector delivery config to enforce filters. */
   getDeliveryConfig?(connectionId: string): Promise<DeliveryConfig | null>;
   /**
-   * Resolve the workspace's pinned schema **active vocabulary** (§4.8/§8).
-   * The handler layer implements this via the §4.8 `getPinnedSchema` resolver,
-   * returning the enabled schemas' labels/relationship types/properties; it is
-   * null when no version is pinned (registry inert → today's behavior).
+   * Resolve the workspace's pinned schema active vocabulary. See
+   * docs/specs/workspace-schema-registry/spec.md §4.8. Returns the enabled
+   * schemas' labels, relationship types, and properties; null when no
+   * version is pinned.
    *
    * `runPipeline` loads this once and threads it to the validation (upsert)
-   * stage. Optional so callers that predate the registry
-   * (and tests) keep working without it.
+   * stage. Optional so callers without a pinned schema, including tests,
+   * keep working without it.
    */
   getPinnedSchema?(
     orgId: string,
@@ -175,15 +175,15 @@ export async function runPipeline(
     sourceRef,
   };
 
-  // Stage 4: Dedup + alias resolution — §8 schema validation + dual-write runs
-  // inside upsertEntityNode with the pinned active vocabulary.
+  // Stage 4: Dedup + alias resolution — schema validation and the dual-write
+  // both run inside upsertEntityNode with the pinned active vocabulary.
   const dedup = await resolveEntity(mutation, ctx.orgId, {
     pinnedSchema,
     connectionId: event.connectionId,
     sourceRecordType: event.sourceRecordType,
   });
 
-  // strict-mode rejection (§8): the node was NOT written — surface a filtered
+  // strict-mode rejection: the node was not written — surface a filtered
   // result so the caller emits `pipeline:record:filtered` and does not embed.
   if (dedup.rejected || dedup.principalNodeId == null) {
     return {
