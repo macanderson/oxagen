@@ -1,4 +1,4 @@
-// Shared dispatch-lineage outcome derivation (issue #1078).
+// Shared dispatch-lineage outcome derivation.
 //
 // Lives in @oxagen/agent (not @oxagen/handlers) because BOTH the fleet-lineage
 // graph projection (./lineage-projection.ts, called from packages/agent's own

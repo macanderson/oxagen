@@ -10,7 +10,7 @@ const logger = pino({
   base: { app: "agent.lineage-projection" },
 });
 
-// ── Graph projection of the subagent dispatch tree (issue #1078) ───────────
+// ── Graph projection of the subagent dispatch tree ──────────────────────────
 //
 // ARCHITECTURE (do not "improve" this into an inline write — see
 // docs/specs/run-evidence-ingress/05-projection-reconciliation-plan.md

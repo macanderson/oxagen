@@ -22,7 +22,7 @@ const dbMocks = vi.hoisted(() => {
       orgId: "mcp.orgId",
       workspaceId: "mcp.workspaceId",
       enabled: "mcp.enabled",
-      // OXA-820: soft-delete column the contributor now filters on.
+      // soft-delete column the contributor now filters on.
       deletedAt: "mcp.deletedAt",
       healthStatus: "mcp.healthStatus",
       orgListingId: "mcp.orgListingId",
@@ -454,13 +454,13 @@ describe("contributeMcpTools — descriptor pinning (pin-or-fail-closed)", () =>
   });
 });
 
-// ── OXA-1982: auth_config is decrypted before use ────────────────────────────
+// ── auth_config is decrypted before use ────────────────────────────
 //
 // mcp_servers.auth_config is envelope-encrypted at rest. The contributor must
 // decrypt it before handing it to connectMcp() — otherwise a static bearer/
 // header MCP server would authenticate with the raw ciphertext blob instead
 // of the real secret and every call would 401.
-describe("contributeMcpTools — decrypts auth_config before connecting (OXA-1982)", () => {
+describe("contributeMcpTools — decrypts auth_config before connecting", () => {
   const originalKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
   const TEST_KEY = Buffer.alloc(32, 5).toString("base64");
 

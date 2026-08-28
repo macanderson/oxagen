@@ -182,7 +182,7 @@ describe("ANN tenant-filter over-sampling", () => {
   });
 });
 
-// Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
+// ANN tenant-filter oversampling (silent recall degradation).
 //
 // `db.index.vector.queryNodes` returns the GLOBAL top-k by similarity; the
 // tenant predicate (m.orgId = $orgId) is applied AFTER that call in the WHERE
@@ -196,7 +196,7 @@ describe("ANN tenant-filter over-sampling", () => {
 // slice the global pool to the emitted `$k`, THEN filter to the target
 // tenant, THEN trim to `$limit` — so this test fails if `recallMemories` /
 // tenant-aware retrieval ever regresses to requesting `k = limit` again.
-describe("multi-tenant recall regression (OXA-1929)", () => {
+describe("multi-tenant recall regression", () => {
   beforeEach(() => {
     sessionRun.mockReset();
     sessionClose.mockClear();

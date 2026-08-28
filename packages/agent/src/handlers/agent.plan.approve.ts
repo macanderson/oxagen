@@ -30,9 +30,10 @@ export async function agentPlanApproveHandler(
 
   await withTenantDb(async (tx) => {
     // Persist the decision on the plan row — this is the durable record of
-    // resolution the audit found missing (the handler used to only NOTIFY).
-    // RLS scopes the UPDATE to the caller's org+workspace, so a plan from
-    // another tenant matches zero rows and 404s below.
+    // resolution; the NOTIFY payload above only wakes a waiting stream, it
+    // does not record anything. RLS scopes the UPDATE to the caller's
+    // org+workspace, so a plan from another tenant matches zero rows and
+    // 404s below.
     const amend =
       input.decision === "amend" && input.amendedSteps
         ? { tasks: input.amendedSteps, taskCount: input.amendedSteps.length }

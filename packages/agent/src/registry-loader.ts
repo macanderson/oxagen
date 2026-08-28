@@ -6,9 +6,9 @@
  * other at the top-level the build would deadlock. We load the module once
  * and cache the two entry-point functions.
  *
- * Both materialize-tools.ts and agent.tool.list.ts previously duplicated this
- * pattern with divergent inline type shapes. This module is the single source
- * of truth for the load path and the shared type.
+ * This module is the single source of truth for the load path and the
+ * shared type, so materialize-tools.ts and agent.tool.list.ts don't each
+ * keep their own diverging inline type shape.
  */
 
 export interface RegistryCapability {

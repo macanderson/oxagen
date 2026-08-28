@@ -10,7 +10,7 @@ const { mockInsertEvents, mockProjectSubagentFanoutLineage } = vi.hoisted(
 );
 vi.mock("@oxagen/telemetry", () => ({ insertEvents: mockInsertEvents }));
 
-// The lineage graph projection (issue #1078) is exercised end-to-end by its
+// The lineage graph projection is exercised end-to-end by its
 // own dedicated tests (packages/agent/src/dispatch/lineage-projection.test.ts).
 // Here we only need to prove the cancel handler calls it with the right
 // scope/id and never lets it fail the cancel.
@@ -139,7 +139,7 @@ describe("agent.subagent.cancel handler", () => {
     expect(rows[0]!.event_type).toBe("agent.subagent.cancel.ran");
     expect(rows[0]!.org_id).toBe("org_1");
 
-    // Fleet lineage graph projection (issue #1078): projected after a
+    // Fleet lineage graph projection: projected after a
     // successful cancel, keyed on the resolved internal fanout uuid (NOT the
     // public id), scoped to the calling org/workspace.
     expect(mockProjectSubagentFanoutLineage).toHaveBeenCalledTimes(1);

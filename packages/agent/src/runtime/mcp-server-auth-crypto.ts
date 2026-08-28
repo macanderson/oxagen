@@ -1,9 +1,8 @@
 /**
- * Envelope-encrypts the secret material stored in `mcp.mcp_servers.auth_config`
- * (OXA-1982). Externally-registered MCP servers previously wrote bearer
- * tokens / header secrets to that JSONB column in the clear — inconsistent
- * with plugin-linked servers, whose credentials already flow through the
- * envelope-encrypted `mcp.credentials` path (packages/plugins/src/credentials).
+ * Envelope-encrypts the secret material stored in `mcp.mcp_servers.auth_config`.
+ * This keeps externally-registered MCP servers consistent with plugin-linked
+ * servers, whose credentials already flow through the envelope-encrypted
+ * `mcp.credentials` path (packages/plugins/src/credentials).
  *
  * This module reuses the SAME crypto primitives as that path
  * (@oxagen/crypto's AES-256-GCM envelope + the local-KEK KMS adapter sourced
@@ -66,7 +65,9 @@ export interface EncryptedAuthConfig {
  * conversion (a non-empty auth_config that does NOT match this shape is
  * legacy plaintext).
  */
-export function isEncryptedAuthConfig(value: unknown): value is EncryptedAuthConfig {
+export function isEncryptedAuthConfig(
+  value: unknown,
+): value is EncryptedAuthConfig {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -95,7 +96,9 @@ export async function encryptMcpAuthConfig(
       "[agent] AUTH_TOKEN_ENCRYPTION_KEY required to store mcp_servers.auth_config secrets",
     );
   }
-  const buf = await encrypt(JSON.stringify(plain), kms.keyId, { adapter: kms.adapter });
+  const buf = await encrypt(JSON.stringify(plain), kms.keyId, {
+    adapter: kms.adapter,
+  });
   const out: EncryptedAuthConfig = {
     v: 1,
     kmsKeyId: kms.keyId,
@@ -141,8 +144,12 @@ export async function decryptMcpAuthConfig(
     return {};
   }
 
-  const buf = await decrypt(Buffer.from(stored.ciphertext, "base64"), stored.kmsKeyId, {
-    adapter: kms.adapter,
-  });
+  const buf = await decrypt(
+    Buffer.from(stored.ciphertext, "base64"),
+    stored.kmsKeyId,
+    {
+      adapter: kms.adapter,
+    },
+  );
   return JSON.parse(buf.toString("utf8")) as Record<string, string>;
 }
