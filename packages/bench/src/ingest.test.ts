@@ -4,13 +4,15 @@
 // (__fixtures__/sample-run/ — a small, hand-built stand-in for a Harbor
 // results dir) with @oxagen/telemetry/bench-client mocked directly:
 // chBenchInsert/chBenchQuery are @oxagen/bench's only ClickHouse-touching
-// dependency (see ingest.ts's header comment for why — OXA-1515 forbids
-// touching @oxagen/telemetry's raw clickhouse() from outside the
-// seam-owning packages).
+// dependency (see ingest.ts's header comment for why).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
-import type { BenchmarkCandidateRow, BenchmarkRunResultRow, BenchmarkRunRow } from "./types";
+import type {
+  BenchmarkCandidateRow,
+  BenchmarkRunResultRow,
+  BenchmarkRunRow,
+} from "./types";
 
 const insertMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const queryMock = vi.hoisted(() => vi.fn());
@@ -67,7 +69,10 @@ describe("ingestBenchResultsDir", () => {
     expect(summary.nTasks).toBe(5);
     expect(summary.nResolved).toBe(2); // task-one (reward 1) + task-three (reward 1, no report.json)
     expect(summary.skipped).toEqual([
-      { taskId: "task-four-incomplete__jkl012", reason: "no result.json (trial did not finish)" },
+      {
+        taskId: "task-four-incomplete__jkl012",
+        reason: "no result.json (trial did not finish)",
+      },
     ]);
     expect(insertMock).toHaveBeenCalledTimes(3);
   });
@@ -82,7 +87,8 @@ describe("ingestBenchResultsDir", () => {
       notes: "backfill test",
     });
 
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     expect(runRow.public_id).toBe(1);
     expect(runRow.bench_type).toBe("swe-bench");
     expect(runRow.agent).toBe("oxagen"); // derived from config.json's "oxagen_swe_bench:OxagenAgent"
@@ -97,15 +103,26 @@ describe("ingestBenchResultsDir", () => {
     expect(runRow.status).toBe("partial");
 
     // config: options.config merged OVER the bench-config.json snapshot.
-    expect(JSON.parse(runRow.config)).toEqual({ candidates: 2, effort: "high", models: ["a", "b"] });
+    expect(JSON.parse(runRow.config)).toEqual({
+      candidates: 2,
+      effort: "high",
+      models: ["a", "b"],
+    });
     // conditions: options.conditions.os overrides the snapshot's, docker_vm survives from the snapshot.
-    expect(JSON.parse(runRow.conditions)).toEqual({ docker_vm: "VZ", os: "linux" });
+    expect(JSON.parse(runRow.conditions)).toEqual({
+      docker_vm: "VZ",
+      os: "linux",
+    });
   });
 
   it("derives resolved/reward/test_spec from the verifier report when present", async () => {
-    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
 
-    const results = insertedTable("bench.benchmark_run_result").values as BenchmarkRunResultRow[];
+    const results = insertedTable("bench.benchmark_run_result")
+      .values as BenchmarkRunResultRow[];
     const taskOne = results.find((r) => r.task_id === "task-one")!;
     expect(taskOne.public_id).toBe(1);
     expect(taskOne.resolved).toBe(1);
@@ -114,7 +131,9 @@ describe("ingestBenchResultsDir", () => {
       FAIL_TO_PASS: ["test_ascii_validator"],
       PASS_TO_PASS: ["test_help_text", "test_validate"],
     });
-    expect(taskOne.problem_statement).toBe("Fix the trailing newline bug in the username validator.");
+    expect(taskOne.problem_statement).toBe(
+      "Fix the trailing newline bug in the username validator.",
+    );
     expect(taskOne.n_candidates).toBe(2);
     expect(taskOne.winner_candidate_id).toBe("candidate-1");
     expect(taskOne.winner_files).toBe(1);
@@ -143,7 +162,9 @@ describe("ingestBenchResultsDir", () => {
     expect(taskOne.cost_usd).toBe(1.62);
 
     const expectedDuration = Math.round(
-      (Date.parse("2026-07-03T21:29:50.872754Z") - Date.parse("2026-07-03T21:27:00.997829Z")) / 1000,
+      (Date.parse("2026-07-03T21:29:50.872754Z") -
+        Date.parse("2026-07-03T21:27:00.997829Z")) /
+        1000,
     );
     expect(taskOne.duration_s).toBe(expectedDuration);
 
@@ -155,10 +176,16 @@ describe("ingestBenchResultsDir", () => {
   });
 
   it("degrades gracefully when a task has a result.json but no trajectory or verifier report", async () => {
-    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
 
-    const results = insertedTable("bench.benchmark_run_result").values as BenchmarkRunResultRow[];
-    const taskThree = results.find((r) => r.task_id === "task-three-no-trajectory")!;
+    const results = insertedTable("bench.benchmark_run_result")
+      .values as BenchmarkRunResultRow[];
+    const taskThree = results.find(
+      (r) => r.task_id === "task-three-no-trajectory",
+    )!;
     // No verifier/report.json -> falls back to reward >= 1.
     expect(taskThree.reward).toBe(1);
     expect(taskThree.resolved).toBe(1);
@@ -169,30 +196,44 @@ describe("ingestBenchResultsDir", () => {
   });
 
   it("writes one benchmark_candidate row per trajectory candidate, correctly flagging the winner", async () => {
-    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
 
-    const candidates = insertedTable("bench.benchmark_candidate").values as BenchmarkCandidateRow[];
+    const candidates = insertedTable("bench.benchmark_candidate")
+      .values as BenchmarkCandidateRow[];
     // task-one: 2, task-two: 3, task-three: 0 (no trajectory), task-six: 1 => 6 total.
     expect(candidates).toHaveLength(6);
 
-    const taskOneCandidates = candidates.filter((c) => c.candidate_id.startsWith("candidate-") && c.steps <= 6);
+    const taskOneCandidates = candidates.filter(
+      (c) => c.candidate_id.startsWith("candidate-") && c.steps <= 6,
+    );
     const winner = candidates.find((c) => c.is_winner === 1 && c.steps === 5)!;
     expect(winner.model).toBe("anthropic/claude-fable-5");
     expect(winner.files_changed).toBe(1);
     expect(winner.tests_passed).toBe(-1); // not explicitly failed -> unknown, not a real pass/fail signal
     expect(taskOneCandidates.length).toBeGreaterThan(0);
 
-    const failedCandidate = candidates.find((c) => c.steps === 3 && c.files_changed === 0)!;
+    const failedCandidate = candidates.find(
+      (c) => c.steps === 3 && c.files_changed === 0,
+    )!;
     expect(failedCandidate.tests_passed).toBe(0); // failed: true in the trajectory
     expect(failedCandidate.is_winner).toBe(0);
   });
 
   it("handles an errored task: exception_info, real token counts, no task_name/task_id, no agent_execution, a corrupt verifier report, and empty bestof-N metadata falling back to the trajectory", async () => {
-    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
 
-    const results = insertedTable("bench.benchmark_run_result").values as BenchmarkRunResultRow[];
+    const results = insertedTable("bench.benchmark_run_result")
+      .values as BenchmarkRunResultRow[];
     // No task_name/task_id in result.json -> bareTaskId() is "" -> falls back to the directory name.
-    const taskSix = results.find((r) => r.task_id === "task-six-errored__pqr678")!;
+    const taskSix = results.find(
+      (r) => r.task_id === "task-six-errored__pqr678",
+    )!;
     expect(taskSix.status).toBe("errored");
     expect(JSON.parse(taskSix.error)).toEqual({
       exception_type: "AgentTimeoutError",
@@ -208,7 +249,9 @@ describe("ingestBenchResultsDir", () => {
     // No agent_execution block -> falls back to the trial-level started_at/finished_at.
     expect(taskSix.duration_s).toBe(
       Math.round(
-        (Date.parse("2026-07-03T21:55:00.000000Z") - Date.parse("2026-07-03T21:50:00.000000Z")) / 1000,
+        (Date.parse("2026-07-03T21:55:00.000000Z") -
+          Date.parse("2026-07-03T21:50:00.000000Z")) /
+          1000,
       ),
     );
     // agent_result.metadata is {} (no oxagen_bestofn_* fields) -> falls back to the trajectory's
@@ -219,10 +262,14 @@ describe("ingestBenchResultsDir", () => {
     // verifier/report.json is corrupt (unparseable) -> readJsonOptional swallows the parse error and
     // returns null -> falls back to the reward-based resolved computation (reward 0 here) rather than throwing.
     expect(taskSix.resolved).toBe(0);
-    expect(JSON.parse(taskSix.test_spec)).toEqual({ FAIL_TO_PASS: [], PASS_TO_PASS: [] });
+    expect(JSON.parse(taskSix.test_spec)).toEqual({
+      FAIL_TO_PASS: [],
+      PASS_TO_PASS: [],
+    });
 
     // The run-level split totals include task-six's real counts (every other fixture task has null split fields).
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     expect(runRow.tokens_in).toBe(1000);
     expect(runRow.tokens_out).toBe(300);
     expect(runRow.tokens_cache).toBe(200);
@@ -232,12 +279,12 @@ describe("ingestBenchResultsDir", () => {
   });
 
   it("sums per-task agent_result.cost_usd into total_cost_usd when no out-of-band costUsd is supplied", async () => {
-    // Regression guard for the "cost is always $0" half of the token/cost bug:
-    // ingest.ts used to hardcode result cost_usd to 0 and default the run
-    // total to 0 unless a caller passed costUsd. It now reads the real
-    // agent_result.cost_usd Harbor records for every task.
-    await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     // task-one 1.62 + task-two 3.08 + task-three/six/seven (null -> 0).
     expect(runRow.total_cost_usd).toBeCloseTo(4.7, 5);
   });
@@ -251,9 +298,15 @@ describe("ingestBenchResultsDir", () => {
 
     expect(summary.nTasks).toBe(0);
     expect(summary.nResolved).toBe(0);
-    expect(summary.skipped).toEqual([{ taskId: "only-task__aaa111", reason: "no result.json (trial did not finish)" }]);
+    expect(summary.skipped).toEqual([
+      {
+        taskId: "only-task__aaa111",
+        reason: "no result.json (trial did not finish)",
+      },
+    ]);
 
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     // No result.json at the run level -> defaulted to "now" rather than thrown.
     expect(runRow.started_at).toBeTruthy();
     expect(runRow.finished_at).toBe(runRow.started_at);
@@ -269,15 +322,20 @@ describe("ingestBenchResultsDir", () => {
 
   it("falls back to the bench-config.json snapshot's git sha when options.gitSha is omitted", async () => {
     await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench" });
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     expect(runRow.git_sha).toBe("snapshot-sha-000");
   });
 
   it("defaults a task's started_at/finished_at to the run's own start when it has no timestamps of its own", async () => {
     await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench" });
-    const results = insertedTable("bench.benchmark_run_result").values as BenchmarkRunResultRow[];
-    const taskSeven = results.find((r) => r.task_id === "task-seven-no-timestamps")!;
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const results = insertedTable("bench.benchmark_run_result")
+      .values as BenchmarkRunResultRow[];
+    const taskSeven = results.find(
+      (r) => r.task_id === "task-seven-no-timestamps",
+    )!;
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     // No agent_execution, no trial-level started_at/finished_at -> falls all the way back
     // to the run's own started_at (from the run-level result.json) — compared against the
     // run row's own (identically-derived) value rather than a hardcoded literal, since the
@@ -292,9 +350,17 @@ describe("ingestBenchResultsDir", () => {
     // and instead pointing at a directory with no incomplete task — reuse FIXTURE_DIR's own
     // config/result but assert on a task-bearing status only when nothing was skipped.
     // (sample-run always has one incomplete task; this run has none.)
-    const ALL_COMPLETE_DIR = join(__dirname, "__fixtures__", "all-complete-run");
-    await mod.ingestBenchResultsDir(ALL_COMPLETE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
-    const runRow = insertedTable("bench.benchmark_run").values[0] as BenchmarkRunRow;
+    const ALL_COMPLETE_DIR = join(
+      __dirname,
+      "__fixtures__",
+      "all-complete-run",
+    );
+    await mod.ingestBenchResultsDir(ALL_COMPLETE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
+    const runRow = insertedTable("bench.benchmark_run")
+      .values[0] as BenchmarkRunRow;
     expect(runRow.status).toBe("completed");
   });
 
@@ -305,7 +371,10 @@ describe("ingestBenchResultsDir", () => {
       return [{ m: "0" }];
     });
 
-    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
     expect(summary.alreadyIngested).toBe(true);
     expect(summary.runPublicId).toBe(7);
     expect(insertMock).not.toHaveBeenCalled();
@@ -336,7 +405,10 @@ describe("ingestBenchResultsDir", () => {
       if (query.includes("max(public_id)")) return [{ m: 9 }]; // number, not "9"
       return [];
     });
-    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
     expect(summary.runPublicId).toBe(10);
   });
 
@@ -347,7 +419,10 @@ describe("ingestBenchResultsDir", () => {
       if (query.includes("max(public_id)")) return []; // zero rows, not even {m: 0}
       return [];
     });
-    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
+    const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, {
+      benchType: "swe-bench",
+      gitSha: "abc123",
+    });
     expect(summary.runPublicId).toBe(1);
   });
 

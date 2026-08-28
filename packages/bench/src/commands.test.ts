@@ -6,7 +6,15 @@
  * touches a real database, filesystem, or process.
  */
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { BenchmarkRunResultRow, BenchmarkRunRow } from "./types";
 
 vi.mock("./query", () => ({
@@ -23,13 +31,18 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("node:fs", () => ({ existsSync: vi.fn() }));
 
 import { handleBenchList, handleBenchReplay } from "./commands";
-import { getBenchResultByPublicId, getBenchRunByPublicId, listBenchResults } from "./query";
+import {
+  getBenchResultByPublicId,
+  getBenchRunByPublicId,
+  listBenchResults,
+} from "./query";
 import { buildReplayEnv, formatEnvPrefix, runScriptFor } from "./replay-env";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 
 const mockListBenchResults = listBenchResults as unknown as Mock;
-const mockGetBenchResultByPublicId = getBenchResultByPublicId as unknown as Mock;
+const mockGetBenchResultByPublicId =
+  getBenchResultByPublicId as unknown as Mock;
 const mockGetBenchRunByPublicId = getBenchRunByPublicId as unknown as Mock;
 const mockBuildReplayEnv = buildReplayEnv as unknown as Mock;
 const mockFormatEnvPrefix = formatEnvPrefix as unknown as Mock;
@@ -68,7 +81,9 @@ afterEach(() => {
   process.exitCode = 0;
 });
 
-function resultRow(overrides: Partial<BenchmarkRunResultRow> = {}): BenchmarkRunResultRow {
+function resultRow(
+  overrides: Partial<BenchmarkRunResultRow> = {},
+): BenchmarkRunResultRow {
   return {
     id: "r1",
     public_id: 2984,
@@ -152,13 +167,19 @@ describe("handleBenchList", () => {
   it("passes the type filter and a parsed numeric limit through", async () => {
     mockListBenchResults.mockResolvedValue([]);
     await handleBenchList({ type: "terminal-bench", limit: "5" });
-    expect(mockListBenchResults).toHaveBeenCalledWith({ benchType: "terminal-bench", limit: 5 });
+    expect(mockListBenchResults).toHaveBeenCalledWith({
+      benchType: "terminal-bench",
+      limit: 5,
+    });
   });
 
   it("passes limit: undefined when the limit string doesn't parse to a finite number", async () => {
     mockListBenchResults.mockResolvedValue([]);
     await handleBenchList({ limit: "not-a-number" });
-    expect(mockListBenchResults).toHaveBeenCalledWith({ benchType: undefined, limit: undefined });
+    expect(mockListBenchResults).toHaveBeenCalledWith({
+      benchType: undefined,
+      limit: undefined,
+    });
   });
 
   it("prints a no-results message, mentioning the type filter when one was given", async () => {
@@ -214,7 +235,7 @@ describe("handleBenchReplay — display", () => {
     expect(stdout).toContain("reward: 1");
     expect(stdout).toContain("resolved: yes");
     expect(stdout).toContain("tokens: 507.0k"); // tokens_total surfaced in the replay view
-    expect(stdout).toContain("cost: $4.20"); // real per-task cost, no longer $0.00
+    expect(stdout).toContain("cost: $4.20");
     expect(stdout).toContain("run: #3");
     expect(stdout).toContain("abc1234");
     expect(stdout).toContain("Reproducing command:");
@@ -231,7 +252,9 @@ describe("handleBenchReplay — display", () => {
   });
 
   it("falls back to an empty config object when the config column is malformed JSON", async () => {
-    mockGetBenchResultByPublicId.mockResolvedValue(resultRow({ config: "{ not valid json" }));
+    mockGetBenchResultByPublicId.mockResolvedValue(
+      resultRow({ config: "{ not valid json" }),
+    );
     mockGetBenchRunByPublicId.mockResolvedValue(null);
     await expect(handleBenchReplay("2984", {})).resolves.not.toThrow();
     expect(mockBuildReplayEnv).toHaveBeenCalledWith({});
@@ -241,7 +264,11 @@ describe("handleBenchReplay — display", () => {
     const row = resultRow();
     mockGetBenchResultByPublicId.mockResolvedValue(row);
     await handleBenchReplay("2984", { json: true });
-    const parsed = JSON.parse(stdout) as { result: BenchmarkRunResultRow; env: unknown; script: string };
+    const parsed = JSON.parse(stdout) as {
+      result: BenchmarkRunResultRow;
+      env: unknown;
+      script: string;
+    };
     expect(parsed.result).toEqual(row);
     expect(parsed.script).toBe("bench/swe-bench/run.sh");
     // --json never needs the parent-run lookup (it's display-only context).
@@ -263,7 +290,9 @@ describe("handleBenchReplay — --run", () => {
   it("spawns the script with inherited stdio and the reconstructed env, resolving the exit code", async () => {
     mockGetBenchResultByPublicId.mockResolvedValue(resultRow());
     mockGetBenchRunByPublicId.mockResolvedValue(null);
-    mockExistsSync.mockImplementation((p: string) => p.endsWith("bench/swe-bench/run.sh"));
+    mockExistsSync.mockImplementation((p: string) =>
+      p.endsWith("bench/swe-bench/run.sh"),
+    );
 
     const fakeChild = new EventEmitter();
     mockSpawn.mockReturnValue(fakeChild);

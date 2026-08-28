@@ -6,10 +6,9 @@
 // docs/cli/eval-results-schema.md for how this relates to eval_runs/eval_results.
 //
 // This package never imports @oxagen/telemetry's raw `clickhouse()` client
-// directly (OXA-1515's no-restricted-imports rule forbids that outside the
-// seam-owning packages) — it goes through chBenchInsert/chBenchQuery, the
-// thin unscoped wrappers telemetry exposes specifically for bench's
-// non-tenant data (see packages/telemetry/src/bench-client.ts).
+// directly — it goes through chBenchInsert/chBenchQuery, the thin unscoped
+// wrappers telemetry exposes specifically for bench's non-tenant data (see
+// packages/telemetry/src/bench-client.ts).
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -73,7 +72,9 @@ function readTextOptional(path: string, maxChars: number): string {
 }
 
 function listSubdirectories(dir: string): string[] {
-  return readdirSync(dir).filter((name) => statSync(join(dir, name)).isDirectory());
+  return readdirSync(dir).filter((name) =>
+    statSync(join(dir, name)).isDirectory(),
+  );
 }
 
 /**
@@ -122,8 +123,12 @@ function parseChUInt(value: string | number | undefined): number {
  * not-yet-flushed rows from the same batch anyway (inserts are batched at
  * the end of `ingestBenchResultsDir`, not streamed per row).
  */
-async function nextPublicId(table: "benchmark_run" | "benchmark_run_result"): Promise<number> {
-  const rows = await chBenchQuery<{ m: string | number }>(`SELECT max(public_id) AS m FROM bench.${table}`);
+async function nextPublicId(
+  table: "benchmark_run" | "benchmark_run_result",
+): Promise<number> {
+  const rows = await chBenchQuery<{ m: string | number }>(
+    `SELECT max(public_id) AS m FROM bench.${table}`,
+  );
   return parseChUInt(rows[0]?.m) + 1;
 }
 
@@ -135,7 +140,9 @@ interface ExistingRunCriteria {
 }
 
 /** public_id of an already-ingested run matching (bench_type, dataset, git_sha, started_at), or null. */
-async function findExistingRunPublicId(criteria: ExistingRunCriteria): Promise<number | null> {
+async function findExistingRunPublicId(
+  criteria: ExistingRunCriteria,
+): Promise<number | null> {
   const rows = await chBenchQuery<{ public_id: string | number }>(
     `
       SELECT public_id
@@ -167,11 +174,15 @@ export async function insertBenchmarkRun(row: BenchmarkRunRow): Promise<void> {
   await chBenchInsert("bench.benchmark_run", [row]);
 }
 
-export async function insertBenchmarkRunResults(rows: readonly BenchmarkRunResultRow[]): Promise<void> {
+export async function insertBenchmarkRunResults(
+  rows: readonly BenchmarkRunResultRow[],
+): Promise<void> {
   await chBenchInsert("bench.benchmark_run_result", rows);
 }
 
-export async function insertBenchmarkCandidates(rows: readonly BenchmarkCandidateRow[]): Promise<void> {
+export async function insertBenchmarkCandidates(
+  rows: readonly BenchmarkCandidateRow[],
+): Promise<void> {
   await chBenchInsert("bench.benchmark_candidate", rows);
 }
 
@@ -198,17 +209,24 @@ export async function ingestBenchResultsDir(
   options: IngestBenchOptions,
 ): Promise<IngestBenchSummary> {
   const harborConfig = readJson<HarborRunConfig>(join(dir, "config.json"));
-  const jobResult = readJsonOptional<{ id?: string; started_at?: string; finished_at?: string }>(
-    join(dir, "result.json"),
+  const jobResult = readJsonOptional<{
+    id?: string;
+    started_at?: string;
+    finished_at?: string;
+  }>(join(dir, "result.json"));
+  const snapshot = readJsonOptional<BenchConfigSnapshot>(
+    join(dir, "bench-config.json"),
   );
-  const snapshot = readJsonOptional<BenchConfigSnapshot>(join(dir, "bench-config.json"));
 
   const benchType = options.benchType;
   const dataset = options.dataset ?? harborConfig.datasets?.[0]?.name ?? "";
   const agent = options.agent ?? agentNameFromHarborConfig(harborConfig);
   const gitSha = options.gitSha ?? snapshot?.gitSha ?? "";
   const config: BenchReplayConfig = { ...snapshot?.config, ...options.config };
-  const conditions: BenchReplayConfig = { ...snapshot?.conditions, ...options.conditions };
+  const conditions: BenchReplayConfig = {
+    ...snapshot?.conditions,
+    ...options.conditions,
+  };
   assertNoSecretValues(config, "config");
   assertNoSecretValues(conditions, "conditions");
 
@@ -255,7 +273,10 @@ export async function ingestBenchResultsDir(
     const taskDir = join(dir, taskDirName);
     const resultPath = join(taskDir, "result.json");
     if (!existsSync(resultPath)) {
-      skipped.push({ taskId: taskDirName, reason: "no result.json (trial did not finish)" });
+      skipped.push({
+        taskId: taskDirName,
+        reason: "no result.json (trial did not finish)",
+      });
       continue;
     }
 
@@ -264,15 +285,24 @@ export async function ingestBenchResultsDir(
     const reward = rewardOf(trial);
     const bestOfN = bestOfNMetadata(trial);
 
-    const verifierReport = readJsonOptional<HarborVerifierReport>(join(taskDir, "verifier", "report.json"));
-    const { resolved: reportResolved, testSpec } = parseVerifierReport(verifierReport, taskId);
-    const resolved: 0 | 1 = reportResolved !== null ? (reportResolved ? 1 : 0) : reward >= 1 ? 1 : 0;
+    const verifierReport = readJsonOptional<HarborVerifierReport>(
+      join(taskDir, "verifier", "report.json"),
+    );
+    const { resolved: reportResolved, testSpec } = parseVerifierReport(
+      verifierReport,
+      taskId,
+    );
+    const resolved: 0 | 1 =
+      reportResolved !== null ? (reportResolved ? 1 : 0) : reward >= 1 ? 1 : 0;
 
     const verifierStdout = readTextOptional(
       join(taskDir, "verifier", "test-stdout.txt"),
       MAX_VERIFIER_STDOUT_CHARS,
     );
-    const trajectoryText = readTextOptional(join(taskDir, "agent", "oxagen.txt"), Number.MAX_SAFE_INTEGER);
+    const trajectoryText = readTextOptional(
+      join(taskDir, "agent", "oxagen.txt"),
+      Number.MAX_SAFE_INTEGER,
+    );
     const trajectory = parseTrajectory(trajectoryText);
 
     // Split fields are populated by Harbor's built-in competitor adapters;
@@ -289,8 +319,10 @@ export async function ingestBenchResultsDir(
     costSum += costUsd;
 
     const resultPublicId = nextResultPublicId++;
-    const startedAt = trial.agent_execution?.started_at ?? trial.started_at ?? startedAtIso;
-    const finishedAt = trial.agent_execution?.finished_at ?? trial.finished_at ?? startedAt;
+    const startedAt =
+      trial.agent_execution?.started_at ?? trial.started_at ?? startedAtIso;
+    const finishedAt =
+      trial.agent_execution?.finished_at ?? trial.finished_at ?? startedAt;
 
     resultRows.push({
       id: randomUUID(),
@@ -307,11 +339,15 @@ export async function ingestBenchResultsDir(
       config: JSON.stringify({ ...config, taskId }),
       model_patch: "",
       n_candidates: bestOfN.nCandidates || trajectory.candidates.length,
-      winner_candidate_id: bestOfN.winnerCandidateId || trajectory.winnerCandidateId,
+      winner_candidate_id:
+        bestOfN.winnerCandidateId || trajectory.winnerCandidateId,
       winner_files: bestOfN.winnerFiles || trajectory.winnerFiles,
       winner_steps: bestOfN.winnerSteps,
       tool_calls_json: JSON.stringify(trajectory.aggregateToolCalls),
-      code_graph_calls: toolCallCount(trajectory.aggregateToolCalls, "code_graph"),
+      code_graph_calls: toolCallCount(
+        trajectory.aggregateToolCalls,
+        "code_graph",
+      ),
       grep_calls: toolCallCount(trajectory.aggregateToolCalls, "grep"),
       reward,
       resolved,
@@ -348,13 +384,19 @@ export async function ingestBenchResultsDir(
       });
     }
 
-    results.push({ taskId, publicId: resultPublicId, resolved: resolved === 1, reward });
+    results.push({
+      taskId,
+      publicId: resultPublicId,
+      resolved: resolved === 1,
+      reward,
+    });
   }
 
   const nTasks = results.length;
   const nResolved = results.filter((r) => r.resolved).length;
   const resolvedRate = nTasks > 0 ? nResolved / nTasks : 0;
-  const status = options.status ?? (skipped.length > 0 ? "partial" : "completed");
+  const status =
+    options.status ?? (skipped.length > 0 ? "partial" : "completed");
 
   await insertBenchmarkRun({
     id: runId,
@@ -383,5 +425,13 @@ export async function ingestBenchResultsDir(
   await insertBenchmarkRunResults(resultRows);
   await insertBenchmarkCandidates(candidateRows);
 
-  return { runId, runPublicId, alreadyIngested: false, nTasks, nResolved, results, skipped };
+  return {
+    runId,
+    runPublicId,
+    alreadyIngested: false,
+    nTasks,
+    nResolved,
+    results,
+    skipped,
+  };
 }

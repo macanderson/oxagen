@@ -6,11 +6,15 @@
 //
 // Goes through chBenchQuery (packages/telemetry/src/bench-client.ts), the
 // thin unscoped wrapper telemetry exposes for bench's non-tenant data — never
-// the raw `clickhouse()` client (OXA-1515's no-restricted-imports rule
-// forbids that outside the seam-owning packages).
+// the raw `clickhouse()` client.
 
 import { chBenchQuery } from "@oxagen/telemetry/bench-client";
-import type { BenchmarkCandidateRow, BenchmarkRunResultRow, BenchmarkRunRow, BenchType } from "./types";
+import type {
+  BenchmarkCandidateRow,
+  BenchmarkRunResultRow,
+  BenchmarkRunRow,
+  BenchType,
+} from "./types";
 
 type RawRow = Record<string, unknown>;
 
@@ -130,7 +134,9 @@ export async function listBenchResults(
   opts: ListBenchResultsOptions = {},
 ): Promise<BenchmarkRunResultRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 20, 1), 500);
-  const whereClause = opts.benchType ? "WHERE bench_type = {benchType:String}" : "";
+  const whereClause = opts.benchType
+    ? "WHERE bench_type = {benchType:String}"
+    : "";
   const rows = await chBenchQuery<RawRow>(
     `
       SELECT *
@@ -145,7 +151,9 @@ export async function listBenchResults(
 }
 
 /** The task result the internal bench replay command reconstructs an env from. */
-export async function getBenchResultByPublicId(publicId: number): Promise<BenchmarkRunResultRow | null> {
+export async function getBenchResultByPublicId(
+  publicId: number,
+): Promise<BenchmarkRunResultRow | null> {
   const rows = await chBenchQuery<RawRow>(
     `SELECT * FROM bench.benchmark_run_result FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
     { publicId },
@@ -154,7 +162,9 @@ export async function getBenchResultByPublicId(publicId: number): Promise<Benchm
 }
 
 /** The parent run of a result — used to show run-level context (agent, dataset, conditions) alongside a replay. */
-export async function getBenchRunByPublicId(publicId: number): Promise<BenchmarkRunRow | null> {
+export async function getBenchRunByPublicId(
+  publicId: number,
+): Promise<BenchmarkRunRow | null> {
   const rows = await chBenchQuery<RawRow>(
     `SELECT * FROM bench.benchmark_run FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
     { publicId },
@@ -163,7 +173,9 @@ export async function getBenchRunByPublicId(publicId: number): Promise<Benchmark
 }
 
 /** Every best-of-N candidate for one task result, e.g. for a future --candidates flag on the internal replay command. */
-export async function getBenchCandidatesForResult(resultPublicId: number): Promise<BenchmarkCandidateRow[]> {
+export async function getBenchCandidatesForResult(
+  resultPublicId: number,
+): Promise<BenchmarkCandidateRow[]> {
   const rows = await chBenchQuery<RawRow>(
     `
       SELECT *

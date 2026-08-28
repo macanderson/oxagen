@@ -10,9 +10,10 @@
 -- denormalized metrics/labels map, on purpose light on detail. `bench` keeps
 -- full per-task and per-candidate fidelity — a secret-free config snapshot,
 -- tool-call breakdowns, best-of-N candidate patches — so any one run can be
--- inspected or replayed exactly (the internal bench replay command by public_id), which
--- the denormalized eval shape cannot support. The two are complementary, not
--- duplicative: ingest into both when you want the trend AND the detail.
+-- inspected or replayed exactly by public_id (the internal bench replay
+-- command), which the denormalized eval shape cannot support. The two are
+-- complementary, not duplicative: ingest into both when you want the trend
+-- AND the detail.
 --
 -- Grain:
 --   bench.benchmark_run         one row per Harbor job (a full harbor run
@@ -74,8 +75,8 @@ CREATE TABLE IF NOT EXISTS bench.benchmark_run (
   -- pipeline/verify flags, effort, evaluator/advisor slugs, revise rounds,
   -- task_ids, N_CONCURRENT, bundle git_sha. Env var keys are referenced BY
   -- NAME only — a value is never written here — so this column is always
-  -- safe to read, log, or display. the internal bench replay command reconstructs the
-  -- run env directly from this JSON.
+  -- safe to read, log, or display. The internal bench replay command
+  -- reconstructs the run env directly from this JSON.
   config String CODEC(ZSTD(3)),
 
   -- Host conditions at run time as JSON, e.g. {"host":"...","os":"darwin",
