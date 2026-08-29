@@ -148,7 +148,7 @@ function withToken(fn: () => Promise<void>): () => Promise<void> {
   };
 }
 
-/** Repo lookup consumed by the default-branch write guard (OXA-2117). */
+/** Repo lookup consumed by the default-branch write guard. */
 function stubRepoInfo(defaultBranch = "main") {
   mocks.getRepoInfo.mockResolvedValueOnce({
     fullName: "myorg/myrepo",

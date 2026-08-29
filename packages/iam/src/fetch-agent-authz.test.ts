@@ -10,7 +10,7 @@
 //   - null humanPrincipalId (no delegator) still resolves
 //   - no roles in the org → no role_grants query, empty inputs
 //   - 42P01 (IAM tables missing) THROWS after a loud error log — the kernel
-//     fails closed on a check-fn throw (OXA-2056 posture)
+//     fails closed on a check-fn throw
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 

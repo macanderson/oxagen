@@ -436,7 +436,7 @@ describe("authorizeExternalCapability", () => {
     });
   });
 
-  it("fails closed (deny + emit) when the resolver throws AND enforcement is off (OXA-2056)", async () => {
+  it("fails closed (deny + emit) when the resolver throws AND enforcement is off", async () => {
     // Regression: a checkFn throw is an evaluation failure, not a policy
     // decision. It must ALWAYS deny, even when IAM_ENFORCEMENT_ENABLED=false —
     // the enforcement flag is only allowed to soften an actual "deny" outcome,
@@ -466,7 +466,7 @@ describe("authorizeExternalCapability", () => {
   });
 });
 
-// ── invoke() — checkFn throw fails closed regardless of enforcement (OXA-2056) ──
+// ── invoke() — checkFn throw fails closed regardless of enforcement ──────────
 // The kernel's main dispatch path (invoke()) runs its own copy of the same
 // "checkFn threw" handling as authorizeExternalCapability. Both must fail
 // closed on a throw unconditionally — this exercises the invoke() copy.
@@ -494,12 +494,12 @@ describe("invoke() IAM check throw — fail closed regardless of enforcement", (
     });
   });
 
-  it("denies (CapabilityError authz_denied) when checkFn throws AND enforcement is OFF (OXA-2056)", async () => {
-    // Regression: previously `iamCheckThrew && _iamEnforced` gated the deny,
-    // so a checkFn throw with enforcement OFF silently fell through and ran
-    // the handler — granting access despite IAM being unable to evaluate the
-    // request at all (e.g. IAM tables missing, DB down, resolver bug). A
-    // throw must deny unconditionally, independent of the enforcement flag.
+  it("denies (CapabilityError authz_denied) when checkFn throws AND enforcement is OFF", async () => {
+    // A checkFn throw must deny unconditionally, independent of the
+    // enforcement flag. Gating the deny on `_iamEnforced` would let a
+    // checkFn throw with enforcement OFF fall through and run the handler —
+    // granting access even though IAM could not evaluate the request at all
+    // (e.g. IAM tables missing, DB down, resolver bug).
     const events: KernelSecurityEvent[] = [];
     setSecurityEventEmitter((e) => events.push(e));
     setKernelIAMRuntime(throwFn, false);

@@ -2,17 +2,12 @@
 // ceiling principals (Agent RBAC docs/specs/agent-rbac/spec.md §3.4/§3.5;
 // run-evidence 02-run-attempt-foundation-plan.md Task 5).
 //
-// ── What changed, and why ───────────────────────────────────────────────────
+// A run carries a PINNED ceiling resolved at admission
+// (authorization-snapshot.ts) and re-reads LIVE authority on every operation
+// (live-agent-run-authorization.ts). This module is the LIVE read.
 //
-// This used to be the ONCE-PER-RUN snapshot fetch: called on the first IAM
-// check of a run, cached on the run context, and never refreshed. The
-// run-evidence spec deletes that model (launch change #7) — a run now carries a
-// PINNED ceiling resolved at admission (authorization-snapshot.ts) and
-// re-reads LIVE authority on every operation
-// (live-agent-run-authorization.ts).
-//
-// So this module is now the LIVE read, and it is deliberately a thin adapter
-// over `readLiveAuthority` rather than a second query implementation: the
+// It is deliberately a thin adapter over `readLiveAuthority` rather than a
+// second query implementation: the
 // ceiling and the live check must project the same columns, or the
 // intersection between them would compare two different pictures of the same
 // rows. `readLiveAuthority` preserves assignment ids, role ids, conditions,
@@ -20,12 +15,12 @@
 // what the live re-evaluation needs — and `liveResolverInputs` flattens them
 // for the pure resolver only at the last moment.
 //
-// FAIL-CLOSED ON MISSING MIGRATION (OXA-2056 posture, unchanged): if the IAM
-// tables are absent (Postgres 42P01) this THROWS after logging loudly. The
-// kernel's IAM seam treats a check-fn throw as an evaluation failure and fails
-// closed unconditionally (authz_denied, independent of IAM_ENFORCEMENT_ENABLED)
-// — an agent run without IAM tables can execute nothing, which is the correct
-// posture for an unattended automation. fetch-authz.ts instead synthesizes a
+// FAIL-CLOSED ON MISSING MIGRATION: if the IAM tables are absent (Postgres
+// 42P01) this THROWS after logging loudly. The kernel's IAM seam treats a
+// check-fn throw as an evaluation failure and fails closed unconditionally
+// (authz_denied, independent of IAM_ENFORCEMENT_ENABLED) — an agent run
+// without IAM tables can execute nothing, which is the correct posture for
+// an unattended automation. fetch-authz.ts instead synthesizes a
 // per-capability deny policy, which cannot express "deny everything" for an
 // all-capability read — hence the throw here.
 
@@ -92,7 +87,7 @@ async function withUndefinedTableAlert<T>(
       );
     }
     // Propagate — the kernel's IAM seam fails closed on a check-fn throw
-    // (unconditional authz_denied, OXA-2056 semantics).
+    // (unconditional authz_denied).
     throw err;
   }
 }

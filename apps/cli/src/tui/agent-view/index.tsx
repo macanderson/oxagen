@@ -21,11 +21,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { theme } from "../theme.js";
 import { useTerminalSize } from "../../repl/use-terminal-size.js";
 import { formatClock, formatDurationMs } from "../mission-control/lib.js";
-import {
-  collectAgentViewData,
-  formatUsd,
-  type AgentViewData,
-} from "./data.js";
+import { collectAgentViewData, formatUsd, type AgentViewData } from "./data.js";
 import { SessionsPanel } from "./sessions-panel.js";
 import { OverviewPanel } from "./overview-panel.js";
 import { CodeGraphPanel } from "./code-graph-panel.js";
@@ -47,12 +43,17 @@ export interface AgentViewProps {
   refreshMs?: number;
 }
 
-export function AgentView({ cwd, collect, refreshMs }: AgentViewProps): React.ReactElement {
+export function AgentView({
+  cwd,
+  collect,
+  refreshMs,
+}: AgentViewProps): React.ReactElement {
   const { exit } = useApp();
   const { cols, fullscreen } = useTerminalSize();
   const [data, setData] = useState<AgentViewData | null>(null);
 
-  const collector = collect ?? ((c: string) => collectAgentViewData({ cwd: c }));
+  const collector =
+    collect ?? ((c: string) => collectAgentViewData({ cwd: c }));
   const inFlight = useRef(false);
 
   useEffect(() => {
@@ -95,7 +96,11 @@ export function AgentView({ cwd, collect, refreshMs }: AgentViewProps): React.Re
   const live = data.rollup.active > 0;
 
   return (
-    <Box flexDirection="column" paddingX={1} {...(fullscreen ? { width: cols } : {})}>
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      {...(fullscreen ? { width: cols } : {})}
+    >
       {/* Header */}
       <Box marginBottom={1} justifyContent="space-between">
         <Box>
@@ -119,7 +124,9 @@ export function AgentView({ cwd, collect, refreshMs }: AgentViewProps): React.Re
 
       {data.sourceError ? (
         <Box marginBottom={1} paddingX={1}>
-          <Text color={theme.red}>Could not read the session store: {data.sourceError}</Text>
+          <Text color={theme.red}>
+            Could not read the session store: {data.sourceError}
+          </Text>
         </Box>
       ) : null}
 
@@ -146,12 +153,14 @@ export function AgentView({ cwd, collect, refreshMs }: AgentViewProps): React.Re
 }
 
 /**
- * Render a compact, honest plain-text snapshot for non-TTY invocation (a pipe, a
+ * Render a compact plain-text snapshot for non-TTY invocation (a pipe, a
  * CI log, `oxagen view | cat`). Same facts, no Ink.
  */
 export function renderTextSnapshot(data: AgentViewData): string {
   const lines: string[] = [];
-  lines.push(`OXAGEN agent audit · ${projectName(data.projectRoot)} · ${formatClock(data.generatedAt)}`);
+  lines.push(
+    `OXAGEN agent audit · ${projectName(data.projectRoot)} · ${formatClock(data.generatedAt)}`,
+  );
   lines.push(
     `auth: ${data.auth.label}   daemon: ${data.daemon.running ? "running" : "off"}   ` +
       `code graph: ${data.codeGraph.state}`,
@@ -161,7 +170,8 @@ export function renderTextSnapshot(data: AgentViewData): string {
     `runs: ${r.total} (${r.active} active, ${r.fleetRuns} fleet, ${r.interactiveRuns} repl)   ` +
       `spend: ${formatUsd(r.costUsdTotal)} all-time / ${formatUsd(r.costUsdToday)} today`,
   );
-  if (data.sourceError) lines.push(`! session store unreadable: ${data.sourceError}`);
+  if (data.sourceError)
+    lines.push(`! session store unreadable: ${data.sourceError}`);
   lines.push("");
   if (data.rows.length === 0) {
     lines.push("No agent runs recorded for this project yet.");
@@ -182,7 +192,9 @@ export function renderTextSnapshot(data: AgentViewData): string {
  * Launch the dashboard. Interactive on a TTY; a one-shot text snapshot otherwise
  * (so the process never hangs a pipe).
  */
-export async function launchAgentView(opts: { cwd?: string } = {}): Promise<void> {
+export async function launchAgentView(
+  opts: { cwd?: string } = {},
+): Promise<void> {
   const cwd = opts.cwd ?? process.cwd();
   if (!process.stdout.isTTY) {
     const data = await collectAgentViewData({ cwd });

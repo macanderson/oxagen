@@ -89,7 +89,7 @@ export interface LivePendingApproval {
   resolution?: ApprovalResolution;
 }
 
-/** A live first-use external-MCP consent prompt (OXA-816), keyed by approvalId. */
+/** A live first-use external-MCP consent prompt, keyed by approvalId. */
 export interface LivePendingConsent {
   approvalId: string;
   capability: string;
@@ -183,7 +183,7 @@ export interface ToolStreamState {
   /** Interleaved assistant-text segments, keyed by segment key. */
   textSegments: Record<string, LiveTextSegment>;
   pendingApprovals: Record<string, LivePendingApproval>;
-  /** Live first-use external-MCP consent prompts (OXA-816), keyed by approvalId. */
+  /** Live first-use external-MCP consent prompts, keyed by approvalId. */
   pendingConsents: Record<string, LivePendingConsent>;
   plans: Record<string, LivePlan>;
   activeFanouts: Record<string, LiveFanout>;
@@ -271,17 +271,27 @@ function withOrder(order: string[], key: string): string[] {
 
 export type Action = { type: "event"; event: StreamEvent } | { type: "reset" };
 
-export function reducer(state: ToolStreamState, action: Action): ToolStreamState {
+export function reducer(
+  state: ToolStreamState,
+  action: Action,
+): ToolStreamState {
   if (action.type === "reset") return INITIAL_STATE;
   const e = action.event;
   switch (e.type) {
     case "text": {
-      const prevMsg = state.messages[e.messageId] ?? { messageId: e.messageId, text: "" };
+      const prevMsg = state.messages[e.messageId] ?? {
+        messageId: e.messageId,
+        text: "",
+      };
       // Reuse the open segment, or open a fresh one keyed by position so text
       // before/after a tool call renders as distinct timeline nodes.
-      const segKey = state.activeTextKey ?? `text:${e.messageId}:${state.order.length}`;
-      const prevSeg =
-        state.textSegments[segKey] ?? { key: segKey, messageId: e.messageId, text: "" };
+      const segKey =
+        state.activeTextKey ?? `text:${e.messageId}:${state.order.length}`;
+      const prevSeg = state.textSegments[segKey] ?? {
+        key: segKey,
+        messageId: e.messageId,
+        text: "",
+      };
       return {
         ...state,
         messages: {
@@ -340,7 +350,11 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
         ...state,
         reasonings: {
           ...state.reasonings,
-          [e.reasoningId]: { ...existing, status: "done", durationMs: e.durationMs },
+          [e.reasoningId]: {
+            ...existing,
+            status: "done",
+            durationMs: e.durationMs,
+          },
         },
       };
     }
@@ -360,7 +374,10 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
       if (!existing) return state;
       return {
         ...state,
-        steps: { ...state.steps, [e.stepIndex]: { ...existing, status: "done" } },
+        steps: {
+          ...state.steps,
+          [e.stepIndex]: { ...existing, status: "done" },
+        },
       };
     }
     case "tool-input-start": {
@@ -536,7 +553,10 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
       if (!existing) return state;
       return {
         ...state,
-        plans: { ...state.plans, [e.planId]: { ...existing, status: e.decision } },
+        plans: {
+          ...state.plans,
+          [e.planId]: { ...existing, status: e.decision },
+        },
       };
     }
     case "subagent-dispatched": {
@@ -547,7 +567,10 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
           [e.fanoutId]: {
             fanoutId: e.fanoutId,
             parentMessageId: e.parentMessageId,
-            children: e.children.map((c) => ({ ...c, status: "running" as SubagentStatus })),
+            children: e.children.map((c) => ({
+              ...c,
+              status: "running" as SubagentStatus,
+            })),
             status: "running",
           },
         },
@@ -616,13 +639,21 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
         backgroundTasks: {
           ...state.backgroundTasks,
           [e.taskId]: {
-            ...(existing ?? { taskId: e.taskId, kind: e.kind, status: e.status }),
+            ...(existing ?? {
+              taskId: e.taskId,
+              kind: e.kind,
+              status: e.status,
+            }),
             taskId: e.taskId,
             kind: e.kind,
             ...(e.label !== undefined ? { label: e.label } : {}),
             status: e.status,
-            ...(e.inngestRunId !== undefined ? { inngestRunId: e.inngestRunId } : {}),
-            ...(e.progressPct !== undefined ? { progressPct: e.progressPct } : {}),
+            ...(e.inngestRunId !== undefined
+              ? { inngestRunId: e.inngestRunId }
+              : {}),
+            ...(e.progressPct !== undefined
+              ? { progressPct: e.progressPct }
+              : {}),
           },
         },
         order: withOrder(state.order, `bgtask:${e.taskId}`),
@@ -659,7 +690,10 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
       // touch the timeline.
       return {
         ...state,
-        turnWarning: { message: e.message, ...(e.code !== undefined ? { code: e.code } : {}) },
+        turnWarning: {
+          message: e.message,
+          ...(e.code !== undefined ? { code: e.code } : {}),
+        },
       };
     }
     case "error": {
@@ -668,7 +702,10 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
       // exactly the raw-JSON-on-the-page bug this event type exists to kill).
       return {
         ...state,
-        turnError: { message: e.message, ...(e.code !== undefined ? { code: e.code } : {}) },
+        turnError: {
+          message: e.message,
+          ...(e.code !== undefined ? { code: e.code } : {}),
+        },
         activeTextKey: null,
       };
     }
@@ -689,10 +726,12 @@ interface ApprovalWaiter {
 }
 
 export interface UseToolStreamResult extends ToolStreamState {
-  consume: (stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>) => Promise<void>;
+  consume: (
+    stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>,
+  ) => Promise<void>;
   reset: () => void;
   hasBlockingApproval: boolean;
-  /** True while a first-use external-MCP consent prompt (OXA-816) is unresolved. */
+  /** True while a first-use external-MCP consent prompt is unresolved. */
   hasBlockingConsent: boolean;
   /** Signal that a pending approval has been resolved (by user action or
    *  incoming stream event). Unblocks the `consume` loop so the stream
@@ -731,7 +770,9 @@ export function useToolStream(): UseToolStreamResult {
   }, []);
 
   const consume = React.useCallback(
-    async (stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>) => {
+    async (
+      stream: ReadableStream<StreamEvent> | AsyncIterable<StreamEvent>,
+    ) => {
       const iter: AsyncIterable<StreamEvent> = isReadable(stream)
         ? readableToAsyncIterable(stream)
         : stream;
@@ -741,7 +782,10 @@ export function useToolStream(): UseToolStreamResult {
         // loop doesn't deadlock. Consent reuses the same waiter map keyed by the
         // underlying approvalId. The dispatch below then updates the UI to show
         // the resolved state.
-        if (event.type === "approval-resolved" || event.type === "consent-resolved") {
+        if (
+          event.type === "approval-resolved" ||
+          event.type === "consent-resolved"
+        ) {
           signalApprovalResolved(event.approvalId);
         }
 
@@ -752,7 +796,10 @@ export function useToolStream(): UseToolStreamResult {
         // settles it. This ensures intermediate UI states (disabled composer,
         // visible approval/consent card) are observable before the stream
         // continues — critical for correct UX and the Playwright e2e assertions.
-        if (event.type === "approval-required" || event.type === "consent-required") {
+        if (
+          event.type === "approval-required" ||
+          event.type === "consent-required"
+        ) {
           let resolveWaiter!: () => void;
           const promise = new Promise<void>((r) => {
             resolveWaiter = r;
@@ -788,7 +835,9 @@ export function useToolStream(): UseToolStreamResult {
 
   const hasBlockingConsent = React.useMemo(
     () =>
-      Object.values(state.pendingConsents).some((c) => c.resolution === undefined),
+      Object.values(state.pendingConsents).some(
+        (c) => c.resolution === undefined,
+      ),
     [state.pendingConsents],
   );
 
@@ -810,7 +859,9 @@ function isReadable<T>(
   return typeof (s as ReadableStream<T>).getReader === "function";
 }
 
-async function* readableToAsyncIterable<T>(stream: ReadableStream<T>): AsyncIterable<T> {
+async function* readableToAsyncIterable<T>(
+  stream: ReadableStream<T>,
+): AsyncIterable<T> {
   const reader = stream.getReader();
   try {
     while (true) {

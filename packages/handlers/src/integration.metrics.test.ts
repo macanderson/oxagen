@@ -5,7 +5,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { integrationMetricsHandler } from "./integration.metrics";
 import { TEST_CTX } from "./test-utils/fixtures";
@@ -22,14 +24,15 @@ type Row = {
 } | null;
 
 function setup(row: Row) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }),
+          }),
         }),
       }),
-    }),
   );
 }
 
@@ -51,7 +54,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_active" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_active" },
+      TEST_CTX,
+    );
 
     expect(out).toEqual({
       integrationId: "con_active",
@@ -67,7 +73,7 @@ describe("integration.metrics handler", () => {
     });
   });
 
-  it("reports a pending_setup connection with honest zeros and nulls", async () => {
+  it("reports a pending_setup connection with real zeros and nulls", async () => {
     setup({
       publicId: "con_pending",
       connectorId: "notion",
@@ -79,7 +85,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_pending" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_pending" },
+      TEST_CTX,
+    );
 
     expect(out.status).toBe("pending_setup");
     expect(out.entityCount).toBe(0);
@@ -103,7 +112,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_broken" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_broken" },
+      TEST_CTX,
+    );
 
     expect(out.status).toBe("failed");
     expect(out.errorMessage).toBe("token expired");
@@ -123,7 +135,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_quiet" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_quiet" },
+      TEST_CTX,
+    );
 
     expect(out.status).toBe("failed");
     expect(out.errorMessage).toBeNull();
@@ -142,7 +157,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_paused" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_paused" },
+      TEST_CTX,
+    );
 
     expect(out.status).toBe("paused");
     expect(out.entityCount).toBe(88);
@@ -161,7 +179,10 @@ describe("integration.metrics handler", () => {
       updatedAt: UPDATED_AT,
     });
 
-    const out = await integrationMetricsHandler({ integrationId: "con_deleting" }, TEST_CTX);
+    const out = await integrationMetricsHandler(
+      { integrationId: "con_deleting" },
+      TEST_CTX,
+    );
 
     expect(out.status).toBe("pending_setup");
   });
@@ -171,7 +192,9 @@ describe("integration.metrics handler", () => {
 
     await expect(
       integrationMetricsHandler({ integrationId: "con_missing" }, TEST_CTX),
-    ).rejects.toThrow("integration.metrics: integration not found: con_missing");
+    ).rejects.toThrow(
+      "integration.metrics: integration not found: con_missing",
+    );
   });
 
   it("routes the query through withTenantDb for tenant scoping", async () => {

@@ -211,7 +211,7 @@ export async function persistGeneratedAsset(
   // kernel handlers and apps/app chat stream route; the chat stream route calls
   // this OUTSIDE any runInTenantScope — the image/video generation happens in a
   // ReadableStream callback that is not wrapped by the kernel or tenant scope;
-  // orgId/workspaceId are carried explicitly in args as defense-in-depth) — OXA-1515
+  // orgId/workspaceId are carried explicitly in args as defense-in-depth) (see docs/specs/tenancy-rls/spec.md)
   const [row] = await withSystemDb(async (tx) => {
     const conversationId = await resolveConversationId(
       tx,
@@ -300,7 +300,7 @@ export async function createPendingGeneratedAsset(
 ): Promise<PendingGeneratedAsset> {
   // tenancy: system bypass via withSystemDb (same rationale as
   // persistGeneratedAsset — called from the chat stream route outside any
-  // runInTenantScope; orgId/workspaceId are explicit in args) — OXA-1515
+  // runInTenantScope; orgId/workspaceId are explicit in args) (see docs/specs/tenancy-rls/spec.md)
   const [row] = await withSystemDb(async (tx) => {
     const conversationId = await resolveConversationId(
       tx,

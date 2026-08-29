@@ -3,7 +3,12 @@ import "@oxagen/handlers/register";
 import { type NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+  getOrgRole,
+} from "@/lib/resolve-org";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 
@@ -31,10 +36,9 @@ const ADMIN_ONLY_CAPABILITIES = new Set([
 ]);
 
 // Maps the browser-facing URL path (kept stable for the schema-service client)
-// to the canonical ADR-025 verb-first capability name. ADR-025 removed the old
-// dotted names (schema.registry.get, …) and their aliases, so the capability is
-// no longer a mechanical `schema.${path.join(".")}` transform of the URL — it
-// must be looked up explicitly.
+// to the canonical ADR-025 verb-first capability name. The capability name is
+// not a mechanical `schema.${path.join(".")}` transform of the URL, so it must
+// be looked up explicitly.
 const PATH_TO_CAPABILITY: Record<string, string> = {
   "registry/get": "get_schema_registry",
   "registry/config": "get_registry_config",
@@ -81,9 +85,14 @@ export async function POST(
   // ── Resolve capability from path segments ─────────────────────────────
   const { path } = await params;
   const pathKey = path.join("/");
-  const capability = PATH_TO_CAPABILITY[pathKey] ?? (KNOWN_CAPABILITIES.has(pathKey) ? pathKey : null);
+  const capability =
+    PATH_TO_CAPABILITY[pathKey] ??
+    (KNOWN_CAPABILITIES.has(pathKey) ? pathKey : null);
   if (!capability) {
-    return NextResponse.json({ error: `Unknown schema capability: ${pathKey}` }, { status: 404 });
+    return NextResponse.json(
+      { error: `Unknown schema capability: ${pathKey}` },
+      { status: 404 },
+    );
   }
 
   // ── Parse body ────────────────────────────────────────────────────────
@@ -95,8 +104,16 @@ export async function POST(
   }
 
   const { orgSlug, workspaceSlug, ...input } = rawBody;
-  if (typeof orgSlug !== "string" || !orgSlug || typeof workspaceSlug !== "string" || !workspaceSlug) {
-    return NextResponse.json({ error: "orgSlug and workspaceSlug are required" }, { status: 400 });
+  if (
+    typeof orgSlug !== "string" ||
+    !orgSlug ||
+    typeof workspaceSlug !== "string" ||
+    !workspaceSlug
+  ) {
+    return NextResponse.json(
+      { error: "orgSlug and workspaceSlug are required" },
+      { status: 400 },
+    );
   }
 
   // ── Tenant resolution ─────────────────────────────────────────────────
@@ -107,14 +124,20 @@ export async function POST(
     await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
-    return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Org or workspace not found" },
+      { status: 404 },
+    );
   }
 
   // ── IAM gate for admin-only capabilities ───────────────────────────────
   if (ADMIN_ONLY_CAPABILITIES.has(capability)) {
     const role = await getOrgRole(tenant.id, session.user.id);
     if (role !== "owner" && role !== "admin") {
-      return NextResponse.json({ error: "Forbidden: requires owner or admin role" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden: requires owner or admin role" },
+        { status: 403 },
+      );
     }
   }
 
@@ -141,7 +164,8 @@ export async function POST(
     );
     return NextResponse.json(result ?? {});
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
     if (message.includes("Forbidden") || message.includes("IAM")) {
       return NextResponse.json({ error: message }, { status: 403 });
     }

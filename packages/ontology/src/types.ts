@@ -40,14 +40,12 @@ export const NodeLabels = {
   // and optionally a secondary TitleCase label for simple type names.
   // Workspace-scoped. Queried as: MATCH (n:EntityNode {workspaceId: $wid, entityType: $type})
   EntityNode: "EntityNode",
-  // Fleet lineage graph projection (issue #1078, docs/specs "projection
-  // reconciliation" pattern): an idempotent MERGE projection of
+  // Fleet lineage graph projection: an idempotent MERGE projection of
   // agent.subagent_fanouts / agent.subagent_runs rows — the authoritative
   // Postgres chain-of-custody — into first-class graph nodes so the dispatch
-  // tree is queryable as graph data. NOT the retired :Fanout/BRANCHED_TO_SUBAGENT
-  // pair above (that was the superseded automatic :Execution/:Message
-  // projection, docs/specs/graph-mediated-fanout-phase2); these are new,
-  // distinct labels keyed on the subagent_fanouts/subagent_runs row ids.
+  // tree is queryable as graph data. Separate from the :Fanout/BRANCHED_TO_SUBAGENT
+  // pair above (a different, message-based projection); these labels are keyed
+  // on the subagent_fanouts/subagent_runs row ids instead.
   SubagentFanout: "SubagentFanout",
   SubagentRun: "SubagentRun",
 } as const;
@@ -88,7 +86,7 @@ export const EdgeTypes = {
   PART_OF: "PART_OF", // issue → epic; commit → PR
   ASSIGNED_TO: "ASSIGNED_TO", // task/issue → User
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
-  // Fleet lineage graph projection (issue #1078). See NodeLabels.SubagentFanout.
+  // Fleet lineage graph projection. See NodeLabels.SubagentFanout.
   DISPATCHED: "DISPATCHED", // SubagentFanout → SubagentRun (direct child)
   SPAWNED_FANOUT: "SPAWNED_FANOUT", // SubagentRun → SubagentFanout (nested dispatch; recursion spine)
 } as const;

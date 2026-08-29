@@ -4,9 +4,9 @@
  * The matrix from docs/specs/repl-async-dispatch.md §2.1, pinned exhaustively:
  * `&` always backgrounds; mode OFF never auto-dispatches; slash/shell and
  * forced-inline `=`/`>` always stay inline; mode ON dispatches every other
- * plain prompt (deterministic — the word-match intent heuristic was removed
- * in PR #893, so there is no "simple"-stays-inline branch; `=` is the inline
- * escape). Pure — no React, no spawn, no store.
+ * plain prompt (deterministic — there is no word-match intent heuristic and
+ * no "simple"-stays-inline branch; `=` is the inline escape). Pure — no
+ * React, no spawn, no store.
  */
 import { describe, it, expect } from "vitest";
 import { decideDispatch } from "../dispatch-mode.js";
@@ -73,13 +73,15 @@ describe("decideDispatch — mode ON dispatches every plain prompt", () => {
   });
 
   it("backgrounds a delegated request ('can you add …')", () => {
-    expect(decideDispatch("can you add rate-limit headers", { mode: true }))
-      .toEqual({ kind: "background", prompt: "can you add rate-limit headers" });
+    expect(
+      decideDispatch("can you add rate-limit headers", { mode: true }),
+    ).toEqual({ kind: "background", prompt: "can you add rate-limit headers" });
   });
 
   it("trims surrounding whitespace off a dispatched prompt", () => {
-    expect(decideDispatch("  audit the billing meters  ", { mode: true }))
-      .toEqual({ kind: "background", prompt: "audit the billing meters" });
+    expect(
+      decideDispatch("  audit the billing meters  ", { mode: true }),
+    ).toEqual({ kind: "background", prompt: "audit the billing meters" });
   });
 });
 

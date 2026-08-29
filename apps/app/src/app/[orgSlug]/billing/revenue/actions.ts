@@ -17,7 +17,7 @@ import { getSession } from "@/lib/session";
 import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
 
 // Sentinel workspaceId for org-only billing routes — the reseller tables use an
-// org-only RLS policy, so the workspace GUC is set but never evaluated. — OXA-1515
+// org-only RLS policy, so the workspace GUC is set but never evaluated.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const NOT_AUTHORIZED =

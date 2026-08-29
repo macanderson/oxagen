@@ -45,4 +45,4 @@ export const tuiChrome = {
 } as const;
 
 /** The CLI version string shown in the banner (apps/cli/package.json). */
-export const CLI_VERSION = "0.10.0";
+export const CLI_VERSION = "2.1.1";

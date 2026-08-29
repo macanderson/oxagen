@@ -6,8 +6,8 @@
  * CI for an arbitrary ref/branch (repo.ci.status).
  *
  * There is no repo.pr.list capability today, so this tab cannot show a true
- * PR list without fabricating data — see the builder's final report for the
- * gap. "Look up PR #" is the honest substitute for a list.
+ * PR list without fabricating data. "Look up PR #" is the substitute for a
+ * list.
  */
 
 import * as React from "react";

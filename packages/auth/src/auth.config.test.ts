@@ -1,7 +1,7 @@
 /**
  * Unit tests for better-auth configuration invariants in @oxagen/auth.
  *
- * The resolvers already have tests (OXA-1418: resolvers.test.ts). These tests
+ * The resolvers already have their own tests (resolvers.test.ts). These tests
  * cover the CONFIG OBJECT invariants that are security-critical:
  *
  *   1. Secure-cookie bypass guard — useSecureCookies must be true in
@@ -35,7 +35,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 //   useSecureCookies = NODE_ENV === "production" && process.env.E2E_TEST !== "true"
 // ---------------------------------------------------------------------------
 
-function deriveUseSecureCookies(nodeEnv: string, e2eTest: string | undefined): boolean {
+function deriveUseSecureCookies(
+  nodeEnv: string,
+  e2eTest: string | undefined,
+): boolean {
   return nodeEnv === "production" && e2eTest !== "true";
 }
 
@@ -148,9 +151,16 @@ interface AdvancedConfig {
 }
 
 // We don't need to import the real betterAuth; just model the config shape.
-function buildMockAuthConfig(nodeEnv: string, e2eTest: string | undefined): {
+function buildMockAuthConfig(
+  nodeEnv: string,
+  e2eTest: string | undefined,
+): {
   advanced: AdvancedConfig;
-  emailAndPassword: { enabled: boolean; autoSignIn: boolean; minPasswordLength: number };
+  emailAndPassword: {
+    enabled: boolean;
+    autoSignIn: boolean;
+    minPasswordLength: number;
+  };
   session: { expiresIn: number; updateAge: number };
 } {
   return {
@@ -272,33 +282,69 @@ function buildSocialProviders(
 
 describe("social provider guard", () => {
   it("google provider is undefined when credentials are absent", () => {
-    const providers = buildSocialProviders(undefined, undefined, undefined, undefined);
+    const providers = buildSocialProviders(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(providers.google).toBeUndefined();
   });
 
   it("google provider is undefined when only clientId is set", () => {
-    const providers = buildSocialProviders("cid", undefined, undefined, undefined);
+    const providers = buildSocialProviders(
+      "cid",
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(providers.google).toBeUndefined();
   });
 
   it("google provider is undefined when only clientSecret is set", () => {
-    const providers = buildSocialProviders(undefined, "secret", undefined, undefined);
+    const providers = buildSocialProviders(
+      undefined,
+      "secret",
+      undefined,
+      undefined,
+    );
     expect(providers.google).toBeUndefined();
   });
 
   it("google provider is configured when both credentials are present", () => {
-    const providers = buildSocialProviders("cid", "secret", undefined, undefined);
-    expect(providers.google).toEqual({ clientId: "cid", clientSecret: "secret" });
+    const providers = buildSocialProviders(
+      "cid",
+      "secret",
+      undefined,
+      undefined,
+    );
+    expect(providers.google).toEqual({
+      clientId: "cid",
+      clientSecret: "secret",
+    });
   });
 
   it("github provider is undefined when credentials are absent", () => {
-    const providers = buildSocialProviders(undefined, undefined, undefined, undefined);
+    const providers = buildSocialProviders(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(providers.github).toBeUndefined();
   });
 
   it("github provider is configured when both credentials are present", () => {
-    const providers = buildSocialProviders(undefined, undefined, "ghid", "ghsec");
-    expect(providers.github).toEqual({ clientId: "ghid", clientSecret: "ghsec" });
+    const providers = buildSocialProviders(
+      undefined,
+      undefined,
+      "ghid",
+      "ghsec",
+    );
+    expect(providers.github).toEqual({
+      clientId: "ghid",
+      clientSecret: "ghsec",
+    });
   });
 
   it("providers can be configured independently", () => {
@@ -345,7 +391,7 @@ describe("account linking policy", () => {
 });
 
 // ---------------------------------------------------------------------------
-// trustedOrigins logic — extracted from auth.ts for unit testing (OXA-1504)
+// trustedOrigins logic — extracted from auth.ts for unit testing
 // ---------------------------------------------------------------------------
 
 // Mirror the prod origins from auth.ts.
@@ -367,7 +413,10 @@ function buildTrustedOrigins(
   betterAuthTrustedOriginsEnv: string | undefined,
 ): string[] {
   const envOrigins: string[] = betterAuthTrustedOriginsEnv
-    ? betterAuthTrustedOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean)
+    ? betterAuthTrustedOriginsEnv
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean)
     : [];
   const devOrigins = nodeEnv !== "production" ? DEV_ORIGINS_LOCAL : [];
   return [...PROD_ORIGINS, ...devOrigins, ...envOrigins];
@@ -409,7 +458,7 @@ describe("trustedOrigins", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Startup token-encryption guard logic — derived from auth.ts (OXA-1504)
+// Startup token-encryption guard logic — derived from auth.ts
 // ---------------------------------------------------------------------------
 
 function shouldThrowEncryptionGuard(
@@ -428,13 +477,15 @@ function shouldThrowEncryptionGuard(
     // applied to useSecureCookies).
     e2eTest === "true";
   // The guard is skipped during `next build` (NEXT_PHASE=phase-production-build)
-  // because the master key is a runtime, not build-time, requirement (OXA-1504).
+  // because the master key is a runtime, not build-time, requirement.
   return !encryptionKey && !isLocal && !isBuildPhase;
 }
 
 describe("AUTH_TOKEN_ENCRYPTION_KEY startup guard", () => {
   it("throws in production when the key is absent", () => {
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined)).toBe(true);
+    expect(shouldThrowEncryptionGuard("production", undefined, undefined)).toBe(
+      true,
+    );
   });
 
   it("throws in production when the key is empty string", () => {
@@ -442,36 +493,78 @@ describe("AUTH_TOKEN_ENCRYPTION_KEY startup guard", () => {
   });
 
   it("does NOT throw in development when the key is absent", () => {
-    expect(shouldThrowEncryptionGuard("development", undefined, undefined)).toBe(false);
+    expect(
+      shouldThrowEncryptionGuard("development", undefined, undefined),
+    ).toBe(false);
   });
 
   it("does NOT throw in test environment when the key is absent", () => {
-    expect(shouldThrowEncryptionGuard("test", undefined, undefined)).toBe(false);
+    expect(shouldThrowEncryptionGuard("test", undefined, undefined)).toBe(
+      false,
+    );
   });
 
   it("does NOT throw on Vercel preview (VERCEL_ENV=development) when the key is absent", () => {
-    expect(shouldThrowEncryptionGuard("production", "development", undefined)).toBe(false);
+    expect(
+      shouldThrowEncryptionGuard("production", "development", undefined),
+    ).toBe(false);
   });
 
   it("does NOT throw in production when the key is present", () => {
-    expect(shouldThrowEncryptionGuard("production", undefined, "Zm9vYmFyYmF6cXV4")).toBe(false);
+    expect(
+      shouldThrowEncryptionGuard("production", undefined, "Zm9vYmFyYmF6cXV4"),
+    ).toBe(false);
   });
 
   it("does NOT throw during the Next.js build phase even when the key is absent", () => {
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined, true)).toBe(false);
+    expect(
+      shouldThrowEncryptionGuard("production", undefined, undefined, true),
+    ).toBe(false);
   });
 
   it("does NOT throw in production when E2E_TEST=true (Playwright CI bypass)", () => {
     // Playwright runs `next start` (NODE_ENV=production) over http without the
     // encryption key. E2E_TEST=true is the sentinel injected by playwright.config.ts
     // webServer.env to exempt this legitimate scenario from the guard.
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "true")).toBe(false);
+    expect(
+      shouldThrowEncryptionGuard(
+        "production",
+        undefined,
+        undefined,
+        false,
+        "true",
+      ),
+    ).toBe(false);
   });
 
   it("E2E bypass only activates for the exact string 'true', not '1' or 'TRUE'", () => {
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "1")).toBe(true);
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "TRUE")).toBe(true);
-    expect(shouldThrowEncryptionGuard("production", undefined, undefined, false, "yes")).toBe(true);
+    expect(
+      shouldThrowEncryptionGuard(
+        "production",
+        undefined,
+        undefined,
+        false,
+        "1",
+      ),
+    ).toBe(true);
+    expect(
+      shouldThrowEncryptionGuard(
+        "production",
+        undefined,
+        undefined,
+        false,
+        "TRUE",
+      ),
+    ).toBe(true);
+    expect(
+      shouldThrowEncryptionGuard(
+        "production",
+        undefined,
+        undefined,
+        false,
+        "yes",
+      ),
+    ).toBe(true);
   });
 });
 
@@ -501,7 +594,9 @@ describe("sendResetPassword config invariants", () => {
     // the test catches the drift immediately.
     const emailAndPasswordConfig: {
       revokeSessionsOnPasswordReset: boolean;
-      sendResetPassword: ((args: { user: { email: string }; url: string }) => void) | undefined;
+      sendResetPassword:
+        | ((args: { user: { email: string }; url: string }) => void)
+        | undefined;
     } = {
       revokeSessionsOnPasswordReset: true,
       sendResetPassword: ({ user: _user, url: _url }) => {
@@ -528,7 +623,10 @@ describe("sendResetPassword config invariants", () => {
     };
 
     expect(() =>
-      callback({ user: { email: "user@example.com" }, url: "https://example.com/reset?token=x" }),
+      callback({
+        user: { email: "user@example.com" },
+        url: "https://example.com/reset?token=x",
+      }),
     ).not.toThrow();
   });
 
@@ -564,7 +662,10 @@ describe("email verification config invariants", () => {
 
   it("sendVerificationEmail is configured as a function (not undefined)", () => {
     const config = {
-      sendVerificationEmail: (_args: { user: { email: string }; url: string }) => {
+      sendVerificationEmail: (_args: {
+        user: { email: string };
+        url: string;
+      }) => {
         void undefined; // fire-and-forget pattern
       },
     };
@@ -578,7 +679,10 @@ describe("email verification config invariants", () => {
     };
 
     expect(() =>
-      callback({ user: { email: "user@example.com" }, url: "https://example.com/verify?token=x" }),
+      callback({
+        user: { email: "user@example.com" },
+        url: "https://example.com/verify?token=x",
+      }),
     ).not.toThrow();
   });
 
@@ -600,7 +704,8 @@ const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
 describe("NO_ORG_SENTINEL", () => {
   it("is a valid UUID-shaped string (8-4-4-4-12 hex)", () => {
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     expect(NO_ORG_SENTINEL).toMatch(uuidPattern);
   });
 
@@ -617,7 +722,7 @@ describe("NO_ORG_SENTINEL", () => {
 // emitSecurityEvent) can NEVER propagate out of Better Auth's hook runner and
 // turn a committed sign-in / sign-out into an HTTP 500. The session is already
 // committed/deleted by the time the after-hook runs, so audit emission is
-// strictly best-effort and must never re-throw (OXA-1422).
+// strictly best-effort and must never re-throw.
 //
 // This mirrors the file's existing convention (deriveUseSecureCookies etc.) of
 // testing extracted logic in isolation, since the hook closures live inside the
@@ -630,7 +735,11 @@ interface SessionAfter {
   userAgent?: string | null;
 }
 
-type EmitEvent = (e: { eventType: string; actorUserId: string; orgId: string }) => void;
+type EmitEvent = (e: {
+  eventType: string;
+  actorUserId: string;
+  orgId: string;
+}) => void;
 
 function makeSessionAfterHook(
   eventType: "auth.sign_in" | "auth.sign_out",
@@ -648,10 +757,13 @@ function makeSessionAfterHook(
         orgId: orgId ?? NO_ORG_SENTINEL,
       });
     } catch (err) {
-      onError(`[auth] session.${eventType === "auth.sign_in" ? "create" : "delete"}.after hook failed`, {
-        userId: s.userId,
-        err,
-      });
+      onError(
+        `[auth] session.${eventType === "auth.sign_in" ? "create" : "delete"}.after hook failed`,
+        {
+          userId: s.userId,
+          err,
+        },
+      );
     }
   };
 }
@@ -682,7 +794,12 @@ describe("session after-hook resilience", () => {
 
   it("falls back to NO_ORG_SENTINEL when the user has no org", async () => {
     const emit = vi.fn();
-    const hook = makeSessionAfterHook("auth.sign_in", async () => null, emit, vi.fn());
+    const hook = makeSessionAfterHook(
+      "auth.sign_in",
+      async () => null,
+      emit,
+      vi.fn(),
+    );
     await hook({ userId: "user_2" });
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: NO_ORG_SENTINEL }),
@@ -705,7 +822,10 @@ describe("session after-hook resilience", () => {
     // No event emitted (resolve failed before emit), but the error is logged.
     expect(emit).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
-    const [msg, ctx] = onError.mock.calls[0] as [string, { userId: string; err: unknown }];
+    const [msg, ctx] = onError.mock.calls[0] as [
+      string,
+      { userId: string; err: unknown },
+    ];
     expect(msg).toContain("session.create.after hook failed");
     expect(ctx.userId).toBe("user_3");
     expect(ctx.err).toBeInstanceOf(Error);
@@ -716,7 +836,12 @@ describe("session after-hook resilience", () => {
       throw new Error("audit sink down");
     });
     const onError = vi.fn();
-    const hook = makeSessionAfterHook("auth.sign_out", async () => "org_9", emit, onError);
+    const hook = makeSessionAfterHook(
+      "auth.sign_out",
+      async () => "org_9",
+      emit,
+      onError,
+    );
     await expect(hook({ userId: "user_4" })).resolves.toBeUndefined();
     expect(onError).toHaveBeenCalledTimes(1);
     const [msg] = onError.mock.calls[0] as [string, unknown];

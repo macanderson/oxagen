@@ -3,8 +3,7 @@
 The **one identity seam** for tenant (`org`) + workspace isolation. Owns a single
 `AsyncLocalStorage<TenantScope>` so data accessors read the active scope without
 threading ids by hand. Enforcement lives next to each store; this package is a
-pure, dependency-light seam. Tracking: **OXA-1515** · Spec:
-`docs/architecture/tenancy-rls/spec.md`.
+pure, dependency-light seam. Spec: `docs/specs/tenancy-rls/spec.md`.
 
 ## The scope
 

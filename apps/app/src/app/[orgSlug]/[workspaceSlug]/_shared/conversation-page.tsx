@@ -153,7 +153,7 @@ export async function ConversationPage({
   // slate (used by the "New conversation" button). Without either, auto-resume
   // the most recent active conversation so users land in context on page load.
   // A blank slate is only shown when no active conversations exist.
-  // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
+  // Workspace-scoped read — real orgId + workspaceId.
   const conv: ConversationRow | undefined =
     forceNew === "1"
       ? undefined
@@ -216,7 +216,7 @@ export async function ConversationPage({
 
   // Promise lifts the message query into the RSC stream — the composer
   // renders eagerly while the active-branch walk resolves.
-  // Workspace-scoped read — real orgId + workspaceId. — OXA-1515
+  // Workspace-scoped read — real orgId + workspaceId.
   const messagesPromise = (async (): Promise<ChatMessage[]> => {
     if (!conversationId) return [];
     const rows: DbMessageRow[] = await runInTenantScope(
@@ -386,7 +386,7 @@ export async function ConversationPage({
     // loadCodeModeOptions never throws (degrades to empty lists internally),
     // so no .catch needed here.
     loadCodeModeOptions(tenant.id, workspace.id, userCtx),
-    // Workspace-level budget governance (OXA-2081): resolved via invoke()
+    // Workspace-level budget governance: resolved via invoke()
     // (Owner/Admin-managed governance state, not a user preference row) so
     // the composer can surface an enforced ceiling / seed a soft default.
     // { surface: "agent" } — the contract's `surfaces` does not include

@@ -295,7 +295,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     );
   });
 
-  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter (#1076)", async () => {
+  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({
       messages: MESSAGES,
       telemetry: TELEMETRY,

@@ -1,7 +1,6 @@
 "use client";
 /**
- * budget-form.tsx — client component for Workspace → Settings → Budget
- * (OXA-2081).
+ * budget-form.tsx — client component for Workspace → Settings → Budget.
  *
  * Renders the governed per-turn budget fields (enabled, USD limit, mode,
  * grace %, enforcement) and saves changes via updateWorkspaceBudgetAction.
@@ -36,7 +35,11 @@ import {
 /** Mirrors TURN_BUDGET_MODES in packages/billing/src/turn-budget.ts — see the
  * identical comment on budget-control.tsx's BUDGET_MODES for why this is a
  * local literal rather than an import. */
-const BUDGET_MODES: ReadonlyArray<{ mode: TurnBudgetMode; label: string; description: string }> = [
+const BUDGET_MODES: ReadonlyArray<{
+  mode: TurnBudgetMode;
+  label: string;
+  description: string;
+}> = [
   {
     mode: "grace",
     label: "Allow overage (grace window)",
@@ -75,7 +78,9 @@ export function WorkspaceBudgetForm({
   workspaceSlug,
 }: WorkspaceBudgetFormProps) {
   const [enabled, setEnabled] = React.useState(initial.enabled);
-  const [limitUsd, setLimitUsd] = React.useState<number | null>(initial.limitUsd);
+  const [limitUsd, setLimitUsd] = React.useState<number | null>(
+    initial.limitUsd,
+  );
   const [mode, setMode] = React.useState<TurnBudgetMode>(initial.mode);
   const [gracePct, setGracePct] = React.useState(initial.graceOveragePct);
   const [enforcement, setEnforcement] = React.useState<"default" | "ceiling">(
@@ -93,15 +98,16 @@ export function WorkspaceBudgetForm({
     setIsSaving(true);
     setError(null);
     try {
-      const result: WorkspaceBudgetActionResult = await updateWorkspaceBudgetAction({
-        orgSlug,
-        workspaceSlug,
-        enabled,
-        limitUsd: enabled ? limitUsd : null,
-        mode,
-        graceOveragePct: gracePct,
-        enforcement,
-      });
+      const result: WorkspaceBudgetActionResult =
+        await updateWorkspaceBudgetAction({
+          orgSlug,
+          workspaceSlug,
+          enabled,
+          limitUsd: enabled ? limitUsd : null,
+          mode,
+          graceOveragePct: gracePct,
+          enforcement,
+        });
       if (result.ok) {
         setSavedAt(new Date());
       } else {
@@ -125,11 +131,15 @@ export function WorkspaceBudgetForm({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <Label htmlFor="workspace-budget-enabled" className="text-sm font-medium">
+            <Label
+              htmlFor="workspace-budget-enabled"
+              className="text-sm font-medium"
+            >
               Govern the turn budget
             </Label>
             <p className="text-xs text-muted-foreground">
-              Off means members use their own personal budget preference, unrestricted.
+              Off means members use their own personal budget preference,
+              unrestricted.
             </p>
           </div>
           <Switch
@@ -143,7 +153,10 @@ export function WorkspaceBudgetForm({
         {enabled ? (
           <>
             <div className="space-y-1">
-              <Label htmlFor="workspace-budget-limit" className="text-xs text-muted-foreground">
+              <Label
+                htmlFor="workspace-budget-limit"
+                className="text-xs text-muted-foreground"
+              >
                 Limit (USD)
               </Label>
               <Input
@@ -164,18 +177,26 @@ export function WorkspaceBudgetForm({
                     return;
                   }
                   const parsed = Number(raw);
-                  setLimitUsd(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+                  setLimitUsd(
+                    Number.isFinite(parsed) && parsed > 0 ? parsed : null,
+                  );
                 }}
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">When the limit is reached</Label>
+              <Label className="text-xs text-muted-foreground">
+                When the limit is reached
+              </Label>
               <Select
                 value={mode}
                 onValueChange={(v) => setMode(v as TurnBudgetMode)}
               >
-                <SelectTrigger size="sm" className="w-full max-md:h-11" disabled={disabled}>
+                <SelectTrigger
+                  size="sm"
+                  className="w-full max-md:h-11"
+                  disabled={disabled}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -187,13 +208,18 @@ export function WorkspaceBudgetForm({
                 </SelectPopup>
               </Select>
               {activeMeta ? (
-                <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {activeMeta.description}
+                </p>
               ) : null}
             </div>
 
             {mode === "grace" ? (
               <div className="space-y-1">
-                <Label htmlFor="workspace-budget-grace" className="text-xs text-muted-foreground">
+                <Label
+                  htmlFor="workspace-budget-grace"
+                  className="text-xs text-muted-foreground"
+                >
                   Grace cushion (% above the limit)
                 </Label>
                 <Input
@@ -209,14 +235,20 @@ export function WorkspaceBudgetForm({
                   value={Math.round(gracePct * 100)}
                   onChange={(e) => {
                     const pct = Number(e.target.value);
-                    setGracePct(Number.isFinite(pct) ? Math.max(0, pct) / 100 : DEFAULT_GRACE_PCT);
+                    setGracePct(
+                      Number.isFinite(pct)
+                        ? Math.max(0, pct) / 100
+                        : DEFAULT_GRACE_PCT,
+                    );
                   }}
                 />
               </div>
             ) : null}
 
             <fieldset className="space-y-2" disabled={disabled}>
-              <legend className="text-xs text-muted-foreground">Enforcement</legend>
+              <legend className="text-xs text-muted-foreground">
+                Enforcement
+              </legend>
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="radio"
@@ -227,10 +259,12 @@ export function WorkspaceBudgetForm({
                   disabled={disabled}
                 />
                 <span>
-                  <span className="font-medium text-foreground">Hard ceiling</span>
+                  <span className="font-medium text-foreground">
+                    Hard ceiling
+                  </span>
                   <span className="block text-xs text-muted-foreground">
-                    Members can&apos;t exceed this limit or pick a laxer mode — the composer
-                    clamps their own budget down to this ceiling.
+                    Members can&apos;t exceed this limit or pick a laxer mode —
+                    the composer clamps their own budget down to this ceiling.
                   </span>
                 </span>
               </label>
@@ -246,8 +280,8 @@ export function WorkspaceBudgetForm({
                 <span>
                   <span className="font-medium text-foreground">Default</span>
                   <span className="block text-xs text-muted-foreground">
-                    Only seeds a member who hasn&apos;t set their own budget yet — members can
-                    still raise or lower it.
+                    Only seeds a member who hasn&apos;t set their own budget yet
+                    — members can still raise or lower it.
                   </span>
                 </span>
               </label>
@@ -276,7 +310,10 @@ export function WorkspaceBudgetForm({
           {savedAt !== null && (
             <p className="text-xs text-muted-foreground">
               Saved at{" "}
-              {savedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+              {savedAt.toLocaleTimeString(undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           )}
 

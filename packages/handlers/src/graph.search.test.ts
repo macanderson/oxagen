@@ -191,7 +191,7 @@ describe("graphSearchHandler", () => {
     expect(cypher).toContain("n.is_system = false");
   });
 
-  // Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
+  // ANN tenant-filter oversampling (silent recall degradation).
   //
   // `db.index.vector.queryNodes` returns the GLOBAL top-k by similarity; the
   // tenant predicate (n.orgId/n.workspaceId) is applied AFTER that call. As

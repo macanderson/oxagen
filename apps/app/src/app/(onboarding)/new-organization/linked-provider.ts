@@ -1,8 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 // tenancy: unscoped seam (identity resolution — auth.accounts is a global
-// identity table with no RLS; reads the user's own linked OAuth providers) —
-// OXA-1515
+// identity table with no RLS; reads the user's own linked OAuth providers)
 import { withSystemDb, schema } from "@oxagen/database";
 import type { SignupProvider } from "@/lib/oauth-prefill";
 

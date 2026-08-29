@@ -1,9 +1,8 @@
 /**
  * schema-smoke.test.ts
  *
- * Smoke tests for the Drizzle table definitions in schema files that were
- * previously untested: environments, notification, workflow, org, content,
- * chat, mcp, and agent.
+ * Smoke tests for the Drizzle table definitions in: environments,
+ * notification, workflow, org, content, chat, mcp, and agent.
  *
  * IMPORTANT: Drizzle's `.table(name, cols, (t) => ({...}))` stores the third
  * argument (the ExtraConfigBuilder) WITHOUT calling it at construction time.
@@ -893,7 +892,7 @@ describe("agent.agent_plans", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// billing schema — covers numeric column regression (PR #1027)
+// billing schema — covers numeric column regression
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("billing.plans", () => {

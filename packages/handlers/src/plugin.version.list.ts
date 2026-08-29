@@ -19,7 +19,7 @@ import { logger } from "./logger";
  *     is the only persisted version-history source, so each entry's releasedAt
  *     is the real cachedAt; entries appear as schema versions are observed (the
  *     cache is populated by plugin.schema.get). When nothing has been cached
- *     yet, versions[] is honestly empty while currentVersion still reflects the
+ *     yet, versions[] is empty while currentVersion still reflects the
  *     live bundled version.
  *   - installedVersion: currentVersion when this workspace has a non-deleted
  *     connection of this connector, else null. Per-connection schema versions
@@ -27,17 +27,21 @@ import { logger } from "./logger";
  *     and hasBreakingUpdate is therefore false. Breaking-change flags are not
  *     persisted anywhere, so isBreaking is false for every entry.
  */
-export const pluginVersionListHandler: CapabilityHandler<typeof pluginVersionList> = async (
-  input,
-  ctx,
-) => {
+export const pluginVersionListHandler: CapabilityHandler<
+  typeof pluginVersionList
+> = async (input, ctx) => {
   const builtIn = loadBuiltInSchema(input.pluginId);
   const manifest = builtIn ? undefined : getOxagenPlugin(input.pluginId);
 
   const currentVersion = builtIn?.metadata.version ?? manifest?.version;
   if (!currentVersion) {
-    logger.warn({ pluginId: input.pluginId }, "plugin.version.list: unknown plugin");
-    throw new HTTPException(404, { message: `Unknown plugin: ${input.pluginId}` });
+    logger.warn(
+      { pluginId: input.pluginId },
+      "plugin.version.list: unknown plugin",
+    );
+    throw new HTTPException(404, {
+      message: `Unknown plugin: ${input.pluginId}`,
+    });
   }
 
   // `ingestion.connector_schemas` is a shared/system catalog (no org_id) read
@@ -91,17 +95,24 @@ export const pluginVersionListHandler: CapabilityHandler<typeof pluginVersionLis
   const isInstalled = installed.length > 0;
 
   const versions = historyRows.map((r) => {
-    const meta = (r.schema as { metadata?: { changelog?: string; minimumPlatformVersion?: string } } | null)
-      ?.metadata;
+    const meta = (
+      r.schema as {
+        metadata?: { changelog?: string; minimumPlatformVersion?: string };
+      } | null
+    )?.metadata;
     return {
       version: r.pluginVersion,
       releasedAt: r.cachedAt.toISOString(),
-      // No breaking-change data is persisted, so this is honestly false rather
+      // No breaking-change data is persisted, so this is false rather
       // than guessed. breakingChanges is omitted for the same reason.
       isBreaking: false,
       schemaVersion: r.schemaVersion,
-      ...(input.includeChangelog && meta?.changelog ? { changelog: meta.changelog } : {}),
-      ...(meta?.minimumPlatformVersion ? { minimumPlatformVersion: meta.minimumPlatformVersion } : {}),
+      ...(input.includeChangelog && meta?.changelog
+        ? { changelog: meta.changelog }
+        : {}),
+      ...(meta?.minimumPlatformVersion
+        ? { minimumPlatformVersion: meta.minimumPlatformVersion }
+        : {}),
     };
   });
 

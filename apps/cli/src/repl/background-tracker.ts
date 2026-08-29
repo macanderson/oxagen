@@ -106,7 +106,7 @@ function isTerminalState(state: SessionState | "orphaned"): boolean {
   );
 }
 
-/** Map a roster-derived state onto the honest terminal outcome for the fold line. */
+/** Map a roster-derived state onto the accurate terminal outcome for the fold line. */
 function outcomeForRosterState(
   state: SessionState | "orphaned",
 ): "done" | "failed" | "cancelled" {

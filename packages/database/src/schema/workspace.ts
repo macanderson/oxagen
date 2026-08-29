@@ -115,7 +115,6 @@ export const workspaceUsers = workspaceSchema.table(
     workspaceId: uuid("workspace_id").notNull(),
     userId: uuid("user_id").notNull(),
     role: text("role").notNull(),
-    // permissions column was dropped in Batch C (#1011) — superseded by IAM store.
     joinedAt: timestamp("joined_at", {
       withTimezone: true,
       mode: "date",
@@ -137,7 +136,7 @@ export const workspaceUsers = workspaceSchema.table(
   }),
 );
 
-// ── workspace.workspace_memory_policy (OXA-1374, two-axis model) ────────────
+// ── workspace.workspace_memory_policy (two-axis model) ──────────────────────
 // One row per workspace. Stores the per-workspace memory decay + enforcement
 // policy:
 //   halfLifeLowDays      — decay half-life (days) for OBSERVATION memories

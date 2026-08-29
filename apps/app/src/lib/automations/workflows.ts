@@ -11,7 +11,7 @@
  *
  * invoke() is called with NO `opts.surface` override: the kernel's surface
  * allowlist gate only fires when opts.surface is explicitly set (kernel.ts:578),
- * so omitting it lets ctx.surface="app" flow through for honest attribution
+ * so omitting it lets ctx.surface="app" flow through for correct attribution
  * while the workflow.* / research.swarm.* contracts (which list "agent" but
  * not "app" in surfaces[]) are still reachable — the first-party app is a
  * trusted surface. Matches lib/automations/automations.ts and scope.ts.
@@ -136,7 +136,9 @@ const LIST_LIMIT = 50;
  * gap note) and enriches the newest ENRICH_LIMIT rows with goal/title/
  * sub-task counts via a bounded get_workflow_status fan-out.
  */
-export async function listWorkflowRuns(ctx: AutomationsCtx): Promise<WorkflowRunRow[]> {
+export async function listWorkflowRuns(
+  ctx: AutomationsCtx,
+): Promise<WorkflowRunRow[]> {
   const input = agentExecutionList.input.parse({ limit: LIST_LIMIT });
   const out = await invoke(agentExecutionList.name, input, ctx);
   const parsed = agentExecutionList.output.parse(out);

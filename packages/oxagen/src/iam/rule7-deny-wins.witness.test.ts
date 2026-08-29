@@ -3,9 +3,8 @@
 //
 // `matchingRoleGrants` spans EVERY role the principal belongs to, so a principal
 // who is a member of two roles can hold conflicting effects for one capability.
-// Rule 7 previously evaluated `allow` before `deny`, which made an explicit deny
-// role grant unreachable whenever any other role also granted allow — silently
-// voiding the deny.
+// Rule 7 must evaluate `deny` before `allow`, or an explicit deny role grant
+// becomes unreachable whenever any other role also grants allow.
 //
 // Rules 1-3 already apply deny-first ordering at the workspace tier, and the
 // Rule 7.5 comment in resolve.ts asserts that rules 1, 2, 6 and 7 "all run first

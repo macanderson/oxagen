@@ -50,7 +50,7 @@ const FormSchema = z.object({
 // Implements the spec §6.9 DAG: persist the user message under the active
 // leaf and shift the conversation's active_leaf forward. The LLM call and
 // streaming live in the stream route (POST /api/v1/chat/stream), which is
-// the SINGLE LLM caller per turn (OXA-1509) and persists the matching
+// the SINGLE LLM caller per turn and persists the matching
 // assistant reply itself once the stream finishes. This action returns the
 // conversation id and the new user-message id so the client can start the
 // stream against them (the stream route threads the assistant reply under
@@ -233,7 +233,7 @@ export async function sendMessageAction(
 }
 
 // Capability-dispatch helpers for the chat UI. All capability calls go
-// through kernel.invoke() per the enforced path (OXA-1498).
+// through kernel.invoke() per the enforced path.
 function capabilityContext(ctx: {
   orgId: string;
   workspaceId: string;

@@ -89,7 +89,7 @@ test("agents card grid: designed avatar, blurb, search/sort/export controls; pro
   await expect(card.getByText(/draft/i).first()).toBeVisible();
   // Blurb: the save path infers an LLM summary from the identity fields even
   // when the Describe step is skipped, so the exact text is non-deterministic —
-  // assert the blurb line is present and non-empty (AI summary or the honest
+  // assert the blurb line is present and non-empty (AI summary or the real
   // "No description yet." placeholder when inference is unavailable).
   const blurb = card.getByTestId(`agent-blurb-${slug}`);
   await expect(blurb).toBeVisible();

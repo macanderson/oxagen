@@ -1,14 +1,13 @@
 /**
  * The fleet's default {@link AgentRunner}, backed by the ONE engine loop.
  *
- * A fleet subagent used to run the legacy `agent/loop.ts` loop; this runner
- * gives it the SAME engine `runTurn` the REPL and one-shot use — so the whole
- * CLI has a single coding loop (retry, compaction, loop-detection, the hardened
- * tools) instead of two. It preserves the legacy runner's behaviour: BYOK
- * gateway-direct model calls (the fleet is unmetered), the agent persona as the
- * system identity, `bare` execution (the fleet runs its OWN judge/plan loop
- * around each subagent, so a per-subagent pipeline would double up), and the
- * rules/hooks/MCP + tool-gate wiring assembled by {@link buildTurnExtras}.
+ * A fleet subagent runs the SAME engine `runTurn` the REPL and one-shot use —
+ * so the whole CLI has a single coding loop (retry, compaction, loop-detection,
+ * the hardened tools) instead of two. It keeps: BYOK gateway-direct model calls
+ * (the fleet is unmetered), the agent persona as the system identity, `bare`
+ * execution (the fleet runs its OWN judge/plan loop around each subagent, so a
+ * per-subagent pipeline would double up), and the rules/hooks/MCP + tool-gate
+ * wiring assembled by {@link buildTurnExtras}.
  *
  * The fleet has no interactive permission broker, so the tool gate owns
  * permissions here (`gatePermissions: true`).

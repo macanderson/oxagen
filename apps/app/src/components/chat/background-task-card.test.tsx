@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * background-task-card.test.tsx — verifies the live + persisted card surface
- * for the OXA-1469 background-task-progress event:
+ * for the background-task-progress event:
  *   - Renders the kind / label / status text for each lifecycle phase.
  *   - Shows a progress bar only while running AND when progressPct is known.
  *   - Carries the taskId + status as data-attrs the e2e test reads.

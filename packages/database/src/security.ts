@@ -10,7 +10,7 @@
 // a `capability.invoke_denied` for the no_tenant_scope deny path BEFORE any
 // scope is established, and security_events is itself an RLS-policied table.
 // Without bypass the audit write would fail closed and we would lose the very
-// record that proves we denied a cross-tenant attempt (OXA-1515).
+// record that proves we denied a cross-tenant attempt.
 //
 // This file is the ONLY place in @oxagen/database that couples to the
 // @oxagen/telemetry type contract — keeping the coupling explicit and
@@ -80,19 +80,9 @@ export function makeSecurityEventInserter(): AuditInsertFn {
 // ---------------------------------------------------------------------------
 // Call-site registry — emitSecurityEvent / emitSecurityEventAsync
 //
-// Before this helper, every audit call site (org member handlers, billing
-// actions, auth route) hand-rolled the same lazy-singleton boilerplate:
-//
-//   let _auditInsert = null;
-//   function auditInsert() { return (_auditInsert ??= makeSecurityEventInserter()); }
-//   ...
-//   recordSecurityEvent(auditInsert(), { ...event });
-//
-// That is three lines of ceremony per file, copy-pasted ~8 times, and nothing
-// stopped a mutation handler from simply forgetting to emit. `emitSecurityEvent`
-// collapses it to one call against a single process-wide inserter, so wiring a
-// new privileged mutation is a one-liner and the coverage invariant test
-// (packages/compliance) can assert the registry is the only emit path.
+// One call against a single process-wide inserter keeps wiring a new
+// privileged mutation to a one-liner, and lets the coverage invariant test
+// (packages/compliance) assert the registry is the only emit path.
 //
 // The inserter uses withSystemDb (RLS bypass) on purpose — see the design note
 // at the top of this file. Safe to call from any surface (handlers, server
@@ -120,6 +110,8 @@ export function emitSecurityEvent(event: SecurityEventInput): void {
  * Awaitable emit for the rare caller that needs the audit row durably written
  * before proceeding (tests, or evidence-load-bearing paths).
  */
-export function emitSecurityEventAsync(event: SecurityEventInput): Promise<void> {
+export function emitSecurityEventAsync(
+  event: SecurityEventInput,
+): Promise<void> {
   return recordSecurityEventAsync(registryInserter(), event);
 }

@@ -24,7 +24,7 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("chat.conversations");
   });
 
-  it("covers the playbook domain added by the 2026-06-11 rebuild (OXA-1700)", () => {
+  it("covers the playbook domain", () => {
     const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
     for (const t of [
       "workflow.playbooks",
@@ -53,7 +53,7 @@ describe("tenant policy manifest", () => {
     );
   });
 
-  it("IAM tables live in iam.* schema after the 2026-06-11 rebuild", () => {
+  it("IAM tables live in the iam.* schema", () => {
     const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
     expect(find("iam.principals")?.policyClass).toBe("workspace_nullable");
     expect(find("iam.principal_role_assignments")?.policyClass).toBe(
@@ -62,7 +62,7 @@ describe("tenant policy manifest", () => {
     expect(find("iam.roles")?.policyClass).toBe("org_only");
     expect(find("iam.role_grants")?.policyClass).toBe("org_only");
     expect(find("iam.access_requests")?.policyClass).toBe("org_only");
-    // Membership stays in org.*; no stale pre-rewrite org.* IAM entries.
+    // Membership stays in org.*; IAM state does not.
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).toContain("org.org_users");
     expect(tables).toContain("org.invitations");
@@ -72,7 +72,7 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("org.policies");
   });
 
-  it("drops the pre-rewrite tables the old manifest still referenced", () => {
+  it("excludes tables that no longer exist or moved to another schema", () => {
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).not.toContain("agent.workflow_runs");
     expect(tables).not.toContain("agent.workflow_run_tasks");
@@ -109,7 +109,7 @@ describe("tenant policy manifest", () => {
     expect(builtinReadable).toEqual(["agent.skills", "agent.skill_versions"]);
   });
 
-  it("there are no org_or_global tables (mcp.registries reclassified to standard in 2026-06-17 rebuild)", () => {
+  it("there are no org_or_global tables", () => {
     const orgOrGlobal = POLICY_MANIFEST.filter(
       (e) => e.policyClass === "org_or_global",
     ).map((e) => e.table);
@@ -121,11 +121,11 @@ describe("tenant policy manifest", () => {
     // stripe_event_processing has no org_id and no workspace_id (shared catalog)
     expect(tables).not.toContain("billing.stripe_event_processing");
     expect(tables).not.toContain("billing.plans");
-    expect(tables).not.toContain("mcp.catalog_servers"); // removed 2026-06-17
-    expect(tables).not.toContain("plugin.org_denylist"); // removed 2026-06-17
+    expect(tables).not.toContain("mcp.catalog_servers");
+    expect(tables).not.toContain("plugin.org_denylist");
     expect(tables).not.toContain("ingestion.connector_schemas");
-    expect(tables).not.toContain("graph.projection_checkpoints"); // dropped 2026-06-21
-    expect(tables).not.toContain("graph.outbox"); // dropped 2026-06-21 (was policied; table removed)
+    expect(tables).not.toContain("graph.projection_checkpoints");
+    expect(tables).not.toContain("graph.outbox");
   });
 
   it("has no duplicate table entries", () => {
@@ -134,96 +134,11 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 89 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the policied tables of the current schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
-    // manifest and this count (and regenerating the Atlas RLS migration).
-    // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
-    // 65 = 62 + mcp.consents + mcp.tool_snapshots + security.mcp_server_changes
-    //      (OXA-816 / OXA-820 external-MCP consent + snapshot tables).
-    // 64 = 65 − graph.outbox (dropped 20260622000000_drop_graph_outbox.sql; the
-    //      outbox/projection_checkpoints tables were never wired).
-    // 66 = 64 + org.org_slug_history + workspace.workspace_slug_history
-    //      (OXA-1779 slug-rename redirect history).
-    // 73 = 66 + 7 schema_registry.* tables (Workspace Schema Registry, §4 + §11).
-    // 71 = the actual base length on 2026-06-26 — the 73 above predated table
-    //      changes never reflected here; asserted against the real
-    //      POLICY_MANIFEST.length below rather than the drifted figure.
-    // 75 = 71 + 4 environments.* (Phase 0 vault): environments, secret_keys,
-    //      secret_values, secret_access_log — all `standard` (org_id + workspace_id NN).
-    // 76 = 75 + agent.sandbox_sessions (durable code-agent sandbox registry,
-    //      orgScopeMixin + tenant_isolation RLS, 20260628120000).
-    // 77 = 76 + workspace.workspace_memory_policy (agent-memory decay policy,
-    //      org_id + workspace_id both NOT NULL → standard, OXA-1374).
-    // 76 = 77 - ingestion.entity_types (dropped as verified-dead zombie table,
-    //      20260704210000_drop_zombie_schema).
-    // 81 = 76 + ai.response_cache + ai.batch_jobs (semantic cache + batch jobs,
-    //      20260704200000) + eval.eval_datasets + eval.eval_dataset_items +
-    //      eval.eval_runs (Evals v1, 20260704220000) — all orgScopeMixin → standard.
-    // 82 = 81 + agent.a2a_tasks (A2A durable task store, orgScopeMixin →
-    //      standard, 20260704230000, PR #572).
-    // 83 = 82 + workspace.workspace_budget_policy (per-turn budget governance,
-    //      org_id + workspace_id both NOT NULL → standard, OXA-2081,
-    //      20260708120000_workspace_budget_policy.sql, PR #630).
-    // 85 = 83 + agent.file_locks + agent.file_lock_fences (file-lock lease
-    //      authority + fencing-token counter, ADR-021 §5, orgScopeMixin +
-    //      forced tenant_isolation RLS, 20260708130000_agent_file_locks.sql —
-    //      bumped past the budget-policy prefix collision, PR #647).
-    // 88 = 85 + environments.sandbox_templates + environments.sandbox_template_tools
-    //      + environments.agent_environment_bindings (portable sandbox templates
-    //      + agent-env bindings, org_id NOT NULL + tenant_isolation RLS,
-    //      20260712120000_sandbox_templates.sql, PR #718 — the manifest was
-    //      updated but this ratchet was not: a parallel-merge semantic conflict).
-    // 89 = 88 + auth.workspace_user_preferences (per-(user, workspace) coding-agent
-    //      defaults: default repo/environment, org_id + workspace_id both NOT NULL →
-    //      standard tenant_isolation RLS, 20260713120000_workspace_user_preferences.sql).
-    //      The table + RLS + manifest all shipped; this ratchet and the
-    //      manifest-coverage integration test were the missed halves — surfaced once
-    //      main CI stopped dying at pnpm install.
-    // 95 = 89 + 6 billing.reseller_* tables (reseller revenue,
-    //      20260725120000_reseller_revenue.sql — org_id NOT NULL, no
-    //      workspace_id → org_only). The migration shipped RLS DDL inline but
-    //      the manifest was never updated, so manifest-coverage failed in CI
-    //      and a future re-baseline would have silently dropped the policies
-    //      (found by the 2026-07-11 Postgres schema audit).
-    // 96 = 95 + workspace.routing_policy (Verified-Outcome Market Router
-    //      governance, PR #903: org_id NOT NULL + workspace_id NULLABLE →
-    //      workspace_nullable tenant_isolation RLS,
-    //      20260731130700_routing_policy.sql). Re-added here because the
-    //      reseller dedupe pass on this branch dropped it while PR #903 was
-    //      merging — without this entry a future re-baseline would silently
-    //      drop the table's RLS policy.
-    // 92 = 96 − 4 zombie tables dropped in 20260802130000_drop_zombie_tables
-    //      (2026-07-11 audit §2: written but never read anywhere):
-    //      auth.credentials, billing.usage_records, billing.org_billing_profiles,
-    //      billing.invoice_line_items. Lowering the pin for REMOVED tables is
-    //      the legitimate direction — the ratchet exists to stop tables gaining
-    //      org_id without a policy entry, not to keep dead tables alive.
-    // 94 = 92 + agent.agent_runs + agent.agent_run_events (durable-run schema,
-    //      agent-engine v2 Phase 2a: orgScopeMixin + forced tenant_isolation
-    //      RLS, 20260804100000_agent_runs_durable_schema.sql).
-    // 95 = 94 + billing.spend_budgets. The table + its inline
-    //      workspace_nullable RLS DDL shipped in
-    //      20260806120000_spend_budgets.sql, but the manifest entry was missed
-    //      — the same defect class as the reseller tables above, where a future
-    //      re-baseline would silently drop the policy. Added here.
-    // 109 = 95 + the 14 run/attempt/authorization foundation tables
-    //      (docs/specs/run-evidence-ingress, run_attempt_foundation_expand +
-    //      agent_run_authorization_foundation migrations):
-    //        agent.agent_run_attempts, agent.agent_run_attempt_leases,
-    //        agent.agent_run_checkpoints, agent.agent_run_attempt_seals,
-    //        agent.agent_run_finalization_grants,
-    //        agent.agent_run_finalization_obligations            → standard
-    //        ingestion.repository_bindings,
-    //        ingestion.repository_binding_heads,
-    //        ingestion.governed_repository_selections            → standard
-    //        evidence.retention_policy_versions                  → standard
-    //        iam.authorization_snapshots                         → standard
-    //        iam.authorization_deny_generations, iam.emergency_denies,
-    //        iam.authorization_decisions                → workspace_nullable
-    // 108 = 109 − agent.agent_triggers (the agent.trigger.* subsystem is removed,
-    //      #1010: triggers belong to automations/playbooks; the table is dropped
-    //      in 20260813130000_drop_agent_triggers.sql). Lowering the pin for a
-    //      REMOVED table is the legitimate direction (see above).
+    // manifest and this count (and regenerating the Atlas RLS migration), so
+    // a table can't gain org_id without a policy entry. Removing a table
+    // lowers the pin — that direction is always legitimate.
     expect(POLICY_MANIFEST.length).toBe(108);
   });
 
@@ -268,7 +183,7 @@ describe("tenant policy manifest", () => {
     ).toBe("workspace_nullable");
   });
 
-  it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
+  it("covers slug-history tables for org + workspace renames", () => {
     const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
     // org_slug_history has org_id only (no workspace_id) → org_only.
     expect(find("org.org_slug_history")?.policyClass).toBe("org_only");
@@ -278,7 +193,7 @@ describe("tenant policy manifest", () => {
     );
   });
 
-  it("covers workspace.workspace_memory_policy for agent-memory decay (OXA-1374)", () => {
+  it("covers workspace.workspace_memory_policy for agent-memory decay", () => {
     const entry = POLICY_MANIFEST.find(
       (e) => e.table === "workspace.workspace_memory_policy",
     );

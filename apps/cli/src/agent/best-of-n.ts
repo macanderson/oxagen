@@ -328,7 +328,7 @@ function buildVerifyUnion(runs: CandidateRun[]): string[] {
  * EVERY surviving candidate's worktree (commands rewritten so absolute repo
  * paths stay inside each worktree — see {@link rewriteCommandForWorktree}),
  * folding the combined pass/fail into each candidate's decisive `testsPassed`.
- * Shared by independent and fork modes, which previously carried two copies.
+ * Shared by independent and fork modes.
  */
 async function runVerifyAutoUnion(
   runs: CandidateRun[],

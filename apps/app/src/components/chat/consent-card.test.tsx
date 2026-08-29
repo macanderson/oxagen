@@ -2,7 +2,7 @@
 /**
  * consent-card.test.tsx
  *
- * Render + interaction tests for ConsentCard (OXA-816):
+ * Render + interaction tests for ConsentCard:
  *   - Shows the tool name, server id, and capability
  *   - Shows Allow/Deny buttons when not resolved and not expired
  *   - Calls onResolved with (approvalId, decision, grantAllTools)
@@ -31,7 +31,12 @@ vi.mock("@/components/ui/button", () => ({
     size?: string;
     variant?: string;
   }) => (
-    <button onClick={onClick} disabled={disabled} data-size={size} data-variant={variant}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      data-size={size}
+      data-variant={variant}
+    >
       {children}
     </button>
   ),
@@ -141,7 +146,9 @@ describe("ConsentCard", () => {
   });
 
   it("shows an error message when onResolved returns not-ok", async () => {
-    const onResolved = vi.fn().mockResolvedValue({ ok: false, error: "Server error" });
+    const onResolved = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Server error" });
     render(<ConsentCard {...baseProps} onResolved={onResolved} />);
     await userEvent.click(screen.getByText("Allow"));
     await waitFor(() => {

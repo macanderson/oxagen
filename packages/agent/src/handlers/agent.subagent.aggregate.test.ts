@@ -6,8 +6,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: vi.fn(),
-
+    withTenantDb: vi.fn(),
   };
 });
 
@@ -52,7 +51,11 @@ function fanout(overrides: Partial<FanoutRow> = {}): FanoutRow {
   };
 }
 
-function run(id: string, output: Record<string, unknown> | null, overrides: Partial<RunRow> = {}): RunRow {
+function run(
+  id: string,
+  output: Record<string, unknown> | null,
+  overrides: Partial<RunRow> = {},
+): RunRow {
   return {
     publicId: id,
     capabilityName: "test.cap",
@@ -69,7 +72,9 @@ function run(id: string, output: Record<string, unknown> | null, overrides: Part
 
 // The handler is called through the kernel in production, which applies the
 // contract's zod defaults — calling it directly here means supplying them.
-function aggInput(overrides: Partial<AgentSubagentAggregateInput> = {}): AgentSubagentAggregateInput {
+function aggInput(
+  overrides: Partial<AgentSubagentAggregateInput> = {},
+): AgentSubagentAggregateInput {
   return {
     fanoutId: "fan_1",
     timeoutMs: 1000,
@@ -87,7 +92,8 @@ function setupMocks(fanoutRow: FanoutRow | null, runs: RunRow[]) {
         select: () => ({
           from: () => ({
             where: () => ({
-              limit: (n: number) => Promise.resolve(fanoutRow ? [fanoutRow].slice(0, n) : []),
+              limit: (n: number) =>
+                Promise.resolve(fanoutRow ? [fanoutRow].slice(0, n) : []),
             }),
           }),
         }),
@@ -117,14 +123,21 @@ describe("agent.subagent.aggregate handler", () => {
       run("sar_2", { extra: 42 }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     expect(result.status).toBe("completed");
     expect(result.fanoutId).toBe("fan_1");
     expect(result.totalChildren).toBe(2);
     expect(result.completedChildren).toBe(2);
     expect(result.conflicts).toHaveLength(0);
-    expect(result.aggregatedData).toMatchObject({ taskId: "t1", result: "ok", extra: 42 });
+    expect(result.aggregatedData).toMatchObject({
+      taskId: "t1",
+      result: "ok",
+      extra: 42,
+    });
     expect(result.aggregatedDataTruncated).toBe(false);
     expect(result.firstError).toBeNull();
     expect(result.timeline).toHaveLength(2);
@@ -146,7 +159,9 @@ describe("agent.subagent.aggregate handler", () => {
       summary: "1 hit for q1",
     });
     // No stored summary → structural fallback (JSON truncation of the output).
-    expect(result.children[1]?.summary).toBe(JSON.stringify({ results: ["b"] }));
+    expect(result.children[1]?.summary).toBe(
+      JSON.stringify({ results: ["b"] }),
+    );
     expect(result.children[0]?.outputBytes).toBeGreaterThan(0);
     // The whole point: full payloads are NOT relayed in compact mode.
     for (const child of result.children) {
@@ -162,7 +177,11 @@ describe("agent.subagent.aggregate handler", () => {
     setupMocks(fanout({ totalChildren: 3 }), [
       run("sar_1", { summary: "  did the thing  ", noise: "x".repeat(500) }),
       run("sar_2", { message: "msg wins", other: 1 }),
-      run("sar_3", null, { status: "failed", errorReason: "boom", outputPayload: null }),
+      run("sar_3", null, {
+        status: "failed",
+        errorReason: "boom",
+        outputPayload: null,
+      }),
     ]);
 
     const result = await agentSubagentAggregateHandler(aggInput(), CTX);
@@ -179,7 +198,10 @@ describe("agent.subagent.aggregate handler", () => {
       run("sar_2", { results: ["b"] }, { inputPayload: { query: "q2" } }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeOutputs: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeOutputs: true }),
+      CTX,
+    );
 
     expect(result.children).toHaveLength(2);
     // Each child preserves its DISTINCT input + output — no collision on `results`.
@@ -200,7 +222,10 @@ describe("agent.subagent.aggregate handler", () => {
     const huge = { blob: "x".repeat(20_000) }; // ~20KB > 8KB cap
     setupMocks(fanout({ totalChildren: 1 }), [run("sar_1", huge)]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeOutputs: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeOutputs: true }),
+      CTX,
+    );
 
     const child = result.children[0];
     expect(child?.outputTruncated).toBe(true);
@@ -216,7 +241,10 @@ describe("agent.subagent.aggregate handler", () => {
       run("sar_2", { b: "y".repeat(10_000) }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     expect(result.aggregatedData).toBeNull();
     expect(result.aggregatedDataTruncated).toBe(true);
@@ -230,7 +258,10 @@ describe("agent.subagent.aggregate handler", () => {
       run("sar_2", { shared: "valueB" }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     expect(result.status).toBe("completed");
     expect(result.conflicts).toHaveLength(1);
@@ -256,7 +287,9 @@ describe("agent.subagent.aggregate handler", () => {
 
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts[0]?.key).toBe("shared");
-    expect(result.conflicts[0]?.values).toEqual(expect.arrayContaining(["valueA", "valueB"]));
+    expect(result.conflicts[0]?.values).toEqual(
+      expect.arrayContaining(["valueA", "valueB"]),
+    );
     // Still compact: the merged record itself is withheld without includeMerged.
     expect(result.aggregatedData).toBeNull();
     expect(result.aggregatedDataTruncated).toBe(false);
@@ -272,7 +305,10 @@ describe("agent.subagent.aggregate handler", () => {
       run("sar_2", { color: "blue" }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.aggregatedData).toMatchObject({ color: "blue" });
@@ -281,10 +317,17 @@ describe("agent.subagent.aggregate handler", () => {
   it("reports 'partial' (not 'failed') with merged data + firstError when some succeed and some fail", async () => {
     setupMocks(fanout({ status: "partial" }), [
       run("sar_1", { result: "ok" }),
-      run("sar_2", null, { status: "failed", errorReason: "OOM error", outputPayload: null }),
+      run("sar_2", null, {
+        status: "failed",
+        errorReason: "OOM error",
+        outputPayload: null,
+      }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     // Distinct from "failed": a mixed outcome surfaces the successful subset.
     expect(result.status).toBe("partial");
@@ -296,11 +339,22 @@ describe("agent.subagent.aggregate handler", () => {
 
   it("reports 'failed' only when every child failed (zero completed)", async () => {
     setupMocks(fanout({ status: "partial", completedChildren: 0 }), [
-      run("sar_1", null, { status: "failed", errorReason: "boom", outputPayload: null }),
-      run("sar_2", null, { status: "failed", errorReason: "second", outputPayload: null }),
+      run("sar_1", null, {
+        status: "failed",
+        errorReason: "boom",
+        outputPayload: null,
+      }),
+      run("sar_2", null, {
+        status: "failed",
+        errorReason: "second",
+        outputPayload: null,
+      }),
     ]);
 
-    const result = await agentSubagentAggregateHandler(aggInput({ includeMerged: true }), CTX);
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ includeMerged: true }),
+      CTX,
+    );
 
     expect(result.status).toBe("failed");
     expect(result.firstError).toBe("boom");
@@ -310,11 +364,19 @@ describe("agent.subagent.aggregate handler", () => {
   it("returns 'running' immediately with NO children and a recheck hint (compact short-circuit)", async () => {
     // createdAt is recent, so the snapshot window has not elapsed.
     setupMocks(
-      fanout({ status: "running", completedChildren: 1, createdAt: new Date() }),
+      fanout({
+        status: "running",
+        completedChildren: 1,
+        createdAt: new Date(),
+      }),
       [
         // One completed child took 60s → median 60s → clamped to the 60s max.
         run("sar_1", { a: 1 }),
-        run("sar_2", null, { status: "running", outputPayload: null, completedAt: null }),
+        run("sar_2", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
+        }),
       ],
     );
 
@@ -339,13 +401,25 @@ describe("agent.subagent.aggregate handler", () => {
     // A completed child that took only 1s yields a 1000ms median, which must be
     // clamped up to the 5s minimum so callers never tight-poll sub-second.
     setupMocks(
-      fanout({ status: "running", completedChildren: 1, createdAt: new Date() }),
+      fanout({
+        status: "running",
+        completedChildren: 1,
+        createdAt: new Date(),
+      }),
       [
-        run("sar_1", { a: 1 }, {
-          startedAt: new Date("2024-01-01T00:00:00.000Z"),
-          completedAt: new Date("2024-01-01T00:00:01.000Z"), // 1s
+        run(
+          "sar_1",
+          { a: 1 },
+          {
+            startedAt: new Date("2024-01-01T00:00:00.000Z"),
+            completedAt: new Date("2024-01-01T00:00:01.000Z"), // 1s
+          },
+        ),
+        run("sar_2", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
         }),
-        run("sar_2", null, { status: "running", outputPayload: null, completedAt: null }),
       ],
     );
 
@@ -360,10 +434,23 @@ describe("agent.subagent.aggregate handler", () => {
 
   it("returns 'running' with default recheck hint when no child has completed yet", async () => {
     setupMocks(
-      fanout({ status: "running", completedChildren: 0, createdAt: new Date() }),
+      fanout({
+        status: "running",
+        completedChildren: 0,
+        createdAt: new Date(),
+      }),
       [
-        run("sar_1", null, { status: "running", outputPayload: null, completedAt: null }),
-        run("sar_2", null, { status: "pending", outputPayload: null, startedAt: null, completedAt: null }),
+        run("sar_1", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
+        }),
+        run("sar_2", null, {
+          status: "pending",
+          outputPayload: null,
+          startedAt: null,
+          completedAt: null,
+        }),
       ],
     );
 
@@ -377,14 +464,22 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.children).toHaveLength(0);
   });
 
-  it("legacy includeOutputs preserves progressive children while running", async () => {
-    // research.swarm.status streams per-query hits as they land — the legacy
+  it("includeOutputs preserves progressive children while running", async () => {
+    // research.swarm.status streams per-query hits as they land — includeOutputs
     // mode must keep returning children mid-flight.
     setupMocks(
-      fanout({ status: "running", completedChildren: 1, createdAt: new Date() }),
+      fanout({
+        status: "running",
+        completedChildren: 1,
+        createdAt: new Date(),
+      }),
       [
         run("sar_1", { results: ["a"] }, { inputPayload: { query: "q1" } }),
-        run("sar_2", null, { status: "running", outputPayload: null, completedAt: null }),
+        run("sar_2", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
+        }),
       ],
     );
 
@@ -395,7 +490,10 @@ describe("agent.subagent.aggregate handler", () => {
 
     expect(result.status).toBe("running");
     expect(result.children).toHaveLength(2);
-    expect(result.children[0]).toMatchObject({ input: { query: "q1" }, output: { results: ["a"] } });
+    expect(result.children[0]).toMatchObject({
+      input: { query: "q1" },
+      output: { results: ["a"] },
+    });
   });
 
   it("reports a LIVE completedChildren from runs, not the stale fanout column (progress-bar regression)", async () => {
@@ -405,11 +503,20 @@ describe("agent.subagent.aggregate handler", () => {
     // so reading the stale column pinned the bar at 0% until the swarm ended.
     // The aggregate must report the live count derived from the run rows.
     setupMocks(
-      fanout({ status: "running", completedChildren: 0, totalChildren: 3, createdAt: new Date() }),
+      fanout({
+        status: "running",
+        completedChildren: 0,
+        totalChildren: 3,
+        createdAt: new Date(),
+      }),
       [
         run("sar_1", { a: 1 }),
         run("sar_2", { b: 2 }),
-        run("sar_3", null, { status: "running", outputPayload: null, completedAt: null }),
+        run("sar_3", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
+        }),
       ],
     );
 
@@ -425,8 +532,19 @@ describe("agent.subagent.aggregate handler", () => {
 
   it("reports 'timed_out' for an in-progress fanout older than the snapshot window", async () => {
     setupMocks(
-      fanout({ status: "running", completedChildren: 1, createdAt: new Date("2020-01-01T00:00:00Z") }),
-      [run("sar_1", { a: 1 }), run("sar_2", null, { status: "running", outputPayload: null, completedAt: null })],
+      fanout({
+        status: "running",
+        completedChildren: 1,
+        createdAt: new Date("2020-01-01T00:00:00Z"),
+      }),
+      [
+        run("sar_1", { a: 1 }),
+        run("sar_2", null, {
+          status: "running",
+          outputPayload: null,
+          completedAt: null,
+        }),
+      ],
     );
 
     const result = await agentSubagentAggregateHandler(aggInput(), CTX);
@@ -446,10 +564,22 @@ describe("agent.subagent.aggregate handler", () => {
     // a recent createdAt + large window must NOT report a misleading `running` —
     // it must surface `failed` immediately so the swarm fails loudly.
     setupMocks(
-      fanout({ status: "pending", completedChildren: 0, createdAt: new Date() }),
+      fanout({
+        status: "pending",
+        completedChildren: 0,
+        createdAt: new Date(),
+      }),
       [
-        run("sar_1", null, { status: "failed", errorReason: "dispatch emit failed: x", outputPayload: null }),
-        run("sar_2", null, { status: "failed", errorReason: "dispatch emit failed: x", outputPayload: null }),
+        run("sar_1", null, {
+          status: "failed",
+          errorReason: "dispatch emit failed: x",
+          outputPayload: null,
+        }),
+        run("sar_2", null, {
+          status: "failed",
+          errorReason: "dispatch emit failed: x",
+          outputPayload: null,
+        }),
       ],
     );
 
@@ -466,7 +596,11 @@ describe("agent.subagent.aggregate handler", () => {
     // The executor finished the children but never advanced the fan-out row
     // (e.g. it crashed before mark-complete). All children completed → completed.
     setupMocks(
-      fanout({ status: "pending", completedChildren: 2, createdAt: new Date() }),
+      fanout({
+        status: "pending",
+        completedChildren: 2,
+        createdAt: new Date(),
+      }),
       [run("sar_1", { a: 1 }), run("sar_2", { b: 2 })],
     );
 

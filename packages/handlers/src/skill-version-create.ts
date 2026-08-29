@@ -1,7 +1,7 @@
 /**
  * createNewSkillVersion — shared helper for skill.version.upload and skill.edit.
  *
- * Shared codepath rules (OXA-1748):
+ * Shared codepath rules:
  * - Creates a NEW immutable skill_versions row (versionNumber = max + 1).
  * - Sets is_latest = true on the new row and clears is_latest on the prior
  *   latest row (partial-unique index on skill_versions enforces one is_latest

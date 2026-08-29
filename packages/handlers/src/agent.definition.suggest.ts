@@ -128,11 +128,11 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   // pairs AGENT_ROLE_SPECS computes its grants from. Purely deterministic: no
   // model output feeds this decision.
   //
-  // Attendance: agent definitions are trigger-free as of #1010 (what starts a
-  // run now lives in the automations subsystem, not the definition), so the
-  // definition no longer carries an attended/unattended signal. Pass no trigger
-  // types — the suggestion defaults to the attended reading; the human-reviewed
-  // role picker and `assign_agent_role` remain the sole authority on the ceiling
+  // Attendance: agent definitions are trigger-free — what starts a run lives
+  // in the automations subsystem, not the definition — so the definition
+  // carries no attended/unattended signal. Pass no trigger types — the
+  // suggestion defaults to the attended reading; the human-reviewed role
+  // picker and `assign_agent_role` remain the sole authority on the ceiling
   // actually attached.
   const suggestedRole = suggestNarrowestAgentRole(
     {

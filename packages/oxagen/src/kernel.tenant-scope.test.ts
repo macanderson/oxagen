@@ -88,15 +88,12 @@ describe("kernel tenant scope", () => {
   });
 
   it("enters a tenant scope for unscoped capabilities that carry real tenant ids", async () => {
-    // Regression (hotfix): plugin.schema.get is scoped:false but is invoked from
-    // the API with a concrete org+workspace. Its IAM check (checkIAM →
-    // fetchAuthz → withTenantDb) and parts of its handler read through
-    // withTenantDb, which require an active tenant scope. The kernel used to skip
-    // runInTenantScope for ALL scoped:false capabilities, so on enterprise orgs
-    // (the only tier that runs the IAM resolver) fetchAuthz threw
-    // TenantScopeError and the kernel fail-closed with "IAM check errored …
-    // failing closed", breaking "Edit configuration" on connectors. An unscoped
-    // capability with valid tenant ids must now run inside the request's scope.
+    // plugin.schema.get is scoped:false but is invoked from the API with a
+    // concrete org+workspace. Its IAM check (checkIAM → fetchAuthz →
+    // withTenantDb) and parts of its handler read through withTenantDb,
+    // which require an active tenant scope. An unscoped capability with
+    // valid tenant ids must run inside the request's scope, or fetchAuthz
+    // throws TenantScopeError and the kernel fails closed.
     registerCapability({
       name: "test.unscoped.scoped",
       domain: "test",

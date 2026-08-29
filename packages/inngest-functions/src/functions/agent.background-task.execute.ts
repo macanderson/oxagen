@@ -66,13 +66,17 @@ export const [agentBackgroundTaskExecute] = createFunction(
     // re-executes. The actual double-insert guard is the step.run wrapper
     // around each insertToolInvocation call below (see OXA reliability
     // fix: retried Inngest steps double-counting ClickHouse telemetry).
-    const invocationId = deterministicEventId("agent.background-task.execute", taskId);
+    const invocationId = deterministicEventId(
+      "agent.background-task.execute",
+      taskId,
+    );
     const startedAt = Date.now();
     const capabilityName = p.capability;
 
     try {
       const output = await step.run("invoke", async () => {
-        if (!capabilityName) throw new Error("background task payload missing 'capability'");
+        if (!capabilityName)
+          throw new Error("background task payload missing 'capability'");
         const ctx = {
           orgId,
           workspaceId,
@@ -83,7 +87,7 @@ export const [agentBackgroundTaskExecute] = createFunction(
           messageId: null,
         };
         // Route through kernel.invoke() for IAM enforcement, audit, and
-        // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
+        // uniform metering.
         return invoke(capabilityName, p.input ?? p, ctx);
       });
       await step.run("mark-completed", () =>
@@ -105,8 +109,8 @@ export const [agentBackgroundTaskExecute] = createFunction(
           ),
         ),
       );
-      // Write tool_invocations row for metering (OXA-1498). Wrapped in its
-      // own memoized step so a retry/replay of this function after this
+      // Write tool_invocations row for metering. This runs in its own
+      // memoized step so a retry/replay of this function after this
       // point never re-inserts the row (tool_invocations is a plain
       // append-only MergeTree — no dedup on re-insert).
       await step.run("emit-tool-invocation-completed", async () => {
@@ -133,10 +137,16 @@ export const [agentBackgroundTaskExecute] = createFunction(
             created_at: new Date().toISOString(),
           });
         } catch (telErr) {
-          logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+          logger.warn(
+            { err: telErr },
+            "insertToolInvocation failed — telemetry loss",
+          );
         }
       });
-      logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
+      logger.info(
+        { taskId, orgId, workspaceId },
+        "agent.background-task.execute completed",
+      );
       return { taskId, status: "completed" };
     } catch (err) {
       await step.run("mark-failed", () =>
@@ -184,10 +194,16 @@ export const [agentBackgroundTaskExecute] = createFunction(
             created_at: new Date().toISOString(),
           });
         } catch (telErr) {
-          logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+          logger.warn(
+            { err: telErr },
+            "insertToolInvocation failed — telemetry loss",
+          );
         }
       });
-      logger.error({ taskId, orgId, err }, "agent.background-task.execute failed");
+      logger.error(
+        { taskId, orgId, err },
+        "agent.background-task.execute failed",
+      );
       throw err;
     }
   },

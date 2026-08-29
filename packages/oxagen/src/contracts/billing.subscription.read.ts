@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const billingSubscriptionRead = registerCapability({
   name: "get_subscription",
   domain: "billing",
-  description: "Read the current subscription, plan, and period bounds for the active tenant",
+  description:
+    "Read the current subscription, plan, and period bounds for the active tenant",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -35,8 +36,8 @@ export const billingSubscriptionRead = registerCapability({
       })
       .nullable(),
     creditBalanceCents: z.number().int(),
-    // OXA-1347: current-period usage snapshot so the billing panel can
-    // render token + cost totals without a second round trip.
+    // Current-period usage snapshot so the billing panel can render token +
+    // cost totals without a second round trip.
     periodUsage: z
       .object({
         inputTokens: z.number().int().nonnegative(),
@@ -49,5 +50,9 @@ export const billingSubscriptionRead = registerCapability({
   }),
 });
 
-export type BillingSubscriptionReadInput = z.output<typeof billingSubscriptionRead.input>;
-export type BillingSubscriptionReadOutput = z.output<typeof billingSubscriptionRead.output>;
+export type BillingSubscriptionReadInput = z.output<
+  typeof billingSubscriptionRead.input
+>;
+export type BillingSubscriptionReadOutput = z.output<
+  typeof billingSubscriptionRead.output
+>;

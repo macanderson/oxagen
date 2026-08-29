@@ -116,7 +116,7 @@ export function buildTerminalEventPayload(
   const payload: Record<string, unknown> = { terminal_status: terminalStatus };
   // Error and result DIGESTS are legitimate terminal-payload fields, but the
   // worker has no hasher here and a raw message may carry paths, stdout, or
-  // source. Omitting them is honest; the message itself travels on the run row
+  // source. They are omitted; the message itself travels on the run row
   // via `sealAttempt`'s `error`, never on the event.
   if (reasonCode !== undefined && REASON_CODE_RE.test(reasonCode)) {
     payload.reason_code = reasonCode;

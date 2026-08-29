@@ -12,12 +12,12 @@
  *
  * ## RunSpec v1 — the fixed wire contract
  *
- * The contract itself now lives in ONE place —
+ * The contract lives in ONE place —
  * `@oxagen/agent-runner`'s `run-spec-v1-legacy.ts` — shared by the enqueuing
- * API route and this claim-side driver (run-evidence-ingress
- * 02-run-attempt-foundation-plan.md Task 6). It used to be defined twice, with
- * nothing but a comment keeping the two copies honest. `parseRunSpec` below is
- * a re-export kept for the existing importers; see that module for the schema,
+ * API route and this claim-side driver (see
+ * docs/specs/run-evidence-ingress/02-run-attempt-foundation-plan.md, Task 6).
+ * `parseRunSpec` below is a re-export kept for the existing importers; see
+ * that module for the schema,
  * for why v1 rows are explicitly NON-EVIDENCE, and for why they can never be
  * promoted to v2. The shape it accepts:
  *
@@ -528,8 +528,8 @@ export function createPlatformTurnDriver(): TurnDriver {
           orgId: run.orgId,
           workspaceId: run.workspaceId,
           // The enqueuing human, when the enqueue surface captured one
-          // (delegation.userId) — honest attribution; null preserves the
-          // pre-delegation shape byte-for-byte.
+          // (delegation.userId); null preserves the pre-delegation shape
+          // byte-for-byte.
           userId: delegation?.userId ?? null,
           apiKeyId: null,
           requestId: run.runId,

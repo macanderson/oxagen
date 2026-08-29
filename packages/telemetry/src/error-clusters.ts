@@ -10,12 +10,12 @@
 // ADR-021 §1/§3: pure, parameterized SQL — zero model calls, and every list
 // this returns is LIMIT-bounded before it reaches a caller/model.
 //
-// CRITICAL ClickHouse gotcha (repo memory: clickhouse-mocked-tests-miss-sql):
-// a mocked CH client happily accepts invalid SQL, so an aggregate query that
-// passes unit tests can still 500 in production (error 184 — "column X is
-// not under aggregate function and not in GROUP BY"). GROUP BY here stays
-// `fingerprint` ONLY; every other selected column goes through an aggregate
-// (count(), argMax(), min(), max()) — never a bare column alias in GROUP BY.
+// A mocked ClickHouse client accepts invalid SQL without complaint, so an
+// aggregate query that passes unit tests can still fail in production
+// (error 184 — "column X is not under aggregate function and not in GROUP
+// BY"). GROUP BY here stays `fingerprint` ONLY; every other selected column
+// goes through an aggregate (count(), argMax(), min(), max()) — never a bare
+// column alias in GROUP BY.
 
 import { clickhouse } from "./clickhouse";
 
@@ -77,7 +77,8 @@ export async function clusterErrorEvents(args: {
   limit?: number;
 }): Promise<ClusterErrorEventsResult> {
   const limit = clampLimit(args.limit);
-  const since = args.sinceMs ?? Date.now() - DEFAULT_SINCE_HOURS * 60 * 60 * 1000;
+  const since =
+    args.sinceMs ?? Date.now() - DEFAULT_SINCE_HOURS * 60 * 60 * 1000;
 
   const filters: string[] = [
     "org_id = {orgId:UUID}",

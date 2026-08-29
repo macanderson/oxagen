@@ -17,8 +17,8 @@ import { logger } from "../logger";
  * ── Why this still FAILS LOUD (does NOT mark `completed`) ─────────────────────
  *
  * A cross-store hard-delete that misses a table or store leaves residual PII
- * while telling the data subject their data was erased — that is WORSE than an
- * honest failure and is itself a GDPR compliance breach. The full subject-scope
+ * while telling the data subject their data was erased — that is WORSE than a
+ * visible failure and is itself a GDPR compliance breach. The full subject-scope
  * deletion set is NOT cleanly bounded today (OXA-1721), because:
  *
  *   1. ClickHouse (`@oxagen/telemetry`) stores RAW `user_email` as a column in

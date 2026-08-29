@@ -26,8 +26,18 @@ import {
   filterSlashCatalog,
   type SlashCatalogEntry,
 } from "../slash/catalog.js";
-import type { StageEvent, StageKind, TurnTrace, JudgeVerdict, ScopeReviewInfo } from "../agent/trace.js";
-import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
+import type {
+  StageEvent,
+  StageKind,
+  TurnTrace,
+  JudgeVerdict,
+  ScopeReviewInfo,
+} from "../agent/trace.js";
+import type {
+  ApprovalRequest,
+  ApprovalResponse,
+  PermissionMode,
+} from "../agent/permissions.js";
 import { readClipboardImage as readClipboardImageDefault } from "../lib/clipboard-image.js";
 import {
   createPasteRegistry,
@@ -57,7 +67,15 @@ import {
 } from "./mouse-select.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal" | "scope";
+  role:
+    | "user"
+    | "assistant"
+    | "reasoning"
+    | "tool"
+    | "stage"
+    | "diff"
+    | "terminal"
+    | "scope";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -124,8 +142,7 @@ export interface TurnSummary {
  * One `/name [hint]  description` line per built-in command, generated from
  * {@link BUILTIN_SLASH_COMMANDS} — the same catalog the menu and typeahead
  * read from — so `/help` can never drift out of sync with what `/` actually
- * lists (it previously did: /login, /logout, /init, /remember, /memories,
- * and /forget were all real, working commands `/help` never mentioned).
+ * lists.
  */
 function formatBuiltinCommandLines(): string[] {
   const invocations = BUILTIN_SLASH_COMMANDS.map(
@@ -172,7 +189,11 @@ export const HELP = [
 
 /** Friendly label for a permission mode (matches the `/mode` argument spelling). */
 export function modeLabel(mode: PermissionMode): string {
-  return mode === "acceptEdits" ? "auto-edit" : mode === "readonly" ? "read-only" : mode;
+  return mode === "acceptEdits"
+    ? "auto-edit"
+    : mode === "readonly"
+      ? "read-only"
+      : mode;
 }
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -363,7 +384,8 @@ export function PromptInput({
     onEmptyChange?.(isEmpty);
   }, [isEmpty, onEmptyChange]);
   // `selected` may lag the (shrinking) suggestion list; clamp for rendering/use.
-  const sel = suggestions.length === 0 ? 0 : Math.min(selected, suggestions.length - 1);
+  const sel =
+    suggestions.length === 0 ? 0 : Math.min(selected, suggestions.length - 1);
   const cols = stdout?.columns ?? 80;
   const menuWidth = Math.min(Math.max(cols - 2, 40), 100);
 
@@ -386,7 +408,11 @@ export function PromptInput({
    *  since they all funnel through here. */
   const insertAtCursor = (text: string): void => {
     if (hasSelection(selection)) {
-      const { text: nextValue, cursorPos: nextCursor } = replaceSelectionWith(value, selection, text);
+      const { text: nextValue, cursorPos: nextCursor } = replaceSelectionWith(
+        value,
+        selection,
+        text,
+      );
       setValue(nextValue);
       setCursorPos(nextCursor);
       setSelection(null);
@@ -432,12 +458,16 @@ export function PromptInput({
     // ── Typeahead navigation (only while the menu is open) ──
     if (menuOpen) {
       if (key.downArrow) {
-        setSelected((s) => (Math.min(s, suggestions.length - 1) + 1) % suggestions.length);
+        setSelected(
+          (s) => (Math.min(s, suggestions.length - 1) + 1) % suggestions.length,
+        );
         return;
       }
       if (key.upArrow) {
         setSelected(
-          (s) => (Math.min(s, suggestions.length - 1) - 1 + suggestions.length) % suggestions.length,
+          (s) =>
+            (Math.min(s, suggestions.length - 1) - 1 + suggestions.length) %
+            suggestions.length,
         );
         return;
       }
@@ -488,7 +518,8 @@ export function PromptInput({
         // Expand paste placeholders for the model NOW, while the registry
         // still holds this prompt's entries — resetInput() below wipes them.
         const paste = expandPasteSubmission(pasteRegistryRef.current, trimmed);
-        const hadTokens = paste.images.length > 0 || paste.expandedText !== trimmed;
+        const hadTokens =
+          paste.images.length > 0 || paste.expandedText !== trimmed;
         onSubmit(trimmed, hadTokens ? paste : undefined);
         resetInput();
       }
@@ -502,7 +533,10 @@ export function PromptInput({
     // the window is the open-in-editor gesture (see onOpenLastTouched).
     if (key.ctrl && input === "v") {
       const now = Date.now();
-      if (onOpenLastTouched && resolveCtrlV(lastCtrlVRef.current, now) === "open") {
+      if (
+        onOpenLastTouched &&
+        resolveCtrlV(lastCtrlVRef.current, now) === "open"
+      ) {
         lastCtrlVRef.current = null;
         onOpenLastTouched();
         return;
@@ -566,7 +600,10 @@ export function PromptInput({
       // WHOLE selected range in one keystroke, same as Delete below, rather
       // than falling through to the single-char/token logic.
       if (hasSelection(selection)) {
-        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(value, selection);
+        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(
+          value,
+          selection,
+        );
         setValue(nextValue);
         setCursorPos(nextCursor);
         setSelection(null);
@@ -591,7 +628,10 @@ export function PromptInput({
     if (key.delete) {
       // Same bulk-delete-the-selection rule as Backspace above.
       if (hasSelection(selection)) {
-        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(value, selection);
+        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(
+          value,
+          selection,
+        );
         setValue(nextValue);
         setCursorPos(nextCursor);
         setSelection(null);
@@ -625,7 +665,9 @@ export function PromptInput({
   // compact, recognizable reference instead of a wall of text.
   usePaste((text) => {
     if (!focused) return;
-    const token = shouldCollapseText(text) ? registerPastedText(pasteRegistryRef.current, text) : null;
+    const token = shouldCollapseText(text)
+      ? registerPastedText(pasteRegistryRef.current, text)
+      : null;
     insertAtCursor(token ?? text);
   });
 
@@ -699,15 +741,28 @@ export function PromptInput({
   // fallback otherwise, unchanged from before mouse selection existed.
   const activeSelection = hasSelection(selection) ? selection : null;
   const selRange = activeSelection ? selectionRange(activeSelection) : null;
-  const beforeSelection = selRange ? shown.slice(0, Math.max(0, selRange.start - terminalShift)) : "";
-  const selectedText = selRange
-    ? shown.slice(Math.max(0, selRange.start - terminalShift), Math.max(0, selRange.end - terminalShift))
+  const beforeSelection = selRange
+    ? shown.slice(0, Math.max(0, selRange.start - terminalShift))
     : "";
-  const afterSelection = selRange ? shown.slice(Math.max(0, selRange.end - terminalShift)) : "";
+  const selectedText = selRange
+    ? shown.slice(
+        Math.max(0, selRange.start - terminalShift),
+        Math.max(0, selRange.end - terminalShift),
+      )
+    : "";
+  const afterSelection = selRange
+    ? shown.slice(Math.max(0, selRange.end - terminalShift))
+    : "";
 
   return (
     <Box flexDirection="column">
-      {menuOpen && <SlashMenu entries={suggestions} selectedIndex={sel} width={menuWidth} />}
+      {menuOpen && (
+        <SlashMenu
+          entries={suggestions}
+          selectedIndex={sel}
+          width={menuWidth}
+        />
+      )}
       {/* The bordered input keeps a constant height (one text row inside a round
           border = 3 rows). minHeight + flexShrink={0} guarantee it never
           collapses or is squeezed as the conversation above grows — though a
@@ -794,7 +849,12 @@ export function ApprovalPrompt({
   });
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="#FBBF24" paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="#FBBF24"
+      paddingX={1}
+    >
       <Box>
         <Text color="#FBBF24" bold>
           {"⚠ permission · "}
@@ -863,7 +923,11 @@ export const STAGE_COLOR: Record<StageKind, string> = {
  * so pipeline chatter stays visually subordinate to the concrete actions the
  * agent takes.
  */
-export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement {
+export function StageBadge({
+  stage,
+}: {
+  stage: StageEvent;
+}): React.ReactElement {
   const color = STAGE_COLOR[stage.kind];
   return (
     <Box paddingX={1}>
@@ -910,7 +974,8 @@ function ToolChip({ msg }: { msg: Message }): React.ReactElement {
   return (
     <Box paddingX={1} marginTop={1}>
       <Text color={accent}>
-        [{emoji ? `${emoji} ` : ""}{subagent ? "Task" : toolDisplayLabel(name)}]
+        [{emoji ? `${emoji} ` : ""}
+        {subagent ? "Task" : toolDisplayLabel(name)}]
       </Text>
       <Text>{"  "}</Text>
       <Text dimColor={!subagent} wrap="truncate-end">
@@ -947,7 +1012,11 @@ export function DiffMessage({
         </Text>
         <Text dimColor>{header}</Text>
         {files.length > 1 ? (
-          <Text dimColor> · {files.slice(0, 4).join(", ")}{files.length > 4 ? " …" : ""}</Text>
+          <Text dimColor>
+            {" "}
+            · {files.slice(0, 4).join(", ")}
+            {files.length > 4 ? " …" : ""}
+          </Text>
         ) : null}
       </Box>
       <DiffView diff={msg.diff ?? ""} theme={diffTheme} />
@@ -1012,7 +1081,8 @@ export function ScopeCard({
         <Text color="#FBBF24">est {est}</Text>
         <Text dimColor>
           {" · ~"}
-          {humanizeTokens(info.estimatedInputTokens)}→{humanizeTokens(info.estimatedOutputTokens)} tok
+          {humanizeTokens(info.estimatedInputTokens)}→
+          {humanizeTokens(info.estimatedOutputTokens)} tok
         </Text>
       </Box>
       <Box paddingLeft={2} flexDirection="column">
@@ -1020,8 +1090,14 @@ export function ScopeCard({
         <Text wrap="wrap">{origPrev.text}</Text>
       </Box>
       <Box paddingLeft={2} flexDirection="column">
-        <Text dimColor>{info.context ? "enhanced with retrieved context:" : "enhanced prompt (no extra context found):"}</Text>
-        <Text dimColor wrap="wrap">{enhPrev.text}</Text>
+        <Text dimColor>
+          {info.context
+            ? "enhanced with retrieved context:"
+            : "enhanced prompt (no extra context found):"}
+        </Text>
+        <Text dimColor wrap="wrap">
+          {enhPrev.text}
+        </Text>
       </Box>
       {origPrev.truncated || enhPrev.truncated ? (
         <Box paddingLeft={2}>
@@ -1052,21 +1128,33 @@ function MessageViewImpl({
   if (msg.trace) return <TraceView trace={msg.trace} />;
   if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
   if (msg.role === "terminal" && msg.terminalRun)
-    return <TerminalRunCard run={msg.terminalRun} expanded={msg.terminalExpanded ?? false} />;
-  if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
-  if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
-  if (msg.role === "scope" && msg.scope) return <ScopeCard info={msg.scope} expanded={expanded} />;
+    return (
+      <TerminalRunCard
+        run={msg.terminalRun}
+        expanded={msg.terminalExpanded ?? false}
+      />
+    );
+  if (msg.role === "diff" && msg.diff)
+    return <DiffMessage msg={msg} theme={diffTheme} />;
+  if (msg.role === "stage" && msg.stage)
+    return <StageBadge stage={msg.stage} />;
+  if (msg.role === "scope" && msg.scope)
+    return <ScopeCard info={msg.scope} expanded={expanded} />;
   if (msg.role === "user") {
     // Long prompts show their opening lines with a Ctrl-O affordance so a big
     // paste never floods the transcript (verbose mode renders it in full).
-    const prev = expanded ? { text: msg.content, truncated: false } : previewLines(msg.content, 4);
+    const prev = expanded
+      ? { text: msg.content, truncated: false }
+      : previewLines(msg.content, 4);
     return (
       <Box paddingX={1} marginY={0} flexDirection="column">
         <Box>
           <Text color={theme.cyan} bold>
             {"❯ "}
           </Text>
-          <Text bold wrap="wrap">{prev.text}</Text>
+          <Text bold wrap="wrap">
+            {prev.text}
+          </Text>
         </Box>
         {prev.truncated ? (
           <Box paddingLeft={2}>
@@ -1165,8 +1253,13 @@ function SummaryRow({
  * touched, and the priced cost. The border warms green when complete and amber
  * when the judge still sees gaps.
  */
-export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.ReactElement {
-  const { complete, quality, qualityReason, filesTouched, costUsd, judged } = summary;
+export function TurnSummaryView({
+  summary,
+}: {
+  summary: TurnSummary;
+}): React.ReactElement {
+  const { complete, quality, qualityReason, filesTouched, costUsd, judged } =
+    summary;
   // The judge's reasoning is a paragraph of chain-of-thought; cap it so the
   // card stays a card. The full verdict is always available via /replay.
   const reason =
@@ -1215,7 +1308,10 @@ export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.Re
         </SummaryRow>
       ) : null}
       <SummaryRow label="files">
-        <Text color={filesTouched.length > 0 ? theme.cyan : undefined} dimColor={filesTouched.length === 0}>
+        <Text
+          color={filesTouched.length > 0 ? theme.cyan : undefined}
+          dimColor={filesTouched.length === 0}
+        >
           {files}
         </Text>
       </SummaryRow>
@@ -1292,23 +1388,29 @@ export function ThinkingIndicator({
   // idle warning; a normal fast turn (progress landing constantly) stays clean.
   const lastProgressAt = getLastProgressAt?.() ?? null;
   const idleSec =
-    lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
+    lastProgressAt != null
+      ? Math.round(Math.max(0, now - lastProgressAt) / 1000)
+      : 0;
   const heartbeat = idleSec >= HEARTBEAT_SEC;
   const idleColor =
-    idleSec >= IDLE_WARN_SEC * 2 ? "#F87171" : idleSec >= IDLE_WARN_SEC ? "#FBBF24" : undefined;
+    idleSec >= IDLE_WARN_SEC * 2
+      ? "#F87171"
+      : idleSec >= IDLE_WARN_SEC
+        ? "#FBBF24"
+        : undefined;
 
   return (
     <Box paddingX={1}>
       <Text color="#FBBF24" bold>
         {SPINNER[frame % SPINNER.length]}{" "}
       </Text>
-      <Text color="#FBBF24">{heartbeat ? "Still working… " : "Thinking… "}</Text>
+      <Text color="#FBBF24">
+        {heartbeat ? "Still working… " : "Thinking… "}
+      </Text>
       <Text dimColor>
         {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
       </Text>
-      {activity ? (
-        <Text color={theme.cyan}>{` · ${activity}`}</Text>
-      ) : null}
+      {activity ? <Text color={theme.cyan}>{` · ${activity}`}</Text> : null}
       {heartbeat ? (
         <Text color={idleColor ?? "#FBBF24"}>{` · working ${idleSec}s`}</Text>
       ) : null}
@@ -1353,7 +1455,12 @@ function triangleWave(n: number, span: number): number {
 }
 
 /** Whether half-open ranges [aStart, aStart+aLen) and [bStart, bStart+bLen) intersect. */
-function overlaps(aStart: number, aLen: number, bStart: number, bLen: number): boolean {
+function overlaps(
+  aStart: number,
+  aLen: number,
+  bStart: number,
+  bLen: number,
+): boolean {
   return aStart < bStart + bLen && bStart < aStart + aLen;
 }
 
@@ -1365,7 +1472,11 @@ function overlaps(aStart: number, aLen: number, bStart: number, bLen: number): b
  * clear of the shot for a near-miss flyby instead. Kept pure (no timers, no
  * React) so every frame is deterministic and unit-testable.
  */
-export function renderInvadersLane(tick: number, width: number, active: boolean): string {
+export function renderInvadersLane(
+  tick: number,
+  width: number,
+  active: boolean,
+): string {
   const W = Math.max(14, Math.min(width, 30));
   const lane: string[] = new Array<string>(W).fill(" ");
   const muzzle = ROCKET_LEN; // column right after the rocket's nose
@@ -1402,14 +1513,22 @@ export function renderInvadersLane(tick: number, width: number, active: boolean)
     }
   }
 
-  placeSprite(lane, 0, cyclePos === 0 ? ROCKET_RECOIL : (ROCKET[tick % 2] as string));
+  placeSprite(
+    lane,
+    0,
+    cyclePos === 0 ? ROCKET_RECOIL : (ROCKET[tick % 2] as string),
+  );
 
   if (hitFrame >= 0 && cyclePos >= hitFrame) {
     // The bolt has landed — flash the impact, then let the UFO reform and
     // resume its patrol for the rest of the beat before the next volley.
     const sinceHit = cyclePos - hitFrame;
     if (sinceHit < EXPLOSION.length) {
-      placeSprite(lane, ufoAt(volleyStart + hitFrame), EXPLOSION[sinceHit] as string);
+      placeSprite(
+        lane,
+        ufoAt(volleyStart + hitFrame),
+        EXPLOSION[sinceHit] as string,
+      );
     } else {
       placeSprite(lane, ufoAt(tick), UFO[tick % 2] as string);
     }
@@ -1459,7 +1578,10 @@ export function SpaceInvaders({
 // ── Status Bar ────────────────────────────────────────────────────────────────
 
 /** Second-line description of the active permission posture. */
-function permissionLine(mode: PermissionMode): { label: string; color: string } {
+function permissionLine(mode: PermissionMode): {
+  label: string;
+  color: string;
+} {
   switch (mode) {
     case "bypass":
       return { label: "bypass permissions on", color: "#FB7185" };
@@ -1511,11 +1633,10 @@ export function StatusLine({
   /** Current permission posture (drives the second line). */
   mode?: PermissionMode;
 }): React.ReactElement {
-  const sep = (
-    <Text dimColor>{"  │  "}</Text>
-  );
+  const sep = <Text dimColor>{"  │  "}</Text>;
   const perm = permissionLine(mode);
-  const cost = costUsd > 0 ? `~$${costUsd.toFixed(costUsd < 100 ? 2 : 0)}` : "~$0.00";
+  const cost =
+    costUsd > 0 ? `~$${costUsd.toFixed(costUsd < 100 ? 2 : 0)}` : "~$0.00";
   return (
     <Box flexDirection="column" paddingX={1}>
       {/* Line 1 — model · branch · tokens · cache · cost */}
@@ -1562,7 +1683,9 @@ export function StatusLine({
         {pipelineOn === true ? (
           <>
             {sep}
-            <Text color="#34D399" bold>🏋️ pipeline activated</Text>
+            <Text color="#34D399" bold>
+              🏋️ pipeline activated
+            </Text>
           </>
         ) : pipelineOn === false ? (
           <>
@@ -1592,7 +1715,13 @@ function scoreColor(score: number): string {
   return "#FB7185";
 }
 
-function ScoreBar({ label, score }: { label: string; score: number }): React.ReactElement {
+function ScoreBar({
+  label,
+  score,
+}: {
+  label: string;
+  score: number;
+}): React.ReactElement {
   const filled = Math.round((Math.max(0, Math.min(100, score)) / 100) * 10);
   return (
     <Box>
@@ -1639,7 +1768,8 @@ function JudgeRoundView({
         </Text>
         <Text dimColor>
           {" "}
-          · {verdict.confidence}% confident · advisor {verdict.model.split("/").pop()}
+          · {verdict.confidence}% confident · advisor{" "}
+          {verdict.model.split("/").pop()}
           {verdict.fallback ? " (heuristic)" : ""}
         </Text>
       </Box>
@@ -1699,7 +1829,9 @@ export function TraceView({ trace }: { trace: TurnTrace }): React.ReactElement {
         <Text wrap="wrap">{trace.originalPrompt}</Text>
       </Section>
 
-      <Section title={`2 · Evaluation${ev.fallback ? " (heuristic)" : ` · ${ev.model.split("/").pop()}`}`}>
+      <Section
+        title={`2 · Evaluation${ev.fallback ? " (heuristic)" : ` · ${ev.model.split("/").pop()}`}`}
+      >
         <ScoreBar label="completeness" score={ev.completeness} />
         <ScoreBar label="complexity" score={ev.complexity} />
         {ev.missing.length > 0 && (
@@ -1749,7 +1881,9 @@ export function TraceView({ trace }: { trace: TurnTrace }): React.ReactElement {
         {en.context ? (
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
-              {en.context.length > 600 ? en.context.slice(0, 600) + "…" : en.context}
+              {en.context.length > 600
+                ? en.context.slice(0, 600) + "…"
+                : en.context}
             </Text>
           </Box>
         ) : null}
@@ -1760,7 +1894,10 @@ export function TraceView({ trace }: { trace: TurnTrace }): React.ReactElement {
           <Text color={theme.cyan} bold>
             {trace.selectedModel.split("/").pop()}
           </Text>
-          <Text dimColor> ({trace.selectedTier}) — {trace.selectionRationale}</Text>
+          <Text dimColor>
+            {" "}
+            ({trace.selectedTier}) — {trace.selectionRationale}
+          </Text>
         </Text>
       </Section>
 
@@ -1768,7 +1905,9 @@ export function TraceView({ trace }: { trace: TurnTrace }): React.ReactElement {
         {trace.judgeRounds.length === 0 ? (
           <Text dimColor>not judged (bare mode)</Text>
         ) : (
-          trace.judgeRounds.map((v, i) => <JudgeRoundView key={i} verdict={v} round={i} />)
+          trace.judgeRounds.map((v, i) => (
+            <JudgeRoundView key={i} verdict={v} round={i} />
+          ))
         )}
       </Section>
 

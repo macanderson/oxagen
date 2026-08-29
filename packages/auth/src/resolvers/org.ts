@@ -36,7 +36,7 @@ export async function resolveOrgScope(
   userId: string,
   slug: string,
 ): Promise<OrgScopeResolution> {
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
   // Resolves an org slug → orgId and verifies membership in a single round-trip.
   // Both tables (organizations + orgUsers) are global identity tables that carry
   // no per-tenant RLS. The inner join means a missing org or non-member both

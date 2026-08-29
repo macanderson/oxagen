@@ -4,7 +4,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
 import { TokensPanel } from "./tokens-panel";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 export async function DeveloperTokensBody({ orgSlug }: { orgSlug: string }) {

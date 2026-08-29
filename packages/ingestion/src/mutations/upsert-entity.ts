@@ -3,16 +3,16 @@
  *
  * Ingested nodes live 100% in Neo4j — no Postgres dual-write of the instance.
  *
- * §3.3 dual-write (Workspace Schema Registry): the MERGE now writes the REAL
- * label as the PRIMARY label (`(n:`Customer` { … })`) while transitionally
- * retaining the generic `:EntityNode` secondary label + `entityType` property
- * for back-compat. Readers prefer the real label; the §3.3 batch relabel (v2)
- * removes the secondary label later.
+ * The MERGE writes the real entity-type label as the primary label
+ * (`(n:Customer { … })`) and also keeps the generic `:EntityNode` label plus
+ * an `entityType` property, so any reader that only knows about `:EntityNode`
+ * still finds the node. See docs/specs/workspace-schema-registry/spec.md §3.3.
  *
- * §8 property-level validation: before the MERGE, when a workspace pins a schema
- * version, `validateNodeAgainstSchema` runs and the write branches on the
- * workspace `enforcement_mode` (strict / lenient / off). Conformance telemetry
- * and observed-label signals are emitted to ClickHouse (§4.9, §4.10).
+ * When a workspace pins a schema version, `validateNodeAgainstSchema` runs
+ * before the MERGE and the write branches on the workspace's
+ * `enforcement_mode` (strict / lenient / off). Conformance telemetry and
+ * observed-label signals are emitted to ClickHouse. See
+ * docs/specs/workspace-schema-registry/spec.md §8, §4.9, §4.10.
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
@@ -42,20 +42,19 @@ export interface UpsertEntityOptions {
   /** Connector record type for telemetry rationale. */
   sourceRecordType?: string;
   /**
-   * OXA-1932: the enclosing Inngest run id (`ctx.runId`), threaded through so
-   * `schema_conformance_events` rows get a per-attempt idempotency key. Inngest
-   * keeps the SAME runId across every retry of one execution but mints a FRESH
-   * runId for the next genuinely separate trigger (e.g. tomorrow's re-sync of
-   * the same entity) — so a retried insert collapses into the original row
-   * (see emitConformanceEvent) while legitimate repeat observations over time
-   * still get their own row. Absent for non-Inngest callers (tests, direct
-   * invocations) — falls back to a fixed sentinel, same as before this fix
-   * (best-effort telemetry; never blocks the write).
+   * The enclosing Inngest run id (`ctx.runId`), used to build a stable
+   * idempotency key for `schema_conformance_events` rows. Inngest keeps the
+   * same run id across every retry of one execution, but mints a new run id
+   * for the next separate trigger (e.g. tomorrow's re-sync of the same
+   * entity). That lets a retried insert collapse into the same row (see
+   * `emitConformanceEvent`) while a later, real re-observation still gets
+   * its own row. Absent for non-Inngest callers (tests, direct calls), which
+   * fall back to a fixed sentinel.
    */
   runId?: string;
 }
 
-/** Outcome of an entity-node write, carrying the §8 conformance result. */
+/** Outcome of an entity-node write, carrying the schema-conformance result. */
 export interface UpsertEntityResult {
   /** The node publicId, or null when a strict-mode write was rejected. */
   nodeId: string | null;
@@ -109,12 +108,10 @@ function parsePreviousProperties(raw: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Derive the first-class Neo4j label from the mutation's entityType (§3.3),
- * canonicalised to PascalCase — `pull_request`/`PULL_REQUEST` both become
- * `PullRequest`. Falls back to the generic `EntityNode` when the entityType has
- * no usable label characters, so a malformed customer type can never be
- * interpolated into Cypher. `sanitizeLabel` guarantees an injection-safe
- * identifier; this is the same coercer every other node-label write site uses.
+ * Turn the mutation's entityType into a Neo4j label, in PascalCase —
+ * `pull_request` and `PULL_REQUEST` both become `PullRequest`. Falls back to
+ * `EntityNode` when the entityType has no usable label characters, so a
+ * malformed customer type can never be interpolated into Cypher.
  */
 export function resolveNodeLabel(entityType: string): string {
   return sanitizeLabel(entityType) ?? "EntityNode";
@@ -127,7 +124,7 @@ export async function upsertEntityNode(
 ): Promise<UpsertEntityResult> {
   const pinnedSchema = opts.pinnedSchema ?? null;
 
-  // ── §8 property-level validation (before the MERGE) ─────────────────────────
+  // ── Property-level validation against the pinned schema (before the MERGE) ──
   let validation: SchemaValidationResult | null = null;
   if (pinnedSchema && pinnedSchema.enforcementMode !== "off") {
     validation = validateNodeAgainstSchema(
@@ -154,15 +151,14 @@ export async function upsertEntityNode(
     }
   }
 
-  // ── §3.3 dual-write: real label PRIMARY + :EntityNode secondary ─────────────
+  // Real label as primary + :EntityNode secondary. `sanitizeLabel` already
+  // made `label` a safe identifier, so it's safe to interpolate here.
   const label = resolveNodeLabel(mutation.entityType);
-  // `sanitizeLabel` produced an injection-safe identifier → safe to interpolate.
-  // When it is already "EntityNode", don't double-apply the secondary label.
   const labelClause =
     label === "EntityNode" ? "`EntityNode`" : `\`${label}\`:\`EntityNode\``;
 
-  // Conformance props are attached on lenient writes (§8). undefined when no
-  // schema was evaluated, so existing nodes are not stamped spuriously.
+  // Conformance props are only set when a schema was actually evaluated, so
+  // a write with no pinned schema doesn't stamp an existing node with them.
   const conformanceScore = validation ? validation.conformanceScore : null;
   const schemaVersionId = validation ? pinnedSchema!.versionId : null;
 
@@ -241,10 +237,10 @@ export async function upsertEntityNode(
     await session.close();
   }
 
-  // ── §4.9 observed-labels signal (every written node) ────────────────────────
+  // ── Observed-labels signal (every written node) ──────────────────────────────
   await emitObservedLabel(mutation, label, opts);
 
-  // ── §4.10 conformance event + §8 below-floor signal (lenient writes) ────────
+  // ── Conformance event + below-floor signal (lenient writes) ─────────────────
   if (validation && pinnedSchema) {
     const belowFloor =
       validation.conformanceScore < pinnedSchema.conformanceFloor;
@@ -279,7 +275,7 @@ export async function upsertEntityNode(
 // ── ClickHouse emit helpers (best-effort; never fail the write) ───────────────
 
 /**
- * Emit a `graph_observed_labels` row (§4.9). Append-only observation read by
+ * Emit a `graph_observed_labels` row. Append-only observation read by
  * `schema.recommend`. Best-effort: a telemetry failure is swallowed.
  */
 async function emitObservedLabel(
@@ -307,26 +303,24 @@ async function emitObservedLabel(
 }
 
 /**
- * Emit a `schema_conformance_events` row (§4.10). Best-effort.
+ * Emit a `schema_conformance_events` row. Best-effort.
  *
- * NOTE: description/error text originates from the registry + payload and is
- * stored as DATA only — never interpreted as instructions (§11 posture).
+ * The description/error text comes from the registry and the payload. It is
+ * stored as data only — never treated as an instruction.
  *
- * OXA-1932: `event_id` is derived deterministically (NOT `crypto.randomUUID()`)
- * from stable inputs — the enclosing Inngest run id, the mutation's natural
- * key, the schema version, the outcome, and a `role` discriminator. This
- * function is called from inside `upsertEntityNode`, itself invoked from a
- * single `step.run("upsert-node", ...)` in the ingestion pipeline; when
- * Inngest retries that step the whole body re-executes, including this insert.
- * A deterministic id means a retry re-derives the SAME row identity instead of
- * minting a fresh one, and — paired with the table's ReplacingMergeTree
- * engine (0021 migration) keyed on `event_id` — a retried insert collapses
- * into the original row on merge (query with FINAL) rather than double-
- * counting the conformance signal. `runId` is what makes this safe to do
- * WITHOUT collapsing genuinely separate observations: Inngest keeps the same
- * runId across retries of one execution but mints a fresh one for the next
- * trigger (e.g. tomorrow's re-sync of the same entity), so that later,
- * legitimate re-observation still gets its own row.
+ * `event_id` is built deterministically, not with `crypto.randomUUID()`, from
+ * the enclosing Inngest run id, the mutation's natural key, the schema
+ * version, the outcome, and a `role` discriminator. `upsertEntityNode` runs
+ * inside a single Inngest step, so when Inngest retries that step, this
+ * insert runs again with the same inputs. A deterministic id means the retry
+ * re-derives the same row identity instead of minting a new one. Combined
+ * with the table's ReplacingMergeTree engine, keyed on `event_id`, a retried
+ * insert collapses into the original row on merge (query with FINAL) instead
+ * of double-counting the conformance signal. `runId` keeps this safe for real
+ * repeat observations too: Inngest keeps the same run id across retries of
+ * one execution but mints a new one for the next trigger (e.g. tomorrow's
+ * re-sync of the same entity), so a later, real re-observation still gets
+ * its own row.
  */
 async function emitConformanceEvent(
   mutation: EntityMutation,
@@ -371,9 +365,9 @@ async function emitConformanceEvent(
 }
 
 /**
- * Emit a low-conformance alert as a distinct `written_below_floor` marker row
- * (§8 `schema.conformance.low`). Reuses the conformance-events table with the
- * below-floor outcome so the alerting pipeline can subscribe. Best-effort.
+ * Emit a low-conformance alert as a distinct `written_below_floor` marker
+ * row. Reuses the conformance-events table with the below-floor outcome so
+ * the alerting pipeline can subscribe. Best-effort.
  */
 async function emitConformanceLowEvent(
   mutation: EntityMutation,

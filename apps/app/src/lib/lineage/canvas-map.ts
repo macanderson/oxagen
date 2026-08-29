@@ -1,6 +1,6 @@
 /**
  * lib/lineage/canvas-map.ts — pure LineageNodeDto[] → reagraph node/edge
- * mapping for the fleet-lineage explorer canvas (issue #1078).
+ * mapping for the fleet-lineage explorer canvas.
  *
  * Kept out of the canvas component (a reagraph/WebGL renderer that cannot be
  * unit-tested in jsdom — see lineage-canvas-view.test.tsx) so every visual

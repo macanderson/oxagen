@@ -1,13 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 
-// Regression for the empty-registry bug: the package's "./connectors"
-// subpath used to resolve to types.ts (registry primitives only), so every
-// consumer that imported `getConnector` from "@oxagen/ingestion/connectors"
-// — including the connection.create handler behind POST /v1/.../connections
-// — saw zero registered connectors and threw "No connector registered for
-// 'github'" at runtime. The subpath must resolve to the registration barrel,
-// making registration a side effect of the import itself.
-import { getConnector, listConnectors, registerConnector } from "@oxagen/ingestion/connectors";
+// The package's "./connectors" subpath must resolve to the registration
+// barrel, not to types.ts (registry primitives only), so importing
+// `getConnector` from "@oxagen/ingestion/connectors" — as the
+// connection.create handler behind POST /v1/.../connections does — always
+// sees every built-in connector registered as a side effect of the import.
+import {
+  getConnector,
+  listConnectors,
+  registerConnector,
+} from "@oxagen/ingestion/connectors";
 import type { ConnectorDefinition } from "@oxagen/ingestion/connectors";
 
 describe("@oxagen/ingestion/connectors subpath", () => {
@@ -18,7 +20,10 @@ describe("@oxagen/ingestion/connectors subpath", () => {
 
   it("treats duplicate registration as benign (bundler/HMR artifact), keeping the first", () => {
     const original = getConnector("github");
-    const impostor = { ...original, displayName: "impostor" } as ConnectorDefinition;
+    const impostor = {
+      ...original,
+      displayName: "impostor",
+    } as ConnectorDefinition;
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {

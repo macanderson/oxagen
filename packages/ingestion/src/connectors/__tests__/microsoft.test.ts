@@ -76,7 +76,9 @@ describe("microsoft connector – normalizeRecord", () => {
       };
       const result = microsoft.normalizeRecord("teams_message", raw);
       // displayName = body content sliced at 100; the test body is < 100 chars so we get the full string
-      expect(result.displayName).toBe("This is a long message with no summary field");
+      expect(result.displayName).toBe(
+        "This is a long message with no summary field",
+      );
     });
   });
 
@@ -130,7 +132,10 @@ describe("microsoft connector – normalizeRecord", () => {
       expect(result.externalId).toBe("cal-event-1");
       expect(result.displayName).toBe("Board meeting");
       expect(result.properties["organizer"]).toBe("ceo@company.com");
-      expect(result.properties["attendees"]).toEqual(["coo@company.com", "cto@company.com"]);
+      expect(result.properties["attendees"]).toEqual([
+        "coo@company.com",
+        "cto@company.com",
+      ]);
       expect(result.properties["start"]).toBe("2024-03-15T14:00:00Z");
       expect(result.properties["location"]).toBe("Boardroom A");
     });
@@ -152,7 +157,10 @@ describe("microsoft connector – normalizeRecord", () => {
 describe("microsoft connector – verifyWebhook", () => {
   const secret = "my-client-state-secret";
 
-  function makeNotificationPayload(clientState: string | undefined, count = 1): Uint8Array {
+  function makeNotificationPayload(
+    clientState: string | undefined,
+    count = 1,
+  ): Uint8Array {
     const notifications = Array.from({ length: count }, () => ({
       clientState,
       changeType: "created",
@@ -218,13 +226,15 @@ describe("microsoft connector – verifyWebhook", () => {
     expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
   });
 
-  // OXA-2051: the clientState check previously used a plain `===` comparison,
-  // which is not constant-time. It must never throw on a length mismatch and
-  // must fail closed.
+  // The clientState check must never throw on a length mismatch, and must
+  // fail closed, since a plain `===` comparison here would leak timing
+  // information about the secret.
   it("rejects a mismatched-length clientState without throwing", () => {
     const payload = makeNotificationPayload("short");
     const longSecret = "a-much-longer-client-state-secret-value";
-    expect(() => microsoft.verifyWebhook!(payload, {}, longSecret)).not.toThrow();
+    expect(() =>
+      microsoft.verifyWebhook!(payload, {}, longSecret),
+    ).not.toThrow();
     expect(microsoft.verifyWebhook!(payload, {}, longSecret)).toBe(false);
   });
 });

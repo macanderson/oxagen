@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { isEmailVerificationRequired, resolveIsLocalEnv, type LocalEnvSignals } from "./local-env";
+import {
+  isEmailVerificationRequired,
+  resolveIsLocalEnv,
+  type LocalEnvSignals,
+} from "./local-env";
 
 const base: LocalEnvSignals = {
   nodeEnv: undefined,
@@ -26,10 +30,12 @@ describe("resolveIsLocalEnv", () => {
     expect(resolveIsLocalEnv({ ...base, e2eTest: "true" })).toBe(true);
   });
 
-  // The whole point of OXA-1752: deterministic local even when NODE_ENV hasn't
-  // settled to 'development' yet (next dev boot race / tsx services).
+  // Deterministic local detection even when NODE_ENV hasn't settled to
+  // 'development' yet (next dev boot race / tsx services).
   it("is true via OXAGEN_LOCAL_DEV='1' even when NODE_ENV looks like production", () => {
-    expect(resolveIsLocalEnv({ ...base, nodeEnv: "production", localDevFlag: "1" })).toBe(true);
+    expect(
+      resolveIsLocalEnv({ ...base, nodeEnv: "production", localDevFlag: "1" }),
+    ).toBe(true);
   });
 
   it("accepts OXAGEN_LOCAL_DEV='true' as well", () => {
@@ -37,7 +43,13 @@ describe("resolveIsLocalEnv", () => {
   });
 
   it("is false in a plain production process", () => {
-    expect(resolveIsLocalEnv({ ...base, nodeEnv: "production", vercelEnv: "production" })).toBe(false);
+    expect(
+      resolveIsLocalEnv({
+        ...base,
+        nodeEnv: "production",
+        vercelEnv: "production",
+      }),
+    ).toBe(false);
   });
 
   // Defense in depth: the local flag must NEVER relax a real Vercel deployment,
@@ -73,12 +85,14 @@ describe("resolveIsLocalEnv", () => {
   });
 });
 
-describe("isEmailVerificationRequired (OXA-1753)", () => {
+describe("isEmailVerificationRequired", () => {
   // The helper must mirror !resolveIsLocalEnv(...) exactly — it's the predicate
   // the API /health gate uses to decide whether to require SMTP_*. Any drift
   // between these and the auth-config branch lets prod sign-in silently break.
   it("is false on a plain local box (NODE_ENV=development)", () => {
-    expect(isEmailVerificationRequired({ NODE_ENV: "development" })).toBe(false);
+    expect(isEmailVerificationRequired({ NODE_ENV: "development" })).toBe(
+      false,
+    );
   });
 
   it("is false under the E2E harness", () => {
@@ -87,7 +101,10 @@ describe("isEmailVerificationRequired (OXA-1753)", () => {
 
   it("is false when OXAGEN_LOCAL_DEV is set on a non-Vercel host", () => {
     expect(
-      isEmailVerificationRequired({ NODE_ENV: "production", OXAGEN_LOCAL_DEV: "1" }),
+      isEmailVerificationRequired({
+        NODE_ENV: "production",
+        OXAGEN_LOCAL_DEV: "1",
+      }),
     ).toBe(false);
   });
 

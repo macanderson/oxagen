@@ -1,8 +1,9 @@
 /**
  * Pure mapping/derivation from a registry ServerDetail to a mcp.catalog_servers
  * row. auth_kind is a heuristic: 'secret' if ANY env-var/header/remote-variable
- * is flagged isSecret, else 'none'. (Real OAuth detection happens at connect
- * time in Plan 4; the registry record does not declare OAuth explicitly.)
+ * is flagged isSecret, else 'none'. Real OAuth detection happens later, at
+ * connect time via detectOAuthProtected() — the registry record never
+ * declares OAuth explicitly.
  */
 import type { ServerDetail, ServerMeta } from "./types";
 
@@ -21,7 +22,9 @@ export function deriveTransportTypes(sd: ServerDetail): string[] {
 
 export function deriveAuthKind(sd: ServerDetail): AuthKind {
   const anySecret =
-    (sd.packages ?? []).some((p) => (p.environmentVariables ?? []).some((e) => e.isSecret === true)) ||
+    (sd.packages ?? []).some((p) =>
+      (p.environmentVariables ?? []).some((e) => e.isSecret === true),
+    ) ||
     (sd.remotes ?? []).some(
       (r) =>
         (r.headers ?? []).some((h) => h.isSecret === true) ||

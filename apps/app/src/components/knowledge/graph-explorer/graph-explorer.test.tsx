@@ -326,11 +326,8 @@ describe("GraphExplorer — empty and filtered-empty states", () => {
   });
 
   it("shows the empty state when the seed is empty, whatever the stats say", () => {
-    // #1087 retired the workspace graph authority's server-side "hide agent
-    // activity" toggle, and with it the "Show agent activity" reveal this
-    // test used to demand — the component now renders EmptyState on an empty
-    // seed unconditionally. This pins the post-#1087 contract; the old
-    // assertion outlived its feature because CI was down when #1087 merged.
+    // The component renders EmptyState on an empty seed unconditionally —
+    // there is no "Show agent activity" toggle gating it.
     explorerState.nodes = [];
     explorerState.edges = [];
     explorerState.stats = statsWith(4);

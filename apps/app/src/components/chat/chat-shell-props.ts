@@ -76,7 +76,7 @@ export interface ChatShellProps {
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
-  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+  /** Workspace-level per-turn budget governance. Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /** Bound published agent's public id (from the Ask page's ?agent=… param).

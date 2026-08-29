@@ -1,6 +1,6 @@
 -- 0021_schema_conformance_events_idempotency.sql
 --
--- OXA-1932: Idempotent ClickHouse conformance events under Inngest retries.
+-- Idempotent ClickHouse conformance events under Inngest retries.
 --
 -- ROOT CAUSE
 --   `upsertEntityNode` (packages/ingestion/src/mutations/upsert-entity.ts) is

@@ -4,7 +4,10 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { DeliveryConfig } from "@oxagen/ingestion/filters";
-import { sourceConnectionRefCondition, toContractStatus } from "./lib/connection-status";
+import {
+  sourceConnectionRefCondition,
+  toContractStatus,
+} from "./lib/connection-status";
 import { logger } from "./logger";
 
 /**
@@ -15,10 +18,13 @@ import { logger } from "./logger";
  *
  * No ClickHouse query: source_connections already carries the scalar entity
  * count, last-sync timestamp, status, and last error. Fields with no backing
- * column (per-type entity breakdown, sync duration) are honest empty/null
- * values rather than fabricated data.
+ * column (per-type entity breakdown, sync duration) are returned empty or
+ * null instead of being fabricated.
  */
-export const repoMetricsHandler: CapabilityHandler<typeof repoMetrics> = async (input, ctx) => {
+export const repoMetricsHandler: CapabilityHandler<typeof repoMetrics> = async (
+  input,
+  ctx,
+) => {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
@@ -45,23 +51,36 @@ export const repoMetricsHandler: CapabilityHandler<typeof repoMetrics> = async (
   );
 
   if (!row) {
-    logger.warn({ repoId: input.repoId, orgId: ctx.orgId }, "repo.metrics: not found");
-    throw new HTTPException(404, { message: "Repository connection not found" });
+    logger.warn(
+      { repoId: input.repoId, orgId: ctx.orgId },
+      "repo.metrics: not found",
+    );
+    throw new HTTPException(404, {
+      message: "Repository connection not found",
+    });
   }
 
   const status = toContractStatus(row.status);
   const deliveryConfig = (row.deliveryConfig ?? {}) as DeliveryConfig;
-  const syncMethod = deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
+  const syncMethod =
+    deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
 
   // syncIntervalSeconds is only meaningful for polling connections.
   const syncIntervalSeconds =
-    syncMethod === "polling" ? (deliveryConfig.syncIntervalSeconds ?? null) : null;
+    syncMethod === "polling"
+      ? (deliveryConfig.syncIntervalSeconds ?? null)
+      : null;
 
   // The next scheduled sync only exists for an actively-polling connection that
   // has already synced once; otherwise there's nothing to estimate from.
   const estimatedNextSyncAt =
-    syncMethod === "polling" && status === "active" && row.lastSyncAt && syncIntervalSeconds
-      ? new Date(row.lastSyncAt.getTime() + syncIntervalSeconds * 1000).toISOString()
+    syncMethod === "polling" &&
+    status === "active" &&
+    row.lastSyncAt &&
+    syncIntervalSeconds
+      ? new Date(
+          row.lastSyncAt.getTime() + syncIntervalSeconds * 1000,
+        ).toISOString()
       : null;
 
   // The row records an error message but no dedicated last_error_at column; when
@@ -69,7 +88,12 @@ export const repoMetricsHandler: CapabilityHandler<typeof repoMetrics> = async (
   const hasError = row.status === "error" && row.errorMessage != null;
 
   logger.info(
-    { repoId: input.repoId, status, entityCount: row.entityCount, orgId: ctx.orgId },
+    {
+      repoId: input.repoId,
+      status,
+      entityCount: row.entityCount,
+      orgId: ctx.orgId,
+    },
     "repo.metrics: fetched",
   );
 
@@ -81,7 +105,7 @@ export const repoMetricsHandler: CapabilityHandler<typeof repoMetrics> = async (
     // source_connections stores a scalar count, not a per-type breakdown.
     entityCountByType: {},
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    // No source column for sync duration — honest null.
+    // No source column for sync duration.
     lastSyncDurationMs: null,
     lastErrorAt: hasError ? row.updatedAt.toISOString() : null,
     errorMessage: row.errorMessage ?? null,

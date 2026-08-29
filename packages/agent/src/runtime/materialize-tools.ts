@@ -105,7 +105,7 @@ export interface ApprovalRequiredEvent {
   expiresAt: string;
 }
 
-// OXA-816: first-use consent for an external MCP tool. Emitted BEFORE the
+// first-use consent for an external MCP tool. Emitted BEFORE the
 // runtime blocks on waitForApproval so the stream route can render the consent
 // card immediately (same pattern as ApprovalRequiredEvent).
 export interface ConsentRequiredEvent {
@@ -148,7 +148,7 @@ export interface MaterializeOptions {
    */
   onApprovalRequired?: (event: ApprovalRequiredEvent) => void;
   /**
-   * OXA-816: called immediately after a first-use consent request is created
+   * called immediately after a first-use consent request is created
    * and BEFORE the runtime blocks waiting for the user's decision. Lets the
    * stream route emit a `consent-required` SSE event so the consent card
    * renders before execution pauses. Without it the stream hangs silently
@@ -340,7 +340,7 @@ export async function materializeTools(
 ): Promise<MaterializedTools> {
   const { listCapabilities, getSurfaces } = await getOxagenRegistry();
   const all = listCapabilities();
-  // OXA-1348: agent.code.execute requires a configured sandbox driver. Gate
+  // agent.code.execute requires a configured sandbox driver. Gate
   // materialization on isSandboxAvailable() — the single source of truth that
   // checks SANDBOX_ENABLED=true AND that the configured driver has the required
   // credentials. The tool is only advertised to the model when it can actually
@@ -539,7 +539,7 @@ export async function materializeTools(
               surface: "agent",
             });
             await afterTool({ capability: cap.name, ctx, output: result });
-            // OXA-1351: every tool invocation lands one row in ClickHouse
+            // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
             try {
               await insertToolInvocation(
@@ -602,7 +602,7 @@ export async function materializeTools(
     );
     if (isMutatingCapability(cap)) mutatingToolNames.push(alias);
   }
-  // ── MCP tool integration (OXA-1498) ─────────────────────────────────────────
+  // ── MCP tool integration ─────────────────────────────────────────
   // Load tools from healthy registered MCP servers for this workspace.
   // Each MCP tool execution is:
   //   1. IAM-checked via authorizeExternalCapability() against the synthetic
@@ -923,7 +923,7 @@ export async function materializeTools(
             }
             // ── End agent RBAC MCP rule gate ───────────────────────────────
 
-            // ── First-use consent gate (OXA-816) ────────────────────────────
+            // ── First-use consent gate ────────────────────────────
             // The FIRST time this (workspace, user, server, tool) is invoked we
             // pause and render a consent card; the decision is durable so the
             // second call runs inline. Only fires on the chat surface (messageId

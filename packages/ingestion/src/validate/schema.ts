@@ -1,24 +1,25 @@
 /**
- * Shared schema-registry validator (Workspace Schema Registry §7.3, §8, §16.2).
+ * Shared schema-registry validator. See
+ * docs/specs/workspace-schema-registry/spec.md §7.3, §8, §16.2.
  *
  * Pure functions — no DB, no IO. Validates a node or relationship payload
- * against the workspace's pinned **active vocabulary** (`PinnedSchema`), which
- * the handler layer resolves via `getPinnedSchema` (§4.8). This module is the
- * single source of truth for property validation: it backs BOTH the
+ * against the workspace's pinned active vocabulary (`PinnedSchema`), which
+ * the handler layer resolves via `getPinnedSchema`. This module is the
+ * single source of truth for property validation: it backs both the
  * `schema.validate.node` / `schema.validate.relationship` contracts (builder UI)
- * AND the ingestion property-validation seam in `mutations/upsert-entity.ts`.
+ * and the ingestion property-validation seam in `mutations/upsert-entity.ts`.
  *
- * The structure deliberately mirrors `validateConfigAgainstSchema` in
+ * The structure mirrors `validateConfigAgainstSchema` in
  * `connector-schema-loader.ts` (same `FieldError` shape and codes) so the two
- * validators read identically.
+ * validators read the same way.
  *
  * The `PinnedSchema` type is the active-vocabulary contract shared with the
- * handler layer (`getPinnedSchema` returns this exact shape). Keeping it here —
- * in the package ingestion already depends on — avoids a circular dep
- * (ingestion → handlers).
+ * handler layer (`getPinnedSchema` returns this exact shape). It lives here,
+ * in a package ingestion already depends on, to avoid a circular dependency
+ * between ingestion and handlers.
  */
 
-// ── Field-error shape (matches §5.1 / connector-schema-loader) ────────────────
+// ── Field-error shape (matches connector-schema-loader) ───────────────────────
 
 /** Validation-rule codes — superset shared with connector-schema-loader. */
 export type SchemaFieldErrorCode =
@@ -34,7 +35,7 @@ export type SchemaFieldErrorCode =
   | "oneOf"
   | "unknown";
 
-/** Field-level validation error (§5.1). */
+/** Field-level validation error. */
 export interface SchemaFieldError {
   field: string;
   message: string;
@@ -46,7 +47,7 @@ export interface SchemaFieldError {
   code: SchemaFieldErrorCode;
 }
 
-// ── PinnedSchema (active vocabulary) — shared with getPinnedSchema (§4.8) ──────
+// ── PinnedSchema (active vocabulary) — shared with getPinnedSchema ───────────
 
 /** A property definition on a label or relationship type. */
 export interface PinnedProperty {
@@ -102,9 +103,9 @@ export interface PinnedRelationshipType {
 }
 
 /**
- * The resolved active vocabulary for a workspace (§4.8). Returned by
+ * The resolved active vocabulary for a workspace. Returned by
  * `getPinnedSchema`; consumed by ingestion grounding/validation and the
- * §3.2 ontology Cypher guard.
+ * ontology Cypher guard.
  */
 export interface PinnedSchema {
   registryId: string;
@@ -116,7 +117,7 @@ export interface PinnedSchema {
   relationshipTypes: PinnedRelationshipType[];
 }
 
-// ── Conformance score formula constants (§16.2) ───────────────────────────────
+// ── Conformance score formula constants ───────────────────────────────────────
 //
 // score = 1 − (weighted missing-required + type-error penalties) / total-evaluated
 //
@@ -132,7 +133,10 @@ export const TYPE_ERROR_WEIGHT = 0.5;
 export const MISSING_OPTIONAL_WEIGHT = 0.25;
 
 /** Outcome of a validation pass (mirrors the contract `outcome` enum). */
-export type ConformanceOutcome = "accepted" | "rejected" | "written_below_floor";
+export type ConformanceOutcome =
+  | "accepted"
+  | "rejected"
+  | "written_below_floor";
 
 /** Result of validating a node or relationship against the active vocabulary. */
 export interface SchemaValidationResult {
@@ -182,7 +186,9 @@ export function validateRelationshipAgainstSchema(
   },
   pinnedSchema: PinnedSchema,
 ): SchemaValidationResult {
-  const candidates = pinnedSchema.relationshipTypes.filter((r) => r.name === rel.type);
+  const candidates = pinnedSchema.relationshipTypes.filter(
+    (r) => r.name === rel.type,
+  );
   if (candidates.length === 0) {
     return passthroughResult(pinnedSchema);
   }
@@ -195,20 +201,32 @@ export function validateRelationshipAgainstSchema(
         (r.endLabel == null || r.endLabel === rel.endLabel),
     ) ?? candidates[0]!;
 
-  const result = evaluateProperties(def.properties, rel.properties, pinnedSchema);
+  const result = evaluateProperties(
+    def.properties,
+    rel.properties,
+    pinnedSchema,
+  );
 
   // Endpoint-constraint violations are surfaced as `type` errors but do NOT
   // factor into the property-based conformance score (they are structural, not
   // property-level). They still flip `valid` to false.
   const endpointErrors: SchemaFieldError[] = [];
-  if (def.startLabel != null && rel.startLabel != null && def.startLabel !== rel.startLabel) {
+  if (
+    def.startLabel != null &&
+    rel.startLabel != null &&
+    def.startLabel !== rel.startLabel
+  ) {
     endpointErrors.push({
       field: "startLabel",
       message: `${rel.type} must start at ${def.startLabel}, got ${rel.startLabel}`,
       code: "type",
     });
   }
-  if (def.endLabel != null && rel.endLabel != null && def.endLabel !== rel.endLabel) {
+  if (
+    def.endLabel != null &&
+    rel.endLabel != null &&
+    def.endLabel !== rel.endLabel
+  ) {
     endpointErrors.push({
       field: "endLabel",
       message: `${rel.type} must end at ${def.endLabel}, got ${rel.endLabel}`,
@@ -235,8 +253,8 @@ export function validateRelationshipAgainstSchema(
  * Core property evaluation shared by node + relationship validation.
  *
  * Walks each declared property: accumulates required-misses, type errors, and
- * constraint failures into a weighted penalty, then computes the §16.2
- * conformance score over the total number of evaluated (declared) properties.
+ * constraint failures into a weighted penalty, then computes the conformance
+ * score over the total number of evaluated (declared) properties.
  */
 function evaluateProperties(
   declared: PinnedProperty[],
@@ -304,10 +322,18 @@ function checkValue(prop: PinnedProperty, value: unknown): SchemaFieldError[] {
 
   if (typeof value === "number") {
     if (c.min !== undefined && value < c.min) {
-      errors.push({ field: prop.key, message: `${prop.key} must be ≥ ${c.min}`, code: "min" });
+      errors.push({
+        field: prop.key,
+        message: `${prop.key} must be ≥ ${c.min}`,
+        code: "min",
+      });
     }
     if (c.max !== undefined && value > c.max) {
-      errors.push({ field: prop.key, message: `${prop.key} must be ≤ ${c.max}`, code: "max" });
+      errors.push({
+        field: prop.key,
+        message: `${prop.key} must be ≤ ${c.max}`,
+        code: "max",
+      });
     }
   }
 
@@ -335,7 +361,11 @@ function checkValue(prop: PinnedProperty, value: unknown): SchemaFieldError[] {
     }
   }
 
-  if (prop.dataType === "enum" && prop.enumValues && typeof value === "string") {
+  if (
+    prop.dataType === "enum" &&
+    prop.enumValues &&
+    typeof value === "string"
+  ) {
     if (!prop.enumValues.includes(value)) {
       errors.push({
         field: prop.key,
@@ -349,7 +379,10 @@ function checkValue(prop: PinnedProperty, value: unknown): SchemaFieldError[] {
 }
 
 /** Return a `type`-coded error when `value` does not match the declared dataType. */
-function checkDataType(prop: PinnedProperty, value: unknown): SchemaFieldError | null {
+function checkDataType(
+  prop: PinnedProperty,
+  value: unknown,
+): SchemaFieldError | null {
   const mk = (expected: string): SchemaFieldError => ({
     field: prop.key,
     message: `${prop.key}: expected ${expected}, got ${typeof value}`,
@@ -368,9 +401,13 @@ function checkDataType(prop: PinnedProperty, value: unknown): SchemaFieldError |
     case "datetime":
       return isDateLike(value) ? null : mk(prop.dataType);
     case "number":
-      return typeof value === "number" && Number.isFinite(value) ? null : mk("number");
+      return typeof value === "number" && Number.isFinite(value)
+        ? null
+        : mk("number");
     case "integer":
-      return typeof value === "number" && Number.isInteger(value) ? null : mk("integer");
+      return typeof value === "number" && Number.isInteger(value)
+        ? null
+        : mk("integer");
     case "boolean":
       return typeof value === "boolean" ? null : mk("boolean");
     case "array":
@@ -414,7 +451,9 @@ function deriveOutcome(
   pinnedSchema: PinnedSchema,
 ): ConformanceOutcome {
   if (!valid) {
-    return pinnedSchema.enforcementMode === "strict" ? "rejected" : "written_below_floor";
+    return pinnedSchema.enforcementMode === "strict"
+      ? "rejected"
+      : "written_below_floor";
   }
   if (score < pinnedSchema.conformanceFloor) {
     return "written_below_floor";

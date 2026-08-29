@@ -122,13 +122,11 @@ describe("resolveAgentRunAuthzContext()", () => {
   });
 
   it("warns when no initiating human is supplied — the sentinel must never be silent", async () => {
-    // Regression guard. A machine-initiated run (the A2A bridge with no
-    // ctx.userId, or a v1 delegated run whose optional delegation.userId is
-    // absent) used to fall back to the agent's creator and execute with that
-    // human's ceiling; it now resolves to the unprivileged sentinel and can
-    // materialize no capability tools. That is intended, but it went out
-    // unlogged, which makes a correctly-denied run look identical to a broken
-    // one. This asserts the operator-visible signal exists.
+    // A machine-initiated run (the A2A bridge with no ctx.userId, or a v1
+    // delegated run whose optional delegation.userId is absent) resolves to
+    // the unprivileged sentinel and can materialize no capability tools.
+    // That must stay visible to an operator, or a correctly-denied run looks
+    // identical to a broken one. This asserts the log line exists.
     mocks.loggerWarn.mockClear();
     mocks.dbFn.mockReturnValue(buildDbMock({}));
 

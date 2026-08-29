@@ -150,8 +150,8 @@ export function resolveDisplayPath(root: string, p: string): string {
  * reports true line numbers rather than 1..N. The number column is sized to the
  * largest number in the block so every number right-aligns.
  *
- * Shared by the engine `read_file` tool and the legacy CLI `read_file` tool so
- * the model sees identical, line-addressable output from either path. Pure.
+ * Shared by every `read_file` implementation so the model sees identical,
+ * line-addressable output from any of them. Pure.
  */
 export function formatWithLineNumbers(text: string, startLine = 1): string {
   if (text === "") return "";
@@ -239,8 +239,8 @@ function occurrenceLines(
 /**
  * Corrective feedback for an `edit_file` miss so the model can self-correct
  * instead of blindly retrying. Returns `null` when `oldString` already appears
- * exactly once (no failure). Shared by every mutating Workspace impl and the
- * legacy CLI tool so the guidance is identical across paths. Pure.
+ * exactly once (no failure). Shared by every mutating Workspace implementation
+ * so the guidance is identical across all of them. Pure.
  *
  *  - not found  → the closest line by fuzzy similarity + a whitespace hint.
  *  - ambiguous  → the first few matching line numbers + how to disambiguate.

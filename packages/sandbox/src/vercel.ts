@@ -13,7 +13,8 @@ import type {
 // Mirrors the Docker driver's 8 MB cap (docker.ts:29).
 const MAX_OUTPUT_CHARS = 8_388_608; // 8 MB
 
-// @vercel/sandbox supports node24 and python3.13 runtimes only (see ADR-011).
+// @vercel/sandbox supports node24 and python3.13 runtimes only
+// (see docs/adr/ADR-011-vercel-sandbox-driver.md).
 // Shell scripts are executed via /bin/sh on the node24 runtime.
 const LANGUAGE_RUNTIMES: Record<SandboxLanguage, string> = {
   node: "node24",
@@ -146,10 +147,15 @@ async function writeWorkspaceFiles(
 
 /** Subset of the Sandbox static API needed for mocking in tests. */
 export interface SandboxFactory {
-  create: (params: Parameters<typeof Sandbox.create>[0]) => ReturnType<typeof Sandbox.create>;
+  create: (
+    params: Parameters<typeof Sandbox.create>[0],
+  ) => ReturnType<typeof Sandbox.create>;
 }
 
-export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: SandboxFactory): SandboxDriver {
+export function createVercelSandbox(
+  config: VercelSandboxConfig,
+  sandboxImpl?: SandboxFactory,
+): SandboxDriver {
   const credentials = credentialsFor(config);
   const SandboxImpl: SandboxFactory = sandboxImpl ?? Sandbox;
 
@@ -185,7 +191,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
       await writeWorkspaceFiles(sandbox, baseDirOf(filePath), req.files);
       // Measure execution time starting after file upload so that
       // Sandbox.create() + fs.writeFile() warmup (typically 1–3 s) is
-      // excluded from the timedOut heuristic (ADR-011, 2026-06-07).
+      // excluded from the timedOut heuristic.
       execStart = Date.now();
       finished = await sandbox.runCommand({ cmd, args, env: req.env });
     } finally {
@@ -195,9 +201,9 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
     const durationMs = Date.now() - wallStart;
     const execDurationMs = Date.now() - execStart!;
     // Heuristic: treat the run as timed-out when execution time (excluding
-    // sandbox warmup) meets or exceeds the configured limit.
-    // ADR-011 (2026-06-07): @vercel/sandbox does not expose a dedicated
-    // timeout signal on CommandFinished; revisit when the SDK adds one.
+    // sandbox warmup) meets or exceeds the configured limit. @vercel/sandbox
+    // does not expose a dedicated timeout signal on CommandFinished
+    // (see docs/adr/ADR-011-vercel-sandbox-driver.md).
     const timedOut = execDurationMs >= req.timeoutMs;
 
     const rawStdout = await finished.stdout().catch(() => "");
@@ -205,10 +211,12 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
     const stdoutTruncated = rawStdout.length > MAX_OUTPUT_CHARS;
     const stderrTruncated = rawStderr.length > MAX_OUTPUT_CHARS;
     const stdout = stdoutTruncated
-      ? rawStdout.slice(0, MAX_OUTPUT_CHARS) + "\n[output truncated: exceeded 8 MB limit]"
+      ? rawStdout.slice(0, MAX_OUTPUT_CHARS) +
+        "\n[output truncated: exceeded 8 MB limit]"
       : rawStdout;
     const stderr = stderrTruncated
-      ? rawStderr.slice(0, MAX_OUTPUT_CHARS) + "\n[output truncated: exceeded 8 MB limit]"
+      ? rawStderr.slice(0, MAX_OUTPUT_CHARS) +
+        "\n[output truncated: exceeded 8 MB limit]"
       : rawStderr;
 
     return {
@@ -217,13 +225,15 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
       stderr,
       durationMs,
       timedOut,
-      // @vercel/sandbox does not surface an OOM flag; hardcode false.
-      // See ADR-011 Consequences for the rationale.
+      // @vercel/sandbox does not surface an OOM flag; hardcode false
+      // (see docs/adr/ADR-011-vercel-sandbox-driver.md).
       oomKilled: false,
     };
   }
 
-  async function* stream(req: SandboxRequest): AsyncIterable<SandboxStreamChunk> {
+  async function* stream(
+    req: SandboxRequest,
+  ): AsyncIterable<SandboxStreamChunk> {
     if (req.stdin && req.stdin.length > 0) {
       throw new VercelSandboxUnsupportedError(
         "The Vercel sandbox driver does not support stdin. " +
@@ -250,7 +260,12 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
       await writeWorkspaceFiles(sandbox, baseDirOf(filePath), req.files);
-      const command = await sandbox.runCommand({ cmd, args, env: req.env, detached: true });
+      const command = await sandbox.runCommand({
+        cmd,
+        args,
+        env: req.env,
+        detached: true,
+      });
       let streamedBytes = 0;
       for await (const log of command.logs()) {
         if (streamedBytes >= MAX_OUTPUT_CHARS) {
@@ -261,9 +276,10 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
           };
           break;
         }
-        const chunk = log.data.length > MAX_OUTPUT_CHARS - streamedBytes
-          ? log.data.slice(0, MAX_OUTPUT_CHARS - streamedBytes)
-          : log.data;
+        const chunk =
+          log.data.length > MAX_OUTPUT_CHARS - streamedBytes
+            ? log.data.slice(0, MAX_OUTPUT_CHARS - streamedBytes)
+            : log.data;
         streamedBytes += chunk.length;
         yield {
           channel: log.stream,

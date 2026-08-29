@@ -56,8 +56,8 @@ const {
     membershipError: null,
   };
 
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
   );
 
   return {
@@ -99,7 +99,8 @@ vi.mock("@oxagen/database", () => {
         where: (_w: unknown) => ({
           limit: (_n: number) => {
             dbState.systemCallIdx++;
-            if (dbState.systemCallIdx % 2 === 1) return Promise.resolve(dbState.orgRows);
+            if (dbState.systemCallIdx % 2 === 1)
+              return Promise.resolve(dbState.orgRows);
             return Promise.resolve(dbState.wsRows);
           },
         }),
@@ -117,10 +118,12 @@ vi.mock("@oxagen/database", () => {
         const limit = (_n: number) => {
           dbState.tenantSelectIdx++;
           if (dbState.tenantSelectIdx === 1) {
-            if (dbState.membershipError) return Promise.reject(dbState.membershipError);
+            if (dbState.membershipError)
+              return Promise.reject(dbState.membershipError);
             return Promise.resolve(dbState.wsUserRows);
           }
-          if (dbState.tenantSelectIdx === 3) return Promise.resolve(dbState.msgRows);
+          if (dbState.tenantSelectIdx === 3)
+            return Promise.resolve(dbState.msgRows);
           return Promise.resolve(dbState.convRows);
         };
         return {
@@ -154,18 +157,25 @@ vi.mock("@oxagen/database", () => {
   });
 
   return {
-    withSystemDb: vi.fn((fn: (tx: ReturnType<typeof makeSystemTx>) => unknown) => {
-      // Do NOT reset systemCallIdx here — the helper makes two separate
-      // withSystemDb calls (org then ws) and the counter must survive both.
-      return fn(makeSystemTx());
-    }),
+    withSystemDb: vi.fn(
+      (fn: (tx: ReturnType<typeof makeSystemTx>) => unknown) => {
+        // Do NOT reset systemCallIdx here — the helper makes two separate
+        // withSystemDb calls (org then ws) and the counter must survive both.
+        return fn(makeSystemTx());
+      },
+    ),
     withTenantDb: vi.fn(
-      (fn: (tx: ReturnType<typeof makeTenantTx>) => unknown) => fn(makeTenantTx()),
+      (fn: (tx: ReturnType<typeof makeTenantTx>) => unknown) =>
+        fn(makeTenantTx()),
     ),
     schema: {
       organizations: { id: "org_id", slug: "org_slug" },
       workspaces: { id: "ws_id", orgId: "ws_orgId", slug: "ws_slug" },
-      workspaceUsers: { id: "wu_id", workspaceId: "wu_wsId", userId: "wu_userId" },
+      workspaceUsers: {
+        id: "wu_id",
+        workspaceId: "wu_wsId",
+        userId: "wu_userId",
+      },
       conversations: {
         id: "conv_id",
         publicId: "conv_pid",
@@ -189,7 +199,11 @@ vi.mock("@oxagen/oxagen/contracts/chat.message.send", () => ({
     input: {
       safeParse: (raw: unknown) => {
         const r = raw as { content?: unknown };
-        if (!r?.content) return { success: false, error: { issues: [{ message: "Invalid" }] } };
+        if (!r?.content)
+          return {
+            success: false,
+            error: { issues: [{ message: "Invalid" }] },
+          };
         return {
           success: true,
           data: {
@@ -210,7 +224,10 @@ vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({
       safeParse: (raw: unknown) => {
         const r = raw as { approvalId?: unknown; decision?: unknown };
         if (!r?.approvalId || !r?.decision)
-          return { success: false, error: { issues: [{ message: "Invalid" }] } };
+          return {
+            success: false,
+            error: { issues: [{ message: "Invalid" }] },
+          };
         return { success: true, data: r };
       },
     },
@@ -220,9 +237,16 @@ vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({
   agentMcpConsentResolve: {
     input: {
       safeParse: (raw: unknown) => {
-        const r = raw as { approvalId?: unknown; decision?: unknown; grantAllTools?: unknown };
+        const r = raw as {
+          approvalId?: unknown;
+          decision?: unknown;
+          grantAllTools?: unknown;
+        };
         if (!r?.approvalId || !r?.decision)
-          return { success: false, error: { issues: [{ message: "Invalid" }] } };
+          return {
+            success: false,
+            error: { issues: [{ message: "Invalid" }] },
+          };
         return { success: true, data: r };
       },
     },
@@ -234,7 +258,10 @@ vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
       safeParse: (raw: unknown) => {
         const r = raw as { planId?: unknown; decision?: unknown };
         if (!r?.planId || !r?.decision)
-          return { success: false, error: { issues: [{ message: "Invalid" }] } };
+          return {
+            success: false,
+            error: { issues: [{ message: "Invalid" }] },
+          };
         return { success: true, data: r };
       },
     },
@@ -351,8 +378,8 @@ describe("wandResolveApprovalAction", () => {
     if (!res.ok) expect(res.error).toContain("workspace");
   });
 
-  // Regression (OXA-2049 co-located instance): wandResolveApprovalAction
-  // resolved orgSlug/workspaceSlug to real ids but never asserted the caller
+  // Regression: wandResolveApprovalAction resolved orgSlug/workspaceSlug to
+  // real ids but never asserted the caller
   // was actually a member of that workspace before invoking
   // agent.approval.resolve — invoke() from apps/app skips the kernel IAM
   // check, so any authenticated user who knew/guessed an orgSlug +
@@ -417,8 +444,8 @@ describe("wandResolveConsentAction", () => {
     mockInvoke.mockResolvedValue(undefined);
   });
 
-  // Regression (OXA-2049 co-located instance): same missing-membership-gate
-  // bug as wandResolveApprovalAction, for the MCP first-use consent resolver.
+  // Regression: same missing-membership-gate bug as wandResolveApprovalAction,
+  // for the MCP first-use consent resolver.
   it("denies a non-member — no cross-workspace consent resolution", async () => {
     dbState.wsUserRows = [];
     const res = await wandResolveConsentAction(
@@ -444,7 +471,11 @@ describe("wandResolveConsentAction", () => {
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "resolve_mcp_consent",
-      expect.objectContaining({ approvalId: "appr-1", decision: "granted", grantAllTools: true }),
+      expect.objectContaining({
+        approvalId: "appr-1",
+        decision: "granted",
+        grantAllTools: true,
+      }),
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
     );
@@ -480,8 +511,24 @@ describe("loadAgentConversationAction", () => {
     ];
     // Message history (3rd tenant select) — a user→assistant branch.
     dbState.msgRows = [
-      { id: "m1", parentMessageId: null, publicId: "msg_1", role: "user", content: "hi", branchReason: null, contentBlocks: [] },
-      { id: "m2", parentMessageId: "m1", publicId: "msg_2", role: "assistant", content: "hello", branchReason: null, contentBlocks: [] },
+      {
+        id: "m1",
+        parentMessageId: null,
+        publicId: "msg_1",
+        role: "user",
+        content: "hi",
+        branchReason: null,
+        contentBlocks: [],
+      },
+      {
+        id: "m2",
+        parentMessageId: "m1",
+        publicId: "msg_2",
+        role: "assistant",
+        content: "hello",
+        branchReason: null,
+        contentBlocks: [],
+      },
     ] as unknown as Array<{ id: string }>;
     dbState.systemCallIdx = 0;
     dbState.tenantSelectIdx = 0;
@@ -506,7 +553,11 @@ describe("loadAgentConversationAction", () => {
 
   it("returns ok:false when the conversation is not found", async () => {
     dbState.convRows = [];
-    const res = await loadAgentConversationAction("acme", "main", "pub-missing");
+    const res = await loadAgentConversationAction(
+      "acme",
+      "main",
+      "pub-missing",
+    );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("not found");
   });
@@ -519,7 +570,10 @@ describe("loadAgentConversationAction", () => {
       expect(res.activeLeafMessageId).toBe("m2");
       expect(res.messages).toHaveLength(2);
       expect(res.messages[0]).toMatchObject({ role: "user", content: "hi" });
-      expect(res.messages[1]).toMatchObject({ role: "assistant", content: "hello" });
+      expect(res.messages[1]).toMatchObject({
+        role: "assistant",
+        content: "hello",
+      });
     }
   });
 });
@@ -539,23 +593,38 @@ describe("wandResolvePlanAction", () => {
 
   it("returns ok:false when workspace cannot be resolved", async () => {
     dbState.wsRows = [];
-    const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
+    const res = await wandResolvePlanAction(
+      "acme",
+      "main",
+      "plan-1",
+      "approved",
+    );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("workspace");
   });
 
-  // Regression (OXA-2049 co-located instance): same missing-membership-gate
-  // bug as wandResolveApprovalAction, for plan approval/denial/amendment.
+  // Regression: same missing-membership-gate bug as wandResolveApprovalAction,
+  // for plan approval/denial/amendment.
   it("denies a non-member — no cross-workspace plan resolution", async () => {
     dbState.wsUserRows = [];
-    const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
+    const res = await wandResolvePlanAction(
+      "acme",
+      "main",
+      "plan-1",
+      "approved",
+    );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("access");
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("returns ok:true for an approved decision", async () => {
-    const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
+    const res = await wandResolvePlanAction(
+      "acme",
+      "main",
+      "plan-1",
+      "approved",
+    );
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "approve_plan",
@@ -573,7 +642,12 @@ describe("wandResolvePlanAction", () => {
   });
 
   it("maps 'amended' to 'amend' verb correctly", async () => {
-    const res = await wandResolvePlanAction("acme", "main", "plan-1", "amended");
+    const res = await wandResolvePlanAction(
+      "acme",
+      "main",
+      "plan-1",
+      "amended",
+    );
     expect(res.ok).toBe(true);
     const call = mockInvoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(call.decision).toBe("amend");

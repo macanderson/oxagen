@@ -9,9 +9,9 @@ import { SANDBOX_TEMPLATE_MANIFEST_KIND } from "../../../contracts/sandbox-templ
 // its entire payload is the portable sandbox template below, seeded into the
 // installing workspace's default environment on install (idempotent by slug).
 //
-// Embedded module data, NOT a runtime fs path (PR #713 bundle-safety pattern):
-// the manifest is a plain object compiled into the bundle, so distribution never
-// depends on a file being present on disk at runtime.
+// Embedded module data, NOT a runtime fs path: the manifest is a plain object
+// compiled into the bundle, so distribution never depends on a file being
+// present on disk at runtime.
 export const sweBenchEvalsManifest: OxagenPluginManifest = {
   id: "oxagen/swe-bench-evals",
   name: "SWE-bench Evals",

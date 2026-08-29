@@ -543,8 +543,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "Webhook signing secret for the SECOND GitHub App (oxagen-sh, app id " +
       "4055615), which delivers to the same /webhooks/github/app endpoint as " +
-      "oxagen-code-agent. Confirmed by HMAC against a captured delivery — see " +
-      "issue #1200. Optional: unset means that App's deliveries are rejected.",
+      "oxagen-code-agent. Optional: unset means that App's deliveries are rejected.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -572,14 +571,15 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
-  // ADR-020: per-workspace write credential resolution.
+  // Per-workspace write credential resolution
+  // (docs/adr/ADR-020-per-workspace-github-write-credentials.md).
   // GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY enable the installation-token path
   // in resolveGitHubToken(). Both must be set together; omitting either falls
   // through to the OAuth-connection or env-PAT fallback.
   GITHUB_APP_ID: {
     group: "github",
     description:
-      "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken() (ADR-020). Find it on the GitHub App settings page.",
+      "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page.",
     secret: false,
     clientExposed: false,
     services: ["api", "mcp"],
@@ -590,7 +590,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_PRIVATE_KEY: {
     group: "github",
     description:
-      "PEM-encoded RSA private key for the GitHub App. Required (with GITHUB_APP_ID) for the installation-token path in resolveGitHubToken() (ADR-020). Generate in the GitHub App settings → Private keys.",
+      "PEM-encoded RSA private key for the GitHub App. Required (with GITHUB_APP_ID) for the installation-token path in resolveGitHubToken(). Generate in the GitHub App settings → Private keys.",
     secret: true,
     clientExposed: false,
     services: ["api", "mcp"],
@@ -1493,8 +1493,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Testing / e2e",
     description:
       'Set to "1" by tools/scripts/dev.ts for the local dev stack. Consumed by packages/auth ' +
-      "to make local-env detection deterministic instead of racing NODE_ENV at module-load time " +
-      "(OXA-1752). Ignored on real Vercel deployments (VERCEL=1 guards it). NOTE: read via raw " +
+      "to make local-env detection deterministic instead of racing NODE_ENV at module-load time. " +
+      "Ignored on real Vercel deployments (VERCEL=1 guards it). NOTE: read via raw " +
       "process.env — not in baseEnvSchema (dev-tooling only).",
     secret: false,
     clientExposed: false,
@@ -1553,11 +1553,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "HMAC-SHA256 secret for signing audit-log export tokens, so exported files " +
       "can be verified as untampered. OPTIONAL: baseEnvSchema declares it " +
       "`.optional()` and the audit export route falls back to " +
-      "BETTER_AUTH_SECRET when it is unset, which is the behaviour in " +
-      "production today. Whether that fallback should be replaced by a " +
-      "dedicated secret is #1197 — setting one changes the signing key and " +
-      "invalidates outstanding export download URLs. Generate with " +
-      "`openssl rand -base64 32`.",
+      "BETTER_AUTH_SECRET when it is unset. Setting a dedicated value changes " +
+      "the signing key and invalidates outstanding export download URLs. " +
+      "Generate with `openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
     services: ["app"],
@@ -1986,7 +1984,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_SPECULATIVE_TOOLS: {
     group: "CLI",
     description:
-      "Speculative tool execution kill switch (ADR-030 — ON by default). After every " +
+      "Speculative tool execution kill switch (docs/adr/ADR-030-speculative-tool-execution.md — ON by default). After every " +
       "read-tool result the engine predicts the model's likely next reads (truncation-marker " +
       "follow-ups, top grep hit files, first glob entries) and executes them early into a " +
       "per-turn promise cache; a matching real call awaits the same promise instead of " +
@@ -2292,7 +2290,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LADDER: {
     group: "CLI",
     description:
-      "Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON BY DEFAULT: " +
+      "Deterministic judge-skip / adaptive compute ladder (docs/adr/ADR-021-inference-doctrine.md §1). ON BY DEFAULT: " +
       "the frontier completeness judge is skipped when executed evidence already settles " +
       "the outcome (oracle flipped + touched tests green + diff within budget, or a " +
       "read-only turn with no diff). Set to 0/false to OPT OUT and force the judge to run " +
@@ -2373,7 +2371,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Overrides the fleet store root (default `~/.oxagen/fleet`) that backs `oxagen fleet` " +
-      "session tracking (ADR-023). Used by tests and sandboxes to isolate the fleet store from " +
+      "session tracking (docs/adr/ADR-023-cli-fleet-session-event-log.md). Used by tests and sandboxes to isolate the fleet store from " +
       "a developer's real `~/.oxagen` directory; never set in deployed environments.",
     secret: false,
     clientExposed: false,
@@ -2384,7 +2382,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_FLEET_RECORD: {
     group: "CLI",
     description:
-      "Toggles the ADR-028 time-travel sidecar record (`record/record.ndjson` + blob store) " +
+      "Toggles the docs/adr/ADR-028-time-travel-replay.md sidecar record (`record/record.ndjson` + blob store) " +
       "written by every `oxagen fleet` session. Recording is default-ON; set to `0` or `off` " +
       "to disable. CLI-local only; never set in deployed environments.",
     secret: false,

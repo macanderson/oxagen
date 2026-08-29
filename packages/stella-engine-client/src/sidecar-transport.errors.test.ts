@@ -158,8 +158,8 @@ describe("StellaSidecarClient error paths", () => {
 
   test("the SSE parser skips comments and blank records, and joins multi-line data", async () => {
     // A single record whose `data:` field spans two lines must be concatenated
-    // before parsing — splitting on every newline (the previous behaviour)
-    // would throw a bare SyntaxError on the first half.
+    // before parsing — splitting on every newline would throw a bare
+    // SyntaxError on the first half.
     const body =
       ": heartbeat comment\n\n" +
       "\n\n" +

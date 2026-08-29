@@ -485,7 +485,7 @@ export async function wandResolveApprovalAction(
 // wandResolveConsentAction
 //
 // Mirrors wandResolveApprovalAction for first-use external-MCP consent
-// (OXA-816). The orgSlug/workspaceSlug are passed explicitly and resolved to
+//. The orgSlug/workspaceSlug are passed explicitly and resolved to
 // IDs server-side; the consent decision resumes the paused agent stream.
 // ---------------------------------------------------------------------------
 

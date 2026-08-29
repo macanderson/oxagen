@@ -1,7 +1,7 @@
 /**
  * two-factor-enrollment.spec.ts
  *
- * Security-critical money-path E2E for TOTP 2FA (PR #561). Proves the full
+ * Security-critical money-path E2E for TOTP 2FA. Proves the full
  * enroll → sign-out → re-sign-in-with-second-factor loop against the real UI
  * and the real Better Auth twoFactor endpoints — no mocks.
  *
@@ -109,10 +109,10 @@ test.describe("TOTP 2FA — enroll then sign in with the second factor", () => {
     await page.getByRole("button", { name: /verify & enable/i }).click();
 
     // router.refresh() re-reads two_factor_enabled → the card flips to Enrolled.
-    await expect(page.getByText(/^enrolled$/i)).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByText(/two-factor authentication is/i),
-    ).toBeVisible();
+    await expect(page.getByText(/^enrolled$/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/two-factor authentication is/i)).toBeVisible();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "02-enrolled.png"),
       fullPage: true,

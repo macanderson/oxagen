@@ -17,19 +17,23 @@ import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const orgMemberInviteDeclineHandler: CapabilityHandler<typeof orgMemberInviteDecline> = async (
-  input,
-  ctx,
-) => {
+export const orgMemberInviteDeclineHandler: CapabilityHandler<
+  typeof orgMemberInviteDecline
+> = async (input, ctx) => {
   // ── Auth guard ───────────────────────────────────────────────────────────────
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({}, "org.member.invite.decline: rejected — no authenticated principal");
-    throw new Error("Unauthorized: must be authenticated to decline an invitation");
+    logger.warn(
+      {},
+      "org.member.invite.decline: rejected — no authenticated principal",
+    );
+    throw new Error(
+      "Unauthorized: must be authenticated to decline an invitation",
+    );
   }
 
   // tenancy: system bypass via withSystemDb (cross-org lookup — the decliner's
   // ctx.orgId may differ from the invitation's orgId; the update below writes to
-  // the invitation's org which cannot satisfy RLS under the caller's scope) — OXA-1515
+  // the invitation's org which cannot satisfy RLS under the caller's scope) (see docs/specs/tenancy-rls/spec.md)
 
   // ── Resolve invitation ───────────────────────────────────────────────────────
   const invitation = await withSystemDb((tx) =>
@@ -59,7 +63,11 @@ export const orgMemberInviteDeclineHandler: CapabilityHandler<typeof orgMemberIn
   await withSystemDb((tx) =>
     tx
       .update(schema.invitations)
-      .set({ status: "declined", updatedAt: new Date(), updatedByUserId: actorId })
+      .set({
+        status: "declined",
+        updatedAt: new Date(),
+        updatedByUserId: actorId,
+      })
       .where(eq(schema.invitations.id, invitation.id)),
   );
 

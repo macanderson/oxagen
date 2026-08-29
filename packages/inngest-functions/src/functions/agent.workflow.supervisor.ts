@@ -37,14 +37,18 @@ export const [agentWorkflowSupervisor] = createFunction(
   },
   { event: "agent/workflow.supervisor.start" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, executionId, maxParallelism, maxTasksGuard } = event.data as {
-      orgId: string;
-      workspaceId: string;
-      executionId: string;
-      maxParallelism: number;
-      maxTasksGuard?: number;
-    };
-    const effectiveMaxTasks = Math.min(maxTasksGuard ?? MAX_TASKS_PER_WORKFLOW, MAX_TASKS_PER_WORKFLOW);
+    const { orgId, workspaceId, executionId, maxParallelism, maxTasksGuard } =
+      event.data as {
+        orgId: string;
+        workspaceId: string;
+        executionId: string;
+        maxParallelism: number;
+        maxTasksGuard?: number;
+      };
+    const effectiveMaxTasks = Math.min(
+      maxTasksGuard ?? MAX_TASKS_PER_WORKFLOW,
+      MAX_TASKS_PER_WORKFLOW,
+    );
 
     const execution = await step.run("load-execution", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
@@ -60,11 +64,14 @@ export const [agentWorkflowSupervisor] = createFunction(
     );
 
     if (!execution) {
-      logger.error({ executionId, orgId }, "agent.workflow.supervisor: execution not found");
+      logger.error(
+        { executionId, orgId },
+        "agent.workflow.supervisor: execution not found",
+      );
       // Mark the execution row as failed in Postgres so the DB record reflects
       // the terminal state (it would otherwise remain stuck in "planning").
       // Use a best-effort update — ignore any secondary DB error here because
-      // the row may simply not exist, and we are about to throw anyway.
+      // the row may not exist, and we are about to throw anyway.
       try {
         await step.run("mark-failed-not-found", () =>
           runInTenantScope({ orgId, workspaceId }, () =>
@@ -176,21 +183,26 @@ Return between 2 and ${effectiveMaxTasks} tasks. Number them starting from 0.`,
       const batchLabel = `dispatch-batch-${Math.floor(i / batchSize)}`;
       await step.run(batchLabel, () =>
         inngest.send(
-          batch.map((s: { id: string; stepNumber: number; inputPayload: unknown }) => {
-            const payload = s.inputPayload as { goal: string; outputFormat: "json" | "csv" };
-            return {
-              name: "agent/workflow.task.execute" as const,
-              data: {
-                orgId,
-                workspaceId,
-                executionId,
-                stepId: s.id,
-                taskIndex: s.stepNumber,
-                goal: payload.goal,
-                outputFormat: payload.outputFormat,
-              },
-            };
-          }),
+          batch.map(
+            (s: { id: string; stepNumber: number; inputPayload: unknown }) => {
+              const payload = s.inputPayload as {
+                goal: string;
+                outputFormat: "json" | "csv";
+              };
+              return {
+                name: "agent/workflow.task.execute" as const,
+                data: {
+                  orgId,
+                  workspaceId,
+                  executionId,
+                  stepId: s.id,
+                  taskIndex: s.stepNumber,
+                  goal: payload.goal,
+                  outputFormat: payload.outputFormat,
+                },
+              };
+            },
+          ),
         ),
       );
     }

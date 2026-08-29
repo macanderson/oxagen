@@ -19,7 +19,9 @@ export interface WorkspaceScopeResult {
   workspaceId: string;
 }
 
-export type WorkspaceScopeResolutionError = { kind: "not_found" } | { kind: "not_member" };
+export type WorkspaceScopeResolutionError =
+  | { kind: "not_found" }
+  | { kind: "not_member" };
 
 export type WorkspaceScopeResolution =
   | ({ ok: true } & WorkspaceScopeResult)
@@ -49,14 +51,17 @@ export async function resolveWorkspaceScope(
   slug: string,
   userId?: string | null,
 ): Promise<WorkspaceScopeResolution> {
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
   // Resolves (orgId, slug) → workspaceId. This is the resolution step: it
   // produces the workspaceId needed to construct a tenant scope. The workspaces
   // table is an identity/routing table queried here purely to establish which
   // tenant scope applies — no tenant-owned payload is accessed.
   const ws = await withSystemDb((tx) =>
     tx.query.workspaces.findFirst({
-      where: and(eq(schema.workspaces.orgId, orgId), eq(schema.workspaces.slug, slug)),
+      where: and(
+        eq(schema.workspaces.orgId, orgId),
+        eq(schema.workspaces.slug, slug),
+      ),
       columns: { id: true },
     }),
   );
@@ -68,7 +73,7 @@ export async function resolveWorkspaceScope(
   // isolation at the transport layer regardless of IAM enforcement state —
   // a ws-alpha session must never access ws-beta resources within the same org.
   // withSystemDb bypasses RLS legitimately here (identity/routing table, no
-  // tenant payload returned) — OXA-1515.
+  // tenant payload returned).
   if (userId) {
     const membership = await withSystemDb((tx) =>
       tx.query.workspaceUsers.findFirst({

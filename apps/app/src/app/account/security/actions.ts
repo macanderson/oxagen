@@ -19,7 +19,7 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { getSessionOrRedirect } from "@/lib/session";
 import { logger } from "@oxagen/handlers/logger";
 
-// Sentinel workspaceId for user-scoped actions. — OXA-1515
+// Sentinel workspaceId for user-scoped actions.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const RevokeOwnSessionSchema = z.object({

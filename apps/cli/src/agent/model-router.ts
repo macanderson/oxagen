@@ -5,10 +5,9 @@
  * on Haiku-sized work and only reach for Fable when the task actually needs it.
  * The *classifier* that turns a task's structural signals into a tier (the
  * PRECISE/DESIGN/TRIVIAL heuristics, the breadth thresholds, the cross-vendor
- * slug markers) is identical to the engine's and now lives ONLY there —
- * `@oxagen/agent-engine`'s `classifyTier`/`tierForSlug`. This module used to
- * carry a byte-for-byte second copy of all of it; keeping two copies in sync by
- * hand was the drift risk the engine unification exists to kill.
+ * slug markers) is identical to the engine's and lives ONLY there —
+ * `@oxagen/agent-engine`'s `classifyTier`/`tierForSlug`. Keeping one copy avoids
+ * the drift risk of two heuristics slowly diverging.
  *
  * Three behaviours stay CLI-specific and are the reason this is a thin wrapper
  * rather than a bare re-export (all three are preserved on purpose — see each):
@@ -34,7 +33,11 @@ import {
   classifyTier as engineClassifyTier,
   tierForSlug as engineTierForSlug,
 } from "@oxagen/agent-engine";
-import type { ModelTier, TaskSignals, RouteDecision } from "@oxagen/agent-engine";
+import type {
+  ModelTier,
+  TaskSignals,
+  RouteDecision,
+} from "@oxagen/agent-engine";
 import { readConfig } from "../lib/config.js";
 import { estimateCostUsd, rateFor, formatUsd } from "./rate-card.js";
 import { LATEST_ANTHROPIC } from "./model-catalog.js";
@@ -85,10 +88,17 @@ export function classifyTier(signals: TaskSignals): RouteDecision {
  * `OXAGEN_MODEL`, or a pinned `config.model` always wins and routing is skipped.
  * Otherwise auto-route from the task signals.
  */
-export function routeModel(signals: TaskSignals, override?: string): RouteDecision {
+export function routeModel(
+  signals: TaskSignals,
+  override?: string,
+): RouteDecision {
   const manual = override ?? process.env["OXAGEN_MODEL"] ?? readConfig().model;
   if (manual) {
-    return { tier: tierForSlug(manual), model: manual, rationale: "pinned model" };
+    return {
+      tier: tierForSlug(manual),
+      model: manual,
+      rationale: "pinned model",
+    };
   }
   return classifyTier(signals);
 }

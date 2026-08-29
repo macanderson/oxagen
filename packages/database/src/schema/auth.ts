@@ -154,22 +154,19 @@ export const accounts = authSchema.table(
 
     // Better Auth's drizzle adapter writes these fields on every OAuth account
     // create/link; without the columns it throws "field does not exist" and
-    // sign-in fails (OXA-1420's encrypt-only contract relied on a databaseHook
-    // stripping them, which Better Auth does not apply on every write path).
-    // Restored as nullable so OAuth login works. These hold LOGIN-client tokens
-    // only (minimal openid/profile/email scopes — low value); the high-value
+    // sign-in fails. Nullable because these hold LOGIN-client tokens only
+    // (minimal openid/profile/email scopes — low value); the high-value
     // DATA-client tokens use a separate client and never land here. The *_enc
-    // columns + token-encryption hook remain for proper re-encryption (OXA-1420
-    // follow-up) once Better Auth's hook coverage is confirmed.
+    // columns below are the authoritative, encrypted copy.
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
 
-    // OXA-1420: envelope-encrypted token columns — authoritative.
+    // Envelope-encrypted token columns — authoritative.
     accessTokenEnc: bytea("access_token_enc"),
     refreshTokenEnc: bytea("refresh_token_enc"),
     idTokenEnc: bytea("id_token_enc"),
-    // The KMS CMK id used to wrap the DEK for this row.  Stored so that
+    // The KMS CMK id used to wrap the DEK for this row. Stored so
     // per-row key rotation is possible without re-querying config.
     tokenKmsKeyId: text("token_kms_key_id"),
 

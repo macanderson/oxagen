@@ -1,11 +1,19 @@
 import pino from "pino";
 import { embed } from "ai";
 import { gateway } from "@ai-sdk/gateway";
-import { insertTokenUsage, providerFromModelId, hashPrompt, type Surface } from "@oxagen/telemetry";
+import {
+  insertTokenUsage,
+  providerFromModelId,
+  hashPrompt,
+  type Surface,
+} from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.embed" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.embed" },
+});
 
 // Match the 1536-dim AgentMemory vector index. Swapping models requires a
 // re-index, so we pin here and treat the index name as the contract. `MODEL` is
@@ -18,7 +26,7 @@ export interface EmbedTextOpts {
   /**
    * Required telemetry context forwarded from the caller's CapabilityContext.
    * Every embedding call must be metered so the token_usage table is the
-   * complete billing record (OXA-1351 / OXA-1425). Tests that do not exercise
+   * complete billing record. Tests that do not exercise
    * the ClickHouse path should mock @oxagen/telemetry.insertTokenUsage rather
    * than omitting this field.
    */
@@ -45,10 +53,13 @@ export interface EmbedTextOpts {
  * and write one `token_usage` row to ClickHouse via @oxagen/telemetry
  * (best-effort, never throws). Surface origin and execution step flow through
  * `opts.telemetry` so every embedding call is metered alongside language-model
- * calls (OXA-1351 / OXA-1425). The gateway client reads `AI_GATEWAY_API_KEY`
+ * calls. The gateway client reads `AI_GATEWAY_API_KEY`
  * from the environment — there is no direct-provider fallback.
  */
-export async function embedText(text: string, opts: EmbedTextOpts): Promise<number[]> {
+export async function embedText(
+  text: string,
+  opts: EmbedTextOpts,
+): Promise<number[]> {
   const model = gateway.embeddingModel(GATEWAY_MODEL);
   const startedAt = Date.now();
 
@@ -58,7 +69,7 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
   const durationMs = Date.now() - startedAt;
   // Warn when the AI SDK embedding response omits usage (gateway outage, partial
   // response, or SDK version skew) so the billing gap is visible in logs rather
-  // than silently recorded as zero tokens / zero cost (OXA-1425).
+  // than silently recorded as zero tokens / zero cost.
   if (!usage) {
     logger.warn(
       { model: MODEL, executionStepId },
@@ -67,7 +78,11 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
   }
   const inputTokens = usage?.tokens ?? 0;
   // Embeddings are input-only; the rate card prices them per the same meter.
-  const costUsdMicros = providerCostUsdMicros({ model: MODEL, inputTokens, outputTokens: 0 });
+  const costUsdMicros = providerCostUsdMicros({
+    model: MODEL,
+    inputTokens,
+    outputTokens: 0,
+  });
   try {
     const promptHash = await hashPrompt(text);
     await insertTokenUsage([
@@ -94,7 +109,7 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
 
   // Debit the org's credits for what this embedding call cost. Best-effort and
   // post-call — a metering failure must not fail the caller (mirrors stream.ts
-  // and generate-object.ts). OXA-1351 / OXA-1425.
+  // and generate-object.ts).
   //
   // chargeUsageCredits → consumeCredits → withTenantDb → requireScope, which
   // needs an active tenant scope. Request-path callers have one; Inngest workers

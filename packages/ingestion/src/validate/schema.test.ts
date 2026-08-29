@@ -1,8 +1,8 @@
 /**
- * Unit tests for the shared schema-registry validator (§7.3, §8, §16.2).
+ * Unit tests for the shared schema-registry validator.
  *
  * Covers: required-property enforcement, type checks, enum (oneOf), numeric +
- * string constraints, the §16.2 conformance-score math against its named-constant
+ * string constraints, the conformance-score math against its named-constant
  * weights, relationship endpoint constraints, and all three enforcement modes'
  * outcome classification.
  */
@@ -130,7 +130,9 @@ describe("validateNodeAgainstSchema — type checks", () => {
       { label: "Deal", properties: { amount: 5, active: "yes" } },
       s,
     );
-    expect(result.errors.some((e) => e.field === "active" && e.code === "type")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "active" && e.code === "type"),
+    ).toBe(true);
   });
 
   it("rejects a malformed url", () => {
@@ -138,7 +140,9 @@ describe("validateNodeAgainstSchema — type checks", () => {
       { label: "Deal", properties: { amount: 5, site: "not a url" } },
       s,
     );
-    expect(result.errors.some((e) => e.field === "site" && e.code === "type")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "site" && e.code === "type"),
+    ).toBe(true);
   });
 
   it("accepts a valid url + integer", () => {
@@ -188,7 +192,9 @@ describe("validateNodeAgainstSchema — enum + constraints", () => {
       { label: "Ticket", properties: { status: "archived" } },
       s,
     );
-    expect(result.errors.some((e) => e.field === "status" && e.code === "oneOf")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "status" && e.code === "oneOf"),
+    ).toBe(true);
   });
 
   it("enforces numeric min/max", () => {
@@ -196,7 +202,9 @@ describe("validateNodeAgainstSchema — enum + constraints", () => {
       { label: "Ticket", properties: { status: "open", priority: 9 } },
       s,
     );
-    expect(result.errors.some((e) => e.field === "priority" && e.code === "max")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "priority" && e.code === "max"),
+    ).toBe(true);
   });
 
   it("enforces string minLength + pattern", () => {
@@ -204,11 +212,13 @@ describe("validateNodeAgainstSchema — enum + constraints", () => {
       { label: "Ticket", properties: { status: "open", code: "ab" } },
       s,
     );
-    expect(result.errors.some((e) => e.field === "code" && e.code === "minLength")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "code" && e.code === "minLength"),
+    ).toBe(true);
   });
 });
 
-describe("conformance score math (§16.2 — named-constant weights)", () => {
+describe("conformance score math (named-constant weights)", () => {
   it("a single missing required over 2 props = 1 − MISSING_REQUIRED_WEIGHT/2", () => {
     const s = schema({
       labels: [
@@ -225,8 +235,14 @@ describe("conformance score math (§16.2 — named-constant weights)", () => {
         },
       ],
     });
-    const result = validateNodeAgainstSchema({ label: "L", properties: { a: "x" } }, s);
-    expect(result.conformanceScore).toBeCloseTo(1 - MISSING_REQUIRED_WEIGHT / 2, 6);
+    const result = validateNodeAgainstSchema(
+      { label: "L", properties: { a: "x" } },
+      s,
+    );
+    expect(result.conformanceScore).toBeCloseTo(
+      1 - MISSING_REQUIRED_WEIGHT / 2,
+      6,
+    );
   });
 
   it("a single type error over 1 prop = 1 − TYPE_ERROR_WEIGHT/1", () => {
@@ -238,11 +254,16 @@ describe("conformance score math (§16.2 — named-constant weights)", () => {
           displayName: "L",
           description: null,
           naturalKeyProps: [],
-          properties: [prop({ key: "n", dataType: "integer", required: false })],
+          properties: [
+            prop({ key: "n", dataType: "integer", required: false }),
+          ],
         },
       ],
     });
-    const result = validateNodeAgainstSchema({ label: "L", properties: { n: "nope" } }, s);
+    const result = validateNodeAgainstSchema(
+      { label: "L", properties: { n: "nope" } },
+      s,
+    );
     expect(result.conformanceScore).toBeCloseTo(1 - TYPE_ERROR_WEIGHT / 1, 6);
   });
 
@@ -262,8 +283,14 @@ describe("conformance score math (§16.2 — named-constant weights)", () => {
         },
       ],
     });
-    const result = validateNodeAgainstSchema({ label: "L", properties: { req: "x" } }, s);
-    expect(result.conformanceScore).toBeCloseTo(1 - MISSING_OPTIONAL_WEIGHT / 2, 6);
+    const result = validateNodeAgainstSchema(
+      { label: "L", properties: { req: "x" } },
+      s,
+    );
+    expect(result.conformanceScore).toBeCloseTo(
+      1 - MISSING_OPTIONAL_WEIGHT / 2,
+      6,
+    );
     expect(result.valid).toBe(true); // optional miss is not a hard error
   });
 
@@ -286,7 +313,10 @@ describe("conformance score math (§16.2 — named-constant weights)", () => {
 });
 
 describe("enforcement-mode outcome classification", () => {
-  function labelSchema(mode: PinnedSchema["enforcementMode"], floor = 0.5): PinnedSchema {
+  function labelSchema(
+    mode: PinnedSchema["enforcementMode"],
+    floor = 0.5,
+  ): PinnedSchema {
     return schema({
       enforcementMode: mode,
       conformanceFloor: floor,
@@ -349,7 +379,10 @@ describe("enforcement-mode outcome classification", () => {
         },
       ],
     });
-    const result = validateNodeAgainstSchema({ label: "L", properties: { a: "x" } }, s);
+    const result = validateNodeAgainstSchema(
+      { label: "L", properties: { a: "x" } },
+      s,
+    );
     expect(result.valid).toBe(true);
     expect(result.conformanceScore).toBeLessThan(0.95);
     expect(result.outcome).toBe("written_below_floor");
@@ -367,7 +400,9 @@ describe("validateRelationshipAgainstSchema", () => {
         startLabel: "Customer",
         endLabel: "Contract",
         cardinality: "one_to_many",
-        properties: [prop({ key: "signedAt", dataType: "datetime", required: true })],
+        properties: [
+          prop({ key: "signedAt", dataType: "datetime", required: true }),
+        ],
       },
     ],
   });
@@ -383,7 +418,12 @@ describe("validateRelationshipAgainstSchema", () => {
 
   it("missing required property on a known relationship", () => {
     const result = validateRelationshipAgainstSchema(
-      { type: "SIGNED_CONTRACT", startLabel: "Customer", endLabel: "Contract", properties: {} },
+      {
+        type: "SIGNED_CONTRACT",
+        startLabel: "Customer",
+        endLabel: "Contract",
+        properties: {},
+      },
       s,
     );
     expect(result.valid).toBe(false);
@@ -401,7 +441,9 @@ describe("validateRelationshipAgainstSchema", () => {
       s,
     );
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "startLabel" && e.code === "type")).toBe(true);
+    expect(
+      result.errors.some((e) => e.field === "startLabel" && e.code === "type"),
+    ).toBe(true);
   });
 
   it("accepts a fully-conformant relationship", () => {

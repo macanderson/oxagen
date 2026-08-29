@@ -1,5 +1,5 @@
 // tenancy: system bypass via withSystemDb (resolves org from external Stripe invoice id
-// before a tenant scope exists; webhook path, no per-org scope available) — OXA-1515
+// before a tenant scope exists; webhook path, no per-org scope available).
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
@@ -27,8 +27,7 @@ async function resolveOrgIdFromSubscription(
  * invokes this from invoice.* events; idempotent on stripe_invoice_id.
  * Line-item detail is NOT mirrored — the invoices UI links to the
  * Stripe-hosted invoice, and receipts read line items straight off the
- * provider payload (billing.invoice_line_items was dropped as a write-only
- * mirror in migration 20260802130000).
+ * provider payload.
  */
 export async function syncInvoiceFromStripe(
   stripeInvoiceId: string,

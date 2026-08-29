@@ -3,9 +3,9 @@
  *
  * Builtin skill bodies are embedded as module data (builtin-skills.generated.ts)
  * so they travel with EVERY bundle. Handlers must resolve builtins through here,
- * never through a runtime `readdir(packages/skills/skills)` — that directory is
- * dropped by serverless bundlers and returns ENOENT in prod, which previously
- * broke workspace skill seeding and the create-agent fallback.
+ * never through a runtime `readdir(packages/skills/skills)` — serverless bundlers
+ * drop that directory and a `readdir` against it returns ENOENT in prod, breaking
+ * workspace skill seeding and the create-agent fallback.
  */
 import { BUILTIN_SKILL_FILES } from "./builtin-skills.generated";
 import { parseSkill } from "./loader";
@@ -21,7 +21,10 @@ export function embeddedBuiltinSkills(): Skill[] {
     const skill = parseSkill(file.raw, { source: "builtin" });
     return {
       ...skill,
-      references: file.references.map((ref) => ({ path: ref.path, body: ref.body })),
+      references: file.references.map((ref) => ({
+        path: ref.path,
+        body: ref.body,
+      })),
     };
   });
 }

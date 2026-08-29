@@ -26,10 +26,9 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
       // via Promise.all(). scopedSession() hands back a single Neo4j session, and
       // a session can only have one query (auto-commit transaction) in flight at a
       // time — firing several session.run() calls concurrently throws Neo4jError
-      // "Queries cannot be run directly on a session with an open transaction"
-      // (the regression #303 introduced when it "parallelised" these). True
-      // parallelism would need a separate session per query; these counts are
-      // cheap, so sequential reuse of one session is the correct, simpler fix.
+      // "Queries cannot be run directly on a session with an open transaction".
+      // Parallelism would need a separate session per query; these counts are
+      // cheap, so sequential reuse of one session is simpler and correct.
       const results: Array<Awaited<ReturnType<typeof session.run>>> = [];
       results.push(
         await session.run(
@@ -195,7 +194,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (
 
   // On the app (chat) surface, attach a render directive so the in-app agent
   // displays the stat boxes inline via the "graph-stats" chat component. API and
-  // MCP consumers get the plain JSON (the optional field is simply absent).
+  // MCP consumers get the plain JSON with the optional field absent.
   if (ctx.surface === "app") {
     return {
       ...output,

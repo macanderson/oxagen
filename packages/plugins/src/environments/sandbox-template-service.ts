@@ -1,5 +1,6 @@
 /**
- * Sandbox templates + agent-environment bindings (Spec §5.2–§5.3, §5.6, §12).
+ * Sandbox templates + agent-environment bindings
+ * (see docs/specs/sandbox-templates-portable/plan.md).
  *
  * Portable sandbox configuration: CRUD, the only-one-default-per-environment
  * invariant (atomic swap, promote-before-remove), replace-set tools, manifest
@@ -681,7 +682,7 @@ export async function importTemplate(
       input.environmentId,
     );
 
-    // Slug collision → hard error unless overridden (§3).
+    // Slug collision → hard error unless overridden.
     const [collision] = await tx
       .select({ id: schema.sandboxTemplates.id })
       .from(schema.sandboxTemplates)
@@ -764,7 +765,7 @@ export async function importTemplate(
   });
 }
 
-// ── plugin-pack distribution (Spec §6 — the third-party story) ───────────────
+// ── plugin-pack distribution (the third-party story) ─────────────────────────
 
 export interface PackTemplateInstall {
   /** Slug the template landed under (bare or pack-prefixed on collision). */
@@ -797,12 +798,12 @@ function prefixedTemplateSlug(packSeg: string, bareSlug: string): string {
 
 /**
  * Install a plugin pack's declared sandbox templates into the workspace's
- * DEFAULT environment (Spec §6). Each template imports via the same shape as
+ * DEFAULT environment. Each template imports via the same shape as
  * `import_sandbox_template`: non-default, tools preloaded, and any MISSING
  * secret keys upserted by NAME only (never a value). Portability is preserved —
  * an unknown tool ref does not fail the install, it surfaces in `warnings`.
  *
- * Idempotency + collision (§6): the template lands under its bare manifest slug;
+ * Idempotency + collision: the template lands under its bare manifest slug;
  * a re-install of the same pack finds that slug in the default environment and
  * UPDATES it in place (no duplicate). If the bare slug is already taken by an
  * UNRELATED template (one living in a different environment — slugs are unique
@@ -861,7 +862,7 @@ export async function installTemplatesFromPack(
   const installed: PackTemplateInstall[] = [];
 
   await withTenantDb(async (tx) => {
-    // Resolve the workspace default environment (§6 target).
+    // Resolve the workspace default environment (the install target).
     const [defaultEnv] = await tx
       .select({ id: schema.environments.id })
       .from(schema.environments)
@@ -1017,7 +1018,7 @@ export async function installTemplatesFromPack(
   return { installed, warnings };
 }
 
-// ── agent-environment bindings (Spec §5.6) ───────────────────────────────────
+// ── agent-environment bindings ────────────────────────────────────────────────
 
 // Per-call for the same reason as templateColumns() — no schema access at import.
 const bindingColumns = () =>
@@ -1148,8 +1149,8 @@ export async function bindAgentEnvironment(
       templateInternalId = tpl.id;
     }
 
-    // Does the agent already have any binding? (First binding becomes primary
-    // unless the caller says otherwise; §5.6 fallback still covers the no-binding case.)
+    // Does the agent already have any binding? First binding becomes primary
+    // unless the caller says otherwise.
     const existingForAgent = await tx
       .select({
         id: schema.agentEnvironmentBindings.id,
@@ -1284,7 +1285,7 @@ export async function listAgentBindings(
   });
 }
 
-// ── run-time resolution (Spec §12) ───────────────────────────────────────────
+// ── run-time resolution ───────────────────────────────────────────────────────
 
 /**
  * Resolve which environment + sandbox template a run should use.

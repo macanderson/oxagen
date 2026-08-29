@@ -9,7 +9,7 @@ import {
 // tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
 // yet at call time; this action IS what creates the first tenant identity, so
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
-// RLS deliberately) — OXA-1515
+// RLS deliberately)
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "@oxagen/handlers/logger";
 import { ingestImageFromUrl, isIngestibleImageUrl } from "@oxagen/storage";
@@ -306,9 +306,9 @@ export async function createOrgAction(
     if (isUniqueViolation(err)) {
       return { ok: false, error: `Slug "${org.slug}" is already taken` };
     }
-    // Never surface a raw driver/SQL error string to the user (information leak
-    // — the unhandled path previously echoed the full INSERT statement). Log the
-    // real cause for diagnosis and return a generic, safe message.
+    // Never surface a raw driver/SQL error string to the user — it can leak
+    // schema and query details. Log the real cause for diagnosis and return a
+    // generic, safe message.
     logger.error(
       { err, slug: org.slug },
       "[onboarding] createOrgAction failed",

@@ -1,10 +1,15 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import type { CreditLedgerRow, PlanRow, SubscriptionRow, CreditBalanceRow } from "@oxagen/database";
+import type {
+  CreditLedgerRow,
+  PlanRow,
+  SubscriptionRow,
+  CreditBalanceRow,
+} from "@oxagen/database";
 import { resolveOrg } from "@/lib/resolve-org";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { getSession } from "@/lib/session";
 import { SubscriptionSummary } from "@/components/billing/subscription-summary";
@@ -26,11 +31,18 @@ import {
 
 const CAN_MANAGE_BILLING = new Set(["owner", "admin", "billing"]);
 
-export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) {
-  const [tenant, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
+export async function BillingSubscriptionBody({
+  orgSlug,
+}: {
+  orgSlug: string;
+}) {
+  const [tenant, session] = await Promise.all([
+    resolveOrg(orgSlug),
+    getSession(),
+  ]);
 
   // Batch 1: all queries keyed solely on tenant/session ids — run concurrently.
-  // All org-scoped reads use sentinel workspaceId (org-only tables). — OXA-1515
+  // All org-scoped reads use sentinel workspaceId (org-only tables).
   const [
     viewerRoleRow,
     subscriptionRow,
@@ -40,22 +52,20 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
   ] = await Promise.all([
     // Viewer's role for billing-control gating.
     session?.user
-      ? runInTenantScope(
-          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-          () =>
-            withTenantDb((tx) =>
-              tx
-                .select({ role: schema.orgUsers.role })
-                .from(schema.orgUsers)
-                .where(
-                  and(
-                    eq(schema.orgUsers.orgId, tenant.id),
-                    eq(schema.orgUsers.userId, session.user.id),
-                  ),
-                )
-                .limit(1)
-                .then((rows) => rows[0] ?? null),
-            ),
+      ? runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          withTenantDb((tx) =>
+            tx
+              .select({ role: schema.orgUsers.role })
+              .from(schema.orgUsers)
+              .where(
+                and(
+                  eq(schema.orgUsers.orgId, tenant.id),
+                  eq(schema.orgUsers.userId, session.user.id),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows[0] ?? null),
+          ),
         )
       : Promise.resolve(null),
     safeQuery(
@@ -100,17 +110,15 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
     ),
     safeQuery(
       () =>
-        runInTenantScope(
-          { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
-          () =>
-            withTenantDb((tx) =>
-              tx
-                .select()
-                .from(schema.creditLedger)
-                .where(eq(schema.creditLedger.orgId, tenant.id))
-                .orderBy(desc(schema.creditLedger.createdAt))
-                .limit(10),
-            ),
+        runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          withTenantDb((tx) =>
+            tx
+              .select()
+              .from(schema.creditLedger)
+              .where(eq(schema.creditLedger.orgId, tenant.id))
+              .orderBy(desc(schema.creditLedger.createdAt))
+              .limit(10),
+          ),
         ),
       [] as CreditLedgerRow[],
     ),
@@ -132,7 +140,7 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
     subscriptionRow
       ? safeQuery(
           // billing.plans is a shared platform catalog (no per-tenant rows);
-          // withSystemDb bypasses RLS deliberately. — OXA-1515
+          // withSystemDb bypasses RLS deliberately.
           async () =>
             (
               await withSystemDb((tx) =>
@@ -147,21 +155,34 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
         )
       : Promise.resolve(null),
     safeQuery(
-      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => listOrgPaymentMethods(tenant.id)),
+      () =>
+        runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          listOrgPaymentMethods(tenant.id),
+        ),
       [],
     ),
     canManageBilling
       ? safeQuery(
-          () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => getOrgBillingSettings(tenant.id)),
+          () =>
+            runInTenantScope(
+              { orgId: tenant.id, workspaceId: ORG_ONLY_WS },
+              () => getOrgBillingSettings(tenant.id),
+            ),
           null,
         )
       : Promise.resolve(null),
     safeQuery(
-      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => getOrgBillingStatus(tenant.id)),
+      () =>
+        runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          getOrgBillingStatus(tenant.id),
+        ),
       null,
     ),
     safeQuery(
-      () => runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () => isLowBalance(tenant.id)),
+      () =>
+        runInTenantScope({ orgId: tenant.id, workspaceId: ORG_ONLY_WS }, () =>
+          isLowBalance(tenant.id),
+        ),
       null,
     ),
   ]);
@@ -173,7 +194,8 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
         planSlug: planForSub?.slug ?? "",
         planName: planForSub?.name ?? "Unknown",
         billingInterval: subscriptionRow.billingInterval as "month" | "year",
-        currentPeriodStart: subscriptionRow.currentPeriodStart?.toISOString() ?? "",
+        currentPeriodStart:
+          subscriptionRow.currentPeriodStart?.toISOString() ?? "",
         currentPeriodEnd: subscriptionRow.currentPeriodEnd?.toISOString() ?? "",
         cancelAtPeriodEnd: subscriptionRow.cancelAtPeriodEnd,
         seatCount: subscriptionRow.seatCount,

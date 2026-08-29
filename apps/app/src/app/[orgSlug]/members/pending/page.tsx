@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
 import { PendingInvitationsActions } from "./pending-invitations-actions";
 
-// Sentinel workspaceId for org-only routes. — OXA-1515
+// Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 function formatExpiry(d: Date | null): string {
@@ -74,9 +74,12 @@ export default async function MembersPendingPage({
           <Mail className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
         </span>
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-foreground">No pending invitations</p>
+          <p className="text-sm font-medium text-foreground">
+            No pending invitations
+          </p>
           <p className="text-xs text-muted-foreground">
-            Members who have been invited but have not yet accepted will appear here.
+            Members who have been invited but have not yet accepted will appear
+            here.
           </p>
         </div>
       </div>
@@ -84,47 +87,57 @@ export default async function MembersPendingPage({
   }
 
   return (
-    <Panel title={<span className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />Pending invitations<Badge variant="secondary">{invitations.length}</Badge></span>}>
-        <ul className="divide-y divide-border/60">
-          {invitations.map((inv) => (
-            <li
-              key={inv.publicId}
-              className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
-            >
-              {/* Avatar initial */}
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted text-xs font-medium text-muted-foreground uppercase">
-                {inv.email.charAt(0)}
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          Pending invitations
+          <Badge variant="secondary">{invitations.length}</Badge>
+        </span>
+      }
+    >
+      <ul className="divide-y divide-border/60">
+        {invitations.map((inv) => (
+          <li
+            key={inv.publicId}
+            className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
+          >
+            {/* Avatar initial */}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted text-xs font-medium text-muted-foreground uppercase">
+              {inv.email.charAt(0)}
+            </span>
+
+            {/* Email + expiry */}
+            <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+              <span className="text-sm font-medium text-foreground truncate">
+                {inv.email}
               </span>
+              {inv.expiresAt ? (
+                <span className="text-xs text-muted-foreground">
+                  {formatExpiry(inv.expiresAt)}
+                </span>
+              ) : null}
+            </div>
 
-              {/* Email + expiry */}
-              <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">{inv.email}</span>
-                {inv.expiresAt ? (
-                  <span className="text-xs text-muted-foreground">
-                    {formatExpiry(inv.expiresAt)}
-                  </span>
-                ) : null}
-              </div>
-
-              {/* Role + actions */}
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge variant="outline" className="capitalize text-xs">
-                  {inv.role}
-                </Badge>
-                {canManage ? (
-                  <PendingInvitationsActions
-                    orgSlug={orgSlug}
-                    invitation={{
-                      publicId: inv.publicId,
-                      email: inv.email,
-                      role: inv.role,
-                    }}
-                  />
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+            {/* Role + actions */}
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge variant="outline" className="capitalize text-xs">
+                {inv.role}
+              </Badge>
+              {canManage ? (
+                <PendingInvitationsActions
+                  orgSlug={orgSlug}
+                  invitation={{
+                    publicId: inv.publicId,
+                    email: inv.email,
+                    role: inv.role,
+                  }}
+                />
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }

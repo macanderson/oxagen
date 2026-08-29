@@ -211,17 +211,12 @@ describe("parseAttachmentsField", () => {
     expect(parseAttachmentsField(file)).toEqual([]);
   });
 
-  // Regression: chat-tool-io-structured.spec.ts / chat-streaming-fresh-user.spec.ts
-  // — "research.swarm.start input/result render as labeled key/value, not JSON".
-  // #589 shipped parseAttachmentsField as an `async` function (it lived in the
-  // sibling "use server" actions.ts, where every export must be async). Its sole
-  // caller feeds the result straight into a SYNCHRONOUS `FormSchema.safeParse`,
-  // so the un-awaited Promise reached `z.array()` as `received: "promise"` and
-  // failed EVERY text-only message send with "Invalid message" — the composer
-  // short-circuited before it ever fetched /api/v1/chat/stream, so no tool-call
-  // card (or any streamed turn) rendered. Guard: the helper must return
-  // synchronously (never a thenable) AND the value must validate against the
-  // same `z.array()` shape the send action uses.
+  // parseAttachmentsField's sole caller feeds the result straight into a
+  // SYNCHRONOUS `FormSchema.safeParse`, so an async (Promise-returning)
+  // implementation would reach `z.array()` as `received: "promise"` and fail
+  // every text-only message send with "Invalid message". Guard: the helper
+  // must return synchronously (never a thenable) AND the value must validate
+  // against the same `z.array()` shape the send action uses.
   it("returns synchronously (not a Promise) so FormSchema.safeParse sees an array, not a promise", () => {
     const attachmentSchema = z.object({
       publicId: z.string().min(1),

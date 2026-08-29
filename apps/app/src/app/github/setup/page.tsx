@@ -35,7 +35,7 @@ type GithubSetupSearchParams = {
  * to many orgs), so it uses `withSystemDb` (RLS-bypassing) but EXPLICITLY joins
  * `org_users` on the session user — it can never redirect a user into a
  * workspace they are not a member of. Same deliberate pattern as the root page
- * (OXA-1515); the app does not bootstrap IAM, so the gate lives here.
+ *; the app does not bootstrap IAM, so the gate lives here.
  */
 const dbQueries: GithubSetupQueries = {
   matchInstallation: (userId, installationId) =>

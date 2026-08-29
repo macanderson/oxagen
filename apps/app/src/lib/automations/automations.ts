@@ -9,7 +9,7 @@
  *
  * invoke() is called with NO `opts.surface` override: the kernel's surface
  * allowlist gate only fires when opts.surface is explicitly set (kernel.ts:578),
- * so omitting it lets ctx.surface="app" flow through for honest attribution
+ * so omitting it lets ctx.surface="app" flow through for correct attribution
  * while the automation.* contracts (which list "agent" but not "app" in
  * surfaces[]) are still reachable — the first-party app is a trusted surface.
  * This matches the shipped app enable path in app/actions/automation-inline.action.ts.
@@ -45,7 +45,9 @@ export type CreateAutomationArgs = z.input<typeof automationCreate.input>;
 export type UpdateAutomationArgs = z.input<typeof automationUpdate.input>;
 
 /** List every automation in the workspace (populates the Automations table). */
-export async function listAutomations(ctx: AutomationsCtx): Promise<AutomationListOutput> {
+export async function listAutomations(
+  ctx: AutomationsCtx,
+): Promise<AutomationListOutput> {
   const input = automationList.input.parse({ workspace_id: ctx.workspaceId });
   const out = await invoke(automationList.name, input, ctx);
   return automationList.output.parse(out);
@@ -104,7 +106,10 @@ export async function triggerAutomation(
   automationId: string,
   payload?: Record<string, unknown>,
 ): Promise<AutomationTriggerOutput> {
-  const input = automationTrigger.input.parse({ automation_id: automationId, payload });
+  const input = automationTrigger.input.parse({
+    automation_id: automationId,
+    payload,
+  });
   const out = await invoke(automationTrigger.name, input, ctx);
   return automationTrigger.output.parse(out);
 }

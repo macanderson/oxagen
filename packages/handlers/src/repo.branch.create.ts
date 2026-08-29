@@ -4,14 +4,13 @@ import { createGitHubClient } from "@oxagen/github";
 import { assertNonDefaultBranchWrite } from "./lib/default-branch-guard";
 import { resolveGitHubToken } from "./lib/github-token";
 
-export const repoBranchCreateHandler: CapabilityHandler<typeof repoBranchCreate> = async (
-  input,
-  ctx,
-) => {
+export const repoBranchCreateHandler: CapabilityHandler<
+  typeof repoBranchCreate
+> = async (input, ctx) => {
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
 
-  // Hard invariant (OXA-2117): the new ref must not shadow the default
+  // Hard invariant: the new ref must not shadow the default
   // branch (defense-in-depth on top of GitHub's existing-ref rejection).
   await assertNonDefaultBranchWrite(gh, {
     owner: input.owner,

@@ -16,12 +16,14 @@ function mapRole(role: "member" | "admin" | "owner"): string {
   return map[role] ?? "Member";
 }
 
-export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInviteSend> = async (
-  input,
-  ctx,
-) => {
+export const workspaceInviteSendHandler: CapabilityHandler<
+  typeof workspaceInviteSend
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "workspace.invite.send: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workspace.invite.send: rejected — no authenticated user",
+    );
     throw new Error("workspace.invite.send requires an authenticated user");
   }
 
@@ -67,7 +69,9 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
     });
 
     if (!existing) {
-      throw new Error("workspace.invite.send: conflict on insert but no existing pending invite found");
+      throw new Error(
+        "workspace.invite.send: conflict on insert but no existing pending invite found",
+      );
     }
     return existing;
   });
@@ -80,7 +84,7 @@ export const workspaceInviteSendHandler: CapabilityHandler<typeof workspaceInvit
   // SOC2 audit: a privileged member-invitation was issued. Mirrors the
   // org.member.add emit so both invite paths leave an audit trail. The
   // org.member_invited taxonomy entry fits exactly. Fire-and-forget — an
-  // audit-write failure must never break the invite. — OXA-1594
+  // audit-write failure must never break the invite.
   emitSecurityEvent({
     eventType: "org.member_invited",
     actorUserId: ctx.userId,

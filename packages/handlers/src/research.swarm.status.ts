@@ -22,10 +22,9 @@ function mapStatus(
   }
 }
 
-export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmStatus> = async (
-  input,
-  ctx,
-) => {
+export const researchSwarmStatusHandler: CapabilityHandler<
+  typeof researchSwarmStatus
+> = async (input, ctx) => {
   // The swarmId IS the subagent fanout's public_id (research.swarm.start returns
   // dispatchId as the swarmId). No in-process lookup is needed — and must not be
   // used: the old in-memory map only existed in whichever process ran the start,
@@ -57,8 +56,6 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
 
   // Surface the ACTUAL web-search hits per query. Each child is a web.search run
   // whose input carries the query and whose output carries { results: [...] }.
-  // (Previously this data was computed by aggregate but dropped here — the core
-  // "the swarm data is useless" bug. Now it flows back to the agent + UI.)
   const results = mapChildrenToResults(aggregateResult.children);
 
   logger.info(
@@ -109,19 +106,23 @@ export function mapChildrenToResults(
     const rawHits = Array.isArray(output?.results) ? output.results : [];
     const hits = rawHits.flatMap((h): SwarmQueryResult["hits"] => {
       const hit = asRecord(h);
-      if (!hit || typeof hit.url !== "string" || typeof hit.title !== "string") return [];
+      if (!hit || typeof hit.url !== "string" || typeof hit.title !== "string")
+        return [];
       return [
         {
           title: hit.title,
           url: hit.url,
-          snippet: typeof hit.content === "string" ? hit.content.slice(0, 500) : "",
+          snippet:
+            typeof hit.content === "string" ? hit.content.slice(0, 500) : "",
           ...(typeof hit.score === "number" ? { score: hit.score } : {}),
         },
       ];
     });
     if (query.length === 0 && hits.length === 0) continue;
     const resultCount =
-      typeof output?.totalResults === "number" ? output.totalResults : hits.length;
+      typeof output?.totalResults === "number"
+        ? output.totalResults
+        : hits.length;
     out.push({ query, resultCount, hits });
   }
   return out;

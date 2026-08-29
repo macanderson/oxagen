@@ -19,7 +19,7 @@ import type { BillingCheckoutSession, BillingInvoice } from "./provider";
  *
  * The ON CONFLICT DO NOTHING on step 1 requires a UNIQUE constraint on
  * credit_ledger(org_id, reason, reference_type, reference_id). This replaces
- * the prior TOCTOU check-then-insert (OXA-1509). See the agent summary for the
+ * the prior TOCTOU check-then-insert. See the agent summary for the
  * cross-agent schema dependency.
  *
  * EXPIRY RULES:
@@ -47,9 +47,9 @@ type DbTx = Tx;
  *   credit_ledger_grant_idempotency_idx
  *   ON credit_ledger(org_id, reason, reference_type, reference_id)
  *   WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
- * declared in the Drizzle schema (schema/billing.ts) and created by migration
- * 0014_billing_credit_ledger_idempotency. ON CONFLICT DO NOTHING uses it as
- * the arbiter; without it every insert would succeed and duplicate-grant.
+ * declared in the Drizzle schema (schema/billing.ts). ON CONFLICT DO NOTHING
+ * uses it as the arbiter; without it every insert would succeed and
+ * duplicate-grant.
  */
 async function tryInsertGrantLedger(
   tx: DbTx,
@@ -115,7 +115,9 @@ async function insertLotAndMirrorBalance(
  */
 function endOfGrantMonth(grantDate: Date): Date {
   // First day of the following month at midnight UTC, minus 1ms.
-  const d = new Date(Date.UTC(grantDate.getUTCFullYear(), grantDate.getUTCMonth() + 1, 1));
+  const d = new Date(
+    Date.UTC(grantDate.getUTCFullYear(), grantDate.getUTCMonth() + 1, 1),
+  );
   d.setUTCMilliseconds(-1);
   return d;
 }
@@ -146,7 +148,7 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
   // withTenantDb here throws TenantScopeError ("no_tenant_scope") under enforced
   // RLS, silently dropping the $5 signup grant. credit_* tables are org_only and
   // every write is scoped by the explicit orgId. Mirrors grantPlanCreditsForInvoicePaid
-  // / grantCreditPackForCheckout. — OXA-1515
+  // / grantCreditPackForCheckout.
   await withSystemDb(async (tx) => {
     granted = await tryInsertGrantLedger(
       tx,
@@ -157,16 +159,30 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
       FREE_SIGNUP_CREDITS,
     );
     if (!granted) return; // Already granted — conflict, nothing to do.
-    await insertLotAndMirrorBalance(tx, orgId, "free_grant", FREE_SIGNUP_CREDITS, new Date(), null);
+    await insertLotAndMirrorBalance(
+      tx,
+      orgId,
+      "free_grant",
+      FREE_SIGNUP_CREDITS,
+      new Date(),
+      null,
+    );
   });
 
   if (granted) {
     logger.info(
-      { orgId, amountCents: Number(FREE_SIGNUP_CREDITS), durationMs: Date.now() - start },
+      {
+        orgId,
+        amountCents: Number(FREE_SIGNUP_CREDITS),
+        durationMs: Date.now() - start,
+      },
       "billing: free signup credits granted",
     );
   } else {
-    logger.debug({ orgId }, "billing: free signup credits already granted, skipping");
+    logger.debug(
+      { orgId },
+      "billing: free signup credits already granted, skipping",
+    );
   }
 }
 
@@ -183,8 +199,14 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
  * Subscription credits expire at the end of the calendar month in which the
  * invoice was paid (use-it-or-lose-it).
  */
-export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): Promise<void> {
-  if (!invoice.billingReason || !SUBSCRIPTION_GRANT_REASONS.has(invoice.billingReason)) return;
+export async function grantPlanCreditsForInvoicePaid(
+  invoice: BillingInvoice,
+): Promise<void> {
+  if (
+    !invoice.billingReason ||
+    !SUBSCRIPTION_GRANT_REASONS.has(invoice.billingReason)
+  )
+    return;
   if (!invoice.subscriptionId) return;
 
   const start = Date.now();
@@ -203,7 +225,7 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
   // → paid and never receives their credits). Now that the subscription is
   // synced above, re-sync the invoice so its row — and thus our idempotency
   // reference id — is guaranteed present regardless of event ordering. This
-  // mirrors the self-healing syncSubscriptionFromStripe call above. — OXA-1611
+  // mirrors the self-healing syncSubscriptionFromStripe call above.
   await syncInvoiceFromStripe(invoice.providerInvoiceId);
 
   let granted = false;
@@ -211,14 +233,20 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (invoice.paid webhook has no org scope yet;
     // org resolved from Stripe subscription id before a tenant scope exists;
-    // billing is org_only) — OXA-1515
+    // billing is org_only).
     const sub = await tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.stripeSubscriptionId, invoice.subscriptionId!),
+      where: eq(
+        schema.subscriptions.stripeSubscriptionId,
+        invoice.subscriptionId!,
+      ),
       columns: { orgId: true, planId: true },
     });
     if (!sub) {
       logger.warn(
-        { stripeSubscriptionId: invoice.subscriptionId, invoiceId: invoice.providerInvoiceId },
+        {
+          stripeSubscriptionId: invoice.subscriptionId,
+          invoiceId: invoice.providerInvoiceId,
+        },
         "billing: plan credit grant — no subscription row found for stripe subscription id; credits not granted",
       );
       return;
@@ -231,7 +259,11 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
     const credits = plan?.includedCreditCents ?? 0;
     if (credits <= 0) {
       logger.warn(
-        { orgId: sub.orgId, planId: sub.planId, includedCreditCents: plan?.includedCreditCents ?? null },
+        {
+          orgId: sub.orgId,
+          planId: sub.planId,
+          includedCreditCents: plan?.includedCreditCents ?? null,
+        },
         "billing: plan credit grant — plan has zero/null includedCreditCents; no credits granted (check plan configuration)",
       );
       return;
@@ -263,10 +295,20 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
       amountCents,
     );
     if (!granted) {
-      logger.debug({ orgId: sub.orgId, referenceId }, "billing: plan renewal credits already granted, skipping");
+      logger.debug(
+        { orgId: sub.orgId, referenceId },
+        "billing: plan renewal credits already granted, skipping",
+      );
       return;
     }
-    await insertLotAndMirrorBalance(tx, sub.orgId, "subscription", amountCents, grantDate, expiresAt);
+    await insertLotAndMirrorBalance(
+      tx,
+      sub.orgId,
+      "subscription",
+      amountCents,
+      grantDate,
+      expiresAt,
+    );
 
     logger.info(
       {
@@ -317,12 +359,19 @@ export async function grantProratedPlanUpgradeCredits(
   const start = Date.now();
 
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
-  // read via withSystemDb to match the catalog-read convention (see grantPlanCreditsForInvoicePaid
-  // line 205). reads/writes to credit_* tables stay on withTenantDb (org_only). — OXA-1515
+  // read via withSystemDb to match the catalog-read convention used in
+  // grantPlanCreditsForInvoicePaid. reads/writes to credit_* tables stay on
+  // withTenantDb (org_only).
   const [fromPlan, toPlan] = await withSystemDb((tx) =>
     Promise.all([
-      tx.query.plans.findFirst({ where: eq(schema.plans.id, fromPlanId), columns: { includedCreditCents: true } }),
-      tx.query.plans.findFirst({ where: eq(schema.plans.id, toPlanId), columns: { includedCreditCents: true } }),
+      tx.query.plans.findFirst({
+        where: eq(schema.plans.id, fromPlanId),
+        columns: { includedCreditCents: true },
+      }),
+      tx.query.plans.findFirst({
+        where: eq(schema.plans.id, toPlanId),
+        columns: { includedCreditCents: true },
+      }),
     ]),
   );
 
@@ -350,7 +399,10 @@ export async function grantProratedPlanUpgradeCredits(
   );
 
   if (!sub) {
-    logger.warn({ orgId }, "billing: plan upgrade grant — no active subscription, skipping");
+    logger.warn(
+      { orgId },
+      "billing: plan upgrade grant — no active subscription, skipping",
+    );
     return;
   }
 
@@ -362,7 +414,10 @@ export async function grantProratedPlanUpgradeCredits(
   const msRemaining = periodEnd.getTime() - now.getTime();
 
   if (msInPeriod <= 0 || msRemaining <= 0) {
-    logger.debug({ orgId }, "billing: plan upgrade grant — period already ended, skipping");
+    logger.debug(
+      { orgId },
+      "billing: plan upgrade grant — period already ended, skipping",
+    );
     return;
   }
 
@@ -373,7 +428,9 @@ export async function grantProratedPlanUpgradeCredits(
   if (prorated <= 0) return;
 
   const amountCents = BigInt(prorated);
-  const referenceId = deterministicUuid(`plan_upgrade:${orgId}:${toPlanId}:${periodStart.toISOString()}`);
+  const referenceId = deterministicUuid(
+    `plan_upgrade:${orgId}:${toPlanId}:${periodStart.toISOString()}`,
+  );
 
   // Expires end of the grant month.
   const expiresAt = endOfGrantMonth(now);
@@ -389,7 +446,14 @@ export async function grantProratedPlanUpgradeCredits(
       amountCents,
     );
     if (!granted) return;
-    await insertLotAndMirrorBalance(tx, orgId, "subscription", amountCents, now, expiresAt);
+    await insertLotAndMirrorBalance(
+      tx,
+      orgId,
+      "subscription",
+      amountCents,
+      now,
+      expiresAt,
+    );
   });
 
   if (granted) {
@@ -407,7 +471,10 @@ export async function grantProratedPlanUpgradeCredits(
       "billing: prorated plan upgrade credits granted",
     );
   } else {
-    logger.debug({ orgId, toPlanId, referenceId }, "billing: plan upgrade credits already granted, skipping");
+    logger.debug(
+      { orgId, toPlanId, referenceId },
+      "billing: plan upgrade credits already granted, skipping",
+    );
   }
 }
 
@@ -422,15 +489,21 @@ export async function grantProratedPlanUpgradeCredits(
  * Idempotency is atomic: INSERT … ON CONFLICT DO NOTHING on the ledger row
  * keyed by (org_id, reason, "stripe_checkout_session", deterministicUuid(sessionId)).
  */
-export async function grantCreditPackForCheckout(session: BillingCheckoutSession): Promise<void> {
+export async function grantCreditPackForCheckout(
+  session: BillingCheckoutSession,
+): Promise<void> {
   if (session.mode !== "payment" || session.paymentStatus !== "paid") return;
   const orgId = session.metadata?.org_id;
   if (!orgId) return;
 
   const start = Date.now();
-  const referenceId = deterministicUuid(`stripe_checkout_session:${session.id}`);
+  const referenceId = deterministicUuid(
+    `stripe_checkout_session:${session.id}`,
+  );
 
-  const lineItems = await billingProvider().getCheckoutSessionCreditPacks(session.id);
+  const lineItems = await billingProvider().getCheckoutSessionCreditPacks(
+    session.id,
+  );
   let totalCredits = 0;
   for (const item of lineItems) {
     totalCredits += item.creditsPerUnit * item.quantity;
@@ -460,7 +533,7 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
   let granted = false;
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (checkout.session.completed webhook, orgId
-    // from session metadata, no active tenant scope at webhook dispatch time) — OXA-1515
+    // from session metadata, no active tenant scope at webhook dispatch time).
     granted = await tryInsertGrantLedger(
       tx,
       orgId,
@@ -470,7 +543,14 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
       amountCents,
     );
     if (!granted) return;
-    await insertLotAndMirrorBalance(tx, orgId, "purchase", amountCents, grantDate, expiresAt);
+    await insertLotAndMirrorBalance(
+      tx,
+      orgId,
+      "purchase",
+      amountCents,
+      grantDate,
+      expiresAt,
+    );
   });
 
   if (granted) {
@@ -496,6 +576,9 @@ export async function grantCreditPackForCheckout(session: BillingCheckoutSession
       requestId: null,
     });
   } else {
-    logger.debug({ orgId, referenceId }, "billing: credit pack already granted, skipping");
+    logger.debug(
+      { orgId, referenceId },
+      "billing: credit pack already granted, skipping",
+    );
   }
 }

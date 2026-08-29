@@ -168,8 +168,8 @@ export type CodingEvent =
       kind: "create" | "update";
       /**
        * The content-hash anchor of the file BEFORE this edit (see
-       * `edit-integrity.ts#hashContent`). Absent for a create (there was no
-       * prior content) and on the legacy pre-integrity write path.
+       * `edit-integrity.ts#hashContent`). Absent for a create — there is no
+       * prior content to hash.
        */
       beforeHash?: string;
       /** The content-hash anchor of the file AFTER this edit — the new anchor. */

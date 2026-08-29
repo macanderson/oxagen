@@ -1,9 +1,9 @@
-// fetch-authz.test.ts — unit tests for fetchAuthz() (OXA-1524, OXA-2056).
+// fetch-authz.test.ts — unit tests for fetchAuthz().
 //
 // Tests:
 //   - 42P01 fails closed (deny) for BOTH human sessions and API keys, with a
 //     loud logger.error alert — never a silent EMPTY_AUTHZ/defaultEffect
-//     degradation (OXA-2056)
+//     degradation
 //   - !userId early return
 //   - !principal early return when no matching principal row
 //   - PRA workspace-scope + expiry filter (roles array has empty principalIds for expired/out-of-scope)
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   praSelect: vi.fn(),
   // db() factory
   dbFn: vi.fn(),
-  // logger spy — asserts the OXA-2056 loud alert on 42P01.
+  // logger spy — asserts the loud alert on 42P01.
   loggerError: vi.fn(),
   loggerWarn: vi.fn(),
 }));
@@ -36,14 +36,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     ...real,
     db: mocks.dbFn,
     // withTenantDb: pass-through — invokes the callback with the same fake tx
-    // the handler expects. No scope GUC overhead in unit tests (OXA-1515).
+    // the handler expects. No scope GUC overhead in unit tests.
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(mocks.dbFn()),
   };
 });
 
 // Spy on the module logger so we can assert the 42P01 alert is logged loudly
-// (error, not warn) — OXA-2056.
+// (error, not warn).
 vi.mock("./logger", () => ({
   logger: { error: mocks.loggerError, warn: mocks.loggerWarn },
 }));
@@ -183,7 +183,7 @@ describe("fetchAuthz()", () => {
     vi.clearAllMocks();
   });
 
-  // ── 42P01 fails closed (OXA-2056) ─────────────────────────────────────────
+  // ── 42P01 fails closed ─────────────────────────────────────────────────────
   // Previously a human-session caller degraded to EMPTY_AUTHZ (→ resolver
   // falls through to each contract's defaultEffect) when the IAM tables were
   // missing — a silent "IAM enforcement is off" bypass. It must now fail

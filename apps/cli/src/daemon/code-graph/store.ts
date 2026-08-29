@@ -1,11 +1,10 @@
 /**
  * CodeGraphStore — DuckDB-backed persistence for the local code graph.
  *
- * The code graph (files → symbols → imports) used to be rebuilt in memory on
- * every CLI process / daemon start and thrown away (ADR-016 P0). This store
- * persists it so a cold start loads from disk and only re-parses files whose
- * content changed — the incremental unit is a single file, keyed by a content
- * hash.
+ * This store persists the code graph (files → symbols → imports) so a cold
+ * start loads from disk and only re-parses files whose content changed — the
+ * incremental unit is a single file, keyed by a content hash. See
+ * ../../../../docs/adr/ADR-016-oxagen-cli-daemon-live-code-graph.md.
  *
  * One DuckDB file holds every repo the user works in, partitioned by `root`
  * (the absolute workspace root). Modeled on @oxagen/engram's GraphStore: a

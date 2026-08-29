@@ -1,4 +1,4 @@
-// audit-exempt: deletes a plugin OAuth/secret credential. No fitting security-event type exists in the current taxonomy (there is no plugin.credential_* family); inventing one is out of scope per OXA-1594. The destructive delete is recorded by the audit-relevant log line below and the kernel capability.invoke_* audit records the privileged invocation. Re-evaluate when a plugin.credential.* taxonomy is added.
+// audit-exempt: deletes a plugin OAuth/secret credential. No fitting security-event type exists in the current taxonomy (there is no plugin.credential_* family). The destructive delete is recorded by the audit-relevant log line below and the kernel capability.invoke_* audit records the privileged invocation. Re-evaluate when a plugin.credential.* taxonomy is added.
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import { deleteWorkspaceSecret } from "@oxagen/plugins";
@@ -15,7 +15,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { orgListingId } = input as { orgListingId: string };
 
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.credential.revoke] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.credential.revoke] workspaceId is required (scoped capability)",
+    );
   }
 
   // Load the installed plugin row — must belong to this org + workspace.

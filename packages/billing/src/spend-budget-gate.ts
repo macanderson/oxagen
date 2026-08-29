@@ -1,6 +1,6 @@
 /**
  * spend-budget-gate.ts — the kernel admission gate for the hard period-to-date
- * spend ceiling (OXA-1079). `assertWithinSpendBudget` is injected into the
+ * spend ceiling. `assertWithinSpendBudget` is injected into the
  * kernel via setBudgetAdmissionGate (bootstrapBillingRuntime) and runs on EVERY
  * scoped, metered invoke() — so it must be cheap. Two short-TTL caches (budget
  * config + ClickHouse spend, both keyed by scope) keep the steady-state guard a

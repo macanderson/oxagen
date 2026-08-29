@@ -101,7 +101,7 @@ export type ToolCallStatus = "pending" | "running" | "completed" | "failed";
 
 export type ApprovalResolution = "approved" | "denied" | "expired";
 
-// External-MCP consent resolution (OXA-816). Distinct vocabulary from
+// External-MCP consent resolution. Distinct vocabulary from
 // ApprovalResolution: a consent grant is "granted"/"denied" (not "approved").
 export type ConsentResolution = "granted" | "denied" | "expired";
 
@@ -230,7 +230,7 @@ export type StreamEvent =
       approvalId: string;
       resolution: ApprovalResolution;
     }
-  // ── External-MCP first-use consent (OXA-816) ────────────────────────────
+  // ── External-MCP first-use consent ────────────────────────────
   // Emitted the first time the agent invokes an external MCP tool the user
   // has not yet consented to. The client renders a ConsentCard; the user's
   // approve/deny resolves it via agent.mcp.consent.resolve, which resumes the
@@ -448,7 +448,7 @@ export interface ApprovalRequestContentBlock {
 }
 
 /**
- * A persisted external-MCP consent request block (OXA-816) — the terminal form
+ * A persisted external-MCP consent request block — the terminal form
  * of a consent-required → consent-resolved stream sequence. Rendered by the
  * ConsentCard as a grant/deny prompt for a first-use external tool.
  */

@@ -127,9 +127,9 @@ const workspaceConfig: SidebarConfig = {
       id: "automations",
       label: "Automations",
       icon: Zap,
-      // The biggest previously-headless section (automation.* + workflow.*):
-      // human-gated agent automation, triggers, and parallel workflow/swarm runs.
-      // Placed high (front-and-center) per the IA recommendation.
+      // Human-gated agent automation, triggers, and parallel workflow/swarm
+      // runs (automation.* + workflow.*). Placed high (front-and-center) per
+      // the IA recommendation.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.automations.root(ctx as Required<ScopeContext>)
@@ -222,9 +222,8 @@ const workspaceConfig: SidebarConfig = {
       // Discovery + install surface, two sides: Agent Tools and Integrations.
       // Managing what is installed lives in Workbench → Agent Tools.
       // No-workspaceSlug fallback mirrors every other workspace-mode item
-      // above (org root) — it previously pointed at org.settings.plugins(),
-      // an org-scope route helper with no page behind it (latent 404),
-      // normally masked only because resolveSidebarCtx recovers the
+      // above (org root). Must not point at org.settings.plugins() — that
+      // route helper has no page behind it. resolveSidebarCtx recovers the
       // workspace slug from the URL before this branch is reached.
       href: (ctx) =>
         ctx.workspaceSlug

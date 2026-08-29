@@ -94,8 +94,8 @@ export const sourceConnections = ingestionSchema.table(
       .on(t.nextPollAt)
       .where(sql`status = 'connected' AND deleted_at IS NULL`),
     // 'deleting' is set synchronously by connection.delete; 'deleted' is the
-    // terminal state written by the async purge job (ingestion.delete). Both
-    // were missing here, so any delete violated this CHECK → 500 (OXA-1751).
+    // terminal state written by the async purge job (ingestion.delete). The
+    // CHECK must allow both or a delete violates it.
     statusCheck: check(
       "source_connections_status_check",
       sql`${t.status} IN ('pending_setup', 'connected', 'paused', 'error', 'deleting', 'deleted')`,
@@ -354,9 +354,8 @@ export const deletionJobs = ingestionSchema.table(
       "deletion_jobs_status_check",
       sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`,
     ),
-    // Contract modes are connection_only | data_only | full (connection.delete).
-    // The old 'soft'/'hard' values were stale, so every deletion job insert
-    // violated this CHECK → 500 (OXA-1751).
+    // Must match the modes connection.delete accepts: connection_only,
+    // data_only, full.
     deleteModeCheck: check(
       "deletion_jobs_delete_mode_check",
       sql`${t.deleteMode} IN ('connection_only', 'data_only', 'full')`,

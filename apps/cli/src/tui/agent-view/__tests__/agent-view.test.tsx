@@ -2,7 +2,7 @@
  * Ink tests for the Agent View dashboard. Data is injected as a one-shot
  * `collect` so the render is deterministic (no DuckDB, no socket, no store);
  * we poll frames with a deadline, never fixed sleeps. Covered: the real audit
- * table paints recorded runs, the honest empty state, real spend + code-graph
+ * table paints recorded runs, the real empty state, real spend + code-graph
  * stats render, and `q` quits.
  */
 import { render } from "ink-testing-library";
@@ -19,7 +19,11 @@ vi.mock("ink", async (importActual) => {
   return { ...actual, useApp: () => ({ exit: exitMock }) };
 });
 
-async function until(cond: () => boolean, timeoutMs = 3000, frame?: () => string): Promise<void> {
+async function until(
+  cond: () => boolean,
+  timeoutMs = 3000,
+  frame?: () => string,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond()) {
     if (Date.now() > deadline) {
@@ -31,11 +35,25 @@ async function until(cond: () => boolean, timeoutMs = 3000, frame?: () => string
 }
 
 const baseData = (over: Partial<AgentViewData> = {}): AgentViewData => ({
-  auth: { mode: "platform", orgSlug: "acme", workspaceSlug: "prod", label: "acme / prod", ok: true },
+  auth: {
+    mode: "platform",
+    orgSlug: "acme",
+    workspaceSlug: "prod",
+    label: "acme / prod",
+    ok: true,
+  },
   rows: [],
   rollup: {
     total: 0,
-    byState: { running: 0, waiting: 0, queued: 0, done: 0, failed: 0, cancelled: 0, orphaned: 0 },
+    byState: {
+      running: 0,
+      waiting: 0,
+      queued: 0,
+      done: 0,
+      failed: 0,
+      cancelled: 0,
+      orphaned: 0,
+    },
     active: 0,
     fleetRuns: 0,
     interactiveRuns: 0,
@@ -55,12 +73,22 @@ const baseData = (over: Partial<AgentViewData> = {}): AgentViewData => ({
 });
 
 const mount = (data: AgentViewData) =>
-  render(<AgentView cwd="/Users/dev/oxagen" collect={async () => data} refreshMs={0} />);
+  render(
+    <AgentView
+      cwd="/Users/dev/oxagen"
+      collect={async () => data}
+      refreshMs={0}
+    />,
+  );
 
 describe("AgentView", () => {
-  it("shows the honest empty state and off-source health when nothing exists", async () => {
+  it("shows the real empty state and off-source health when nothing exists", async () => {
     const { lastFrame, unmount } = mount(baseData());
-    await until(() => (lastFrame() ?? "").includes("No agent runs recorded"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("No agent runs recorded"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("agent audit");
     expect(frame).toContain("oxagen"); // project name in header
@@ -89,7 +117,15 @@ describe("AgentView", () => {
       ],
       rollup: {
         total: 1,
-        byState: { running: 0, waiting: 0, queued: 0, done: 1, failed: 0, cancelled: 0, orphaned: 0 },
+        byState: {
+          running: 0,
+          waiting: 0,
+          queued: 0,
+          done: 1,
+          failed: 0,
+          cancelled: 0,
+          orphaned: 0,
+        },
         active: 0,
         fleetRuns: 1,
         interactiveRuns: 0,
@@ -109,11 +145,20 @@ describe("AgentView", () => {
         embeddedFiles: 100,
         lastIndexedAt: now - 5000,
       },
-      daemon: { running: true, socketPath: "/x.sock", pid: 42, uptimeSeconds: 90 },
+      daemon: {
+        running: true,
+        socketPath: "/x.sock",
+        pid: 42,
+        uptimeSeconds: 90,
+      },
     });
     const { lastFrame, unmount } = mount(data);
     // The title truncates to fit its column, so assert on the surviving prefix.
-    await until(() => (lastFrame() ?? "").includes("ship the audit"), 3000, () => lastFrame() ?? "");
+    await until(
+      () => (lastFrame() ?? "").includes("ship the audit"),
+      3000,
+      () => lastFrame() ?? "",
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("AGENT RUNS");
     expect(frame).toContain("$0.25"); // real recorded cost
@@ -129,7 +174,11 @@ describe("AgentView", () => {
     const { stdin, lastFrame, unmount } = mount(baseData());
     await until(() => (lastFrame() ?? "").length > 0);
     stdin.write("q");
-    await until(() => exitMock.mock.calls.length > 0, 3000, () => lastFrame() ?? "");
+    await until(
+      () => exitMock.mock.calls.length > 0,
+      3000,
+      () => lastFrame() ?? "",
+    );
     unmount();
   });
 });

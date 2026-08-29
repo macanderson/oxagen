@@ -1,8 +1,3 @@
-/**
- * Shared types for the notification service.
- * Used in ≥2 files — lives here per the extract-shared-types standard.
- */
-
 /** Valid kind values enforced by DB CHECK constraint. */
 export const NOTIFICATION_KINDS = [
   "system",

@@ -1,5 +1,5 @@
 /**
- * data.ts — the honest data layer behind `oxagen view` (the agent audit
+ * data.ts — the real-data layer behind `oxagen view` (the agent audit
  * dashboard).
  *
  * Every number the dashboard shows is read here from a REAL local source, or it
@@ -319,7 +319,7 @@ export interface AgentViewData {
   /** The resolved project root (nearest `.git` ancestor of cwd). */
   projectRoot: string;
   generatedAt: number;
-  /** Set when the session store could not be read (surfaced honestly, not hidden). */
+  /** Set when the session store could not be read, so the failure is visible instead of hidden. */
   sourceError?: string;
 }
 
@@ -339,7 +339,7 @@ export interface CollectDeps {
 }
 
 /**
- * Gather one honest snapshot for the dashboard. Session reads are real; the two
+ * Gather one snapshot for the dashboard. Session reads are real; the two
  * IO probes default to the live implementations but are injectable so unit
  * tests exercise the aggregation without DuckDB or a socket.
  */
@@ -583,9 +583,8 @@ export function formatCount(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
-// USD formatting: the canonical engine formatter (re-exported so this
-// dashboard renders costs identically to every other repl/tui panel — this
-// file previously carried a drifted hand-rolled copy).
+// USD formatting: the canonical engine formatter, re-exported so this
+// dashboard renders costs identically to every other repl/tui panel.
 export { formatUsd } from "../../agent/model-router.js";
 
 /** Relative age: `just now` / `12s ago` / `5m ago` / `3h ago` / `2d ago`. */

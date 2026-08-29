@@ -180,10 +180,6 @@ export const invoices = billingSchema.table(
   }),
 );
 
-// invoice_line_items and usage_records were dropped in Batch B (#1006).
-// The tables no longer exist in the DB — these definitions were stale and
-// caused Atlas drift confusion. Removed from the schema to match reality.
-
 export const creditBalances = billingSchema.table(
   "credit_balances",
   {
@@ -247,7 +243,7 @@ export const creditLedger = billingSchema.table(
       "credit_ledger_delta_non_zero",
       sql`${t.deltaCents} <> 0`,
     ),
-    // Atomic GRANT idempotency (OXA-1509). grants.ts inserts with
+    // Atomic GRANT idempotency. grants.ts inserts with
     // INSERT … ON CONFLICT DO NOTHING; this partial unique index is the
     // arbiter — it is the ONLY ledger writer that relies on it (refunds use a
     // SELECT pre-check in disputes.ts; spends do a plain INSERT in credits.ts).
@@ -436,7 +432,7 @@ export const orgBillingSettings = billingSchema.table(
 // billing_disputes: chargebacks / disputes raised against our charges. One row
 // per Stripe dispute (idempotent on stripe_dispute_id). When a dispute opens we
 // claw back any credits funded by the disputed charge and record how much, so
-// the credit ledger stays honest against money actually collected.
+// the credit ledger matches money actually collected.
 export const billingDisputes = billingSchema.table(
   "billing_disputes",
   {
@@ -502,7 +498,7 @@ export const stripeEventProcessing = billingSchema.table(
   }),
 );
 
-// Hard PERIOD-TO-DATE spend ceiling (OXA-1079). Distinct axis from the per-TURN
+// Hard PERIOD-TO-DATE spend ceiling. Distinct axis from the per-TURN
 // dollar budget in workspace.workspace_budget_policy / budget.policy.* (which
 // caps a single agent turn's cost inside the runCodingAgent loop): THIS ceiling
 // caps cumulative period spend for a whole org or workspace and is enforced in

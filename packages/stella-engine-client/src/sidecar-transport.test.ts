@@ -7,10 +7,7 @@
  *
  * The fake is stateful on purpose. A canned list of SSE frames cannot exercise
  * reverse RPC at all — the whole point of the protocol is that the engine's
- * *next* frame depends on the host's answer to its last request. The previous
- * revision of this file replayed a fixed three-frame fixture, which is why it
- * could assert a shape the real server never emits (`output: "contents"`,
- * `is_error: false`) and still pass: nothing in the loop was closed.
+ * *next* frame depends on the host's answer to its last request.
  *
  * Fidelity note: this fake mirrors the real server's *shapes*, and the smoke
  * test is what proves those shapes are right. Neither is sufficient alone —

@@ -1,4 +1,4 @@
-// denial.ts — DenialResponse factory and type guard (OXA-1390, Phase 3).
+// denial.ts — DenialResponse factory and type guard.
 //
 // DenialResponse is the structured value returned by kernel.invoke()
 // when the IAM resolver decides deny or pending_approval. The handler is never

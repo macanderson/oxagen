@@ -462,8 +462,8 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
     // definer would be subject to tenant_isolation. A failed bump aborts the
     // SOURCE transaction, meaning a principal suspension would simply not
     // apply — that must not depend on whether the deploy role is a superuser.
-    // The guarantee used to be the executor's; it is the body's now, so this
-    // reads the live value from inside the bump rather than from the catalog.
+    // The bypass guarantee belongs to the function body, so this reads the
+    // live value from inside the bump rather than from the catalog.
     const observed = await withBumpProbe("observe", async () => {
       await asSystem(async (tx) => {
         await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
@@ -483,10 +483,9 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
 
   it("the bypass does NOT leak into the caller's transaction", async () => {
     // `set_config(..., true)` is TRANSACTION-scoped: it reverts at the caller's
-    // COMMIT/ROLLBACK, not at function exit. Restoring the captured prior value
-    // before returning is what makes the body equivalent to the signature-scoped
-    // SET the executor used to restore. Without that restore, every statement
-    // after an IAM write would silently run unfiltered.
+    // COMMIT/ROLLBACK, not at function exit. The function must restore the
+    // captured prior value itself before returning. Without that restore,
+    // every statement after an IAM write would silently run unfiltered.
     const after = await asSystem(async (tx) => {
       await tx`SELECT set_config('app.rls_bypass', 'off', true)`;
       await tx`SELECT set_config('app.current_org_id', ${ORG_A}, true)`;
@@ -500,8 +499,8 @@ describe("A3: deny-generation functions are security definer, pinned, and not pu
   });
 
   it("the bypass does NOT leak when the bump raises", async () => {
-    // The exception path is the one the executor used to own and the body now
-    // must: a bump that fails still hands the caller back its own value.
+    // The function's exception handler must hand the caller back its own
+    // value even when a bump fails.
     //
     // What this does and does not distinguish: PostgreSQL's GUC stack is
     // savepoint-aware, so rolling back to the savepoint restores the value even

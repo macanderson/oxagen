@@ -257,8 +257,8 @@ export async function readLiveAuthority(
  * A missing row means the scope has never been bumped, so its generation is 0.
  * That is not a fallback for convenience — the application role holds SELECT
  * only on `iam.authorization_deny_generations` and cannot insert a row, so 0 is
- * the only value a never-mutated scope can honestly report, and it is strictly
- * lower than any real generation (the trigger's first INSERT writes 1).
+ * the only value a never-mutated scope can report, and it is strictly lower
+ * than any real generation (the trigger's first INSERT writes 1).
  */
 export async function readDenyGenerationVector(
   tx: Tx,

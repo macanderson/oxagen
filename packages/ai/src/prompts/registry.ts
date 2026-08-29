@@ -3,7 +3,7 @@
  * platform ships, plus the tiered customer-override resolution that lets
  * workspaces influence (and, for safe prompts, replace) them.
  *
- * Tiered control (see docs/architecture spec):
+ * Tiered control:
  *  - `additionalInstructions` — appended to EVERY prompt, all tiers. The
  *    universal "tell the assistant about our workspace" knob.
  *  - `overrides[key]` — full replacement, ENTERPRISE-gated, allowed ONLY for the
@@ -325,7 +325,7 @@ ${mentionGrammarPrompt()}
  * coding loop: locate before editing, read before editing, verify with tests,
  * cite files.
  *
- * ADR-021 §2: this string is STABLE (nothing per-turn interpolated). The bound
+ * See docs/adr/ADR-021-inference-doctrine.md §2: this string is STABLE (nothing per-turn interpolated). The bound
  * repository/branch/environment context is injected by the route as a per-turn
  * USER message, never here, so the prompt-cache prefix stays warm across turns.
  */

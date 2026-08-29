@@ -2,7 +2,7 @@ import { oAuthProxy } from "better-auth/plugins";
 import type { BetterAuthPlugin } from "better-auth";
 
 /**
- * OXA-1789: OAuth Proxy configuration for multi-environment social login.
+ * OAuth Proxy configuration for multi-environment social login.
  *
  * A GitHub OAuth App (and a Google OAuth client) allows only ONE callback host.
  * A single login OAuth app is shared across production (app.oxagen.sh) and every
@@ -39,7 +39,9 @@ export interface OAuthProxyConfigInputs {
  * production app URL. Trailing whitespace is trimmed (oAuthProxy itself strips a
  * trailing slash).
  */
-export function resolveOAuthProxyProductionURL(productionUrlEnv?: string | undefined): string {
+export function resolveOAuthProxyProductionURL(
+  productionUrlEnv?: string | undefined,
+): string {
   const v = productionUrlEnv?.trim();
   return v ? v : DEFAULT_OAUTH_PROXY_PRODUCTION_URL;
 }
@@ -70,12 +72,17 @@ export function resolveOAuthProxySecret(
  * schema does not leak into the exported `auth` type (TS2883). We never call the
  * oauth-proxy endpoint from typed client code, so widening here is lossless.
  */
-export function buildOAuthProxyPlugins(inputs: OAuthProxyConfigInputs): BetterAuthPlugin[] {
+export function buildOAuthProxyPlugins(
+  inputs: OAuthProxyConfigInputs,
+): BetterAuthPlugin[] {
   if (inputs.isLocalEnv) return [];
   return [
     oAuthProxy({
       productionURL: resolveOAuthProxyProductionURL(inputs.productionUrlEnv),
-      secret: resolveOAuthProxySecret(inputs.proxySecretEnv, inputs.betterAuthSecret),
+      secret: resolveOAuthProxySecret(
+        inputs.proxySecretEnv,
+        inputs.betterAuthSecret,
+      ),
     }),
   ];
 }

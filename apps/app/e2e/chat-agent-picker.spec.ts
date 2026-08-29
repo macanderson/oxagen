@@ -84,9 +84,8 @@ test.describe("chat.agent-picker", () => {
     const slug = `chat-${Date.now().toString(36)}`;
     await createAgent(page, orgSlug, { name: "Chat Helper", slug });
 
-    // New chat — the empty state is a quiet welcome line. The "Choose your
-    // assistant" gallery this spec outlived was removed in #1046: agent choice
-    // moved into the composer's chip, which opens the same AgentPickerPanel as
+    // New chat — the empty state is a quiet welcome line. Agent choice lives
+    // in the composer's chip, which opens the same AgentPickerPanel as
     // a popover (`data-agent-picker="popover"`).
     await page.goto(`/${orgSlug}/default/sessions?new=1`);
     await expect(page.getByTestId("chat-empty-state")).toBeVisible({
@@ -168,8 +167,7 @@ test.describe("chat.agent-picker", () => {
         codeFeatures: true,
       });
 
-      // Same as above: the picker opens from the composer chip, not from the
-      // removed empty-state gallery (#1046).
+      // Same as above: the picker opens from the composer chip.
       await page.goto(`/${orgSlug}/default/sessions?new=1`);
       await page.getByRole("button", { name: /^Agent: / }).click();
       const picker = page.locator('[data-agent-picker="popover"]');

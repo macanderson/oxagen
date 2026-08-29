@@ -1,5 +1,5 @@
-// bench-client.test.ts — the unscoped bench.* primitives @oxagen/bench calls
-// instead of touching the raw clickhouse() client itself (OXA-1515).
+// Tests the unscoped bench.* primitives @oxagen/bench calls instead of
+// touching the raw clickhouse() client itself.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,10 +60,15 @@ describe("chBenchInsert / chBenchQuery", () => {
   });
 
   it("runs a query and returns the JSONEachRow rows", async () => {
-    queryMock.mockResolvedValue({ json: () => Promise.resolve([{ public_id: "1" }]) });
-    const rows = await mod.chBenchQuery<{ public_id: string }>("SELECT public_id FROM bench.benchmark_run", {
-      limit: 10,
+    queryMock.mockResolvedValue({
+      json: () => Promise.resolve([{ public_id: "1" }]),
     });
+    const rows = await mod.chBenchQuery<{ public_id: string }>(
+      "SELECT public_id FROM bench.benchmark_run",
+      {
+        limit: 10,
+      },
+    );
     expect(rows).toEqual([{ public_id: "1" }]);
     expect(queryMock).toHaveBeenCalledWith({
       query: "SELECT public_id FROM bench.benchmark_run",
@@ -84,6 +89,8 @@ describe("chBenchInsert / chBenchQuery", () => {
 
   it("chBenchCommand runs a DDL/DML statement with no result set", async () => {
     await mod.chBenchCommand("CREATE DATABASE IF NOT EXISTS bench");
-    expect(commandMock).toHaveBeenCalledWith({ query: "CREATE DATABASE IF NOT EXISTS bench" });
+    expect(commandMock).toHaveBeenCalledWith({
+      query: "CREATE DATABASE IF NOT EXISTS bench",
+    });
   });
 });

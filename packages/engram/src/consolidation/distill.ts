@@ -13,7 +13,11 @@
  *      context passed) or the model call throws.
  */
 import { z } from "zod";
-import { generateObjectFor, selectModel, type GenerateObjectArgs } from "@oxagen/ai";
+import {
+  generateObjectFor,
+  selectModel,
+  type GenerateObjectArgs,
+} from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
 import { jaccard, jaccardSets, tokenize } from "./text-similarity";
 
@@ -58,7 +62,9 @@ const DistilledFactSchema = z.object({
  * deterministic heuristic only.
  */
 export interface DistillationLlmOptions {
-  telemetry: GenerateObjectArgs<z.infer<typeof DistilledFactSchema>>["telemetry"];
+  telemetry: GenerateObjectArgs<
+    z.infer<typeof DistilledFactSchema>
+  >["telemetry"];
 }
 
 /** True when the Vercel AI Gateway key is configured (LLM path is viable). */
@@ -108,9 +114,8 @@ function eventText(event: MemoryRecord): string {
  * Two-stage, deterministic: first bucket by structural key (kind + event type +
  * domain), then split each bucket into sub-clusters whose members' text
  * similarity meets `config.clusterThreshold` (single-linkage against a
- * representative). The threshold was previously ignored — every same-key event
- * landed in one cluster regardless of how unlike its payload was — so distilled
- * facts blended unrelated observations.
+ * representative). Splitting on similarity, not just the structural key,
+ * keeps unrelated payloads from being distilled into one blended fact.
  */
 export function clusterEvents(
   events: MemoryRecord[],
@@ -120,7 +125,8 @@ export function clusterEvents(
   for (const event of events) {
     const body = event.body as Record<string, unknown>;
     const eventType = (body.event as string) ?? event.kind;
-    const domain = (body.domain as string) ?? (body.tool as string) ?? "general";
+    const domain =
+      (body.domain as string) ?? (body.tool as string) ?? "general";
     const key = `${event.kind}:${eventType}:${domain}`;
     const group = buckets.get(key) ?? [];
     group.push(event);
@@ -131,7 +137,8 @@ export function clusterEvents(
   for (const bucket of buckets.values()) {
     // Greedy single-linkage sub-clustering by text similarity against each
     // sub-cluster's representative (its first member).
-    const subClusters: Array<{ rep: Set<string>; members: MemoryRecord[] }> = [];
+    const subClusters: Array<{ rep: Set<string>; members: MemoryRecord[] }> =
+      [];
     for (const event of bucket) {
       const tokens = tokenize(eventText(event));
       const match = subClusters.find(
@@ -179,8 +186,8 @@ export function extractFactHeuristic(
     fact = `Action "${eventType}" has been observed ${cluster.length} times`;
   }
 
-  const domain = (firstBody.domain as string) ??
-    (firstBody.tool as string) ?? "general";
+  const domain =
+    (firstBody.domain as string) ?? (firstBody.tool as string) ?? "general";
 
   return { fact, domain };
 }
@@ -270,7 +277,11 @@ export async function distill(
 
 export interface DistillationResult {
   /** Newly extracted semantic facts. */
-  newFacts: Array<{ fact: SemanticBody; confidence: number; derivedFrom: string[] }>;
+  newFacts: Array<{
+    fact: SemanticBody;
+    confidence: number;
+    derivedFrom: string[];
+  }>;
   /** Existing facts whose confidence should be boosted. */
   boostedFacts: Array<{ recordId: string; newConfidence: number }>;
   /** Events that were processed (to mark as consolidated). */
@@ -289,7 +300,8 @@ function findExistingFact(
   for (const record of existing) {
     if (record.kind !== "semantic") continue;
     const body = record.body as Record<string, unknown>;
-    if (body.domain !== newFact.domain || typeof body.fact !== "string") continue;
+    if (body.domain !== newFact.domain || typeof body.fact !== "string")
+      continue;
     // Real token-overlap similarity with a positive threshold. The old
     // `fact.includes(fact.split('"')[1] ?? "")` reduced to `includes("")` for
     // quoteless facts, which is always true — so the first same-domain fact

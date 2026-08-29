@@ -1,13 +1,13 @@
 /**
  * `20260612052000_regrant_oxagen_app.sql` — the guarded RLS-invariant block.
  *
- * The migration used to re-assert `ALTER ROLE oxagen_app NOSUPERUSER
- * NOBYPASSRLS NOCREATEDB NOCREATEROLE` unconditionally. PostgreSQL gates
- * ALTER ROLE's SUPERUSER/BYPASSRLS clauses on the *actor's* own superuser bit
- * whether or not the value changes, and RDS/Aurora never grants one (only
- * rds_superuser), so the statement failed 42501 on every Aurora target and
- * wedged the directory at file 3 of 88. Guarding it on the role's actual
- * attributes makes it a true no-op wherever the role is already safe.
+ * The migration only runs `ALTER ROLE oxagen_app NOSUPERUSER NOBYPASSRLS
+ * NOCREATEDB NOCREATEROLE` when the role's attributes actually need it.
+ * PostgreSQL gates ALTER ROLE's SUPERUSER/BYPASSRLS clauses on the *actor's*
+ * own superuser bit whether or not the value changes, and RDS/Aurora never
+ * grants one (only rds_superuser) — an unconditional statement fails 42501 on
+ * every Aurora target. Guarding it on the role's actual attributes makes it a
+ * true no-op wherever the role is already safe.
  *
  * A guard that skips the repair it was written for is the failure mode worth
  * testing, so this drifts the role and asserts the block still repairs it. The

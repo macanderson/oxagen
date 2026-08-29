@@ -54,9 +54,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeTx,
-  withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) => fn(fakeTx),
-
+    db: () => fakeTx,
+    withSystemDb: async (fn: (tx: typeof fakeTx) => Promise<unknown>) =>
+      fn(fakeTx),
   };
 });
 
@@ -95,8 +95,6 @@ function sha256hex(input: string): string {
 
 describe("SESSION_COOKIE_NAME", () => {
   it("is oxagen.session_token (matches cookiePrefix in auth.ts)", () => {
-    // OXA-1497: was "better-auth.session_token" which never matched the real
-    // cookie because auth.ts sets advanced.cookiePrefix = "oxagen".
     expect(SESSION_COOKIE_NAME).toBe("oxagen.session_token");
   });
 });
@@ -173,8 +171,7 @@ describe("parseSessionCookie", () => {
     expect(parseSessionCookie(header)).toBe(rawToken);
   });
 
-  it("does NOT match the old default 'better-auth.session_token' cookie name (OXA-1497 regression guard)", () => {
-    // If the cookie is named with the old default prefix it must not be found.
+  it("does NOT match Better Auth's default 'better-auth.session_token' cookie name", () => {
     const rawToken = "abc123";
     const signed = makeSignedCookieValue(rawToken);
     const header = `better-auth.session_token=${signed}`;
@@ -408,7 +405,9 @@ describe("resolveApiKey", () => {
     expect(apiKeyPrefix(RAW_KEY)).toBe(RAW_KEY.slice(0, API_KEY_PREFIX_LENGTH));
     expect(apiKeyPrefix(RAW_KEY)).toBe(RAW_KEY_PREFIX);
     // The old, buggy implementation produced just "ox" — must never happen.
-    expect(apiKeyPrefix(RAW_KEY)).not.toBe(RAW_KEY.slice(0, RAW_KEY.indexOf("_")));
+    expect(apiKeyPrefix(RAW_KEY)).not.toBe(
+      RAW_KEY.slice(0, RAW_KEY.indexOf("_")),
+    );
     expect(apiKeyPrefix(RAW_KEY)).not.toBe("ox");
   });
 
@@ -492,7 +491,11 @@ describe("resolveWorkspaceScope", () => {
   it("returns workspaceId when userId is a member", async () => {
     mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
     mockQuery.workspaceUsers.findFirst.mockResolvedValueOnce({ id: "wsu_xyz" });
-    const result = await resolveWorkspaceScope("org_1", "my-workspace", "usr_1");
+    const result = await resolveWorkspaceScope(
+      "org_1",
+      "my-workspace",
+      "usr_1",
+    );
     expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
   });
 
@@ -515,7 +518,11 @@ describe("resolveWorkspaceScope", () => {
   it("skips membership check when userId is undefined", async () => {
     // Backward-compatible default — no userId arg behaves like the old API.
     mockQuery.workspaces.findFirst.mockResolvedValueOnce({ id: "wrk_abc" });
-    const result = await resolveWorkspaceScope("org_1", "my-workspace", undefined);
+    const result = await resolveWorkspaceScope(
+      "org_1",
+      "my-workspace",
+      undefined,
+    );
     expect(result).toEqual({ ok: true, workspaceId: "wrk_abc" });
     expect(mockQuery.workspaceUsers.findFirst).not.toHaveBeenCalled();
   });

@@ -172,7 +172,7 @@ export async function startSandboxAction(
 
   // Saved sandbox templates carry a `sbx_…` public id; built-in presets use a
   // bare slug. A saved template governs provider/runtime/resources server-side,
-  // so we pass its id through (previously dropped) and let the base image default.
+  // so we pass its id through and let the base image default.
   const isSavedTemplate = templateId.startsWith("sbx_");
 
   let installSteps: string[];

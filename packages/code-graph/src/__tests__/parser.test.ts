@@ -6,8 +6,7 @@
  * structure tree-sitter returns for a given fixture, then verifies the symbols
  * parseSourceFile() extracts.
  *
- * Ported from packages/ingestion/src/parsers/__tests__/parser.test.ts and
- * extended with JS/JSX coverage (the TS grammar handles them).
+ * Covers TypeScript, JS/JSX (the TS grammar handles them), and Python.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -61,9 +60,7 @@ type Match = { captures: CaptureEntry[] };
  * Build a fake Language.query() implementation that, for a well-known query
  * string, returns matches derived from the fake tree via a simple BFS walk.
  */
-function makeFakeLanguage(
-  queryMatches: Record<string, Match[]>,
-): {
+function makeFakeLanguage(queryMatches: Record<string, Match[]>): {
   query: (q: string) => { matches: (node: FakeNode) => Match[] };
 } {
   return {
@@ -156,29 +153,86 @@ function makeParserInstance(
  *                   MyInterface (interface)  → 4 symbols total.
  */
 function buildTypescriptQueryMatches(): Record<string, Match[]> {
-  const classNameNode = buildNode({ type: "type_identifier", text: "MyClass", startRow: 0, endRow: 0 });
-  const classNode = buildNode({ type: "class_declaration", startRow: 0, endRow: 5 });
-  const method1NameNode = buildNode({ type: "property_identifier", text: "doSomething", startRow: 1, endRow: 1 });
-  const method1Node = buildNode({ type: "method_definition", startRow: 1, endRow: 3 });
-  const method2NameNode = buildNode({ type: "property_identifier", text: "another", startRow: 4, endRow: 4 });
-  const method2Node = buildNode({ type: "method_definition", startRow: 4, endRow: 4 });
-  const ifaceNameNode = buildNode({ type: "type_identifier", text: "MyInterface", startRow: 7, endRow: 7 });
-  const ifaceNode = buildNode({ type: "interface_declaration", startRow: 7, endRow: 9 });
+  const classNameNode = buildNode({
+    type: "type_identifier",
+    text: "MyClass",
+    startRow: 0,
+    endRow: 0,
+  });
+  const classNode = buildNode({
+    type: "class_declaration",
+    startRow: 0,
+    endRow: 5,
+  });
+  const method1NameNode = buildNode({
+    type: "property_identifier",
+    text: "doSomething",
+    startRow: 1,
+    endRow: 1,
+  });
+  const method1Node = buildNode({
+    type: "method_definition",
+    startRow: 1,
+    endRow: 3,
+  });
+  const method2NameNode = buildNode({
+    type: "property_identifier",
+    text: "another",
+    startRow: 4,
+    endRow: 4,
+  });
+  const method2Node = buildNode({
+    type: "method_definition",
+    startRow: 4,
+    endRow: 4,
+  });
+  const ifaceNameNode = buildNode({
+    type: "type_identifier",
+    text: "MyInterface",
+    startRow: 7,
+    endRow: 7,
+  });
+  const ifaceNode = buildNode({
+    type: "interface_declaration",
+    startRow: 7,
+    endRow: 9,
+  });
 
   return {
     "(class_declaration name: (type_identifier) @name) @node": [
-      { captures: [{ name: "name", node: classNameNode }, { name: "node", node: classNode }] },
+      {
+        captures: [
+          { name: "name", node: classNameNode },
+          { name: "node", node: classNode },
+        ],
+      },
     ],
     "(method_definition name: (property_identifier) @name) @node": [
-      { captures: [{ name: "name", node: method1NameNode }, { name: "node", node: method1Node }] },
-      { captures: [{ name: "name", node: method2NameNode }, { name: "node", node: method2Node }] },
+      {
+        captures: [
+          { name: "name", node: method1NameNode },
+          { name: "node", node: method1Node },
+        ],
+      },
+      {
+        captures: [
+          { name: "name", node: method2NameNode },
+          { name: "node", node: method2Node },
+        ],
+      },
     ],
     "(interface_declaration name: (type_identifier) @name) @node": [
-      { captures: [{ name: "name", node: ifaceNameNode }, { name: "node", node: ifaceNode }] },
+      {
+        captures: [
+          { name: "name", node: ifaceNameNode },
+          { name: "node", node: ifaceNode },
+        ],
+      },
     ],
     "(function_declaration name: (identifier) @name) @node": [],
     "(type_alias_declaration name: (type_identifier) @name) @node": [],
-    "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node": [],
+    "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node":
+      [],
   };
 }
 
@@ -189,20 +243,62 @@ function buildTypescriptQueryMatches(): Record<string, Match[]> {
  *   Line 8-12: class DataPipeline:
  */
 function buildPythonQueryMatches(): Record<string, Match[]> {
-  const fn1NameNode = buildNode({ type: "identifier", text: "fetch_data", startRow: 0, endRow: 0 });
-  const fn1Node = buildNode({ type: "function_definition", startRow: 0, endRow: 2 });
-  const fn2NameNode = buildNode({ type: "identifier", text: "process", startRow: 4, endRow: 4 });
-  const fn2Node = buildNode({ type: "function_definition", startRow: 4, endRow: 6 });
-  const classNameNode = buildNode({ type: "identifier", text: "DataPipeline", startRow: 8, endRow: 8 });
-  const classNode = buildNode({ type: "class_definition", startRow: 8, endRow: 12 });
+  const fn1NameNode = buildNode({
+    type: "identifier",
+    text: "fetch_data",
+    startRow: 0,
+    endRow: 0,
+  });
+  const fn1Node = buildNode({
+    type: "function_definition",
+    startRow: 0,
+    endRow: 2,
+  });
+  const fn2NameNode = buildNode({
+    type: "identifier",
+    text: "process",
+    startRow: 4,
+    endRow: 4,
+  });
+  const fn2Node = buildNode({
+    type: "function_definition",
+    startRow: 4,
+    endRow: 6,
+  });
+  const classNameNode = buildNode({
+    type: "identifier",
+    text: "DataPipeline",
+    startRow: 8,
+    endRow: 8,
+  });
+  const classNode = buildNode({
+    type: "class_definition",
+    startRow: 8,
+    endRow: 12,
+  });
 
   return {
     "(function_definition name: (identifier) @name) @node": [
-      { captures: [{ name: "name", node: fn1NameNode }, { name: "node", node: fn1Node }] },
-      { captures: [{ name: "name", node: fn2NameNode }, { name: "node", node: fn2Node }] },
+      {
+        captures: [
+          { name: "name", node: fn1NameNode },
+          { name: "node", node: fn1Node },
+        ],
+      },
+      {
+        captures: [
+          { name: "name", node: fn2NameNode },
+          { name: "node", node: fn2Node },
+        ],
+      },
     ],
     "(class_definition name: (identifier) @name) @node": [
-      { captures: [{ name: "name", node: classNameNode }, { name: "node", node: classNode }] },
+      {
+        captures: [
+          { name: "name", node: classNameNode },
+          { name: "node", node: classNode },
+        ],
+      },
     ],
   };
 }
@@ -216,25 +312,70 @@ function buildPythonQueryMatches(): Record<string, Match[]> {
  * Expected: fetchData (arrow_function) + processItems (arrow_function) + namedFn (function)
  */
 function buildArrowQueryMatches(): Record<string, Match[]> {
-  const arrowName1 = buildNode({ type: "identifier", text: "fetchData", startRow: 0, endRow: 0 });
-  const arrowNode1 = buildNode({ type: "lexical_declaration", startRow: 0, endRow: 2 });
-  const arrowName2 = buildNode({ type: "identifier", text: "processItems", startRow: 4, endRow: 4 });
-  const arrowNode2 = buildNode({ type: "lexical_declaration", startRow: 4, endRow: 6 });
-  const fnName = buildNode({ type: "identifier", text: "namedFn", startRow: 8, endRow: 8 });
-  const fnNode = buildNode({ type: "function_declaration", startRow: 8, endRow: 9 });
+  const arrowName1 = buildNode({
+    type: "identifier",
+    text: "fetchData",
+    startRow: 0,
+    endRow: 0,
+  });
+  const arrowNode1 = buildNode({
+    type: "lexical_declaration",
+    startRow: 0,
+    endRow: 2,
+  });
+  const arrowName2 = buildNode({
+    type: "identifier",
+    text: "processItems",
+    startRow: 4,
+    endRow: 4,
+  });
+  const arrowNode2 = buildNode({
+    type: "lexical_declaration",
+    startRow: 4,
+    endRow: 6,
+  });
+  const fnName = buildNode({
+    type: "identifier",
+    text: "namedFn",
+    startRow: 8,
+    endRow: 8,
+  });
+  const fnNode = buildNode({
+    type: "function_declaration",
+    startRow: 8,
+    endRow: 9,
+  });
 
   return {
     "(function_declaration name: (identifier) @name) @node": [
-      { captures: [{ name: "name", node: fnName }, { name: "node", node: fnNode }] },
+      {
+        captures: [
+          { name: "name", node: fnName },
+          { name: "node", node: fnNode },
+        ],
+      },
     ],
     "(class_declaration name: (type_identifier) @name) @node": [],
     "(method_definition name: (property_identifier) @name) @node": [],
     "(interface_declaration name: (type_identifier) @name) @node": [],
     "(type_alias_declaration name: (type_identifier) @name) @node": [],
-    "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node": [
-      { captures: [{ name: "name", node: arrowName1 }, { name: "node", node: arrowNode1 }, { name: "fn", node: arrowNode1 }] },
-      { captures: [{ name: "name", node: arrowName2 }, { name: "node", node: arrowNode2 }, { name: "fn", node: arrowNode2 }] },
-    ],
+    "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node":
+      [
+        {
+          captures: [
+            { name: "name", node: arrowName1 },
+            { name: "node", node: arrowNode1 },
+            { name: "fn", node: arrowNode1 },
+          ],
+        },
+        {
+          captures: [
+            { name: "name", node: arrowName2 },
+            { name: "node", node: arrowNode2 },
+            { name: "fn", node: arrowNode2 },
+          ],
+        },
+      ],
   };
 }
 
@@ -264,7 +405,10 @@ describe("parseSourceFile", () => {
 
       makeParserInstance(fakeTree, fakeLang);
 
-      const result = await parseSourceFile("src/components/MyClass.ts", "/* fixture */");
+      const result = await parseSourceFile(
+        "src/components/MyClass.ts",
+        "/* fixture */",
+      );
 
       expect(result.language).toBe("typescript");
       expect(result.error).toBeUndefined();
@@ -305,31 +449,56 @@ describe("parseSourceFile", () => {
 
       makeParserInstance(fakeTree, fakeLang);
 
-      const result = await parseSourceFile("components/Button.tsx", "/* tsx */");
+      const result = await parseSourceFile(
+        "components/Button.tsx",
+        "/* tsx */",
+      );
 
       expect(result.language).toBe("typescript");
       expect(result.symbols.length).toBeGreaterThan(0);
     });
 
     it("deduplicates symbols matched by multiple overlapping queries", async () => {
-      const classNameNode = buildNode({ type: "type_identifier", text: "Dup", startRow: 0, endRow: 0 });
-      const classNode = buildNode({ type: "class_declaration", startRow: 0, endRow: 5 });
+      const classNameNode = buildNode({
+        type: "type_identifier",
+        text: "Dup",
+        startRow: 0,
+        endRow: 0,
+      });
+      const classNode = buildNode({
+        type: "class_declaration",
+        startRow: 0,
+        endRow: 5,
+      });
       const matches: Record<string, Match[]> = {
         "(class_declaration name: (type_identifier) @name) @node": [
-          { captures: [{ name: "name", node: classNameNode }, { name: "node", node: classNode }] },
-          { captures: [{ name: "name", node: classNameNode }, { name: "node", node: classNode }] },
+          {
+            captures: [
+              { name: "name", node: classNameNode },
+              { name: "node", node: classNode },
+            ],
+          },
+          {
+            captures: [
+              { name: "name", node: classNameNode },
+              { name: "node", node: classNode },
+            ],
+          },
         ],
         "(function_declaration name: (identifier) @name) @node": [],
         "(method_definition name: (property_identifier) @name) @node": [],
         "(interface_declaration name: (type_identifier) @name) @node": [],
         "(type_alias_declaration name: (type_identifier) @name) @node": [],
-        "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node": [],
+        "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node":
+          [],
       };
 
       const fakeLang = makeFakeLanguage(matches);
       const fakeTree = { rootNode: buildNode({ type: "program" }) };
 
-      mocks.languageLoad.mockResolvedValueOnce(fakeLang).mockResolvedValueOnce({});
+      mocks.languageLoad
+        .mockResolvedValueOnce(fakeLang)
+        .mockResolvedValueOnce({});
       makeParserInstance(fakeTree, fakeLang);
 
       const result = await parseSourceFile("Dup.ts", "");
@@ -420,7 +589,9 @@ describe("parseSourceFile", () => {
 
       expect(result.language).toBe("typescript");
 
-      const arrowSymbols = result.symbols.filter((s) => s.kind === "arrow_function");
+      const arrowSymbols = result.symbols.filter(
+        (s) => s.kind === "arrow_function",
+      );
       expect(arrowSymbols).toHaveLength(2);
       expect(arrowSymbols.map((s) => s.name)).toContain("fetchData");
       expect(arrowSymbols.map((s) => s.name)).toContain("processItems");
@@ -496,7 +667,10 @@ describe("parseSourceFile", () => {
 
       expect(result.language).toBe("markdown");
       expect(result.title).toBe("Getting Started");
-      expect(result.symbols.map((s) => s.name)).toEqual(["Getting Started", "Install"]);
+      expect(result.symbols.map((s) => s.name)).toEqual([
+        "Getting Started",
+        "Install",
+      ]);
       expect(result.symbols.every((s) => s.kind === "heading")).toBe(true);
       expect(mocks.parserInstances).toHaveLength(0);
       expect(mocks.parserInit).not.toHaveBeenCalled();
@@ -513,9 +687,7 @@ describe("parseSourceFile", () => {
 
   describe("Error handling", () => {
     it("returns error field when parser throws", async () => {
-      mocks.languageLoad
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
+      mocks.languageLoad.mockResolvedValueOnce({}).mockResolvedValueOnce({});
       mocks.parserInit.mockRejectedValueOnce(new Error("WASM load failed"));
       _resetForTest();
 
@@ -527,11 +699,11 @@ describe("parseSourceFile", () => {
     });
 
     it("logs a console.error when the parser throws (regression: silent WASM failure)", async () => {
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const consoleSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
 
-      mocks.languageLoad
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
+      mocks.languageLoad.mockResolvedValueOnce({}).mockResolvedValueOnce({});
       mocks.parserInit.mockRejectedValueOnce(new Error("WASM load failed"));
       _resetForTest();
 
@@ -546,13 +718,16 @@ describe("parseSourceFile", () => {
     });
 
     it("error field in ParseResult is populated on parse failure", async () => {
-      mocks.languageLoad
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
-      mocks.parserInit.mockRejectedValueOnce(new Error("tree-sitter wasm not found: typescript.wasm"));
+      mocks.languageLoad.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      mocks.parserInit.mockRejectedValueOnce(
+        new Error("tree-sitter wasm not found: typescript.wasm"),
+      );
       _resetForTest();
 
-      const result = await parseSourceFile("src/index.ts", "export const x = 1;");
+      const result = await parseSourceFile(
+        "src/index.ts",
+        "export const x = 1;",
+      );
 
       expect(result.error).toBeDefined();
       expect(result.error).toMatch(/tree-sitter wasm not found/);

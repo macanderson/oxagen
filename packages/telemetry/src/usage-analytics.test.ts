@@ -1,6 +1,6 @@
 // usage-analytics.test.ts
 //
-// Unit tests for readUsageBreakdown (OXA-1585). The ClickHouse client is mocked
+// Unit tests for readUsageBreakdown. The ClickHouse client is mocked
 // so no live server is needed. We pin the tenant filter (org_id always; the
 // optional workspace_id branch), the GROUP BY / ORDER BY of each grouped query,
 // the string→number coercion of UInt64 sums, and the derivation of `totals` from
@@ -268,7 +268,7 @@ describe("readUsageBreakdown", () => {
     ]);
   });
 
-  it("falls back to an empty string when a model row's provider aggregate is null (OXA-2059)", async () => {
+  it("falls back to an empty string when a model row's provider aggregate is null", async () => {
     // `any(provider)` can return null when ClickHouse has no non-null provider
     // value to aggregate over for a group — the byModel mapper must not surface
     // `null`/`undefined` to callers.

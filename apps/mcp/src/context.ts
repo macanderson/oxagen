@@ -9,13 +9,11 @@
  * the edge with `invalid_token`. Session tokens carry no org/workspace scope;
  * accepting them would produce orgId:"" which fails closed in the kernel but
  * gives a confusing error. MCP clients must always authenticate with API keys.
- * See OXA-1515 for the tenancy-scope rationale.
  *
- * OXA-2056: an orgId of "" (empty string) is NEVER a valid scope, from either
- * path. The API-key path also explicitly rejects a resolved orgId/workspaceId
- * that is empty (defense in depth alongside the session-token rejection
- * above) rather than proceeding into a security-event emit + CapabilityContext
- * construction that only fails later, deeper in the kernel.
+ * An orgId of "" (empty string) is never a valid scope, from either path.
+ * The API-key path also rejects a resolved orgId/workspaceId that is empty,
+ * so a bad scope is caught here instead of failing later, deeper in the
+ * kernel.
  *
  * Token classification: an API key always contains an underscore in the format
  * `<prefix>_<secret>`. A session token (Better Auth opaque token) never does.
@@ -38,7 +36,10 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 type HttpHeaders = Record<string, string | string[] | undefined>;
 
 /** Typed reasons an MCP request fails authentication. */
-export type McpAuthFailure = "unauthenticated" | "invalid_token" | "expired_token";
+export type McpAuthFailure =
+  | "unauthenticated"
+  | "invalid_token"
+  | "expired_token";
 
 /** Thrown when an MCP request carries no valid principal. Fails closed. */
 export class McpUnauthorizedError extends Error {
@@ -61,7 +62,9 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
  * @param authHeader - The raw Authorization header (e.g. "Bearer abc123").
  * @returns The token string, or null when the header is absent or malformed.
  */
-export function extractBearerToken(authHeader: string | undefined): string | null {
+export function extractBearerToken(
+  authHeader: string | undefined,
+): string | null {
   if (!authHeader) return null;
   const trimmed = authHeader.trim();
   if (!trimmed.toLowerCase().startsWith("bearer ")) return null;
@@ -117,22 +120,17 @@ export async function resolveMcpContext(
     if (!resolution.ok) {
       return {
         ok: false,
-        reason: resolution.kind === "expired" ? "expired_token" : "invalid_token",
+        reason:
+          resolution.kind === "expired" ? "expired_token" : "invalid_token",
       };
     }
 
-    // Defense in depth (OXA-2056): an API key MUST resolve to a non-empty
-    // org/workspace scope. resolveApiKey() should never return ok:true with
-    // an empty orgId (the DB column is populated at key creation), but if it
-    // ever did — a data-integrity bug, a bad migration, a future refactor —
-    // an empty orgId is exactly the "no real scope" shape that used to open
-    // access instead of rejecting it: runInTenantScope's own uuid guard
-    // fails closed on it deep in the kernel, but only AFTER a security event
-    // has already been emitted and downstream code has already seen an
-    // apparently-successful auth resolution. Reject here at the edge instead,
-    // same as the session-token path below, so an empty scope is treated as
-    // invalid_token and never reaches the kernel or the audit log as
-    // "success".
+    // An API key must resolve to a non-empty org/workspace scope.
+    // resolveApiKey() should never return ok:true with an empty orgId, but
+    // if a data bug ever produced one, runInTenantScope's uuid guard would
+    // still fail closed deep in the kernel — after a security event already
+    // logged the request as a success. Reject the empty scope here instead,
+    // so it never reaches the kernel or the audit log as a success.
     if (!resolution.orgId || !resolution.workspaceId) {
       return { ok: false, reason: "invalid_token" };
     }
@@ -142,7 +140,7 @@ export async function resolveMcpContext(
     // an "api_key.used" access-log event. Fire-and-forget: an audit-pipeline
     // hiccup must never fail-closed a legitimately authenticated request.
     // actorUserId is null (machine auth carries no user); ip is the resolved
-    // client IP. — OXA-1594
+    // client IP.
     emitSecurityEvent({
       eventType: "api_key.used",
       actorUserId: null,
@@ -174,18 +172,15 @@ export async function resolveMcpContext(
   // org/workspace scope. Session tokens (Better Auth opaque tokens) only
   // provide a userId; they carry no org/workspace context at all. Emitting
   // an empty orgId ("") would cause the kernel's runInTenantScope to throw
-  // TenantScopeError (fail-closed, OXA-1515 Task 3 Step 4), but that gives
-  // a confusing generic denial. Reject here at the edge with invalid_token so
-  // the caller gets a clear 401 rather than a cryptic 500/deny downstream.
+  // TenantScopeError (fail-closed), but that gives a confusing generic
+  // denial. Reject here at the edge with invalid_token so the caller gets a
+  // clear 401 rather than a cryptic 500/deny downstream.
   //
-  // Rationale: MCP clients authenticate with API keys (org+workspace scope
-  // baked into the key). Browser sessions (app surface) use a different
-  // transport (the /api/v1/chat/stream SSE route) where the session cookie
-  // is resolved server-side with full tenant context. There is no legitimate
-  // MCP use case for session-token auth.
-  //
-  // tenancy: unscoped seam -- session tokens have no org scope; reject before
-  // any data access so the kernel never receives an empty orgId. -- OXA-1515
+  // MCP clients authenticate with API keys (org+workspace scope baked into
+  // the key). Browser sessions (app surface) use a different transport (the
+  // /api/v1/chat/stream SSE route) where the session cookie is resolved
+  // server-side with full tenant context. There is no legitimate MCP use
+  // case for session-token auth.
   return { ok: false, reason: "invalid_token" };
 }
 
@@ -196,7 +191,9 @@ export async function resolveMcpContext(
  * validated Authorization credential and throws `McpUnauthorizedError`
  * (fail closed) when the request carries no valid principal.
  */
-export async function buildContext(hdrs: HttpHeaders): Promise<CapabilityContext> {
+export async function buildContext(
+  hdrs: HttpHeaders,
+): Promise<CapabilityContext> {
   const authHeader = firstHeader(hdrs["authorization"]);
   const requestId = firstHeader(hdrs["x-request-id"]) ?? crypto.randomUUID();
   const clientIp = extractClientIp(hdrs);

@@ -40,12 +40,9 @@ export function buildPrunedProperties(
  *
  * Canonical storage (see graph.node.upsert) serializes the property bag to a
  * JSON STRING — Neo4j node property values must be primitives/arrays, never a
- * map. This adapter previously read the column as if it were already an object
- * (always yielding `{}` since a string isn't a Record) and wrote it back as a
- * raw map (which Neo4j rejects: "Property values can only be of primitive types
- * or arrays thereof"), so heal/prune silently did nothing. Read with this
- * helper and write with `JSON.stringify(...)` to stay consistent with ingestion.
- * Tolerates a legacy object value just in case.
+ * map. Read with this helper and write back with `JSON.stringify(...)` to
+ * stay consistent with ingestion. Also accepts an already-parsed object,
+ * since some callers may hand one in directly.
  */
 export function parseNodeProps(raw: unknown): Record<string, unknown> {
   if (raw == null) return {};
@@ -59,7 +56,8 @@ export function parseNodeProps(raw: unknown): Record<string, unknown> {
       return {};
     }
   }
-  if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (typeof raw === "object" && !Array.isArray(raw))
+    return raw as Record<string, unknown>;
   return {};
 }
 
@@ -99,13 +97,14 @@ export const [schemaReconcile] = createFunction(
   },
   { event: "schema/reconcile.start" },
   async ({ event, step }) => {
-    const { orgId, workspaceId, executionId, versionId, prune } = event.data as {
-      orgId: string;
-      workspaceId: string;
-      executionId: string;
-      versionId: string;
-      prune: boolean;
-    };
+    const { orgId, workspaceId, executionId, versionId, prune } =
+      event.data as {
+        orgId: string;
+        workspaceId: string;
+        executionId: string;
+        versionId: string;
+        prune: boolean;
+      };
 
     // ── Step: mark the execution as running ────────────────────────────────────
     await step.run("start", () =>
@@ -140,7 +139,9 @@ export const [schemaReconcile] = createFunction(
         );
 
         if (!versionRow) {
-          throw new Error(`schema.reconcile: schema version not found: ${versionId}`);
+          throw new Error(
+            `schema.reconcile: schema version not found: ${versionId}`,
+          );
         }
 
         // Load all schemas belonging to this version.
@@ -157,13 +158,37 @@ export const [schemaReconcile] = createFunction(
         );
 
         if (allSchemas.length === 0) {
-          logger.info({ orgId, workspaceId, versionId }, "schema.reconcile: no schemas in target version");
+          logger.info(
+            { orgId, workspaceId, versionId },
+            "schema.reconcile: no schemas in target version",
+          );
           return {
             versionInternalId: versionRow.id,
             labelNames: [] as string[],
             relTypeNames: [] as string[],
-            labelSchemaMap: {} as Record<string, { labelId: string; properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }>,
-            relTypeSchemaMap: {} as Record<string, { properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }>,
+            labelSchemaMap: {} as Record<
+              string,
+              {
+                labelId: string;
+                properties: Array<{
+                  key: string;
+                  dataType: string;
+                  required: boolean;
+                  description: string | null;
+                }>;
+              }
+            >,
+            relTypeSchemaMap: {} as Record<
+              string,
+              {
+                properties: Array<{
+                  key: string;
+                  dataType: string;
+                  required: boolean;
+                  description: string | null;
+                }>;
+              }
+            >,
           };
         }
 
@@ -179,7 +204,9 @@ export const [schemaReconcile] = createFunction(
           }),
         );
 
-        const activationMap = new Map(activations.map((a) => [a.schemaName, a.enabled]));
+        const activationMap = new Map(
+          activations.map((a) => [a.schemaName, a.enabled]),
+        );
         // Schemas with no activation record are enabled by default.
         const enabledSchemaIds = allSchemas
           .filter((s) => activationMap.get(s.name) !== false)
@@ -190,8 +217,29 @@ export const [schemaReconcile] = createFunction(
             versionInternalId: versionRow.id,
             labelNames: [] as string[],
             relTypeNames: [] as string[],
-            labelSchemaMap: {} as Record<string, { labelId: string; properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }>,
-            relTypeSchemaMap: {} as Record<string, { properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }>,
+            labelSchemaMap: {} as Record<
+              string,
+              {
+                labelId: string;
+                properties: Array<{
+                  key: string;
+                  dataType: string;
+                  required: boolean;
+                  description: string | null;
+                }>;
+              }
+            >,
+            relTypeSchemaMap: {} as Record<
+              string,
+              {
+                properties: Array<{
+                  key: string;
+                  dataType: string;
+                  required: boolean;
+                  description: string | null;
+                }>;
+              }
+            >,
           };
         }
 
@@ -242,20 +290,51 @@ export const [schemaReconcile] = createFunction(
         );
 
         // Build label schema map (plain object, Inngest step results must be serializable).
-        const labelSchemaMap: Record<string, { labelId: string; properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }> = {};
+        const labelSchemaMap: Record<
+          string,
+          {
+            labelId: string;
+            properties: Array<{
+              key: string;
+              dataType: string;
+              required: boolean;
+              description: string | null;
+            }>;
+          }
+        > = {};
         for (const label of labels) {
           const props = allProperties
             .filter((p) => p.nodeLabelId === label.id)
-            .map((p) => ({ key: p.key, dataType: p.dataType, required: p.required, description: p.description }));
+            .map((p) => ({
+              key: p.key,
+              dataType: p.dataType,
+              required: p.required,
+              description: p.description,
+            }));
           labelSchemaMap[label.name] = { labelId: label.id, properties: props };
         }
 
         // Build rel type schema map.
-        const relTypeSchemaMap: Record<string, { properties: Array<{ key: string; dataType: string; required: boolean; description: string | null }> }> = {};
+        const relTypeSchemaMap: Record<
+          string,
+          {
+            properties: Array<{
+              key: string;
+              dataType: string;
+              required: boolean;
+              description: string | null;
+            }>;
+          }
+        > = {};
         for (const relType of relTypes) {
           const props = allProperties
             .filter((p) => p.relationshipTypeId === relType.id)
-            .map((p) => ({ key: p.key, dataType: p.dataType, required: p.required, description: p.description }));
+            .map((p) => ({
+              key: p.key,
+              dataType: p.dataType,
+              required: p.required,
+              description: p.description,
+            }));
           relTypeSchemaMap[relType.name] = { properties: props };
         }
 
@@ -270,7 +349,10 @@ export const [schemaReconcile] = createFunction(
     });
 
     // Exit early if there are no labels to reconcile.
-    if (schemaDefinition.labelNames.length === 0 && schemaDefinition.relTypeNames.length === 0) {
+    if (
+      schemaDefinition.labelNames.length === 0 &&
+      schemaDefinition.relTypeNames.length === 0
+    ) {
       await step.run("complete-empty", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
           withTenantDb((tx) =>
@@ -280,16 +362,26 @@ export const [schemaReconcile] = createFunction(
                 status: "completed",
                 completedAt: new Date(),
                 outputPayload: {
-                  totalNodes: 0, processedNodes: 0, updatedNodes: 0,
-                  totalRelationships: 0, processedRelationships: 0, updatedRelationships: 0,
-                  prunedNodes: 0, prunedRelationships: 0,
+                  totalNodes: 0,
+                  processedNodes: 0,
+                  updatedNodes: 0,
+                  totalRelationships: 0,
+                  processedRelationships: 0,
+                  updatedRelationships: 0,
+                  prunedNodes: 0,
+                  prunedRelationships: 0,
                 },
               })
               .where(eq(db.agentExecutions.id, executionId)),
           ),
         ),
       );
-      return { executionId, status: "completed", totalNodes: 0, totalRelationships: 0 };
+      return {
+        executionId,
+        status: "completed",
+        totalNodes: 0,
+        totalRelationships: 0,
+      };
     }
 
     // ── Step: count total nodes and relationships to reconcile ─────────────────
@@ -307,9 +399,20 @@ export const [schemaReconcile] = createFunction(
              RETURN count(n) AS total`,
             { orgId, workspaceId, labels: schemaDefinition.labelNames },
           );
-          totalNodes = (nodeResult.records[0]?.get("total") as { toNumber?: () => number } | number | undefined)
-            ? typeof (nodeResult.records[0]?.get("total") as { toNumber?: () => number }).toNumber === "function"
-              ? (nodeResult.records[0]?.get("total") as { toNumber: () => number }).toNumber()
+          totalNodes = (nodeResult.records[0]?.get("total") as
+            | { toNumber?: () => number }
+            | number
+            | undefined)
+            ? typeof (
+                nodeResult.records[0]?.get("total") as {
+                  toNumber?: () => number;
+                }
+              ).toNumber === "function"
+              ? (
+                  nodeResult.records[0]?.get("total") as {
+                    toNumber: () => number;
+                  }
+                ).toNumber()
               : Number(nodeResult.records[0]?.get("total") ?? 0)
             : 0;
         }
@@ -321,9 +424,16 @@ export const [schemaReconcile] = createFunction(
              RETURN count(r) AS total`,
             { orgId, workspaceId, relTypes: schemaDefinition.relTypeNames },
           );
-          totalRelationships = typeof (relResult.records[0]?.get("total") as { toNumber?: () => number }).toNumber === "function"
-            ? (relResult.records[0]?.get("total") as { toNumber: () => number }).toNumber()
-            : Number(relResult.records[0]?.get("total") ?? 0);
+          totalRelationships =
+            typeof (
+              relResult.records[0]?.get("total") as { toNumber?: () => number }
+            ).toNumber === "function"
+              ? (
+                  relResult.records[0]?.get("total") as {
+                    toNumber: () => number;
+                  }
+                ).toNumber()
+              : Number(relResult.records[0]?.get("total") ?? 0);
         }
 
         return { totalNodes, totalRelationships };
@@ -358,7 +468,12 @@ export const [schemaReconcile] = createFunction(
     // ── Step: reconcile all nodes (in-step pagination, single Inngest checkpoint) ──
     const nodeResults = await step.run("reconcile-all-nodes", async () => {
       if (schemaDefinition.labelNames.length === 0) {
-        return { processedNodes: 0, updatedNodes: 0, prunedNodes: 0, prunedPropertyKeys: {} as Record<string, string[]> };
+        return {
+          processedNodes: 0,
+          updatedNodes: 0,
+          prunedNodes: 0,
+          prunedPropertyKeys: {} as Record<string, string[]>,
+        };
       }
 
       return runInTenantScope({ orgId, workspaceId }, async () => {
@@ -409,7 +524,9 @@ export const [schemaReconcile] = createFunction(
 
             if (missingRequired.length > 0) {
               try {
-                const missingSchema = z.object({ derivedProps: z.record(z.unknown()) });
+                const missingSchema = z.object({
+                  derivedProps: z.record(z.unknown()),
+                });
                 const { object } = await generateObjectFor({
                   schema: missingSchema,
                   prompt: `You are completing missing required schema properties for a knowledge graph node with label "${label}".
@@ -427,7 +544,10 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                   abortSignal: AbortSignal.timeout(AI_DERIVE_TIMEOUT_MS),
                   maxRetries: 0, // Inngest owns the retry policy for this step.
                 });
-                if (object.derivedProps && typeof object.derivedProps === "object") {
+                if (
+                  object.derivedProps &&
+                  typeof object.derivedProps === "object"
+                ) {
                   newProps = { ...newProps, ...object.derivedProps };
                   nodeUpdated = true;
                 }
@@ -441,7 +561,10 @@ Return only the derived property key-value pairs in the derivedProps field.`,
 
             // Prune off-schema properties if requested.
             if (prune) {
-              const { pruned, removedKeys } = buildPrunedProperties(newProps, schemaKeys);
+              const { pruned, removedKeys } = buildPrunedProperties(
+                newProps,
+                schemaKeys,
+              );
               if (removedKeys.length > 0) {
                 newProps = pruned;
                 nodeUpdated = true;
@@ -457,7 +580,12 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                  SET n.properties = $properties`,
                 // Serialize back to a JSON string — Neo4j rejects raw maps as
                 // property values, and ingestion stores this column the same way.
-                { nodeId, orgId, workspaceId, properties: JSON.stringify(newProps) },
+                {
+                  nodeId,
+                  orgId,
+                  workspaceId,
+                  properties: JSON.stringify(newProps),
+                },
               );
               updatedNodes++;
             }
@@ -469,121 +597,148 @@ Return only the derived property key-value pairs in the derivedProps field.`,
           if (batchResult.records.length < BATCH_SIZE) break;
         }
 
-        return { processedNodes, updatedNodes, prunedNodes, prunedPropertyKeys };
+        return {
+          processedNodes,
+          updatedNodes,
+          prunedNodes,
+          prunedPropertyKeys,
+        };
       });
     });
 
     // ── Step: reconcile all relationships ──────────────────────────────────────
-    const relResults = await step.run("reconcile-all-relationships", async () => {
-      if (schemaDefinition.relTypeNames.length === 0) {
-        return { processedRelationships: 0, updatedRelationships: 0, prunedRelationships: 0 };
-      }
+    const relResults = await step.run(
+      "reconcile-all-relationships",
+      async () => {
+        if (schemaDefinition.relTypeNames.length === 0) {
+          return {
+            processedRelationships: 0,
+            updatedRelationships: 0,
+            prunedRelationships: 0,
+          };
+        }
 
-      return runInTenantScope({ orgId, workspaceId }, async () => {
-        const session = scopedSession();
-        let skip = 0;
-        let processedRelationships = 0;
-        let updatedRelationships = 0;
-        let prunedRelationships = 0;
+        return runInTenantScope({ orgId, workspaceId }, async () => {
+          const session = scopedSession();
+          let skip = 0;
+          let processedRelationships = 0;
+          let updatedRelationships = 0;
+          let prunedRelationships = 0;
 
-        for (;;) {
-          const batchResult = await session.run(
-            `MATCH (a:GraphNode)-[r]->(b:GraphNode)
+          for (;;) {
+            const batchResult = await session.run(
+              `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId AND type(r) IN $relTypes
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props
              SKIP $skip LIMIT $batchSize`,
-            {
-              orgId,
-              workspaceId,
-              relTypes: schemaDefinition.relTypeNames,
-              skip,
-              batchSize: BATCH_SIZE,
-            },
-          );
-
-          if (batchResult.records.length === 0) break;
-
-          for (const record of batchResult.records) {
-            const relElemId = record.get("relElemId") as string;
-            const relType = record.get("relType") as string;
-            const existingProps = (record.get("props") ?? {}) as Record<string, unknown>;
-
-            const relSchema = schemaDefinition.relTypeSchemaMap[relType];
-            if (!relSchema) {
-              processedRelationships++;
-              continue;
-            }
-
-            const schemaKeys = relSchema.properties.map((p) => p.key);
-            let newProps = { ...existingProps };
-            let relUpdated = false;
-
-            // AI-derive missing required properties for relationships.
-            const missingRequired = relSchema.properties.filter(
-              (p) => p.required && p.description && !(p.key in existingProps),
+              {
+                orgId,
+                workspaceId,
+                relTypes: schemaDefinition.relTypeNames,
+                skip,
+                batchSize: BATCH_SIZE,
+              },
             );
 
-            if (missingRequired.length > 0) {
-              try {
-                const missingSchema = z.object({ derivedProps: z.record(z.unknown()) });
-                const { object } = await generateObjectFor({
-                  schema: missingSchema,
-                  prompt: `You are completing missing required schema properties for a knowledge graph relationship of type "${relType}".
+            if (batchResult.records.length === 0) break;
+
+            for (const record of batchResult.records) {
+              const relElemId = record.get("relElemId") as string;
+              const relType = record.get("relType") as string;
+              const existingProps = (record.get("props") ?? {}) as Record<
+                string,
+                unknown
+              >;
+
+              const relSchema = schemaDefinition.relTypeSchemaMap[relType];
+              if (!relSchema) {
+                processedRelationships++;
+                continue;
+              }
+
+              const schemaKeys = relSchema.properties.map((p) => p.key);
+              let newProps = { ...existingProps };
+              let relUpdated = false;
+
+              // AI-derive missing required properties for relationships.
+              const missingRequired = relSchema.properties.filter(
+                (p) => p.required && p.description && !(p.key in existingProps),
+              );
+
+              if (missingRequired.length > 0) {
+                try {
+                  const missingSchema = z.object({
+                    derivedProps: z.record(z.unknown()),
+                  });
+                  const { object } = await generateObjectFor({
+                    schema: missingSchema,
+                    prompt: `You are completing missing required schema properties for a knowledge graph relationship of type "${relType}".
 Existing properties: ${JSON.stringify(existingProps)}
 Missing required properties to derive:
 ${missingRequired.map((p) => `  - ${p.key} (${p.dataType}): ${p.description}`).join("\n")}
 Return only the derived property key-value pairs in the derivedProps field.`,
-                  telemetry: {
-                    orgId,
-                    workspaceId,
-                    surface: "runner" as const,
-                    messageId: null,
-                  },
-                  // Bound the call so a stalled gateway can't hang the worker.
-                  abortSignal: AbortSignal.timeout(AI_DERIVE_TIMEOUT_MS),
-                  maxRetries: 0, // Inngest owns the retry policy for this step.
-                });
-                if (object.derivedProps && typeof object.derivedProps === "object") {
-                  newProps = { ...newProps, ...object.derivedProps };
-                  relUpdated = true;
+                    telemetry: {
+                      orgId,
+                      workspaceId,
+                      surface: "runner" as const,
+                      messageId: null,
+                    },
+                    // Bound the call so a stalled gateway can't hang the worker.
+                    abortSignal: AbortSignal.timeout(AI_DERIVE_TIMEOUT_MS),
+                    maxRetries: 0, // Inngest owns the retry policy for this step.
+                  });
+                  if (
+                    object.derivedProps &&
+                    typeof object.derivedProps === "object"
+                  ) {
+                    newProps = { ...newProps, ...object.derivedProps };
+                    relUpdated = true;
+                  }
+                } catch (aiErr) {
+                  logger.warn(
+                    { relElemId, relType, err: aiErr },
+                    "schema.reconcile: AI derivation failed for relationship — skipping AI step",
+                  );
                 }
-              } catch (aiErr) {
-                logger.warn(
-                  { relElemId, relType, err: aiErr },
-                  "schema.reconcile: AI derivation failed for relationship — skipping AI step",
+              }
+
+              // Prune off-schema properties from relationships if requested.
+              if (prune) {
+                const { pruned, removedKeys } = buildPrunedProperties(
+                  newProps,
+                  schemaKeys,
                 );
+                if (removedKeys.length > 0) {
+                  newProps = pruned;
+                  relUpdated = true;
+                  prunedRelationships++;
+                }
               }
-            }
 
-            // Prune off-schema properties from relationships if requested.
-            if (prune) {
-              const { pruned, removedKeys } = buildPrunedProperties(newProps, schemaKeys);
-              if (removedKeys.length > 0) {
-                newProps = pruned;
-                relUpdated = true;
-                prunedRelationships++;
+              // Write back to Neo4j only if something changed.
+              if (relUpdated) {
+                await session.run(
+                  `MATCH ()-[r]->() WHERE elementId(r) = $relElemId SET r += $props`,
+                  { relElemId, props: newProps },
+                );
+                updatedRelationships++;
               }
+
+              processedRelationships++;
             }
 
-            // Write back to Neo4j only if something changed.
-            if (relUpdated) {
-              await session.run(
-                `MATCH ()-[r]->() WHERE elementId(r) = $relElemId SET r += $props`,
-                { relElemId, props: newProps },
-              );
-              updatedRelationships++;
-            }
-
-            processedRelationships++;
+            skip += BATCH_SIZE;
+            if (batchResult.records.length < BATCH_SIZE) break;
           }
 
-          skip += BATCH_SIZE;
-          if (batchResult.records.length < BATCH_SIZE) break;
-        }
-
-        return { processedRelationships, updatedRelationships, prunedRelationships };
-      });
-    });
+          return {
+            processedRelationships,
+            updatedRelationships,
+            prunedRelationships,
+          };
+        });
+      },
+    );
 
     // ── Step: finalize the execution record ────────────────────────────────────
     await step.run("complete", () =>
@@ -610,8 +765,9 @@ Return only the derived property key-value pairs in the derivedProps field.`,
             columns: { startedAt: true },
           });
 
-          const latencyMs =
-            execRow?.startedAt ? completedAt.getTime() - execRow.startedAt.getTime() : null;
+          const latencyMs = execRow?.startedAt
+            ? completedAt.getTime() - execRow.startedAt.getTime()
+            : null;
 
           await tx
             .update(db.agentExecutions)

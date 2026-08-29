@@ -1,4 +1,4 @@
-// contracts/index.ts — canonical per-package contracts array (OXA-1390, Phase 3).
+// contracts/index.ts — canonical per-package contracts array.
 //
 // Every capability registered via registerCapability() in this package is re-exported here.
 // The array is the canonical registry for tooling that needs to discover capabilities
@@ -331,7 +331,7 @@ import { secretValueUnset } from "./secret.value.unset";
 import { secretImportEnv } from "./secret.import_env";
 import { secretReveal } from "./secret.reveal";
 import { secretExport } from "./secret.export";
-// Memory decay policies (OXA-1374).
+// Memory decay policies.
 import { agentMemoryPolicyRead } from "./agent.memory_policy.read";
 import { agentMemoryPolicyWrite } from "./agent.memory_policy.write";
 import { evalDatasetCreate } from "./eval.dataset.create";
@@ -383,7 +383,7 @@ export type {
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
-// Memory policy schema + types (OXA-1374). Capability objects are exported in
+// Memory policy schema + types. Capability objects are exported in
 // the named block below; here we expose the shared schema and TS types.
 export { memoryPolicySchema } from "./agent.memory_policy.read";
 export type { AgentMemoryPolicyReadOutput } from "./agent.memory_policy.read";

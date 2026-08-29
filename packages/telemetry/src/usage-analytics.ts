@@ -18,7 +18,7 @@
 //     the JSON wire; every numeric is coerced through Number().
 //
 // This mirrors sumTokenUsage (same table, same tenant param convention) but adds
-// the per-dimension GROUP BY that the OXA-1585 usage pipeline needs.
+// the per-dimension GROUP BY the usage-breakdown pipeline needs.
 
 import { clickhouse } from "./clickhouse";
 
@@ -30,7 +30,7 @@ export interface UsageTotals {
   cachedTokens: number;
   /**
    * Prompt-cache WRITE tokens (cache creation) — a subset of inputTokens billed
-   * at the provider premium (#1076). Pre-migration-0026 rows carry 0.
+   * at the provider premium. Pre-migration-0026 rows carry 0.
    */
   cacheWriteTokens: number;
   /** Sum of cost_usd_micros (micro-USD; 1 USD = 1_000_000). */

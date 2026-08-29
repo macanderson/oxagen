@@ -17,7 +17,7 @@ import { resolveOrg, assertSecurityManager } from "@/lib/resolve-org";
 import { isAuthDenialError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
-// Sentinel workspaceId for org-only actions. — OXA-1515
+// Sentinel workspaceId for org-only actions.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const SaveMfaPolicySchema = z.object({
@@ -60,7 +60,10 @@ export async function saveMfaPolicyAction(
     if (isAuthDenialError(err)) {
       return { ok: false, code: "forbidden" };
     }
-    logger.error({ orgSlug, err: String(err) }, "mfa-policy: auth gate failed unexpectedly");
+    logger.error(
+      { orgSlug, err: String(err) },
+      "mfa-policy: auth gate failed unexpectedly",
+    );
     return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 
@@ -106,7 +109,10 @@ export async function saveMfaPolicyAction(
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ orgSlug, err: msg }, "mfa-policy: saveMfaPolicyAction failed");
+    logger.error(
+      { orgSlug, err: msg },
+      "mfa-policy: saveMfaPolicyAction failed",
+    );
     return { ok: false, code: "internal", error: "Failed to save MFA policy" };
   }
 }

@@ -1,8 +1,8 @@
 /**
  * The turn pipeline — what every user prompt flows through.
  *
- * This is the orchestrator that makes the engine excellent at context and honest
- * about completion. For each prompt it:
+ * This is the orchestrator that makes the engine excellent at context and
+ * accurate about completion. For each prompt it:
  *
  *   1. EVALUATE — a cheap model scores completeness + complexity and proposes
  *      context to pull and a noise-removed rewrite.
@@ -147,7 +147,7 @@ function composeAgentSystem(
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt
     // becomes the preamble). Lets `--agent` and the fleet run their persona
-    // through the ONE engine loop instead of the legacy loop.
+    // through the same engine loop as every other run.
     agent: opts.agent,
   });
 }
@@ -179,8 +179,8 @@ export interface RunTurnOptions {
   /**
    * Final transform over the tool set — the CLI's permission-gate + lifecycle-
    * hook + per-tool-timeout wrapper. Applied on every execution round so the
-   * `--agent` and fleet paths get the same safety wiring the legacy loop had,
-   * through the ONE engine loop.
+   * `--agent` and fleet paths get the same safety wiring as every other run
+   * through the engine loop.
    */
   wrapTools?: (tools: ToolSet) => ToolSet;
   /**
@@ -460,8 +460,7 @@ function collectActivity(
  * ran it, and whether it errored. We reconstruct `startedAt`/`finishedAt` from
  * that duration so each entry has an absolute window. No-op when verbose is off
  * or the event is not a tool result. Shared by the full-pipeline and bare paths
- * so both produce identical `/verbose` timing (previously the bare path dropped
- * tool events entirely).
+ * so both produce identical `/verbose` timing.
  */
 function captureToolEvent(
   e: CodingEvent,
@@ -512,7 +511,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const phases: PhaseStat[] = [];
   const toolEvents: ToolEvent[] = [];
   // Reasoning captured per execution round — persisted on the trace so the
-  // agent's thinking survives the turn (it used to be streamed then discarded).
+  // agent's thinking survives the turn.
   const thinkingLog: Array<{ round: number; text: string }> = [];
 
   // ── Bare mode: skip the pipeline, run the agent directly. ──
@@ -1344,7 +1343,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       }
     }
 
-    // Perf #10: don't spend a full execute+judge round on a low-confidence
+    // Don't spend a full execute+judge round on a low-confidence
     // "incomplete" verdict. `confidence` is the judge's confidence IN its
     // verdict, so a low value on an "incomplete" call is a coin-flip that leans
     // complete — revising it doubles turn cost for marginal expected gain.

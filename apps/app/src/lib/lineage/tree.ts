@@ -1,6 +1,6 @@
 /**
  * lib/lineage/tree.ts — pure helpers over `query_lineage`'s flat adjacency
- * list (issue #1078: fleet-lineage explorer).
+ * list, for the fleet-lineage explorer.
  *
  * The contract (`packages/oxagen/src/contracts/lineage.query.ts`) returns
  * `nodes: LineageNode[]` as a FLAT list — reconstruct the tree client-side by

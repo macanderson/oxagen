@@ -1,9 +1,14 @@
 // audit-filters.ts — pure parsing / encoding of the audit-log viewer filter
 // state. No DB, no React — node-testable. The viewer page, the filter bar, and
 // the signed-export endpoint all share this so the rows you see are exactly the
-// rows you export (OXA-1558).
+// rows you export.
 
-import { SECURITY_EVENT_TYPES, SECURITY_OUTCOMES, isSecurityEventType, isSecurityOutcome } from "@oxagen/compliance";
+import {
+  SECURITY_EVENT_TYPES,
+  SECURITY_OUTCOMES,
+  isSecurityEventType,
+  isSecurityOutcome,
+} from "@oxagen/compliance";
 import type { SecurityEventType, SecurityOutcome } from "@oxagen/compliance";
 
 export const AUDIT_PAGE_SIZE = 100;
@@ -53,7 +58,8 @@ export function parseAuditFilter(sp: RawSearchParams): AuditFilter {
     .filter((s): s is SecurityEventType => isSecurityEventType(s));
 
   const outcomeRaw = firstString(sp["outcome"]);
-  const outcome = outcomeRaw && isSecurityOutcome(outcomeRaw) ? outcomeRaw : null;
+  const outcome =
+    outcomeRaw && isSecurityOutcome(outcomeRaw) ? outcomeRaw : null;
 
   const actorUserId = firstString(sp["actor"]);
   const q = firstString(sp["q"]);
@@ -93,12 +99,16 @@ export function encodeAuditFilter(
   if (f.from) sp.set("from", f.from.toISOString());
   if (f.to) sp.set("to", f.to.toISOString());
   const cursor = "cursor" in opts ? opts.cursor : f.cursor;
-  if (cursor) sp.set("cursor", `${cursor.occurredAt.toISOString()}|${cursor.id}`);
+  if (cursor)
+    sp.set("cursor", `${cursor.occurredAt.toISOString()}|${cursor.id}`);
   return sp;
 }
 
 /** Build a cursor token from a row (for the "next page" link). */
-export function cursorOf(row: { occurredAt: Date; id: string }): { occurredAt: Date; id: string } {
+export function cursorOf(row: { occurredAt: Date; id: string }): {
+  occurredAt: Date;
+  id: string;
+} {
   return { occurredAt: row.occurredAt, id: row.id };
 }
 

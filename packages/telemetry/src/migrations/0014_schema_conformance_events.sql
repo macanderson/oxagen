@@ -1,6 +1,6 @@
 -- 0014_schema_conformance_events.sql
 --
--- OXA-schema-registry §4.10: schema_conformance_events (ClickHouse)
+-- See docs/specs/workspace-schema-registry/spec.md §4.10: schema_conformance_events (ClickHouse)
 --
 -- Per-write conformance telemetry emitted during property-level validation
 -- (§2.1 criteria 9). NOT in Postgres — these are high-volume runtime events.

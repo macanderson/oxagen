@@ -41,10 +41,10 @@ test("parent routes resolve to their default sub-page without erroring", async (
 
   // Each bare parent → the sub-page it must land on.
   const redirects: { from: string; to: RegExp }[] = [
-    // Org root → the org dashboard, the usage/metering home (#1053 moved it
-    // there from the first workspace; apps/app/src/app/[orgSlug]/page.tsx
-    // redirects unconditionally so an org with zero workspaces still lands
-    // somewhere real). What the dashboard renders is org-dashboard.spec.ts.
+    // Org root → the org dashboard, the usage/metering home
+    // (apps/app/src/app/[orgSlug]/page.tsx redirects unconditionally so an
+    // org with zero workspaces still lands somewhere real). What the
+    // dashboard renders is org-dashboard.spec.ts.
     { from: `/${orgSlug}`, to: new RegExp(`/${orgSlug}/dashboard$`) },
     // Workspace-scope section parents → first tab.
     {

@@ -21,11 +21,10 @@ import {
  *   3. A never-seeded node id renders the friendly not-found state, not a
  *      raw 500 or crash.
  *
- * #1087 ("retire unsafe workspace graph authority") deleted the node-detail
- * admin-actions panel — node-admin-actions.tsx and its server actions are
- * gone, and nothing under apps/app/src renders "Admin actions" or a Delete
- * node control any more. The org-owner admin assertion this spec carried was
- * an assertion it outlived; page.tsx is now a read-only detail view.
+ * There is no node-detail admin-actions panel — node-admin-actions.tsx and
+ * its server actions do not exist, and nothing under apps/app/src renders
+ * "Admin actions" or a Delete node control. page.tsx is a read-only detail
+ * view.
  *
  * Seeding: setupAgentRuntimeFixture gives a real org + workspace + owner
  * session (org.org_users.role = 'owner' — the exact row getOrgRole /
@@ -46,12 +45,19 @@ import {
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
-const NEO4J_URL = deQuote(process.env.NEO4J_URI ?? process.env.NEO4J_URL, "bolt://localhost:7687");
-const NEO4J_USER = deQuote(process.env.NEO4J_USERNAME ?? process.env.NEO4J_USER, "neo4j");
+const NEO4J_URL = deQuote(
+  process.env.NEO4J_URI ?? process.env.NEO4J_URL,
+  "bolt://localhost:7687",
+);
+const NEO4J_USER = deQuote(
+  process.env.NEO4J_USERNAME ?? process.env.NEO4J_USER,
+  "neo4j",
+);
 const NEO4J_PASSWORD = deQuote(process.env.NEO4J_PASSWORD, "oxagen-dev");
 
 const ORG_SLUG = "e2e-node-detail";
@@ -68,7 +74,10 @@ let driver: Driver | null = null;
 let neo4jReachable = true;
 
 async function seedGraph(orgId: string, workspaceId: string): Promise<void> {
-  driver = neo4j.driver(NEO4J_URL, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD));
+  driver = neo4j.driver(
+    NEO4J_URL,
+    neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD),
+  );
   const session = driver.session();
   try {
     await session.run(
@@ -126,7 +135,9 @@ async function teardownGraph(orgId: string): Promise<void> {
   try {
     const session = driver.session();
     try {
-      await session.run(`MATCH (n:GraphNode {orgId: $orgId}) DETACH DELETE n`, { orgId });
+      await session.run(`MATCH (n:GraphNode {orgId: $orgId}) DETACH DELETE n`, {
+        orgId,
+      });
     } finally {
       await session.close();
     }
@@ -166,7 +177,10 @@ test.describe("knowledge node detail — citation rule + neighbors", () => {
     test.skip(!neo4jReachable, "Neo4j not reachable — seeding failed");
 
     await loginWithSession(context, fixture.sessionToken, baseURL);
-    await gotoStable(page, `/${ORG_SLUG}/${WS_SLUG}/knowledge/graph/${PRIMARY_NODE_ID}`);
+    await gotoStable(
+      page,
+      `/${ORG_SLUG}/${WS_SLUG}/knowledge/graph/${PRIMARY_NODE_ID}`,
+    );
     await expect(page).not.toHaveURL(/\/login/);
     await page.waitForLoadState("domcontentloaded");
 
@@ -176,24 +190,32 @@ test.describe("knowledge node detail — citation rule + neighbors", () => {
     // heading, which page.tsx renders after {children}. Take the last one —
     // an unscoped level-1 locator resolves to both and trips strict mode.
     const heading = page.getByRole("heading", { level: 1 }).last();
-    await expect(heading).toHaveText("E2E Node Detail Primary", { timeout: 15_000 });
+    await expect(heading).toHaveText("E2E Node Detail Primary", {
+      timeout: 15_000,
+    });
     await expect(heading).not.toContainText(PRIMARY_NODE_ID);
-    await expect(page.getByText("Feature", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Feature", { exact: true }).first(),
+    ).toBeVisible();
 
     // The raw id IS present, but only inside the metadata section's
     // CopyableId control (never as the primary heading identifier).
     await expect(
-      page.getByRole("button", { name: new RegExp(`Copy ID ${PRIMARY_NODE_ID}`) }),
+      page.getByRole("button", {
+        name: new RegExp(`Copy ID ${PRIMARY_NODE_ID}`),
+      }),
     ).toBeVisible();
 
     // ── Neighbors section ────────────────────────────────────────────────────
-    await expect(page.getByRole("heading", { name: "Neighbors" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Neighbors" }),
+    ).toBeVisible();
     await expect(page.getByText("E2E Node Detail Neighbor")).toBeVisible({
       timeout: 15_000,
     });
 
-    // No admin-actions assertion: #1087 deleted the panel outright (see the
-    // file header). The node-detail route is a read-only view now.
+    // No admin-actions assertion: there is no such panel (see the
+    // file header). The node-detail route is a read-only view.
   });
 
   test("a never-seeded node id renders the friendly not-found state, not a crash", async ({
@@ -202,8 +224,13 @@ test.describe("knowledge node detail — citation rule + neighbors", () => {
     baseURL,
   }) => {
     await loginWithSession(context, fixture.sessionToken, baseURL);
-    await gotoStable(page, `/${ORG_SLUG}/${WS_SLUG}/knowledge/graph/${NEVER_SEEDED_NODE_ID}`);
+    await gotoStable(
+      page,
+      `/${ORG_SLUG}/${WS_SLUG}/knowledge/graph/${NEVER_SEEDED_NODE_ID}`,
+    );
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page.getByText("Node not found")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Node not found")).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });

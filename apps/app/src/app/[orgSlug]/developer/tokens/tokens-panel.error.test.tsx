@@ -2,12 +2,12 @@
 /**
  * tokens-panel.error.test.tsx — a failing server action has to reach the user.
  *
- * Every action on this panel ran inside `startTransition` with no catch, so a
- * rejected `rotateApiKeyAction` was swallowed by React: the transition ended,
- * no state changed, and the previously-displayed secret stayed on screen. A
- * rotation that failed was indistinguishable from one that worked (#1225), and
- * the e2e spec that noticed could only report "the key did not change" without
- * being able to say why.
+ * If an action on this panel runs inside `startTransition` with no catch, a
+ * rejected `rotateApiKeyAction` is swallowed by React: the transition ends,
+ * no state changes, and the previously-displayed secret stays on screen. A
+ * rotation that fails then looks identical to one that worked, and an e2e
+ * spec that notices can only report "the key did not change" without being
+ * able to say why.
  *
  * These tests assert the failure is visible, which is what makes the next
  * diagnosis a glance rather than an investigation.
@@ -83,6 +83,8 @@ describe("TokensPanel — a rejected action surfaces", () => {
     await userEvent.click(screen.getByTitle("Rotate key"));
 
     await waitFor(() => expect(screen.getByText("ox_new")).toBeInTheDocument());
-    expect(screen.queryByTestId("api-key-action-error")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("api-key-action-error"),
+    ).not.toBeInTheDocument();
   });
 });

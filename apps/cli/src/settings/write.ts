@@ -9,7 +9,11 @@
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { oxagenSettingsSchema, type OxagenSettings } from "./schema.js";
-import { getScopePaths, clearSettingsCache, type SettingsScope } from "./resolve.js";
+import {
+  getScopePaths,
+  clearSettingsCache,
+  type SettingsScope,
+} from "./resolve.js";
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 
 /** Keys `oxagen settings set` accepts. Complex sections are edited in the file. */
@@ -45,7 +49,9 @@ function parseBooleanSettingValue(raw: string): boolean {
   const v = raw.trim().toLowerCase();
   if (v === "true") return true;
   if (v === "false") return false;
-  throw new Error(`invalid boolean value "${raw}" — expected "true" or "false"`);
+  throw new Error(
+    `invalid boolean value "${raw}" — expected "true" or "false"`,
+  );
 }
 
 /** A finite number string → number. Throws otherwise. */
@@ -140,7 +146,10 @@ export function envVarForSettingsKey(key: string): string | undefined {
  * to warn at SET time, right when the confusing "✓" is printed, instead of
  * leaving the user to discover it only at the next `config doctor` run.
  */
-export function shellShadowsSettingsKey(key: string, env: NodeJS.ProcessEnv = process.env): boolean {
+export function shellShadowsSettingsKey(
+  key: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
   const name = envVarForSettingsKey(key);
   if (!name) return false;
   const v = env[name];
@@ -148,16 +157,14 @@ export function shellShadowsSettingsKey(key: string, env: NodeJS.ProcessEnv = pr
 }
 
 /**
- * Deliberately does NOT seed `model` (see item 6 of the config-truth audit,
- * PR fix/cli-config-truth): a starter file used to plant `DEFAULT_CODING_MODEL`
- * here, which meant every fresh `oxagen settings init` silently masked
- * `oxagen config model <x>` (store #2, `~/.config/oxagen/config.json`) forever
- * — `applySettingsToEnv` (runtime.ts) projects `settings.model` into
- * `OXAGEN_MODEL` whenever the shell hasn't set it, and `resolveModelId`
- * (agent/model.ts) checks `OXAGEN_MODEL` before ever consulting store #2. An
- * absent `model` key here means the user's actual model choice (store #2, or
- * the built-in default) governs until they deliberately pin one with
- * `oxagen settings set model <x>`.
+ * Deliberately does NOT seed `model`: `applySettingsToEnv` (runtime.ts)
+ * projects `settings.model` into `OXAGEN_MODEL` whenever the shell hasn't set
+ * it, and `resolveModelId` (agent/model.ts) checks `OXAGEN_MODEL` before ever
+ * consulting store #2 (`~/.config/oxagen/config.json`). If this starter file
+ * planted a `model` value, every fresh `oxagen settings init` would silently
+ * mask `oxagen config model <x>` forever. An absent `model` key here means the
+ * user's actual model choice (store #2, or the built-in default) governs until
+ * they deliberately pin one with `oxagen settings set model <x>`.
  */
 const STARTER: OxagenSettings = {
   $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
@@ -185,7 +192,10 @@ export interface InitOptions {
  * Write a documented starter settings file for a scope. Returns the path and
  * whether it was newly created (false = already existed, left untouched).
  */
-export function writeStarterSettings(opts: InitOptions): { path: string; created: boolean } {
+export function writeStarterSettings(opts: InitOptions): {
+  path: string;
+  created: boolean;
+} {
   const paths = getScopePaths(opts);
   const path = paths[opts.scope];
   if (existsSync(path)) return { path, created: false };

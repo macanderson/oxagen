@@ -10,8 +10,8 @@ let unscopedCount = 0;
  * resolveWorkspace / assertWorkspaceMember, session/api-key resolution) that
  * MUST run before a tenant scope exists — see withSystemDb in tenant.ts. The
  * running `count` is the operator signal for RLS-enforcement readiness; it stays
- * fully queryable via LOG_LEVEL=debug without flooding default `info` output (or
- * burying real errors, as the raw per-call console.warn did).
+ * fully queryable via LOG_LEVEL=debug without flooding default `info` output or
+ * burying real errors.
  */
 export function recordIfUnscoped(site: string): void {
   if (getScope() === null) {

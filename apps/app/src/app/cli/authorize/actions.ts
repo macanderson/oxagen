@@ -35,7 +35,7 @@ import {
 } from "@oxagen/auth/cli-auth";
 import { actorCanManageApiKeys } from "@oxagen/handlers";
 
-// Sentinel workspace ID for org-level queries (no real workspace context). — OXA-1515
+// Sentinel workspace ID for org-level queries (no real workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 // ---------------------------------------------------------------------------
@@ -128,7 +128,9 @@ export async function approveCliAuth(formData: FormData): Promise<void> {
   const redirectUri = String(formData.get("redirect_uri") ?? "");
   const state = String(formData.get("state") ?? "");
   const codeChallenge = String(formData.get("code_challenge") ?? "");
-  const codeChallengeMethod = String(formData.get("code_challenge_method") ?? "");
+  const codeChallengeMethod = String(
+    formData.get("code_challenge_method") ?? "",
+  );
   const label = String(formData.get("label") ?? "Oxagen CLI");
   const orgSlug = String(formData.get("org_slug") ?? "");
   const workspaceSlug = String(formData.get("workspace_slug") ?? "");

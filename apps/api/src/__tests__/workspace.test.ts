@@ -48,16 +48,24 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 vi.mock("@oxagen/handlers", () => ({
   serveFile: vi.fn(),
   FileNotFoundError: class FileNotFoundError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileNotFoundError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileNotFoundError";
+    }
   },
   FileForbiddenError: class FileForbiddenError extends Error {
-    constructor(msg?: string) { super(msg); this.name = "FileForbiddenError"; }
+    constructor(msg?: string) {
+      super(msg);
+      this.name = "FileForbiddenError";
+    }
   },
 }));
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -115,7 +123,9 @@ describe("workspaceMiddleware — session-auth paths", () => {
     mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceNotFound());
 
     const res = await app.fetch(
-      makeRequest(orgWsPath("my-org", "nonexistent-ws"), { headers: sessionHeaders() }),
+      makeRequest(orgWsPath("my-org", "nonexistent-ws"), {
+        headers: sessionHeaders(),
+      }),
     );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { message: string } };
@@ -124,11 +134,13 @@ describe("workspaceMiddleware — session-auth paths", () => {
 
   it("cross-tenant: workspace from another org returns 404 (not 403)", async () => {
     // resolveWorkspaceScope is scoped to the resolved orgId; a workspace from
-    // another org simply returns not_found. The HTTP layer must return 404.
+    // another org returns not_found. The HTTP layer must return 404.
     mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceNotFound());
 
     const res = await app.fetch(
-      makeRequest(orgWsPath("my-org", "other-orgs-ws"), { headers: sessionHeaders() }),
+      makeRequest(orgWsPath("my-org", "other-orgs-ws"), {
+        headers: sessionHeaders(),
+      }),
     );
     expect(res.status).toBe(404);
     // Must NOT be 403 — no IDOR through status code distinction
@@ -136,7 +148,9 @@ describe("workspaceMiddleware — session-auth paths", () => {
   });
 
   it("workspace resolution success → proceeds to route handler", async () => {
-    mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceScopeOk("ws-222"));
+    mocks.resolveWorkspaceScope.mockResolvedValue(
+      makeWorkspaceScopeOk("ws-222"),
+    );
     mocks.invoke.mockResolvedValue({ conversations: [], nextCursor: null });
 
     const res = await app.fetch(
@@ -153,7 +167,9 @@ describe("workspaceMiddleware — session-auth paths", () => {
     mocks.resolveWorkspaceScope.mockResolvedValue(makeWorkspaceNotMember());
 
     const res = await app.fetch(
-      makeRequest(orgWsPath("my-org", "ws-beta"), { headers: sessionHeaders() }),
+      makeRequest(orgWsPath("my-org", "ws-beta"), {
+        headers: sessionHeaders(),
+      }),
     );
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: { message: string } };

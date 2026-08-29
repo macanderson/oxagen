@@ -1,4 +1,4 @@
-// resolve.ts — pure IAM capability resolver (OXA-1390, Phase 3).
+// resolve.ts — pure IAM capability resolver.
 //
 // This module is intentionally dependency-free: it takes pre-fetched data from
 // the database (grants, roles, policies) and returns a decision + trace.
@@ -253,8 +253,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   //
   // IMPORTANT: conditions are evaluated here so that a conditional enforced policy
   // is only active when its conditions currently hold. A deny-policy whose conditions
-  // do NOT hold is NOT active — it should not deny. This closes the gap noted in
-  // OXA-1390 where org policies had no condition evaluation at all.
+  // do NOT hold is NOT active — it should not deny.
   const orgEnforcedDenyPolicies = policies.filter(
     (p) =>
       matchesCapability(p.capabilityId) &&

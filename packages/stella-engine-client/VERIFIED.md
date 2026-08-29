@@ -1,12 +1,9 @@
-# Verification record — oxagen #1132
+# Verification record
 
 What the sidecar wire contract in this package has actually been checked
-against, and how. This file exists because the contract it records was
-previously *asserted* rather than verified, and the difference was invisible for
-two PRs.
+against, and how.
 
 - **Date:** 2026-07-29
-- **Closes:** oxagen #1132 (follow-up to #1081 / PR #1124)
 - **Engine under test:** `stella-serve` 0.6.2, built from stella `main` at
   `c8249788` with `cargo build -p stella-serve --bin stella-serve`
 - **How to reproduce:**
@@ -78,9 +75,8 @@ than a nightly best-effort.
 
 ## Mutation proof
 
-#1081's acceptance criterion was "a field rename turns it red". That was
-previously demonstrated only against a hand-written fixture in the same commit.
-Re-run against the live binary, each mutation applied alone:
+The acceptance criterion is "a field rename turns it red". Re-run against the
+live binary, each mutation applied alone:
 
 | Mutation | Result |
 |---|---|
@@ -90,15 +86,16 @@ Re-run against the live binary, each mutation applied alone:
 | `finish_reason: "tool_use"` (Anthropic's spelling) | RED — 1 failed / 27 passed |
 | *control: unmutated* | GREEN — 28 passed |
 
-## What #1132 found
+## Wire surface, as verified
 
-The previous contract was wrong about **every route**, because it mirrored a
-planned session-oriented surface from stella's `docs/design/serve-surface.md`
-rather than the shipped one. Nothing detected this, because the capability probe
-looked for a `stella serve` subcommand that has never existed, so the smoke test
-skipped in every environment including CI.
+A contract based on a planned session-oriented surface from stella's
+`docs/design/serve-surface.md` would be wrong about **every route**, because
+the shipped surface differs from that plan. A capability probe that looks for
+a `stella serve` subcommand never finds one, since it does not exist — so any
+smoke test built on that probe would skip in every environment, including CI,
+and never catch the mismatch.
 
-| Previously assumed | Reality |
+| Wrong assumption | Reality |
 |---|---|
 | `POST /sessions` | **404.** No session resource exists at all |
 | `POST /sessions/{id}/turns` | `POST /v1/turns` — the *turn* is the top-level resource |
@@ -110,10 +107,9 @@ skipped in every environment including CI.
 | — *absent* — | `POST /v1/turns/{id}/provider-result` ← **required to drive any turn** |
 | — *absent* — | `POST /v1/turns/{id}/tool-result` ← **required for any tool** |
 
-The last two are why this was not merely cosmetic: with no way to answer a
-reverse request, the old client could not have completed a single turn even
-against corrected routes — the engine would have parked on its first model call
-and aborted at the deadline.
+The last two rows matter most: with no way to answer a reverse request, a
+client cannot complete a single turn even with every other route correct —
+the engine parks on its first model call and aborts at the deadline.
 
 ## Known gaps (verified absent, not oversights)
 

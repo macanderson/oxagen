@@ -765,9 +765,9 @@ function MemoryRow({
   }
 
   return (
-    // NOTE: this row used to be a native <button>, but the lesson preview
-    // below (TruncatedText) renders its own popover-trigger <button> when the
-    // text overflows — a <button> inside a <button> is invalid HTML and
+    // The row must not be a native <button>: the lesson preview below
+    // (TruncatedText) renders its own popover-trigger <button> when the
+    // text overflows, and a <button> inside a <button> is invalid HTML and
     // breaks a11y semantics. Instead the row is a role="button" div (click +
     // Enter/Space still open the detail sheet), and the lesson preview's
     // wrapper stops click propagation so clicking the "…" reveal doesn't also

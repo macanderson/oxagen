@@ -2,11 +2,11 @@
  * circuit-breaker.ts — a small, dependency-free circuit breaker for the shared
  * external-dependency client paths (Neo4j, Stripe, ClickHouse).
  *
- * Why this exists: before this, a degraded external dependency was hammered by
- * every single request — no fail-fast, no bulkhead. One slow/erroring Neo4j or
- * Stripe would pile connection attempts and stall the whole process. A circuit
- * breaker fails fast once a dependency looks down, gives it room to recover, and
- * makes the trip observable.
+ * Without it, a degraded external dependency gets hammered by every request —
+ * no fail-fast, no bulkhead. One slow or erroring Neo4j or Stripe call would
+ * pile up connection attempts and stall the whole process. The breaker fails
+ * fast once a dependency looks down, gives it room to recover, and makes the
+ * trip observable.
  *
  * Design:
  *  - Pure state machine, no npm dependency (bloat/vendor policy: no breaker lib).
@@ -65,7 +65,9 @@ export class CircuitOpenError extends Error {
     /** Ms until the breaker will allow a probe again. */
     readonly retryAfterMs: number,
   ) {
-    super(`circuit breaker "${key}" is open — failing fast (retry in ${retryAfterMs}ms)`);
+    super(
+      `circuit breaker "${key}" is open — failing fast (retry in ${retryAfterMs}ms)`,
+    );
     this.name = "CircuitOpenError";
   }
 }
@@ -114,7 +116,10 @@ export class CircuitBreaker {
   /** Current state — for observability/tests. */
   getState(): BreakerState {
     // Surface a matured open→half-open transition to a reader even without a call.
-    if (this.state === "open" && this.now() - this.openedAt >= this.resetTimeoutMs) {
+    if (
+      this.state === "open" &&
+      this.now() - this.openedAt >= this.resetTimeoutMs
+    ) {
       return "half-open";
     }
     return this.state;
@@ -181,7 +186,11 @@ export class CircuitBreaker {
     }
   }
 
-  private transition(to: BreakerState, failureCount: number, error?: string): void {
+  private transition(
+    to: BreakerState,
+    failureCount: number,
+    error?: string,
+  ): void {
     const from = this.state;
     if (from === to) return;
     this.state = to;
@@ -189,7 +198,14 @@ export class CircuitBreaker {
       // The sink must never destabilise the breaker — a telemetry hiccup can't
       // be allowed to throw out of exec().
       try {
-        this.onTransition({ key: this.key, from, to, failureCount, at: this.now(), error });
+        this.onTransition({
+          key: this.key,
+          from,
+          to,
+          failureCount,
+          at: this.now(),
+          error,
+        });
       } catch {
         // swallow — breaker health must not depend on the emitter
       }
@@ -218,7 +234,10 @@ const registry = new Map<string, CircuitBreaker>();
  * only on first creation for a given key — later calls return the existing
  * instance so per-key isolation holds across every call path.
  */
-export function getBreaker(key: string, opts?: CircuitBreakerOptions): CircuitBreaker {
+export function getBreaker(
+  key: string,
+  opts?: CircuitBreakerOptions,
+): CircuitBreaker {
   let b = registry.get(key);
   if (!b) {
     b = new CircuitBreaker(key, opts);

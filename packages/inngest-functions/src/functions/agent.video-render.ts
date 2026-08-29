@@ -45,7 +45,9 @@ export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
     timeouts: { finish: "16m" },
     onFailure: async ({ event, step }) => {
       const failureData = event.data as {
-        event?: { data?: { assetId?: string; orgId?: string; workspaceId?: string } };
+        event?: {
+          data?: { assetId?: string; orgId?: string; workspaceId?: string };
+        };
         error?: unknown;
       };
       const originalData = failureData.event?.data;
@@ -81,7 +83,7 @@ export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
           );
         } else {
           // tenancy: system bypass via withSystemDb (legacy/malformed event with
-          // no orgId/workspaceId -- the failure record must still land) -- OXA-1515
+          // no orgId/workspaceId -- the failure record must still land)
           await withSystemDb((tx) =>
             tx
               .update(schema.generatedAssets)
@@ -130,20 +132,25 @@ export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
     // trips as `{ [index]: number }`, which would corrupt the bytes. We combine
     // generate+upload into one atomic step so raw bytes never leave the closure.
     // The step returns only JSON-safe metadata (url, key, sizes).
-    const { storageUrl, storageKey, sizeBytes, durationMs, mimeType } = await step.run(
-      "generate-and-upload",
-      async () => {
+    const { storageUrl, storageKey, sizeBytes, durationMs, mimeType } =
+      await step.run("generate-and-upload", async () => {
         const videoModel = selectVideoModel({
           model: model || undefined,
           tier: mediaTier,
         });
 
-        const { bytes, mimeType: generatedMime, durationMs: genMs } = await generateVideoFor({
+        const {
+          bytes,
+          mimeType: generatedMime,
+          durationMs: genMs,
+        } = await generateVideoFor({
           model: videoModel,
           prompt,
           durationSeconds,
           aspectRatio:
-            aspectRatio === "16:9" || aspectRatio === "9:16" || aspectRatio === "1:1"
+            aspectRatio === "16:9" ||
+            aspectRatio === "9:16" ||
+            aspectRatio === "1:1"
               ? aspectRatio
               : undefined,
           telemetry: {
@@ -171,8 +178,7 @@ export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
           mimeType: generatedMime,
           durationMs: genMs,
         };
-      },
-    );
+      });
 
     // ── Step 3: mark asset ready ─────────────────────────────────────────────
     // Tight DB-only block: withTenantDb is entered here (not wrapping the long

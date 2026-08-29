@@ -1,6 +1,5 @@
 /**
- * page.tsx — Workspace → Automations → Lineage (issue #1078: the
- * fleet-lineage explorer).
+ * page.tsx — Workspace → Automations → Lineage, the fleet-lineage explorer.
  *
  * The read surface for `query_lineage` — the dispatch tree rooted at one
  * `agent.subagent_fanouts` row. Natural neighbour/drill-through target of

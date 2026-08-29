@@ -1,7 +1,6 @@
 // Shared authorization + key-material helpers for the api.key.* handlers
-// (create / revoke / rotate). Previously resolveActorRole + generateApiKey were
-// duplicated across api.key.create and api.key.revoke — this is the single
-// source of truth so the three handlers stay in lockstep.
+// (create / revoke / rotate). This is the single source of truth so the
+// three handlers stay in lockstep.
 
 import { createHash, randomBytes } from "node:crypto";
 import { schema, withTenantDb } from "@oxagen/database";

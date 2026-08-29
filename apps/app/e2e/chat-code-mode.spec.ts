@@ -21,8 +21,8 @@
  *   - Deep-linking `?agent=<codeAgentId>` with two seeded repos and no
  *     workspace-default repo preference: send stays BLOCKED with the
  *     "Select a repository and environment…" hint until a repo is picked in
- *     the chip's setup step (the composer's own repo/environment selectors
- *     were removed in #1046 — context is chosen once, not per turn).
+ *     the chip's setup step (context is chosen once, not per turn — the
+ *     composer itself has no repo/environment selectors).
  *   - Submitting the first turn POSTs /api/v1/chat/stream with a `code` field
  *     carrying { connectionId, owner, name, defaultBranch, environmentId,
  *     sandboxSessionId: null } matching the selected repo — asserted by
@@ -152,7 +152,7 @@ test.describe("chat.code-mode", () => {
       const chip = page.getByRole("button", { name: "Agent: Repo Coder" });
       await expect(chip).toBeVisible();
 
-      // The composer's own repo/environment selectors are gone (#1046): chat
+      // The composer has no repo/environment selectors of its own: chat
       // context is chosen once, in the chip's setup step, and is immutable for
       // the conversation. What the composer still owns is the send GATE, which
       // is what this test is about.
@@ -233,10 +233,8 @@ test.describe("chat.code-mode", () => {
 
       // The conversation's coding target is now LOCKED for its lifetime
       // (lockSelection() fires synchronously in onSubmit — no reload needed).
-      // The lock used to also be visible as disabled selectors in a
-      // `composer-context-controls` row; that row went with the composer's
-      // selectors (#1046) and ComposerContextControls has no caller left, so
-      // the chip's read-only variant is the whole of what the lock renders.
+      // The chip's read-only variant is the whole of what the lock renders;
+      // ComposerContextControls has no caller in this flow.
       const lockedChip = page.getByTestId("agent-context-chip-locked");
       await expect(lockedChip).toBeVisible();
       await expect(lockedChip).toHaveAttribute(

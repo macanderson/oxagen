@@ -34,7 +34,7 @@
  * Constraint: *"Existing V1 history is never backfilled with invented
  * principals or repository authority."*
  *
- * What v1 rows DO get is honest treatment: they stay claimable
+ * What v1 rows DO get is fair treatment: they stay claimable
  * (`claimLegacyV1`), stay readable (the V1 `seq`-cursored SSE/replay path),
  * and stay labelled `spec_version = 1` forever — until retention cleanup or a
  * later compatibility retirement removes them.

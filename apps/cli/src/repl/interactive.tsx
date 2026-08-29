@@ -425,15 +425,12 @@ export function ReplApp({
     options.budget ?? TURN_BUDGET_OFF,
   );
   const [turns, setTurns] = useState(0);
-  // Live token/cost/cache metrics (Bug 2). Every model call the engine makes
+  // Live token/cost/cache metrics. Every model call the engine makes
   // — evaluator, worker (every step), judge — flows through the metered AI
   // port, which records into this bus; the dock/status line subscribe and
   // re-render (throttled) as each call completes, then settle on the final
   // totals via flush() at turn end. This is the SOLE source for session
-  // token/cache/cost figures — a separate one-shot "settle at turn end" state
-  // used to live here too and fed the same displays, which meant the cache
-  // "hit" figure alone went stale mid-turn while tokens/cost next to it kept
-  // updating live; removed in favor of this single, always-live source.
+  // token/cache/cost figures, so every figure updates live and in sync.
   const metricsBusRef = useRef(createMetricsBus());
   const [metrics, setMetrics] = useState<SessionMetrics>(() =>
     metricsBusRef.current.snapshot(),
@@ -927,15 +924,14 @@ export function ReplApp({
   // into the transcript as a collapsed, expandable accordion (see
   // foldTerminalInline). This timer drives that time-based hand-off.
   const foldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Zombie-process guard: nothing previously aborted an in-flight turn or
-  // killed a live `!command` child on unmount. If ReplApp is torn down mid-turn
-  // (a fatal render error elsewhere, a test harness unmount, or — with the
-  // SIGTERM/SIGINT handlers added in launchRepl — a signal-driven exit that
-  // unmounts the Ink tree) the model call kept streaming into a dead
-  // component and any detached `bash -c` process group (see shell-runner.ts)
-  // kept running with no one left to reap it. Abort the turn, kill the
-  // terminal child, and cancel any pending render-throttle frame timer so it
-  // can never fire a `setState` after teardown.
+  // Zombie-process guard. If ReplApp is torn down mid-turn (a fatal render
+  // error elsewhere, a test harness unmount, or a signal-driven exit from
+  // launchRepl's SIGTERM/SIGINT handlers that unmounts the Ink tree), an
+  // in-flight turn or a live `!command` child would otherwise keep running
+  // with no one left to reap it — a detached `bash -c` process group (see
+  // shell-runner.ts) with a dead component streaming into it. Abort the turn,
+  // kill the terminal child, and cancel any pending render-throttle frame
+  // timer so it can never fire a `setState` after teardown.
   const reapChildren = useCallback((): void => {
     abortRef.current?.abort();
     terminalHandleRef.current?.kill();
@@ -1069,11 +1065,10 @@ export function ReplApp({
   // click/drag mapping) in classic mode where that geometry doesn't apply.
   const promptMouseRow = fullscreen ? inputContentRow(rows) : undefined;
   const promptMouseEnabled = fullscreen && mouseOn;
-  // The 1Hz clock (header time-of-day + dock elapsed counters) used to live
-  // here as top-level state: every tick re-rendered the WHOLE ReplApp tree,
-  // including the transcript viewport and sidebar. It's now isolated into the
-  // <LiveClock> component below (used at each of its 3 call sites) so a tick
-  // invalidates only that small subtree.
+  // The 1Hz clock (header time-of-day + dock elapsed counters) is isolated
+  // into the <LiveClock> component below (used at each of its 3 call sites)
+  // so a tick invalidates only that small subtree, not the whole ReplApp tree
+  // (transcript viewport and sidebar included).
   // REPO dock panel: worktree path, live branch (re-read periodically — a
   // `!git checkout` mid-session changes it), and PR number (async via `gh`,
   // cached, never blocking). Full-screen only — see use-repo-info.ts.
@@ -1202,7 +1197,7 @@ export function ReplApp({
   useEffect(() => {
     // Warm the code-graph in the background at mount so the FIRST turn's enhance
     // stage hits a built graph instead of paying a cold tree-sitter build on the
-    // critical path (previously the first prompt of a session ate that build).
+    // critical path.
     warmCodeGraph(cwd);
     let mem: SessionMemory | null = null;
     // Guards the async-open race: if the component unmounts before
@@ -2287,11 +2282,11 @@ export function ReplApp({
 
       // ── Slash commands ──
       // Match on the leading whitespace-delimited token, never a prefix or a
-      // bare `===`. `text === "/help"` used to reject `/help x` (fell through to
-      // "unknown command"), and `text.startsWith("/model")` used to swallow
-      // `/models`, `/modelx`, etc. Extracting the command token fixes both:
-      // argless commands tolerate-and-ignore trailing args, and arg commands can
-      // never collide with a longer-named sibling. Handler bodies still read
+      // bare `===`. A bare `===` would reject `/help x`, and a prefix match on
+      // `/model` would swallow `/models`, `/modelx`, etc. Extracting the command
+      // token avoids both: argless commands tolerate-and-ignore trailing args,
+      // and arg commands can never collide with a longer-named sibling.
+      // Handler bodies still read
       // their args via `text.slice("/name".length)`, which stays correct because
       // an exact token match guarantees `text` is `"/name"` or `"/name …args"`.
       const cmd = text.split(/\s+/)[0];
@@ -3156,15 +3151,12 @@ export function ReplApp({
           // Not a built-in and not a custom .md command. The catalog's "cli"
           // tier (see slash/catalog.ts + repl/cli-bridge.ts) splits three ways:
           //   1. Safe/read-only commands run INLINE through the capture
-          //      seam — their output becomes this turn's assistant message,
-          //      instead of the old "run it from your shell" dead-end.
+          //      seam — their output becomes this turn's assistant message.
           //   2. Long-running/interactive commands (they own the terminal or
-          //      run indefinitely) get an honest "opens outside the REPL"
-          //      message — never silently dead-ended, never run inline.
-          //   3. Everything else not yet ported to the seam keeps a shell-out
-          //      hint (now worded as "not yet available inline", which is
-          //      true — distinct from bucket 2's "this genuinely can't run
-          //      here").
+          //      run indefinitely) get an "opens outside the REPL" message.
+          //   3. Everything else not yet ported to the seam gets a "not yet
+          //      available inline" shell-out hint — distinct from bucket 2's
+          //      "this genuinely can't run here".
           const invocation = parseInvocation(text);
           const name = invocation?.name ?? text.split(/\s+/)[0]!.slice(1);
           const entry = catalogRef.current?.find((c) => c.name === name);
@@ -4066,10 +4058,9 @@ export function ReplApp({
           : timeoutReason instanceof AgentTimeoutError
             ? timeoutReason.message
             : `Error: ${err instanceof Error ? err.message : String(err)}`;
-        // Persist the exception to cli.output. The REPL previously only rendered
-        // the error to the terminal — nothing reached the debug log, so a failed
-        // or hung turn left only its `turn.tool-call`/agent messages behind with no
-        // exception data to diagnose. A user cancel isn't an error, so skip it.
+        // Persist the exception to the debug log, so a failed or hung turn
+        // leaves exception data behind, not just its `turn.tool-call`/agent
+        // messages. A user cancel isn't an error, so skip it.
         if (!userCancelled) {
           void debugLog("error", "turn.error", {
             mode: "repl",
@@ -5002,11 +4993,11 @@ export async function launchRepl(options: ReplOptions): Promise<void> {
   const signalHandleRef: { current: ReplSignalHandle | null } = {
     current: null,
   };
-  // SIGTERM/SIGINT net: a signal kill previously left the terminal stranded
-  // in the alternate screen buffer (with mouse tracking still armed) AND
-  // leaked the in-flight turn's model call + any detached `!command` child
-  // process group, because neither `waitUntilExit`'s `finally` nor any React
-  // effect cleanup ever runs when the process is torn down by a signal —
+  // SIGTERM/SIGINT net: without this, a signal kill would leave the terminal
+  // stranded in the alternate screen buffer (with mouse tracking still armed)
+  // and leak the in-flight turn's model call plus any detached `!command`
+  // child process group, because neither `waitUntilExit`'s `finally` nor any
+  // React effect cleanup ever runs when the process is torn down by a signal —
   // only `"exit"` listeners (registered above) do, and `"exit"` itself is not
   // emitted for a signal kill. Restore the terminal FIRST (so the signal is
   // visibly handled even if reaping children is slow), then reap, then die by

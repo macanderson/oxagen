@@ -91,9 +91,9 @@ export interface RunStore {
 // package keeps zero runtime dependencies.
 
 /**
- * The complete fencing reference for one attempt. Replaces V1's implicit
- * "(runId, workerId)" lease, which could not distinguish two executions of the
- * same run — precisely how a reclaimed run's events used to interleave.
+ * The complete fencing reference for one attempt. An `(runId, workerId)` pair
+ * alone cannot distinguish two executions of the same run, so a reclaimed
+ * run's events could interleave with the attempt that no longer owns it.
  *
  * Every fenced operation echoes this whole tuple. Unlike the V1 port's
  * `false`-on-lost-lease convention, a fenced V2 operation THROWS: a stale

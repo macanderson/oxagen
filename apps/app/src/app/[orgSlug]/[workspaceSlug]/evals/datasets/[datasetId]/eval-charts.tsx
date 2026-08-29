@@ -33,11 +33,10 @@ import { useChartSeriesColors } from "@/lib/chart-colors";
 type SeriesModel = EvalRunSeriesOutput["byModel"][number];
 
 // Categorical slots come from the theme (`--chart-1..5`) via the shared
-// resolver, the same ramp usage-charts.tsx uses. There are FIVE, where this
-// chart previously carried six private hexes: a sixth model cycles back to
-// slot 1, and the legend by model + vendor is what disambiguates it. Inventing
-// a sixth hue that belongs to no token is what let this palette drift in the
-// first place.
+// resolver, the same ramp usage-charts.tsx uses. There are only FIVE: a sixth
+// model cycles back to slot 1, and the legend by model + vendor is what
+// disambiguates it. Do not add a sixth hue outside the token set — that lets
+// the palette drift from the theme.
 
 export interface EvalChartsProps {
   series: EvalRunSeriesOutput | null;

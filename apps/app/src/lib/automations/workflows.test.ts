@@ -6,7 +6,7 @@
  * parse). Verifies each helper dispatches the right capability name with the
  * right input shape (contract-valid bounds), threads ctx, and — critically —
  * omits opts.surface (exactly 3 args to invoke) so the kernel surface gate
- * stays skipped and ctx.surface="app" is the honest attribution. Also covers
+ * stays skipped and ctx.surface="app" is the attribution used. Also covers
  * listWorkflowRuns' originType filter and bounded enrichment fan-out.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -96,7 +96,11 @@ describe("workflow.* helpers", () => {
   it("cancelWorkflow dispatches cancel_workflow with the workflow id, no opts", async () => {
     mockInvoke.mockResolvedValue({ cancelled: true });
     await cancelWorkflow(CTX, "wfr_456");
-    expect(mockInvoke).toHaveBeenCalledWith("cancel_workflow", { workflowId: "wfr_456" }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "cancel_workflow",
+      { workflowId: "wfr_456" },
+      CTX,
+    );
     expect(mockInvoke.mock.calls[0]).toHaveLength(3);
   });
 
@@ -149,7 +153,10 @@ describe("listWorkflowRuns", () => {
           executions: [
             execution({ executionId: "wf-1", originType: "workflow_run" }),
             execution({ executionId: "chat-1", originType: "chat_message" }),
-            execution({ executionId: "auto-1", originType: "automation_trigger" }),
+            execution({
+              executionId: "auto-1",
+              originType: "automation_trigger",
+            }),
           ],
           nextCursor: null,
         });
@@ -177,7 +184,11 @@ describe("listWorkflowRuns", () => {
   it("calls list_executions with limit only, no status/before filter (contract has none)", async () => {
     mockInvoke.mockResolvedValue({ executions: [], nextCursor: null });
     await listWorkflowRuns(CTX);
-    expect(mockInvoke).toHaveBeenCalledWith("list_executions", { limit: 50 }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "list_executions",
+      { limit: 50 },
+      CTX,
+    );
   });
 
   it("enriches only the newest ENRICH_LIMIT (10) rows via get_workflow_status", async () => {
@@ -190,7 +201,13 @@ describe("listWorkflowRuns", () => {
       }
       if (name === "get_workflow_status") {
         return Promise.resolve({
-          workflow: { title: "T", goal: "G", totalTasks: 3, completedTasks: 1, failedTasks: 0 },
+          workflow: {
+            title: "T",
+            goal: "G",
+            totalTasks: 3,
+            completedTasks: 1,
+            failedTasks: 0,
+          },
           tasks: [],
         });
       }
@@ -211,7 +228,9 @@ describe("listWorkflowRuns", () => {
     mockInvoke.mockImplementation((name: string) => {
       if (name === "list_executions") {
         return Promise.resolve({
-          executions: [execution({ executionId: "wf-err", originType: "workflow_run" })],
+          executions: [
+            execution({ executionId: "wf-err", originType: "workflow_run" }),
+          ],
           nextCursor: null,
         });
       }

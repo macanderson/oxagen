@@ -17,14 +17,17 @@ import { logger } from "./logger";
  * There is no ClickHouse query here: source_connections already carries the
  * scalar entity count, last-sync timestamp, status, and last error message.
  * Fields with no backing column (per-type entity breakdown, sync duration)
- * are returned as honest empty/null values rather than fabricated data.
+ * are returned empty or null instead of being fabricated.
  */
 
 // Source DB status enum → contract status enum. The DB CHECK constraint allows
 // 'pending_setup' | 'connected' | 'paused' | 'error' | 'deleting' | 'deleted';
 // the contract exposes 'active' | 'paused' | 'failed' | 'pending_setup'. Deleting
 // and deleted connections collapse to 'pending_setup' (no live data to report).
-const DB_STATUS_TO_CONTRACT_STATUS: Record<string, IntegrationMetricsOutput["status"]> = {
+const DB_STATUS_TO_CONTRACT_STATUS: Record<
+  string,
+  IntegrationMetricsOutput["status"]
+> = {
   pending_setup: "pending_setup",
   connected: "active",
   paused: "paused",
@@ -33,10 +36,9 @@ const DB_STATUS_TO_CONTRACT_STATUS: Record<string, IntegrationMetricsOutput["sta
   deleted: "pending_setup",
 };
 
-export const integrationMetricsHandler: CapabilityHandler<typeof integrationMetrics> = async (
-  input,
-  ctx,
-) => {
+export const integrationMetricsHandler: CapabilityHandler<
+  typeof integrationMetrics
+> = async (input, ctx) => {
   // Resolve source connection by public ID — same tenant-scoped WHERE clause as
   // integration.configure (publicId + orgId + workspaceId + not soft-deleted).
   const [row] = await withTenantDb((tx) =>
@@ -64,7 +66,9 @@ export const integrationMetricsHandler: CapabilityHandler<typeof integrationMetr
   );
 
   if (!row) {
-    throw new Error(`integration.metrics: integration not found: ${input.integrationId}`);
+    throw new Error(
+      `integration.metrics: integration not found: ${input.integrationId}`,
+    );
   }
 
   const status = DB_STATUS_TO_CONTRACT_STATUS[row.status] ?? "pending_setup";
@@ -95,10 +99,10 @@ export const integrationMetricsHandler: CapabilityHandler<typeof integrationMetr
     status,
     entityCount: row.entityCount,
     // source_connections stores only a scalar entity count, not a per-type
-    // breakdown, so this is honestly empty rather than fabricated.
+    // breakdown.
     entityCountByType: {},
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    // No source column for sync duration — honest null.
+    // No source column for sync duration.
     lastSyncDurationMs: null,
     lastErrorAt,
     errorMessage: row.errorMessage ?? null,

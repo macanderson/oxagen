@@ -7,17 +7,12 @@
  * entry points that run it. Deleting the smoke test, hollowing out its
  * assertions, or dropping a workflow all turn this red.
  *
- * ## Rewritten for oxagen #1132
- *
- * The previous revision asserted the *wrong contract*, and that is worth
- * recording because it is the trap this file exists to avoid. It demanded a
- * `seq` field (stella-serve emits no sequence numbers at all), a
- * `createSession` -> `openEventStream` -> `driveTurn` -> `deleteSession`
- * sequence (there is no session resource and no DELETE route), and the literal
- * phrase `stella serve` (the binary is `stella-serve`; the subcommand has never
- * existed). A witness that pins a fictional contract does not protect
- * coverage — it obstructs correcting it. The assertions below name only
- * properties verified against a running stella-serve 0.6.2.
+ * The assertions below name only properties verified against a running
+ * stella-serve binary: there is no `seq` field (stella-serve emits no
+ * sequence numbers), no session resource or DELETE route, and no `serve`
+ * subcommand separate from the `stella-serve` binary name. A witness that
+ * pins a contract the server doesn't actually implement does not protect
+ * coverage — it blocks anyone from fixing it.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -57,7 +52,7 @@ test("ships a real stella-serve round-trip smoke test and both CI entry points",
 
   // The real drive sequence: create a turn, stream its frames, answer the
   // engine's model call, answer its tool call. A smoke test missing either
-  // reverse-RPC leg cannot complete a turn, which is the defect #1132 found.
+  // reverse-RPC leg cannot complete a turn.
   expect(
     source,
     "the smoke must create a turn, stream frames, and answer BOTH reverse-RPC kinds",

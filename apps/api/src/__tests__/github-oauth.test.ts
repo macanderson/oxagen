@@ -110,7 +110,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -126,7 +128,8 @@ vi.mock("@oxagen/crypto", () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 vi.mock("@oxagen/config/env", async (importOriginal) => {
@@ -256,7 +259,9 @@ function buildValidState(
     nonce: "test-nonce-uuid",
     ...overrides,
   });
-  const hmac = createHmac("sha256", STATE_SECRET).update(stateJson).digest("hex");
+  const hmac = createHmac("sha256", STATE_SECRET)
+    .update(stateJson)
+    .digest("hex");
   const encoded = Buffer.from(stateJson).toString("base64url");
   return `${encoded}.${hmac}`;
 }
@@ -304,12 +309,14 @@ beforeEach(() => {
 
 describe("GET /connections/github/auth-url", () => {
   it("works WITHOUT a connectionId (settings-level connect) and encodes a null connectionId", async () => {
-    // The install now lives in workspace settings (1 workspace = 1 app install),
-    // so auth-url no longer requires a pre-created source_connection.
+    // The install lives in workspace settings (1 workspace = 1 app install),
+    // so auth-url does not require a pre-created source_connection.
     const res = await authGet(`${BASE}/auth-url?returnTo=settings`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { authUrl: string };
-    expect(body.authUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+    expect(body.authUrl).toContain(
+      `github.com/apps/${APP_SLUG}/installations/new`,
+    );
 
     const stateParam = new URL(body.authUrl).searchParams.get("state")!;
     const encoded = stateParam.slice(0, stateParam.lastIndexOf("."));
@@ -327,7 +334,7 @@ describe("GET /connections/github/auth-url", () => {
     });
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     expect(res.status).toBe(503);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("not configured");
   });
 
@@ -343,23 +350,25 @@ describe("GET /connections/github/auth-url", () => {
   it("returns the GitHub App installations/new URL with the app slug + state", async () => {
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { authUrl: string };
+    const body = (await res.json()) as { authUrl: string };
     // Install flow (not bare OAuth authorize) so a first-time user installs the
     // App AND GitHub round-trips our signed state back to the callback.
-    expect(body.authUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+    expect(body.authUrl).toContain(
+      `github.com/apps/${APP_SLUG}/installations/new`,
+    );
     expect(body.authUrl).not.toContain("login/oauth/authorize");
     expect(body.authUrl).toContain("state=");
   });
 
   it("does NOT pass redirect_uri (the App's configured Callback URL is used)", async () => {
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
-    const body = await res.json() as { authUrl: string };
+    const body = (await res.json()) as { authUrl: string };
     expect(body.authUrl).not.toContain("redirect_uri");
   });
 
   it("state encodes the connectionId + orgId + workspaceId as base64url JSON", async () => {
     const res = await authGet(`${BASE}/auth-url?connectionId=con_MYCONN`);
-    const body = await res.json() as { authUrl: string };
+    const body = (await res.json()) as { authUrl: string };
     const urlStr = body.authUrl;
     const stateMatch = urlStr.match(/[?&]state=([^&]+)/);
     expect(stateMatch).not.toBeNull();
@@ -387,7 +396,9 @@ describe("GET /connections/github/auth-url", () => {
     expect(statePayload.expiresAt).toBeGreaterThan(Date.now());
 
     // HMAC should match
-    const expectedHmac = createHmac("sha256", STATE_SECRET).update(stateJson).digest("hex");
+    const expectedHmac = createHmac("sha256", STATE_SECRET)
+      .update(stateJson)
+      .digest("hex");
     expect(receivedHmac).toBe(expectedHmac);
   });
 
@@ -395,11 +406,16 @@ describe("GET /connections/github/auth-url", () => {
     const before = Date.now();
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     const after = Date.now();
-    const body = await res.json() as { authUrl: string };
+    const body = (await res.json()) as { authUrl: string };
 
-    const rawState = decodeURIComponent(body.authUrl.match(/[?&]state=([^&]+)/)![1]!);
+    const rawState = decodeURIComponent(
+      body.authUrl.match(/[?&]state=([^&]+)/)![1]!,
+    );
     const dotIdx = rawState.lastIndexOf(".");
-    const stateJson = Buffer.from(rawState.slice(0, dotIdx), "base64url").toString("utf8");
+    const stateJson = Buffer.from(
+      rawState.slice(0, dotIdx),
+      "base64url",
+    ).toString("utf8");
     const { expiresAt } = JSON.parse(stateJson) as { expiresAt: number };
 
     expect(expiresAt).toBeGreaterThanOrEqual(before + 10 * 60 * 1000 - 100);
@@ -411,7 +427,10 @@ describe("GET /connections/github/auth-url", () => {
 
 describe("GET /connections/github/status", () => {
   it("returns 503 when the GitHub App is not configured", async () => {
-    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
+    mocks.requireEnv.mockReturnValue({
+      ...DEFAULT_ENV,
+      GITHUB_APP_SLUG: undefined,
+    });
     const res = await authGet(`${BASE}/status`);
     expect(res.status).toBe(503);
   });
@@ -428,12 +447,21 @@ describe("GET /connections/github/status", () => {
     };
     expect(body.connected).toBe(false);
     expect(body.installations).toHaveLength(0);
-    expect(body.installUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+    expect(body.installUrl).toContain(
+      `github.com/apps/${APP_SLUG}/installations/new`,
+    );
   });
 
   it("reports connected with the installations the token can reach", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          {
+            id: "oa1",
+            accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" },
+          },
+        ]) as TxLike,
+      ),
     );
     mocks.fetch.mockResolvedValueOnce({
       ok: true,
@@ -443,9 +471,14 @@ describe("GET /connections/github/status", () => {
         installations: [
           {
             id: 444,
-            account: { login: "connected-org", type: "Organization", avatar_url: "https://gh.com/444" },
+            account: {
+              login: "connected-org",
+              type: "Organization",
+              avatar_url: "https://gh.com/444",
+            },
             repository_selection: "selected",
-            html_url: "https://github.com/organizations/connected-org/settings/installations/444",
+            html_url:
+              "https://github.com/organizations/connected-org/settings/installations/444",
           },
         ],
       }),
@@ -467,9 +500,20 @@ describe("GET /connections/github/status", () => {
 
   it("reports not-connected when the user token has been revoked (GitHub 401)", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          {
+            id: "oa1",
+            accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" },
+          },
+        ]) as TxLike,
+      ),
     );
-    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    });
 
     const res = await authGet(`${BASE}/status`);
     expect(res.status).toBe(200);
@@ -492,10 +536,18 @@ describe("GET /oauth/github/callback", () => {
     // must still record the install and redirect, not 400.
     // withSystemDb order (no code): conn lookup, UPDATE, org slug, ws slug.
     mocks.withSystemDb
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-org" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-ws" }]) as TxLike));
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-org" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-ws" }]) as TxLike),
+      );
 
     const res = await makeCallbackReq({
       state: buildValidState(),
@@ -511,14 +563,17 @@ describe("GET /oauth/github/callback", () => {
   it("returns 400 when state is missing and there are no install params", async () => {
     const res = await makeCallbackReq({ code: "test-code" });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Missing");
   });
 
   it("redirects (not 400) for a GitHub-initiated install that has no signed state", async () => {
     // User installs the App straight from GitHub's app page → installation_id +
     // setup_action but no state. Must redirect into the app, not 400.
-    const res = await makeCallbackReq({ installation_id: "142003699", setup_action: "install" });
+    const res = await makeCallbackReq({
+      installation_id: "142003699",
+      setup_action: "install",
+    });
     expect(res.status).toBe(302);
     expect(res.headers.get("location") ?? "").toContain("github_installed=1");
   });
@@ -528,19 +583,28 @@ describe("GET /oauth/github/callback", () => {
       ...DEFAULT_ENV,
       GITHUB_APP_CLIENT_ID: undefined,
     });
-    const res = await makeCallbackReq({ code: "code", state: buildValidState() });
+    const res = await makeCallbackReq({
+      code: "code",
+      state: buildValidState(),
+    });
     expect(res.status).toBe(503);
   });
 
   it("returns 400 when state format is invalid (no dot separator)", async () => {
-    const res = await makeCallbackReq({ code: "code", state: "nodotseparator" });
+    const res = await makeCallbackReq({
+      code: "code",
+      state: "nodotseparator",
+    });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Invalid state format");
   });
 
   it("returns 400 when state base64url decoding fails", async () => {
-    const res = await makeCallbackReq({ code: "code", state: "!!!invalid_base64!!!.abc123" });
+    const res = await makeCallbackReq({
+      code: "code",
+      state: "!!!invalid_base64!!!.abc123",
+    });
     expect(res.status).toBe(400);
   });
 
@@ -550,7 +614,7 @@ describe("GET /oauth/github/callback", () => {
     const tampered = `${validState.slice(0, dotIdx)}.deadbeefdeadbeef`;
     const res = await makeCallbackReq({ code: "code", state: tampered });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("signature");
   });
 
@@ -558,7 +622,7 @@ describe("GET /oauth/github/callback", () => {
     const expiredState = buildValidState({ expiresAt: Date.now() - 1000 });
     const res = await makeCallbackReq({ code: "code", state: expiredState });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("expired");
   });
 
@@ -568,11 +632,18 @@ describe("GET /oauth/github/callback", () => {
     mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
       fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike),
     );
-    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
 
-    const res = await makeCallbackReq({ code: "code", state: buildValidState() });
+    const res = await makeCallbackReq({
+      code: "code",
+      state: buildValidState(),
+    });
     expect(res.status).toBe(502);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("503");
   });
 
@@ -583,12 +654,18 @@ describe("GET /oauth/github/callback", () => {
     mocks.fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ error: "bad_verification_code", error_description: "Code already used" }),
+      json: async () => ({
+        error: "bad_verification_code",
+        error_description: "Code already used",
+      }),
     });
 
-    const res = await makeCallbackReq({ code: "code", state: buildValidState() });
+    const res = await makeCallbackReq({
+      code: "code",
+      state: buildValidState(),
+    });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Code already used");
   });
 
@@ -610,11 +687,20 @@ describe("GET /oauth/github/callback", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ id: 12345, login: "testuser", email: "test@test.com", name: "Test User" }),
+        json: async () => ({
+          id: 12345,
+          login: "testuser",
+          email: "test@test.com",
+          name: "Test User",
+        }),
       });
 
     // DB: source_connection found
-    const connRow = { id: "uuid-conn-1", orgId: "org-id-test", workspaceId: "ws-id-test" };
+    const connRow = {
+      id: "uuid-conn-1",
+      orgId: "org-id-test",
+      workspaceId: "ws-id-test",
+    };
     // oauthAccounts insert
     const oauthRow = { id: "uuid-oauth-1" };
     // orgs slug
@@ -624,13 +710,26 @@ describe("GET /oauth/github/callback", () => {
 
     // withSystemDb calls in order: source_connections lookup, oauth upsert, oauth update, org slug, ws slug
     mocks.withSystemDb
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([connRow]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([oauthRow]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([]) as TxLike))   // UPDATE source_connections
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([orgSlugRow]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([wsSlugRow]) as TxLike));
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([connRow]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([oauthRow]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([]) as TxLike),
+      ) // UPDATE source_connections
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([orgSlugRow]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([wsSlugRow]) as TxLike),
+      );
 
-    const res = await makeCallbackReq({ code: "auth-code", state: buildValidState() });
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState(),
+    });
 
     // Should redirect (302)
     expect(res.status).toBe(302);
@@ -650,7 +749,10 @@ describe("GET /oauth/github/callback", () => {
       fn(makeTxChain([]) as TxLike),
     );
 
-    const res = await makeCallbackReq({ code: "auth-code", state: buildValidState() });
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState(),
+    });
     expect(res.status).toBe(404);
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
@@ -660,16 +762,30 @@ describe("GET /oauth/github/callback", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ access_token: "ghs_settings", token_type: "Bearer", scope: "repo" }),
+        json: async () => ({
+          access_token: "ghs_settings",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: 7, login: "owner" }) });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 7, login: "owner" }),
+      });
 
     // No connection lookup (connectionId is null). withSystemDb order:
     // oauth upsert, org slug, ws slug. There is NO connection UPDATE.
     mocks.withSystemDb
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "oauth-settings" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-org" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-ws" }]) as TxLike));
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "oauth-settings" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-org" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "my-ws" }]) as TxLike),
+      );
 
     const res = await makeCallbackReq({
       code: "auth-code",
@@ -692,9 +808,17 @@ describe("GET /oauth/github/callback", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ access_token: "ghs_x", token_type: "Bearer", scope: "repo" }),
+        json: async () => ({
+          access_token: "ghs_x",
+          token_type: "Bearer",
+          scope: "repo",
+        }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: 99, login: "u" }) });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 99, login: "u" }),
+      });
 
     // Capture the UPDATE .set() payload to assert the merge.
     let updateSetArg: Record<string, unknown> | undefined;
@@ -705,17 +829,32 @@ describe("GET /oauth/github/callback", () => {
       }),
       where: vi.fn().mockResolvedValue(undefined),
     };
-    const updateTx = { ...makeTxChain([]), update: vi.fn().mockReturnValue(updateChain) };
+    const updateTx = {
+      ...makeTxChain([]),
+      update: vi.fn().mockReturnValue(updateChain),
+    };
 
     // Order: conn lookup (has existing config), oauth upsert, UPDATE (captured), org slug, ws slug.
     mocks.withSystemDb
       .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-        fn(makeTxChain([{ id: "uuid-conn-1", deliveryConfig: { syncDepthDays: 90 } }]) as TxLike),
+        fn(
+          makeTxChain([
+            { id: "uuid-conn-1", deliveryConfig: { syncDepthDays: 90 } },
+          ]) as TxLike,
+        ),
       )
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "oauth-1" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(updateTx as unknown as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "o" }]) as TxLike))
-      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "w" }]) as TxLike));
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "oauth-1" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(updateTx as unknown as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "o" }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ slug: "w" }]) as TxLike),
+      );
 
     const res = await makeCallbackReq({
       code: "auth-code",
@@ -724,7 +863,10 @@ describe("GET /oauth/github/callback", () => {
       setup_action: "install",
     });
     expect(res.status).toBe(302);
-    expect(updateSetArg?.deliveryConfig).toEqual({ syncDepthDays: 90, installationId: "142003699" });
+    expect(updateSetArg?.deliveryConfig).toEqual({
+      syncDepthDays: 90,
+      installationId: "142003699",
+    });
     expect(updateSetArg?.oauthAccountId).toBe("oauth-1");
   });
 });
@@ -743,7 +885,14 @@ describe("GET /connections/github/installations", () => {
 
   it("WITHOUT a connectionId, lists installations using the workspace's org GitHub token", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          {
+            id: "oa1",
+            accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" },
+          },
+        ]) as TxLike,
+      ),
     );
     mocks.fetch.mockResolvedValueOnce({
       ok: true,
@@ -753,7 +902,11 @@ describe("GET /connections/github/installations", () => {
         installations: [
           {
             id: 333,
-            account: { login: "ws-org", type: "Organization", avatar_url: "https://gh.com/333" },
+            account: {
+              login: "ws-org",
+              type: "Organization",
+              avatar_url: "https://gh.com/333",
+            },
             repository_selection: "all",
           },
         ],
@@ -762,7 +915,9 @@ describe("GET /connections/github/installations", () => {
 
     const res = await authGet(`${BASE}/installations`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { installations: Array<{ accountLogin: string }> };
+    const body = (await res.json()) as {
+      installations: Array<{ accountLogin: string }>;
+    };
     expect(body.installations).toHaveLength(1);
     expect(body.installations[0]!.accountLogin).toBe("ws-org");
   });
@@ -781,27 +936,42 @@ describe("GET /connections/github/installations", () => {
     );
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(404);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("token not found");
   });
 
   it("returns 502 when GitHub API fails", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
-    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    });
 
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(502);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("401");
   });
 
   it("returns installations list on happy path", async () => {
     // Unset GITHUB_APP_SLUG so manageUrl derives from the installation's app_slug.
-    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
+    mocks.requireEnv.mockReturnValue({
+      ...DEFAULT_ENV,
+      GITHUB_APP_SLUG: undefined,
+    });
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
 
     const ghResponse = {
@@ -809,24 +979,37 @@ describe("GET /connections/github/installations", () => {
       installations: [
         {
           id: 111,
-          account: { login: "acme-org", type: "Organization", avatar_url: "https://avatars.gh.com/111" },
+          account: {
+            login: "acme-org",
+            type: "Organization",
+            avatar_url: "https://avatars.gh.com/111",
+          },
           repository_selection: "all",
-          html_url: "https://github.com/organizations/acme-org/settings/installations/111",
+          html_url:
+            "https://github.com/organizations/acme-org/settings/installations/111",
           app_slug: "oxagen",
         },
         {
           id: 222,
-          account: { login: "bob", type: "User", avatar_url: "https://avatars.gh.com/222" },
+          account: {
+            login: "bob",
+            type: "User",
+            avatar_url: "https://avatars.gh.com/222",
+          },
           repository_selection: "selected",
         },
       ],
     };
-    mocks.fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ghResponse });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ghResponse,
+    });
 
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(200);
 
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       installations: Array<{
         id: number;
         accountLogin: string;
@@ -848,13 +1031,22 @@ describe("GET /connections/github/installations", () => {
     expect(body.installations[1]!.id).toBe(222);
     expect(body.installations[1]!.htmlUrl).toBeNull();
     // manageUrl derives from the installation's app_slug when GITHUB_APP_SLUG is unset.
-    expect(body.manageUrl).toBe("https://github.com/apps/oxagen/installations/new");
+    expect(body.manageUrl).toBe(
+      "https://github.com/apps/oxagen/installations/new",
+    );
   });
 
   it("manageUrl uses GITHUB_APP_SLUG when configured", async () => {
-    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: "oxagen-prod" });
+    mocks.requireEnv.mockReturnValue({
+      ...DEFAULT_ENV,
+      GITHUB_APP_SLUG: "oxagen-prod",
+    });
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
     mocks.fetch.mockResolvedValueOnce({
       ok: true,
@@ -864,7 +1056,11 @@ describe("GET /connections/github/installations", () => {
         installations: [
           {
             id: 111,
-            account: { login: "acme-org", type: "Organization", avatar_url: "https://gh.com" },
+            account: {
+              login: "acme-org",
+              type: "Organization",
+              avatar_url: "https://gh.com",
+            },
             repository_selection: "all",
             app_slug: "from-installation",
           },
@@ -874,15 +1070,24 @@ describe("GET /connections/github/installations", () => {
 
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { manageUrl: string };
+    const body = (await res.json()) as { manageUrl: string };
     // Configured slug wins over the installation-derived slug.
-    expect(body.manageUrl).toBe("https://github.com/apps/oxagen-prod/installations/new");
+    expect(body.manageUrl).toBe(
+      "https://github.com/apps/oxagen-prod/installations/new",
+    );
   });
 
   it("manageUrl falls back to GitHub settings when no slug is available", async () => {
-    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
+    mocks.requireEnv.mockReturnValue({
+      ...DEFAULT_ENV,
+      GITHUB_APP_SLUG: undefined,
+    });
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
     // Zero installations and no GITHUB_APP_SLUG → generic settings page.
     mocks.fetch.mockResolvedValueOnce({
@@ -893,27 +1098,42 @@ describe("GET /connections/github/installations", () => {
 
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { manageUrl: string; installations: unknown[] };
+    const body = (await res.json()) as {
+      manageUrl: string;
+      installations: unknown[];
+    };
     expect(body.installations).toHaveLength(0);
     expect(body.manageUrl).toBe("https://github.com/settings/installations");
   });
 
   it("paginates when total_count exceeds 100", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
 
     // Page 1: 100 installations
     const page1Installations = Array.from({ length: 100 }, (_, i) => ({
       id: i + 1,
-      account: { login: `org-${i + 1}`, type: "Organization", avatar_url: "https://gh.com" },
+      account: {
+        login: `org-${i + 1}`,
+        type: "Organization",
+        avatar_url: "https://gh.com",
+      },
       repository_selection: "all",
     }));
     // Page 2: 1 installation
     const page2Installations = [
       {
         id: 101,
-        account: { login: "org-101", type: "Organization", avatar_url: "https://gh.com" },
+        account: {
+          login: "org-101",
+          type: "Organization",
+          avatar_url: "https://gh.com",
+        },
         repository_selection: "all",
       },
     ];
@@ -922,17 +1142,23 @@ describe("GET /connections/github/installations", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ total_count: 101, installations: page1Installations }),
+        json: async () => ({
+          total_count: 101,
+          installations: page1Installations,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ total_count: 101, installations: page2Installations }),
+        json: async () => ({
+          total_count: 101,
+          installations: page2Installations,
+        }),
       });
 
     const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { installations: unknown[] };
+    const body = (await res.json()) as { installations: unknown[] };
     expect(body.installations).toHaveLength(101);
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
@@ -971,19 +1197,31 @@ describe("GET /connections/github/installations/:id/repositories", () => {
 
   it("returns 502 when GitHub API fails", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
-    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({}),
+    });
 
     const res = await authGet(`${PATH}?connectionId=con_ABC`);
     expect(res.status).toBe(502);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("403");
   });
 
   it("returns repositories with correct shape on happy path", async () => {
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
-      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+      fn(
+        makeTxChain([
+          { accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } },
+        ]) as TxLike,
+      ),
     );
 
     const ghResponse = {
@@ -1009,12 +1247,16 @@ describe("GET /connections/github/installations/:id/repositories", () => {
         },
       ],
     };
-    mocks.fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ghResponse });
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ghResponse,
+    });
 
     const res = await authGet(`${PATH}?connectionId=con_ABC`);
     expect(res.status).toBe(200);
 
-    const body = await res.json() as {
+    const body = (await res.json()) as {
       repositories: Array<{
         id: number;
         name: string;
@@ -1036,7 +1278,9 @@ describe("GET /connections/github/installations/:id/repositories", () => {
 
     // Verify the request was made to the correct GitHub endpoint
     const fetchCall = mocks.fetch.mock.calls[0] as [string, RequestInit];
-    expect(fetchCall[0]).toContain(`/user/installations/${INSTALL_ID}/repositories`);
+    expect(fetchCall[0]).toContain(
+      `/user/installations/${INSTALL_ID}/repositories`,
+    );
     expect(fetchCall[1]?.headers).toMatchObject({
       Authorization: "Bearer decrypted-access-token",
     });
@@ -1095,7 +1339,11 @@ describe("OAuth token resolution for /installations", () => {
       installations: [
         {
           id: 111,
-          account: { login: "acme", type: "Organization", avatar_url: "https://gh.com" },
+          account: {
+            login: "acme",
+            type: "Organization",
+            avatar_url: "https://gh.com",
+          },
           repository_selection: "all",
         },
       ],
@@ -1121,7 +1369,9 @@ describe("OAuth token resolution for /installations", () => {
     );
     mocks.fetch.mockResolvedValueOnce(GH_OK);
 
-    const res = await authGet(`${BASE}/installations?connectionId=con_UPDATE_LEG`);
+    const res = await authGet(
+      `${BASE}/installations?connectionId=con_UPDATE_LEG`,
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { installations: unknown[] };
     expect(body.installations).toHaveLength(1);
@@ -1131,7 +1381,9 @@ describe("OAuth token resolution for /installations", () => {
     expect(updateArg?.oauthAccountId).toBe("oa-org-1");
     // The fetch used the decrypted fallback token.
     const fetchCall = mocks.fetch.mock.calls[0] as [string, RequestInit];
-    expect(fetchCall[1]?.headers).toMatchObject({ Authorization: "Bearer decrypted-access-token" });
+    expect(fetchCall[1]?.headers).toMatchObject({
+      Authorization: "Bearer decrypted-access-token",
+    });
   });
 
   it("uses the directly-linked OAuth account without a fallback when one is set", async () => {
@@ -1160,7 +1412,10 @@ describe("OAuth token resolution for /installations", () => {
 
   it("returns 404 when neither the connection nor the org has any GitHub OAuth account", async () => {
     // source_connections → unlinked; fallback oauth_accounts → empty.
-    const seqTx = makeSequencedTx([[{ id: "conn-uuid-3", oauthAccountId: null }], []]);
+    const seqTx = makeSequencedTx([
+      [{ id: "conn-uuid-3", oauthAccountId: null }],
+      [],
+    ]);
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
       fn(seqTx as unknown as TxLike),
     );

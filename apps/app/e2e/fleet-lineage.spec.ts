@@ -1,6 +1,6 @@
 /**
  * fleet-lineage — e2e spec for the fleet-lineage explorer
- * (`/{orgSlug}/{workspaceSlug}/automations/lineage`, issue #1078).
+ * (`/{orgSlug}/{workspaceSlug}/automations/lineage`).
  *
  * Signs up a fresh user (a brand-new workspace has zero fleet dispatches) and
  * asserts:
@@ -11,7 +11,7 @@
  *    a blank page or a crash) alongside the always-available paste-a-
  *    dispatch-id form — the "no dead ends" requirement;
  *  - pasting an unknown dispatch id round-trips through `?dispatchId=`,
- *    query_lineage resolves not-found, and the page honestly falls back to
+ *    query_lineage resolves not-found, and the page falls back to
  *    the picker with a named not-found banner instead of erroring out.
  *
  * Does NOT dispatch a real subagent fan-out (would need a live agent run) —
@@ -92,7 +92,7 @@ test("pasting an unknown dispatch id round-trips through query_lineage and falls
   });
 
   // query_lineage resolves FanoutNotFoundError → queryLineageAction returns
-  // ok:false → the section honestly falls back to the picker, naming the id
+  // ok:false → the section falls back to the picker, naming the id
   // that failed instead of a blank page or an unhandled crash.
   const banner = page.getByRole("alert").filter({ hasText: bogusId });
   await expect(banner).toBeVisible({ timeout: 20_000 });

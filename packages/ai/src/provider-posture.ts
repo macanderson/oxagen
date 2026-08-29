@@ -125,7 +125,7 @@ export const CACHE_POSTURE: Record<Vendor, CachePosture> = {
     kind: "implicit",
     telemetry:
       "Llama is served by whichever host the gateway routes to; any cached-token count the host " +
-      "reports arrives pre-normalized as usage.inputTokenDetails.cacheReadTokens, and is simply " +
+      "reports arrives pre-normalized as usage.inputTokenDetails.cacheReadTokens, and is " +
       "zero on hosts that report none",
     witness:
       "forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter",
@@ -248,7 +248,7 @@ export const REASONING_POSTURE: Record<Vendor, ReasoningPosture> = {
     note:
       "DeepSeek's reasoner models reason unconditionally and stream reasoning natively, but the " +
       "API exposes no request-level effort control. reasoningRequestConfig returns no " +
-      "providerOptions for the deepseek prefix — an honest no-op rather than a guessed field, " +
+      "providerOptions for the deepseek prefix — a deliberate no-op rather than a guessed field, " +
       "since an unknown key risks a hard 400.",
   },
   meta: {
@@ -312,7 +312,7 @@ export type StructuredOutputPosture =
  * matrix anyway for two reasons: the axis is where the next silent divergence
  * would land (a vendor whose constrained decoding the gateway cannot drive
  * would degrade to best-effort JSON with no error), and an image-only vendor
- * must be an honest N/A rather than an implied yes.
+ * must show a clear N/A rather than an implied yes.
  */
 export const STRUCTURED_OUTPUT_POSTURE: Record<
   Vendor,

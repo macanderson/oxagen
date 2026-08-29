@@ -10,7 +10,10 @@ import { captureError } from "@oxagen/telemetry";
 import { requireEnv } from "@oxagen/config/env";
 import { logger } from "./logger";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
-import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
+import {
+  buildAccountTokenHooks,
+  buildStripOnlyAccountHooks,
+} from "./token-encryption";
 import { withTrustedLinkHardening } from "./account-linking";
 import { resolveIsLocalEnv } from "./local-env";
 import {
@@ -39,7 +42,7 @@ const env = requireEnv([
 ] as const);
 
 // ---------------------------------------------------------------------------
-// OXA-1504: Startup guard — AUTH_TOKEN_ENCRYPTION_KEY must be set in non-local
+// Startup guard — AUTH_TOKEN_ENCRYPTION_KEY must be set in non-local
 // environments so that OAuth token encryption is NEVER silently skipped in
 // production.  In local/development the key is optional so engineers can boot
 // without it.  This is a Vercel-native master key (KEK) held in encrypted env
@@ -61,7 +64,7 @@ const isE2E = process.env.E2E_TEST === "true";
 
 // Single source of truth (see local-env.ts). The explicit OXAGEN_LOCAL_DEV flag
 // — set for the whole stack by tools/scripts/dev.ts — makes local detection
-// deterministic instead of racing NODE_ENV at module-load time (OXA-1752). It is
+// deterministic instead of racing NODE_ENV at module-load time. It is
 // ignored on real Vercel deploys, so it can never relax production.
 const isLocalEnv = resolveIsLocalEnv({
   nodeEnv: env.NODE_ENV,
@@ -76,17 +79,17 @@ const isLocalEnv = resolveIsLocalEnv({
 // NEXT_PHASE=phase-production-build set, and the build environment legitimately
 // lacks the runtime secret — failing the build here is wrong. The guard still
 // fires at server boot / request time (NEXT_PHASE unset), so production can
-// still never boot without OAuth token encryption configured (OXA-1504).
+// still never boot without OAuth token encryption configured.
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
 if (!tokenEncryptionKey && !isLocalEnv && !isBuildPhase) {
   throw new Error(
     "[auth] AUTH_TOKEN_ENCRYPTION_KEY is required in non-local environments. " +
-      "Production cannot boot without OAuth token encryption configured (OXA-1504).",
+      "Production cannot boot without OAuth token encryption configured.",
   );
 }
 
-// OXA-1420: native envelope-encryption adapter for OAuth tokens.
+// Native envelope-encryption adapter for OAuth tokens.
 // Only created when AUTH_TOKEN_ENCRYPTION_KEY is present so that development /
 // local builds without the key can still boot.
 const kmsAdapter = tokenEncryptionKey
@@ -100,14 +103,14 @@ const kmsAdapter = tokenEncryptionKey
 // process-wide inserter, which uses withSystemDb internally. These emits run
 // inside Better Auth lifecycle hooks (session.create/delete) where no tenant
 // scope has been established yet — the session itself is the identity signal
-// (tenancy: system bypass — OXA-1515).
+// (tenancy: system bypass).
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // resolveFirstOrgId — resolve an orgId for a given userId so that
 // auth lifecycle events can be scoped to an org.
 //
-// LIMITATION (flagged for follow-up — OXA-1422):
+// LIMITATION:
 //   A user may belong to multiple orgs. The sign-in event emits once using
 //   the user's *first* org membership (ORDER BY joined_at ASC). Multi-org
 //   users will see a sign-in event for their oldest org only. The correct
@@ -116,7 +119,7 @@ const kmsAdapter = tokenEncryptionKey
 // ---------------------------------------------------------------------------
 
 async function resolveFirstOrgId(userId: string): Promise<string | null> {
-  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
   // Resolves the user's first org membership so that auth lifecycle events
   // (sign_in / sign_out) can be tagged with an orgId for the audit trail.
   // This lookup IS the identity resolution step — a tenant scope cannot exist
@@ -138,16 +141,17 @@ async function resolveFirstOrgId(userId: string): Promise<string | null> {
 const NO_ORG_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
 // ---------------------------------------------------------------------------
-// OXA-1504: Trusted origins — built from env vars so switching from the
-// interim Vercel domains to oxagen.sh is a one-line env change, not a
-// code change.
+// Trusted origins — built from env vars so switching domains is a one-line
+// env change, not a code change.
 //
 // BETTER_AUTH_TRUSTED_ORIGINS may be a comma-separated list of origins.
 // The production Vercel domains are unconditionally included; local dev
 // origins are added when NODE_ENV is not "production".
 // ---------------------------------------------------------------------------
 const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
-  ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+  ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean)
   : [];
 
 // Production app origins trusted for CSRF / OAuth redirect validation. The
@@ -185,7 +189,7 @@ const trustedOrigins: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// OXA-1789: Multi-environment social login via Better Auth's OAuth Proxy.
+// Multi-environment social login via Better Auth's OAuth Proxy.
 //
 // A GitHub OAuth App (and a Google OAuth client) allows only ONE callback host.
 // We share a SINGLE login OAuth app across production (app.oxagen.sh) and every
@@ -227,7 +231,7 @@ const oauthProxyPlugins = buildOAuthProxyPlugins({
 });
 
 export const auth = betterAuth({
-  // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
+  // tenancy: unscoped seam (identity resolution before a tenant scope exists)
   // The Drizzle adapter is handed the global db() connection so Better Auth can
   // read/write the auth.users, auth.sessions, auth.accounts, and
   // auth.verifications tables. These are global identity tables (no RLS) and
@@ -262,11 +266,11 @@ export const auth = betterAuth({
   }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
-  // OXA-1504: CSRF / redirect validation. The baseURL origin is automatically
+  // CSRF / redirect validation. The baseURL origin is automatically
   // trusted by Better Auth; these additional origins cover the app surfaces and
   // dev localhost. See PROD_ORIGINS / DEV_ORIGINS constants above.
   trustedOrigins,
-  // OXA-1789: OAuth Proxy — passthrough in production, relays preview social
+  // OAuth Proxy — passthrough in production, relays preview social
   // logins through the production callback. Empty in local dev. See the
   // oauthProxyPlugins note above.
   //
@@ -334,7 +338,10 @@ export const auth = betterAuth({
       sendEmailFireAndForget(
         {
           to: user.email,
-          ...emailVerificationTemplate({ verificationUrl: url, email: user.email }),
+          ...emailVerificationTemplate({
+            verificationUrl: url,
+            email: user.email,
+          }),
         },
         "verification",
       );
@@ -343,7 +350,7 @@ export const auth = betterAuth({
   },
 
   // ---------------------------------------------------------------------------
-  // OXA-SOC2: Brute-force defense — database-backed rate limiting.
+  // Brute-force defense — database-backed rate limiting.
   //
   // `storage: "database"` is the only option that survives across Vercel
   // serverless instances (memory resets on cold-start). The auth.rate_limit
@@ -388,7 +395,10 @@ export const auth = betterAuth({
         : undefined,
     github:
       env.GITHUB_LOGIN_CLIENT_ID && env.GITHUB_LOGIN_CLIENT_SECRET
-        ? { clientId: env.GITHUB_LOGIN_CLIENT_ID, clientSecret: env.GITHUB_LOGIN_CLIENT_SECRET }
+        ? {
+            clientId: env.GITHUB_LOGIN_CLIENT_ID,
+            clientSecret: env.GITHUB_LOGIN_CLIENT_SECRET,
+          }
         : undefined,
   },
   // Account linking — never create a duplicate user. Google and GitHub both
@@ -449,20 +459,21 @@ export const auth = betterAuth({
   },
 
   // ---------------------------------------------------------------------------
-  // Database hooks — merged from OXA-1420 (account token encryption) and
-  // OXA-1422 (security audit events).
+  // Database hooks — account token encryption and security audit events.
   //
-  // OXA-1420: account.create.before / account.update.before
+  // account.create.before / account.update.before
   //   Encrypt OAuth access_token, refresh_token, id_token into *_enc bytea
-  //   columns before any account row is written.  CONTRACT PHASE — migration
-  //   0012 has dropped the plaintext access_token and refresh_token columns;
-  //   the hooks now write ONLY to the *_enc columns.
+  //   columns before any account row is written, and strip the plaintext
+  //   values from the write. The plaintext columns still exist in the schema
+  //   (Better Auth writes to them directly on some internal paths), so a
+  //   Postgres trigger is the backstop that nulls each plaintext column
+  //   whenever its *_enc counterpart is set. See ./token-encryption.ts.
   //
-  // OXA-1422: session.create.after / session.delete.after
+  // session.create.after / session.delete.after
   //   Emit auth.sign_in / auth.sign_out into security.security_events for
-  //   SOC2 / audit trail.
+  //   the SOC 2 audit trail.
   //
-  // FLAGGED for follow-up (OXA-1422):
+  // KNOWN GAPS in the audit trail:
   //   (1) Session expiry (TTL-based) does NOT trigger session.delete.after.
   //       A sweep job must retroactively emit auth.sign_out events for
   //       expired sessions.
@@ -472,12 +483,13 @@ export const auth = betterAuth({
   //       from the API/MCP sign-in route handler instead.
   // ---------------------------------------------------------------------------
   databaseHooks: {
-    // The account hook ALWAYS runs: it must strip the dropped plaintext
-    // access_token / refresh_token columns (migration 0012) on every write or
-    // OAuth sign-up fails with an "unknown column" error. When
-    // AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod, enforced by the
-    // startup guard) the tokens are additionally encrypted into the *_enc
-    // columns; locally without the key they're simply not persisted.
+    // The account hook ALWAYS runs: it must strip the plaintext
+    // access_token / refresh_token / id_token fields on every write, so the
+    // DB trigger backstop (see ./token-encryption.ts) is never the only line
+    // of defense. When AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod,
+    // enforced by the startup guard) the tokens are additionally encrypted
+    // into the *_enc columns; locally without the key they're simply not
+    // persisted.
     //
     // withTrustedLinkHardening composes onto that base hook: after the token
     // transform, it revokes any stale credential password when a trusted social
@@ -503,7 +515,7 @@ export const auth = betterAuth({
           // and turn a successful sign-in into an HTTP 500. The session is
           // already committed by the time this after-hook runs; blocking sign-in
           // for an audit-emit failure would be worse than emitting no event.
-          // Log so the gap is visible in ops; never re-throw (OXA-1422).
+          // Log so the gap is visible in ops; never re-throw.
           try {
             const orgId = await resolveFirstOrgId(s.userId);
             emitSecurityEvent({
@@ -524,8 +536,11 @@ export const auth = betterAuth({
             // events is alertable — the failure here happens BEFORE
             // emitSecurityEvent's own retry/escalation path could run
             // (resolveFirstOrgId can throw first), so this is the only place it
-            // can be surfaced (OXA-2058 companion; never re-throw — OXA-1422).
-            logger.error({ userId: s.userId, err }, "[auth] session.create.after hook failed");
+            // can be surfaced. Never re-throw.
+            logger.error(
+              { userId: s.userId, err },
+              "[auth] session.create.after hook failed",
+            );
             captureError({
               error: err,
               source: "app",
@@ -545,7 +560,7 @@ export const auth = betterAuth({
           // SECURITY: same guard as session.create.after — a transient DB
           // failure must not propagate into Better Auth's hook runner and cause
           // sign-out to 500. The session is already deleted; audit is
-          // best-effort (OXA-1422).
+          // best-effort.
           try {
             const orgId = await resolveFirstOrgId(s.userId);
             emitSecurityEvent({
@@ -562,9 +577,12 @@ export const auth = betterAuth({
           } catch (err) {
             // Best-effort audit — never block sign-out for an audit failure.
             // Same escalation as session.create.after: structured logger +
-            // captureError so dropped sign-out audit events are alertable
-            // (OXA-2058 companion; never re-throw — OXA-1422).
-            logger.error({ userId: s.userId, err }, "[auth] session.delete.after hook failed");
+            // captureError so dropped sign-out audit events are alertable.
+            // Never re-throw.
+            logger.error(
+              { userId: s.userId, err },
+              "[auth] session.delete.after hook failed",
+            );
             captureError({
               error: err,
               source: "app",

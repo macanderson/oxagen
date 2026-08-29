@@ -204,9 +204,8 @@ export function tierForSlug(model: string): ModelTier {
   if (family.startsWith("claude-haiku") || SMALL_MARKER.test(family))
     return "fast";
   // Frontier / high-capability families across vendors → precise. claude-fable
-  // / claude-mythos (the Mythos-class tier above Opus) match none of the
-  // legacy markers, so without their own prefixes a pinned fable-5 was
-  // mislabelled "Sonnet" in route stage events.
+  // and claude-mythos (the Mythos-class tier above Opus) need their own
+  // prefix checks because PRECISE_MARKER does not match either name.
   if (
     family.startsWith("claude-opus") ||
     family.startsWith("claude-fable") ||

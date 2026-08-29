@@ -54,7 +54,7 @@ import {
   formatUsdFromMicros,
 } from "../billing/usage/usage-format";
 
-// Sentinel workspaceId for org-only routes. — OXA-1515
+// Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const EMPTY: BillingUsageBreakdownOutput = {

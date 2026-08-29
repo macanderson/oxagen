@@ -255,8 +255,8 @@ export function planWitnessCommands(
 /**
  * Whether the turn makes a witness CLAIM the gate is entitled to check: either
  * a test went fail→pass (the spec-test oracle flipped) or the turn changed
- * test files. Without a claim the gate stays silent — rejecting a turn that
- * never pretended to be test-witnessed would be punishing honesty.
+ * test files. Without a claim the gate stays silent — a turn that never
+ * claimed to be test-witnessed should not be rejected for lacking one.
  */
 export function hasWitnessClaim(
   evidence: TestEvidence,
@@ -304,7 +304,9 @@ export interface MutationGateResult {
 
 /** True when at least one witness re-run failed — the tests DO witness the fix. */
 export function witnessOutcome(runs: WitnessRun[]): "witnessed" | "vacuous" {
-  return runs.some((r) => r.timedOut || (r.exitCode !== null && r.exitCode !== 0))
+  return runs.some(
+    (r) => r.timedOut || (r.exitCode !== null && r.exitCode !== 0),
+  )
     ? "witnessed"
     : "vacuous";
 }
@@ -375,7 +377,11 @@ export interface Mutant {
 }
 
 /** Deterministic single-token mutation operators, applied first-match. */
-const MUTATION_OPERATORS: Array<{ find: RegExp; replace: string; label: string }> = [
+const MUTATION_OPERATORS: Array<{
+  find: RegExp;
+  replace: string;
+  label: string;
+}> = [
   { find: /===/, replace: "!==", label: "=== → !==" },
   { find: /!==/, replace: "===", label: "!== → ===" },
   { find: /&&/, replace: "||", label: "&& → ||" },

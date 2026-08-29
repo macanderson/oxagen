@@ -8,12 +8,21 @@ import {
 } from "./registry";
 
 describe("resolvePrompt", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("returns the bare baseline when config is empty", () => {
     const baseline = conversationTitlePrompt();
-    expect(resolvePrompt({ key: "conversation.title", baseline })).toBe(baseline);
-    expect(resolvePrompt({ key: "conversation.title", baseline, config: {} })).toBe(baseline);
+    expect(resolvePrompt({ key: "conversation.title", baseline })).toBe(
+      baseline,
+    );
+    expect(
+      resolvePrompt({ key: "conversation.title", baseline, config: {} }),
+    ).toBe(baseline);
   });
 
   it("applies a full override for an overridable (content) key", () => {
@@ -42,7 +51,10 @@ describe("resolvePrompt", () => {
     const out = resolvePrompt({
       key: "svg.generate",
       baseline: "BASE",
-      config: { overrides: { "svg.generate": "OVERRIDE" }, additionalInstructions: "Use blue." },
+      config: {
+        overrides: { "svg.generate": "OVERRIDE" },
+        additionalInstructions: "Use blue.",
+      },
     });
     expect(out.startsWith("OVERRIDE")).toBe(true);
     expect(out).toContain("Workspace instructions");
@@ -64,7 +76,10 @@ describe("resolvePrompt", () => {
     const out = resolvePrompt({
       key: "svg.generate",
       baseline: "BASE",
-      config: { overrides: { "svg.generate": "   " }, additionalInstructions: "  " },
+      config: {
+        overrides: { "svg.generate": "   " },
+        additionalInstructions: "  ",
+      },
     });
     expect(out).toBe("BASE");
   });
@@ -82,7 +97,12 @@ describe("isOverridablePromptKey", () => {
 });
 
 describe("chatSystemPrompt — knowledge-graph-first context gathering", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("declares the knowledge graph the PRIMARY source of context", () => {
     const prompt = chatSystemPrompt(CTX);
@@ -105,7 +125,12 @@ describe("chatSystemPrompt — knowledge-graph-first context gathering", () => {
 });
 
 describe("chatSystemPrompt — connection-create-inline intent", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("contains 'connection-create-inline' componentId in the intent table", () => {
     const prompt = chatSystemPrompt(CTX);
@@ -129,7 +154,12 @@ describe("chatSystemPrompt — connection-create-inline intent", () => {
 });
 
 describe("chatSystemPrompt — resource-link guidance (no fabricated /api/v1 URLs)", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("directs links at in-app page URLs, not internal API endpoints", () => {
     const prompt = chatSystemPrompt(CTX);
@@ -146,17 +176,23 @@ describe("chatSystemPrompt — resource-link guidance (no fabricated /api/v1 URL
 });
 
 describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("documents the discoverability section header", () => {
-    expect(chatSystemPrompt(CTX)).toContain("## Capabilities, Skills, MCP servers & Plugins");
+    expect(chatSystemPrompt(CTX)).toContain(
+      "## Capabilities, Skills, MCP servers & Plugins",
+    );
   });
 
   it("tells the agent to load skills via the skill contracts", () => {
     const prompt = chatSystemPrompt(CTX);
-    // #176 replaced list-then-load discovery with an injected skill index plus
-    // agent.skill.load (progressive disclosure); the prompt no longer instructs
-    // an explicit agent.skill.list call, so only the load contract is asserted.
+    // Skill discovery uses an injected skill index plus load_skill
+    // (progressive disclosure), so only the load contract is asserted here.
     expect(prompt).toContain("load_skill");
   });
 
@@ -176,7 +212,12 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
 });
 
 describe("chatSystemPrompt — A2A (Agent2Agent) protocol awareness", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("documents the A2A section header", () => {
     expect(chatSystemPrompt(CTX)).toContain("## A2A (Agent2Agent) Protocol");
@@ -200,7 +241,12 @@ describe("chatSystemPrompt — A2A (Agent2Agent) protocol awareness", () => {
 });
 
 describe("chatSystemPrompt — page form fill guidance", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("mentions page_form_fill tool in the chat system prompt", () => {
     const prompt = chatSystemPrompt(CTX);
@@ -219,7 +265,12 @@ describe("chatSystemPrompt — page form fill guidance", () => {
 });
 
 describe("chatSystemPrompt — memory & self-improvement", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("documents the memory & self-improvement section header", () => {
     expect(chatSystemPrompt(CTX)).toContain("## Memory & Self-Improvement");
@@ -247,7 +298,12 @@ describe("chatSystemPrompt — memory & self-improvement", () => {
 });
 
 describe("codeModeSystemPrompt", () => {
-  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+  const CTX = {
+    orgSlug: "acme",
+    workspaceSlug: "main",
+    orgName: "Acme",
+    workspaceName: "Main",
+  };
 
   it("extends the chat baseline with a coding-discipline section", () => {
     const prompt = codeModeSystemPrompt(CTX);
@@ -255,7 +311,14 @@ describe("codeModeSystemPrompt", () => {
     expect(prompt.startsWith(chatSystemPrompt(CTX))).toBe(true);
     // ...plus the code-mode section and its tools-first discipline.
     expect(prompt).toContain("Code Mode");
-    for (const tool of ["read_file", "write_file", "edit_file", "grep", "bash", "code_graph"]) {
+    for (const tool of [
+      "read_file",
+      "write_file",
+      "edit_file",
+      "grep",
+      "bash",
+      "code_graph",
+    ]) {
       expect(prompt).toContain(tool);
     }
     expect(prompt).toMatch(/read before you edit/i);

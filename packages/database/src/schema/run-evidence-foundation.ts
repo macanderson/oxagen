@@ -7,8 +7,8 @@
 // siblings (schema/agent.ts, schema/iam.ts, schema/ingestion.ts) because the
 // Postgres schema name IS the domain in this repo — one file per pg schema. The
 // only table that belongs to the new `evidence` schema at foundation time is
-// `evidence.retention_policy_versions`; the manifest/blob ledger lands in the
-// evidence-ledger PR.
+// `evidence.retention_policy_versions`; the manifest/blob ledger is planned in
+// docs/specs/run-evidence-ingress/03-evidence-ledger-plan.md.
 //
 // Everything else exported here is vocabulary — the closed value sets that CHECK
 // constraints and application code must agree on. Keeping them in one module
@@ -77,7 +77,7 @@ export type AttemptSealerKind = (typeof ATTEMPT_SEALER_KINDS)[number];
 
 /**
  * Retention modes a pinned retention-policy version may declare, in increasing
- * order of what replay can honestly claim (spec.md §"Replay grades").
+ * order of what replay can prove (spec.md §"Replay grades").
  */
 export const RETENTION_MODES = [
   "digest_only",

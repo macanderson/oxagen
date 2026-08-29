@@ -74,7 +74,11 @@ vi.mock("@oxagen/database", () => ({
     },
     verifications: { id: "v.id" },
     rateLimitTable: { id: "r.id" },
-    orgUsers: { orgId: "ou.orgId", userId: "ou.userId", joinedAt: "ou.joinedAt" },
+    orgUsers: {
+      orgId: "ou.orgId",
+      userId: "ou.userId",
+      joinedAt: "ou.joinedAt",
+    },
   },
   withSystemDb: vi.fn(),
 }));
@@ -167,7 +171,8 @@ function makeQueryTx(rows: unknown[]): Record<string, unknown> {
 }
 
 function getConfig(): Record<string, unknown> {
-  if (!capture.config) throw new Error("betterAuth config was not captured — import failed");
+  if (!capture.config)
+    throw new Error("betterAuth config was not captured — import failed");
   return capture.config;
 }
 
@@ -295,7 +300,10 @@ describe("auth module — import and betterAuth config", () => {
   });
 
   it("account.accountLinking: enabled, trusts google+github, no local verified required", () => {
-    const acct = getConfig()["account"] as Record<string, Record<string, unknown>>;
+    const acct = getConfig()["account"] as Record<
+      string,
+      Record<string, unknown>
+    >;
     const linking = acct["accountLinking"]!;
     expect(linking["enabled"]).toBe(true);
     expect(linking["trustedProviders"]).toEqual(["google", "github"]);
@@ -341,10 +349,8 @@ describe("emailAndPassword.sendResetPassword callback", () => {
     });
 
     expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
-    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0]! as [
-      Record<string, unknown>,
-      string,
-    ];
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock
+      .calls[0]! as [Record<string, unknown>, string];
     expect(emailArg["to"]).toBe("reset@example.com");
     expect(tagArg).toBe("password-reset");
   });
@@ -352,7 +358,10 @@ describe("emailAndPassword.sendResetPassword callback", () => {
   it("fire-and-forget — resolves to undefined without throwing", async () => {
     const fn = getSendResetPasswordFn();
     await expect(
-      fn({ user: { email: "fire@example.com" }, url: "https://example.com/reset?t=x" }),
+      fn({
+        user: { email: "fire@example.com" },
+        url: "https://example.com/reset?t=x",
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -374,10 +383,8 @@ describe("emailVerification.sendVerificationEmail callback", () => {
     });
 
     expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
-    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0]! as [
-      Record<string, unknown>,
-      string,
-    ];
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock
+      .calls[0]! as [Record<string, unknown>, string];
     expect(emailArg["to"]).toBe("verify@example.com");
     expect(tagArg).toBe("verification");
   });
@@ -385,7 +392,10 @@ describe("emailVerification.sendVerificationEmail callback", () => {
   it("fire-and-forget — resolves to undefined without throwing", async () => {
     const fn = getSendVerificationEmailFn();
     await expect(
-      fn({ user: { email: "v@example.com" }, url: "https://example.com/verify?t=y" }),
+      fn({
+        user: { email: "v@example.com" },
+        url: "https://example.com/verify?t=y",
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -403,15 +413,22 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
 
   it("emits auth.sign_in event with the resolved orgId on the happy path", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_happy" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_happy" }])),
     );
 
     const hook = getSessionHook("create", "after");
-    await hook({ userId: "user_1", ipAddress: "1.2.3.4", userAgent: "TestBrowser/1" });
+    await hook({
+      userId: "user_1",
+      ipAddress: "1.2.3.4",
+      userAgent: "TestBrowser/1",
+    });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["eventType"]).toBe("auth.sign_in");
     expect(event["actorUserId"]).toBe("user_1");
     expect(event["orgId"]).toBe("org_happy");
@@ -420,19 +437,21 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
 
   it("uses NO_ORG_SENTINEL (nil UUID) when user has no org membership", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([])), // empty rows → no org
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(makeQueryTx([])), // empty rows → no org
     );
 
     const hook = getSessionHook("create", "after");
     await hook({ userId: "user_new" });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["orgId"]).toBe("00000000-0000-0000-0000-000000000000");
   });
 
-  it("SECURITY (OXA-1422): DB failure in resolveFirstOrgId is swallowed — hook resolves", async () => {
+  it("SECURITY: DB failure in resolveFirstOrgId is swallowed — hook resolves", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (withSystemDb as any).mockRejectedValue(new Error("connection refused"));
 
@@ -445,36 +464,47 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
 
   it("populates ip and userAgent from session fields in the audit event", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_ip" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_ip" }])),
     );
 
     const hook = getSessionHook("create", "after");
-    await hook({ userId: "user_3", ipAddress: "203.0.113.5", userAgent: "curl/7.88" });
+    await hook({
+      userId: "user_3",
+      ipAddress: "203.0.113.5",
+      userAgent: "curl/7.88",
+    });
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["ip"]).toBe("203.0.113.5");
     expect(event["userAgent"]).toBe("curl/7.88");
   });
 
   it("passes null for ip and userAgent when absent from session", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_null" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_null" }])),
     );
 
     const hook = getSessionHook("create", "after");
     await hook({ userId: "user_4" }); // no ip/userAgent fields
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["ip"]).toBeNull();
     expect(event["userAgent"]).toBeNull();
   });
 
   it("SECURITY: emitSecurityEvent failure is also swallowed — sign-in succeeds", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_5" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_5" }])),
     );
     vi.mocked(emitSecurityEvent).mockImplementation(() => {
       throw new Error("audit sink unavailable");
@@ -498,15 +528,22 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
 
   it("emits auth.sign_out event with the resolved orgId on the happy path", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_signout" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_signout" }])),
     );
 
     const hook = getSessionHook("delete", "after");
-    await hook({ userId: "user_del_1", ipAddress: "10.0.0.9", userAgent: "Agent/2" });
+    await hook({
+      userId: "user_del_1",
+      ipAddress: "10.0.0.9",
+      userAgent: "Agent/2",
+    });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["eventType"]).toBe("auth.sign_out");
     expect(event["actorUserId"]).toBe("user_del_1");
     expect(event["orgId"]).toBe("org_signout");
@@ -515,14 +552,16 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
 
   it("uses NO_ORG_SENTINEL on sign-out when user has no org", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(makeQueryTx([])),
     );
 
     const hook = getSessionHook("delete", "after");
     await hook({ userId: "user_del_2" });
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [
+      Record<string, unknown>,
+    ];
     expect(event["orgId"]).toBe("00000000-0000-0000-0000-000000000000");
   });
 
@@ -537,8 +576,9 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
 
   it("SECURITY: emitSecurityEvent failure on sign-out is swallowed", async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (withSystemDb as any).mockImplementation(async (fn: (tx: unknown) => unknown) =>
-      fn(makeQueryTx([{ orgId: "org_d" }])),
+    (withSystemDb as any).mockImplementation(
+      async (fn: (tx: unknown) => unknown) =>
+        fn(makeQueryTx([{ orgId: "org_d" }])),
     );
     vi.mocked(emitSecurityEvent).mockImplementation(() => {
       throw new Error("clickhouse down");
@@ -644,7 +684,9 @@ describe("BETTER_AUTH_TRUSTED_ORIGINS env var — truthy branch (line 147)", () 
 
     // Verify betterAuth was called with the parsed custom origins included
     expect(capture.config).not.toBeNull();
-    const origins = (capture.config as Record<string, unknown>)["trustedOrigins"] as string[];
+    const origins = (capture.config as Record<string, unknown>)[
+      "trustedOrigins"
+    ] as string[];
     expect(origins).toContain("https://custom.example.com");
     expect(origins).toContain("https://other.example.com");
   });
@@ -667,10 +709,9 @@ describe("socialProviders — undefined branches when credentials are absent (li
     await import("./auth");
 
     expect(capture.config).not.toBeNull();
-    const providers = (capture.config as Record<string, unknown>)["socialProviders"] as Record<
-      string,
-      unknown
-    >;
+    const providers = (capture.config as Record<string, unknown>)[
+      "socialProviders"
+    ] as Record<string, unknown>;
     expect(providers["google"]).toBeUndefined();
     expect(providers["github"]).toBeUndefined();
   });

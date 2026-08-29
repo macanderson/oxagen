@@ -3,7 +3,10 @@ import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
 import { captureToolSnapshots } from "../runtime/mcp-snapshots";
 import { encryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
-import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
+import type {
+  AgentMcpRegisterInput,
+  AgentMcpRegisterOutput,
+} from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
 
@@ -19,7 +22,9 @@ function assertPublicHttpUrl(raw: string): void {
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`Refusing to register MCP server: invalid endpoint URL "${raw}"`);
+    throw new Error(
+      `Refusing to register MCP server: invalid endpoint URL "${raw}"`,
+    );
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error(
@@ -28,7 +33,9 @@ function assertPublicHttpUrl(raw: string): void {
   }
   const host = parsed.hostname.toLowerCase();
   if (host === "localhost" || host === "metadata.google.internal") {
-    throw new Error(`Refusing to register MCP server: hostname "${host}" is not allowed`);
+    throw new Error(
+      `Refusing to register MCP server: hostname "${host}" is not allowed`,
+    );
   }
   if (host.startsWith("[")) {
     const ipv6 = host.slice(1, -1);
@@ -84,7 +91,7 @@ export async function agentMcpRegisterHandler(
   // Run the health check before insert so we persist the live tool list
   // alongside the row — the chat surface lists external tools without a
   // second roundtrip. The probe also returns full per-tool JSONSchema
-  // descriptors so we can snapshot them for replay durability (OXA-820).
+  // descriptors so we can snapshot them for replay durability.
   const probe: {
     status: "healthy" | "degraded" | "unreachable";
     discoveredTools: string[];
@@ -98,8 +105,8 @@ export async function agentMcpRegisterHandler(
         })
       : { status: "degraded", discoveredTools: [], descriptors: [] };
 
-  // Envelope-encrypt any secret material before it ever reaches the DB
-  // (OXA-1982). authStrategy "none" carries no secrets, so encryptMcpAuthConfig
+  // Envelope-encrypt any secret material before it ever reaches the DB.
+  // authStrategy "none" carries no secrets, so encryptMcpAuthConfig
   // stores `{}`; bearer/header auth REQUIRES AUTH_TOKEN_ENCRYPTION_KEY to be
   // configured and throws rather than persisting plaintext.
   const encryptedAuthConfig = await encryptMcpAuthConfig(input.authConfig);
@@ -120,11 +127,14 @@ export async function agentMcpRegisterHandler(
         discoveredTools: probe.discoveredTools as object,
         createdByUserId: ctx.userId,
       })
-      .returning({ id: schema.mcpServers.id, publicId: schema.mcpServers.publicId }),
+      .returning({
+        id: schema.mcpServers.id,
+        publicId: schema.mcpServers.publicId,
+      }),
   );
   if (!row) throw new Error("mcp_servers insert failed");
 
-  // Snapshot each discovered tool descriptor (OXA-820). Failure-isolated: a
+  // Snapshot each discovered tool descriptor. Failure-isolated: a
   // snapshot write must never fail registration of an otherwise-healthy server.
   if (probe.descriptors.length > 0) {
     await captureToolSnapshots({

@@ -61,7 +61,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -105,14 +107,19 @@ function signedPost(
 ): Request {
   const body = JSON.stringify(bodyObj);
   const sig =
-    "sha256=" + createHmac("sha256", opts.secret ?? SECRET).update(Buffer.from(body)).digest("hex");
+    "sha256=" +
+    createHmac("sha256", opts.secret ?? SECRET)
+      .update(Buffer.from(body))
+      .digest("hex");
   return makeRequest(PATH, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-github-event": event,
       "x-hub-signature-256": opts.badSig ? "sha256=deadbeef" : sig,
-      ...(opts.targetId ? { "x-github-hook-installation-target-id": opts.targetId } : {}),
+      ...(opts.targetId
+        ? { "x-github-hook-installation-target-id": opts.targetId }
+        : {}),
     },
     body,
   });
@@ -146,12 +153,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.GITHUB_APP_WEBHOOK_SECRET = SECRET;
   mocks.inngestSend.mockResolvedValue({});
-  mocks.getConnector.mockReturnValue({ parseWebhookEvent: mocks.parseWebhookEvent });
+  mocks.getConnector.mockReturnValue({
+    parseWebhookEvent: mocks.parseWebhookEvent,
+  });
   mocks.parseWebhookEvent.mockReturnValue([
     { sourceRecordType: "pull_request", record: { number: 7, title: "PR" } },
   ]);
-  mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn(makeTx([CONNECTED_ROW])),
+  mocks.withSystemDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([CONNECTED_ROW])),
   );
 });
 
@@ -170,9 +179,15 @@ describe("github app webhook – configuration & signature", () => {
     // GitHub retrying, and log loudly so operators catch the misconfiguration.
     // The real fix is setting GITHUB_APP_WEBHOOK_SECRET in Vercel.
     delete process.env.GITHUB_APP_WEBHOOK_SECRET;
-    const res = await app.fetch(signedPost("pull_request", { installation: { id: 555 } }));
+    const res = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }),
+    );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { received: boolean; dispatched: number; reason?: string };
+    const body = (await res.json()) as {
+      received: boolean;
+      dispatched: number;
+      reason?: string;
+    };
     expect(body.received).toBe(true);
     expect(body.dispatched).toBe(0);
     // Operators must see the misconfiguration — assert it was logged at error.
@@ -207,7 +222,10 @@ describe("github app webhook – configuration & signature", () => {
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-github-event": "pull_request" },
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "pull_request",
+        },
         body: JSON.stringify({ installation: { id: 555 } }),
       }),
     );
@@ -216,17 +234,21 @@ describe("github app webhook – configuration & signature", () => {
 
   it("returns 401 on an invalid signature", async () => {
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, { badSig: true }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        { badSig: true },
+      ),
     );
     expect(res.status).toBe(401);
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
-  // ── Second App (#1200) ────────────────────────────────────────────────────
+  // ── Second App ────────────────────────────────────────────────────────────
   // Two GitHub Apps deliver to this one endpoint. oxagen-sh (4055615) signs
   // with GITHUB_WEBHOOK_SECRET, confirmed by HMAC-verifying a captured
-  // delivery; every one of its deliveries was rejected 401 because the route
-  // only ever knew the primary App's secret.
+  // delivery; the route must know both Apps' secrets so neither App's
+  // deliveries are rejected 401.
 
   it("accepts the second App's delivery, signed with its own secret", async () => {
     process.env.GITHUB_APP_ID = "4168398";
@@ -255,10 +277,14 @@ describe("github app webhook – configuration & signature", () => {
     process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
 
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, {
-        secret: SECOND_SECRET,
-        targetId: "4168398",
-      }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        {
+          secret: SECOND_SECRET,
+          targetId: "4168398",
+        },
+      ),
     );
 
     expect(res.status).toBe(401);
@@ -269,10 +295,14 @@ describe("github app webhook – configuration & signature", () => {
     delete process.env.GITHUB_WEBHOOK_SECRET;
 
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, {
-        secret: SECOND_SECRET,
-        targetId: "4055615",
-      }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        {
+          secret: SECOND_SECRET,
+          targetId: "4055615",
+        },
+      ),
     );
 
     // 200, not 401 — an unknown signer must not become a retry flood.
@@ -289,10 +319,14 @@ describe("github app webhook – configuration & signature", () => {
     process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
 
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, {
-        secret: SECRET,
-        targetId: "4168398",
-      }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        {
+          secret: SECRET,
+          targetId: "4168398",
+        },
+      ),
     );
 
     expect(res.status).toBe(200);
@@ -300,7 +334,11 @@ describe("github app webhook – configuration & signature", () => {
 
   it("returns 401 when signed with the wrong secret", async () => {
     const res = await app.fetch(
-      signedPost("pull_request", { installation: { id: 555 } }, { secret: "wrong" }),
+      signedPost(
+        "pull_request",
+        { installation: { id: 555 } },
+        { secret: "wrong" },
+      ),
     );
     expect(res.status).toBe(401);
   });
@@ -308,7 +346,8 @@ describe("github app webhook – configuration & signature", () => {
   it("returns 400 on a validly-signed but non-JSON body", async () => {
     const body = "this-is-not-json";
     const sig =
-      "sha256=" + createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
+      "sha256=" +
+      createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
@@ -326,7 +365,9 @@ describe("github app webhook – configuration & signature", () => {
 
 describe("github app webhook – lifecycle events", () => {
   it("acks ping without touching DB or inngest", async () => {
-    const res = await app.fetch(signedPost("ping", { zen: "Keep it logically awesome." }));
+    const res = await app.fetch(
+      signedPost("ping", { zen: "Keep it logically awesome." }),
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { pong: boolean };
     expect(body.pong).toBe(true);
@@ -336,9 +377,14 @@ describe("github app webhook – lifecycle events", () => {
 
   it("pauses connections when an installation is deleted", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
     const res = await app.fetch(
-      signedPost("installation", { action: "deleted", installation: { id: 555 } }),
+      signedPost("installation", {
+        action: "deleted",
+        installation: { id: 555 },
+      }),
     );
     expect(res.status).toBe(200);
     expect(tx.update).toHaveBeenCalled();
@@ -350,9 +396,14 @@ describe("github app webhook – lifecycle events", () => {
 
   it("acks installation events that are not deletions without pausing", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
     const res = await app.fetch(
-      signedPost("installation", { action: "created", installation: { id: 555 } }),
+      signedPost("installation", {
+        action: "created",
+        installation: { id: 555 },
+      }),
     );
     expect(res.status).toBe(200);
     expect(tx.update).not.toHaveBeenCalled();
@@ -360,8 +411,12 @@ describe("github app webhook – lifecycle events", () => {
 
   it("acks an installation event with no action field", async () => {
     const tx = makeTx([]);
-    mocks.withSystemDb.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
-    const res = await app.fetch(signedPost("installation", { installation: { id: 555 } }));
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
+    const res = await app.fetch(
+      signedPost("installation", { installation: { id: 555 } }),
+    );
     expect(res.status).toBe(200);
     expect(tx.update).not.toHaveBeenCalled();
   });
@@ -384,7 +439,12 @@ describe("github app webhook – routing & dispatch", () => {
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
     const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
       name: string;
-      data: { connectionId: string; connectorType: string; sourceRecordType: string; payload: unknown };
+      data: {
+        connectionId: string;
+        connectorType: string;
+        sourceRecordType: string;
+        payload: unknown;
+      };
     }>;
     expect(sent).toHaveLength(1);
     expect(sent[0]?.name).toBe("ingestion/entity.received");
@@ -420,7 +480,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("handles a null extracted record without throwing", async () => {
-    mocks.parseWebhookEvent.mockReturnValue([{ sourceRecordType: "repository", record: null }]);
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "repository", record: null },
+    ]);
     const res = await app.fetch(
       signedPost("repository", {
         installation: { id: 555 },
@@ -438,11 +500,15 @@ describe("github app webhook – routing & dispatch", () => {
       pull_request: { number: 7 },
     });
     const sig =
-      "sha256=" + createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
+      "sha256=" +
+      createHmac("sha256", SECRET).update(Buffer.from(body)).digest("hex");
     const res = await app.fetch(
       makeRequest(PATH, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-hub-signature-256": sig },
+        headers: {
+          "content-type": "application/json",
+          "x-hub-signature-256": sig,
+        },
         body,
       }),
     );
@@ -464,7 +530,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("returns dispatched:0 when the payload carries no installation id", async () => {
-    const res = await app.fetch(signedPost("pull_request", { pull_request: { number: 1 } }));
+    const res = await app.fetch(
+      signedPost("pull_request", { pull_request: { number: 1 } }),
+    );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(0);
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
@@ -485,7 +553,9 @@ describe("github app webhook – routing & dispatch", () => {
   });
 
   it("dispatches records that lack sha/id/number (idempotency key falls back)", async () => {
-    mocks.parseWebhookEvent.mockReturnValue([{ sourceRecordType: "repository", record: {} }]);
+    mocks.parseWebhookEvent.mockReturnValue([
+      { sourceRecordType: "repository", record: {} },
+    ]);
     const res = await app.fetch(
       signedPost("repository", {
         action: "edited",
@@ -495,7 +565,9 @@ describe("github app webhook – routing & dispatch", () => {
     );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
-    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{ data: { idempotencyKey: string } }>;
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as Array<{
+      data: { idempotencyKey: string };
+    }>;
     expect(sent[0]?.data.idempotencyKey).toContain(":record");
   });
 

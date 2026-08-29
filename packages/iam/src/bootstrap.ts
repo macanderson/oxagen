@@ -1,4 +1,4 @@
-// bootstrap.ts — IAM runtime adapter for kernel.invoke() (OXA-1390, OXA-1498).
+// bootstrap.ts — IAM runtime adapter for kernel.invoke().
 //
 // Surfaces (apps/api, apps/mcp) import bootstrapIAMRuntime() and call it ONCE
 // at process start to wire the real IAM enforcement into kernel.invoke().
@@ -16,11 +16,8 @@
 // IDEMPOTENT: calling bootstrapIAMRuntime() more than once (e.g. in tests or
 // hot-reload scenarios) is safe — setKernelIAMRuntime() simply overwrites the ref.
 //
-// NOTE: The defineContract() parallel dispatch path and its setIAMRuntime() /
-// clearIAMRuntime() injection points were removed because no contracts used
-// defineContract() — all 43 contracts call registerCapability() directly and
-// dispatch through kernel.invoke(). The dead defineContract.ts file was
-// deleted in the release-audit-ce1cec3 fix bundle.
+// Every contract calls registerCapability() directly and dispatches through
+// kernel.invoke() — there is no parallel dispatch path to wire here.
 
 import {
   setKernelIAMRuntime,
@@ -32,7 +29,7 @@ import { checkIAM } from "./check-iam";
 import { createAccessRequest } from "./access-request";
 
 /**
- * Wire the real IAM enforcement runtime into kernel.invoke() (OXA-1498).
+ * Wire the real IAM enforcement runtime into kernel.invoke().
  *
  * Enforcement is always on — denied invocations are blocked. Non-enterprise
  * orgs are unconditionally allowed by checkIAM's tier_gate fast-path, so

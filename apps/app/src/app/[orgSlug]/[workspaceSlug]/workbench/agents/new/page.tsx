@@ -47,8 +47,8 @@ export default async function NewAgentPage() {
   const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   // Role picker data (Agent RBAC Phase 5a). Fail-soft: a load failure falls
-  // back to the built-in system role definitions (grant counts unavailable,
-  // honestly flagged) so the builder never renders without an Access step.
+  // back to the built-in system role definitions (grant counts unavailable
+  // and flagged as such) so the builder never renders without an Access step.
   let roleOptions: AgentRoleOption[];
   let customRolesAvailable = false;
   let rolesError: string | null = null;

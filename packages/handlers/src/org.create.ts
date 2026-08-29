@@ -24,7 +24,7 @@ export const organizationCreateHandler: CapabilityHandler<
   }
   // tenancy: system bypass via withSystemDb (bootstrap — creates the org's own root
   // rows; no tenant scope exists yet because the new org does not exist yet, and
-  // ctx.orgId is the caller's current org, not the one being created) — OXA-1515
+  // ctx.orgId is the caller's current org, not the one being created) (see docs/specs/tenancy-rls/spec.md)
   // Fast-path friendly error for the common (non-racing) case; the unique
   // index + the catch below are the authoritative guard against the race.
   const existing = await withSystemDb((tx) =>
@@ -194,8 +194,7 @@ export const organizationCreateHandler: CapabilityHandler<
     });
   });
 
-  // Note: global-seed registry sync removed in workspace-scoping rebuild (2026-06-17).
-  // Registries are now per-(org, workspace); the default registry is seeded by
+  // Registries are per-(org, workspace); the default registry is seeded by
   // seedWorkspaceDefaultRegistry when the first workspace is created.
 
   return result;

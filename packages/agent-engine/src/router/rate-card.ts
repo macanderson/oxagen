@@ -127,18 +127,16 @@ export const RATE_CARD: RateCardEntry[] = [
   {
     family: "gpt-5",
     label: "GPT-5",
-    // Real Gateway cache-read rate is $0.13/M (~10% of fresh input), not the
-    // 50% OpenAI ratio this row previously assumed — corrected 2026-07-11
-    // against the AI Gateway's per-model pricing page; the old $0.625 guess
-    // over-priced every cache hit on plain gpt-5 by ~4.8x.
+    // Cache-read rate is $0.13/M, matching the AI Gateway's per-model pricing
+    // page — not the general 50% cached-vs-fresh ratio OpenAI uses elsewhere.
     vendor: "openai",
     rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.13 },
   },
-  // o3/o4-mini rows are from the AI Gateway's per-model pricing pages
-  // (2026-07-11). NOTE: there is no bare "o4" model published on the
-  // Gateway (only "o3" and "o4-mini") — a slug of exactly "openai/o4" (as
-  // referenced in packages/ai/src/catalog.ts) falls through to
-  // FALLBACK_RATE until/unless OpenAI ships a standalone o4 flagship.
+  // o3/o4-mini rows match the AI Gateway's per-model pricing pages. There is
+  // no bare "o4" model published on the Gateway (only "o3" and "o4-mini") — a
+  // slug of exactly "openai/o4" (as referenced in packages/ai/src/catalog.ts)
+  // falls through to FALLBACK_RATE until OpenAI ships a standalone o4
+  // flagship.
   {
     family: "o3",
     label: "o3",

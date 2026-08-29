@@ -2,13 +2,12 @@
  * The single source of truth for the latest-GA gateway slug of every model
  * family the CLI defaults to.
  *
- * Why this file exists: model slugs were previously hard-coded in a dozen
- * places (the cost router, the agent-loop default, the scaffolded settings and
- * agent files, the pipeline judge, the runtime registry) and drifted — Sonnet
- * appeared as `4.5`, `4.6`, and `5` across the tree at the same time. Now every
- * default imports from here, so when a provider ships a new GA version of a
- * family (Sonnet 5 → Sonnet 6, Fable 5 → Fable 6, …) you update EXACTLY ONE
- * line below and every default across the CLI moves with it.
+ * Every default across the CLI (the cost router, the agent-loop default, the
+ * scaffolded settings and agent files, the pipeline judge, the runtime
+ * registry) imports the slug from here instead of hard-coding it. When a
+ * provider ships a new GA version of a family (Sonnet 5 → Sonnet 6, Fable 5 →
+ * Fable 6, …) you update EXACTLY ONE line below and every default across the
+ * CLI moves with it.
  *
  * These are floating major-version aliases, not dated snapshots: the Vercel AI
  * Gateway resolves `anthropic/claude-sonnet-5` to the current Sonnet-5 build,
@@ -24,12 +23,10 @@
 /**
  * Latest-GA Anthropic gateway slug per cost tier.
  *
- * As of the current cutoff the newest GA build of each family is: Haiku 4.5,
- * Sonnet 5, Fable 5. Bump a line the instant that family's next major is GA.
+ * Bump a line the instant that family's next major is GA.
  *
- * Fable is the flagship of the Claude 5 generation and holds the precise/
- * high-stakes tier (the slot Opus used to fill). Every default that reached for
- * Opus now reaches for Fable via this one line.
+ * Fable is the flagship model and holds the precise/high-stakes tier. Every
+ * default that needs that tier reaches for Fable via this one line.
  */
 export const LATEST_ANTHROPIC = {
   /** Cheapest tier — mechanical / single-file work. */

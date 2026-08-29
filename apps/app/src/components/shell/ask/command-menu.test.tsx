@@ -45,7 +45,7 @@ vi.mock("@/lib/command-menu/use-recent", () => ({
   useRecent: () => ({ recent: [], push: vi.fn() }),
 }));
 
-// ── Mocks for the new sections (OXA-1770 + OXA-1771) ──────────────────────────
+// ── Mocks for the Suggested-for-page and Search-results sections ─────────────
 
 // entity-prefix matcher — default: no match (vi.fn typed via mockReturnValue at test time)
 const mockMatchEntityPrefix = vi.fn() as ReturnType<typeof vi.fn>;
@@ -160,7 +160,7 @@ beforeEach(() => {
   } as Response);
 });
 
-// ── Existing tests (OXA-1769 regression) ──────────────────────────────────────
+// ── Quick Actions and Navigate sections ───────────────────────────────────────
 
 describe("CommandMenu", () => {
   it("does NOT render dialog when isCommandOpen=false", () => {
@@ -217,7 +217,7 @@ describe("CommandMenu", () => {
     expect(updatedOptions[1]?.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("passes the workspace ctx through to enumerateNavTargets (OXA-1464)", () => {
+  it("passes the workspace ctx through to enumerateNavTargets", () => {
     mockPageCtx.isCommandOpen = true;
     const wsCtx = { orgSlug: "acme", workspaceSlug: "prod" } as Parameters<
       typeof CommandMenu
@@ -240,9 +240,9 @@ describe("CommandMenu", () => {
   });
 });
 
-// ── OXA-1770: Suggested for this page section ─────────────────────────────────
+// ── Suggested for this page section ───────────────────────────────────────────
 
-describe("CommandMenu — Suggested for this page (OXA-1770)", () => {
+describe("CommandMenu — Suggested for this page", () => {
   it("renders 'Suggested for this page' section when suggestions are available", () => {
     mockUseSuggestions.mockReturnValue({
       suggestions: [
@@ -346,9 +346,9 @@ describe("CommandMenu — Suggested for this page (OXA-1770)", () => {
   });
 });
 
-// ── OXA-1771: Search results section ─────────────────────────────────────────
+// ── Search results section ────────────────────────────────────────────────────
 
-describe("CommandMenu — Entity Search (OXA-1771)", () => {
+describe("CommandMenu — Entity Search", () => {
   it("enters search mode when input matches an entity prefix", async () => {
     mockMatchEntityPrefix.mockReturnValue({
       kind: "run",

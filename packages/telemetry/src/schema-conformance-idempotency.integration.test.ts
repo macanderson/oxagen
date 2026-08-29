@@ -1,15 +1,12 @@
-// schema-conformance-idempotency.integration.test.ts
-//
-// OXA-1932: integration coverage for the ReplacingMergeTree dedup half of the
-// fix (the deterministic event_id half is unit-tested against real
-// deterministicEventId() logic in
+// Integration coverage for the ReplacingMergeTree dedup half of conformance
+// event ingestion (the deterministic event_id half is unit-tested against
+// real deterministicEventId() logic in
 // packages/ingestion/src/mutations/__tests__/upsert-entity.test.ts).
 //
-// This repo has a documented gotcha (see .oxagen memories:
-// clickhouse-mocked-tests-miss-sql) — mocked ClickHouse unit tests can pass
-// invalid SQL/DDL undetected. ReplacingMergeTree dedup-on-merge specifically
-// cannot be verified against a mock (there is no merge to simulate), so these
-// tests run against the real local ClickHouse (docker :8123, matching
+// A mocked ClickHouse client accepts invalid SQL/DDL without complaint, and
+// ReplacingMergeTree dedup-on-merge specifically cannot be verified against a
+// mock (there is no merge to simulate), so these tests run against the real
+// local ClickHouse (docker :8123, matching
 // packages/telemetry/src/clickhouse.test.ts / lease.integration.test.ts's
 // "skip cleanly when unreachable" convention) rather than faking the engine
 // behaviour.
@@ -19,9 +16,8 @@
 //      actually runs it against the live server).
 //   2. Two inserts sharing the SAME deterministic event_id (simulating an
 //      Inngest step retry re-executing the whole emitConformanceEvent call)
-//      collapse to ONE row after ReplacingMergeTree merges — the literal
-//      "same conformance event inserted twice, only one logical event
-//      counted" acceptance criterion from the ticket.
+//      collapse to ONE row after ReplacingMergeTree merges — a conformance
+//      event inserted twice must count as one logical event.
 //   3. Two inserts with DIFFERENT event_ids (simulating two genuinely
 //      separate ingestion runs of the same entity) do NOT collapse — the fix
 //      must not turn into an over-aggressive dedup that silently drops real
@@ -120,7 +116,7 @@ async function cleanup(eventIds: string[]): Promise<void> {
 }
 
 describe.skipIf(!chUp)(
-  "schema_conformance_events — ReplacingMergeTree idempotency (OXA-1932, integration) [skipped: local ClickHouse unreachable at :8123]",
+  "schema_conformance_events — ReplacingMergeTree idempotency (integration) [skipped: local ClickHouse unreachable at :8123]",
   () => {
     it("collapses two inserts sharing the same deterministic event_id into ONE row after merge", async () => {
       const { clickhouse } = await import("./clickhouse");

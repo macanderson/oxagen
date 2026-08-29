@@ -1,10 +1,8 @@
-// eval-item-results.test.ts — OXA-2059
-//
 // Unit tests for insertEvalItemResults / selectEvalItemResults (Evals v1
-// tenant-scoped per-item results). This file previously had zero test
-// coverage — chInsert/chSelect (the tenant seam) are mocked so no live
-// ClickHouse is needed; we assert the no-op-on-empty guard, the row shape
-// passed to chInsert, and the tenant-filtered read + row shape from chSelect.
+// tenant-scoped per-item results). chInsert/chSelect (the tenant seam) are
+// mocked so no live ClickHouse is needed; we assert the no-op-on-empty guard,
+// the row shape passed to chInsert, and the tenant-filtered read + row shape
+// from chSelect.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

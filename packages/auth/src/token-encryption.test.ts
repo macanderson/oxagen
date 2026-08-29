@@ -72,10 +72,10 @@ describe("encryptAccountTokens", () => {
     expect(mockEncrypt).not.toHaveBeenCalled();
   });
 
-  it("returns all three encrypted fields WITHOUT plaintext (CONTRACT phase)", async () => {
-    // OXA-1504: migration 0012 dropped plaintext access_token/refresh_token
-    // columns. encryptAccountTokens must NOT return accessToken/refreshToken
-    // in the result object (they must not be written back to the DB).
+  it("returns all three encrypted fields WITHOUT plaintext", async () => {
+    // encryptAccountTokens must NOT return accessToken/refreshToken in the
+    // result object — the caller strips plaintext separately, and this
+    // function must never hand plaintext back for a write.
     const encBuf = Buffer.from("encrypted");
     mockEncrypt.mockResolvedValue(encBuf);
 
@@ -93,10 +93,9 @@ describe("encryptAccountTokens", () => {
     expect(result.idTokenEnc).toBe(encBuf);
     // KMS key id recorded.
     expect(result.tokenKmsKeyId).toBe(KEY_ID);
-    // CONTRACT phase: plaintext must NOT be in the returned object.
+    // Plaintext must NOT be in the returned object.
     expect(result.accessToken).toBeUndefined();
     expect(result.refreshToken).toBeUndefined();
-    // idToken is not a DB column; it is not in the return value.
     expect(result.idToken).toBeUndefined();
     // encrypt called once per non-null token.
     expect(mockEncrypt).toHaveBeenCalledTimes(3);
@@ -112,9 +111,10 @@ describe("decryptAccountTokens", () => {
     vi.clearAllMocks();
   });
 
-  it("returns null token fields when tokenKmsKeyId is absent (pre-migration rows)", async () => {
-    // CONTRACT phase: plaintext columns are gone. Pre-OXA-1420 rows have no
-    // KMS key id and no encrypted columns — tokens are unavailable.
+  it("returns null token fields when tokenKmsKeyId is absent (pre-encryption rows)", async () => {
+    // Rows written before token encryption was enabled have no KMS key id and
+    // no encrypted columns — the plaintext is not trusted, so tokens are
+    // unavailable.
     const adapter = makeMockAdapter();
     const data = {
       accessTokenEnc: null,
@@ -196,10 +196,10 @@ describe("buildAccountTokenHooks", () => {
   });
 
   it("create.before encrypts token fields and strips all plaintext columns", async () => {
-    // CONTRACT phase: access_token / refresh_token columns are dropped from DB
-    // (migration 0012). id_token column still exists but plaintext is stripped
-    // so no plaintext is durably stored once the *_enc column is populated
-    // (SOC2 hardening migration 0009; DB trigger is the final backstop).
+    // The plaintext access_token / refresh_token / id_token columns still
+    // exist in the schema, but this hook strips them on every write so no
+    // plaintext is durably stored once the *_enc column is populated. The DB
+    // trigger is the backstop for write paths that bypass this hook.
     const encBuf = Buffer.from("enc");
     mockEncrypt.mockResolvedValue(encBuf);
 
@@ -243,7 +243,10 @@ describe("buildAccountTokenHooks", () => {
 
     const adapter = makeMockAdapter();
     const hooks = buildAccountTokenHooks(adapter, KEY_ID);
-    const result = await hooks.update.before({ accessToken: "ya29.access", userId: "u1" });
+    const result = await hooks.update.before({
+      accessToken: "ya29.access",
+      userId: "u1",
+    });
 
     expect(result.data.accessTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("accessToken");
@@ -262,7 +265,10 @@ describe("buildAccountTokenHooks", () => {
 
     const adapter = makeMockAdapter();
     const hooks = buildAccountTokenHooks(adapter, KEY_ID);
-    const result = await hooks.update.before({ refreshToken: "1//refresh.secret", userId: "u2" });
+    const result = await hooks.update.before({
+      refreshToken: "1//refresh.secret",
+      userId: "u2",
+    });
 
     expect(result.data.refreshTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("refreshToken");
@@ -277,7 +283,10 @@ describe("buildAccountTokenHooks", () => {
 
     const adapter = makeMockAdapter();
     const hooks = buildAccountTokenHooks(adapter, KEY_ID);
-    const result = await hooks.update.before({ idToken: "id.jwt.value", userId: "u3" });
+    const result = await hooks.update.before({
+      idToken: "id.jwt.value",
+      userId: "u3",
+    });
 
     expect(result.data.idTokenEnc).toBe(encBuf);
     expect(result.data).not.toHaveProperty("idToken");
@@ -291,7 +300,10 @@ describe("buildAccountTokenHooks", () => {
     // the plaintext key must still be stripped from the output.
     const adapter = makeMockAdapter();
     const hooks = buildAccountTokenHooks(adapter, KEY_ID);
-    const result = await hooks.update.before({ accessToken: null, userId: "u4" });
+    const result = await hooks.update.before({
+      accessToken: null,
+      userId: "u4",
+    });
 
     // Key "accessToken" triggered the hasTokenField branch — encrypt was called
     // on null and returned null (no actual encrypt call).

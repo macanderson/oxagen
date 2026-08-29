@@ -65,7 +65,7 @@ export function deriveFanoutStatus(
 }
 
 /**
- * Maximum subagent nesting depth (OXA-1498: infinite fanout guard).
+ * Maximum subagent nesting depth, to stop infinite fanout.
  * Depth is carried in the Inngest event payload, NOT a DB column,
  * to avoid schema coupling. Default 0 (root dispatch), max 3 levels deep.
  */
@@ -86,10 +86,9 @@ const MAX_FANOUT_DEPTH = 3;
  * to observe all-terminal finalizes, and a guarded finalize UPDATE dedupes
  * the completion event when two workers race that observation.
  *
- * OXA-1498:
- *   - Dispatches through kernel.invoke() so IAM enforcement, audit, and
- *     tool_invocations metering apply to every subagent capability call.
- *   - Depth guard: rejects fanouts that exceed MAX_FANOUT_DEPTH.
+ * Dispatches through kernel.invoke() so IAM enforcement, audit, and
+ * tool_invocations metering apply to every subagent capability call.
+ * The depth guard rejects fanouts that exceed MAX_FANOUT_DEPTH.
  */
 export const [agentExecuteSubagent] = createFunction(
   {
@@ -110,8 +109,7 @@ export const [agentExecuteSubagent] = createFunction(
       fanoutId: string;
       depth?: number;
     };
-    // Depth is optional for backwards-compatibility with events emitted before
-    // the guard was added. Treat absence as depth 0 (root).
+    // Depth is optional in the event payload. Treat absence as depth 0 (root).
     const depth: number = typeof rawDepth === "number" ? rawDepth : 0;
 
     // Worker identity for claim ownership: the Inngest run id (stable across
@@ -195,8 +193,8 @@ export const [agentExecuteSubagent] = createFunction(
           );
           try {
             // Route through kernel.invoke() for IAM enforcement, audit, and
-            // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
-            // kernel.invoke() enters its own runInTenantScope internally (OXA-1515).
+            // uniform metering. kernel.invoke() enters its own
+            // runInTenantScope internally.
             // Transaction-span caution (spec §6.2): invoke may run a long LLM call;
             // keep withTenantDb blocks tight around DB-only work only.
             const output = await invoke(
@@ -221,7 +219,7 @@ export const [agentExecuteSubagent] = createFunction(
                   .where(eq(schema.subagentRuns.id, claimed.id)),
               ),
             );
-            // Write tool_invocations row for metering (OXA-1498).
+            // Write tool_invocations row for metering.
             try {
               await insertToolInvocation({
                 invocation_id: invocationId,
@@ -452,7 +450,7 @@ export const [agentExecuteSubagent] = createFunction(
       }
     });
 
-    // Fleet lineage graph projection (issue #1078): idempotent MERGE of the
+    // Fleet lineage graph projection: idempotent MERGE of the
     // dispatch tree (agent.subagent_fanouts/subagent_runs, the authoritative
     // Postgres rows) into Neo4j as :SubagentFanout/:SubagentRun nodes — see
     // packages/agent/src/dispatch/lineage-projection.ts for the full

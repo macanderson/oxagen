@@ -144,7 +144,11 @@ export function withPromptCaching(
   );
   return system
     ? [
-        { role: "system", content: system, providerOptions: { ...ANTHROPIC_CACHE } },
+        {
+          role: "system",
+          content: system,
+          providerOptions: { ...ANTHROPIC_CACHE },
+        },
         ...out,
       ]
     : out;
@@ -160,7 +164,9 @@ export function withPromptCaching(
  * direct-Anthropic global provider, so the same string slugs resolve straight
  * against the Anthropic API (Anthropic models only).
  */
-export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi {
+export function createGatewayAgentAi(
+  opts: GatewayAgentAiOptions = {},
+): AgentAi {
   if (!resolveAiCredential(opts.cwd ?? process.cwd())) {
     throw new MissingAiKeyError();
   }
@@ -176,7 +182,7 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
       const providerOptions = gatewayReasoningOptions(args.model, args.effort);
       return streamText({
         // A plain string model id resolves through the Vercel AI Gateway using
-        // AI_GATEWAY_API_KEY (same mechanism as the legacy local loop).
+        // AI_GATEWAY_API_KEY.
         model: args.model,
         // System is folded into the message list as a cached system message —
         // only message-level providerOptions can carry a cache_control marker.
@@ -195,13 +201,11 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
         ...(providerOptions ? { providerOptions } : {}),
         onError: args.onError,
         // ALWAYS defined (even when the caller passes no onStepFinish) so we can
-        // capture per-LLM-call usage as a side-effect. The streaming path
-        // previously logged only the request shape, never the response usage —
-        // so per-turn token cost and the cache-read hit rate were invisible
-        // (only generateObject logged usage). That blind spot hid the true cost
-        // driver on long tool loops. Cache reads live under
-        // `inputTokenDetails.cacheReadTokens` in AI SDK v7 (see generateObject
-        // below). The engine port still receives only toolCalls/toolResults.
+        // capture per-LLM-call usage as a side-effect. Without this, per-turn
+        // token cost and the cache-read hit rate on long tool loops would be
+        // invisible. Cache reads live under `inputTokenDetails.cacheReadTokens`
+        // in AI SDK v7 (see generateObject below). The engine port still
+        // receives only toolCalls/toolResults.
         onStepFinish: (step) => {
           const u = step.usage;
           void debugLog("llm", "llm.stream.step", {
@@ -230,13 +234,18 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
             inputTokens: fresh,
             outputTokens: u?.outputTokens ?? 0,
             cachedInputTokens: cached,
-            cacheHitPct: fresh + cached > 0 ? Math.round((100 * cached) / (fresh + cached)) : 0,
+            cacheHitPct:
+              fresh + cached > 0
+                ? Math.round((100 * cached) / (fresh + cached))
+                : 0,
           });
         },
       });
     },
 
-    async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
+    async generateObject<T>(
+      args: ObjectRunArgs<T>,
+    ): Promise<ObjectRunResult<T>> {
       void debugLog("llm", "llm.object.request", {
         transport: "gateway-direct",
         model: args.model,
@@ -249,8 +258,9 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
       // instead of the provider's much cheaper cached-read rate. `prompt`
       // (when given, XOR with `messages`) becomes the sole message so the
       // same message-level cache_control shaping applies uniformly.
-      const baseMessages: ModelMessage[] =
-        args.messages ?? [{ role: "user", content: args.prompt ?? "" }];
+      const baseMessages: ModelMessage[] = args.messages ?? [
+        { role: "user", content: args.prompt ?? "" },
+      ];
       const result = await generateObject({
         model: args.model,
         schema: args.schema,

@@ -14,7 +14,10 @@ import {
   OVERRIDABLE_PROMPT_KEYS,
 } from "./registry";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.prompts" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.prompts" },
+});
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -25,7 +28,9 @@ export function normalizePromptConfig(raw: unknown): PromptConfig {
   if (!isRecord(raw)) return {};
 
   const additionalInstructions =
-    typeof raw.additionalInstructions === "string" ? raw.additionalInstructions : null;
+    typeof raw.additionalInstructions === "string"
+      ? raw.additionalInstructions
+      : null;
 
   const autoImprovePrompts =
     typeof raw.autoImprovePrompts === "boolean" ? raw.autoImprovePrompts : null;
@@ -66,9 +71,7 @@ export async function loadWorkspacePromptConfig(
  * read failure (RLS/DB error, connection loss) must not silently revert a
  * workspace's configured prompt behavior to defaults with no trace — it logs the
  * failure once and then degrades to an empty config (baselines pass through).
- *
- * Callers that previously used a bare `.catch(() => ({}))` should use this so the
- * degrade is observable.
+ * Use this instead of a bare `.catch(() => ({}))` so the degrade is observable.
  */
 export async function loadWorkspacePromptConfigSafe(
   workspaceId: string | null,
@@ -76,7 +79,10 @@ export async function loadWorkspacePromptConfigSafe(
   try {
     return await loadWorkspacePromptConfig(workspaceId);
   } catch (err) {
-    logger.warn({ err, workspaceId }, "prompt-config read failed — using defaults");
+    logger.warn(
+      { err, workspaceId },
+      "prompt-config read failed — using defaults",
+    );
     return {};
   }
 }

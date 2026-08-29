@@ -1,22 +1,21 @@
 /**
- * Integration test for OXA-2052: Pass-A of resolveEntity previously omitted
- * `$orgId` from the Cypher params object it passed to `session.run()` even
- * though the query text referenced `$orgId` in its MATCH clause. Neo4j treats
- * an unbound parameter as `null`, so `orgId: $orgId` never matched an existing
- * principal (`orgId = null` is never true) — every re-delivery of the same
- * naturalKey (e.g. a webhook retry, or a polling overlap) fell through to
- * Pass B/created a brand-new principal, causing unbounded duplicate-principal
- * accumulation in the graph.
+ * Integration test proving Pass-A of resolveEntity binds `$orgId` into the
+ * Cypher params it passes to `session.run()`. Neo4j treats an unbound
+ * parameter as `null`, so an unbound `orgId: $orgId` would never match an
+ * existing principal (`orgId = null` is never true) — every re-delivery of
+ * the same naturalKey (e.g. a webhook retry, or a polling overlap) would fall
+ * through to Pass B and create a duplicate principal instead of updating the
+ * existing one.
  *
- * This exact failure mode — a parameter silently evaluating to `null` inside a
- * MATCH clause — cannot be reproduced with a mocked Neo4j session (a mock
- * can't reject/short-circuit a query the way the real driver's parameter
- * binding does), so this test runs `resolveEntity` against the real local
- * Neo4j instance (`bolt://localhost:7687`, started by `pnpm dev`) and skips
- * cleanly when it is unreachable (e.g. the CI unit lane).
+ * A parameter silently evaluating to `null` inside a MATCH clause cannot be
+ * reproduced with a mocked Neo4j session (a mock can't reject/short-circuit a
+ * query the way the real driver's parameter binding does), so this test runs
+ * `resolveEntity` against the real local Neo4j instance
+ * (`bolt://localhost:7687`, started by `pnpm dev`) and skips cleanly when it
+ * is unreachable (e.g. the CI unit lane).
  *
  * Only `embedText` (@oxagen/ai) is mocked — Pass B's embedding call hits a
- * paid AI Gateway and is not what this regression is about. Everything else
+ * paid AI Gateway and is not what this test checks. Everything else
  * (scopedSession, the real Cypher, upsertEntityNode) runs for real.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
@@ -54,7 +53,11 @@ function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
     operation: "insert",
     displayName: "OXA-2052 dedup regression fixture",
     properties: { title: "OXA-2052 dedup regression fixture" },
-    sourceRef: { connectorType: "github", connectionId: "conn-oxa-2052", externalId: "42" },
+    sourceRef: {
+      connectorType: "github",
+      connectionId: "conn-oxa-2052",
+      externalId: "42",
+    },
     ...overrides,
   };
 }
@@ -133,7 +136,7 @@ afterAll(async () => {
   }
 });
 
-describe("resolveEntity (integration, local Neo4j) — OXA-2052 $orgId binding regression", () => {
+describe("resolveEntity (integration, local Neo4j) — $orgId binding", () => {
   it("re-delivering the same naturalKey+orgId matches the existing principal instead of creating a duplicate", async (ctx) => {
     if (!neo4jUp) return ctx.skip();
 
@@ -141,8 +144,9 @@ describe("resolveEntity (integration, local Neo4j) — OXA-2052 $orgId binding r
 
     // First delivery: no existing node → Pass A miss → Pass B (no candidates,
     // embedText mocked) → a brand-new principal is created.
-    const first = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      resolveEntity(mutation, ORG_ID),
+    const first = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () => resolveEntity(mutation, ORG_ID),
     );
     expect(first.action).toBe("created_principal");
     expect(first.principalNodeId).toBeTruthy();
@@ -151,8 +155,9 @@ describe("resolveEntity (integration, local Neo4j) — OXA-2052 $orgId binding r
     // With $orgId correctly bound in Pass A's params, this MUST hit the
     // exact-match fast path and update the existing node rather than falling
     // through to Pass B and creating a duplicate.
-    const second = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-      resolveEntity(mutation, ORG_ID),
+    const second = await runInTenantScope(
+      { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+      () => resolveEntity(mutation, ORG_ID),
     );
 
     expect(second.action).toBe("updated_principal");
@@ -183,11 +188,15 @@ describe("resolveEntity (integration, local Neo4j) — OXA-2052 $orgId binding r
 
     try {
       const mutation = makeMutation({ orgId: ORG_ID });
-      const home = await runInTenantScope({ orgId: ORG_ID, workspaceId: WORKSPACE_ID }, () =>
-        resolveEntity(mutation, ORG_ID),
+      const home = await runInTenantScope(
+        { orgId: ORG_ID, workspaceId: WORKSPACE_ID },
+        () => resolveEntity(mutation, ORG_ID),
       );
 
-      const otherMutation = makeMutation({ orgId: otherOrgId, workspaceId: otherWorkspaceId });
+      const otherMutation = makeMutation({
+        orgId: otherOrgId,
+        workspaceId: otherWorkspaceId,
+      });
       const other = await runInTenantScope(
         { orgId: otherOrgId, workspaceId: otherWorkspaceId },
         () => resolveEntity(otherMutation, otherOrgId),

@@ -37,7 +37,9 @@ describe("breaker-clients", () => {
     await Promise.resolve();
 
     expect(insertEvents).toHaveBeenCalledTimes(1);
-    const rows = insertEvents.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    const rows = insertEvents.mock.calls[0]?.[0] as Array<
+      Record<string, unknown>
+    >;
     const row = rows[0]!;
     expect(row).toMatchObject({
       event_type: "circuit_breaker.open",
@@ -46,14 +48,22 @@ describe("breaker-clients", () => {
       workspace_id: "00000000-0000-0000-0000-000000000000",
     });
     const payload = JSON.parse(row.payload as string);
-    expect(payload).toMatchObject({ key: "neo4j", to: "open", failureCount: 5 });
+    expect(payload).toMatchObject({
+      key: "neo4j",
+      to: "open",
+      failureCount: 5,
+    });
   });
 
-  it("falls back to a stderr line when ClickHouse itself is also down (OXA-2059)", async () => {
+  it("falls back to a stderr line when ClickHouse itself is also down", async () => {
     // insertEvents() rejecting exercises emitTransitionToClickHouse's own
     // .catch() — the "ClickHouse ALSO down" last-resort stderr path.
-    insertEvents.mockImplementationOnce(() => Promise.reject(new Error("ch down")));
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    insertEvents.mockImplementationOnce(() =>
+      Promise.reject(new Error("ch down")),
+    );
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
 
     const b = stripeBreaker(); // default threshold 5
     for (let i = 0; i < 5; i++) {
@@ -70,7 +80,7 @@ describe("breaker-clients", () => {
     expect(failedEmitLine).toContain("stripe");
   });
 
-  it("omits ` err=` when a transition carries no error (open→half-open probe) (OXA-2059)", async () => {
+  it("omits ` err=` when a transition carries no error (open→half-open probe)", async () => {
     // The open→half-open transition (triggered by exec() once the reset window
     // has elapsed) always fires onTransition with error=undefined — exercises
     // the falsy arm of the `t.error ? ... : ""` ternary in both
@@ -83,7 +93,9 @@ describe("breaker-clients", () => {
     const dateSpy = vi.spyOn(Date, "now");
     let time = 1_000_000;
     dateSpy.mockImplementation(() => time);
-    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
 
     try {
       const b = neo4jBreaker(); // constructed with the mocked Date.now captured
@@ -111,7 +123,9 @@ describe("breaker-clients", () => {
       const noErrEmitFailedLine = writeSpy.mock.calls
         .map((c) => String(c[0]))
         .find(
-          (line) => line.includes("[clickhouse emit failed]") && !line.includes(" err="),
+          (line) =>
+            line.includes("[clickhouse emit failed]") &&
+            !line.includes(" err="),
         );
       expect(noErrEmitFailedLine).toBeDefined();
     } finally {

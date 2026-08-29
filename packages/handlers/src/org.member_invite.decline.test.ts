@@ -28,15 +28,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => mockDb,
-  // withSystemDb passthrough: forward each call to mockDb so existing mock
-  // chains (query.invitations.findFirst, update) apply (OXA-1515).
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
-
+    db: () => mockDb,
+    // withSystemDb passthrough: forward each call to mockDb so existing mock
+    // chains (query.invitations.findFirst, update) apply.
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
   };
 });
 
-const { orgMemberInviteDeclineHandler } = await import("./org.member_invite.decline");
+const { orgMemberInviteDeclineHandler } = await import(
+  "./org.member_invite.decline"
+);
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -92,19 +93,29 @@ describe("orgMemberInviteDeclineHandler", () => {
   });
 
   it("invitation already declined → throws 'no longer pending'", async () => {
-    mockDb.query.invitations.findFirst.mockResolvedValue(makeInvitation("declined"));
+    mockDb.query.invitations.findFirst.mockResolvedValue(
+      makeInvitation("declined"),
+    );
     const ctx = makeCtx();
     await expect(
-      orgMemberInviteDeclineHandler({ invitationPublicId: "inv_DECLINE01" }, ctx),
+      orgMemberInviteDeclineHandler(
+        { invitationPublicId: "inv_DECLINE01" },
+        ctx,
+      ),
     ).rejects.toThrow("no longer pending");
   });
 
   it("happy path → returns declined status, does not throw", async () => {
-    mockDb.query.invitations.findFirst.mockResolvedValue(makeInvitation("pending"));
+    mockDb.query.invitations.findFirst.mockResolvedValue(
+      makeInvitation("pending"),
+    );
     mockUpdate.mockReturnValue(makeUpdateChain());
 
     const ctx = makeCtx();
-    const result = await orgMemberInviteDeclineHandler({ invitationPublicId: "inv_DECLINE01" }, ctx);
+    const result = await orgMemberInviteDeclineHandler(
+      { invitationPublicId: "inv_DECLINE01" },
+      ctx,
+    );
 
     expect(result).toEqual({
       invitationPublicId: "inv_DECLINE01",
@@ -114,11 +125,16 @@ describe("orgMemberInviteDeclineHandler", () => {
   });
 
   it("happy path via apiKeyId (no userId) → still declines", async () => {
-    mockDb.query.invitations.findFirst.mockResolvedValue(makeInvitation("pending"));
+    mockDb.query.invitations.findFirst.mockResolvedValue(
+      makeInvitation("pending"),
+    );
     mockUpdate.mockReturnValue(makeUpdateChain());
 
     const ctx = makeCtx({ userId: null, apiKeyId: "api-key-001" });
-    const result = await orgMemberInviteDeclineHandler({ invitationPublicId: "inv_DECLINE01" }, ctx);
+    const result = await orgMemberInviteDeclineHandler(
+      { invitationPublicId: "inv_DECLINE01" },
+      ctx,
+    );
 
     expect(result.status).toBe("declined");
   });

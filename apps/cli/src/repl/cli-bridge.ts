@@ -1,11 +1,10 @@
 /**
- * cli-bridge.ts — the REPL's inline capture-execution seam (PR C item 11).
+ * cli-bridge.ts — the REPL's inline capture-execution seam.
  *
- * `interactive.tsx` used to dead-end every CLI-sourced slash command with
- * "run it from your shell", even for commands that are perfectly safe and
- * fast to run inline (`/cost`, `/graph:search`, `/memory:list`, …). This module
- * is what makes those commands actually run *inside* the REPL: their output is
- * captured (via `../lib/capture-writer.ts`) instead of touching the real
+ * CLI-sourced slash commands that are safe and fast to run inline
+ * (`/cost`, `/graph:search`, `/memory:list`, …) run *inside* the REPL instead of
+ * telling the user to run them from a shell. This module makes that work: their
+ * output is captured (via `../lib/capture-writer.ts`) instead of touching the real
  * `process.stdout`/`console.log` — required, because the REPL is an Ink app
  * and anything that writes to the real terminal while Ink owns raw mode
  * corrupts the render tree — and folded into a single assistant message.
@@ -25,12 +24,10 @@
  * Three buckets, matching the slash catalog's "cli" tier:
  *   1. `REGISTRY` below — read-only/safe commands wired to run inline.
  *   2. `EXTERNAL_ONLY_TOP_LEVEL` — long-running/interactive commands (they own
- *      the terminal or run indefinitely) get an honest "opens outside the
- *      REPL" message, never the old dead-end.
- *   3. Everything else — not yet ported to this seam — keeps the shell-out
- *      hint (now worded as "not yet available inline", which is true, rather
- *      than the old blanket "This is an oxagen CLI command" phrasing that
- *      read as a dead-end even for commands that could have run).
+ *      the terminal or run indefinitely) get an "opens outside the REPL"
+ *      message.
+ *   3. Everything else — not yet ported to this seam — gets a "not yet
+ *      available inline" shell-out hint.
  */
 import type { Command } from "commander";
 import { captureWriter, type CommandWriter } from "../lib/capture-writer.js";

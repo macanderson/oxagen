@@ -1,6 +1,6 @@
 // skill-telemetry.test.ts
 //
-// Unit tests for recordSkillLoad + readSkillMetrics (OXA-1750). The ClickHouse
+// Unit tests for recordSkillLoad + readSkillMetrics. The ClickHouse
 // client is mocked so no live server is needed; we assert the insert row shape,
 // the query SQL/params (including the optional skillId filter branch), and the
 // aggregation/reduction of raw rows into the metrics shape.
@@ -29,7 +29,11 @@ vi.mock("./clickhouse", async (importOriginal) => {
   };
 });
 
-import { readSkillMetrics, readSkillTokenCosts, recordSkillLoad } from "./skill-telemetry";
+import {
+  readSkillMetrics,
+  readSkillTokenCosts,
+  recordSkillLoad,
+} from "./skill-telemetry";
 import type { SkillLoadRow } from "./skill-telemetry";
 import { NIL_UUID } from "./clickhouse";
 
@@ -113,22 +117,65 @@ describe("readSkillMetrics", () => {
         },
       ],
       [
-        { skill_id: "a", skill_version: "2", loads: "3", last_used: "2026-06-18T10:00:00.000Z" },
-        { skill_id: "a", skill_version: "1", loads: "2", last_used: "2026-06-17T10:00:00.000Z" },
-        { skill_id: "b", skill_version: "1", loads: "2", last_used: "2026-06-18T12:00:00.000Z" },
+        {
+          skill_id: "a",
+          skill_version: "2",
+          loads: "3",
+          last_used: "2026-06-18T10:00:00.000Z",
+        },
+        {
+          skill_id: "a",
+          skill_version: "1",
+          loads: "2",
+          last_used: "2026-06-17T10:00:00.000Z",
+        },
+        {
+          skill_id: "b",
+          skill_version: "1",
+          loads: "2",
+          last_used: "2026-06-18T12:00:00.000Z",
+        },
       ],
     );
 
-    const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillMetrics({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
 
     expect(result.bySkill).toEqual([
-      { skill_id: "a", skill_slug: "alpha", loads: 5, last_used: "2026-06-18T10:00:00.000Z" },
-      { skill_id: "b", skill_slug: "beta", loads: 2, last_used: "2026-06-18T12:00:00.000Z" },
+      {
+        skill_id: "a",
+        skill_slug: "alpha",
+        loads: 5,
+        last_used: "2026-06-18T10:00:00.000Z",
+      },
+      {
+        skill_id: "b",
+        skill_slug: "beta",
+        loads: 2,
+        last_used: "2026-06-18T12:00:00.000Z",
+      },
     ]);
     expect(result.byVersion).toEqual([
-      { skill_id: "a", skill_version: 2, loads: 3, last_used: "2026-06-18T10:00:00.000Z" },
-      { skill_id: "a", skill_version: 1, loads: 2, last_used: "2026-06-17T10:00:00.000Z" },
-      { skill_id: "b", skill_version: 1, loads: 2, last_used: "2026-06-18T12:00:00.000Z" },
+      {
+        skill_id: "a",
+        skill_version: 2,
+        loads: 3,
+        last_used: "2026-06-18T10:00:00.000Z",
+      },
+      {
+        skill_id: "a",
+        skill_version: 1,
+        loads: 2,
+        last_used: "2026-06-17T10:00:00.000Z",
+      },
+      {
+        skill_id: "b",
+        skill_version: 1,
+        loads: 2,
+        last_used: "2026-06-18T12:00:00.000Z",
+      },
     ]);
     expect(result.totalLoads).toBe(7);
     // lastUsed is the max across skills.
@@ -137,7 +184,10 @@ describe("readSkillMetrics", () => {
 
   it("returns zeros / null for an empty scope", async () => {
     mockQueries([], []);
-    const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillMetrics({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
     expect(result.bySkill).toEqual([]);
     expect(result.byVersion).toEqual([]);
     expect(result.totalLoads).toBe(0);
@@ -158,8 +208,22 @@ describe("readSkillMetrics", () => {
 
   it("binds skillId and applies the filter when skillId is supplied", async () => {
     mockQueries(
-      [{ skill_id: "x", skill_slug: "xray", loads: "4", last_used: "2026-06-18T09:00:00.000Z" }],
-      [{ skill_id: "x", skill_version: "1", loads: "4", last_used: "2026-06-18T09:00:00.000Z" }],
+      [
+        {
+          skill_id: "x",
+          skill_slug: "xray",
+          loads: "4",
+          last_used: "2026-06-18T09:00:00.000Z",
+        },
+      ],
+      [
+        {
+          skill_id: "x",
+          skill_version: "1",
+          loads: "4",
+          last_used: "2026-06-18T09:00:00.000Z",
+        },
+      ],
     );
     const result = await readSkillMetrics({
       orgId: "org-1",
@@ -179,11 +243,19 @@ describe("readSkillMetrics", () => {
     mockQueries(
       [
         { skill_id: "a", skill_slug: "alpha", loads: "1", last_used: null },
-        { skill_id: "b", skill_slug: "beta", loads: "1", last_used: "2026-06-18T08:00:00.000Z" },
+        {
+          skill_id: "b",
+          skill_slug: "beta",
+          loads: "1",
+          last_used: "2026-06-18T08:00:00.000Z",
+        },
       ],
       [],
     );
-    const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillMetrics({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
     expect(result.lastUsed).toBe("2026-06-18T08:00:00.000Z");
   });
 
@@ -209,7 +281,10 @@ describe("readSkillMetrics", () => {
       ],
       [],
     );
-    const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillMetrics({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
     // latest is correctly the newer of the two
     expect(result.lastUsed).toBe("2026-06-18T15:00:00.000Z");
     expect(result.totalLoads).toBe(12);
@@ -225,7 +300,10 @@ describe("readSkillTokenCosts", () => {
       ],
     });
 
-    const result = await readSkillTokenCosts({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillTokenCosts({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
 
     expect(result).toEqual([
       { skill_id: "a", cost_usd_micros: 1_250_000 },
@@ -235,7 +313,10 @@ describe("readSkillTokenCosts", () => {
 
   it("returns an empty array when no steps have attributable cost", async () => {
     queryMock.mockResolvedValueOnce({ json: async () => [] });
-    const result = await readSkillTokenCosts({ orgId: "org-1", workspaceId: "ws-1" });
+    const result = await readSkillTokenCosts({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
     expect(result).toEqual([]);
   });
 
@@ -253,7 +334,9 @@ describe("readSkillTokenCosts", () => {
     expect(arg.query).toContain("execution_step_id IS NOT NULL");
     expect(arg.query).toContain("execution_step_id != ''");
     expect(arg.query).toContain("execution_step_id != {nilUuid:String}");
-    expect(arg.query).toContain("execution_step_id != toUUID({nilUuid:String})");
+    expect(arg.query).toContain(
+      "execution_step_id != toUUID({nilUuid:String})",
+    );
     // Org/workspace filtered with the correct per-table types.
     expect(arg.query).toContain("org_id = {orgId:String}");
     expect(arg.query).toContain("org_id = {orgId:UUID}");

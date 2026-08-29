@@ -1,6 +1,6 @@
 /**
- * Wire contract for oxagen's Stella sidecar transport (oxagen #1072) talking
- * to a headless `stella-serve` process.
+ * Wire contract for oxagen's Stella sidecar transport talking to a headless
+ * `stella-serve` process.
  *
  * These are hand-authored TS mirrors of the Rust types in stella's
  * `stella-serve/src/frame.rs` (the `ServerFrame` / `ToolResultIn` /
@@ -12,13 +12,10 @@
  * and stella-serve.smoke.test.ts is what proves it still matches a real
  * `stella-serve` at the pinned version.
  *
- * VERIFIED, not assumed: every route, field name and tag in this file was
- * checked against a locally built `stella-serve` 0.6.2 driving a real
- * multi-step turn (oxagen #1132). The previous revision of this file was a
- * good-faith mirror of a *planned* session-oriented surface that the server
- * never served — see #1132 for the drift table. If you are changing anything
- * here, re-run the smoke test against a real binary rather than reasoning
- * about it.
+ * Every route, field name and tag in this file was checked against a locally
+ * built `stella-serve` 0.6.2 driving a real multi-step turn. If you are
+ * changing anything here, re-run the smoke test against a real binary rather
+ * than reasoning about it.
  *
  * If you are here because the smoke test just turned red: stella renamed or
  * restructured something. Update the type AND the assertions in the smoke
@@ -93,11 +90,10 @@ export interface TurnCreated {
  * failure for no benefit. The variants oxagen actually branches on are typed
  * below; everything else flows through as an envelope.
  *
- * NOTE: there is no `seq` field. The previous revision of this file declared
- * one and called it "the resumable-subscription invariant"; the server emits
- * no sequence number and retains no event history, so a dropped connection
- * loses whatever streamed while it was down. Resumption via `?after=<seq>` is
- * named as unbuilt in stella's docs/design/serve-surface.md.
+ * NOTE: there is no `seq` field. The server emits no sequence number and
+ * retains no event history, so a dropped connection loses whatever streamed
+ * while it was down. Resumption via `?after=<seq>` is named as unbuilt in
+ * stella's docs/design/serve-surface.md.
  */
 export interface AgentEventEnvelope {
   readonly type: string;
@@ -157,9 +153,9 @@ export interface TurnCompleteEvent extends AgentEventEnvelope {
  * A frame on the turn's event stream. Internally tagged on `type`, snake_case
  * — mirrors `ServerFrame` in stella-serve/src/frame.rs.
  *
- * This is the layer the previous revision was missing entirely: it modelled
- * the stream as bare `AgentEvent`s, so the two reverse-RPC request frames had
- * nowhere to land and a turn could never be driven to completion.
+ * A client that only models bare `AgentEvent`s has nowhere to land the two
+ * reverse-RPC request frames below, so it can never drive a turn to
+ * completion — those frames must be answered, not just observed.
  *
  * Three ordering properties a correct host must not assume away:
  *

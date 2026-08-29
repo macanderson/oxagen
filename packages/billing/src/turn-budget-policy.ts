@@ -13,8 +13,7 @@ import {
  * (per-turn request override wins; omitting it falls back to the user's saved
  * default; workspace governance merges on top) live HERE so the surfaces can't
  * drift — a budget resolved on one surface is resolved identically on all of
- * them. Moved from apps/app/src/app/api/v1/chat/stream/ where it was
- * app-local and the API surface had silently diverged.
+ * them.
  */
 
 /**
@@ -31,7 +30,8 @@ export const requestTurnBudgetSchema = z
     graceOveragePct: z.number().min(0).max(10),
   })
   .refine((v) => !v.enabled || (v.limitUsd !== null && v.limitUsd > 0), {
-    message: "budget.limitUsd must be a positive number when budget.enabled is true",
+    message:
+      "budget.limitUsd must be a positive number when budget.enabled is true",
     path: ["limitUsd"],
   });
 
@@ -48,7 +48,9 @@ export interface SavedBudgetPolicy {
 
 /** Convert a budget.policy.read output (limitUsd: number|null) to the engine's
  * TurnBudgetPolicy shape (limitUsd: number, 0 meaning "no limit set"). */
-export function turnBudgetPolicyFromSaved(saved: SavedBudgetPolicy): TurnBudgetPolicy {
+export function turnBudgetPolicyFromSaved(
+  saved: SavedBudgetPolicy,
+): TurnBudgetPolicy {
   return {
     enabled: saved.enabled,
     limitUsd: saved.limitUsd ?? 0,
@@ -82,7 +84,7 @@ export function resolveTurnBudgetPolicy(
   };
 }
 
-// ── Workspace governance (OXA-2081) ─────────────────────────────────────────
+// ── Workspace governance ─────────────────────────────────────────────
 // A workspace can impose a governed budget on top of the member's own policy
 // (resolveEffectiveTurnBudget in ./turn-budget does the actual pure merge —
 // this section only adapts workspace.budget.policy.read's wire shape into the

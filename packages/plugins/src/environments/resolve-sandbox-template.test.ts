@@ -1,9 +1,9 @@
 /**
  * resolve-sandbox-template.test.ts
  *
- * Covers the explicit-template branch of resolveSandboxTemplateForRun (Spec §12,
- * provisioning integration §5): when a run pins a `sandboxTemplateId`, that exact
- * template and its OWN environment are resolved, and both must be active. The
+ * Covers the explicit-template branch of resolveSandboxTemplateForRun: when a
+ * run pins a `sandboxTemplateId`, that exact template and its OWN environment
+ * are resolved, and both must be active. The
  * env→binding→default chain is covered separately in
  * resolve-sandbox-template-chain.test.ts; here we prove the short-circuit and
  * its active-preflight errors.
@@ -43,8 +43,13 @@ const vaultMocks = vi.hoisted(() => ({
   upsertSecretKey: vi.fn(),
 }));
 vi.mock("../vault/vault-secret-service", async (importOriginal) => {
-  const real = await importOriginal<typeof import("../vault/vault-secret-service")>();
-  return { ...real, listSecretKeys: vaultMocks.listSecretKeys, upsertSecretKey: vaultMocks.upsertSecretKey };
+  const real =
+    await importOriginal<typeof import("../vault/vault-secret-service")>();
+  return {
+    ...real,
+    listSecretKeys: vaultMocks.listSecretKeys,
+    upsertSecretKey: vaultMocks.upsertSecretKey,
+  };
 });
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -98,9 +103,15 @@ describe("resolveSandboxTemplateForRun — explicit sandboxTemplateId", () => {
       [], // loadToolsFor
     ];
 
-    const result = await resolveSandboxTemplateForRun(actor, { sandboxTemplateId: "sbx-pub" });
+    const result = await resolveSandboxTemplateForRun(actor, {
+      sandboxTemplateId: "sbx-pub",
+    });
 
-    expect(result.environment).toEqual({ id: "env-pub", name: "Prod", slug: "prod" });
+    expect(result.environment).toEqual({
+      id: "env-pub",
+      name: "Prod",
+      slug: "prod",
+    });
     expect(result.template.id).toBe("sbx-pub");
     expect(result.template.provider).toBe("modal");
     expect(result.template.runtime).toBe("ghcr.io/x/y@sha256:abc");
