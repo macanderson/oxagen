@@ -46,10 +46,14 @@ export const agentMemoryRemember = registerCapability({
       ),
     memoryClass: memoryClassEnum
       .optional()
-      .describe("Pin the epistemic class; omit to let the classifier infer it (defaults to OBSERVATION)"),
+      .describe(
+        "Pin the epistemic class; omit to let the classifier infer it (defaults to OBSERVATION)",
+      ),
     memoryKind: memoryKindSchema
       .optional()
-      .describe("Pin the content-domain kind; omit to let the classifier infer it"),
+      .describe(
+        "Pin the content-domain kind; omit to let the classifier infer it",
+      ),
     enforcementScore: z
       .number()
       .int()
@@ -65,7 +69,9 @@ export const agentMemoryRemember = registerCapability({
       .array(z.string())
       .max(20)
       .optional()
-      .describe("KnowledgeNode publicIds this memory is about — creates :ABOUT edges"),
+      .describe(
+        "KnowledgeNode publicIds this memory is about — creates :ABOUT edges",
+      ),
   }),
   output: z.object({
     memory: agentMemoryRecordSchema,
@@ -75,16 +81,24 @@ export const agentMemoryRemember = registerCapability({
         memoryKind: memoryKindSchema,
         classified: z
           .boolean()
-          .describe("true when class/kind were inferred by the model rather than supplied or defaulted"),
+          .describe(
+            "true when class/kind were inferred by the model rather than supplied or defaulted",
+          ),
       })
-      .describe("The class + kind actually used, and whether the model inferred them"),
+      .describe(
+        "The class + kind actually used, and whether the model inferred them",
+      ),
   }),
 });
 
 // z.input (not z.output): `source` has a .default, so the value a *caller*
 // supplies leaves it optional. The handler applies the `?? "user"` fallback
-// itself, so typing the handler input as the caller-facing shape is the honest
-// contract — and a parsed (source-present) object the kernel passes still
+// itself, so typing the handler input as the caller-facing shape matches the
+// real contract — and a parsed (source-present) object the kernel passes still
 // satisfies it.
-export type AgentMemoryRememberInput = z.input<typeof agentMemoryRemember.input>;
-export type AgentMemoryRememberOutput = z.output<typeof agentMemoryRemember.output>;
+export type AgentMemoryRememberInput = z.input<
+  typeof agentMemoryRemember.input
+>;
+export type AgentMemoryRememberOutput = z.output<
+  typeof agentMemoryRemember.output
+>;

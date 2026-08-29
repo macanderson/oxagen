@@ -60,7 +60,7 @@ const lineageSpend = z.object({
 /**
  * A denial captured on this run, parsed from `subagent_runs.error_reason`.
  *
- * HONESTY NOTE (do not "complete" this without re-reading it): this is
+ * IMPORTANT (do not "complete" this without re-reading it): this is
  * populated by pattern-matching the kernel's IAM-denial error message
  * (`IAM denied "<capability>" for principal: <reason>` /
  * `IAM requires approval for "<capability>" — …`), which IS durably recorded
