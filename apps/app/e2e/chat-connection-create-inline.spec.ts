@@ -24,7 +24,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 // Scripted stream events: emit a component event for the given componentId,
 // mirroring what translate-stream derives from an agent.ui.render tool result.
@@ -79,7 +82,9 @@ test.describe("chat.connection-create-inline", () => {
   test("github connect card renders inline and launches the connection wizard", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "conn-inline" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "conn-inline",
+    });
 
     // /sessions is the conversation route; /chat is a 301 shim onto it since
     // the Ask→Sessions rename (src/proxy.ts WS_RENAMES).
@@ -93,7 +98,11 @@ test.describe("chat.connection-create-inline", () => {
 
     // Register the SSE mock BEFORE the user submits.
     await interceptAgentStream(page, {
-      events: connectionFormEvents(toolCallId, orgSlug, "connection-create-inline"),
+      events: connectionFormEvents(
+        toolCallId,
+        orgSlug,
+        "connection-create-inline",
+      ),
       delayMs: 50,
     });
 
@@ -104,7 +113,9 @@ test.describe("chat.connection-create-inline", () => {
     await sendBtn.click();
 
     // The inline GitHub connect card appears in the chat.
-    const card = page.locator('[data-testid="connection-create-inline-github"]');
+    const card = page.locator(
+      '[data-testid="connection-create-inline-github"]',
+    );
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card).toContainText("Connect a GitHub repository");
 
@@ -115,7 +126,9 @@ test.describe("chat.connection-create-inline", () => {
     // Clicking the button opens the GitHubConnectionWizard dialog. A fresh
     // user has no GitHub App installation, so the wizard opens at the gate
     // step directing them to Workspace Settings.
-    await card.locator('[data-testid="connection-create-inline-github-btn"]').click();
+    await card
+      .locator('[data-testid="connection-create-inline-github-btn"]')
+      .click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
@@ -125,14 +138,19 @@ test.describe("chat.connection-create-inline", () => {
     );
 
     await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "connection-create-inline-wizard-open.png"),
+      path: path.join(
+        SCREENSHOT_DIR,
+        "connection-create-inline-wizard-open.png",
+      ),
     });
   });
 
   test("unknown componentId renders a visible unavailable-component fallback", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "conn-unknown" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "conn-unknown",
+    });
 
     await page.goto(`/${orgSlug}/default/sessions`);
     await expect(page).not.toHaveURL(/\/login/);

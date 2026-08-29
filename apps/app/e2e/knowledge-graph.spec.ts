@@ -32,7 +32,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 function shot(page: import("@playwright/test").Page, name: string) {
   return page.screenshot({
@@ -49,8 +52,12 @@ test.describe("Knowledge → Graph", () => {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   });
 
-  test("canvas loads, side panel mounts with stats header and Browse/Search/Query tabs", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-canvas" });
+  test("canvas loads, side panel mounts with stats header and Browse/Search/Query tabs", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-canvas",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
@@ -61,7 +68,9 @@ test.describe("Knowledge → Graph", () => {
     // (the canvas itself is `next/dynamic({ ssr:false })`, so the toolbar is
     // the stable, immediately-paintable proof point instead of the canvas
     // element, which loads behind a skeleton).
-    await expect(page.getByLabel("Search the graph")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("Search the graph")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator('[aria-label="View mode"]')).toBeVisible();
 
     // The new side panel: header + stat boxes + tab strip.
@@ -70,7 +79,9 @@ test.describe("Knowledge → Graph", () => {
     await expect(
       page.getByRole("heading", { name: "Graph", exact: true }),
     ).toBeVisible();
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByRole("tab", { name: "Browse" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Search" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Query" })).toBeVisible();
@@ -78,15 +89,21 @@ test.describe("Knowledge → Graph", () => {
     await shot(page, "01-canvas-and-panel-loaded");
   });
 
-  test("Browse panel lists nodes (or the Connect-a-source empty state on a fresh graph)", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-browse" });
+  test("Browse panel lists nodes (or the Connect-a-source empty state on a fresh graph)", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-browse",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
 
     // Browse is the default tab.
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     const emptyState = page.getByText("Connect a source");
     const hasEmptyState = await emptyState.isVisible().catch(() => false);
@@ -97,7 +114,9 @@ test.describe("Knowledge → Graph", () => {
       const sourcesLink = page.getByRole("link", { name: /go to sources/i });
       await expect(sourcesLink).toBeVisible();
       await sourcesLink.click();
-      await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/knowledge/sources$`));
+      await expect(page).toHaveURL(
+        new RegExp(`/${orgSlug}/${ws}/knowledge/sources$`),
+      );
       return;
     }
 
@@ -109,17 +128,23 @@ test.describe("Knowledge → Graph", () => {
     const openLink = firstRow.getByRole("link", { name: /open .* detail/i });
     if (await openLink.isVisible().catch(() => false)) {
       await openLink.click();
-      await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/knowledge/graph/`));
+      await expect(page).toHaveURL(
+        new RegExp(`/${orgSlug}/${ws}/knowledge/graph/`),
+      );
     }
   });
 
   test("Search tab filters as you type", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-search" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-search",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("tab", { name: "Search" }).click();
     const searchBox = page.getByLabel("Search graph nodes");
@@ -129,19 +154,27 @@ test.describe("Knowledge → Graph", () => {
     // Debounced (300ms) — give it room, then assert the panel settled into
     // either a result list or the no-match state (never a crash/blank panel).
     await expect(
-      page.getByText("No matches").or(page.getByTestId("graph-result-row").first()),
+      page
+        .getByText("No matches")
+        .or(page.getByTestId("graph-result-row").first()),
     ).toBeVisible({ timeout: 10_000 });
 
     await shot(page, "03-search-results");
   });
 
-  test("Query console runs a typed traversal and reports an unknown start node", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-query" });
+  test("Query console runs a typed traversal and reports an unknown start node", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-query",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("tab", { name: "Query" }).click();
 

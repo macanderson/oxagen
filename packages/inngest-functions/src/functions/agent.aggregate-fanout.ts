@@ -81,7 +81,7 @@ export const [agentAggregateFanout] = createFunction(
     }
 
     // Emit the aggregated result so orchestrators (swarm, workflows) can react
-    // without re-reading. Honest status flows straight through.
+    // without re-reading. The real status passes through unchanged.
     await step.sendEvent("emit-aggregated", {
       name: "agent/subagent.aggregated",
       data: {
