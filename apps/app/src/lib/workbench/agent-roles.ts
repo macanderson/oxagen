@@ -21,6 +21,7 @@
  * plain serializable AgentRoleOption[] via page props.
  */
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import type { ResourceScopeCondition } from "@oxagen/oxagen/iam";
 import type { AgentRoleListOutput } from "@oxagen/oxagen/contracts/agent.role.list";
