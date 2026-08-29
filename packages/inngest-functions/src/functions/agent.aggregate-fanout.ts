@@ -21,7 +21,11 @@ import "@oxagen/oxagen";
  * for downstream consumers (e.g. the research swarm → graph projection).
  */
 export const [agentAggregateFanout] = createFunction(
-  { id: "agent.aggregate-fanout", retries: 1, concurrency: { limit: 5, key: "event.data.orgId" } },
+  {
+    id: "agent.aggregate-fanout",
+    retries: 1,
+    concurrency: { limit: 5, key: "event.data.orgId" },
+  },
   { event: "agent/subagent.aggregate.requested" },
   async ({ event, step }) => {
     const { orgId, workspaceId, fanoutId, timeoutMs } = event.data as {
@@ -32,7 +36,10 @@ export const [agentAggregateFanout] = createFunction(
     };
 
     // Clamp the durable wait to the contract's maximum (30 min). Default 5 min.
-    const waitMs = Math.min(Math.max(timeoutMs ?? 5 * 60 * 1000, 0), 30 * 60 * 1000);
+    const waitMs = Math.min(
+      Math.max(timeoutMs ?? 5 * 60 * 1000, 0),
+      30 * 60 * 1000,
+    );
 
     // Park until the fanout signals completion for THIS fanoutId. No polling,
     // no wall-clock burn — Inngest resumes the function when the event arrives
@@ -45,7 +52,7 @@ export const [agentAggregateFanout] = createFunction(
 
     // Read the merged snapshot through the kernel so IAM, audit, and metering
     // all apply. The handler is non-blocking: by now the fanout is terminal
-    // (event fired) or we time out and report the honest in-progress snapshot.
+    // (event fired) or we time out and report the real in-progress snapshot.
     const aggregate = await step.run("read-aggregate", () =>
       runInTenantScope({ orgId, workspaceId }, () =>
         invoke(
