@@ -64,14 +64,18 @@ describe("Panel", () => {
     expect(padded).toContain("p-[18px]");
   });
 
-  it("applies brand treatments (glow + gradientRing) when enabled", () => {
+  it("accepts the back-compat brand treatments without emitting any class", () => {
+    // The flat reskin retired both treatments (Card ignores them too). Panel
+    // used to stamp `ox-glow-violet` — a class no stylesheet defined, naming a
+    // colour the palette does not have — so the props are now inert by design.
     const html = renderToStaticMarkup(
       <Panel glow gradientRing title="Brand">
         body
       </Panel>,
     );
-    expect(html).toContain("ox-glow-violet");
-    expect(html).toContain("gradient-ring");
+    expect(html).not.toContain("ox-glow-violet");
+    expect(html).not.toContain("gradient-ring");
+    expect(html).toContain("bg-card");
   });
 
   it("merges a custom className onto the surface", () => {

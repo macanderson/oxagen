@@ -2,9 +2,14 @@ import type { CSSProperties } from "react";
 
 /**
  * HexField — an ambient background of hexagon cells abstracted from the Oxagen
- * logomark (the ember hex-cluster). Most cells are faint outlines ("faint");
- * a few are lit with the ember gradient and breathe slowly ("lit"), and a
- * couple glow cool indigo ("cool"). Used as a pointer-events-none backdrop
+ * logomark (the ember hex-cluster). Cells come in exactly two forms: faint
+ * outlines ("faint"), and cells lit with the ember gradient that breathe slowly
+ * ("lit"). There is deliberately no third, differently-hued variant. The field
+ * used to carry a "cool" cell filled with --ox-indigo-bright (#9CA3E8), and
+ * because the breathing pulse holds it between 22% and 70% opacity it
+ * composited over the near-black canvas as a muted slate-purple — a second
+ * brand colour nobody chose, in the largest graphic on the product. The
+ * backdrop now speaks one accent. Used as a pointer-events-none backdrop
  * behind hero / auth / shell surfaces so every section reads as part of the
  * same lattice without competing with the foreground content.
  *
@@ -18,7 +23,7 @@ import type { CSSProperties } from "react";
  * backdrop both render this exact field so they stay visually identical.
  */
 
-type Variant = "faint" | "lit" | "cool";
+type Variant = "faint" | "lit";
 
 interface Cell {
   cx: number;
@@ -56,7 +61,7 @@ const FIELD: Cell[] = [
   { cx: 1050, cy: 230, r: 32, variant: "lit", delay: 2.1 },
   { cx: 1110, cy: 330, r: 32, variant: "faint" },
   { cx: 990, cy: 130, r: 32, variant: "faint" },
-  { cx: 990, cy: 330, r: 32, variant: "cool", delay: 3.0 },
+  { cx: 990, cy: 330, r: 32, variant: "lit", delay: 3.0 },
   { cx: 930, cy: 230, r: 32, variant: "faint" },
   { cx: 930, cy: 430, r: 32, variant: "faint" },
   { cx: 1050, cy: 430, r: 32, variant: "faint" },
@@ -101,15 +106,11 @@ export function HexField({
             />
           );
         }
-        const fill =
-          c.variant === "lit"
-            ? "url(#oxHexEmber)"
-            : "var(--ox-ember-light, #F7D96B)";
         return (
           <polygon
             key={i}
             points={pts}
-            fill={fill}
+            fill="url(#oxHexEmber)"
             className="ox-hex-lit"
             style={{ animationDelay: `${c.delay ?? 0}s` }}
           />

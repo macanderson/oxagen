@@ -26,7 +26,7 @@ const OUTCOME_COLOR: Record<LineageNodeDto["outcome"], string> = {
   running: "#0ea5e9", // info sky
   completed: "#10b981", // success emerald
   failed: "#ef4444", // error red
-  cancelled: "#a855f7", // violet
+  cancelled: "#a16207", // bronze — inert, not alarming
 };
 const VIOLATION_COLOR = "#f97316"; // amber — distinct from OUTCOME_COLOR.failed
 const ROOT_COLOR = "#64748b"; // neutral slate, distinguishes the synthetic root

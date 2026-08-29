@@ -8,7 +8,7 @@ interface ThinkingBubbleProps {
   className?: string;
 }
 
-// Three staggered dots using the brand violet, animating with a gentle bounce.
+// Three staggered dots tinted with the info token, animating with a gentle bounce.
 // Entry/exit animation lives in the wrapping TimelineItem (fadeInUp variant).
 // The bounce here is purely decorative — dots pulse in sequence with the brand
 // easing [0.45,0,0.55,1] matching the ReasoningCard pulse timing.

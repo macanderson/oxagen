@@ -90,9 +90,9 @@ export function ContextWindow() {
             className="size-2.5 rounded-full transition-colors duration-500"
             style={{
               background: governed
-                ? "var(--ox-indigo-bright, #9CA3E8)"
+                ? "var(--success, #7BC98A)"
                 : "var(--_ember-b, #EFC53F)",
-              boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(239,197,63,.8)"}`,
+              boxShadow: `0 0 10px ${governed ? "rgba(123,201,138,.8)" : "rgba(239,197,63,.8)"}`,
             }}
           />
           <span className="font-mono text-xs font-medium tracking-wide text-muted-foreground">
@@ -104,7 +104,7 @@ export function ContextWindow() {
             className="text-2xl font-semibold tabular-nums transition-colors duration-500"
             style={{
               color: governed
-                ? "var(--ox-indigo-bright, #9CA3E8)"
+                ? "var(--success, #7BC98A)"
                 : "var(--_ember-b, #EFC53F)",
             }}
           >
@@ -121,7 +121,7 @@ export function ContextWindow() {
           style={{
             width: `${used}%`,
             background: governed
-              ? "var(--ox-indigo-bright, #9CA3E8)"
+              ? "var(--success, #7BC98A)"
               : "linear-gradient(90deg, var(--_ember-a,#725A00), var(--_ember-b,#EFC53F), var(--_ember-c,#F7D96B))",
           }}
         />
@@ -138,7 +138,7 @@ export function ContextWindow() {
           const bg = !lit
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
-              ? "var(--ox-indigo-bright, #9CA3E8)"
+              ? "var(--success, #7BC98A)"
               : "var(--_ember-b, #EFC53F)";
           return (
             <span
@@ -147,7 +147,7 @@ export function ContextWindow() {
               style={{
                 background: bg,
                 boxShadow: lit
-                  ? `0 0 8px ${governed ? "rgba(156,163,232,.55)" : "rgba(239,197,63,.6)"}`
+                  ? `0 0 8px ${governed ? "rgba(123,201,138,.55)" : "rgba(239,197,63,.6)"}`
                   : "none",
                 transition: "background-color .55s ease, box-shadow .55s ease",
                 transitionDelay: `${(i % COLS) * 9}ms`,

@@ -338,7 +338,7 @@ const KIND_CONFIG: Record<
   PERFORMANCE: {
     label: "Performance",
     icon: Gauge,
-    color: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400",
+    color: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
   },
   STYLE: {
     label: "Style",
@@ -353,7 +353,7 @@ const KIND_CONFIG: Record<
   VOICE: {
     label: "Voice",
     icon: Mic,
-    color: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+    color: "bg-lime-500/15 text-lime-700 dark:text-lime-400",
   },
   PROSE: {
     label: "Prose",
@@ -368,7 +368,7 @@ const KIND_CONFIG: Record<
   constraint: {
     label: "Constraint",
     icon: Lock,
-    color: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+    color: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
   },
   "bug-root-cause": {
     label: "Bug Root Cause",

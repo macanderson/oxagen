@@ -110,12 +110,15 @@
     --ox-ember-light: oklch(0.8893 0.1332 94.3); /* #F7D96B — st-gold-bright, live indicators */
     --ox-ember-soft: oklch(0.215 0.030 90);      /* #1F1908 — tinted gold fill on the dark canvas */
 
-    /* Categorical CHART accent only. Stella ships no indigo — its links are gold
-       (--ox-ember-deep on paper, --ox-ember on canvas). This swatch survives
-       solely because a five-series chart ramp needs a hue that is not gold,
-       green, red or orange. It must never carry brand or link meaning again. */
-    --ox-indigo: oklch(0.477 0.137 277.4);        /* #4C51A8 — chart-2 (light) */
-    --ox-indigo-bright: oklch(0.736 0.100 279.2); /* #9CA3E8 — chart-2 (dark) */
+    /* NOTE — there is deliberately NO indigo/violet swatch here. The skin used to
+       carry --ox-indigo (#4C51A8 / #9CA3E8) as a link accent, and after the gold
+       took links over it lingered as chart-2 and as the "cool" hexagon in the
+       hero backdrop — where, at the hex pulse's ~45% opacity over the canvas, it
+       composited to a muted slate-purple that read as a second, unowned brand
+       colour. The whole family is gone: the categorical ramp now spends the
+       palette's own hues (gold · slate · moss · ochre · silver), so no chart,
+       badge, graph node or backdrop can reintroduce a hue the brand never had.
+       Do not add one back — a new chart hue must come from a primitive above. */
 
     /* Cursor block of the "o + cursor" logomark (docs/brand). Deliberately NOT
        touched by this reskin: the brand asset set ships the cursor in its own
@@ -243,12 +246,17 @@
        The site's own angle and stops: 92deg, 0% / 46% / 100%. */
     --brand-gradient: linear-gradient(92deg, var(--_ember-a) 0%, var(--_ember-b) 46%, var(--_ember-c) 100%);
 
-    /* Charts — distinct categorical ramp (ember · indigo · moss · ochre · slate). */
+    /* Charts — categorical ramp drawn entirely from palette primitives:
+       ember · slate · moss · ochre · silver. The slate that used to sit at
+       chart-5 moves up to chart-2 (the cool counterpoint the retired indigo
+       held) and the neutral stone silver takes the fifth slot, so five series
+       stay separable — four hues roughly 60° apart plus one achromatic — with
+       no colour outside the skin. */
     --chart-1: var(--ox-ember);
-    --chart-2: var(--ox-indigo);
+    --chart-2: var(--_slate);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
-    --chart-5: var(--_slate);
+    --chart-5: var(--_stone-500);   /* #777782 — st-muted, the achromatic series */
 
     --surface: var(--ox-surface);
     --surface-foreground: var(--_ink);
@@ -292,7 +300,7 @@
     --app-topbar-fg: var(--foreground);
     --app-topbar-border: var(--border);
     /* App-chrome icons/links (support, notifications bell, mobile nav). Neutral
-       at rest so they match the rest of the UI — NO blue/indigo — brightening to
+       at rest so they match the rest of the UI — no second accent — brightening to
        the foreground on hover; the active nav item picks up the ember primary. */
     --app-link-fg: var(--muted-foreground);
     --app-link-hover-fg: var(--foreground);
@@ -439,10 +447,10 @@
     --info-foreground: oklch(0.18 0.01 230);
 
     --chart-1: var(--ox-ember);
-    --chart-2: var(--ox-indigo-bright);
+    --chart-2: var(--_slate-light);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
-    --chart-5: var(--_slate-light);
+    --chart-5: var(--_stone-400);   /* #A9AAB5 — st-silver, the achromatic series */
 
     --surface: var(--_stone-900);
     --surface-foreground: var(--_ink-white);
@@ -554,10 +562,10 @@
       --info-foreground: oklch(0.18 0.01 230);
 
       --chart-1: var(--ox-ember);
-      --chart-2: var(--ox-indigo-bright);
+      --chart-2: var(--_slate-light);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
-      --chart-5: var(--_slate-light);
+      --chart-5: var(--_stone-400);   /* #A9AAB5 — st-silver, the achromatic series */
 
       --surface: var(--_stone-900);
       --surface-foreground: var(--_ink-white);

@@ -24,7 +24,7 @@ import { useThemeColors } from "@/lib/chart-colors";
  * lib/chart-colors.ts for why this is done at runtime rather than as hexes.
  */
 const SERIES_TOKENS = ["--chart-2", "--destructive"] as const;
-const SERIES_FALLBACK = ["#4C51A8", "#DC2828"] as const;
+const SERIES_FALLBACK = ["#4E6A7A", "#DC2828"] as const;
 
 export interface CitationDailyChartProps {
   daily: AgentMemoryCitationStatsOutput["daily"];

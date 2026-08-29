@@ -35,10 +35,13 @@ Accent *copy* never uses `#EFC53F` directly — that is the mark colour and only
 1.6:1 on paper. It uses `--ember-ink`, which resolves to the gold's own ink
 shade in light (`#725A00` — `st-gold-ink`, 6.0:1) and to the gold itself in
 dark (12.0:1). This is exactly what Stella's `--stella-accent-text` does, and
-`--link` follows the same pair. **Links are gold, not indigo** — Stella ships
-no indigo at all. The `--ox-indigo*` swatches survive only as `chart-2`, where
-a fifth categorical hue is genuinely needed; they must never carry brand or
-link meaning again.
+`--link` follows the same pair. **Links are gold** — and there is no second
+accent anywhere in the skin. The `--ox-indigo*` swatches (`#4C51A8` / `#9CA3E8`)
+were **deleted**: after the gold took links over they lingered as `chart-2` and
+as the "cool" cell of the hero `HexField`, where the breathing pulse's 22–70%
+opacity composited them over the near-black canvas into a muted slate-purple —
+a second brand colour nobody chose, sitting in the largest graphic on the
+product. The categorical ramp now spends palette primitives only.
 
 > **Naming note.** The accent identifiers still read `ember`/`amber`
 > (`--ox-ember`, `--_amber-*`, `--_ember-a/b/c`) from the previous skin. They
@@ -178,9 +181,12 @@ carry the three stops; `--ox-ember` (#EFC53F) is the master accent knob.
 the one swatch that is intentionally off the gold accent, kept faithful to the
 canonical files in `docs/brand/logos/`.
 
-`--ox-indigo` (#4C51A8 light / #9CA3E8 dark) is **chart-2 only**. Stella ships
-no indigo; this swatch exists because a five-series categorical ramp needs a
-hue that is not gold, green, red or orange.
+There is deliberately **no indigo/violet swatch**. `--ox-indigo` (#4C51A8 /
+#9CA3E8) was removed for the reason above, and `chart-2` now takes `--_slate`
+while `chart-5` takes the achromatic `--_stone-500` / `--_stone-400`, so the
+five-series ramp is gold · slate · moss · ochre · silver — four hues roughly
+60° apart plus one neutral, every one of them already in the palette. A new
+categorical hue must come from a primitive in this table, never a fresh one.
 
 The old coral swatches (`--ox-tangerine`, `--ox-rose`, `--ox-teak`,
 `--ox-bronze`, `--ox-sunset-red`, `--ox-gold`, `--ox-wheat`, `--_terracotta*`)
@@ -219,12 +225,11 @@ These ~30 tokens (mapped to `--color-*` → utilities `bg-background`,
 | `--input` | stone-300 (#E0DDD7) | st-rule (#2C2C33) |
 | `--link` / `--ember-ink` | #725A00 (st-gold-ink, 6.0:1) | #EFC53F (gold, 12.0:1) |
 | `--ring` | **gold** | **gold** |
-| `--link` | indigo #4C51A8 (6.9:1) | indigo #9CA3E8 (8.3:1) |
 | `--success/-foreground` | moss / white | moss-light / dark |
 | `--warning/-foreground` | ochre / dark | ochre-light / dark |
 | `--error/-foreground` | true red / white | true red / white |
 | `--info/-foreground` | slate / white | slate-light / dark |
-| `--chart-1 … 5` | ember · indigo · moss · orange · slate | bright equivalents |
+| `--chart-1 … 5` | ember · slate · moss · ochre · silver | bright equivalents |
 | `--sidebar*` | white, ember accent | stone-900, ember accent |
 
 ---
