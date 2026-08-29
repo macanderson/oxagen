@@ -130,11 +130,11 @@ vi.mock("@oxagen/agent-runner", () => ({
   ),
 }));
 
-// PR #637 (modal-sandbox-workspace) rerouted the handler through a durable
-// ModalSandboxWorkspace whenever a sandbox driver is configured — and in the
-// test/CI environment isSandboxAvailable() reports true, so the handler took the
-// sandbox path and its getChangedFiles() entered a real tenant scope with the
-// (non-UUID) fixture orgId, throwing TenantScopeError before any assertion ran.
+// The handler routes through a durable ModalSandboxWorkspace whenever a
+// sandbox driver is configured — and in the test/CI environment
+// isSandboxAvailable() reports true, so the handler takes the sandbox path
+// and its getChangedFiles() enters a real tenant scope with the (non-UUID)
+// fixture orgId, throwing TenantScopeError before any assertion runs.
 // These tests exercise the GitHub-API fallback (they mock GitHubWorkspace's
 // changedFiles), so pin the driver OFF to force that deterministic path. The
 // sandbox path is a distinct concern with its own collaborators to mock.
@@ -457,7 +457,7 @@ describe("agentRepoEditHandler — happy path", () => {
   it("returns { prNumber, prUrl, branch, changedFiles, summary, execBackend, diffs, warnings }", async () => {
     const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
-    // On the GitHub-API fallback path (no sandbox driver) PR #637 adds
+    // On the GitHub-API fallback path (no sandbox driver) the handler adds
     // execBackend: "github-api" plus a warning that shell execution was
     // unavailable — the sandbox path returns execBackend: "sandbox" and no warning.
     const expectedDiff = diffFileContents(

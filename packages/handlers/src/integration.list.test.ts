@@ -25,7 +25,9 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 vi.mock("@oxagen/ingestion/connector-schema-loader", () => ({
   loadBuiltInSchema: mocks.loadBuiltInSchema,
 }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { schema } from "@oxagen/database";
 import { integrationListHandler } from "./integration.list";
@@ -46,30 +48,33 @@ type ListRow = {
 const whereSpy = vi.fn();
 
 function setup(rows: ListRow[], total: number) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: (arg: Record<string, unknown>) => {
-        if ("value" in arg) {
-          // count(*) query
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: (arg: Record<string, unknown>) => {
+          if ("value" in arg) {
+            // count(*) query
+            return {
+              from: () => ({
+                where: (cond: unknown) => {
+                  whereSpy(cond);
+                  return Promise.resolve([{ value: total }]);
+                },
+              }),
+            };
+          }
+          // paginated list query
           return {
             from: () => ({
-              where: (cond: unknown) => {
-                whereSpy(cond);
-                return Promise.resolve([{ value: total }]);
-              },
+              where: () => ({
+                orderBy: () => ({
+                  limit: () => ({ offset: () => Promise.resolve(rows) }),
+                }),
+              }),
             }),
           };
-        }
-        // paginated list query
-        return {
-          from: () => ({
-            where: () => ({
-              orderBy: () => ({ limit: () => ({ offset: () => Promise.resolve(rows) }) }),
-            }),
-          }),
-        };
-      },
-    }),
+        },
+      }),
   );
 }
 
@@ -135,7 +140,7 @@ describe("integration.list handler", () => {
     expect(out.integrations[0]!.status).toBe("paused");
   });
 
-  it("returns an empty page honestly when there are no integrations", async () => {
+  it("returns the real empty page when there are no integrations", async () => {
     setup([], 0);
     const out = await integrationListHandler({ limit: 50, offset: 0 }, CTX);
     expect(out.integrations).toEqual([]);
@@ -145,16 +150,28 @@ describe("integration.list handler", () => {
 
   it("translates the contract status filter to the DB status in the predicate", async () => {
     setup([], 0);
-    await integrationListHandler({ status: "failed", limit: 50, offset: 0 }, CTX);
+    await integrationListHandler(
+      { status: "failed", limit: 50, offset: 0 },
+      CTX,
+    );
     // 'failed' must become the DB 'error' value in the ACTUAL where predicate,
     // not merely "a filter ran".
-    expect(mocks.eqSpy).toHaveBeenCalledWith(schema.sourceConnections.status, "error");
+    expect(mocks.eqSpy).toHaveBeenCalledWith(
+      schema.sourceConnections.status,
+      "error",
+    );
     expect(whereSpy).toHaveBeenCalled();
   });
 
   it("filters by pluginId on the connectorId column when provided", async () => {
     setup([], 0);
-    await integrationListHandler({ pluginId: "github", limit: 50, offset: 0 }, CTX);
-    expect(mocks.eqSpy).toHaveBeenCalledWith(schema.sourceConnections.connectorId, "github");
+    await integrationListHandler(
+      { pluginId: "github", limit: 50, offset: 0 },
+      CTX,
+    );
+    expect(mocks.eqSpy).toHaveBeenCalledWith(
+      schema.sourceConnections.connectorId,
+      "github",
+    );
   });
 });
