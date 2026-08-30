@@ -26,7 +26,11 @@ vi.mock("next/link", () => ({
     href: string;
     children: React.ReactNode;
     [key: string]: unknown;
-  }) => <a href={href} {...rest}>{children}</a>,
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 describe("EnterpriseUpsell", () => {
@@ -38,7 +42,9 @@ describe("EnterpriseUpsell", () => {
 
   it("renders the feature name as an Enterprise feature", () => {
     render(<EnterpriseUpsell {...defaultProps} />);
-    expect(screen.getByText(/audit log export is an enterprise feature/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/audit log export is an enterprise feature/i),
+    ).toBeInTheDocument();
   });
 
   it("mentions the user's current tier in the description", () => {
@@ -53,8 +59,16 @@ describe("EnterpriseUpsell", () => {
   });
 
   it("works for the free tier", () => {
-    render(<EnterpriseUpsell {...defaultProps} currentTier={"free" as PlanTier} feature="SIEM streaming" />);
-    expect(screen.getByText(/siem streaming is an enterprise feature/i)).toBeInTheDocument();
+    render(
+      <EnterpriseUpsell
+        {...defaultProps}
+        currentTier={"free" as PlanTier}
+        feature="SIEM streaming"
+      />,
+    );
+    expect(
+      screen.getByText(/siem streaming is an enterprise feature/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/free plan/i)).toBeInTheDocument();
   });
 });

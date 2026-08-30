@@ -12,7 +12,11 @@ afterEach(cleanup);
 describe("MarkdownCodeEditor", () => {
   it("renders a CodeMirror editor showing the provided value", () => {
     const { container } = render(
-      <MarkdownCodeEditor value="# Hello world" onChange={() => {}} ariaLabel="Body" />,
+      <MarkdownCodeEditor
+        value="# Hello world"
+        onChange={() => {}}
+        ariaLabel="Body"
+      />,
     );
     expect(container.querySelector(".cm-editor")).toBeTruthy();
     expect(container.textContent).toContain("Hello world");

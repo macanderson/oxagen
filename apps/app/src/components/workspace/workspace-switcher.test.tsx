@@ -55,7 +55,9 @@ describe("WorkspaceSwitcher — rendering", () => {
   });
 
   it("renders with createWorkspaceAction without crashing", () => {
-    const action = vi.fn().mockResolvedValue({ ok: true, workspaceSlug: "new-ws" });
+    const action = vi
+      .fn()
+      .mockResolvedValue({ ok: true, workspaceSlug: "new-ws" });
     render(
       <WorkspaceSwitcher
         orgSlug="acme"

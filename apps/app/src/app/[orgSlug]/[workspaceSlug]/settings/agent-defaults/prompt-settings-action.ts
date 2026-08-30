@@ -21,7 +21,11 @@ import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import type { PromptSettingsWriteOutput } from "@oxagen/oxagen/contracts/prompt.settings.write";
 
 // Re-export for page.tsx
@@ -85,8 +89,13 @@ export async function updatePromptSettingsAction(
     };
   }
 
-  const { orgSlug, workspaceSlug, additionalInstructions, overrides, autoImprovePrompts } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    additionalInstructions,
+    overrides,
+    autoImprovePrompts,
+  } = parsed.data;
 
   // Resolve org + workspace — notFound() on slug mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
@@ -95,56 +104,62 @@ export async function updatePromptSettingsAction(
   // Assert the caller is an org member first (IDOR guard).
   await assertOrgMember(org.id, session.user.id);
 
-  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    // Re-read the caller's workspace role server-side — never trust the client flag.
-    const wsRoleRows = await withTenantDb((tx) =>
-      tx
-        .select({ role: schema.workspaceUsers.role })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, ws.id),
-            eq(schema.workspaceUsers.userId, session.user.id),
-          ),
-        )
-        .limit(1),
-    );
+  return await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      // Re-read the caller's workspace role server-side — never trust the client flag.
+      const wsRoleRows = await withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
+      );
 
-    const wsRole = wsRoleRows[0]?.role ?? "";
-    if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
-      return {
-        ok: false,
-        error: "Only workspace owners and admins can edit prompt settings.",
-      };
-    }
+      const wsRole = wsRoleRows[0]?.role ?? "";
+      if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
+        return {
+          ok: false,
+          error: "Only workspace owners and admins can edit prompt settings.",
+        };
+      }
 
-    const ctx = buildCapabilityContext({
-      orgId: org.id,
-      workspaceId: ws.id,
-      userId: session.user.id,
-    });
+      const ctx = buildCapabilityContext({
+        orgId: org.id,
+        workspaceId: ws.id,
+        userId: session.user.id,
+      });
 
-    try {
-      const result = (await invoke(
-        "update_prompt_settings",
-        { additionalInstructions, overrides, autoImprovePrompts },
-        ctx,
-        { surface: "agent" },
-      )) as PromptSettingsWriteOutput;
+      try {
+        const result = (await invoke(
+          "update_prompt_settings",
+          { additionalInstructions, overrides, autoImprovePrompts },
+          ctx,
+          { surface: "agent" },
+        )) as PromptSettingsWriteOutput;
 
-      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-      revalidatePath(workspace.settings.agentDefaults(routeCtx));
+        const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+        revalidatePath(workspace.settings.agentDefaults(routeCtx));
 
-      return { ok: true, data: result };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save prompt settings.";
-      // Surface a specific flag for enterprise-gate errors so the form can show an upsell.
-      const isTierErr =
-        err instanceof Error &&
-        ("code" in err
-          ? (err as Error & { code: unknown }).code === "TIER_DENIED"
-          : err.message.toLowerCase().includes("tier"));
-      return { ok: false, error: message, tierDenied: isTierErr };
-    }
-  });
+        return { ok: true, data: result };
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to save prompt settings.";
+        // Surface a specific flag for enterprise-gate errors so the form can show an upsell.
+        const isTierErr =
+          err instanceof Error &&
+          ("code" in err
+            ? (err as Error & { code: unknown }).code === "TIER_DENIED"
+            : err.message.toLowerCase().includes("tier"));
+        return { ok: false, error: message, tierDenied: isTierErr };
+      }
+    },
+  );
 }

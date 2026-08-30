@@ -67,7 +67,10 @@ export default async function WorkbenchSandboxesPage({ params }: PageProps) {
     // Degrade gracefully but never silently: an empty list that's really a
     // broken read looks like "no sandboxes".
     unavailable = isSandboxUnavailable(e);
-    console.error("list_sandboxes failed:", e);
+    logger.error(
+      { err: e, orgSlug, workspaceSlug },
+      "sandboxes: listSandboxes failed — rendering an empty session list",
+    );
     sandboxes = [];
   }
 

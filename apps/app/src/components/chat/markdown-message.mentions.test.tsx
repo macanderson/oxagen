@@ -43,7 +43,9 @@ vi.mock("@/components/ui/popover", () => ({
       {children}
     </button>
   ),
-  PopoverPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 // Minimal Streamdown stub: renders `[text](url)` links through the
@@ -71,7 +73,9 @@ vi.mock("streamdown", () => ({
       if (match.index > last) nodes.push(children.slice(last, match.index));
       const text = match[1]!;
       const rawHref = match[2]!;
-      const href = urlTransform ? (urlTransform(rawHref, "href", null) ?? undefined) : rawHref;
+      const href = urlTransform
+        ? (urlTransform(rawHref, "href", null) ?? undefined)
+        : rawHref;
       const Anchor = components?.a;
       nodes.push(
         Anchor ? (
@@ -91,8 +95,12 @@ vi.mock("streamdown", () => ({
   },
 }));
 
-vi.mock("@streamdown/code", () => ({ createCodePlugin: () => ({ name: "code" }) }));
-vi.mock("@streamdown/mermaid", () => ({ createMermaidPlugin: () => ({ name: "mermaid" }) }));
+vi.mock("@streamdown/code", () => ({
+  createCodePlugin: () => ({ name: "code" }),
+}));
+vi.mock("@streamdown/mermaid", () => ({
+  createMermaidPlugin: () => ({ name: "mermaid" }),
+}));
 
 import { MarkdownMessage } from "./markdown-message";
 
@@ -108,7 +116,9 @@ beforeEach(() => {
   // stray call can never hit the network.
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ results: [] }) }),
+    vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ results: [] }) }),
   );
 });
 
@@ -132,9 +142,13 @@ describe("MarkdownMessage — mention tokens", () => {
   });
 
   it("leaves an ordinary markdown message untouched (no chip)", () => {
-    render(<MarkdownMessage>{"## Heading\n\nJust plain text."}</MarkdownMessage>);
+    render(
+      <MarkdownMessage>{"## Heading\n\nJust plain text."}</MarkdownMessage>,
+    );
     expect(screen.queryByTestId("mention-chip-file")).toBeNull();
-    expect(screen.getByTestId("streamdown")).toHaveTextContent("Just plain text.");
+    expect(screen.getByTestId("streamdown")).toHaveTextContent(
+      "Just plain text.",
+    );
   });
 
   it("renders a mention chip while keeping a real https link an anchor", () => {

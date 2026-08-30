@@ -11,9 +11,20 @@ const ACTION_BADGE: Record<
   SchemaMutationCardProps["action"],
   { label: string; className: string }
 > = {
-  add: { label: "Add", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
-  update: { label: "Update", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
-  remove: { label: "Remove", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
+  add: {
+    label: "Add",
+    className:
+      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  },
+  update: {
+    label: "Update",
+    className:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  },
+  remove: {
+    label: "Remove",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  },
 };
 
 export default function SchemaMutationCard({
@@ -31,7 +42,9 @@ export default function SchemaMutationCard({
         >
           {badge.label}
         </span>
-        <span className="font-mono text-xs text-muted-foreground">{schemaName}</span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {schemaName}
+        </span>
         {labelName && (
           <>
             <span className="text-xs text-muted-foreground">/</span>

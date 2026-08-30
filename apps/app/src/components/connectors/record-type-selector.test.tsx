@@ -7,7 +7,10 @@ import { render, cleanup, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, afterEach } from "vitest";
 import * as React from "react";
-import { ConnectorSchemaProvider, useConnectorSchema } from "./connector-schema-provider";
+import {
+  ConnectorSchemaProvider,
+  useConnectorSchema,
+} from "./connector-schema-provider";
 import { RecordTypeSelector } from "./record-type-selector";
 import type { ConnectorPluginSchema } from "@oxagen/oxagen/contracts/plugin.schema.get";
 
@@ -27,9 +30,24 @@ const SCHEMA: ConnectorPluginSchema = {
     selectionMode: "multi",
     defaultAll: false,
     items: [
-      { id: "pull_request", displayName: "Pull Requests", description: "PRs", defaultEnabled: true },
-      { id: "issue", displayName: "Issues", description: "Bugs", defaultEnabled: true },
-      { id: "release", displayName: "Releases", description: "Tags", defaultEnabled: false },
+      {
+        id: "pull_request",
+        displayName: "Pull Requests",
+        description: "PRs",
+        defaultEnabled: true,
+      },
+      {
+        id: "issue",
+        displayName: "Issues",
+        description: "Bugs",
+        defaultEnabled: true,
+      },
+      {
+        id: "release",
+        displayName: "Releases",
+        description: "Tags",
+        defaultEnabled: false,
+      },
     ],
   },
 };
@@ -82,7 +100,9 @@ describe("RecordTypeSelector — render", () => {
 describe("RecordTypeSelector — interaction", () => {
   it("toggles a record type off on click", async () => {
     renderSelector();
-    const prCheckbox = screen.getByRole("checkbox", { name: /pull requests selected/i });
+    const prCheckbox = screen.getByRole("checkbox", {
+      name: /pull requests selected/i,
+    });
     await userEvent.click(prCheckbox);
     // After click, it should be unchecked
     expect(prCheckbox).toHaveAttribute("aria-checked", "false");
@@ -90,7 +110,9 @@ describe("RecordTypeSelector — interaction", () => {
 
   it("toggles a record type on when unchecked item clicked", async () => {
     renderSelector();
-    const releaseCheckbox = screen.getByRole("checkbox", { name: /releases not selected/i });
+    const releaseCheckbox = screen.getByRole("checkbox", {
+      name: /releases not selected/i,
+    });
     await userEvent.click(releaseCheckbox);
     expect(releaseCheckbox).toHaveAttribute("aria-checked", "true");
   });

@@ -1,6 +1,6 @@
 "use client";
 /**
- * use-agent-panel-store.ts — Unified state management for the in-app AI agent panel.
+ * use-agent-panel-store.tsx — Unified state management for the in-app AI agent panel.
  *
  * Manages:
  *   - Panel visibility: open | collapsed | closed
@@ -84,12 +84,21 @@ AgentPanelContext.displayName = "AgentPanelContext";
 // Provider
 // ---------------------------------------------------------------------------
 
-export function AgentPanelStoreProvider({ children }: { children: React.ReactNode }) {
+export function AgentPanelStoreProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [visibility, setVisibility] = React.useState<PanelVisibility>("closed");
-  const [sizeMode, setSizeModeState] = React.useState<PanelSizeMode>("standard");
+  const [sizeMode, setSizeModeState] =
+    React.useState<PanelSizeMode>("standard");
   const [status, setStatusState] = React.useState<AgentStatus>("idle");
-  const [conversationTitle, setConversationTitleState] = React.useState<string | null>(null);
-  const [conversationPublicId, setConversationPublicIdState] = React.useState<string | null>(null);
+  const [conversationTitle, setConversationTitleState] = React.useState<
+    string | null
+  >(null);
+  const [conversationPublicId, setConversationPublicIdState] = React.useState<
+    string | null
+  >(null);
   const [newChatNonce, setNewChatNonce] = React.useState(0);
 
   const open = React.useCallback(() => setVisibility("open"), []);
@@ -115,9 +124,12 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
     setConversationTitleState(title);
   }, []);
 
-  const setConversationPublicId = React.useCallback((publicId: string | null) => {
-    setConversationPublicIdState(publicId);
-  }, []);
+  const setConversationPublicId = React.useCallback(
+    (publicId: string | null) => {
+      setConversationPublicIdState(publicId);
+    },
+    [],
+  );
 
   const startNewChat = React.useCallback(() => {
     setConversationTitleState(null);
@@ -183,7 +195,9 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
 export function useAgentPanelStore(): AgentPanelStore {
   const ctx = React.useContext(AgentPanelContext);
   if (!ctx) {
-    throw new Error("useAgentPanelStore must be used inside AgentPanelStoreProvider");
+    throw new Error(
+      "useAgentPanelStore must be used inside AgentPanelStoreProvider",
+    );
   }
   return ctx;
 }

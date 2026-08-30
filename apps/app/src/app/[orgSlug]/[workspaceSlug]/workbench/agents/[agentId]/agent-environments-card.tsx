@@ -38,7 +38,8 @@ interface Props {
 }
 
 export function AgentEnvironmentsCard(props: Props) {
-  const { scope, agentId, canManage, bindings, environments, templates } = props;
+  const { scope, agentId, canManage, bindings, environments, templates } =
+    props;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -72,9 +73,10 @@ export function AgentEnvironmentsCard(props: Props) {
       <div>
         <h3 className="text-sm font-medium">Environments</h3>
         <p className="text-xs text-muted-foreground">
-          Bind this agent to environments and their sandbox templates. The primary binding
-          resolves first at run time; unbinding the primary falls back to the workspace default
-          environment and its default template.
+          Bind this agent to environments and their sandbox templates. The
+          primary binding resolves first at run time; unbinding the primary
+          falls back to the workspace default environment and its default
+          template.
         </p>
       </div>
 
@@ -87,7 +89,8 @@ export function AgentEnvironmentsCard(props: Props) {
 
       {bindings.length === 0 ? (
         <p className="rounded-md border border-border/40 px-3 py-4 text-center text-sm text-muted-foreground">
-          No bindings — this agent uses the workspace default environment and template.
+          No bindings — this agent uses the workspace default environment and
+          template.
         </p>
       ) : (
         <ul className="divide-y divide-border/30 overflow-hidden rounded-md border border-border/40 text-sm">
@@ -99,7 +102,9 @@ export function AgentEnvironmentsCard(props: Props) {
             >
               <div className="min-w-0 flex-1">
                 <span className="font-medium">{b.environmentName}</span>{" "}
-                <span className="text-xs text-muted-foreground">{b.environmentSlug}</span>
+                <span className="text-xs text-muted-foreground">
+                  {b.environmentSlug}
+                </span>
               </div>
               <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
                 <div>
@@ -108,7 +113,9 @@ export function AgentEnvironmentsCard(props: Props) {
                   </dt>
                   <dd className="mt-0.5 text-xs">
                     {b.sandboxTemplateName ?? (
-                      <span className="text-muted-foreground">environment default</span>
+                      <span className="text-muted-foreground">
+                        environment default
+                      </span>
                     )}
                   </dd>
                 </div>
@@ -177,7 +184,9 @@ export function AgentEnvironmentsCard(props: Props) {
 
       {canManage && (
         <div className="flex flex-col gap-2 rounded-md border border-border/40 p-3">
-          <span className="text-xs font-medium text-muted-foreground">Bind an environment</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Bind an environment
+          </span>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Environment</span>
@@ -193,8 +202,7 @@ export function AgentEnvironmentsCard(props: Props) {
                 <option value="">Select…</option>
                 {availableEnvs.map((env) => (
                   <option key={env.id} value={env.id}>
-                    {env.name} ({env.slug})
-                    {env.isDefault ? " ★" : ""}
+                    {env.name} ({env.slug}){env.isDefault ? " ★" : ""}
                   </option>
                 ))}
               </select>

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
@@ -6,25 +6,20 @@ import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 /**
  * Workspace Settings → General → Members (sub-tab body).
  *
- * web-app-2.0 Phase 2 consolidation: this used to be the standalone
- * `settings/members/page.tsx` route; it is now the "Members" sub-tab body
- * inside `settings/general/page.tsx` (see general-settings-tabs.tsx). Org +
- * workspace + session are resolved ONCE by the parent page and passed down —
- * this component only runs the members query and renders the list.
+ * The "Members" sub-tab body inside `settings/general/page.tsx` (see
+ * general-settings-tabs.tsx). Org + workspace + session are resolved ONCE by
+ * the parent page and passed down — this component only runs the members
+ * query and renders the list.
  *
  * Lists all members who have access to this workspace (via workspace_users).
  * Shows each member's workspace role alongside their org role for context.
  *
- * Mutating workspace role assignments (workspace-scoped grants) is a
- * separate capability (org.workspace.member.role.change, planned) — out of
- * scope for this PR. The org-level role and remove controls live at
- * /{orgSlug}/members; this panel shows the read-only workspace membership
- * view with a link to the org-level management page.
+ * Read-only by design: mutating workspace role assignments is a separate,
+ * not-yet-built capability. The org-level role and remove controls live at
+ * /{orgSlug}/members, which this panel links to.
  *
- * Read failure degrades to an inline ErrorState notice instead of throwing —
- * per docs/web-app-2.0/workspace/settings/general/spec.md "States: Members
- * read failure should degrade to an inline notice (not yet handled — fix in
- * place)", fixed here.
+ * A read failure degrades to an inline ErrorState notice instead of throwing,
+ * so one bad query cannot 500 the whole General settings page.
  */
 
 export interface WorkspaceMembersPanelProps {
@@ -67,12 +62,17 @@ export async function WorkspaceMembersPanel({
             displayName: schema.users.displayName,
           })
           .from(schema.workspaceUsers)
-          .innerJoin(schema.users, eq(schema.users.id, schema.workspaceUsers.userId))
+          .innerJoin(
+            schema.users,
+            eq(schema.users.id, schema.workspaceUsers.userId),
+          )
           .where(eq(schema.workspaceUsers.workspaceId, workspaceId)),
       ),
     );
 
-    // Org roles for each member (for contextual display).
+    // Org roles for each member (for contextual display). Narrowed to the
+    // workspace's own members — the org can hold far more rows than this
+    // panel ever renders, and only these ids are looked up below.
     const orgMemberIds = members.map((m) => m.userId);
     const orgRoles =
       orgMemberIds.length > 0
@@ -84,7 +84,12 @@ export async function WorkspaceMembersPanel({
                   orgRole: schema.orgUsers.role,
                 })
                 .from(schema.orgUsers)
-                .where(eq(schema.orgUsers.orgId, orgId)),
+                .where(
+                  and(
+                    eq(schema.orgUsers.orgId, orgId),
+                    inArray(schema.orgUsers.userId, orgMemberIds),
+                  ),
+                ),
             ),
           )
         : [];
@@ -104,10 +109,12 @@ export async function WorkspaceMembersPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground">Workspace members</h2>
+        <h2 className="text-base font-semibold text-foreground">
+          Workspace members
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Members with access to <strong>{workspaceName}</strong>. To manage org-level
-          membership and roles, visit{" "}
+          Members with access to <strong>{workspaceName}</strong>. To manage
+          org-level membership and roles, visit{" "}
           <a
             href={`/${orgSlug}/members`}
             className="font-medium underline underline-offset-2 hover:no-underline"
@@ -119,7 +126,9 @@ export async function WorkspaceMembersPanel({
       </div>
 
       {members.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No members in this workspace yet.</p>
+        <p className="text-sm text-muted-foreground">
+          No members in this workspace yet.
+        </p>
       ) : (
         <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
           {members.map((m) => {
@@ -134,10 +143,14 @@ export async function WorkspaceMembersPanel({
                   <span className="font-medium text-sm">
                     {m.displayName ?? m.email}
                     {isSelf ? (
-                      <span className="ml-1.5 text-xs text-muted-foreground">(you)</span>
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        (you)
+                      </span>
                     ) : null}
                   </span>
-                  <span className="text-xs text-muted-foreground">{m.email}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {m.email}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {orgRole ? (

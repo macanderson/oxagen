@@ -72,7 +72,9 @@ describe("MentionMenu — stage 'type'", () => {
     render(<MentionMenu {...props({ stage: "type" })} />);
     expect(screen.getByTestId("mention-menu")).toBeInTheDocument();
     for (const info of MENTION_TYPES) {
-      expect(screen.getByTestId(`mention-type-${info.type}`)).toBeInTheDocument();
+      expect(
+        screen.getByTestId(`mention-type-${info.type}`),
+      ).toBeInTheDocument();
     }
     expect(screen.getAllByRole("option")).toHaveLength(MENTION_TYPES.length);
   });
@@ -95,7 +97,9 @@ describe("MentionMenu — stage 'type'", () => {
   it("calls onHoverIndex with the hovered row's index", async () => {
     const onHoverIndex = vi.fn();
     render(<MentionMenu {...props({ stage: "type", onHoverIndex })} />);
-    await userEvent.hover(screen.getByTestId(`mention-type-${MENTION_TYPES[1]!.type}`));
+    await userEvent.hover(
+      screen.getByTestId(`mention-type-${MENTION_TYPES[1]!.type}`),
+    );
     expect(onHoverIndex).toHaveBeenCalledWith(1);
   });
 
@@ -110,7 +114,12 @@ describe("MentionMenu — stage 'search'", () => {
   it("shows the selected type's plural label in the header", () => {
     render(
       <MentionMenu
-        {...props({ stage: "search", selectedType: fileType, results: RESULTS, query: "pro" })}
+        {...props({
+          stage: "search",
+          selectedType: fileType,
+          results: RESULTS,
+          query: "pro",
+        })}
       />,
     );
     expect(screen.getByText(fileType.pluralLabel)).toBeInTheDocument();
@@ -119,7 +128,12 @@ describe("MentionMenu — stage 'search'", () => {
   it("renders each result's label and description", () => {
     render(
       <MentionMenu
-        {...props({ stage: "search", selectedType: fileType, results: RESULTS, query: "" })}
+        {...props({
+          stage: "search",
+          selectedType: fileType,
+          results: RESULTS,
+          query: "",
+        })}
       />,
     );
     expect(screen.getByText("proxy.ts")).toBeInTheDocument();
@@ -132,7 +146,12 @@ describe("MentionMenu — stage 'search'", () => {
     const onSelectResult = vi.fn();
     render(
       <MentionMenu
-        {...props({ stage: "search", selectedType: fileType, results: RESULTS, onSelectResult })}
+        {...props({
+          stage: "search",
+          selectedType: fileType,
+          results: RESULTS,
+          onSelectResult,
+        })}
       />,
     );
     await userEvent.click(screen.getByTestId("mention-result-0"));
@@ -159,7 +178,12 @@ describe("MentionMenu — stage 'search'", () => {
   it("prompts to type when the query is empty and there are no results", () => {
     render(
       <MentionMenu
-        {...props({ stage: "search", selectedType: fileType, results: [], query: "" })}
+        {...props({
+          stage: "search",
+          selectedType: fileType,
+          results: [],
+          query: "",
+        })}
       />,
     );
     expect(screen.getByText("Type to search.")).toBeInTheDocument();
@@ -168,7 +192,12 @@ describe("MentionMenu — stage 'search'", () => {
   it("shows a no-matches state for a non-empty query with no results", () => {
     render(
       <MentionMenu
-        {...props({ stage: "search", selectedType: fileType, results: [], query: "zzz" })}
+        {...props({
+          stage: "search",
+          selectedType: fileType,
+          results: [],
+          query: "zzz",
+        })}
       />,
     );
     expect(screen.getByText("No matches.")).toBeInTheDocument();

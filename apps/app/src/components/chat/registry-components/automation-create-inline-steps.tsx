@@ -19,7 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { STEP_TYPE_OPTIONS, type AutomationStep } from "./automation-create-inline-types";
+import {
+  STEP_TYPE_OPTIONS,
+  type AutomationStep,
+} from "./automation-create-inline-types";
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 
@@ -59,7 +62,8 @@ export function StepsEditor({
       </div>
       {steps.length === 0 && (
         <p className="text-xs text-muted-foreground italic">
-          No steps yet — the automation will run with no actions. Add steps or leave blank for a shell playbook.
+          No steps yet — the automation will run with no actions. Add steps or
+          leave blank for a shell playbook.
         </p>
       )}
       {steps.map((step, idx) => (
@@ -97,7 +101,9 @@ export function StepsEditor({
               value={step.stepType}
               onValueChange={(v) => {
                 if (v !== null)
-                  onUpdateStep(idx, { stepType: v as AutomationStep["stepType"] });
+                  onUpdateStep(idx, {
+                    stepType: v as AutomationStep["stepType"],
+                  });
               }}
               disabled={disabled}
               items={STEP_TYPE_OPTIONS}

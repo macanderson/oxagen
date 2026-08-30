@@ -22,7 +22,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import type { UsageMetric } from "./usage-charts";
 import { formatTokens, formatUsdFromMicros } from "./usage-format";
 
@@ -94,7 +97,8 @@ export function UsageBreakdownView({
 
         <Panel title={`Top models by ${metric === "cost" ? "cost" : "tokens"}`}>
           <p className="mb-3 text-xs text-muted-foreground">
-            Highest-{metric === "cost" ? "spend" : "token"} models in this window.
+            Highest-{metric === "cost" ? "spend" : "token"} models in this
+            window.
           </p>
           <TopModelsChart byModel={byModel} metric={metric} />
         </Panel>

@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { slugify } from "@/lib/slug";
-import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
+import {
+  useRegisterFillableForm,
+  useRegisterPageEntity,
+} from "@/lib/page-context";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 
 // ---------------------------------------------------------------------------
@@ -106,7 +109,9 @@ export function OrgGeneralForm({
     setSlug((prev) => (prev.trim() === "" ? slugify(name) : prev));
   };
 
-  const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [status, setStatus] = React.useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const [pending, startTransition] = React.useTransition();

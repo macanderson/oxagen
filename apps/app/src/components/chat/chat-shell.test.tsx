@@ -129,10 +129,18 @@ function makeProps(overrides: Partial<ChatShellProps> = {}): ChatShellProps {
 describe("ChatShell", () => {
   it("shows MessagesSkeleton fallback while promise is pending", async () => {
     // Create a promise that never resolves so Suspense stays in fallback
-    const neverResolves = new Promise<never>(() => { /* intentionally pending */ });
+    const neverResolves = new Promise<never>(() => {
+      /* intentionally pending */
+    });
 
     await act(async () => {
-      render(<ChatShell {...makeProps({ messagesPromise: neverResolves as unknown as Promise<[]> })} />);
+      render(
+        <ChatShell
+          {...makeProps({
+            messagesPromise: neverResolves as unknown as Promise<[]>,
+          })}
+        />,
+      );
     });
 
     // Should render skeleton fallback elements
@@ -144,10 +152,18 @@ describe("ChatShell", () => {
   });
 
   it("renders BackgroundTaskTray outside Suspense immediately", async () => {
-    const neverResolves = new Promise<never>(() => { /* intentionally pending */ });
+    const neverResolves = new Promise<never>(() => {
+      /* intentionally pending */
+    });
 
     await act(async () => {
-      render(<ChatShell {...makeProps({ messagesPromise: neverResolves as unknown as Promise<[]> })} />);
+      render(
+        <ChatShell
+          {...makeProps({
+            messagesPromise: neverResolves as unknown as Promise<[]>,
+          })}
+        />,
+      );
     });
 
     // BackgroundTaskTray must be present even while Suspense fallback is showing
@@ -187,7 +203,9 @@ describe("ChatShell", () => {
     try {
       await act(async () => {
         render(
-          <ChatShell {...makeProps({ messagesPromise: Promise.resolve([]) })} />,
+          <ChatShell
+            {...makeProps({ messagesPromise: Promise.resolve([]) })}
+          />,
         );
       });
       await waitFor(() => {
@@ -207,7 +225,9 @@ describe("ChatShell", () => {
     try {
       await act(async () => {
         render(
-          <ChatShell {...makeProps({ messagesPromise: Promise.resolve([]) })} />,
+          <ChatShell
+            {...makeProps({ messagesPromise: Promise.resolve([]) })}
+          />,
         );
       });
       await waitFor(() => {
@@ -245,7 +265,9 @@ describe("ChatShell", () => {
   });
 
   it("works when initialBackgroundTaskIds is undefined", async () => {
-    const neverResolves = new Promise<never>(() => { /* intentionally pending */ });
+    const neverResolves = new Promise<never>(() => {
+      /* intentionally pending */
+    });
 
     await act(async () => {
       render(
@@ -264,7 +286,9 @@ describe("ChatShell", () => {
   });
 
   it("works when initialBackgroundTaskIds is empty array", async () => {
-    const neverResolves = new Promise<never>(() => { /* intentionally pending */ });
+    const neverResolves = new Promise<never>(() => {
+      /* intentionally pending */
+    });
 
     await act(async () => {
       render(
@@ -283,7 +307,9 @@ describe("ChatShell", () => {
   });
 
   it("passes initialBackgroundTaskIds to BackgroundTaskTray", async () => {
-    const neverResolves = new Promise<never>(() => { /* intentionally pending */ });
+    const neverResolves = new Promise<never>(() => {
+      /* intentionally pending */
+    });
 
     await act(async () => {
       render(
@@ -297,6 +323,9 @@ describe("ChatShell", () => {
     });
 
     const tray = screen.getByTestId("background-task-tray");
-    expect(tray).toHaveAttribute("data-task-ids", JSON.stringify(["task_1", "task_2"]));
+    expect(tray).toHaveAttribute(
+      "data-task-ids",
+      JSON.stringify(["task_1", "task_2"]),
+    );
   });
 });

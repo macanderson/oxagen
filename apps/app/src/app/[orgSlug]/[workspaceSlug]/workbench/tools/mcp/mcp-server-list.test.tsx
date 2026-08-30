@@ -200,9 +200,9 @@ describe("McpServerList", () => {
       screen.queryByTestId("mcp-server-authenticate-srv-2"),
     ).not.toBeInTheDocument();
     // …but an "Update API key" dialog trigger is present.
-    expect(
-      screen.getByTestId("mcp-server-set-secret-srv-2"),
-    ).toHaveTextContent("Update API key");
+    expect(screen.getByTestId("mcp-server-set-secret-srv-2")).toHaveTextContent(
+      "Update API key",
+    );
   });
 
   // (d2) secret-auth server without a key: Enter API key → dialog → save flow

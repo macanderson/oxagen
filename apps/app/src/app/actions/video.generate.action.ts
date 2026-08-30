@@ -12,7 +12,11 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 export interface VideoGenerateFormData {
   prompt: string;
@@ -42,7 +46,8 @@ export async function videoGenerateAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid video generation request",
+      error:
+        parsed.error.issues[0]?.message ?? "Invalid video generation request",
     };
   }
 
@@ -77,12 +82,17 @@ export async function videoGenerateAction(
   };
 
   try {
-    const result = (await invoke("generate_video", parsed.data, ctx, { surface: "agent" })) as {
+    const result = (await invoke("generate_video", parsed.data, ctx, {
+      surface: "agent",
+    })) as {
       jobId: string;
     };
     return { ok: true, queued: true, jobId: result.jobId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Video generation could not be queued.";
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Video generation could not be queued.";
     return { ok: false, error: message };
   }
 }

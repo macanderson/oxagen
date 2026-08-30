@@ -12,7 +12,7 @@ import { Mail } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { getSession } from "@/lib/session";
+import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
@@ -36,12 +36,15 @@ export default async function MembersPendingPage({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  const [org, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
-  const viewerUserId = session?.user?.id ?? "";
+  const [org, session] = await Promise.all([
+    resolveOrg(orgSlug),
+    getSessionOrRedirect(),
+  ]);
+  const viewerUserId = session.user.id;
 
-  if (viewerUserId) {
-    await assertOrgMember(org.id, viewerUserId);
-  }
+  // IDOR guard, unconditional: a missing session redirects to /login above, so
+  // invitee email addresses and invitation ids never render ungated.
+  await assertOrgMember(org.id, viewerUserId);
 
   const [invitations, viewerRole] = await Promise.all([
     runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
@@ -62,7 +65,7 @@ export default async function MembersPendingPage({
           ),
       ),
     ),
-    viewerUserId ? getOrgRole(org.id, viewerUserId) : Promise.resolve(null),
+    getOrgRole(org.id, viewerUserId),
   ]);
 
   const canManage = ["owner", "admin"].includes(viewerRole ?? "");

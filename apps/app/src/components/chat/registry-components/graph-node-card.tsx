@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Network, ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
@@ -44,7 +45,8 @@ function readNode(output: unknown): NodeShape {
   return {
     nodeId: typeof node.nodeId === "string" ? node.nodeId : undefined,
     label: typeof node.label === "string" ? node.label : undefined,
-    displayName: typeof node.displayName === "string" ? node.displayName : undefined,
+    displayName:
+      typeof node.displayName === "string" ? node.displayName : undefined,
     description: typeof node.description === "string" ? node.description : null,
     properties:
       typeof node.properties === "object" && node.properties !== null
@@ -54,11 +56,18 @@ function readNode(output: unknown): NodeShape {
   };
 }
 
-export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactElement {
+export default function GraphNodeCard(
+  props: GraphNodeCardProps,
+): React.ReactElement {
   const node = readNode(props.output);
-  const href = props.links?.find((l) => l.href)?.href ?? null;
+  // `links[].href` is capability output — a model-influenced string — so the
+  // scheme is allow-listed before it reaches the DOM. An unsafe value yields
+  // no link rather than a `javascript:` navigation. Matches capability-result.
+  const href = props.links?.map((l) => safeHref(l.href)).find(Boolean) ?? null;
   const heading = props.title ?? node.displayName ?? "Knowledge node";
-  const propEntries = node.properties ? Object.entries(node.properties).slice(0, 12) : [];
+  const propEntries = node.properties
+    ? Object.entries(node.properties).slice(0, 12)
+    : [];
 
   return (
     <div
@@ -72,7 +81,9 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
           {heading}
         </span>
         {node.label ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{node.label}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+            {node.label}
+          </span>
         ) : null}
         {node.created === true ? (
           <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
@@ -92,7 +103,9 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
           <dl className="grid gap-x-4 gap-y-1 overflow-x-auto sm:grid-cols-[minmax(6rem,auto)_1fr]">
             {propEntries.map(([k, v]) => (
               <React.Fragment key={k}>
-                <dt className="text-xs font-medium text-muted-foreground">{k}</dt>
+                <dt className="text-xs font-medium text-muted-foreground">
+                  {k}
+                </dt>
                 <dd className="min-w-0 break-words text-sm">
                   <TruncatedText text={String(v)} lines={2} />
                 </dd>
@@ -103,7 +116,10 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
 
         {node.nodeId ? (
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-[11px] text-muted-foreground" title={node.nodeId}>
+            <span
+              className="font-mono text-[11px] text-muted-foreground"
+              title={node.nodeId}
+            >
               {node.nodeId}
             </span>
             {href ? (
@@ -115,7 +131,10 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
                 )}
               >
                 Open node
-                <ArrowUpRight className="size-3 opacity-70" aria-hidden="true" />
+                <ArrowUpRight
+                  className="size-3 opacity-70"
+                  aria-hidden="true"
+                />
               </a>
             ) : null}
           </div>

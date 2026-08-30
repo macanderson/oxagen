@@ -35,13 +35,17 @@ vi.mock("./onboarding-recommendation", () => ({
 }));
 
 // The rest of the builder's children are irrelevant to the empty state.
-vi.mock("./schema-list", () => ({ SchemaList: () => <div data-testid="schema-list" /> }));
+vi.mock("./schema-list", () => ({
+  SchemaList: () => <div data-testid="schema-list" />,
+}));
 vi.mock("./label-editor", () => ({ LabelEditor: () => null }));
 vi.mock("./relationship-editor", () => ({ RelationshipEditor: () => null }));
 vi.mock("./version-history", () => ({ VersionHistory: () => null }));
 vi.mock("./pin-change-dialog", () => ({ PinChangeDialog: () => null }));
 vi.mock("./export-button", () => ({ ExportButton: () => null }));
-vi.mock("./schema-assistant-drawer", () => ({ SchemaAssistantDrawer: () => null }));
+vi.mock("./schema-assistant-drawer", () => ({
+  SchemaAssistantDrawer: () => null,
+}));
 
 import { SchemaBuilder } from "./schema-builder";
 

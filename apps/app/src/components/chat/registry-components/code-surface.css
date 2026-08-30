@@ -3,8 +3,8 @@
  *
  * The terminal emulator, the sandbox log console, the chat terminal-trace card,
  * and the code-execute stdout/stderr panes all render monospaced program output.
- * They used to hard-code a dark palette (`bg-black/90`, `text-neutral-200`,
- * `border-white/10`), which reads as an out-of-place black slab in light mode.
+ * None of them may hard-code a palette: a fixed dark slab (`bg-black/90`,
+ * `text-neutral-200`, `border-white/10`) reads as out of place in light mode.
  *
  * This gives them ONE surface that dynamically follows the app theme, using the
  * same GitHub palette as the Shiki-highlighted diff card (`github-light` /

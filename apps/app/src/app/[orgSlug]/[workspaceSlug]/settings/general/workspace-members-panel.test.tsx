@@ -34,7 +34,12 @@ const { mockWithTenantDb, mockRunInTenantScope, dbState } = vi.hoisted(() => {
     // The component issues the members query and the org-roles query as TWO
     // separate withTenantDb() calls, so this counter must persist across them.
     callIndex: number;
-  } = { membersRows: [], orgRolesRows: [], throwOnMembers: false, callIndex: 0 };
+  } = {
+    membersRows: [],
+    orgRolesRows: [],
+    throwOnMembers: false,
+    callIndex: 0,
+  };
 
   const mockWithTenantDb = vi.fn((fn: (tx: unknown) => unknown) => {
     const tx = {
@@ -59,7 +64,9 @@ const { mockWithTenantDb, mockRunInTenantScope, dbState } = vi.hoisted(() => {
     };
     return fn(tx);
   });
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
 
   return { mockWithTenantDb, mockRunInTenantScope, dbState };
 });
@@ -95,8 +102,20 @@ const BASE_PROPS = {
 describe("WorkspaceMembersPanel", () => {
   it("renders each member with workspace + org role badges", async () => {
     dbState.membersRows = [
-      { publicId: "wsu-1", userId: "user-1", wsRole: "owner", email: "me@acme.com", displayName: "Me" },
-      { publicId: "wsu-2", userId: "user-2", wsRole: "member", email: "you@acme.com", displayName: null },
+      {
+        publicId: "wsu-1",
+        userId: "user-1",
+        wsRole: "owner",
+        email: "me@acme.com",
+        displayName: "Me",
+      },
+      {
+        publicId: "wsu-2",
+        userId: "user-2",
+        wsRole: "member",
+        email: "you@acme.com",
+        displayName: null,
+      },
     ];
     dbState.orgRolesRows = [
       { userId: "user-1", orgRole: "admin" },
@@ -108,7 +127,9 @@ describe("WorkspaceMembersPanel", () => {
 
     expect(screen.getByText("Me")).toBeInTheDocument();
     // Second member has no displayName → falls back to email.
-    expect(screen.getByText("you@acme.com", { selector: "span.font-medium" })).toBeInTheDocument();
+    expect(
+      screen.getByText("you@acme.com", { selector: "span.font-medium" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("org: admin")).toBeInTheDocument();
     expect(screen.getByText("ws: owner")).toBeInTheDocument();
     expect(screen.getByText("ws: member")).toBeInTheDocument();
@@ -116,7 +137,13 @@ describe("WorkspaceMembersPanel", () => {
 
   it("marks the viewer's own row with (you)", async () => {
     dbState.membersRows = [
-      { publicId: "wsu-1", userId: "user-1", wsRole: "owner", email: "me@acme.com", displayName: "Me" },
+      {
+        publicId: "wsu-1",
+        userId: "user-1",
+        wsRole: "owner",
+        email: "me@acme.com",
+        displayName: "Me",
+      },
     ];
     dbState.orgRolesRows = [{ userId: "user-1", orgRole: "owner" }];
 
@@ -132,7 +159,9 @@ describe("WorkspaceMembersPanel", () => {
     const element = await WorkspaceMembersPanel(BASE_PROPS);
     render(element);
 
-    expect(screen.getByText("No members in this workspace yet.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No members in this workspace yet."),
+    ).toBeInTheDocument();
   });
 
   it("degrades to an inline ErrorState notice when the members read fails", async () => {
@@ -142,7 +171,9 @@ describe("WorkspaceMembersPanel", () => {
     render(element);
 
     expect(screen.getByRole("alert")).toBeInTheDocument();
-    expect(screen.getByText("Couldn't load workspace members")).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't load workspace members"),
+    ).toBeInTheDocument();
     // Never throws — no crash, so the surrounding General/Members shell stays intact.
   });
 

@@ -2,8 +2,7 @@
 /**
  * TotpEnrollmentCard — TOTP (authenticator app) enrollment + management.
  *
- * Replaces the former static "not yet available" placeholder on
- * /account/security. Drives Better Auth's twoFactor client plugin:
+ * Drives Better Auth's twoFactor client plugin:
  *   - enable({ password })      → returns totpURI (QR) + one-time backup codes
  *   - verifyTotp({ code })      → confirms enrollment (flips twoFactorEnabled)
  *   - disable({ password })     → turns 2FA off
@@ -75,7 +74,8 @@ export default function TotpEnrollmentCard({ enabled }: { enabled: boolean }) {
       const res = (await authClient.twoFactor.enable({
         password,
       })) as ClientResult<EnableData>;
-      if (res.error) throw new Error(res.error.message ?? "Could not start setup");
+      if (res.error)
+        throw new Error(res.error.message ?? "Could not start setup");
       setTotpUri(res.data?.totpURI ?? null);
       setBackupCodes(res.data?.backupCodes ?? null);
       setPassword("");
@@ -110,7 +110,8 @@ export default function TotpEnrollmentCard({ enabled }: { enabled: boolean }) {
       const res = (await authClient.twoFactor.disable({
         password: managePassword,
       })) as ClientResult<unknown>;
-      if (res.error) throw new Error(res.error.message ?? "Could not disable 2FA");
+      if (res.error)
+        throw new Error(res.error.message ?? "Could not disable 2FA");
       setManagePassword("");
       router.refresh();
     } catch (e) {
@@ -128,10 +129,13 @@ export default function TotpEnrollmentCard({ enabled }: { enabled: boolean }) {
       const res = (await authClient.twoFactor.generateBackupCodes({
         password: managePassword,
       })) as ClientResult<BackupData>;
-      if (res.error) throw new Error(res.error.message ?? "Could not regenerate codes");
+      if (res.error)
+        throw new Error(res.error.message ?? "Could not regenerate codes");
       setBackupCodes(res.data?.backupCodes ?? null);
       setManagePassword("");
-      setNotice("New backup codes generated. Your previous codes no longer work.");
+      setNotice(
+        "New backup codes generated. Your previous codes no longer work.",
+      );
     } catch (e) {
       setError(errText(e, "Could not regenerate codes. Check your password."));
     } finally {

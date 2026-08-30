@@ -1,8 +1,8 @@
 "use client";
 /**
- * ConversationList — the body of the history nav: a "New conversation" action,
- * the active conversations, and a collapsible "Archived" section with a
- * "Delete all" (purge) action. Rendered identically inside the desktop aside
+ * ConversationList — the body of the history nav: a start-a-new-conversation
+ * action, the active conversations, and a collapsible "Archived" section with
+ * a "Delete all" (purge) action. Rendered identically inside the desktop aside
  * and the mobile Sheet (ConversationNav owns the chrome).
  *
  * State model: server-rendered `initialActive` seeds local state and reseeds
@@ -129,7 +129,10 @@ export function ConversationList({
           description: res.error,
           type: "error",
         });
-        setArchived([]);
+        // Leave `archived` null so re-opening the section retries. Writing []
+        // here would latch a transient failure into a permanent "No archived
+        // conversations." — the `archived === null` guard above never fires
+        // again once it holds an array.
         return;
       }
       setArchived(res.conversations);

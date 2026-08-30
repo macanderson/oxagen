@@ -8,7 +8,11 @@
 import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
 import { DialogFooter } from "@oxagen/ui";
-import { type SyncDepth, SYNC_DEPTH_OPTIONS, API_BASE } from "./github-connection-wizard-types";
+import {
+  type SyncDepth,
+  SYNC_DEPTH_OPTIONS,
+  API_BASE,
+} from "./github-connection-wizard-types";
 import type { SelectedRepoMeta } from "./github-connection-wizard-step2";
 import { Spinner } from "./github-connection-wizard-spinner";
 
@@ -139,7 +143,10 @@ export function Step3Confirm({
       {/* Sync depth */}
       <div className="flex flex-col gap-2">
         <p className="text-xs font-medium text-muted-foreground">
-          Sync history depth: <span className="text-foreground font-semibold">{syncDepth} days</span>
+          Sync history depth:{" "}
+          <span className="text-foreground font-semibold">
+            {syncDepth} days
+          </span>
         </p>
         <div className="flex gap-1.5">
           {SYNC_DEPTH_OPTIONS.map((depth) => (

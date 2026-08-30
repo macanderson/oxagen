@@ -47,10 +47,9 @@ export function PageTabs({ tabs, className }: PageTabsProps) {
   const activeHref = resolveActiveTab(tabs, pathname);
 
   // Edge fades are scroll affordances: each one is shown ONLY when there is
-  // actually content scrolled off that side. Rendering them unconditionally
-  // overlaid the left fade on the first tab even at rest, painting a
-  // background→transparent gradient over its active indicator — the underline
-  // looked gray→black on the first tab only.
+  // actually content scrolled off that side. They must never render at rest —
+  // the left fade would sit over the first tab's active indicator and wash the
+  // underline out to a background→transparent gradient.
   const scrollerRef = React.useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = React.useState(false);
   const [canScrollRight, setCanScrollRight] = React.useState(false);

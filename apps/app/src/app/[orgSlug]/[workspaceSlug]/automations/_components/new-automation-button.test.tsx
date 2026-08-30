@@ -39,6 +39,8 @@ describe("NewAutomationButton", () => {
   it("clicking the button opens the dialog with the tenant slugs", () => {
     render(<NewAutomationButton orgSlug="acme" workspaceSlug="main" />);
     fireEvent.click(screen.getByTestId("new-automation"));
-    expect(screen.getByTestId("new-automation-dialog-stub").textContent).toBe("open for acme/main");
+    expect(screen.getByTestId("new-automation-dialog-stub").textContent).toBe(
+      "open for acme/main",
+    );
   });
 });

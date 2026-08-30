@@ -44,11 +44,9 @@ describe("getCroppedBlob", () => {
     originalGetContext = HTMLCanvasElement.prototype.getContext;
     originalToBlob = HTMLCanvasElement.prototype.toBlob;
 
-    HTMLCanvasElement.prototype.getContext = vi
-      .fn()
-      .mockReturnValue({
-        drawImage: vi.fn(),
-      }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      drawImage: vi.fn(),
+    }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
     HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(
       callback: BlobCallback,
@@ -149,12 +147,10 @@ describe("uploadAvatarBlob", () => {
   it("returns the CDN URL on a successful upload", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ url: "https://cdn.example.com/a.webp" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: "https://cdn.example.com/a.webp" }),
+      }),
     );
 
     await expect(uploadAvatarBlob(blob)).resolves.toBe(
@@ -163,12 +159,10 @@ describe("uploadAvatarBlob", () => {
   });
 
   it("POSTs to /api/v1/upload/avatar with a multipart form", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ url: "https://cdn.example.com/a.webp" }),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://cdn.example.com/a.webp" }),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     await uploadAvatarBlob(blob);
@@ -182,13 +176,11 @@ describe("uploadAvatarBlob", () => {
   it("throws the server's error message on a failed response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 400,
-          json: async () => ({ error: "Bad image" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "Bad image" }),
+      }),
     );
 
     await expect(uploadAvatarBlob(blob)).rejects.toThrow("Bad image");
@@ -340,11 +332,9 @@ describe("useCropUpload", () => {
     originalGetContext = HTMLCanvasElement.prototype.getContext;
     originalToBlob = HTMLCanvasElement.prototype.toBlob;
 
-    HTMLCanvasElement.prototype.getContext = vi
-      .fn()
-      .mockReturnValue({
-        drawImage: vi.fn(),
-      }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      drawImage: vi.fn(),
+    }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.toBlob = vi.fn(function toBlob(
       callback: BlobCallback,
     ) {
@@ -371,12 +361,10 @@ describe("useCropUpload", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ url: "https://cdn.example.com/cropped.webp" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: "https://cdn.example.com/cropped.webp" }),
+      }),
     );
   });
 
@@ -459,13 +447,11 @@ describe("useCropUpload", () => {
   it("surfaces an error message and does not call onUploaded when the upload fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 500,
-          json: async () => ({ error: "Server exploded" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: "Server exploded" }),
+      }),
     );
     const onUploaded = vi.fn();
     render(<CropUploadHarness onUploaded={onUploaded} />);
@@ -496,13 +482,11 @@ describe("useCropUpload", () => {
   it("reset() clears image, error, and canSave", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 500,
-          json: async () => ({ error: "Server exploded" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: "Server exploded" }),
+      }),
     );
     render(<CropUploadHarness onUploaded={vi.fn()} />);
     const file = new File(["fake-bytes"], "photo.png", { type: "image/png" });

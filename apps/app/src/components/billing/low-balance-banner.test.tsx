@@ -27,7 +27,10 @@ function sessionKeyFor(orgSlug: string): string {
   return `${SESSION_KEY_PREFIX}${orgSlug}`;
 }
 
-function shouldShowBanner(balanceCents: number, thresholdCents: number): boolean {
+function shouldShowBanner(
+  balanceCents: number,
+  thresholdCents: number,
+): boolean {
   return balanceCents < thresholdCents;
 }
 
@@ -43,7 +46,10 @@ function initDismissedState(
   return storage.get(sessionKeyFor(orgSlug)) === "1";
 }
 
-function handleDismiss(orgSlug: string, storage: Map<string, string> | null): void {
+function handleDismiss(
+  orgSlug: string,
+  storage: Map<string, string> | null,
+): void {
   if (storage === null) return; // SSR: window is undefined — no-op
   storage.set(sessionKeyFor(orgSlug), "1");
 }

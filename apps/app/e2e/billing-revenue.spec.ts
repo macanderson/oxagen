@@ -18,7 +18,10 @@ import { fileURLToPath } from "node:url";
 import { signUpFreshUser } from "./helpers/signup";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCREENSHOT_DIR = resolve(__dirname, "screenshots");
+// Per-spec subdirectory, NOT the shared `e2e/screenshots` root: the beforeAll
+// below wipes this directory, and pointing several specs at the same root made
+// each one delete the artifacts the previously-run specs had just captured.
+const SCREENSHOT_DIR = resolve(__dirname, "screenshots", "billing-revenue");
 
 test.beforeAll(() => {
   rmSync(SCREENSHOT_DIR, { recursive: true, force: true });

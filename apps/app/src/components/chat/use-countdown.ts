@@ -11,12 +11,19 @@ import * as React from "react";
  * self-clears the moment the deadline is crossed. Without that self-clear the
  * interval re-renders a resolved/expired card every second for the rest of the
  * conversation's life (mirrors useElapsed in background-task-tray).
+ *
+ * An `expiresAt` the browser can't parse yields a NaN deadline. That is treated
+ * as "already expired" — 0 remaining, no ticker — because every NaN comparison
+ * is false, so an unguarded ticker would run forever and render "NaNs".
  */
 export function useCountdown(expiresAt: string, stop: boolean): number {
-  const target = React.useMemo(() => new Date(expiresAt).getTime(), [expiresAt]);
+  const target = React.useMemo(
+    () => new Date(expiresAt).getTime(),
+    [expiresAt],
+  );
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
-    if (stop || Date.now() >= target) return;
+    if (stop || Number.isNaN(target) || Date.now() >= target) return;
     const id = setInterval(() => {
       const t = Date.now();
       setNow(t);
@@ -24,7 +31,7 @@ export function useCountdown(expiresAt: string, stop: boolean): number {
     }, 1000);
     return () => clearInterval(id);
   }, [stop, target]);
-  return Math.max(0, target - now);
+  return Number.isNaN(target) ? 0 : Math.max(0, target - now);
 }
 
 /** Format a remaining-ms duration as `Xm Ys` (or `Ys` under a minute). */

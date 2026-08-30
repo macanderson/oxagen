@@ -75,7 +75,11 @@ describe("SubagentFanout", () => {
 
   it("falls back to capability when no label", () => {
     const subagents = [
-      { childMessageId: "c1", capability: "my.capability", status: "running" as const },
+      {
+        childMessageId: "c1",
+        capability: "my.capability",
+        status: "running" as const,
+      },
     ];
     render(
       <SubagentFanout
@@ -86,7 +90,9 @@ describe("SubagentFanout", () => {
       />,
     );
     // capability appears in both truncated label span and mono span; just assert at least one exists
-    expect(screen.getAllByText("my.capability").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("my.capability").length).toBeGreaterThanOrEqual(
+      1,
+    );
   });
 
   it("calls onSelectChild with the correct childMessageId when clicked", async () => {
@@ -160,7 +166,9 @@ describe("SubagentFanout", () => {
         status="running"
       />,
     );
-    expect(screen.getByText("Running").className).toContain("text-muted-foreground");
+    expect(screen.getByText("Running").className).toContain(
+      "text-muted-foreground",
+    );
   });
 
   it("shows a success-toned Completed status for completed status", () => {
@@ -184,7 +192,9 @@ describe("SubagentFanout", () => {
         status="timed_out"
       />,
     );
-    expect(screen.getByText("Timed out").className).toContain("text-destructive");
+    expect(screen.getByText("Timed out").className).toContain(
+      "text-destructive",
+    );
   });
 
   it("shows a warning-toned Partial status for partial status", () => {

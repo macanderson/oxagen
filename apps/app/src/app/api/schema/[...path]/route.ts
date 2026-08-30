@@ -11,6 +11,7 @@ import {
 } from "@/lib/resolve-org";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
+import { logger } from "@oxagen/handlers/logger";
 
 // Runs on the default Node.js runtime (invoke() uses Node built-ins). No
 // `export const runtime` — the segment config is incompatible with
@@ -166,6 +167,20 @@ export async function POST(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Internal server error";
+    // Log every failure server-side. Without this an infrastructure fault (DB
+    // outage, unregistered handler, Neo4j down) is indistinguishable from a bad
+    // request: the caller gets a 400 and nothing reaches the server logs or
+    // ClickHouse, so a recurring defect stays invisible to an operator.
+    logger.error(
+      {
+        err,
+        capability,
+        orgId: tenant.id,
+        workspaceId: workspace.id,
+        requestId,
+      },
+      "[api/schema] capability invocation failed",
+    );
     if (message.includes("Forbidden") || message.includes("IAM")) {
       return NextResponse.json({ error: message }, { status: 403 });
     }

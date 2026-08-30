@@ -70,10 +70,9 @@ export interface SandboxRepoRef {
 
 /**
  * One captured output line from a durable sandbox session — the exact shape the
- * `list_sandbox_logs` capability returns. The previous `{ stream, text, at }`
- * shape was WRONG (the fields are `line`/`ts`, never `text`/`at`), so the log
- * console read `line.text` and rendered every row blank; keep this in lockstep
- * with the contract's output.
+ * `list_sandbox_logs` capability returns. The text field is `line` and the
+ * timestamp is `ts`; keep this in lockstep with the contract's output, since a
+ * mismatched field name renders every log row blank rather than failing loudly.
  */
 export interface SandboxLogLine {
   /** ISO timestamp of the line. */
@@ -173,9 +172,7 @@ export async function startSandbox(
     /**
      * Warm from a saved sandbox template (sbx_…) instead of a bare image — the
      * template's provider/runtime/resources/network + vault secret selection are
-     * frozen onto the session. `start_sandbox` accepts these; the previous
-     * helper silently dropped them, so warming from a real template was
-     * impossible from the app.
+     * frozen onto the session.
      */
     sandboxTemplateId?: string;
     /** Workspace environment (env_…) whose vault secrets bind to the session. */

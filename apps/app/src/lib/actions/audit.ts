@@ -5,7 +5,11 @@ import { invoke } from "@oxagen/oxagen";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import type { AuditLogQueryOutput } from "@oxagen/oxagen/contracts/audit.log.query";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 export async function queryAuditLogAction(input: {
   orgSlug: string;
@@ -40,6 +44,8 @@ export async function queryAuditLogAction(input: {
     offset: input.offset ?? 0,
   });
 
-  const result = await invoke(auditLogQuery.name, parsedInput, ctx, { surface: "agent" });
+  const result = await invoke(auditLogQuery.name, parsedInput, ctx, {
+    surface: "agent",
+  });
   return auditLogQuery.output.parse(result);
 }

@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * agent-definition-list-card — renders `agent.definition.list` output as a
- * compact, borderless roster of the workspace's agents. Replaces the generic
- * key/value dump (which rendered every field of every agent as a full-height
- * label/value block) with one scannable row per agent.
+ * compact, borderless roster of the workspace's agents: one scannable row per
+ * agent instead of a generic key/value dump.
  *
  * componentId: "agent-definition-list-card"
  *
@@ -70,9 +69,12 @@ function toRows(output: unknown): Row[] {
     rows.push({
       publicId: a.publicId,
       name:
-        typeof a.name === "string" && a.name.length > 0 ? a.name : "Untitled agent",
+        typeof a.name === "string" && a.name.length > 0
+          ? a.name
+          : "Untitled agent",
       slug: typeof a.slug === "string" ? a.slug : "",
-      latestVersion: typeof a.latestVersion === "number" ? a.latestVersion : null,
+      latestVersion:
+        typeof a.latestVersion === "number" ? a.latestVersion : null,
       dot: deployed ? "active" : "disabled",
       statusLabel: deployed
         ? "Active"

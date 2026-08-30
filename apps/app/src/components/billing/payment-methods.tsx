@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js";
+import {
+  useStripe,
+  useElements,
+  PaymentElement,
+} from "@stripe/react-stripe-js";
 import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { CreditCard, Star } from "lucide-react";
 import type { PaymentMethodView } from "@oxagen/billing";
@@ -72,7 +76,8 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
       if (error) {
         toast.add({
           title: "Card not saved",
-          description: error.message ?? "Please check your card details and try again.",
+          description:
+            error.message ?? "Please check your card details and try again.",
           type: "error",
         });
         return;
@@ -91,7 +96,10 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
             "Your card was accepted by Stripe but could not be saved to your account. Please refresh the page. If the card does not appear, contact support.",
           type: "error",
         });
-        console.error("[payment-methods] syncPaymentMethodsAction failed after Stripe confirmSetup", syncErr);
+        console.error(
+          "[payment-methods] syncPaymentMethodsAction failed after Stripe confirmSetup",
+          syncErr,
+        );
         return;
       }
       toast.add({ title: "Card saved", type: "success" });
@@ -105,10 +113,19 @@ function AddCardForm({ orgSlug, onSuccess, onCancel }: AddCardFormProps) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <PaymentElement options={paymentElementOptions} />
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={submitting}
+        >
           Cancel
         </Button>
-        <Button type="submit" variant="gradient" disabled={submitting || !stripe || !elements}>
+        <Button
+          type="submit"
+          variant="gradient"
+          disabled={submitting || !stripe || !elements}
+        >
           {submitting ? "Saving…" : "Save card"}
         </Button>
       </DialogFooter>
@@ -211,7 +228,12 @@ interface PaymentMethodRowProps {
   onMutate: () => void;
 }
 
-function PaymentMethodRow({ method, orgSlug, canManage, onMutate }: PaymentMethodRowProps) {
+function PaymentMethodRow({
+  method,
+  orgSlug,
+  canManage,
+  onMutate,
+}: PaymentMethodRowProps) {
   const toast = useToast();
   const [removing, setRemoving] = React.useState(false);
   const [settingDefault, setSettingDefault] = React.useState(false);
@@ -224,7 +246,11 @@ function PaymentMethodRow({ method, orgSlug, canManage, onMutate }: PaymentMetho
         paymentMethodId: method.stripePaymentMethodId,
       });
       if ("error" in result && result.error) {
-        toast.add({ title: "Failed to set default", description: result.error, type: "error" });
+        toast.add({
+          title: "Failed to set default",
+          description: result.error,
+          type: "error",
+        });
       } else {
         toast.add({ title: "Default card updated", type: "success" });
         onMutate();
@@ -250,7 +276,11 @@ function PaymentMethodRow({ method, orgSlug, canManage, onMutate }: PaymentMetho
             type: "warning",
           });
         } else {
-          toast.add({ title: "Remove failed", description: result.error, type: "error" });
+          toast.add({
+            title: "Remove failed",
+            description: result.error,
+            type: "error",
+          });
         }
       } else {
         toast.add({ title: "Card removed", type: "success" });
@@ -267,7 +297,8 @@ function PaymentMethodRow({ method, orgSlug, canManage, onMutate }: PaymentMetho
         <CreditCard className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">
-            {formatBrand(method.brand)} {method.last4 ? `•• ${method.last4}` : ""}
+            {formatBrand(method.brand)}{" "}
+            {method.last4 ? `•• ${method.last4}` : ""}
           </span>
           {(method.expMonth || method.expYear) && (
             <span className="text-xs text-muted-foreground">
@@ -336,40 +367,44 @@ export function PaymentMethods({
     <Panel
       id="payment-methods"
       title="Payment methods"
-      actions={canManage ? (
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDialogOpen(true)}
-          >
-            {methods.length === 0 ? "Add card" : "Add / change card"}
-          </Button>
-          <AddCardDialog
-            orgSlug={orgSlug}
-            publishableKey={publishableKey}
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            router={router}
-          />
-        </>
-      ) : undefined}
+      actions={
+        canManage ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDialogOpen(true)}
+            >
+              {methods.length === 0 ? "Add card" : "Add / change card"}
+            </Button>
+            <AddCardDialog
+              orgSlug={orgSlug}
+              publishableKey={publishableKey}
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              router={router}
+            />
+          </>
+        ) : undefined
+      }
     >
-        {methods.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No payment method on file.</p>
-        ) : (
-          <div className="divide-y divide-border">
-            {methods.map((method) => (
-              <PaymentMethodRow
-                key={method.stripePaymentMethodId}
-                method={method}
-                orgSlug={orgSlug}
-                canManage={canManage}
-                onMutate={handleMutate}
-              />
-            ))}
-          </div>
-        )}
+      {methods.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No payment method on file.
+        </p>
+      ) : (
+        <div className="divide-y divide-border">
+          {methods.map((method) => (
+            <PaymentMethodRow
+              key={method.stripePaymentMethodId}
+              method={method}
+              orgSlug={orgSlug}
+              canManage={canManage}
+              onMutate={handleMutate}
+            />
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }

@@ -95,12 +95,24 @@ describe("EdgeHoverPopover — inferred edge", () => {
 
 describe("EdgeHoverPopover — source/target display", () => {
   it("shows sourceNode displayName when sourceNode is provided", () => {
-    render(<EdgeHoverPopover edge={confirmedEdge} pos={pos} sourceNode={sourceNode} />);
+    render(
+      <EdgeHoverPopover
+        edge={confirmedEdge}
+        pos={pos}
+        sourceNode={sourceNode}
+      />,
+    );
     expect(screen.getByText("Bug #42")).toBeInTheDocument();
   });
 
   it("shows targetNode displayName when targetNode is provided", () => {
-    render(<EdgeHoverPopover edge={confirmedEdge} pos={pos} targetNode={targetNode} />);
+    render(
+      <EdgeHoverPopover
+        edge={confirmedEdge}
+        pos={pos}
+        targetNode={targetNode}
+      />,
+    );
     expect(screen.getByText("AI Safety")).toBeInTheDocument();
   });
 
@@ -140,7 +152,11 @@ describe("EdgeHoverPopover — property values", () => {
       },
     };
     const { container } = render(
-      <EdgeHoverPopover edge={confirmedEdge} pos={pos} sourceNode={withProps} />,
+      <EdgeHoverPopover
+        edge={confirmedEdge}
+        pos={pos}
+        sourceNode={withProps}
+      />,
     );
     expect(container.textContent).not.toContain("[object Object]");
     // formatPropertyValue then truncate(…, 20): objects render as compact JSON,
@@ -158,7 +174,11 @@ describe("EdgeHoverPopover — property values", () => {
       },
     };
     const { container } = render(
-      <EdgeHoverPopover edge={confirmedEdge} pos={pos} targetNode={withProps} />,
+      <EdgeHoverPopover
+        edge={confirmedEdge}
+        pos={pos}
+        targetNode={withProps}
+      />,
     );
     // truncate(value, 20) → 19 chars + ellipsis.
     expect(container.textContent).toContain(`${"a".repeat(19)}…`);

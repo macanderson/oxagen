@@ -14,14 +14,18 @@ import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 
 test.describe("chat.message.send — auth guard", () => {
-  test("chat page redirects unauthenticated users to /login", async ({ page }) => {
+  test("chat page redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
     await page.goto("/acme/default/chat");
     await expect(page).toHaveURL(/\/login$/);
   });
 });
 
 test.describe("chat.message.send — authenticated composer", () => {
-  test("fresh user lands on chat page with an enabled composer", async ({ page }) => {
+  test("fresh user lands on chat page with an enabled composer", async ({
+    page,
+  }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-send" });
 
     await page.goto(`/${orgSlug}/default/chat`);

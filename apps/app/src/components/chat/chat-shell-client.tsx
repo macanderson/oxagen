@@ -653,7 +653,22 @@ export function ChatShellClient({
       setIsStreamingRef.current(true);
 
       const wasNewConversation = !conversationIdRef.current;
-      const result = await sendAction(formData);
+      // A THROWN server action (network drop, an unexpected server error, a
+      // redirect) would otherwise escape past the `setIsStreaming(true)` above
+      // with nothing left to clear it: the composer would render its Stop
+      // button forever with no stream to stop, and every further submit would
+      // silently queue behind a turn that never ends. Catch here, clear the
+      // flag, and hand the composer a normal failed result.
+      let result: Awaited<ReturnType<ComposerAction>>;
+      try {
+        result = await sendAction(formData);
+      } catch (err) {
+        setIsStreamingRef.current(false);
+        const message =
+          err instanceof Error ? err.message : "Failed to send message";
+        setStreamErrorRef.current(`${message} — please try again.`);
+        return { ok: false, error: message };
+      }
       if (!result.ok || !result.conversationId) {
         // Persistence failed (or yielded no conversation): don't stream; the
         // result drives the composer's error state.
@@ -907,7 +922,7 @@ export function ChatShellClient({
   // synchronously after DOM mutations but before paint.
   React.useLayoutEffect(() => {
     scrollToBottom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design; scrollToBottom is a stable useCallback and listing it would not change when this runs
   }, []);
 
   // Force-scroll + re-enable auto-scroll when the user submits a new turn.
@@ -923,7 +938,7 @@ export function ChatShellClient({
   // re-renders on these — we just piggyback the scroll.
   React.useEffect(() => {
     if (shouldAutoScrollRef.current) scrollToBottom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- order/textSegments are the intended triggers; scrollToBottom is a stable useCallback and listing it would only add noise
   }, [order, textSegments]);
 
   // Scroll when the persisted messages prop updates (history load or after
@@ -1653,20 +1668,16 @@ export function ChatShellClient({
               </button>
             ) : null}
           </div>
-          {/* Suggested prompts.
-          • Empty state (v2): up to 3 left-aligned starter chips docked above
-            the composer — the pre-first-message hint.
-          • After the first prompt: exactly ONE LLM-derived next-step
-            suggestion, dismissable via the "×" inside the pill. It is grounded
-            on the per-turn server suggestion (captured into `lastSuggestions`
-            so it survives the turn-close reconcile) and only shows for a
-            COMPLETED turn — it's a "what would you do next" prompt, not a
-            mid-stream distraction. Falls back to the static heuristic only
-            until the first server suggestion lands. */}
-          {/* NOTE: no starter chips on the empty state — a new conversation is
-          just the welcome line + a focused composer (see the empty state
-          above). Suggestions only appear AFTER the first turn, as the single
-          dismissable next-step pill below. */}
+          {/* Suggested prompts — one pill, and only after the first turn.
+          A new conversation shows NO starter chips: it is just the welcome
+          line + a focused composer (see the empty state above). Once a turn
+          has landed, exactly ONE LLM-derived next-step suggestion renders,
+          dismissable via the "×" inside the pill. It is grounded on the
+          per-turn server suggestion (captured into `lastSuggestions` so it
+          survives the turn-close reconcile) and only shows for a COMPLETED
+          turn — it's a "what would you do next" prompt, not a mid-stream
+          distraction. Falls back to the static heuristic only until the
+          first server suggestion lands. */}
           {!isStreaming && messages.length > 0 ? (
             <SuggestedPromptChips
               action={wrappedSendAction}
@@ -1881,10 +1892,6 @@ export function ChatShellClient({
     </ChatSessionProvider>
   );
 }
-
-/* The empty state no longer renders an agent hero or gallery — a new
-   conversation is just the welcome line + a focused composer. Agent (and code
-   org/repo/branch) selection lives in the composer's agent picker. */
 
 /**
  * MobileSessionChrome — the v2 mobile header + session-settings drawer,

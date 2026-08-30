@@ -117,7 +117,10 @@ export function ReasoningCard({
         aria-expanded={hasText ? open : undefined}
         disabled={!hasText}
       >
-        <Brain className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Brain
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
 
         {status === "thinking" ? (
           <motion.span

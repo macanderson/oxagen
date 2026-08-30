@@ -53,13 +53,17 @@ test.describe("MCP Servers — install → authenticate UX", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     const settingsNav = page.getByRole("navigation", { name: "Settings" });
-    const registriesNavItem = settingsNav.getByRole("link", { name: "MCP Registries" });
+    const registriesNavItem = settingsNav.getByRole("link", {
+      name: "MCP Registries",
+    });
     await expect(registriesNavItem).toBeVisible({ timeout: 20_000 });
     await registriesNavItem.click();
     await expect(page).toHaveURL(/\/settings\/mcp-server-registries$/, {
       timeout: 20_000,
     });
-    await expect(page.getByTestId("add-registry-btn")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("add-registry-btn")).toBeVisible({
+      timeout: 20_000,
+    });
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "01-settings-mcp-registries.png"),
       fullPage: true,
@@ -102,7 +106,9 @@ test.describe("MCP Servers — install → authenticate UX", () => {
     // The primary action names the server; do not click it — it navigates to
     // the provider's consent screen, which does not exist for this endpoint.
     await expect(
-      dialog.getByRole("button", { name: "Authenticate with E2E OAuth Server" }),
+      dialog.getByRole("button", {
+        name: "Authenticate with E2E OAuth Server",
+      }),
     ).toBeEnabled();
     await page.screenshot({
       path: path.join(SCREENSHOTS_DIR, "04-authenticate-dialog.png"),

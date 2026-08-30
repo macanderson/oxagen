@@ -17,15 +17,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const {
-  mockGetSessionOrRedirect,
-  mockResolveOrg,
-  mockCreateWorkspaceAction,
-} = vi.hoisted(() => ({
-  mockGetSessionOrRedirect: vi.fn(),
-  mockResolveOrg: vi.fn(),
-  mockCreateWorkspaceAction: vi.fn(),
-}));
+const { mockGetSessionOrRedirect, mockResolveOrg, mockCreateWorkspaceAction } =
+  vi.hoisted(() => ({
+    mockGetSessionOrRedirect: vi.fn(),
+    mockResolveOrg: vi.fn(),
+    mockCreateWorkspaceAction: vi.fn(),
+  }));
 
 vi.mock("@/lib/session", () => ({
   getSessionOrRedirect: mockGetSessionOrRedirect,
@@ -87,7 +84,10 @@ describe("createWorkspaceInlineAction", () => {
     await createWorkspaceInlineAction(validInput);
 
     expect(mockCreateWorkspaceAction).toHaveBeenCalledOnce();
-    const [orgSlugArg, fdArg] = mockCreateWorkspaceAction.mock.calls[0] as [string, FormData];
+    const [orgSlugArg, fdArg] = mockCreateWorkspaceAction.mock.calls[0] as [
+      string,
+      FormData,
+    ];
     expect(orgSlugArg).toBe("my-org");
     expect(fdArg.get("name")).toBe("My Workspace");
     expect(fdArg.get("slug")).toBe("my-workspace");

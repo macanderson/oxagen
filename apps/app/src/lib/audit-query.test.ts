@@ -40,7 +40,9 @@ vi.mock("@oxagen/database", () => {
     }),
   });
   return {
-    withTenantDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) => fn(makeTx())),
+    withTenantDb: vi.fn((fn: (tx: ReturnType<typeof makeTx>) => unknown) =>
+      fn(makeTx()),
+    ),
     schema: {
       securityEvents: {
         id: "id",
@@ -127,12 +129,19 @@ describe("queryAuditForExport", () => {
 
   it("PROPAGATES a mid-export DB error instead of silently truncating", async () => {
     // Page 1 succeeds (hasMore), page 2 throws — must reject, NOT return ["a","b"].
-    dbState.queue = [[row("a"), row("b"), row("c")], new Error("connection lost")];
-    await expect(queryAuditForExport("org-1", baseFilter)).rejects.toThrow("connection lost");
+    dbState.queue = [
+      [row("a"), row("b"), row("c")],
+      new Error("connection lost"),
+    ];
+    await expect(queryAuditForExport("org-1", baseFilter)).rejects.toThrow(
+      "connection lost",
+    );
   });
 
   it("PROPAGATES a first-page DB error (never returns an empty 'complete' export)", async () => {
     dbState.queue = [new Error("rls denied")];
-    await expect(queryAuditForExport("org-1", baseFilter)).rejects.toThrow("rls denied");
+    await expect(queryAuditForExport("org-1", baseFilter)).rejects.toThrow(
+      "rls denied",
+    );
   });
 });

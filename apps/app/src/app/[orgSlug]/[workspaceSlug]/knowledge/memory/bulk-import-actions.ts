@@ -32,8 +32,13 @@ import { withTenantDb, schema } from "@oxagen/database";
 import type { MemoryImportDraftInput } from "@oxagen/oxagen/contracts/agent.memory_import.shared";
 import type { AgentMemoryImportParseOutput } from "@oxagen/oxagen/contracts/agent.memory_import.parse";
 import type { AgentMemoryImportCommitOutput } from "@oxagen/oxagen/contracts/agent.memory_import.commit";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Result types. A "use server" module may only EXPORT async server actions —
@@ -127,7 +132,10 @@ export async function parseImportAction(input: {
     .filter((d) => d.filename.length > 0 && d.content.trim().length > 0);
 
   if (cleaned.length === 0) {
-    return { ok: false, error: "Upload at least one non-empty markdown document." };
+    return {
+      ok: false,
+      error: "Upload at least one non-empty markdown document.",
+    };
   }
   if (cleaned.length > MAX_DOCS_PER_CALL) {
     return {
@@ -187,6 +195,10 @@ export async function parseImportAction(input: {
         skipped: out.skipped,
       };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, documents: cleaned.length },
+        "knowledge.memory: parseImportAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to parse documents." };
     }
@@ -245,12 +257,9 @@ export async function commitImportAction(input: {
     };
 
     try {
-      const out = (await invoke(
-        "commit_memory_import",
-        { drafts },
-        ctx,
-        { surface: "agent" },
-      )) as AgentMemoryImportCommitOutput;
+      const out = (await invoke("commit_memory_import", { drafts }, ctx, {
+        surface: "agent",
+      })) as AgentMemoryImportCommitOutput;
 
       revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memory`);
       return {
@@ -260,6 +269,10 @@ export async function commitImportAction(input: {
         failed: out.failed,
       };
     } catch (err) {
+      logger.error(
+        { err, orgId: org.id, workspaceId: ws.id, drafts: drafts.length },
+        "knowledge.memory: commitImportAction failed",
+      );
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to import memories." };
     }

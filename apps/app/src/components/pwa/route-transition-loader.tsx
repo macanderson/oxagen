@@ -1,25 +1,23 @@
 "use client";
 
-
 /**
  * Route-transition loading indicator for mobile.
  *
- * Uses `usePathname` to detect navigation. When the pathname changes and the
- * component re-renders (within a concurrent `startTransition`) we show the
- * spinner briefly. Visibility is gated to small screens via a CSS media query
- * so desktop users are unaffected.
+ * Uses `usePathname` to detect navigation: when the pathname changes we show
+ * the spinner and hide it again after a short window. Visibility is gated to
+ * small screens via a CSS media query so desktop users are unaffected.
  *
- * Respects `prefers-reduced-motion` — no animation when the user has opted out.
+ * Respects `prefers-reduced-motion` — the stylesheet hides `.loader` entirely
+ * when the user has opted out, so no animation ever runs.
  */
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import styles from "./route-transition-loader.module.css";
 import Image from "next/image";
 
 export function RouteTransitionLoader() {
   const pathname = usePathname();
-  const [, startTransition] = useTransition();
   const [visible, setVisible] = useState(false);
   const [imgFailed, setImgFailed] = useState<boolean>(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,15 +34,13 @@ export function RouteTransitionLoader() {
 
     // Auto-hide after a short window. In practice the page content appears
     // before this fires, but this is the safety net.
-    startTransition(() => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setVisible(false), 600);
-    });
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setVisible(false), 600);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [pathname, startTransition]);
+  }, [pathname]);
 
   if (!visible) return null;
 

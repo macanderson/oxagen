@@ -88,7 +88,13 @@ vi.mock("./balance-pill", () => ({
 // Mock: @/components/ui/skeleton
 // ---------------------------------------------------------------------------
 vi.mock("@/components/ui/skeleton", () => ({
-  Skeleton: ({ className, ...props }: { className?: string; [key: string]: unknown }) => (
+  Skeleton: ({
+    className,
+    ...props
+  }: {
+    className?: string;
+    [key: string]: unknown;
+  }) => (
     <div
       data-testid="skeleton"
       className={className}
@@ -129,18 +135,31 @@ import {
 // Shared test data
 // ---------------------------------------------------------------------------
 
-const org = { id: "org-id-1", slug: "acme", name: "Acme Corp", publicId: "org_1" };
-const workspace = { id: "ws-id-1", orgId: "org-id-1", slug: "prod", name: "Production", publicId: "ws_1", description: "", avatarUrl: null };
+const org = {
+  id: "org-id-1",
+  slug: "acme",
+  name: "Acme Corp",
+  publicId: "org_1",
+};
+const workspace = {
+  id: "ws-id-1",
+  orgId: "org-id-1",
+  slug: "prod",
+  name: "Production",
+  publicId: "ws_1",
+  description: "",
+  avatarUrl: null,
+};
 
 const orgs = [
   { publicId: "org_1", slug: "acme", name: "Acme Corp", logoUrl: null },
 ];
 
-const workspaces = [
-  { publicId: "ws_1", slug: "prod", name: "Production" },
-];
+const workspaces = [{ publicId: "ws_1", slug: "prod", name: "Production" }];
 
-function makeNavPromise(overrides: Partial<ShellNavData> = {}): Promise<ShellNavData> {
+function makeNavPromise(
+  overrides: Partial<ShellNavData> = {},
+): Promise<ShellNavData> {
   return Promise.resolve({
     availableOrgs: orgs,
     availableWorkspaces: workspaces,
@@ -183,7 +202,10 @@ describe("OrgSwitcherFallback", () => {
 
   it("skeleton has aria-hidden='true'", () => {
     render(<OrgSwitcherFallback />);
-    expect(screen.getByTestId("skeleton")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByTestId("skeleton")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
   });
 });
 
@@ -207,7 +229,10 @@ describe("OrgSwitcherSlot", () => {
       <OrgSwitcherSlot org={org} navDataPromise={promise} />,
       promise,
     );
-    expect(screen.getByTestId("org-switcher")).toHaveAttribute("data-current", "acme");
+    expect(screen.getByTestId("org-switcher")).toHaveAttribute(
+      "data-current",
+      "acme",
+    );
   });
 
   it("passes available orgs count to OrgSwitcher", async () => {
@@ -216,7 +241,10 @@ describe("OrgSwitcherSlot", () => {
       <OrgSwitcherSlot org={org} navDataPromise={promise} />,
       promise,
     );
-    expect(screen.getByTestId("org-switcher")).toHaveAttribute("data-orgs-count", "1");
+    expect(screen.getByTestId("org-switcher")).toHaveAttribute(
+      "data-orgs-count",
+      "1",
+    );
   });
 });
 
@@ -263,7 +291,10 @@ describe("WorkspaceSwitcherSlot — with current workspace", () => {
       />,
       promise,
     );
-    expect(screen.getByTestId("workspace-switcher")).toHaveAttribute("data-current", "prod");
+    expect(screen.getByTestId("workspace-switcher")).toHaveAttribute(
+      "data-current",
+      "prod",
+    );
   });
 });
 

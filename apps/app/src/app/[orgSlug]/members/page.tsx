@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getOrgSeatUsage } from "@oxagen/billing";
-import { getSession } from "@/lib/session";
+import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember, getOrgRole } from "@/lib/resolve-org";
 import { MembersPanel } from "@/components/workspace/members-panel";
 
@@ -24,14 +24,17 @@ export default async function MembersPage({
 }) {
   const { orgSlug } = await params;
 
-  const [org, session] = await Promise.all([resolveOrg(orgSlug), getSession()]);
+  const [org, session] = await Promise.all([
+    resolveOrg(orgSlug),
+    getSessionOrRedirect(),
+  ]);
 
-  const viewerUserId = session?.user?.id ?? "";
+  const viewerUserId = session.user.id;
 
   // IDOR guard: assert the viewer is a member before loading any org data.
-  if (viewerUserId) {
-    await assertOrgMember(org.id, viewerUserId);
-  }
+  // Unconditional — a missing session redirects to /login above, so there is no
+  // path on which the roster, member emails, or invitations load ungated.
+  await assertOrgMember(org.id, viewerUserId);
 
   // Run all three reads in parallel inside the tenant scope.
   const [members, pendingInvitations, seatUsage, viewerRole] =
@@ -82,7 +85,7 @@ export default async function MembersPage({
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         getOrgSeatUsage(org.id),
       ),
-      viewerUserId ? getOrgRole(org.id, viewerUserId) : Promise.resolve(null),
+      getOrgRole(org.id, viewerUserId),
     ]);
 
   return (

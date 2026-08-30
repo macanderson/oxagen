@@ -156,8 +156,12 @@ export function BrowsePanel({
   const [bulkPending, setBulkPending] = React.useState(false);
   const [bulkFailures, setBulkFailures] = React.useState<string[]>([]);
 
+  // `query` is passed explicitly by the debounced search handler: setSearch is
+  // async, so the timeout it schedules closes over the PREVIOUS render's
+  // `search` and would otherwise fetch one keystroke behind (and "Clear search"
+  // would re-fetch the query it just cleared).
   const fetchServers = React.useCallback(
-    async (offset = 0, replace = true) => {
+    async (offset = 0, replace = true, query = search) => {
       setLoading(true);
       setError(null);
       // Bound the request: a stalled catalog response must never strand the
@@ -172,7 +176,8 @@ export function BrowsePanel({
           offset: String(offset),
           workspaceId,
         });
-        if (search.trim()) params.set("search", search.trim());
+        const trimmed = query.trim();
+        if (trimmed) params.set("search", trimmed);
         const res = await fetch(
           `/api/v1/plugin/catalog/browse?${params.toString()}`,
           { signal: controller.signal },
@@ -216,7 +221,10 @@ export function BrowsePanel({
   const handleSearchChange = (val: string) => {
     setSearch(val);
     clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => fetchServers(0, true), 300);
+    searchTimeoutRef.current = setTimeout(
+      () => fetchServers(0, true, val),
+      300,
+    );
   };
 
   const handleInstall = async (srv: CatalogServer) => {

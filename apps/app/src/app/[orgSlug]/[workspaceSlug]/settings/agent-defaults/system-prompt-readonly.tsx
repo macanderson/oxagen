@@ -28,7 +28,9 @@ export function SystemPromptReadonly({ prompt }: SystemPromptReadonlyProps) {
       <details className="group rounded-lg border border-border/60 bg-card">
         <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-foreground">
           <span className="flex items-center gap-2">
-            <span id="system-prompt-heading">Effective workspace system prompt</span>
+            <span id="system-prompt-heading">
+              Effective workspace system prompt
+            </span>
             <Badge variant="secondary" size="sm">
               Read-only
             </Badge>
@@ -37,11 +39,13 @@ export function SystemPromptReadonly({ prompt }: SystemPromptReadonlyProps) {
         </summary>
         <div className="border-t border-border/40 px-4 py-3">
           <p className="mb-3 text-xs text-muted-foreground">
-            This is the exact instruction set your agent runs with in this workspace — Oxagen&apos;s
-            core orchestration prompt with your{" "}
-            <span className="font-medium text-foreground">Additional instructions</span> (below)
-            appended. The core prompt is managed by Oxagen and is not editable; use Additional
-            instructions to add workspace-wide context.
+            This is the exact instruction set your agent runs with in this
+            workspace — Oxagen&apos;s core orchestration prompt with your{" "}
+            <span className="font-medium text-foreground">
+              Additional instructions
+            </span>{" "}
+            (below) appended. The core prompt is managed by Oxagen and is not
+            editable; use Additional instructions to add workspace-wide context.
           </p>
           <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 font-mono text-xs leading-relaxed text-muted-foreground">
             {prompt}

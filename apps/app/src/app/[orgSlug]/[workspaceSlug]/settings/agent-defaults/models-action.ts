@@ -20,7 +20,11 @@ import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ── Input schema ─────────────────────────────────────────────────────────────
 
@@ -88,55 +92,62 @@ export async function updateWorkspaceModelsAction(
   // Assert the caller is an org member first (IDOR guard).
   await assertOrgMember(org.id, session.user.id);
 
-  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    // Re-read the caller's workspace role server-side — never trust the client flag.
-    const wsRoleRows = await withTenantDb((tx) =>
-      tx
-        .select({ role: schema.workspaceUsers.role })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, ws.id),
-            eq(schema.workspaceUsers.userId, session.user.id),
-          ),
-        )
-        .limit(1),
-    );
-
-    const wsRole = wsRoleRows[0]?.role ?? "";
-    if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
-      return { ok: false, error: "Only workspace owners and admins can edit model defaults." };
-    }
-
-    const ctx = buildCapabilityContext({
-      orgId: org.id,
-      workspaceId: ws.id,
-      userId: session.user.id,
-    });
-
-    try {
-      // invoke() goes through kernel.invoke() which enters its own
-      // runInTenantScope — the outer scope here is belt-and-suspenders
-      // for any direct withTenantDb calls in this action.
-      await invoke(
-        "update_model_settings",
-        {
-          defaultTextTier,
-          defaultTextModel,
-          defaultImageModel,
-          defaultVideoModel,
-        },
-        ctx,
-        { surface: "agent" },
+  return await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      // Re-read the caller's workspace role server-side — never trust the client flag.
+      const wsRoleRows = await withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
       );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save model defaults.";
-      return { ok: false, error: message };
-    }
 
-    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.agentDefaults(routeCtx));
+      const wsRole = wsRoleRows[0]?.role ?? "";
+      if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
+        return {
+          ok: false,
+          error: "Only workspace owners and admins can edit model defaults.",
+        };
+      }
 
-    return { ok: true };
-  });
+      const ctx = buildCapabilityContext({
+        orgId: org.id,
+        workspaceId: ws.id,
+        userId: session.user.id,
+      });
+
+      try {
+        // invoke() goes through kernel.invoke() which enters its own
+        // runInTenantScope — the outer scope here is belt-and-suspenders
+        // for any direct withTenantDb calls in this action.
+        await invoke(
+          "update_model_settings",
+          {
+            defaultTextTier,
+            defaultTextModel,
+            defaultImageModel,
+            defaultVideoModel,
+          },
+          ctx,
+          { surface: "agent" },
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to save model defaults.";
+        return { ok: false, error: message };
+      }
+
+      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+      revalidatePath(workspace.settings.agentDefaults(routeCtx));
+
+      return { ok: true };
+    },
+  );
 }

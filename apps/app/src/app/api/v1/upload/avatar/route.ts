@@ -39,7 +39,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Expected multipart/form-data" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Expected multipart/form-data" },
+      { status: 400 },
+    );
   }
 
   const file = form.get("file");
@@ -61,14 +64,22 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "File is empty" }, { status: 400 });
   }
   if (file.size > ASSET_LIMITS.avatar) {
-    return NextResponse.json({ error: "Image exceeds the 5 MB limit" }, { status: 413 });
+    return NextResponse.json(
+      { error: "Image exceeds the 5 MB limit" },
+      { status: 413 },
+    );
   }
 
   // Server-derived key — user-controlled input never reaches the storage path.
   const key = deriveAssetKey("avatar", session.user.id, ext);
 
   try {
-    const { url } = await storage().put({ key, body: file, contentType: file.type, access: "public" });
+    const { url } = await storage().put({
+      key,
+      body: file,
+      contentType: file.type,
+      access: "public",
+    });
     return NextResponse.json({ url }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upload failed";

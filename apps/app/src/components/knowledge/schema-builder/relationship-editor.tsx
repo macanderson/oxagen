@@ -38,20 +38,25 @@ export function RelationshipEditor({
   onCancel,
 }: RelationshipEditorProps) {
   const [name, setName] = React.useState(initial?.name ?? "");
-  const [displayName, setDisplayName] = React.useState(initial?.displayName ?? "");
+  const [displayName, setDisplayName] = React.useState(
+    initial?.displayName ?? "",
+  );
   const [startLabel, setStartLabel] = React.useState(initial?.startLabel ?? "");
   const [endLabel, setEndLabel] = React.useState(initial?.endLabel ?? "");
-  const [cardinality, setCardinality] = React.useState<RelationshipItem["cardinality"] | "">(
-    initial?.cardinality ?? "",
+  const [cardinality, setCardinality] = React.useState<
+    RelationshipItem["cardinality"] | ""
+  >(initial?.cardinality ?? "");
+  const [description, setDescription] = React.useState(
+    initial?.description ?? "",
   );
-  const [description, setDescription] = React.useState(initial?.description ?? "");
   const [properties, setProperties] = React.useState<PropertyItem[]>(
     initial?.properties ?? [],
   );
   const [saving, setSaving] = React.useState(false);
 
   // Enforce uppercase for relationship type names
-  const handleNameChange = (v: string) => setName(v.toUpperCase().replace(/[^A-Z0-9_]/g, ""));
+  const handleNameChange = (v: string) =>
+    setName(v.toUpperCase().replace(/[^A-Z0-9_]/g, ""));
 
   const handleSave = async () => {
     setSaving(true);
@@ -85,7 +90,9 @@ export function RelationshipEditor({
             placeholder="WORKS_FOR"
             className="font-mono"
           />
-          <p className="text-xs text-muted-foreground">Uppercase only, e.g. WORKS_FOR</p>
+          <p className="text-xs text-muted-foreground">
+            Uppercase only, e.g. WORKS_FOR
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="rel-display-name">Display Name</Label>
@@ -100,7 +107,12 @@ export function RelationshipEditor({
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1.5">
           <Label>Start Label</Label>
-          <Select value={startLabel || "Any"} onValueChange={(v) => setStartLabel(v == null || v === "Any" ? "" : v)}>
+          <Select
+            value={startLabel || "Any"}
+            onValueChange={(v) =>
+              setStartLabel(v == null || v === "Any" ? "" : v)
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Any" />
             </SelectTrigger>
@@ -115,7 +127,12 @@ export function RelationshipEditor({
         </div>
         <div className="space-y-1.5">
           <Label>End Label</Label>
-          <Select value={endLabel || "Any"} onValueChange={(v) => setEndLabel(v == null || v === "Any" ? "" : v)}>
+          <Select
+            value={endLabel || "Any"}
+            onValueChange={(v) =>
+              setEndLabel(v == null || v === "Any" ? "" : v)
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Any" />
             </SelectTrigger>
@@ -132,7 +149,9 @@ export function RelationshipEditor({
           <Label>Cardinality</Label>
           <Select
             value={cardinality || ""}
-            onValueChange={(v) => setCardinality(v as RelationshipItem["cardinality"] | "")}
+            onValueChange={(v) =>
+              setCardinality(v as RelationshipItem["cardinality"] | "")
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Not set" />
@@ -166,7 +185,9 @@ export function RelationshipEditor({
           onUpdate={(i, p) =>
             setProperties((prev) => prev.map((x, idx) => (idx === i ? p : x)))
           }
-          onRemove={(i) => setProperties((prev) => prev.filter((_, idx) => idx !== i))}
+          onRemove={(i) =>
+            setProperties((prev) => prev.filter((_, idx) => idx !== i))
+          }
         />
       </div>
       <div className="flex justify-end gap-2 pt-2">

@@ -28,7 +28,9 @@ async function* makeSource(events: StreamEvent[]): AsyncGenerator<StreamEvent> {
   for (const e of events) yield e;
 }
 
-async function collectAll(gen: AsyncGenerator<StreamEvent>): Promise<StreamEvent[]> {
+async function collectAll(
+  gen: AsyncGenerator<StreamEvent>,
+): Promise<StreamEvent[]> {
   const out: StreamEvent[] = [];
   for await (const e of gen) out.push(e);
   return out;
@@ -53,7 +55,13 @@ const toolCallEndCompleted: StreamEvent = {
   durationMs: 120,
   output: {
     fields: [
-      { name: "name", current: "old", proposed: "My Project", changed: true, reason: "Instruction says so" },
+      {
+        name: "name",
+        current: "old",
+        proposed: "My Project",
+        changed: true,
+        reason: "Instruction says so",
+      },
       { name: "description", current: "", proposed: "", changed: false },
     ],
   },
@@ -75,7 +83,11 @@ describe("interceptFormFillEvents", () => {
   // (a)
   it("fires onStart when page_form_fill tool-call-start arrives", async () => {
     const onStart = vi.fn();
-    const gen = interceptFormFillEvents(makeSource([toolCallStart]), onStart, null);
+    const gen = interceptFormFillEvents(
+      makeSource([toolCallStart]),
+      onStart,
+      null,
+    );
     await collectAll(gen);
     expect(onStart).toHaveBeenCalledOnce();
   });
@@ -91,7 +103,11 @@ describe("interceptFormFillEvents", () => {
       inputPreview: {},
       riskLevel: "low",
     };
-    const gen = interceptFormFillEvents(makeSource([otherStart]), onStart, null);
+    const gen = interceptFormFillEvents(
+      makeSource([otherStart]),
+      onStart,
+      null,
+    );
     await collectAll(gen);
     expect(onStart).not.toHaveBeenCalled();
   });
@@ -173,7 +189,11 @@ describe("interceptFormFillEvents", () => {
 
   // (g)
   it("yields all events unchanged (pass-through)", async () => {
-    const textEvent: StreamEvent = { type: "text", messageId: MSG_ID, text: "hello" };
+    const textEvent: StreamEvent = {
+      type: "text",
+      messageId: MSG_ID,
+      text: "hello",
+    };
     const events = [textEvent, toolCallStart, toolCallEndCompleted];
     const gen = interceptFormFillEvents(makeSource(events), null, null);
     const yielded = await collectAll(gen);
@@ -203,7 +223,12 @@ describe("interceptFormFillEvents", () => {
     await collectAll(gen);
     const result = onEnd.mock.calls[0]![0];
     expect(result.fields[0]).not.toHaveProperty("reason");
-    expect(result.fields[0]).toEqual({ name: "x", current: null, proposed: "new", changed: true });
+    expect(result.fields[0]).toEqual({
+      name: "x",
+      current: null,
+      proposed: "new",
+      changed: true,
+    });
   });
 
   // (i)

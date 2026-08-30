@@ -55,7 +55,8 @@ export async function extractVideoFrames(
   const maxFrames = Math.max(1, opts.maxFrames ?? DEFAULT_MAX_FRAMES);
   const mimeType = opts.mimeType ?? DEFAULT_MIME_TYPE;
   const quality = opts.quality ?? DEFAULT_QUALITY;
-  const metadataTimeoutMs = opts.metadataTimeoutMs ?? DEFAULT_METADATA_TIMEOUT_MS;
+  const metadataTimeoutMs =
+    opts.metadataTimeoutMs ?? DEFAULT_METADATA_TIMEOUT_MS;
   const seekTimeoutMs = opts.seekTimeoutMs ?? DEFAULT_SEEK_TIMEOUT_MS;
 
   let objectUrl: string | undefined;
@@ -137,7 +138,11 @@ function waitForEvent(
   });
 }
 
-function seekTo(video: HTMLVideoElement, atSeconds: number, timeoutMs: number): Promise<void> {
+function seekTo(
+  video: HTMLVideoElement,
+  atSeconds: number,
+  timeoutMs: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();

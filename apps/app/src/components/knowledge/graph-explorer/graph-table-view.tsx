@@ -63,7 +63,18 @@ export function GraphTableView({
     return () => clearTimeout(t);
   }, [rawQuery]);
 
+  // The parent rebuilds `visibleLabels` inline on every render, so its identity
+  // changes even when the label set does not. Re-key it on the joined value so
+  // the fetch effect below fires on a real filter change — not on every parent
+  // re-render (hover, selection), which otherwise aborts and refetches the page.
   const labelsKey = visibleLabels ? visibleLabels.join(",") : "";
+  const labels = React.useMemo(
+    () => visibleLabels,
+    // labelsKey IS the value-identity of visibleLabels; depending on the array
+    // itself is exactly the bug this memo exists to avoid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [labelsKey],
+  );
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -73,9 +84,7 @@ export function GraphTableView({
       tenant,
       {
         ...(query ? { query } : {}),
-        ...(visibleLabels && visibleLabels.length > 0
-          ? { labels: visibleLabels }
-          : {}),
+        ...(labels && labels.length > 0 ? { labels } : {}),
         limit: PAGE_SIZE,
         offset,
       },
@@ -98,7 +107,7 @@ export function GraphTableView({
       active = false;
       controller.abort();
     };
-  }, [tenant, query, offset, labelsKey, visibleLabels]);
+  }, [tenant, query, offset, labels]);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(state.total / PAGE_SIZE));

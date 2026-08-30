@@ -11,7 +11,12 @@
  * mutations initiated from this page.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Eye, Ban, Workflow as WorkflowIcon } from "lucide-react";
+import {
+  MoreHorizontal,
+  Eye,
+  Ban,
+  Workflow as WorkflowIcon,
+} from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -23,14 +28,28 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Menu, MenuTrigger, MenuPopup, MenuItem } from "@/components/ui/menu";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { useToast } from "@/components/ui/toast";
 import { EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
-import { formatCost, formatDuration, statusBadgeVariant, timeAgo } from "@/components/activity/format";
+import {
+  formatCost,
+  formatDuration,
+  statusBadgeVariant,
+  timeAgo,
+} from "@/components/activity/format";
 import type { WorkflowRunRow } from "@/lib/automations/workflows";
 import { cancelWorkflowAction } from "../actions";
-import { WorkflowDetailDrawer, type WorkflowDetailTarget } from "./workflow-detail-drawer";
-import { useSwarmSessionStore, type SwarmSessionRecord } from "./swarm-session-store";
+import {
+  WorkflowDetailDrawer,
+  type WorkflowDetailTarget,
+} from "./workflow-detail-drawer";
+import {
+  useSwarmSessionStore,
+  type SwarmSessionRecord,
+} from "./swarm-session-store";
 
 const NON_TERMINAL_WORKFLOW_STATUSES = new Set(["planning", "running"]);
 const SWARM_POLL_INTERVAL_MS = 5_000;
@@ -40,7 +59,10 @@ async function fetchSwarmStatus(
   orgSlug: string,
   workspaceSlug: string,
   swarmId: string,
-): Promise<Pick<SwarmSessionRecord, "status" | "completedTasks" | "totalTasks"> | null> {
+): Promise<Pick<
+  SwarmSessionRecord,
+  "status" | "completedTasks" | "totalTasks"
+> | null> {
   try {
     const res = await fetch(
       `/api/v1/${encodeURIComponent(orgSlug)}/${encodeURIComponent(workspaceSlug)}/research/swarm/status?swarmId=${encodeURIComponent(swarmId)}`,
@@ -52,7 +74,11 @@ async function fetchSwarmStatus(
       completedTasks?: number;
       totalTasks?: number;
     };
-    if (json.status !== "running" && json.status !== "complete" && json.status !== "failed") {
+    if (
+      json.status !== "running" &&
+      json.status !== "complete" &&
+      json.status !== "failed"
+    ) {
       return null;
     }
     return {
@@ -72,7 +98,8 @@ function workflowLabel(row: WorkflowRunRow): string {
 }
 
 function progressLabel(row: WorkflowRunRow): string {
-  if (!row.enriched || row.totalTasks === undefined || row.totalTasks === 0) return "—";
+  if (!row.enriched || row.totalTasks === undefined || row.totalTasks === 0)
+    return "—";
   const completed = row.completedTasks ?? 0;
   return `${Math.round((completed / row.totalTasks) * 100)}%`;
 }
@@ -95,10 +122,11 @@ export function WorkflowsTable({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WorkflowDetailTarget | null>(null);
 
-  const { swarms, updateSwarm, refresh: refreshSwarms } = useSwarmSessionStore(
-    orgSlug,
-    workspaceSlug,
-  );
+  const {
+    swarms,
+    updateSwarm,
+    refresh: refreshSwarms,
+  } = useSwarmSessionStore(orgSlug, workspaceSlug);
 
   // Resync from sessionStorage whenever the Swarms tab becomes active — the
   // header's LaunchWorkflowButton owns a separate hook instance (see
@@ -129,9 +157,11 @@ export function WorkflowsTable({
       }
       const running = swarmsRef.current.filter((s) => s.status === "running");
       for (const s of running) {
-        void fetchSwarmStatus(orgSlug, workspaceSlug, s.swarmId).then((result) => {
-          if (result && !cancelled) updateSwarm(s.swarmId, result);
-        });
+        void fetchSwarmStatus(orgSlug, workspaceSlug, s.swarmId).then(
+          (result) => {
+            if (result && !cancelled) updateSwarm(s.swarmId, result);
+          },
+        );
       }
     }, SWARM_POLL_INTERVAL_MS);
     return () => {
@@ -143,16 +173,27 @@ export function WorkflowsTable({
   const handleCancel = useCallback(
     async (row: WorkflowRunRow) => {
       setBusyId(row.executionId);
-      const res = await cancelWorkflowAction({
-        orgSlug,
-        workspaceSlug,
-        workflowId: row.executionId,
-      });
-      setBusyId(null);
-      if (res.ok) {
-        toast.add({ title: "Workflow cancelled", type: "success" });
-      } else {
-        toast.add({ title: "Couldn't cancel", description: res.error, type: "error" });
+      // finally: a rejected action would otherwise leave this row's Cancel
+      // permanently disabled until the page is reloaded.
+      try {
+        const res = await cancelWorkflowAction({
+          orgSlug,
+          workspaceSlug,
+          workflowId: row.executionId,
+        });
+        if (res.ok) {
+          toast.add({ title: "Workflow cancelled", type: "success" });
+        } else {
+          toast.add({
+            title: "Couldn't cancel",
+            description: res.error,
+            type: "error",
+          });
+        }
+      } catch {
+        toast.add({ title: "Couldn't cancel", type: "error" });
+      } finally {
+        setBusyId(null);
       }
     },
     [orgSlug, workspaceSlug, toast],
@@ -170,7 +211,10 @@ export function WorkflowsTable({
 
   return (
     <div className="flex flex-col gap-3">
-      <SegmentedControl value={view} onValueChange={(v) => setView(v as typeof view)}>
+      <SegmentedControl
+        value={view}
+        onValueChange={(v) => setView(v as typeof view)}
+      >
         <SegmentedControlItem value="workflows" data-testid="view-workflows">
           Workflows ({workflows.length})
         </SegmentedControlItem>
@@ -202,7 +246,8 @@ export function WorkflowsTable({
             </TableHeader>
             <TableBody>
               {workflows.map((row) => {
-                const cancellable = canManage && NON_TERMINAL_WORKFLOW_STATUSES.has(row.status);
+                const cancellable =
+                  canManage && NON_TERMINAL_WORKFLOW_STATUSES.has(row.status);
                 return (
                   <TableRow key={row.executionId}>
                     <TableCell>
@@ -324,7 +369,9 @@ export function WorkflowsTable({
                     {swarm.topic}
                   </button>
                 </TableCell>
-                <TableCell className="capitalize text-muted-foreground">{swarm.depth}</TableCell>
+                <TableCell className="capitalize text-muted-foreground">
+                  {swarm.depth}
+                </TableCell>
                 <TableCell className="tabular-nums text-muted-foreground">
                   {swarm.maxParallel}
                 </TableCell>

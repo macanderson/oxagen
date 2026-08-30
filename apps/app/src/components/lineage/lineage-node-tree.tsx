@@ -1,7 +1,9 @@
 /**
  * lineage-node-tree.tsx — indented tree list of every run in a fleet dispatch.
- * Renders the nested `LineageTreeNode[]` from
- * `buildLineageTree` (lib/lineage/tree.ts) as a keyboard-navigable list.
+ * Renders the nested `LineageTreeNode[]` from `buildLineageTree`
+ * (lib/lineage/tree.ts). Each row is a tab stop that selects its run on
+ * Enter/Space; there is no roving-tabindex or arrow-key traversal yet, so the
+ * `tree`/`treeitem` roles here are structural only.
  *
  * Every run is cited through `NodeRef` (never a raw runId as the primary
  * on-screen identity — CLAUDE.md "Citing nodes & edges in the UI"), and a

@@ -81,14 +81,19 @@ test.describe("workspace.isolation — cross-workspace access denied", () => {
     expect(denied).toBe(true);
 
     // Must never see ws-beta workspace content.
-    await expect(page.locator(`[data-workspace-slug="${WS_BETA_SLUG}"]`)).not.toBeVisible();
+    await expect(
+      page.locator(`[data-workspace-slug="${WS_BETA_SLUG}"]`),
+    ).not.toBeVisible();
   });
 
   test("api: ws-alpha session cannot list ws-beta conversations", async ({
     request,
     baseURL,
   }) => {
-    const apiBase = (baseURL ?? "http://localhost:3000").replace(/:\d+$/, ":4000");
+    const apiBase = (baseURL ?? "http://localhost:3000").replace(
+      /:\d+$/,
+      ":4000",
+    );
 
     const res = await request.get(
       `${apiBase}/v1/${ORG_SLUG}/${WS_BETA_SLUG}/conversations`,
@@ -113,7 +118,10 @@ test.describe("workspace.isolation — cross-workspace access denied", () => {
     request,
     baseURL,
   }) => {
-    const apiBase = (baseURL ?? "http://localhost:3000").replace(/:\d+$/, ":4000");
+    const apiBase = (baseURL ?? "http://localhost:3000").replace(
+      /:\d+$/,
+      ":4000",
+    );
 
     const res = await request.get(
       `${apiBase}/v1/${ORG_SLUG}/${WS_BETA_SLUG}/conversations`,

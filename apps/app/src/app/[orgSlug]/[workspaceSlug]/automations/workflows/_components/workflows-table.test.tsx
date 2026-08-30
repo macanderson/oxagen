@@ -21,17 +21,26 @@
  *   - Swarms tab renders client-session-tracked swarm rows.
  */
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WorkflowRunRow } from "@/lib/automations/workflows";
 import type { SwarmSessionRecord } from "./swarm-session-store";
 
-const { mockAddToast, mockCancelAction, viewState, swarmState } = vi.hoisted(() => ({
-  mockAddToast: vi.fn(),
-  mockCancelAction: vi.fn(),
-  viewState: { onChange: null as ((v: string) => void) | null },
-  swarmState: { swarms: [] as SwarmSessionRecord[] },
-}));
+const { mockAddToast, mockCancelAction, viewState, swarmState } = vi.hoisted(
+  () => ({
+    mockAddToast: vi.fn(),
+    mockCancelAction: vi.fn(),
+    viewState: { onChange: null as ((v: string) => void) | null },
+    swarmState: { swarms: [] as SwarmSessionRecord[] },
+  }),
+);
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockAddToast }),
@@ -59,12 +68,17 @@ vi.mock("./workflow-detail-drawer", () => ({
 vi.mock("@/components/ui/menu", () => ({
   Menu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   MenuTrigger: () => null,
-  MenuPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  MenuPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   MenuItem: ({
     children,
     onClick,
     ...rest
-  }: { children: React.ReactNode; onClick?: () => void } & Record<string, unknown>) => (
+  }: { children: React.ReactNode; onClick?: () => void } & Record<
+    string,
+    unknown
+  >) => (
     <button type="button" onClick={onClick} {...rest}>
       {children}
     </button>
@@ -88,7 +102,10 @@ vi.mock("@/components/ui/segmented-control", () => ({
     children,
     value,
     ...rest
-  }: { children: React.ReactNode; value: string } & Record<string, unknown>) => (
+  }: { children: React.ReactNode; value: string } & Record<
+    string,
+    unknown
+  >) => (
     <button type="button" onClick={() => viewState.onChange?.(value)} {...rest}>
       {children}
     </button>
@@ -155,8 +172,11 @@ describe("WorkflowsTable — Workflows tab", () => {
         ]}
       />,
     );
-    expect(screen.getByTestId("workflow-row-wf-1").textContent).toBe("Pricing sweep");
-    const cells = screen.getByTestId("workflow-row-wf-1").closest("tr")?.textContent ?? "";
+    expect(screen.getByTestId("workflow-row-wf-1").textContent).toBe(
+      "Pricing sweep",
+    );
+    const cells =
+      screen.getByTestId("workflow-row-wf-1").closest("tr")?.textContent ?? "";
     expect(cells).toContain("40%");
     expect(cells).toContain("10");
   });
@@ -165,10 +185,13 @@ describe("WorkflowsTable — Workflows tab", () => {
     render(
       <WorkflowsTable
         {...BASE_PROPS}
-        workflows={[row({ executionId: "wf-2", status: "completed", enriched: false })]}
+        workflows={[
+          row({ executionId: "wf-2", status: "completed", enriched: false }),
+        ]}
       />,
     );
-    const cells = screen.getByTestId("workflow-row-wf-2").closest("tr")?.textContent ?? "";
+    const cells =
+      screen.getByTestId("workflow-row-wf-2").closest("tr")?.textContent ?? "";
     expect(cells).toContain("—");
   });
 
@@ -177,7 +200,9 @@ describe("WorkflowsTable — Workflows tab", () => {
       <WorkflowsTable
         {...BASE_PROPS}
         canManage={false}
-        workflows={[row({ executionId: "wf-3", status: "running", enriched: true })]}
+        workflows={[
+          row({ executionId: "wf-3", status: "running", enriched: true }),
+        ]}
       />,
     );
     expect(screen.queryByTestId("cancel-wf-3")).toBeNull();
@@ -188,7 +213,9 @@ describe("WorkflowsTable — Workflows tab", () => {
       <WorkflowsTable
         {...BASE_PROPS}
         canManage={true}
-        workflows={[row({ executionId: "wf-4", status: "completed", enriched: true })]}
+        workflows={[
+          row({ executionId: "wf-4", status: "completed", enriched: true }),
+        ]}
       />,
     );
     expect(screen.queryByTestId("cancel-wf-4")).toBeNull();
@@ -199,7 +226,9 @@ describe("WorkflowsTable — Workflows tab", () => {
       <WorkflowsTable
         {...BASE_PROPS}
         canManage={true}
-        workflows={[row({ executionId: "wf-5", status: "running", enriched: true })]}
+        workflows={[
+          row({ executionId: "wf-5", status: "running", enriched: true }),
+        ]}
       />,
     );
     await act(async () => {
@@ -218,7 +247,9 @@ describe("WorkflowsTable — Workflows tab", () => {
     render(
       <WorkflowsTable
         {...BASE_PROPS}
-        workflows={[row({ executionId: "wf-6", status: "completed", enriched: true })]}
+        workflows={[
+          row({ executionId: "wf-6", status: "completed", enriched: true }),
+        ]}
       />,
     );
     expect(screen.queryByTestId("detail-open")).toBeNull();
@@ -245,8 +276,11 @@ describe("WorkflowsTable — Swarms tab", () => {
     ];
     render(<WorkflowsTable {...BASE_PROPS} workflows={[]} />);
     fireEvent.click(screen.getByTestId("view-swarms"));
-    expect(screen.getByTestId("swarm-row-s1").textContent).toBe("AI safety funding");
-    const cells = screen.getByTestId("swarm-row-s1").closest("tr")?.textContent ?? "";
+    expect(screen.getByTestId("swarm-row-s1").textContent).toBe(
+      "AI safety funding",
+    );
+    const cells =
+      screen.getByTestId("swarm-row-s1").closest("tr")?.textContent ?? "";
     expect(cells).toContain("2 / 8");
   });
 });

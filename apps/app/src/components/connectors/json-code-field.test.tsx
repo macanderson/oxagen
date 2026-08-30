@@ -84,7 +84,9 @@ describe("code field with format: json", () => {
     const box = screen.getByLabelText(/Record Type Definitions/i);
 
     await user.click(box);
-    await user.paste('[{"sourceRecordType":"order.created","matcher":"order.created"}]');
+    await user.paste(
+      '[{"sourceRecordType":"order.created","matcher":"order.created"}]',
+    );
 
     // What the FORM holds is an array — the shape the connector's
     // z.array(...) declares. Before this fix it held the raw string.

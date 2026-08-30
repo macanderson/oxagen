@@ -34,8 +34,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
 
   return {
     mockGetSession: vi.fn(),
@@ -71,8 +75,13 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {
-      agentDefaults: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
+      agentDefaults: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
     },
   },
 }));
@@ -83,13 +92,15 @@ const SESSION = { user: { id: "user-1" } };
 const ORG = { id: "org-1", slug: "acme" };
 const WS = { id: "ws-1", slug: "main" };
 
-function base(overrides: Partial<{
-  enabled: boolean;
-  limitUsd: number | null;
-  mode: "grace" | "prompt" | "enforce";
-  graceOveragePct: number;
-  enforcement: "default" | "ceiling";
-}> = {}) {
+function base(
+  overrides: Partial<{
+    enabled: boolean;
+    limitUsd: number | null;
+    mode: "grace" | "prompt" | "enforce";
+    graceOveragePct: number;
+    enforcement: "default" | "ceiling";
+  }> = {},
+) {
   return {
     orgSlug: "acme",
     workspaceSlug: "main",
@@ -135,8 +146,18 @@ describe("updateWorkspaceBudgetAction", () => {
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_budget_policy",
-      { enabled: true, limitUsd: 5, mode: "enforce", graceOveragePct: 0.25, enforcement: "ceiling" },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      {
+        enabled: true,
+        limitUsd: 5,
+        mode: "enforce",
+        graceOveragePct: 0.25,
+        enforcement: "ceiling",
+      },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       { surface: "agent" },
     );
   });
@@ -144,7 +165,9 @@ describe("updateWorkspaceBudgetAction", () => {
   it("forces limitUsd to null when the caller disables the budget", async () => {
     // The form is responsible for nulling limitUsd before calling the action
     // when disabled — assert the action passes the caller-supplied value through.
-    const res = await updateWorkspaceBudgetAction(base({ enabled: false, limitUsd: null }));
+    const res = await updateWorkspaceBudgetAction(
+      base({ enabled: false, limitUsd: null }),
+    );
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_budget_policy",
@@ -156,7 +179,9 @@ describe("updateWorkspaceBudgetAction", () => {
 
   it("revalidates the consolidated agent-defaults path on success", async () => {
     await updateWorkspaceBudgetAction(base());
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/agent-defaults");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/settings/agent-defaults",
+    );
   });
 
   it("returns ok:false with error message when invoke throws", async () => {
@@ -167,7 +192,9 @@ describe("updateWorkspaceBudgetAction", () => {
   });
 
   it("rejects an out-of-range grace percentage before invoking", async () => {
-    const res = await updateWorkspaceBudgetAction(base({ graceOveragePct: 11 }));
+    const res = await updateWorkspaceBudgetAction(
+      base({ graceOveragePct: 11 }),
+    );
     expect(res.ok).toBe(false);
     expect(mockInvoke).not.toHaveBeenCalled();
   });

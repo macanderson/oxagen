@@ -12,8 +12,7 @@ type Story = StoryObj<typeof meta>;
 export const Thinking: Story = {
   args: {
     status: "thinking",
-    text:
-      "The user wants the API route wired first. Let me confirm the contract exists in packages/oxagen/src/contracts before mounting it on the Hono app, then decide where the handler registration goes.",
+    text: "The user wants the API route wired first. Let me confirm the contract exists in packages/oxagen/src/contracts before mounting it on the Hono app, then decide where the handler registration goes.",
   },
 };
 
@@ -22,8 +21,7 @@ export const Done: Story = {
   args: {
     status: "done",
     durationMs: 4200,
-    text:
-      "Confirmed the contract exists. The route mounts in apps/api/src/app.ts and the handler must import @oxagen/handlers/register before invoke() runs, otherwise metering silently no-ops.",
+    text: "Confirmed the contract exists. The route mounts in apps/api/src/app.ts and the handler must import @oxagen/handlers/register before invoke() runs, otherwise metering silently no-ops.",
   },
 };
 

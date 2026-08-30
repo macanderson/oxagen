@@ -5,7 +5,11 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "@oxagen/handlers/logger";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { WorkspacePluginsPanel } from "@/components/agent-tools/workspace-plugins-panel";
 import { shapeInstalledPlugins } from "@/components/agent-tools/plugin-shape";
 import {
@@ -25,13 +29,13 @@ interface PageProps {
 
 /**
  * Workbench → Agent Tools → Capabilities — installed plugin listings
- * (enable/disable, uninstall). Descended from Settings → Plugins →
- * Marketplace → Installed; both old routes now redirect here. Registry
- * administration lives in Settings → MCP Server Registries. All server
- * actions flow through the single install choke point in
- * @/lib/agent-tools/install-actions.
+ * (enable/disable, uninstall). Registry administration lives in
+ * Settings → MCP Server Registries. All server actions flow through the
+ * single install choke point in @/lib/agent-tools/install-actions.
  */
-export default async function AgentToolsCapabilitiesPage({ params }: PageProps) {
+export default async function AgentToolsCapabilitiesPage({
+  params,
+}: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);

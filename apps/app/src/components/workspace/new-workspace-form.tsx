@@ -5,7 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export interface NewWorkspaceAction {
-  (formData: FormData): Promise<{ ok: true; workspaceSlug: string } | { ok: false; error: string }>;
+  (
+    formData: FormData,
+  ): Promise<
+    { ok: true; workspaceSlug: string } | { ok: false; error: string }
+  >;
 }
 
 // Slug rules mirror the workspace.create contract pattern: [a-z0-9-]{2,40}.
@@ -23,7 +27,13 @@ function deriveSlug(name: string): string {
     .slice(0, 40);
 }
 
-export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action: NewWorkspaceAction }) {
+export function NewWorkspaceForm({
+  orgSlug,
+  action,
+}: {
+  orgSlug: string;
+  action: NewWorkspaceAction;
+}) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [name, setName] = React.useState("");
@@ -90,7 +100,9 @@ export function NewWorkspaceForm({ orgSlug, action }: { orgSlug: string; action:
             setSlug(next);
           }}
         />
-        <p className="text-xs text-muted-foreground">Lowercase letters, digits, and hyphens. 2 to 40 chars.</p>
+        <p className="text-xs text-muted-foreground">
+          Lowercase letters, digits, and hyphens. 2 to 40 chars.
+        </p>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" disabled={pending}>

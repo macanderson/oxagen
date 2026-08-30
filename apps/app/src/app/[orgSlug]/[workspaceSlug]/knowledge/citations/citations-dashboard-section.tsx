@@ -4,11 +4,9 @@
  * ("get_citation_stats") and renders the CitationsDashboard.
  *
  * Sits inside a <Suspense> boundary (see page.tsx) so the page shell paints
- * immediately behind CitationsDashboardSkeleton. The handler for this
- * capability may not exist yet in every environment (built in parallel) — the
- * fetch fails open to an ErrorState rather than throwing, matching every
- * other Knowledge → Memory section (memories-section.tsx, promotion-queue-
- * section.tsx).
+ * immediately behind CitationsDashboardSkeleton. The fetch fails open to an
+ * ErrorState rather than throwing, matching every other Knowledge → Memory
+ * section (memories-section.tsx, promotion-queue-section.tsx).
  */
 import "@oxagen/handlers/register";
 // agent.memory_citation.stats is an agent.* capability — its handler is bound
@@ -18,6 +16,7 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { AgentMemoryCitationStatsOutput } from "@oxagen/oxagen/contracts/agent.memory_citation.stats";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { workspace } from "@/lib/routes";
@@ -63,8 +62,11 @@ export async function CitationsDashboardSection({
         { surface: "agent" },
       ),
     )) as AgentMemoryCitationStatsOutput;
-  } catch (e) {
-    console.error("agent.memory_citation.stats failed:", e);
+  } catch (err) {
+    logger.error(
+      { err, orgId, workspaceId, days },
+      "knowledge.citations: get_citation_stats failed",
+    );
     // A fetch failure is not "no citations yet" — surface it as an error
     // (never throw from RSC, which would blank the streamed header) rather
     // than masquerading the failure as the dashboard's empty state.

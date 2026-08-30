@@ -32,7 +32,9 @@ vi.mock("@/lib/page-context", () => ({
 }));
 
 vi.mock("@/components/ui/field-fill-transition", () => ({
-  FieldFillTransition: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  FieldFillTransition: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -113,9 +115,15 @@ describe("FillOverlay", () => {
     };
     mockPageCtx.isFilling = false;
     render(<FillOverlay />);
-    const acceptBtn = screen.getByRole("button", { name: /accept suggestion for email/i });
+    const acceptBtn = screen.getByRole("button", {
+      name: /accept suggestion for email/i,
+    });
     fireEvent.click(acceptBtn);
-    expect(applyMock).toHaveBeenCalledWith({ email: "new@example.com" }, "field", "email");
+    expect(applyMock).toHaveBeenCalledWith(
+      { email: "new@example.com" },
+      "field",
+      "email",
+    );
   });
 
   it("Reject all button calls _setFillResult(null)", () => {
@@ -131,7 +139,9 @@ describe("FillOverlay", () => {
     };
     mockPageCtx.isFilling = false;
     render(<FillOverlay />);
-    const rejectAllBtn = screen.getByRole("button", { name: /reject all suggestions/i });
+    const rejectAllBtn = screen.getByRole("button", {
+      name: /reject all suggestions/i,
+    });
     fireEvent.click(rejectAllBtn);
     expect(mockSetFillResult).toHaveBeenCalledWith(null);
   });
@@ -162,7 +172,9 @@ describe("FillOverlay", () => {
     };
     mockPageCtx.isFilling = false;
     render(<FillOverlay />);
-    const applyAllBtn = screen.getByRole("button", { name: /apply all suggestions/i });
+    const applyAllBtn = screen.getByRole("button", {
+      name: /apply all suggestions/i,
+    });
     fireEvent.click(applyAllBtn);
     expect(applyMock).toHaveBeenCalledWith(
       { email: "new@example.com", name: "New Name" },

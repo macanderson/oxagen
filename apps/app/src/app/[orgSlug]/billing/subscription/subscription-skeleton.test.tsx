@@ -6,9 +6,13 @@ import { render, screen, cleanup } from "@testing-library/react";
 afterEach(cleanup);
 
 vi.mock("@/components/loading", () => ({
-  LoadingRegion: ({ children, label }: { children: React.ReactNode; label: string }) => (
-    <div aria-label={label}>{children}</div>
-  ),
+  LoadingRegion: ({
+    children,
+    label,
+  }: {
+    children: React.ReactNode;
+    label: string;
+  }) => <div aria-label={label}>{children}</div>,
   DetailSkeleton: () => <div data-testid="detail-skeleton" />,
   CardGridSkeleton: ({ count }: { count: number }) => (
     <div data-testid="card-grid-skeleton" data-count={count} />
@@ -38,9 +42,7 @@ describe("BillingSubscriptionSkeleton", () => {
     render(<BillingSubscriptionSkeleton />);
     const grids = screen.getAllByTestId("card-grid-skeleton");
     // One with count=1 (credit sidebar) and one with count=3 (plan cards)
-    const planGrid = grids.find(
-      (el) => el.getAttribute("data-count") === "3"
-    );
+    const planGrid = grids.find((el) => el.getAttribute("data-count") === "3");
     expect(planGrid).toBeDefined();
   });
 });

@@ -84,13 +84,20 @@ describe("InstallInstructions", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<InstallInstructions client="cursor" steps={[{ label: "Run", command: "oxagen go" }]} />);
+    render(
+      <InstallInstructions
+        client="cursor"
+        steps={[{ label: "Run", command: "oxagen go" }]}
+      />,
+    );
     const btn = screen.getByRole("button");
     await userEvent.click(btn);
     expect(writeText).toHaveBeenCalledWith("oxagen go");
     await waitFor(() => {
       // After copy the aria-label changes to "step 1 command copied"
-      expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /copied/i }),
+      ).toBeInTheDocument();
     });
   });
 

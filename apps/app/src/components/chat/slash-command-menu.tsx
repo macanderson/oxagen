@@ -31,9 +31,13 @@ export function SlashCommandMenu({
       className="absolute bottom-full left-0 z-20 mb-2 w-72 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
       data-testid="slash-command-menu"
     >
-      <ul className="max-h-64 overflow-y-auto py-1">
+      {/* `option` must be an owned child of the `listbox`, so the list chrome
+          in between is marked presentational — otherwise the implicit
+          list/listitem roles break the required parent-child relationship and
+          screen readers stop announcing the options. */}
+      <ul role="presentation" className="max-h-64 overflow-y-auto py-1">
         {commands.map((command, index) => (
-          <li key={command.name}>
+          <li role="presentation" key={command.name}>
             <button
               type="button"
               role="option"
@@ -54,7 +58,9 @@ export function SlashCommandMenu({
                   <span className="text-muted-foreground"> {command.args}</span>
                 ) : null}
               </span>
-              <span className="text-xs text-muted-foreground">{command.summary}</span>
+              <span className="text-xs text-muted-foreground">
+                {command.summary}
+              </span>
             </button>
           </li>
         ))}

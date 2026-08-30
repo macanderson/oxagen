@@ -23,9 +23,7 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import {
-  parseAnsiLine,
-} from "@/components/chat/registry-components/terminal-trace-card";
+import { parseAnsiLine } from "@/components/chat/registry-components/terminal-trace-card";
 // Shared GitHub light/dark palette — same surface as the terminal & trace card.
 import "@/components/chat/registry-components/code-surface.css";
 import type { SandboxLogLine } from "@/lib/workbench/sandboxes";
@@ -75,8 +73,7 @@ function formatMs(ms: number | null): string {
 
 function LogLine({ line }: { line: SandboxLogLine }) {
   const stream = normStream(line.stream);
-  // The captured text is `line.line` (the previous `line.text` never existed at
-  // runtime, so every row rendered blank).
+  // The captured text lives on `line.line`.
   const text = typeof line.line === "string" ? line.line : "";
   // The `system` line that closes a command carries its exit code + duration as
   // separate columns — surface them as a compact suffix instead of dropping
@@ -108,7 +105,9 @@ function LogLine({ line }: { line: SandboxLogLine }) {
         ))}
       </span>
       {meta ? (
-        <span className="code-fg-faint shrink-0 select-none tabular-nums">{meta}</span>
+        <span className="code-fg-faint shrink-0 select-none tabular-nums">
+          {meta}
+        </span>
       ) : null}
     </div>
   );
@@ -156,10 +155,20 @@ export function SandboxLogsConsole({
     return () => clearInterval(id);
   }, [refresh, disabled, pollMs]);
 
-  // Keep the newest output in view.
+  // Keep the newest output in view — but only while the reader is already at
+  // the bottom. A 3s poll that scrolls unconditionally yanks a user who has
+  // scrolled up to read earlier output back down before they can finish a line.
+  const pinnedToBottomRef = useRef(true);
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // A few px of slack absorbs sub-pixel rounding on fractional zoom levels.
+    pinnedToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+  }, []);
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && pinnedToBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [lines]);
 
   return (
@@ -172,7 +181,8 @@ export function SandboxLogsConsole({
     >
       <div className="code-border flex items-center justify-between gap-3 border-b px-3 py-2">
         <span className="code-fg-muted font-mono text-xs">
-          logs · {sessionId.length > 14 ? `${sessionId.slice(0, 12)}…` : sessionId}
+          logs ·{" "}
+          {sessionId.length > 14 ? `${sessionId.slice(0, 12)}…` : sessionId}
         </span>
         <div className="flex items-center gap-3">
           <label className="code-fg-muted flex cursor-pointer items-center gap-1.5 text-xs">
@@ -217,6 +227,7 @@ export function SandboxLogsConsole({
 
       <div
         ref={scrollRef}
+        onScroll={onScroll}
         role="log"
         aria-label="Sandbox output logs"
         aria-live="polite"

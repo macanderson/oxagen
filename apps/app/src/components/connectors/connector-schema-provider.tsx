@@ -40,18 +40,24 @@ export interface ConnectorSchemaContextValue {
   setErrors: (errors: FieldError[]) => void;
   clearErrors: () => void;
   selectAuthScheme: (schemeId: string) => void;
-  isFieldVisible: (fieldKey: string, dependsOn?: { field: string; value?: unknown }) => boolean;
+  isFieldVisible: (
+    fieldKey: string,
+    dependsOn?: { field: string; value?: unknown },
+  ) => boolean;
   resetForm: () => void;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────────
 
-const ConnectorSchemaContext = React.createContext<ConnectorSchemaContextValue | null>(null);
+const ConnectorSchemaContext =
+  React.createContext<ConnectorSchemaContextValue | null>(null);
 
 export function useConnectorSchema(): ConnectorSchemaContextValue {
   const ctx = React.useContext(ConnectorSchemaContext);
   if (!ctx) {
-    throw new Error("useConnectorSchema must be used within ConnectorSchemaProvider");
+    throw new Error(
+      "useConnectorSchema must be used within ConnectorSchemaProvider",
+    );
   }
   return ctx;
 }
@@ -101,7 +107,9 @@ export function ConnectorSchemaProvider({
   initialSchema,
   initialValues,
 }: ConnectorSchemaProviderProps) {
-  const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(initialSchema ?? null);
+  const [schema, setSchema] = React.useState<ConnectorPluginSchema | null>(
+    initialSchema ?? null,
+  );
   const [loading, setLoading] = React.useState(!initialSchema);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
 
@@ -114,14 +122,17 @@ export function ConnectorSchemaProvider({
   }, [initialValues]);
 
   const [formState, setFormState] = React.useState<ConnectorFormState>(() => ({
-    values: { ...buildDefaultValues(initialSchema ?? null), ...(initialValues ?? {}) },
+    values: {
+      ...buildDefaultValues(initialSchema ?? null),
+      ...(initialValues ?? {}),
+    },
     errors: [],
     touched: new Set<string>(),
   }));
 
-  const [selectedAuthSchemeId, setSelectedAuthSchemeId] = React.useState<string | null>(
-    initialSchema?.auth?.schemes[0]?.id ?? null,
-  );
+  const [selectedAuthSchemeId, setSelectedAuthSchemeId] = React.useState<
+    string | null
+  >(initialSchema?.auth?.schemes[0]?.id ?? null);
 
   // Fetch schema from API if not pre-loaded
   React.useEffect(() => {
@@ -149,7 +160,10 @@ export function ConnectorSchemaProvider({
         if (cancelled) return;
         setSchema(data);
         setFormState({
-          values: { ...buildDefaultValues(data), ...(initialValuesRef.current ?? {}) },
+          values: {
+            ...buildDefaultValues(data),
+            ...(initialValuesRef.current ?? {}),
+          },
           errors: [],
           touched: new Set<string>(),
         });
@@ -157,7 +171,11 @@ export function ConnectorSchemaProvider({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setFetchError(err instanceof Error ? err.message : "Failed to load connector schema");
+        setFetchError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load connector schema",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -173,7 +191,9 @@ export function ConnectorSchemaProvider({
       ...prev,
       values: { ...prev.values, [key]: value },
       // Clear errors for this field on change
-      errors: prev.errors.filter((e) => e.field !== key && e.field !== `config.${key}`),
+      errors: prev.errors.filter(
+        (e) => e.field !== key && e.field !== `config.${key}`,
+      ),
     }));
   }, []);
 
@@ -196,7 +216,14 @@ export function ConnectorSchemaProvider({
   const selectAuthScheme = React.useCallback(
     (schemeId: string) => {
       setSelectedAuthSchemeId(schemeId);
-      // Clear auth field values when switching schemes
+      // Reset the INCOMING scheme's fields to their declared defaults so the
+      // form does not open on a stale value.
+      //
+      // Known gap: the OUTGOING scheme's fields are left in `values`, so a
+      // credential typed under one scheme is still present (and still
+      // submitted) after switching to another. Clearing them needs the
+      // previously-selected scheme's field list, which this callback does not
+      // have — see the audit finding on connector auth-scheme switching.
       const scheme = schema?.auth?.schemes.find((s) => s.id === schemeId);
       if (scheme?.fields) {
         setFormState((prev) => {
@@ -216,7 +243,10 @@ export function ConnectorSchemaProvider({
   );
 
   const isFieldVisible = React.useCallback(
-    (_fieldKey: string, dependsOn?: { field: string; value?: unknown }): boolean => {
+    (
+      _fieldKey: string,
+      dependsOn?: { field: string; value?: unknown },
+    ): boolean => {
       if (!dependsOn) return true;
       // Check against auth fields and config fields in form values
       const currentValue = formState.values[dependsOn.field];
@@ -227,7 +257,10 @@ export function ConnectorSchemaProvider({
 
   const resetForm = React.useCallback(() => {
     setFormState({
-      values: { ...buildDefaultValues(schema), ...(initialValuesRef.current ?? {}) },
+      values: {
+        ...buildDefaultValues(schema),
+        ...(initialValuesRef.current ?? {}),
+      },
       errors: [],
       touched: new Set<string>(),
     });

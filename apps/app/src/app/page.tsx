@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { getSession } from "@/lib/session";
 
@@ -25,6 +25,14 @@ export default async function RootPage() {
         eq(schema.workspaces.orgId, schema.organizations.id),
       )
       .where(eq(schema.orgUsers.userId, session.user.id))
+      // LIMIT 1 without ORDER BY lets Postgres return whichever joined row it
+      // reaches first, so the same user could land in a different org — or a
+      // different workspace of the same org — on consecutive visits. Order by
+      // creation so "home" is always the oldest org and its oldest workspace.
+      .orderBy(
+        asc(schema.organizations.createdAt),
+        asc(schema.workspaces.createdAt),
+      )
       .limit(1),
   );
 

@@ -23,7 +23,9 @@ const {
     canManage: boolean;
   }
   const scopeState: ScopeState = { canManage: true };
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
   return {
     mockResolveWorkbenchScope: vi.fn(),
     mockInvoke: vi.fn(),
@@ -33,7 +35,9 @@ const {
   };
 });
 
-vi.mock("@/lib/workbench/scope", () => ({ resolveWorkbenchScope: mockResolveWorkbenchScope }));
+vi.mock("@/lib/workbench/scope", () => ({
+  resolveWorkbenchScope: mockResolveWorkbenchScope,
+}));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
@@ -65,7 +69,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   scopeState.canManage = true;
   mockResolveWorkbenchScope.mockImplementation(async () => ({
-    ctx: { orgId: "org_1", workspaceId: "ws_1", userId: "user_1", surface: "app" },
+    ctx: {
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      userId: "user_1",
+      surface: "app",
+    },
     org: { id: "org_1" },
     ws: { id: "ws_1" },
     canManage: scopeState.canManage,
@@ -88,12 +97,21 @@ describe("readAgentBindingsAction", () => {
 
 describe("readEnvironmentOptionsAction", () => {
   it("invokes list_environments", async () => {
-    mockInvoke.mockResolvedValue({ environments: [{ id: "env_1", name: "Prod", slug: "prod", isDefault: true }] });
+    mockInvoke.mockResolvedValue({
+      environments: [
+        { id: "env_1", name: "Prod", slug: "prod", isDefault: true },
+      ],
+    });
     const out = await readEnvironmentOptionsAction(SCOPE);
     expect(out).toHaveLength(1);
-    expect(mockInvoke).toHaveBeenCalledWith("list_environments", {}, expect.any(Object), {
-      surface: "agent",
-    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "list_environments",
+      {},
+      expect.any(Object),
+      {
+        surface: "agent",
+      },
+    );
   });
 });
 
@@ -113,11 +131,22 @@ describe("readTemplateOptionsAction", () => {
     });
     const out = await readTemplateOptionsAction(SCOPE);
     expect(out).toEqual([
-      { id: "tpl_1", environmentId: "env_1", name: "Base", slug: "base", isDefault: false },
+      {
+        id: "tpl_1",
+        environmentId: "env_1",
+        name: "Base",
+        slug: "base",
+        isDefault: false,
+      },
     ]);
-    expect(mockInvoke).toHaveBeenCalledWith("list_sandbox_templates", {}, expect.any(Object), {
-      surface: "agent",
-    });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "list_sandbox_templates",
+      {},
+      expect.any(Object),
+      {
+        surface: "agent",
+      },
+    );
   });
 });
 
@@ -134,7 +163,12 @@ describe("bindAgentEnvironmentAction", () => {
     expect(res).toEqual({ ok: true, binding: BINDING });
     expect(mockInvoke).toHaveBeenCalledWith(
       "bind_agent_environment",
-      { agentId: AGENT, environmentId: "env_1", sandboxTemplateId: null, isPrimary: true },
+      {
+        agentId: AGENT,
+        environmentId: "env_1",
+        sandboxTemplateId: null,
+        isPrimary: true,
+      },
       expect.any(Object),
       { surface: "agent" },
     );

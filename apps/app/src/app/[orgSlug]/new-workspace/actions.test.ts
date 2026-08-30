@@ -8,8 +8,13 @@
  *   - duplicate slug (existing row found) → already-taken error
  *   - slug conflict on insert (23505) → already-taken error
  *   - happy path: returns ok:true with workspaceSlug
- *   - seeders invoked with correct orgId+workspaceId on success
- *   - seeder failure does not reject the action (fire-and-log)
+ *   - all four seeders invoked with correct orgId+workspaceId on success
+ *   - a failure in any one seeder does not reject the action (fire-and-log)
+ *
+ * Every handler the action imports is mocked here. Leaving one unmocked would
+ * pull the real seeder (and its DB client) into a unit run, where it fails and
+ * is swallowed by the action's own fire-and-log catch — the test would still
+ * pass while asserting nothing.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -26,6 +31,7 @@ const {
   mockSeedRegistry,
   mockSeedCapabilities,
   mockSeedSkills,
+  mockSeedEnvironment,
   mockBootstrapAgents,
   dbState,
 } = vi.hoisted(() => {
@@ -58,6 +64,7 @@ const {
     mockSeedRegistry: vi.fn(),
     mockSeedCapabilities: vi.fn(),
     mockSeedSkills: vi.fn(),
+    mockSeedEnvironment: vi.fn(),
     mockBootstrapAgents: vi.fn(),
     dbState,
   };
@@ -86,6 +93,9 @@ vi.mock("@oxagen/handlers/workspace-capability-seed", () => ({
 }));
 vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
   seedWorkspaceDefaultSkillsSystem: mockSeedSkills,
+}));
+vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
+  seedWorkspaceDefaultEnvironmentSystem: mockSeedEnvironment,
 }));
 
 // Mock @oxagen/database — withTenantDb tracks call count via dbState.tenantCallIdx
@@ -176,8 +186,15 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     isUniqueViolation: (err: unknown): boolean => {
       let cur: unknown = err;
       for (let depth = 0; cur != null && depth < 5; depth++) {
-        if (typeof cur === "object" && (cur as { code?: string }).code === "23505") return true;
-        cur = typeof cur === "object" ? (cur as { cause?: unknown }).cause : undefined;
+        if (
+          typeof cur === "object" &&
+          (cur as { code?: string }).code === "23505"
+        )
+          return true;
+        cur =
+          typeof cur === "object"
+            ? (cur as { cause?: unknown }).cause
+            : undefined;
       }
       return false;
     },
@@ -199,7 +216,10 @@ vi.mock("@oxagen/oxagen/contracts/workspace.create", () => ({
         const name = typeof r?.name === "string" ? r.name.trim() : "";
         const slug = typeof r?.slug === "string" ? r.slug.trim() : "";
         if (!name || !slug || /\s/.test(slug)) {
-          return { success: false, error: { issues: [{ message: "Invalid" }] } };
+          return {
+            success: false,
+            error: { issues: [{ message: "Invalid" }] },
+          };
         }
         return { success: true, data: { name, slug } };
       },
@@ -237,11 +257,15 @@ describe("createWorkspaceAction", () => {
     mockSeedRegistry.mockResolvedValue("mreg_123");
     mockSeedCapabilities.mockResolvedValue(undefined);
     mockSeedSkills.mockResolvedValue({ scanned: 3, inserted: 3 });
+    mockSeedEnvironment.mockResolvedValue(undefined);
   });
 
   it("returns ok:false when the caller's role is member (not owner/admin)", async () => {
     dbState.membershipRole = "member";
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("owner");
   });
@@ -263,6 +287,17 @@ describe("createWorkspaceAction", () => {
     if (!res.ok) expect(res.error).toContain("reserved");
   });
 
+  it("returns ok:false for a slug that collides with an org-level route", async () => {
+    // "billing" is a static [orgSlug] child route, so a workspace with that
+    // slug would be permanently shadowed and unreachable.
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Billing", slug: "billing" }),
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("reserved");
+  });
+
   it("returns ok:false when a slug already exists in the org", async () => {
     dbState.existingSlugRows = [{ id: "existing-ws" }];
     const res = await createWorkspaceAction(
@@ -274,7 +309,9 @@ describe("createWorkspaceAction", () => {
   });
 
   it("returns ok:false with duplicate-slug message on 23505 insert error", async () => {
-    const pgErr = Object.assign(new Error("unique violation"), { code: "23505" });
+    const pgErr = Object.assign(new Error("unique violation"), {
+      code: "23505",
+    });
     dbState.insertError = pgErr;
     const res = await createWorkspaceAction(
       "acme",
@@ -295,22 +332,32 @@ describe("createWorkspaceAction", () => {
 
   // ── seeder wiring ─────────────────────────────────────────────────────────
 
-  it("calls all three *System seeders with correct orgId and workspaceId on success", async () => {
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+  it("calls every *System seeder with correct orgId and workspaceId on success", async () => {
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(true);
 
-    expect(mockSeedRegistry).toHaveBeenCalledOnce();
-    expect(mockSeedRegistry).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
-
-    expect(mockSeedCapabilities).toHaveBeenCalledOnce();
-    expect(mockSeedCapabilities).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
-
-    expect(mockSeedSkills).toHaveBeenCalledOnce();
-    expect(mockSeedSkills).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
+    for (const seeder of [
+      mockSeedRegistry,
+      mockSeedCapabilities,
+      mockSeedSkills,
+      mockSeedEnvironment,
+    ]) {
+      expect(seeder).toHaveBeenCalledOnce();
+      expect(seeder).toHaveBeenCalledWith({
+        orgId: ORG.id,
+        workspaceId: "ws-1",
+      });
+    }
   });
 
   it("calls bootstrapWorkspaceAgents inside the tx with correct args on success", async () => {
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(true);
 
     expect(mockBootstrapAgents).toHaveBeenCalledOnce();
@@ -321,26 +368,49 @@ describe("createWorkspaceAction", () => {
 
   it("seed failure in seedWorkspaceDefaultRegistrySystem does NOT reject the action", async () => {
     mockSeedRegistry.mockRejectedValue(new Error("registry seed failed"));
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     // Workspace was created; seed failure is fire-and-log.
     expect(res.ok).toBe(true);
   });
 
   it("seed failure in seedWorkspaceDefaultCapabilitiesSystem does NOT reject the action", async () => {
-    mockSeedCapabilities.mockRejectedValue(new Error("capabilities seed failed"));
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    mockSeedCapabilities.mockRejectedValue(
+      new Error("capabilities seed failed"),
+    );
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(true);
   });
 
   it("seed failure in seedWorkspaceDefaultSkillsSystem does NOT reject the action", async () => {
     mockSeedSkills.mockRejectedValue(new Error("skills seed failed"));
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it("seed failure in seedWorkspaceDefaultEnvironmentSystem does NOT reject the action", async () => {
+    mockSeedEnvironment.mockRejectedValue(new Error("environment seed failed"));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(true);
   });
 
   it("seeders are NOT called when the action returns ok:false (role gate)", async () => {
     dbState.membershipRole = "member";
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
     expect(mockSeedCapabilities).not.toHaveBeenCalled();
@@ -348,9 +418,14 @@ describe("createWorkspaceAction", () => {
   });
 
   it("seeders are NOT called when the insert fails (tx error rolls back workspace)", async () => {
-    const pgErr = Object.assign(new Error("unique violation"), { code: "23505" });
+    const pgErr = Object.assign(new Error("unique violation"), {
+      code: "23505",
+    });
     dbState.insertError = pgErr;
-    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    const res = await createWorkspaceAction(
+      "acme",
+      form({ name: "Main", slug: "main" }),
+    );
     expect(res.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
     expect(mockSeedCapabilities).not.toHaveBeenCalled();

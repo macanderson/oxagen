@@ -41,7 +41,10 @@ export function GraphStatsBoxes({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-3", className)} data-testid="graph-stats">
+    <div
+      className={cn("flex flex-col gap-3", className)}
+      data-testid="graph-stats"
+    >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {STAT_BOXES.map(({ key, label, Icon }) => (
           <div
@@ -50,7 +53,9 @@ export function GraphStatsBoxes({
           >
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Icon className="size-3.5" aria-hidden="true" />
-              <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
+              <span className="text-[11px] font-medium uppercase tracking-wide">
+                {label}
+              </span>
             </div>
             <span className="text-2xl font-semibold tabular-nums leading-none text-foreground">
               {formatCount(stats[key])}

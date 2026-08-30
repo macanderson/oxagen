@@ -25,7 +25,11 @@ export const GraphSearchResult: Story = {
           label: "Person",
           displayName: "Hyman G. Rickover",
           score: 0.94,
-          properties: { rank: "Admiral", born: "1900", role: "Director, Naval Reactors" },
+          properties: {
+            rank: "Admiral",
+            born: "1900",
+            role: "Director, Naval Reactors",
+          },
         },
         {
           nodeId: "n_12",

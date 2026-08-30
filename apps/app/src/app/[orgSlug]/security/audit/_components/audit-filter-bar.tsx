@@ -82,7 +82,8 @@ export function AuditFilterBar({
 
   const clearAll = () =>
     commit((sp) => {
-      for (const k of ["event_type", "outcome", "actor", "q", "from", "to"]) sp.delete(k);
+      for (const k of ["event_type", "outcome", "actor", "q", "from", "to"])
+        sp.delete(k);
     });
 
   const setParam = (key: string, value: string | null) =>
@@ -169,7 +170,12 @@ export function AuditFilterBar({
           aria-label="From date"
           value={from ? from.slice(0, 10) : ""}
           onChange={(e) =>
-            setParam("from", e.target.value ? new Date(e.target.value + "T00:00:00Z").toISOString() : null)
+            setParam(
+              "from",
+              e.target.value
+                ? new Date(e.target.value + "T00:00:00Z").toISOString()
+                : null,
+            )
           }
           className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
@@ -178,13 +184,23 @@ export function AuditFilterBar({
           aria-label="To date"
           value={to ? to.slice(0, 10) : ""}
           onChange={(e) =>
-            setParam("to", e.target.value ? new Date(e.target.value + "T23:59:59Z").toISOString() : null)
+            setParam(
+              "to",
+              e.target.value
+                ? new Date(e.target.value + "T23:59:59Z").toISOString()
+                : null,
+            )
           }
           className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
 
         {hasFilter && (
-          <Button variant="ghost" size="sm" onClick={clearAll} className="shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearAll}
+            className="shrink-0"
+          >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
             Clear
           </Button>
@@ -193,7 +209,9 @@ export function AuditFilterBar({
 
       {anyGroupActive && (
         <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Active:</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Active:
+          </span>
           {selectedEventTypes.map((t) => (
             <Badge key={t} variant="muted" className="text-[10px]">
               {t}

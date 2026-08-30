@@ -74,7 +74,12 @@ export function PromptCacheBar({
 
   const layers: Layer[] = [
     { key: "cached", label: "Cached", tokens: cached, bg: "bg-foreground/70" },
-    { key: "fresh", label: "Fresh input", tokens: fresh, bg: "bg-foreground/35" },
+    {
+      key: "fresh",
+      label: "Fresh input",
+      tokens: fresh,
+      bg: "bg-foreground/35",
+    },
     { key: "output", label: "Output", tokens: output, bg: "bg-foreground/15" },
   ];
 
@@ -108,22 +113,33 @@ export function PromptCacheBar({
               <div
                 key={layer.key}
                 data-layer={layer.key}
-                className={cn("h-full transition-[width] duration-300", layer.bg)}
+                className={cn(
+                  "h-full transition-[width] duration-300",
+                  layer.bg,
+                )}
                 style={{ width: `${pct}%` }}
               />
             );
           })}
         </div>
         {/* Headline: cache-hit rate. Muted, tabular so it doesn't jitter. */}
-        <span className="text-xs tabular-nums text-muted-foreground" aria-hidden="true">
+        <span
+          className="text-xs tabular-nums text-muted-foreground"
+          aria-hidden="true"
+        >
           {formatPct(hitRate)} cached
         </span>
       </TooltipTrigger>
       <TooltipPopup>
         <div className="flex flex-col gap-0.5 text-xs">
-          <span className="font-medium">Prompt cache · {formatPct(hitRate)} hit rate</span>
+          <span className="font-medium">
+            Prompt cache · {formatPct(hitRate)} hit rate
+          </span>
           {layers.map((layer) => (
-            <span key={layer.key} className="tabular-nums text-muted-foreground">
+            <span
+              key={layer.key}
+              className="tabular-nums text-muted-foreground"
+            >
               {layer.label}: {layer.tokens.toLocaleString()}
             </span>
           ))}

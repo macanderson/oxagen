@@ -12,7 +12,13 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, within, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  within,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { pathnameRef } = vi.hoisted(() => ({
@@ -25,12 +31,26 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
-    <a href={href} {...rest}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   ),
 }));
 
-import { SettingsNav, MobileSettingsNav, type SettingsNavItem } from "./settings-nav";
+import {
+  SettingsNav,
+  MobileSettingsNav,
+  type SettingsNavItem,
+} from "./settings-nav";
 
 const items: SettingsNavItem[] = [
   { label: "General", href: "/acme/prod/settings/general" },
@@ -48,10 +68,9 @@ describe("SettingsNav", () => {
     render(<SettingsNav items={items} />);
     const nav = screen.getByRole("navigation", { name: "Settings" });
     for (const item of items) {
-      expect(within(nav).getByRole("link", { name: item.label })).toHaveAttribute(
-        "href",
-        item.href,
-      );
+      expect(
+        within(nav).getByRole("link", { name: item.label }),
+      ).toHaveAttribute("href", item.href);
     }
   });
 
@@ -61,7 +80,9 @@ describe("SettingsNav", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByRole("link", { name: "General" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "General" })).not.toHaveAttribute(
+      "aria-current",
+    );
   });
 });
 
@@ -76,7 +97,9 @@ describe("MobileSettingsNav", () => {
   });
 
   it("renders nothing when there are no items", () => {
-    const { container } = render(<MobileSettingsNav items={[]} label="Workspace settings" />);
+    const { container } = render(
+      <MobileSettingsNav items={[]} label="Workspace settings" />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -86,20 +109,25 @@ describe("MobileSettingsNav", () => {
     const sheetNav = await screen.findByTestId("settings-mobile-nav-sheet");
     const links = within(sheetNav).getAllByRole("link");
     // Parity: the sheet must present the identical item list, nothing dropped.
-    expect(links.map((l) => l.getAttribute("href"))).toEqual(items.map((i) => i.href));
-    expect(within(sheetNav).getByRole("link", { name: "Members" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    expect(links.map((l) => l.getAttribute("href"))).toEqual(
+      items.map((i) => i.href),
     );
+    expect(
+      within(sheetNav).getByRole("link", { name: "Members" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("closes the sheet when a section is selected", async () => {
     render(<MobileSettingsNav items={items} label="Workspace settings" />);
     await userEvent.click(screen.getByTestId("settings-mobile-nav-trigger"));
     const sheetNav = await screen.findByTestId("settings-mobile-nav-sheet");
-    await userEvent.click(within(sheetNav).getByRole("link", { name: "General" }));
+    await userEvent.click(
+      within(sheetNav).getByRole("link", { name: "General" }),
+    );
     await waitFor(() => {
-      expect(screen.queryByTestId("settings-mobile-nav-sheet")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("settings-mobile-nav-sheet"),
+      ).not.toBeInTheDocument();
     });
   });
 });

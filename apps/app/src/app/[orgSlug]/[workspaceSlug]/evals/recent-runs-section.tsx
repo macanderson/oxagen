@@ -4,8 +4,8 @@
  *
  * Rendered inside its own <Suspense> boundary in page.tsx so it streams in
  * independently of the datasets section. Never throws from RSC — a handler
- * failure renders the client with an empty run list + zeroed totals (its own
- * empty state takes over). Mirrors datasets-section.tsx exactly.
+ * failure renders an ErrorState in place of the list, so a failed fetch is
+ * never mistaken for "no runs yet". Mirrors datasets-section.tsx exactly.
  */
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";

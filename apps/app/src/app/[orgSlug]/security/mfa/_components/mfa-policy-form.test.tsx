@@ -13,7 +13,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  fireEvent,
+  act,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { MfaPolicyForm } from "./mfa-policy-form";
 
 afterEach(() => cleanup());
@@ -48,7 +54,9 @@ describe("MfaPolicyForm", () => {
       />,
     );
     // Switch renders with aria-label
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]');
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    );
     expect(toggle).not.toBeNull();
   });
 
@@ -110,9 +118,7 @@ describe("MfaPolicyForm", () => {
         initialMfaGraceHours={0}
       />,
     );
-    expect(
-      getByText(/Owner or admin role required to change/),
-    ).toBeDefined();
+    expect(getByText(/Owner or admin role required to change/)).toBeDefined();
     // Save button should not appear
     expect(queryByText("Save policy")).toBeNull();
   });
@@ -126,7 +132,9 @@ describe("MfaPolicyForm", () => {
         initialMfaGraceHours={24}
       />,
     );
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]');
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    );
     // When disabled, the button should have disabled attribute or aria-disabled
     const isDisabled =
       toggle?.getAttribute("disabled") !== null ||
@@ -146,7 +154,9 @@ describe("MfaPolicyForm", () => {
     );
 
     // Toggle MFA required switch to make it dirty
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]') as HTMLElement;
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -179,7 +189,9 @@ describe("MfaPolicyForm", () => {
       />,
     );
 
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]') as HTMLElement;
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -204,7 +216,9 @@ describe("MfaPolicyForm", () => {
       />,
     );
 
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]') as HTMLElement;
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -233,7 +247,9 @@ describe("MfaPolicyForm", () => {
       />,
     );
 
-    const toggle = container.querySelector('[aria-label="Require MFA for all members"]') as HTMLElement;
+    const toggle = container.querySelector(
+      '[aria-label="Require MFA for all members"]',
+    ) as HTMLElement;
     await act(async () => {
       fireEvent.click(toggle);
     });

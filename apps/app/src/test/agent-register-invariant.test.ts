@@ -56,9 +56,24 @@ const IMPORTS_AGENT_REGISTER = /["']@oxagen\/agent\/register["']/;
 // Legacy dotted form kept as belt-and-braces for any straggler literals.
 const INVOKES_DOTTED_AGENT_CAPABILITY = /invoke\(\s*["']agent\./;
 
-function invokesAgentCapability(flattened: string, names: readonly string[]): boolean {
+function escapeForRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function invokesAgentCapability(
+  flattened: string,
+  names: readonly string[],
+): boolean {
   if (INVOKES_DOTTED_AGENT_CAPABILITY.test(flattened)) return true;
-  return names.some((name) => flattened.includes(`invoke("${name}"`) || flattened.includes(`invoke('${name}'`));
+  // `flattened` collapses runs of whitespace to a SINGLE SPACE, so a
+  // multi-line `invoke(\n  "list_agent_tools",` becomes `invoke( "…"` — with a
+  // space after the paren. Matching the bare substring `invoke("name"` therefore
+  // silently skipped every multi-line call site (this is how the missing
+  // @oxagen/agent/register import in lib/workbench/tools.ts went unnoticed).
+  // Allow the optional space instead of relying on the call being one line.
+  return names.some((name) =>
+    new RegExp(`invoke\\(\\s*["']${escapeForRegExp(name)}["']`).test(flattened),
+  );
 }
 
 describe("agent handler registration invariant", () => {
@@ -76,7 +91,10 @@ describe("agent handler registration invariant", () => {
       const source = readFileSync(file, "utf8");
       // Collapse whitespace so multi-line `invoke(\n  "list_sandboxes")` matches.
       const flattened = source.replace(/\s+/g, " ");
-      if (invokesAgentCapability(flattened, agentHandlerNames) && !IMPORTS_AGENT_REGISTER.test(source)) {
+      if (
+        invokesAgentCapability(flattened, agentHandlerNames) &&
+        !IMPORTS_AGENT_REGISTER.test(source)
+      ) {
         offenders.push(relative(SRC_DIR, file));
       }
     }

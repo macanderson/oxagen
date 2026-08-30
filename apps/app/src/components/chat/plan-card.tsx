@@ -83,17 +83,23 @@ export function PlanCard({
 }: PlanCardProps) {
   const [rationaleOpen, setRationaleOpen] = React.useState(false);
   const [amending, setAmending] = React.useState(false);
-  const [draft, setDraft] = React.useState<PlanStep[]>(() => steps.map(cloneStep));
+  const [draft, setDraft] = React.useState<PlanStep[]>(() =>
+    steps.map(cloneStep),
+  );
   const [pending, setPending] = React.useState<PlanDecision | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [optimistic, setOptimistic] = React.useState<PlanDecision | "pending">(status);
+  const [optimistic, setOptimistic] = React.useState<PlanDecision | "pending">(
+    status,
+  );
 
   const capabilities = React.useMemo<readonly AgentCapability[]>(
     () => agentCapabilities ?? [],
     [agentCapabilities],
   );
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
 
   const enterAmend = () => {
     setDraft(steps.map(cloneStep));
@@ -107,9 +113,14 @@ export function PlanCard({
     setError(null);
   };
 
-  const updateStep = React.useCallback((id: string, patch: Partial<PlanStep>) => {
-    setDraft((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  }, []);
+  const updateStep = React.useCallback(
+    (id: string, patch: Partial<PlanStep>) => {
+      setDraft((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      );
+    },
+    [],
+  );
 
   const deleteStep = React.useCallback((id: string) => {
     // Cascade-clean: removing a step also drops it from any sibling's
@@ -173,7 +184,9 @@ export function PlanCard({
     <div
       className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 p-4 animate-in"
       data-component="plan-card"
-      data-plan-status={settled ? optimistic : amending ? "amending" : "pending"}
+      data-plan-status={
+        settled ? optimistic : amending ? "amending" : "pending"
+      }
     >
       <div className="flex items-center gap-2">
         <ListChecks className="h-4 w-4 text-muted-foreground" />
@@ -190,7 +203,10 @@ export function PlanCard({
           modifiers={[restrictToVerticalAxis]}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext items={draft.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            items={draft.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
             <ul className="space-y-2">
               {draft.map((step) => (
                 <SortableStepRow
@@ -225,7 +241,9 @@ export function PlanCard({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{step.summary}</span>
                   {step.capability ? (
-                    <span className="text-xs text-muted-foreground">{step.capability}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {step.capability}
+                    </span>
                   ) : null}
                   {step.dependsOn.length > 0 ? (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -279,7 +297,11 @@ export function PlanCard({
               >
                 Cancel
               </Button>
-              <Button size="sm" onClick={() => handle("amended")} disabled={pending !== null}>
+              <Button
+                size="sm"
+                onClick={() => handle("amended")}
+                disabled={pending !== null}
+              >
                 {pending === "amended" ? "Saving…" : "Save amendments"}
               </Button>
             </>
@@ -301,7 +323,11 @@ export function PlanCard({
               >
                 Deny
               </Button>
-              <Button size="sm" onClick={() => handle("approved")} disabled={pending !== null}>
+              <Button
+                size="sm"
+                onClick={() => handle("approved")}
+                disabled={pending !== null}
+              >
                 {pending === "approved" ? "Approving…" : "Approve"}
               </Button>
             </>
@@ -327,7 +353,14 @@ function SortableStepRow({
   onChange,
   onDelete,
 }: SortableStepRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: step.id,
   });
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
@@ -340,7 +373,8 @@ function SortableStepRow({
   };
 
   const dependents = React.useMemo(
-    () => allSteps.filter((s) => s.dependsOn.includes(step.id)).map((s) => s.id),
+    () =>
+      allSteps.filter((s) => s.dependsOn.includes(step.id)).map((s) => s.id),
     [allSteps, step.id],
   );
 
@@ -356,12 +390,13 @@ function SortableStepRow({
     setCycleWarning(null);
     const already = step.dependsOn.includes(otherId);
     if (already) {
-      onChange(step.id, { dependsOn: step.dependsOn.filter((d) => d !== otherId) });
+      onChange(step.id, {
+        dependsOn: step.dependsOn.filter((d) => d !== otherId),
+      });
       return;
     }
-    // Cycle prevention: BFS from `otherId` across existing dependsOn
-    // edges; if we can reach `step.id`, adding step.id -> otherId would
-    // close a cycle.
+    // Cycle prevention: walk the existing dependsOn edges out from `otherId`;
+    // if we can reach `step.id`, adding step.id -> otherId would close a cycle.
     if (wouldIntroduceCycle(allSteps, step.id, otherId)) {
       setCycleWarning(`Adding ${otherId} would create a cycle.`);
       return;
@@ -393,7 +428,9 @@ function SortableStepRow({
         </button>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="shrink-0 text-xs text-muted-foreground">{step.id}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {step.id}
+            </span>
             <Input
               value={step.summary}
               onChange={(e) => onChange(step.id, { summary: e.target.value })}
@@ -410,16 +447,24 @@ function SortableStepRow({
           />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
-              <label htmlFor={`${step.id}-capability`} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label
+                htmlFor={`${step.id}-capability`}
+                className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
                 Capability
               </label>
               <Select
                 value={selectedCapability}
                 onValueChange={(v: string | null) =>
-                  onChange(step.id, { capability: v === "__none__" || v === null ? null : v })
+                  onChange(step.id, {
+                    capability: v === "__none__" || v === null ? null : v,
+                  })
                 }
               >
-                <SelectTrigger id={`${step.id}-capability`} className="h-9 text-xs">
+                <SelectTrigger
+                  id={`${step.id}-capability`}
+                  className="h-9 text-xs"
+                >
                   <SelectValue placeholder="Choose capability" />
                 </SelectTrigger>
                 <SelectPopup>
@@ -429,8 +474,15 @@ function SortableStepRow({
                   {capabilities.map((cap) => (
                     <SelectItem key={cap.name} value={cap.name}>
                       <span className="flex items-center gap-2">
-                        <span className="font-mono text-[11px]">{cap.name}</span>
-                        <span className={cn("text-[9px] font-medium", RISK_TEXT[cap.riskLevel])}>
+                        <span className="font-mono text-[11px]">
+                          {cap.name}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[9px] font-medium",
+                            RISK_TEXT[cap.riskLevel],
+                          )}
+                        >
                           {cap.riskLevel}
                         </span>
                       </span>
@@ -440,7 +492,10 @@ function SortableStepRow({
               </Select>
             </div>
             <div className="space-y-1">
-              <label htmlFor={`${step.id}-depends-on`} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label
+                htmlFor={`${step.id}-depends-on`}
+                className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
                 Depends on
               </label>
               <Menu>
@@ -456,7 +511,9 @@ function SortableStepRow({
                   }
                 >
                   <span className="truncate">
-                    {step.dependsOn.length > 0 ? step.dependsOn.join(", ") : "None"}
+                    {step.dependsOn.length > 0
+                      ? step.dependsOn.join(", ")
+                      : "None"}
                   </span>
                   <ChevronDown className="ml-2 h-3 w-3 opacity-60" />
                 </MenuTrigger>
@@ -486,7 +543,9 @@ function SortableStepRow({
                             className="pointer-events-none"
                           />
                           <span className="font-mono">{sib.id}</span>
-                          <span className="truncate text-muted-foreground">{sib.summary}</span>
+                          <span className="truncate text-muted-foreground">
+                            {sib.summary}
+                          </span>
                         </button>
                       );
                     })
@@ -512,7 +571,9 @@ function SortableStepRow({
             aria-label={confirmingDelete ? "Confirm delete" : "Delete step"}
           >
             <Trash2 className="h-3 w-3" />
-            {confirmingDelete ? <span className="ml-1 text-[10px]">Confirm</span> : null}
+            {confirmingDelete ? (
+              <span className="ml-1 text-[10px]">Confirm</span>
+            ) : null}
           </Button>
           {confirmingDelete ? (
             <button

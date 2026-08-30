@@ -5,17 +5,54 @@
  * generic, which does not resolve the `tool-result` arm to a concrete
  * narrowable shape when TOOLS is the wide `ToolSet` alias.
  */
-export interface TextDeltaPart { type: "text-delta"; text: string }
-export interface ReasoningDeltaPart { type: "reasoning-delta"; id: string; text: string }
-export interface ReasoningBoundaryPart { type: "reasoning-start" | "reasoning-end"; id: string }
-export interface ToolInputStartPart { type: "tool-input-start"; id: string; toolName: string }
-export interface ToolInputDeltaPart { type: "tool-input-delta"; id: string; delta: string }
-export interface ToolCallPart { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
-export interface ToolResultPart { type: "tool-result"; toolCallId: string; toolName: string; output: unknown }
-export interface ToolErrorPart { type: "tool-error"; toolCallId: string; toolName: string; error: unknown }
+export interface TextDeltaPart {
+  type: "text-delta";
+  text: string;
+}
+export interface ReasoningDeltaPart {
+  type: "reasoning-delta";
+  id: string;
+  text: string;
+}
+export interface ReasoningBoundaryPart {
+  type: "reasoning-start" | "reasoning-end";
+  id: string;
+}
+export interface ToolInputStartPart {
+  type: "tool-input-start";
+  id: string;
+  toolName: string;
+}
+export interface ToolInputDeltaPart {
+  type: "tool-input-delta";
+  id: string;
+  delta: string;
+}
+export interface ToolCallPart {
+  type: "tool-call";
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+}
+export interface ToolResultPart {
+  type: "tool-result";
+  toolCallId: string;
+  toolName: string;
+  output: unknown;
+}
+export interface ToolErrorPart {
+  type: "tool-error";
+  toolCallId: string;
+  toolName: string;
+  error: unknown;
+}
 export interface FinishPart {
   type: "finish";
-  totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  totalUsage: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
 }
 
 /** Discriminant accessor for an unknown stream part. */
@@ -112,12 +149,16 @@ function toRecord(candidate: unknown): Record<string, unknown> | null {
  * Pull {code, message} out of a structured error record. Returns null when the
  * record carries no usable (non-blank) message in any recognized shape.
  */
-function infoFromRecord(record: Record<string, unknown>): StreamErrorInfo | null {
+function infoFromRecord(
+  record: Record<string, unknown>,
+): StreamErrorInfo | null {
   // Envelope form: { error: { code?, message }, requestId? }.
   const errField = record["error"];
   if (isRecord(errField)) {
-    const message = typeof errField["message"] === "string" ? errField["message"] : undefined;
-    const code = typeof errField["code"] === "string" ? errField["code"] : undefined;
+    const message =
+      typeof errField["message"] === "string" ? errField["message"] : undefined;
+    const code =
+      typeof errField["code"] === "string" ? errField["code"] : undefined;
     if (message !== undefined && message.trim().length > 0) {
       return code !== undefined ? { code, message } : { message };
     }
@@ -129,8 +170,11 @@ function infoFromRecord(record: Record<string, unknown>): StreamErrorInfo | null
   // Flat form: { message, code? }.
   const flatMessage = record["message"];
   if (typeof flatMessage === "string" && flatMessage.trim().length > 0) {
-    const code = typeof record["code"] === "string" ? record["code"] : undefined;
-    return code !== undefined ? { code, message: flatMessage } : { message: flatMessage };
+    const code =
+      typeof record["code"] === "string" ? record["code"] : undefined;
+    return code !== undefined
+      ? { code, message: flatMessage }
+      : { message: flatMessage };
   }
   return null;
 }

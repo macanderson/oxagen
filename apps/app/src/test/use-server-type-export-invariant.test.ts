@@ -78,7 +78,7 @@ function localTypeReExports(source: string): string[] {
   return offenders;
 }
 
-describe("\"use server\" type-export invariant", () => {
+describe('"use server" type-export invariant', () => {
   const files = collectSourceFiles(SRC_DIR);
 
   it("scans a non-empty source tree", () => {
@@ -100,7 +100,7 @@ describe("\"use server\" type-export invariant", () => {
     ).toEqual(["export type { B }"]);
   });
 
-  it("no \"use server\" module uses the local type re-export form", () => {
+  it('no "use server" module uses the local type re-export form', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = readFileSync(file, "utf8");

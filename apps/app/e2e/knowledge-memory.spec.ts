@@ -47,7 +47,9 @@ test.describe("Knowledge → Memory — list + new sections render", () => {
   test("fresh workspace renders the memory list, promotion queue, citations, and evidence sections", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mem-sections" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mem-sections",
+    });
     const ws = "default";
 
     await page.goto(`/${orgSlug}/${ws}/knowledge/memory`);
@@ -56,9 +58,9 @@ test.describe("Knowledge → Memory — list + new sections render", () => {
     await shot(page, "01-page-loaded");
 
     // ── Existing memory list (pre-existing, renamed from knowledge/memories) ──
-    await expect(
-      page.getByText("Agent Memories", { exact: true }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Agent Memories", { exact: true })).toBeVisible(
+      { timeout: 15_000 },
+    );
 
     // ── Promotion Candidates queue (new) ─────────────────────────────────────
     await expect(
@@ -87,7 +89,9 @@ test.describe("Knowledge → Memory — list + new sections render", () => {
     await shot(page, "04-evidence-attach-form");
 
     // ── Decay-policy cross-link — linked out to, not reimplemented ──────────
-    const decayLink = page.getByRole("link", { name: /workspace settings.*agent defaults/i });
+    const decayLink = page.getByRole("link", {
+      name: /workspace settings.*agent defaults/i,
+    });
     await expect(decayLink).toBeVisible();
     await expect(decayLink).toHaveAttribute(
       "href",
@@ -98,7 +102,9 @@ test.describe("Knowledge → Memory — list + new sections render", () => {
   test("Memory Citations panel fails open on a lookup for a non-existent execution", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "mem-citations" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "mem-citations",
+    });
     const ws = "default";
 
     await page.goto(`/${orgSlug}/${ws}/knowledge/memory`);

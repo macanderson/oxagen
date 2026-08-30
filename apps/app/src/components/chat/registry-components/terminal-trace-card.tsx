@@ -31,10 +31,10 @@ const LINE_COLLAPSE_THRESHOLD = 40;
 const ANSI_SEQ_RE = /\x1b\[([0-9;]*)([A-Za-z])/g;
 
 // SGR foreground → class. Red/green/yellow/blue use the semantic design tokens
-// (--error/--success/--warning/--info) which already flip with the theme; the
+// (--error/--success/--warning/--info), which already flip with the theme; the
 // black/gray, magenta, cyan and default-foreground codes use the theme-aware
-// `ansi-*` classes from code-surface.css (the previous text-neutral-*/text-white/
-// text-cyan-400/text-fuchsia-400 were dark-only and vanished in light mode).
+// `ansi-*` classes from code-surface.css. Every entry must follow the theme —
+// a fixed palette class here would vanish against one of the two backgrounds.
 const ANSI_COLOR_CLASS: Readonly<Record<string, string>> = {
   "30": "ansi-dim",
   "31": "text-error",
@@ -76,14 +76,18 @@ export function parseAnsiLine(line: string): AnsiSegment[] {
   let currentColorClass: string | undefined;
   let currentBold = false;
   const currentClass = (): string | undefined =>
-    [currentColorClass, currentBold ? "font-semibold" : undefined].filter(Boolean).join(" ") ||
-    undefined;
+    [currentColorClass, currentBold ? "font-semibold" : undefined]
+      .filter(Boolean)
+      .join(" ") || undefined;
   ANSI_SEQ_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = ANSI_SEQ_RE.exec(line)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: line.slice(lastIndex, match.index), className: currentClass() });
+      segments.push({
+        text: line.slice(lastIndex, match.index),
+        className: currentClass(),
+      });
     }
     const [, codeStr, letter] = match;
     if (letter === "m") {
@@ -93,7 +97,8 @@ export function parseAnsiLine(line: string): AnsiSegment[] {
           currentColorClass = undefined;
           currentBold = false;
         } else if (code === "1") currentBold = true;
-        else if (ANSI_COLOR_CLASS[code]) currentColorClass = ANSI_COLOR_CLASS[code];
+        else if (ANSI_COLOR_CLASS[code])
+          currentColorClass = ANSI_COLOR_CLASS[code];
       }
     }
     // Non-SGR sequences (cursor movement, screen clears, …) are dropped.
@@ -114,7 +119,8 @@ function Scrollback({ text, testId }: { text: string; testId: string }) {
   const [expanded, setExpanded] = useState(false);
   const lines = useMemo(() => splitLines(text), [text]);
   const overLimit = lines.length > LINE_COLLAPSE_THRESHOLD;
-  const visible = expanded || !overLimit ? lines : lines.slice(0, LINE_COLLAPSE_THRESHOLD);
+  const visible =
+    expanded || !overLimit ? lines : lines.slice(0, LINE_COLLAPSE_THRESHOLD);
 
   if (lines.length === 0) {
     return <p className="px-3 py-3 text-xs text-muted-foreground">(empty)</p>;
@@ -142,7 +148,9 @@ function Scrollback({ text, testId }: { text: string; testId: string }) {
           onClick={() => setExpanded((v) => !v)}
           className="mt-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {expanded ? "Show fewer lines" : `Show ${lines.length - LINE_COLLAPSE_THRESHOLD} more lines`}
+          {expanded
+            ? "Show fewer lines"
+            : `Show ${lines.length - LINE_COLLAPSE_THRESHOLD} more lines`}
         </button>
       ) : null}
     </div>
@@ -159,7 +167,8 @@ export default function TerminalTraceCard({
 }: TerminalTraceCardProps): ReactElement {
   const stdoutText = stdout ?? "";
   const stderrText = stderr ?? "";
-  const defaultTab = stdoutText.length === 0 && stderrText.length > 0 ? "stderr" : "stdout";
+  const defaultTab =
+    stdoutText.length === 0 && stderrText.length > 0 ? "stderr" : "stdout";
 
   return (
     <div

@@ -18,8 +18,18 @@ import { CreditBalance, type CreditLedgerEntry } from "./credit-balance";
 afterEach(cleanup);
 
 const makeLedger = (): CreditLedgerEntry[] => [
-  { id: "e1", deltaCents: 500, reason: "Monthly credit", createdAt: "2025-01-01T00:00:00Z" },
-  { id: "e2", deltaCents: -200, reason: "Agent usage", createdAt: "2025-01-02T00:00:00Z" },
+  {
+    id: "e1",
+    deltaCents: 500,
+    reason: "Monthly credit",
+    createdAt: "2025-01-01T00:00:00Z",
+  },
+  {
+    id: "e2",
+    deltaCents: -200,
+    reason: "Agent usage",
+    createdAt: "2025-01-02T00:00:00Z",
+  },
 ];
 
 describe("CreditBalance — rendering", () => {
@@ -68,7 +78,12 @@ describe("CreditBalance — ledger toggle", () => {
 
   it("positive delta renders success badge with '+' prefix", async () => {
     const ledger: CreditLedgerEntry[] = [
-      { id: "e1", deltaCents: 500, reason: "Top-up", createdAt: "2025-01-01T00:00:00Z" },
+      {
+        id: "e1",
+        deltaCents: 500,
+        reason: "Top-up",
+        createdAt: "2025-01-01T00:00:00Z",
+      },
     ];
     render(<CreditBalance balanceCents={500} ledger={ledger} />);
     await userEvent.click(screen.getByText(/recent ledger entries/i));
@@ -77,7 +92,12 @@ describe("CreditBalance — ledger toggle", () => {
 
   it("negative delta renders destructive badge", async () => {
     const ledger: CreditLedgerEntry[] = [
-      { id: "e2", deltaCents: -100, reason: "Usage", createdAt: "2025-01-02T00:00:00Z" },
+      {
+        id: "e2",
+        deltaCents: -100,
+        reason: "Usage",
+        createdAt: "2025-01-02T00:00:00Z",
+      },
     ];
     render(<CreditBalance balanceCents={400} ledger={ledger} />);
     await userEvent.click(screen.getByText(/recent ledger entries/i));

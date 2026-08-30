@@ -40,7 +40,9 @@ test.describe("chat.prompt-queue — queue management", () => {
   test("submitting mid-stream queues prompts in an ordered list with controls", async ({
     page,
   }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-queue" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-queue",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -97,13 +99,19 @@ test.describe("chat.prompt-queue — queue management", () => {
     });
 
     // Reorder: move the second queued item up → it becomes first.
-    await page.getByRole("button", { name: /move queued message 2 up/i }).click();
+    await page
+      .getByRole("button", { name: /move queued message 2 up/i })
+      .click();
     await expect(
-      page.getByRole("button", { name: /edit queued message 1: third prompt/i }),
+      page.getByRole("button", {
+        name: /edit queued message 1: third prompt/i,
+      }),
     ).toBeVisible();
 
     // Remove the first queued item.
-    await page.getByRole("button", { name: /remove queued message 1/i }).click();
+    await page
+      .getByRole("button", { name: /remove queued message 1/i })
+      .click();
     await expect(queuePanel).toContainText("1 message queued");
     await expect(queuePanel).not.toContainText("Third prompt — also queued");
 

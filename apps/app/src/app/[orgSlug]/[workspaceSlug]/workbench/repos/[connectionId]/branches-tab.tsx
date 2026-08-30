@@ -5,7 +5,11 @@
  *
  * There is no repo.branch.list capability today, so this tab cannot show a
  * true branch list without fabricating data. Instead it shows the branches
- * created THIS session, labeled as such, plus the create form.
+ * created here, labeled as such, plus the create form.
+ *
+ * That list lives in local component state, and Base UI unmounts an inactive
+ * Tabs.Panel, so it is emptied whenever the user leaves and re-enters this
+ * tab. The empty-state copy says so rather than implying durability.
  */
 
 import * as React from "react";
@@ -122,7 +126,7 @@ export function BranchesTab({
         <EmptyState
           icon={<GitBranch />}
           title="No branches created this session"
-          description="Oxagen doesn't list existing branches yet (no repo.branch.list capability) — branches you create here show up below."
+          description="Oxagen can't list a repo's existing branches yet. Branches you create here show up below until you leave this tab."
           variant="muted"
         />
       ) : (

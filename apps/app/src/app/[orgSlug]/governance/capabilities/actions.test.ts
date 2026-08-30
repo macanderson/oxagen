@@ -10,14 +10,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSession, mockResolveOrg, mockAssertOrgMember, mockInvoke } = vi.hoisted(
-  () => ({
+const { mockGetSession, mockResolveOrg, mockAssertOrgMember, mockInvoke } =
+  vi.hoisted(() => ({
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
     mockAssertOrgMember: vi.fn(),
     mockInvoke: vi.fn(),
-  }),
-);
+  }));
 
 vi.mock("@/lib/session", () => ({ getSession: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
@@ -101,12 +100,14 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue({ user: { id: "user-1" } });
   mockResolveOrg.mockResolvedValue({ id: "org-1" });
   mockAssertOrgMember.mockResolvedValue(undefined);
-  mockInvoke.mockImplementation(async (_org: string, _user: string, name: string) => {
-    if (name === "get_capability_registry") return DETAIL;
-    if (name === "get_usage_breakdown") return USAGE;
-    if (name === "query_audit_log") return AUDIT;
-    throw new Error(`unexpected capability ${name}`);
-  });
+  mockInvoke.mockImplementation(
+    async (_org: string, _user: string, name: string) => {
+      if (name === "get_capability_registry") return DETAIL;
+      if (name === "get_usage_breakdown") return USAGE;
+      if (name === "query_audit_log") return AUDIT;
+      throw new Error(`unexpected capability ${name}`);
+    },
+  );
 });
 
 describe("fetchCapabilityInsights", () => {
@@ -144,12 +145,14 @@ describe("fetchCapabilityInsights", () => {
   });
 
   it("returns a zero usage slice when the capability has no metered rows", async () => {
-    mockInvoke.mockImplementation(async (_o: string, _u: string, name: string) => {
-      if (name === "get_capability_registry") return DETAIL;
-      if (name === "get_usage_breakdown") return { byCapability: [] };
-      if (name === "query_audit_log") return AUDIT;
-      throw new Error("unexpected");
-    });
+    mockInvoke.mockImplementation(
+      async (_o: string, _u: string, name: string) => {
+        if (name === "get_capability_registry") return DETAIL;
+        if (name === "get_usage_breakdown") return { byCapability: [] };
+        if (name === "query_audit_log") return AUDIT;
+        throw new Error("unexpected");
+      },
+    );
     const out = await fetchCapabilityInsights("acme", "query_audit_log");
     expect(out.usage).toEqual({
       costMicros: 0,
@@ -160,10 +163,12 @@ describe("fetchCapabilityInsights", () => {
   });
 
   it("degrades usage and audit to null independently", async () => {
-    mockInvoke.mockImplementation(async (_o: string, _u: string, name: string) => {
-      if (name === "get_capability_registry") return DETAIL;
-      throw new Error("analytics down");
-    });
+    mockInvoke.mockImplementation(
+      async (_o: string, _u: string, name: string) => {
+        if (name === "get_capability_registry") return DETAIL;
+        throw new Error("analytics down");
+      },
+    );
     const out = await fetchCapabilityInsights("acme", "query_audit_log");
     expect(out.detail?.name).toBe("query_audit_log");
     expect(out.usage).toBeNull();
@@ -172,11 +177,14 @@ describe("fetchCapabilityInsights", () => {
   });
 
   it("errors when the detail read itself fails", async () => {
-    mockInvoke.mockImplementation(async (_o: string, _u: string, name: string) => {
-      if (name === "get_capability_registry") throw new Error("registry down");
-      if (name === "get_usage_breakdown") return USAGE;
-      return AUDIT;
-    });
+    mockInvoke.mockImplementation(
+      async (_o: string, _u: string, name: string) => {
+        if (name === "get_capability_registry")
+          throw new Error("registry down");
+        if (name === "get_usage_breakdown") return USAGE;
+        return AUDIT;
+      },
+    );
     const out = await fetchCapabilityInsights("acme", "query_audit_log");
     expect(out.detail).toBeNull();
     expect(out.error).toBe("Unable to load the contract detail.");

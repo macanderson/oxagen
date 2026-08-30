@@ -14,7 +14,11 @@ import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agen
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -58,7 +62,10 @@ export async function saveMemoryPolicyAction(
 
   const parsed = MemoryPolicySchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
 
   const {
@@ -78,62 +85,70 @@ export async function saveMemoryPolicyAction(
   // Assert the caller is an org member first (IDOR guard).
   await assertOrgMember(org.id, session.user.id);
 
-  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    // Re-read the caller's workspace role server-side — never trust the client.
-    // apps/app does not enforce IAM via invoke(), so this is the gate.
-    const wsRoleRows = await withTenantDb((tx) =>
-      tx
-        .select({ role: schema.workspaceUsers.role })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, ws.id),
-            eq(schema.workspaceUsers.userId, session.user.id),
-          ),
-        )
-        .limit(1),
-    );
+  return await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      // Re-read the caller's workspace role server-side — never trust the client.
+      // apps/app does not enforce IAM via invoke(), so this is the gate.
+      const wsRoleRows = await withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
+      );
 
-    const wsRole = wsRoleRows[0]?.role ?? "";
-    if (!["owner"].includes(wsRole.toLowerCase())) {
-      return { ok: false, error: "Only workspace owners can edit memory policy." };
-    }
+      // Owner-only — stricter than the owner/admin gate the other Agent Defaults
+      // sub-tabs use, because memory policy governs what the agent retains.
+      const wsRole = wsRoleRows[0]?.role ?? "";
+      if (wsRole.toLowerCase() !== "owner") {
+        return {
+          ok: false,
+          error: "Only workspace owners can edit memory policy.",
+        };
+      }
 
-    const ctx = {
-      orgId: org.id,
-      workspaceId: ws.id,
-      userId: session.user.id,
-      apiKeyId: null as string | null,
-      requestId: crypto.randomUUID(),
-      surface: "app" as const,
-      messageId: null as string | null,
-    };
+      const ctx = {
+        orgId: org.id,
+        workspaceId: ws.id,
+        userId: session.user.id,
+        apiKeyId: null as string | null,
+        requestId: crypto.randomUUID(),
+        surface: "app" as const,
+        messageId: null as string | null,
+      };
 
-    try {
-      // CRITICAL: pass { surface: "agent" } — the contract's `surfaces` list is
-      // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
-      // surface_denied. (Same as the workspace.settings.write precedent.)
-      await invoke(
-        "update_memory_policy",
-        {
-          halfLifeLowDays,
-          halfLifeHighDays,
-          recallThreshold,
-          complianceThreshold,
-          defaultDecayFloor,
-        },
-        ctx,
-        { surface: "agent" },
-      ) as AgentMemoryPolicyWriteOutput;
+      try {
+        // CRITICAL: pass { surface: "agent" } — the contract's `surfaces` list is
+        // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
+        // surface_denied. (Same as the workspace.settings.write precedent.)
+        (await invoke(
+          "update_memory_policy",
+          {
+            halfLifeLowDays,
+            halfLifeHighDays,
+            recallThreshold,
+            complianceThreshold,
+            defaultDecayFloor,
+          },
+          ctx,
+          { surface: "agent" },
+        )) as AgentMemoryPolicyWriteOutput;
 
-      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-      revalidatePath(workspace.settings.agentDefaults(routeCtx));
-      return { ok: true };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      return { ok: false, error: message || "Failed to save memory policy." };
-    }
-  });
+        const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+        revalidatePath(workspace.settings.agentDefaults(routeCtx));
+        return { ok: true };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "";
+        return { ok: false, error: message || "Failed to save memory policy." };
+      }
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -163,28 +178,28 @@ export async function readMemoryPolicyAction(args: {
   const ws = await resolveWorkspace(org.id, args.workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
 
-  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    const ctx = {
-      orgId: org.id,
-      workspaceId: ws.id,
-      userId: session.user.id,
-      apiKeyId: null as string | null,
-      requestId: crypto.randomUUID(),
-      surface: "app" as const,
-      messageId: null as string | null,
-    };
-    const result = await invoke(
-      "get_memory_policy",
-      {},
-      ctx,
-      { surface: "agent" },
-    );
-    return result as {
-      halfLifeLowDays: number;
-      halfLifeHighDays: number;
-      recallThreshold: number;
-      complianceThreshold: number;
-      defaultDecayFloor: number;
-    };
-  });
+  return await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      const ctx = {
+        orgId: org.id,
+        workspaceId: ws.id,
+        userId: session.user.id,
+        apiKeyId: null as string | null,
+        requestId: crypto.randomUUID(),
+        surface: "app" as const,
+        messageId: null as string | null,
+      };
+      const result = await invoke("get_memory_policy", {}, ctx, {
+        surface: "agent",
+      });
+      return result as {
+        halfLifeLowDays: number;
+        halfLifeHighDays: number;
+        recallThreshold: number;
+        complianceThreshold: number;
+        defaultDecayFloor: number;
+      };
+    },
+  );
 }

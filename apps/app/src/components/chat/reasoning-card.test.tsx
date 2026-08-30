@@ -20,14 +20,35 @@ afterEach(cleanup);
 
 vi.mock("motion/react", () => ({
   motion: {
-    span: ({ children, animate: _animate, ...rest }: React.HTMLAttributes<HTMLSpanElement> & { animate?: unknown }) => (
+    span: ({
+      children,
+      animate: _animate,
+      ...rest
+    }: React.HTMLAttributes<HTMLSpanElement> & { animate?: unknown }) => (
       <span {...rest}>{children}</span>
     ),
-    div: ({ children, initial: _initial, animate: _animate, exit: _exit, transition: _transition, style, ...rest }: React.HTMLAttributes<HTMLDivElement> & { initial?: unknown; animate?: unknown; exit?: unknown; transition?: unknown }) => (
-      <div style={style} {...rest}>{children}</div>
+    div: ({
+      children,
+      initial: _initial,
+      animate: _animate,
+      exit: _exit,
+      transition: _transition,
+      style,
+      ...rest
+    }: React.HTMLAttributes<HTMLDivElement> & {
+      initial?: unknown;
+      animate?: unknown;
+      exit?: unknown;
+      transition?: unknown;
+    }) => (
+      <div style={style} {...rest}>
+        {children}
+      </div>
     ),
   },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   useReducedMotion: () => true, // use reduced motion in tests to bypass animation
 }));
 
@@ -50,7 +71,9 @@ vi.mock("@oxagen/ui/lib/motion", () => ({
 }));
 
 vi.mock("./streaming-text", () => ({
-  StreamingText: ({ text }: { text: string }) => <div data-testid="streaming-text">{text}</div>,
+  StreamingText: ({ text }: { text: string }) => (
+    <div data-testid="streaming-text">{text}</div>
+  ),
 }));
 
 // formatDuration is imported from tool-call-card, mock that module
@@ -71,7 +94,9 @@ describe("ReasoningCard", () => {
 
   it("renders 'Thought for Xs' when status=done with durationMs", async () => {
     const { ReasoningCard } = await import("./reasoning-card");
-    render(<ReasoningCard text="done reasoning" status="done" durationMs={3000} />);
+    render(
+      <ReasoningCard text="done reasoning" status="done" durationMs={3000} />,
+    );
     expect(screen.getByText("Thought for 3s")).toBeInTheDocument();
   });
 
@@ -99,7 +124,9 @@ describe("ReasoningCard", () => {
 
   it("toggle button opens the body on click when status=done", async () => {
     const { ReasoningCard } = await import("./reasoning-card");
-    render(<ReasoningCard text="done reasoning" status="done" durationMs={1000} />);
+    render(
+      <ReasoningCard text="done reasoning" status="done" durationMs={1000} />,
+    );
     const toggleBtn = screen.getByRole("button");
     // Initially closed
     expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
@@ -127,7 +154,9 @@ describe("ReasoningCard", () => {
   it("has data-component='reasoning-card' attribute", async () => {
     const { ReasoningCard } = await import("./reasoning-card");
     render(<ReasoningCard text="text" status="thinking" />);
-    expect(document.querySelector("[data-component='reasoning-card']")).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-component='reasoning-card']"),
+    ).toBeInTheDocument();
   });
 
   it("button is disabled for empty text (redacted reasoning)", async () => {

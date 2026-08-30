@@ -115,11 +115,17 @@ export default function VideoResult({
         {noticeBanner}
         <div className="flex flex-col items-center justify-center gap-3 bg-muted/30 px-6 py-10 text-center dark:bg-muted/10">
           <div className="rounded-full bg-muted p-3">
-            <VideoOff className="size-6 text-muted-foreground" aria-hidden="true" />
+            <VideoOff
+              className="size-6 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
-          <p className="text-sm font-medium text-foreground">Video is taking longer than expected</p>
+          <p className="text-sm font-medium text-foreground">
+            Video is taking longer than expected
+          </p>
           <p className="max-w-xs text-xs text-muted-foreground">
-            The render is still running. Refresh the conversation to check again.
+            The render is still running. Refresh the conversation to check
+            again.
           </p>
         </div>
       </div>
@@ -137,11 +143,16 @@ export default function VideoResult({
       <div className="flex flex-col items-center justify-center gap-3 bg-muted/30 px-6 py-10 text-center dark:bg-muted/10">
         <div className="relative">
           <Film className="size-8 text-muted-foreground" aria-hidden="true" />
-          <Loader2 className="absolute -right-2 -top-2 size-4 animate-spin text-primary" aria-hidden="true" />
+          <Loader2
+            className="absolute -right-2 -top-2 size-4 animate-spin text-primary"
+            aria-hidden="true"
+          />
         </div>
         <p className="text-sm font-medium text-foreground">Generating video…</p>
         {prompt && (
-          <p className="max-w-xs truncate text-xs italic text-muted-foreground">“{prompt}”</p>
+          <p className="max-w-xs truncate text-xs italic text-muted-foreground">
+            “{prompt}”
+          </p>
         )}
       </div>
     </div>

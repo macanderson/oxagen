@@ -62,8 +62,14 @@ beforeEach(() => {
   mockResolveOrg.mockResolvedValue(ORG);
   mockAssertOrgMember.mockResolvedValue(undefined);
   mockAssertSecurityManager.mockResolvedValue(undefined);
-  mockInvoke.mockResolvedValue({ requestId: "r1", status: "queued", effectiveAt: "2026-07-01" });
-  mockWithSystemDb.mockResolvedValue([{ status: "ready", exportUrl: "https://blob/x" }]);
+  mockInvoke.mockResolvedValue({
+    requestId: "r1",
+    status: "queued",
+    effectiveAt: "2026-07-01",
+  });
+  mockWithSystemDb.mockResolvedValue([
+    { status: "ready", exportUrl: "https://blob/x" },
+  ]);
 });
 
 describe("requestOrgDataEraseAction", () => {

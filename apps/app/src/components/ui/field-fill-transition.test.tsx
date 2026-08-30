@@ -14,7 +14,7 @@ describe("FieldFillTransition — render", () => {
     const { getByRole } = render(
       <FieldFillTransition active={false}>
         <input aria-label="test-input" />
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     expect(getByRole("textbox", { name: "test-input" })).toBeInTheDocument();
   });
@@ -23,7 +23,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={false}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.dataset.fillActive).toBeUndefined();
@@ -33,7 +33,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={true}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.dataset.fillActive).toBe("true");
@@ -43,7 +43,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={true}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     const style = container.querySelector("style");
     expect(style).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={false}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     expect(container.querySelector("style")).toBeNull();
   });
@@ -63,7 +63,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={true}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.boxShadow).not.toBe("");
@@ -73,7 +73,7 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={false}>
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.boxShadow).toBe("");
@@ -83,8 +83,10 @@ describe("FieldFillTransition — render", () => {
     const { container } = render(
       <FieldFillTransition active={false} className="custom-wrap">
         <span>content</span>
-      </FieldFillTransition>
+      </FieldFillTransition>,
     );
-    expect((container.firstChild as HTMLElement).className).toContain("custom-wrap");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "custom-wrap",
+    );
   });
 });

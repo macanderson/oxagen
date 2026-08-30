@@ -53,7 +53,9 @@ describe("mcpAuthorizeUrl", () => {
       returnTo: "/acme/main/workbench/tools/mcp",
     });
 
-    expect(paramsOf(url).get("returnTo")).toBe("/acme/main/workbench/tools/mcp");
+    expect(paramsOf(url).get("returnTo")).toBe(
+      "/acme/main/workbench/tools/mcp",
+    );
   });
 
   it("percent-encodes URL-significant characters so values round-trip losslessly", () => {

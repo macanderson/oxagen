@@ -15,7 +15,9 @@ export interface DiscountPreview {
   savedCents: number;
 }
 
-export async function getDiscountPreview(grantCents: number): Promise<DiscountPreview> {
+export async function getDiscountPreview(
+  grantCents: number,
+): Promise<DiscountPreview> {
   if (!Number.isInteger(grantCents) || grantCents < 0) {
     return { grantCents: 0, priceCents: 0, percent: 0, savedCents: 0 };
   }

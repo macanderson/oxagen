@@ -10,7 +10,10 @@
  * tab. Props arrive as Record<string, unknown>, so each field is coerced
  * defensively.
  */
-import { GraphStatsBoxes, type GraphStatsData } from "@/components/knowledge/graph/graph-stats";
+import {
+  GraphStatsBoxes,
+  type GraphStatsData,
+} from "@/components/knowledge/graph/graph-stats";
 
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
@@ -23,7 +26,9 @@ export default function GraphStatsBlock(props: Record<string, unknown>) {
     inferredEdgeCount: num(props.inferredEdgeCount),
     sourceCount: num(props.sourceCount),
     lastModifiedAt:
-      typeof props.lastModifiedAt === "string" ? props.lastModifiedAt : undefined,
+      typeof props.lastModifiedAt === "string"
+        ? props.lastModifiedAt
+        : undefined,
   };
   return <GraphStatsBoxes stats={stats} className="my-1" />;
 }

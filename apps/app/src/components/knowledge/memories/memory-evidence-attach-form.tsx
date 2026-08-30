@@ -70,12 +70,36 @@ export interface MemoryEvidenceAttachFormProps {
   }) => Promise<AttachMemoryEvidenceResult>;
 }
 
-const SOURCE_KIND_OPTIONS: Array<{ value: EvidenceSourceKind; label: string; hint: string }> = [
-  { value: "HUMAN_CONFIRM", label: "Human confirmation", hint: "A person verified this by hand" },
-  { value: "CITATION", label: "Citation", hint: "Cited again during a later execution" },
-  { value: "CODE_SCAN", label: "Code scan", hint: "A static or automated scan found supporting evidence" },
-  { value: "AGENT_JUDGE", label: "Agent judge", hint: "An LLM judge assessed this as correct" },
-  { value: "REPEAT_OBSERVATION", label: "Repeat observation", hint: "Observed again independently" },
+const SOURCE_KIND_OPTIONS: Array<{
+  value: EvidenceSourceKind;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "HUMAN_CONFIRM",
+    label: "Human confirmation",
+    hint: "A person verified this by hand",
+  },
+  {
+    value: "CITATION",
+    label: "Citation",
+    hint: "Cited again during a later execution",
+  },
+  {
+    value: "CODE_SCAN",
+    label: "Code scan",
+    hint: "A static or automated scan found supporting evidence",
+  },
+  {
+    value: "AGENT_JUDGE",
+    label: "Agent judge",
+    hint: "An LLM judge assessed this as correct",
+  },
+  {
+    value: "REPEAT_OBSERVATION",
+    label: "Repeat observation",
+    hint: "Observed again independently",
+  },
 ];
 
 export function MemoryEvidenceAttachForm({
@@ -84,7 +108,8 @@ export function MemoryEvidenceAttachForm({
   attachEvidence,
 }: MemoryEvidenceAttachFormProps) {
   const [memoryId, setMemoryId] = React.useState("");
-  const [sourceKind, setSourceKind] = React.useState<EvidenceSourceKind>("HUMAN_CONFIRM");
+  const [sourceKind, setSourceKind] =
+    React.useState<EvidenceSourceKind>("HUMAN_CONFIRM");
   const [strength, setStrength] = React.useState(0.5);
   const [detail, setDetail] = React.useState("");
   const [refutes, setRefutes] = React.useState(false);
@@ -129,16 +154,26 @@ export function MemoryEvidenceAttachForm({
   }
 
   return (
-    <section aria-labelledby="memory-evidence-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="memory-evidence-heading"
+      className="flex flex-col gap-4"
+    >
       <div className="flex items-center gap-2">
-        <FlaskConical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h2 id="memory-evidence-heading" className="text-sm font-semibold text-foreground">
+        <FlaskConical
+          className="h-4 w-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <h2
+          id="memory-evidence-heading"
+          className="text-sm font-semibold text-foreground"
+        >
           Attach Evidence
         </h2>
       </div>
       <p className="text-xs text-muted-foreground">
-        Strengthen (or refute) a memory&apos;s provenance. Supporting evidence pulls confidence
-        up by strength and refreshes its decay clock; refuting evidence pulls it down.
+        Strengthen (or refute) a memory&apos;s provenance. Supporting evidence
+        pulls confidence up by strength and refreshes its decay clock; refuting
+        evidence pulls it down.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
@@ -172,7 +207,9 @@ export function MemoryEvidenceAttachForm({
               {SOURCE_KIND_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   <span className="font-medium">{opt.label}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{opt.hint}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {opt.hint}
+                  </span>
                 </SelectItem>
               ))}
             </SelectPopup>
@@ -180,8 +217,12 @@ export function MemoryEvidenceAttachForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="evidence-strength" className="text-sm text-foreground">
-            Strength: <span className="tabular-nums">{strength.toFixed(2)}</span>
+          <label
+            htmlFor="evidence-strength"
+            className="text-sm text-foreground"
+          >
+            Strength:{" "}
+            <span className="tabular-nums">{strength.toFixed(2)}</span>
           </label>
           <input
             id="evidence-strength"
@@ -207,7 +248,9 @@ export function MemoryEvidenceAttachForm({
             onCheckedChange={setRefutes}
             disabled={isPending}
           />
-          <Label htmlFor="evidence-refutes">This evidence refutes the memory</Label>
+          <Label htmlFor="evidence-refutes">
+            This evidence refutes the memory
+          </Label>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -230,7 +273,12 @@ export function MemoryEvidenceAttachForm({
         )}
 
         <div>
-          <Button type="submit" size="sm" variant="gradient" disabled={isPending}>
+          <Button
+            type="submit"
+            size="sm"
+            variant="gradient"
+            disabled={isPending}
+          >
             {isPending ? "Attaching…" : "Attach evidence"}
           </Button>
         </div>
@@ -243,7 +291,9 @@ export function MemoryEvidenceAttachForm({
           </p>
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground">
             <CopyableId value={success.memoryId} label="Memory" max={24} />
-            <span>now at {Math.round(success.confidenceScore)}% confidence</span>
+            <span>
+              now at {Math.round(success.confidenceScore)}% confidence
+            </span>
           </div>
         </div>
       )}

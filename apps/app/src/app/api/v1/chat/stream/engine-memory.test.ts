@@ -19,7 +19,9 @@ describe("createChatMemoryProvider", () => {
       ].join("\n"),
     };
 
-    const provider = createChatMemoryProvider({ recalledPromise: Promise.resolve(msg) });
+    const provider = createChatMemoryProvider({
+      recalledPromise: Promise.resolve(msg),
+    });
     const recalled = await provider.recallContext();
 
     // Heading stripped; anti-injection preamble KEPT (prompt-injection guard).
@@ -30,7 +32,9 @@ describe("createChatMemoryProvider", () => {
   });
 
   it("returns empty string when recall resolved to null", async () => {
-    const provider = createChatMemoryProvider({ recalledPromise: Promise.resolve(null) });
+    const provider = createChatMemoryProvider({
+      recalledPromise: Promise.resolve(null),
+    });
     expect(await provider.recallContext()).toBe("");
   });
 
@@ -51,10 +55,14 @@ describe("createChatMemoryProvider", () => {
   });
 
   it("remember is a no-op (chat writes go through agent.memory.record)", () => {
-    const provider = createChatMemoryProvider({ recalledPromise: Promise.resolve(null) });
+    const provider = createChatMemoryProvider({
+      recalledPromise: Promise.resolve(null),
+    });
     const spy = vi.fn();
     // Should neither throw nor call anything.
-    expect(() => provider.remember("coding_turn", { anything: true })).not.toThrow();
+    expect(() =>
+      provider.remember("coding_turn", { anything: true }),
+    ).not.toThrow();
     expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,14 @@
  */
 
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mockAddToast, mockRefresh, radioState } = vi.hoisted(() => ({
@@ -34,18 +41,41 @@ vi.mock("@oxagen/ui", () => ({
 
 // Dialog primitives → plain divs (skip Base UI portals/animation in jsdom).
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-    open ? <div data-testid="dialog">{children}</div> : null,
-  DialogPopup: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Dialog: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode;
+    open?: boolean;
+  }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  DialogPopup: ({
+    children,
+    ...rest
+  }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  Button: ({
+    children,
+    onClick,
+    disabled,
+    ...rest
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" onClick={onClick} disabled={disabled} {...rest}>
       {children}
     </button>
@@ -75,7 +105,11 @@ vi.mock("@/components/ui/radio-group", () => ({
 
 import { DeleteSourceDialog } from "./delete-source-dialog";
 
-const TARGET = { publicId: "con_pub1", displayName: "Acme Repos", entityCount: 1234 };
+const TARGET = {
+  publicId: "con_pub1",
+  displayName: "Acme Repos",
+  entityCount: 1234,
+};
 
 const BASE_PROPS = {
   open: true,
@@ -95,7 +129,11 @@ beforeEach(() => {
   radioState.onChange = null;
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "running" }), text: async () => "" }),
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "running" }),
+      text: async () => "",
+    }),
   );
 });
 
@@ -109,7 +147,9 @@ describe("DeleteSourceDialog", () => {
     render(<DeleteSourceDialog {...BASE_PROPS} />);
     expect(screen.getByTestId("delete-mode-full")).toBeTruthy();
     expect(screen.getByTestId("delete-mode-connection_only")).toBeTruthy();
-    expect(screen.getByTestId("radio-group").getAttribute("data-value")).toBe("full");
+    expect(screen.getByTestId("radio-group").getAttribute("data-value")).toBe(
+      "full",
+    );
     // The record count is surfaced in the "full" option label.
     expect(screen.getByText(/1,234 ingested records/)).toBeTruthy();
   });
@@ -123,7 +163,9 @@ describe("DeleteSourceDialog", () => {
     const { url, opts } = fetchCall();
     expect(url).toBe("/api/v1/acme/main/connections/con_pub1?mode=full");
     expect(opts.method).toBe("DELETE");
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 
   it("DELETEs with mode=connection_only when that mode is selected", async () => {
@@ -135,20 +177,30 @@ describe("DeleteSourceDialog", () => {
       fireEvent.click(screen.getByTestId("confirm-delete-source-btn"));
     });
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(fetchCall().url).toBe("/api/v1/acme/main/connections/con_pub1?mode=connection_only");
+    expect(fetchCall().url).toBe(
+      "/api/v1/acme/main/connections/con_pub1?mode=connection_only",
+    );
   });
 
   it("surfaces an error when the request fails and does not refresh", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "boom" }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "boom",
+      }),
     );
     render(<DeleteSourceDialog {...BASE_PROPS} />);
     await act(async () => {
       fireEvent.click(screen.getByTestId("confirm-delete-source-btn"));
     });
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("boom"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("boom"),
+    );
     expect(mockRefresh).not.toHaveBeenCalled();
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" }),
+    );
   });
 });

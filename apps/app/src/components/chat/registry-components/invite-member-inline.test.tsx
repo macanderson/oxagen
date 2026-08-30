@@ -33,32 +33,63 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={ariaBusy}
+    >
       {children}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
-  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
-    <label htmlFor={htmlFor}>{children}</label>
-  ),
+  Label: ({
+    children,
+    htmlFor,
+  }: {
+    children: React.ReactNode;
+    htmlFor?: string;
+  }) => <label htmlFor={htmlFor}>{children}</label>,
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectTrigger: ({ children, id, "aria-label": ariaLabel }: { children: React.ReactNode; id?: string; "aria-label"?: string }) => (
-    <button id={id} aria-label={ariaLabel} type="button">{children}</button>
+  Select: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <option value={value}>{children}</option>
+  SelectTrigger: ({
+    children,
+    id,
+    "aria-label": ariaLabel,
+  }: {
+    children: React.ReactNode;
+    id?: string;
+    "aria-label"?: string;
+  }) => (
+    <button id={id} aria-label={ariaLabel} type="button">
+      {children}
+    </button>
   ),
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
+  ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <option value={value}>{children}</option>,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -76,84 +107,149 @@ vi.mock("@/lib/utils", () => ({
 
 describe("InviteMemberInline", () => {
   it("renders form with aria-label", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
     render(<InviteMemberInline />);
-    expect(screen.getByRole("form", { name: "Invite member" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: "Invite member" }),
+    ).toBeInTheDocument();
   });
 
   it("renders email input", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
     render(<InviteMemberInline />);
-    expect(screen.getByPlaceholderText("teammate@company.com")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("teammate@company.com"),
+    ).toBeInTheDocument();
   });
 
   it("pre-fills email from suggestedEmail prop", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
     render(<InviteMemberInline suggestedEmail="alice@example.com" />);
-    const input = screen.getByPlaceholderText("teammate@company.com") as HTMLInputElement;
+    const input = screen.getByPlaceholderText(
+      "teammate@company.com",
+    ) as HTMLInputElement;
     expect(input.value).toBe("alice@example.com");
   });
 
   it("submit button is disabled when email is empty", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
     render(<InviteMemberInline />);
     const submitBtn = screen.getByRole("button", { name: "Send invitation" });
     expect(submitBtn).toBeDisabled();
   });
 
   it("submit button is enabled when email is filled", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
     render(<InviteMemberInline suggestedEmail="alice@example.com" />);
     const submitBtn = screen.getByRole("button", { name: "Send invitation" });
     expect(submitBtn).not.toBeDisabled();
   });
 
   it("shows error when inviteMemberAction fails", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
-    vi.mocked(inviteMemberAction).mockResolvedValue({ ok: false, code: "internal", error: "User already invited" });
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
+    vi.mocked(inviteMemberAction).mockResolvedValue({
+      ok: false,
+      code: "internal",
+      error: "User already invited",
+    });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
-    render(<InviteMemberInline suggestedEmail="alice@example.com" orgSlug="my-org" />);
-    await userEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
+    render(
+      <InviteMemberInline
+        suggestedEmail="alice@example.com"
+        orgSlug="my-org"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send invitation" }),
+    );
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("User already invited");
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "User already invited",
+      );
     });
   });
 
   it("shows success state when action succeeds", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
-    render(<InviteMemberInline suggestedEmail="alice@example.com" orgSlug="my-org" />);
-    await userEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
+    render(
+      <InviteMemberInline
+        suggestedEmail="alice@example.com"
+        orgSlug="my-org"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send invitation" }),
+    );
     await waitFor(() => {
       expect(screen.getByText("Invitation sent")).toBeInTheDocument();
     });
   });
 
   it("shows email in success state summary", async () => {
-    const { inviteMemberAction } = await import("@/app/[orgSlug]/members/actions");
+    const { inviteMemberAction } = await import(
+      "@/app/[orgSlug]/members/actions"
+    );
     vi.mocked(inviteMemberAction).mockResolvedValue({ ok: true });
 
-    const { default: InviteMemberInline } = await import("./invite-member-inline");
-    render(<InviteMemberInline suggestedEmail="alice@example.com" orgSlug="my-org" />);
-    await userEvent.click(screen.getByRole("button", { name: "Send invitation" }));
+    const { default: InviteMemberInline } = await import(
+      "./invite-member-inline"
+    );
+    render(
+      <InviteMemberInline
+        suggestedEmail="alice@example.com"
+        orgSlug="my-org"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Send invitation" }),
+    );
     await waitFor(() => {
       expect(screen.getByText(/alice@example.com/)).toBeInTheDocument();
     });

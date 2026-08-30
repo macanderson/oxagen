@@ -149,7 +149,11 @@ describe("useListControls — pagination", () => {
   it("honors a custom pageSize", () => {
     const rows = makeRows(10);
     const { result } = renderHook(() =>
-      useListControls(rows, { searchKeys: ["name"], sortOptions: [], pageSize: 4 }),
+      useListControls(rows, {
+        searchKeys: ["name"],
+        sortOptions: [],
+        pageSize: 4,
+      }),
     );
     expect(result.current.pageCount).toBe(3);
     expect(result.current.pageRows).toHaveLength(4);
@@ -158,7 +162,11 @@ describe("useListControls — pagination", () => {
   it("navigates pages via setPage", () => {
     const rows = makeRows(10);
     const { result } = renderHook(() =>
-      useListControls(rows, { searchKeys: ["name"], sortOptions: [], pageSize: 4 }),
+      useListControls(rows, {
+        searchKeys: ["name"],
+        sortOptions: [],
+        pageSize: 4,
+      }),
     );
     act(() => result.current.setPage(3));
     expect(result.current.page).toBe(3);
@@ -168,7 +176,11 @@ describe("useListControls — pagination", () => {
   it("clamps setPage to at least 1", () => {
     const rows = makeRows(10);
     const { result } = renderHook(() =>
-      useListControls(rows, { searchKeys: ["name"], sortOptions: [], pageSize: 4 }),
+      useListControls(rows, {
+        searchKeys: ["name"],
+        sortOptions: [],
+        pageSize: 4,
+      }),
     );
     act(() => result.current.setPage(-5));
     expect(result.current.page).toBe(1);
@@ -177,7 +189,11 @@ describe("useListControls — pagination", () => {
   it("clamps the page down when a new search query shrinks the result set", () => {
     const rows = makeRows(10);
     const { result } = renderHook(() =>
-      useListControls(rows, { searchKeys: ["name"], sortOptions: [], pageSize: 4 }),
+      useListControls(rows, {
+        searchKeys: ["name"],
+        sortOptions: [],
+        pageSize: 4,
+      }),
     );
     act(() => result.current.setPage(3));
     expect(result.current.page).toBe(3);
@@ -191,7 +207,12 @@ describe("useListControls — pagination", () => {
   it("clamps the page down when the underlying rows array shrinks", () => {
     const rows = makeRows(10);
     const { result, rerender } = renderHook(
-      ({ rows }) => useListControls(rows, { searchKeys: ["name"], sortOptions: [], pageSize: 4 }),
+      ({ rows }) =>
+        useListControls(rows, {
+          searchKeys: ["name"],
+          sortOptions: [],
+          pageSize: 4,
+        }),
       { initialProps: { rows } },
     );
     act(() => result.current.setPage(3));

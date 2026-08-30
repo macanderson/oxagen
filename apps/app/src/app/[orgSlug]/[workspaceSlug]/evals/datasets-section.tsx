@@ -4,8 +4,8 @@
  *
  * Rendered inside a <Suspense> boundary in page.tsx so the static header is
  * shown immediately while this component streams in. Never throws from RSC —
- * a handler failure renders the client component with an empty dataset list
- * (its own empty state takes over).
+ * a handler failure renders an ErrorState in place of the list, so a failed
+ * fetch is never mistaken for "no datasets yet".
  */
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
@@ -65,5 +65,11 @@ export async function DatasetsSection({
     );
   }
 
-  return <DatasetsClient datasets={datasets} orgSlug={orgSlug} workspaceSlug={workspaceSlug} />;
+  return (
+    <DatasetsClient
+      datasets={datasets}
+      orgSlug={orgSlug}
+      workspaceSlug={workspaceSlug}
+    />
+  );
 }

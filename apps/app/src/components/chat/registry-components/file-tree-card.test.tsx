@@ -24,11 +24,16 @@ afterEach(cleanup);
 
 describe("buildFileTree", () => {
   it("nests files under synthesized intermediate directories", () => {
-    const entries: FileTreeEntry[] = [{ path: "src/components/button.tsx", kind: "file" }];
+    const entries: FileTreeEntry[] = [
+      { path: "src/components/button.tsx", kind: "file" },
+    ];
     const tree = buildFileTree(entries);
     expect(tree).toHaveLength(1);
     expect(tree[0]).toMatchObject({ name: "src", kind: "dir" });
-    expect(tree[0]?.children[0]).toMatchObject({ name: "components", kind: "dir" });
+    expect(tree[0]?.children[0]).toMatchObject({
+      name: "components",
+      kind: "dir",
+    });
     expect(tree[0]?.children[0]?.children[0]).toMatchObject({
       name: "button.tsx",
       kind: "file",
@@ -87,7 +92,12 @@ describe("FileTreeCard", () => {
   });
 
   it("renders a custom title when provided", () => {
-    render(<FileTreeCard entries={[{ path: "a.ts", kind: "file" }]} title="Workspace" />);
+    render(
+      <FileTreeCard
+        entries={[{ path: "a.ts", kind: "file" }]}
+        title="Workspace"
+      />,
+    );
     expect(screen.getByText("Workspace")).toBeInTheDocument();
   });
 
@@ -106,23 +116,37 @@ describe("FileTreeCard", () => {
   });
 
   it("shows a diff link for a changed file pointing at the shared diff anchor", () => {
-    render(<FileTreeCard entries={[{ path: "src/a.ts", kind: "file", changed: true }]} />);
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/a.ts", kind: "file", changed: true }]}
+      />,
+    );
     const link = screen.getByRole("link", { name: `View diff for src/a.ts` });
     expect(link).toHaveAttribute("href", `#${diffAnchorId("src/a.ts")}`);
   });
 
   it("does not show a diff link for an unchanged file", () => {
-    render(<FileTreeCard entries={[{ path: "src/a.ts", kind: "file", changed: false }]} />);
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/a.ts", kind: "file", changed: false }]}
+      />,
+    );
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("renders a formatted file size when sizeBytes is provided", () => {
-    render(<FileTreeCard entries={[{ path: "a.ts", kind: "file", sizeBytes: 2048 }]} />);
+    render(
+      <FileTreeCard
+        entries={[{ path: "a.ts", kind: "file", sizeBytes: 2048 }]}
+      />,
+    );
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
   });
 
   it("collapses a nested directory (depth >= 1) by default and expands on click", async () => {
-    render(<FileTreeCard entries={[{ path: "src/nested/file.ts", kind: "file" }]} />);
+    render(
+      <FileTreeCard entries={[{ path: "src/nested/file.ts", kind: "file" }]} />,
+    );
     // "src" (depth 0) is open by default, revealing "nested" (depth 1).
     expect(screen.getByText("nested")).toBeInTheDocument();
     // "nested" itself is collapsed by default. Children stay MOUNTED (the
@@ -159,13 +183,17 @@ describe("FileTreeCard", () => {
         onFileSelect={onFileSelect}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "View src/index.ts" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "View src/index.ts" }),
+    );
     expect(onFileSelect).toHaveBeenCalledWith("src/index.ts");
   });
 
   it("does not render file rows as buttons without onFileSelect", () => {
     render(<FileTreeCard entries={[{ path: "src/index.ts", kind: "file" }]} />);
-    expect(screen.queryByRole("button", { name: "View src/index.ts" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "View src/index.ts" }),
+    ).not.toBeInTheDocument();
   });
 
   it("fires onDirExpand for default-open directories on mount", async () => {
@@ -205,7 +233,10 @@ describe("FileTreeCard", () => {
     render(
       <FileTreeCard
         entries={[
-          { path: "extremely-long-component-file-name-for-mobile.tsx", kind: "file" },
+          {
+            path: "extremely-long-component-file-name-for-mobile.tsx",
+            kind: "file",
+          },
         ]}
       />,
     );
@@ -232,7 +263,10 @@ describe("truncateMiddle", () => {
   });
 
   it("preserves both the start and the end of the name", () => {
-    const out = truncateMiddle("prefix-abcdefghijklmnopqrstuvwxyz-suffix.txt", 24);
+    const out = truncateMiddle(
+      "prefix-abcdefghijklmnopqrstuvwxyz-suffix.txt",
+      24,
+    );
     expect(out.startsWith("prefix-")).toBe(true);
     expect(out.endsWith(".txt")).toBe(true);
   });

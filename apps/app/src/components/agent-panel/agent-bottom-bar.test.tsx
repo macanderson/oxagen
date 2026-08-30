@@ -5,13 +5,10 @@
  * AgentBottomBar is the persistent bottom toolbar in the authenticated shell.
  * It reads state from useAgentPanelStore; we mock the hook so each test can
  * pin a specific store state and assert the component's rendering branches:
- *   - The toolbar + always-present "Open AI agent" / history buttons.
+ *   - The toolbar + the always-present "Open AI agent" launch button.
  *   - The collapsed-conversation tab (only when collapsed + a title exists).
  *   - The status indicator (hidden when idle; labelled for active/completed).
  *   - The open() wiring on the launch + resume buttons.
- *
- * Replaces the stale e2e/agent-panel.spec.ts, which tested a removed
- * "agent-panel-launcher" glassmorphism panel design on /login.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -66,11 +63,14 @@ describe("AgentBottomBar — always-present chrome", () => {
     expect(launch).toHaveAttribute("type", "button");
   });
 
-  it("renders the conversation-history button", () => {
+  it("renders no dead conversation-history affordance", () => {
+    // The bar used to render a Clock button with no click handler at all. A
+    // control that does nothing when pressed is worse than no control, so the
+    // bar now ships only the affordances that are actually wired.
     render(<AgentBottomBar />);
     expect(
-      screen.getByRole("button", { name: /conversation history/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /conversation history/i }),
+    ).toBeNull();
   });
 
   it("calls open() when the launch button is clicked", () => {

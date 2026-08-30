@@ -26,16 +26,24 @@
  *   - The capability's own ok:false error renders inline; no navigation.
  */
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { workspace } from "@/lib/routes";
 
-const { mockPush, mockRefresh, mockAddToast, mockCreateAutomationAction } = vi.hoisted(() => ({
-  mockPush: vi.fn(),
-  mockRefresh: vi.fn(),
-  mockAddToast: vi.fn(),
-  mockCreateAutomationAction: vi.fn(),
-}));
+const { mockPush, mockRefresh, mockAddToast, mockCreateAutomationAction } =
+  vi.hoisted(() => ({
+    mockPush: vi.fn(),
+    mockRefresh: vi.fn(),
+    mockAddToast: vi.fn(),
+    mockCreateAutomationAction: vi.fn(),
+  }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
@@ -46,27 +54,44 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("../actions", () => ({
-  createAutomationAction: (...args: unknown[]) => mockCreateAutomationAction(...args),
+  createAutomationAction: (...args: unknown[]) =>
+    mockCreateAutomationAction(...args),
 }));
 
 // Dialog primitives → plain divs (skip Base UI portals/animation in jsdom).
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
-    open ? <div data-testid="dialog">{children}</div> : null,
-  DialogPopup: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...rest}>{children}</div>
+  Dialog: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode;
+    open?: boolean;
+  }) => (open ? <div data-testid="dialog">{children}</div> : null),
+  DialogPopup: ({
+    children,
+    ...rest
+  }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 // Select → interactive controlled-context mock, same convention as
 // trigger-form-dialog.test.tsx. Each <Select> instance gets its own
 // Provider, so multiple concurrently-rendered selects (trigger type, event
 // type, per-step type) don't cross-wire.
-const SelectMockCtx = React.createContext<{ onValueChange?: (v: string) => void }>({});
+const SelectMockCtx = React.createContext<{
+  onValueChange?: (v: string) => void;
+}>({});
 vi.mock("@/components/ui/select", () => ({
   Select: ({
     children,
@@ -75,13 +100,28 @@ vi.mock("@/components/ui/select", () => ({
     children: React.ReactNode;
     value?: string;
     onValueChange?: (v: string) => void;
-  }) => <SelectMockCtx.Provider value={{ onValueChange }}>{children}</SelectMockCtx.Provider>,
-  SelectTrigger: ({ children, ...rest }: { children: React.ReactNode } & Record<string, unknown>) => (
+  }) => (
+    <SelectMockCtx.Provider value={{ onValueChange }}>
+      {children}
+    </SelectMockCtx.Provider>
+  ),
+  SelectTrigger: ({
+    children,
+    ...rest
+  }: { children: React.ReactNode } & Record<string, unknown>) => (
     <div {...rest}>{children}</div>
   ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => {
     const ctx = React.useContext(SelectMockCtx);
     return (
       <button type="button" onClick={() => ctx.onValueChange?.(value)}>
@@ -120,19 +160,25 @@ afterEach(() => cleanup());
 describe("NewAutomationDialog — validation", () => {
   it("shows an inline error for an empty name and never calls the action", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("entity-type"), { target: { value: "Contact" } });
+    fireEvent.change(screen.getByTestId("entity-type"), {
+      target: { value: "Contact" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("create-error").textContent).toBe("Name is required.");
+      expect(screen.getByTestId("create-error").textContent).toBe(
+        "Name is required.",
+      );
     });
     expect(mockCreateAutomationAction).not.toHaveBeenCalled();
   });
 
   it("event trigger (default) with no entity type shows an inline error", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Alpha" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Alpha" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
     });
@@ -146,7 +192,9 @@ describe("NewAutomationDialog — validation", () => {
 
   it("schedule trigger with no cron shows an inline error", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Alpha" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Alpha" },
+    });
     fireEvent.click(screen.getByText("Schedule (cron)"));
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
@@ -161,7 +209,9 @@ describe("NewAutomationDialog — validation", () => {
 
   it("an api trigger needs neither entity type nor cron", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Alpha" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Alpha" },
+    });
     fireEvent.click(screen.getByText("API / manual"));
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
@@ -203,7 +253,9 @@ describe("NewAutomationDialog — submit wiring", () => {
     fireEvent.change(screen.getByTestId("automation-name"), {
       target: { value: "Notify on high-value deal" },
     });
-    fireEvent.change(screen.getByTestId("entity-type"), { target: { value: "Contact" } });
+    fireEvent.change(screen.getByTestId("entity-type"), {
+      target: { value: "Contact" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
     });
@@ -219,18 +271,27 @@ describe("NewAutomationDialog — submit wiring", () => {
     });
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith(
-        workspace.automations.automation({ orgSlug: "acme", workspaceSlug: "main" }, "plt_1"),
+        workspace.automations.automation(
+          { orgSlug: "acme", workspaceSlug: "main" },
+          "plt_1",
+        ),
       ),
     );
     expect(mockRefresh).toHaveBeenCalled();
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 
   it("submits a valid schedule trigger with cronExpression + timezone", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Weekly digest" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Weekly digest" },
+    });
     fireEvent.click(screen.getByText("Schedule (cron)"));
-    fireEvent.change(screen.getByTestId("cron"), { target: { value: "0 9 * * 1" } });
+    fireEvent.change(screen.getByTestId("cron"), {
+      target: { value: "0 9 * * 1" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
     });
@@ -243,8 +304,12 @@ describe("NewAutomationDialog — submit wiring", () => {
 
   it("filters out a step with a blank name and includes a named step's stepType", async () => {
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Alpha" } });
-    fireEvent.change(screen.getByTestId("entity-type"), { target: { value: "Contact" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Alpha" },
+    });
+    fireEvent.change(screen.getByTestId("entity-type"), {
+      target: { value: "Contact" },
+    });
 
     // Add two steps: one left blank, one named.
     fireEvent.click(screen.getByText("Add step"));
@@ -262,15 +327,24 @@ describe("NewAutomationDialog — submit wiring", () => {
   });
 
   it("renders the capability's own error inline on failure and does not navigate", async () => {
-    mockCreateAutomationAction.mockResolvedValue({ ok: false, error: "Only owners can do that." });
+    mockCreateAutomationAction.mockResolvedValue({
+      ok: false,
+      error: "Only owners can do that.",
+    });
     render(<NewAutomationDialog {...BASE_PROPS} />);
-    fireEvent.change(screen.getByTestId("automation-name"), { target: { value: "Alpha" } });
-    fireEvent.change(screen.getByTestId("entity-type"), { target: { value: "Contact" } });
+    fireEvent.change(screen.getByTestId("automation-name"), {
+      target: { value: "Alpha" },
+    });
+    fireEvent.change(screen.getByTestId("entity-type"), {
+      target: { value: "Contact" },
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("create-automation"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("create-error").textContent).toBe("Only owners can do that.");
+      expect(screen.getByTestId("create-error").textContent).toBe(
+        "Only owners can do that.",
+      );
     });
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();

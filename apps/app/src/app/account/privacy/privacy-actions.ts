@@ -23,7 +23,10 @@ export async function requestUserDataExportAction(): Promise<ExportResult> {
     tx
       .select({ id: schema.organizations.id })
       .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.orgUsers.orgId),
+      )
       .where(eq(schema.orgUsers.userId, session.user.id))
       .limit(1),
   );
@@ -52,7 +55,10 @@ export async function requestUserDataEraseAction(): Promise<EraseResult> {
     tx
       .select({ id: schema.organizations.id })
       .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.orgUsers.orgId),
+      )
       .where(eq(schema.orgUsers.userId, session.user.id))
       .limit(1),
   );

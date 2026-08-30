@@ -17,7 +17,13 @@
 
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ChatMention } from "@oxagen/ai/mentions";
 
@@ -113,7 +119,9 @@ describe("MentionChip", () => {
 
   it("renders a remove affordance and fires onRemove when clicked", async () => {
     const onRemove = vi.fn();
-    render(<MentionChip mention={fileMention} properties={{}} onRemove={onRemove} />);
+    render(
+      <MentionChip mention={fileMention} properties={{}} onRemove={onRemove} />,
+    );
     const removeBtn = screen.getByRole("button", {
       name: `Remove mention ${fileMention.label}`,
     });
@@ -124,7 +132,9 @@ describe("MentionChip", () => {
   it("omits the remove affordance when onRemove is not provided", () => {
     render(<MentionChip mention={fileMention} properties={{}} />);
     expect(
-      screen.queryByRole("button", { name: `Remove mention ${fileMention.label}` }),
+      screen.queryByRole("button", {
+        name: `Remove mention ${fileMention.label}`,
+      }),
     ).toBeNull();
   });
 

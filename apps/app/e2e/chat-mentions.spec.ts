@@ -17,8 +17,12 @@ import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 
 test.describe("chat @-mentions — composer picker", () => {
-  test("@ opens the type menu, scoped search inserts a mention chip", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-mention" });
+  test("@ opens the type menu, scoped search inserts a mention chip", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-mention",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     await expect(page).not.toHaveURL(/\/login/);
@@ -77,8 +81,12 @@ test.describe("chat @-mentions — composer picker", () => {
     await expect(composer).toHaveValue(/@search references /);
   });
 
-  test("mouse flow selects a type and Escape dismisses the menu", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-mention-mouse" });
+  test("mouse flow selects a type and Escape dismisses the menu", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "chat-mention-mouse",
+    });
 
     await page.goto(`/${orgSlug}/default/chat`);
     const composer = page.getByPlaceholder(/send a message/i);

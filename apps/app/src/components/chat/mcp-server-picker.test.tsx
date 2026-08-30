@@ -21,7 +21,9 @@ import userEvent from "@testing-library/user-event";
 import type { McpServerSummary } from "./mcp-types";
 
 // Controllable viewport: false = desktop (default, matches jsdom), true = phone.
-const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+const { mockViewport } = vi.hoisted(() => ({
+  mockViewport: { isMobile: false },
+}));
 vi.mock("@/hooks/use-media-query", () => ({
   useIsMobile: () => mockViewport.isMobile,
   useMediaQuery: () => mockViewport.isMobile,
@@ -54,10 +56,18 @@ vi.mock("@/components/ui/sheet", () => ({
       {children}
     </div>
   ),
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SheetTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  SheetDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -145,7 +155,9 @@ describe("McpServerPicker — button", () => {
         onActiveServerIdsChange={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: "MCP servers" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "MCP servers" }),
+    ).toBeInTheDocument();
   });
 
   it("shows no badge when no servers are active", async () => {
@@ -170,7 +182,9 @@ describe("McpServerPicker — button", () => {
         onActiveServerIdsChange={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: "MCP servers — 1 active" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "MCP servers — 1 active" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
@@ -183,7 +197,9 @@ describe("McpServerPicker — button", () => {
         onActiveServerIdsChange={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: "MCP servers — 2 active" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "MCP servers — 2 active" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
   });
 });
@@ -342,7 +358,9 @@ describe("McpServerPicker — toggle switches", () => {
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "MCP servers" }));
-    await userEvent.click(screen.getByRole("switch", { name: "Activate Server A" }));
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Activate Server A" }),
+    );
     expect(onChange).toHaveBeenCalledOnce();
     const [newSet] = onChange.mock.calls[0] as [Set<string>];
     expect(newSet.has("mcs_1")).toBe(true);
@@ -358,8 +376,12 @@ describe("McpServerPicker — toggle switches", () => {
         onActiveServerIdsChange={onChange}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "MCP servers — 1 active" }));
-    await userEvent.click(screen.getByRole("switch", { name: "Deactivate Server A" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "MCP servers — 1 active" }),
+    );
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Deactivate Server A" }),
+    );
     expect(onChange).toHaveBeenCalledOnce();
     const [newSet] = onChange.mock.calls[0] as [Set<string>];
     expect(newSet.has("mcs_1")).toBe(false);
@@ -369,7 +391,13 @@ describe("McpServerPicker — toggle switches", () => {
     const { McpServerPicker } = await import("./mcp-server-picker");
     render(
       <McpServerPicker
-        servers={[makeServer({ publicId: "mcs_1", name: "Dead", healthStatus: "unreachable" })]}
+        servers={[
+          makeServer({
+            publicId: "mcs_1",
+            name: "Dead",
+            healthStatus: "unreachable",
+          }),
+        ]}
         activeServerIds={new Set()}
         onActiveServerIdsChange={vi.fn()}
       />,
@@ -390,7 +418,9 @@ describe("McpServerPicker — activate/deactivate all", () => {
         onActiveServerIdsChange={vi.fn()}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "MCP servers — 1 active" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "MCP servers — 1 active" }),
+    );
     expect(screen.getByText("Activate all")).toBeInTheDocument();
   });
 
@@ -403,7 +433,9 @@ describe("McpServerPicker — activate/deactivate all", () => {
         onActiveServerIdsChange={vi.fn()}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "MCP servers — 2 active" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "MCP servers — 2 active" }),
+    );
     expect(screen.getByText("Deactivate all")).toBeInTheDocument();
   });
 
@@ -435,7 +467,9 @@ describe("McpServerPicker — activate/deactivate all", () => {
         onActiveServerIdsChange={onChange}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "MCP servers — 2 active" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "MCP servers — 2 active" }),
+    );
     await userEvent.click(screen.getByText("Deactivate all"));
     expect(onChange).toHaveBeenCalledOnce();
     const [newSet] = onChange.mock.calls[0] as [Set<string>];
@@ -454,7 +488,9 @@ describe("McpServerPicker — desktop panel viewport clamp", () => {
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "MCP servers" }));
-    expect(screen.getByRole("dialog").className).toContain("max-w-[calc(100vw-2rem)]");
+    expect(screen.getByRole("dialog").className).toContain(
+      "max-w-[calc(100vw-2rem)]",
+    );
   });
 });
 
@@ -504,7 +540,9 @@ describe("McpServerPicker — mobile bottom sheet", () => {
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "MCP servers" }));
-    await userEvent.click(screen.getByRole("switch", { name: "Activate Server A" }));
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Activate Server A" }),
+    );
     const [newSet] = onChange.mock.calls[0] as [Set<string>];
     expect(newSet.has("mcs_1")).toBe(true);
   });

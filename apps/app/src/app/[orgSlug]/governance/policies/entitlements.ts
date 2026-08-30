@@ -46,7 +46,9 @@ export function deriveEntitlementRows(
     });
   }
   out.sort(
-    (a, b) => a.packId.localeCompare(b.packId) || a.capability.localeCompare(b.capability),
+    (a, b) =>
+      a.packId.localeCompare(b.packId) ||
+      a.capability.localeCompare(b.capability),
   );
   return out;
 }

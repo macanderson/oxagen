@@ -3,7 +3,10 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { declineInvitationAction, inviteMemberAction } from "@/app/[orgSlug]/members/actions";
+import {
+  declineInvitationAction,
+  inviteMemberAction,
+} from "@/app/[orgSlug]/members/actions";
 
 // Roles the form supports — must match the InviteMemberSchema enum.
 type OrgRole = "owner" | "admin" | "member" | "billing";
@@ -35,9 +38,9 @@ export function PendingInvitationsActions({
 
   // Guard: if role is not one of the four allowed values, default to "member"
   // so the type stays sound (DB could have historical values like "compliance").
-  const safeRole: OrgRole = (["owner", "admin", "member", "billing"] as const).includes(
-    invitation.role as OrgRole,
-  )
+  const safeRole: OrgRole = (
+    ["owner", "admin", "member", "billing"] as const
+  ).includes(invitation.role as OrgRole)
     ? (invitation.role as OrgRole)
     : "member";
 
@@ -61,7 +64,11 @@ export function PendingInvitationsActions({
             : res.code === "seat_limit_reached"
               ? "No seats available. Upgrade your plan to invite more members."
               : "Failed to resend invitation.";
-        addToast({ title: "Failed to resend", description: msg, type: "error" });
+        addToast({
+          title: "Failed to resend",
+          description: msg,
+          type: "error",
+        });
       }
     });
   }
@@ -79,7 +86,11 @@ export function PendingInvitationsActions({
           type: "success",
         });
       } else {
-        addToast({ title: "Failed to revoke", description: res.error, type: "error" });
+        addToast({
+          title: "Failed to revoke",
+          description: res.error,
+          type: "error",
+        });
       }
     });
   }

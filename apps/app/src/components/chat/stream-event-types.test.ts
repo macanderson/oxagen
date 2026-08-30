@@ -102,7 +102,12 @@ describe("ToolCallContentBlock", () => {
   });
 
   it("accepts all ToolCallStatus values", () => {
-    const statuses: ToolCallStatus[] = ["pending", "running", "completed", "failed"];
+    const statuses: ToolCallStatus[] = [
+      "pending",
+      "running",
+      "completed",
+      "failed",
+    ];
     for (const status of statuses) {
       const block: ToolCallContentBlock = {
         type: "tool-call",
@@ -389,7 +394,12 @@ describe("SubagentFanoutContentBlock", () => {
   });
 
   it("accepts all SubagentStatus values", () => {
-    const statuses: SubagentStatus[] = ["running", "completed", "partial", "timed_out"];
+    const statuses: SubagentStatus[] = [
+      "running",
+      "completed",
+      "partial",
+      "timed_out",
+    ];
     for (const status of statuses) {
       const block: SubagentFanoutContentBlock = {
         type: "subagent-fanout",
@@ -800,7 +810,13 @@ describe("StreamEvent union — member shapes", () => {
       planId: "plan-ev-1",
       title: "My plan",
       steps: [
-        { id: "s1", summary: "step one", intent: "do", capability: null, dependsOn: [] },
+        {
+          id: "s1",
+          summary: "step one",
+          intent: "do",
+          capability: null,
+          dependsOn: [],
+        },
       ],
     };
     expect(evt.type).toBe("plan-proposed");

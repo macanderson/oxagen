@@ -55,7 +55,11 @@ vi.mock("./message-bubble", () => ({
 }));
 
 describe("MessageTree", () => {
-  const makeMsg = (id: string, role: "user" | "assistant", content: string) => ({
+  const makeMsg = (
+    id: string,
+    role: "user" | "assistant",
+    content: string,
+  ) => ({
     publicId: id,
     role,
     content,
@@ -110,7 +114,13 @@ describe("MessageTree", () => {
         ]}
       />,
     );
-    expect(screen.getByTestId("message-a")).toHaveAttribute("data-role", "user");
-    expect(screen.getByTestId("message-b")).toHaveAttribute("data-role", "assistant");
+    expect(screen.getByTestId("message-a")).toHaveAttribute(
+      "data-role",
+      "user",
+    );
+    expect(screen.getByTestId("message-b")).toHaveAttribute(
+      "data-role",
+      "assistant",
+    );
   });
 });

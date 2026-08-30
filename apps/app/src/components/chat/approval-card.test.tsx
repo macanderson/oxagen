@@ -53,7 +53,9 @@ vi.mock("lucide-react", async (importOriginal) => {
 });
 
 vi.mock("./risk-badge", () => ({
-  RiskBadge: ({ risk }: { risk: string }) => <span data-testid="risk-badge">{risk}</span>,
+  RiskBadge: ({ risk }: { risk: string }) => (
+    <span data-testid="risk-badge">{risk}</span>
+  ),
 }));
 
 // future date — ensures countdown doesn't immediately expire
@@ -182,7 +184,9 @@ describe("ApprovalCard", () => {
   });
 
   it("shows error message when onResolved returns not-ok", async () => {
-    const onResolved = vi.fn().mockResolvedValue({ ok: false, error: "Server error" });
+    const onResolved = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Server error" });
     render(
       <ApprovalCard
         approvalId="a1"
@@ -213,7 +217,9 @@ describe("ApprovalCard", () => {
     );
     await userEvent.click(screen.getByText("Deny"));
     await waitFor(() => {
-      expect(screen.getByText("Failed to resolve approval")).toBeInTheDocument();
+      expect(
+        screen.getByText("Failed to resolve approval"),
+      ).toBeInTheDocument();
     });
   });
 

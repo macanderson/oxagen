@@ -2,10 +2,8 @@
 
 /**
  * AgentDefaultsTabs — client wrapper providing the four in-page sub-tabs for
- * Workspace → Settings → Agent Defaults (web-app-2.0 Phase 2 consolidation:
- * Models · Budget · Prompts · Memory Policy merged from four standalone
- * routes into one page — see
- * docs/web-app-2.0/workspace/settings/agent-defaults/spec.md).
+ * Workspace → Settings → Agent Defaults: Models · Budget · Prompts · Memory
+ * Policy.
  *
  * All four panels' data is fetched up front by the parent Server Component
  * (in parallel) and passed in as fully-resolved `ReactNode`s, so switching
@@ -13,7 +11,7 @@
  * mirrors the `?tab=` search param ("models" is the default and — mirroring
  * `workspace.settings.agentDefaults(ctx)`, the bare path — carries no query
  * param). Each sub-tab keeps its OWN independent save + feedback; there is no
- * cross-tab save (per spec).
+ * cross-tab save.
  *
  * Pattern: Base UI Tabs (`@/components/ui/tabs`) driven as a controlled
  * component with URL sync — same pattern as
@@ -21,11 +19,20 @@
  */
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+  TabsPanel,
+  TabsIndicator,
+} from "@/components/ui/tabs";
 // The type + `?tab=` guard live in a boundary-agnostic (non-"use client")
 // sibling so the Server Component page can call the guard without tripping the
 // "call a client function from the server" error. See ./agent-defaults-tabs-shared.
-import { isAgentDefaultsTab, type AgentDefaultsTab } from "./agent-defaults-tabs-shared";
+import {
+  isAgentDefaultsTab,
+  type AgentDefaultsTab,
+} from "./agent-defaults-tabs-shared";
 
 export interface AgentDefaultsTabsProps {
   initialTab: AgentDefaultsTab;
@@ -47,7 +54,9 @@ export function AgentDefaultsTabs({
   const [tab, setTab] = React.useState<AgentDefaultsTab>(initialTab);
 
   function handleTabChange(value: unknown) {
-    const next: AgentDefaultsTab = isAgentDefaultsTab(value as string) ? (value as AgentDefaultsTab) : "models";
+    const next: AgentDefaultsTab = isAgentDefaultsTab(value as string)
+      ? (value as AgentDefaultsTab)
+      : "models";
     setTab(next);
     // "models" is the default — keep its URL bare (no ?tab=) so the canonical
     // route from @/lib/routes (`workspace.settings.agentDefaults`) stays the

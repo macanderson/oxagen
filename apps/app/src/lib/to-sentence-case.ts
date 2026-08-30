@@ -42,7 +42,9 @@ export function toSentenceCase(label: string): string {
       if (word.length === 0) return word;
       if (shouldPreserveCase(word)) return word;
       const lower = word.toLowerCase();
-      return index === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
+      return index === 0
+        ? lower.charAt(0).toUpperCase() + lower.slice(1)
+        : lower;
     })
     .join(" ");
 }

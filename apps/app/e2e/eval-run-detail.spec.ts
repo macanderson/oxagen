@@ -43,15 +43,19 @@ const SCREENSHOT_DIR = path.join(
 
 function deQuote(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))
+    return raw.slice(1, -1);
   return raw;
 }
 
 const DATABASE_URL = deQuote(
   process.env.DATABASE_URL,
-  "postgres://oxagen:oxagen@localhost:5432/oxagen",
+  "postgres://oxagen:oxagen@localhost:5433/oxagen",
 );
-const CLICKHOUSE_URL = deQuote(process.env.CLICKHOUSE_URL, "http://localhost:8123");
+const CLICKHOUSE_URL = deQuote(
+  process.env.CLICKHOUSE_URL,
+  "http://localhost:8123",
+);
 const CLICKHOUSE_USERNAME = deQuote(process.env.CLICKHOUSE_USERNAME, "default");
 const CLICKHOUSE_PASSWORD = deQuote(process.env.CLICKHOUSE_PASSWORD, "");
 const CLICKHOUSE_DATABASE = deQuote(process.env.CLICKHOUSE_DATABASE, "oxagen");
@@ -98,7 +102,9 @@ async function insertEvalItemResults(rows: EvalItemResultRow[]): Promise<void> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`eval-run-detail: ClickHouse insert failed (${res.status}): ${text}`);
+    throw new Error(
+      `eval-run-detail: ClickHouse insert failed (${res.status}): ${text}`,
+    );
   }
 }
 
@@ -111,7 +117,10 @@ async function deleteEvalItemResults(runId: string): Promise<void> {
   try {
     await fetch(url, {
       method: "POST",
-      headers: { "X-ClickHouse-User": CLICKHOUSE_USERNAME, "X-ClickHouse-Key": CLICKHOUSE_PASSWORD },
+      headers: {
+        "X-ClickHouse-User": CLICKHOUSE_USERNAME,
+        "X-ClickHouse-Key": CLICKHOUSE_PASSWORD,
+      },
     });
   } catch {
     // Best-effort — a local dev ClickHouse the fixture never reached is tolerated.
@@ -256,7 +265,10 @@ test.describe("eval run detail", () => {
     await teardownFixture({ orgSlug: ORG_SLUG });
   });
 
-  test("renders a seeded run's summary and per-item results table", async ({ page, context }) => {
+  test("renders a seeded run's summary and per-item results table", async ({
+    page,
+    context,
+  }) => {
     await loginWithSession(context, fixture.sessionToken);
 
     await gotoStable(page, `/${ORG_SLUG}/${WS_SLUG}/evals/runs/${runPublicId}`);
@@ -272,7 +284,9 @@ test.describe("eval run detail", () => {
     await expect(detail.getByText("0.73")).toBeVisible();
     await expect(detail.getByText(/67% \(2\/3\)/)).toBeVisible();
     await expect(detail.getByText("claude-3-5-sonnet-20241022")).toBeVisible();
-    await expect(detail.getByText(/Model: claude-3-haiku-20240307/)).toBeVisible();
+    await expect(
+      detail.getByText(/Model: claude-3-haiku-20240307/),
+    ).toBeVisible();
     await expect(detail.getByText("3/3 completed")).toBeVisible();
 
     // Per-item results table.
@@ -292,10 +306,16 @@ test.describe("eval run detail", () => {
     });
   });
 
-  test("shows an error state for an unknown runId", async ({ page, context }) => {
+  test("shows an error state for an unknown runId", async ({
+    page,
+    context,
+  }) => {
     await loginWithSession(context, fixture.sessionToken);
 
-    await gotoStable(page, `/${ORG_SLUG}/${WS_SLUG}/evals/runs/evr_does_not_exist`);
+    await gotoStable(
+      page,
+      `/${ORG_SLUG}/${WS_SLUG}/evals/runs/evr_does_not_exist`,
+    );
 
     // An unknown run id makes eval.run.get throw, and run-detail-section.tsx
     // treats a failed read — "run not found" included — as an error rather

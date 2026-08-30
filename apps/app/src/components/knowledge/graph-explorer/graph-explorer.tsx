@@ -224,8 +224,11 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
           setSelection({ type: "node", id: first.id });
           if (view === "table") setView("2d");
         }
-      } catch {
-        // Search failure is non-fatal; leave the graph untouched.
+      } catch (err) {
+        // Search failure is non-fatal — the graph is left untouched — but it
+        // must not vanish: an empty result and a failed request look identical
+        // on screen otherwise.
+        console.error("graph explorer: node search failed:", err);
       } finally {
         setSearching(false);
       }

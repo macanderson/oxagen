@@ -1,5 +1,5 @@
 /**
- * sources-section.tsx — Async server component that fetches connection data
+ * connections-section.tsx — Async server component that fetches connection data
  * and renders KnowledgeConnectionsClient.
  *
  * Rendered inside a <Suspense> boundary in page.tsx so the static header
@@ -8,6 +8,7 @@
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { KnowledgeConnectionsClient } from "@/components/knowledge/connections/knowledge-connections-client";
@@ -48,8 +49,11 @@ export async function ConnectionsSection({
       invoke("list_connections", {}, ctx, { surface: "agent" }),
     )) as ConnectionListOutput;
     connections = result.connections;
-  } catch (e) {
-    console.error("connection.list failed:", e);
+  } catch (err) {
+    logger.error(
+      { err, orgId, workspaceId },
+      "knowledge.sources: list_connections failed",
+    );
     // A fetch failure is distinct from "no sources yet" — surface it as an
     // error (never throw from RSC, which would blank the streamed header)
     // rather than masquerading the failure as the client's empty state.

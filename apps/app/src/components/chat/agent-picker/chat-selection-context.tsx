@@ -248,7 +248,9 @@ export function ChatSelectionProvider({
   );
   // null = the repository's default branch (the convention everywhere). A
   // binding pins the repo, not a feature branch, so it seeds no branch.
-  const [selectedBranch, setSelectedBranch] = React.useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = React.useState<string | null>(
+    null,
+  );
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(
     () => codeBinding?.environmentId ?? null,
   );

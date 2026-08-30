@@ -4,7 +4,12 @@
 // drill-down (ip / user agent / request id / capability / workspace / actor).
 
 import * as React from "react";
-import { ChevronRight, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import {
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatDateTimeWithSeconds } from "@/lib/utils";
 
@@ -23,7 +28,10 @@ export interface AuditEventRowData {
   requestId: string | null;
 }
 
-const OUTCOME_VARIANT: Record<string, "default" | "destructive" | "muted" | "outline"> = {
+const OUTCOME_VARIANT: Record<
+  string,
+  "default" | "destructive" | "muted" | "outline"
+> = {
   allow: "default",
   success: "default",
   deny: "destructive",
@@ -33,15 +41,28 @@ const OUTCOME_VARIANT: Record<string, "default" | "destructive" | "muted" | "out
 function OutcomeIcon({ outcome }: { outcome: string }) {
   if (outcome === "allow" || outcome === "success")
     return <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />;
-  if (outcome === "deny") return <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />;
+  if (outcome === "deny")
+    return <XCircle className="mr-1 h-3 w-3" aria-hidden="true" />;
   return <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />;
 }
 
-function Detail({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
+function Detail({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string | null;
+  mono?: boolean;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className={cn("text-xs text-foreground break-all", mono && "font-mono")}>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={cn("text-xs text-foreground break-all", mono && "font-mono")}
+      >
         {value && value.length > 0 ? value : "—"}
       </span>
     </div>
@@ -76,7 +97,10 @@ export function AuditEventRow({ row }: { row: AuditEventRowData }) {
             {row.ip && <span className="font-mono">{row.ip}</span>}
           </div>
         </div>
-        <Badge variant={OUTCOME_VARIANT[row.outcome] ?? "outline"} className="shrink-0 text-xs">
+        <Badge
+          variant={OUTCOME_VARIANT[row.outcome] ?? "outline"}
+          className="shrink-0 text-xs"
+        >
           <OutcomeIcon outcome={row.outcome} />
           {row.outcome}
         </Badge>

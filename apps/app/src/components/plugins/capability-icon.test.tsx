@@ -38,13 +38,23 @@ describe("resolveIconEntry", () => {
   });
 
   it("returns a lucide entry for a non-URL src", () => {
-    const result = resolveIconEntry([{ src: "brain-circuit", color: "#f59e0b" }]);
-    expect(result).toEqual({ type: "lucide", iconName: "brain-circuit", color: "#f59e0b" });
+    const result = resolveIconEntry([
+      { src: "brain-circuit", color: "#f59e0b" },
+    ]);
+    expect(result).toEqual({
+      type: "lucide",
+      iconName: "brain-circuit",
+      color: "#f59e0b",
+    });
   });
 
   it("returns a lucide entry without color when color is omitted", () => {
     const result = resolveIconEntry([{ src: "sparkles" }]);
-    expect(result).toEqual({ type: "lucide", iconName: "sparkles", color: undefined });
+    expect(result).toEqual({
+      type: "lucide",
+      iconName: "sparkles",
+      color: undefined,
+    });
   });
 });
 

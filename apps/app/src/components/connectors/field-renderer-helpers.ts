@@ -14,12 +14,8 @@ export function validateField(
   value: unknown,
 ): string | null {
   const v = field.validation;
-  if (!v) {
-    if (field.validation?.required) {
-      if (value === undefined || value === null || value === "") return "Required";
-    }
-    return null;
-  }
+  // No constraints declared → nothing to check.
+  if (!v) return null;
 
   // Required
   if (v.required) {
@@ -43,8 +39,10 @@ export function validateField(
 
   // Number validations
   if (typeof value === "number") {
-    if (v.min !== undefined && value < v.min) return `Minimum value is ${v.min}`;
-    if (v.max !== undefined && value > v.max) return `Maximum value is ${v.max}`;
+    if (v.min !== undefined && value < v.min)
+      return `Minimum value is ${v.min}`;
+    if (v.max !== undefined && value > v.max)
+      return `Maximum value is ${v.max}`;
   }
 
   // Array validations

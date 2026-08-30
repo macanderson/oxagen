@@ -22,9 +22,13 @@ export function OnboardingRecommendation({
 }: OnboardingRecommendationProps) {
   const [sampleLimit, setSampleLimit] = React.useState(200);
   const [loading, setLoading] = React.useState(false);
-  const [result, setResult] = React.useState<SchemaRecommendOutput | null>(null);
+  const [result, setResult] = React.useState<SchemaRecommendOutput | null>(
+    null,
+  );
   const [error, setError] = React.useState<string | null>(null);
-  const [applyingSchema, setApplyingSchema] = React.useState<string | null>(null);
+  const [applyingSchema, setApplyingSchema] = React.useState<string | null>(
+    null,
+  );
 
   const fetchRecommendation = React.useCallback(
     async (limit: number) => {
@@ -34,7 +38,9 @@ export function OnboardingRecommendation({
         const data = await recommend(slugs, { sampleLimit: limit });
         setResult(data);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to get recommendations");
+        setError(
+          e instanceof Error ? e.message : "Failed to get recommendations",
+        );
       } finally {
         setLoading(false);
       }
@@ -44,7 +50,7 @@ export function OnboardingRecommendation({
 
   React.useEffect(() => {
     void fetchRecommendation(sampleLimit);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSampleMore = () => {
@@ -53,7 +59,10 @@ export function OnboardingRecommendation({
     void fetchRecommendation(newLimit);
   };
 
-  const handleApply = async (schemaName: string, schema: SchemaRecommendOutput["proposal"]["schemas"][number]) => {
+  const handleApply = async (
+    schemaName: string,
+    schema: SchemaRecommendOutput["proposal"]["schemas"][number],
+  ) => {
     setApplyingSchema(schemaName);
     try {
       const labels: LabelItem[] = schema.labels.map((l) => ({
@@ -147,7 +156,8 @@ export function OnboardingRecommendation({
                 <div>
                   <p className="font-medium">{schema.displayName}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {schema.labels.length} label{schema.labels.length !== 1 ? "s" : ""}
+                    {schema.labels.length} label
+                    {schema.labels.length !== 1 ? "s" : ""}
                     {" · "}
                     {schema.relationshipTypes.length} relationship type
                     {schema.relationshipTypes.length !== 1 ? "s" : ""}

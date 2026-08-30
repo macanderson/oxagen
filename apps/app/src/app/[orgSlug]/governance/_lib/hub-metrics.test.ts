@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { CapabilityRegistrySummary } from "@oxagen/oxagen/contracts/capability.registry.list";
 import { computeChainMetrics, formatCappedCount } from "./hub-metrics";
 
-function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummary {
+function row(
+  over: Partial<CapabilityRegistrySummary>,
+): CapabilityRegistrySummary {
   return {
     name: "cap_x",
     domain: "test",
@@ -26,8 +28,17 @@ function row(over: Partial<CapabilityRegistrySummary>): CapabilityRegistrySummar
 describe("computeChainMetrics", () => {
   it("counts each accountability-chain dimension", () => {
     const rows = [
-      row({ name: "a", layers: ["api", "mcp", "app", "unit", "e2e"], scoped: true }),
-      row({ name: "b", layers: ["api", "unit"], scoped: false, noBillingGate: true }),
+      row({
+        name: "a",
+        layers: ["api", "mcp", "app", "unit", "e2e"],
+        scoped: true,
+      }),
+      row({
+        name: "b",
+        layers: ["api", "unit"],
+        scoped: false,
+        noBillingGate: true,
+      }),
       row({
         name: "c",
         plugin: { id: "oxagen/pack", tier: "premium", minPlanTier: "build" },

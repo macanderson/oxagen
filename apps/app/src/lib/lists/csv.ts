@@ -60,9 +60,14 @@ function csvField(raw: unknown): string {
  *   );
  *   // 'Name,Email\r\n"Ada Lovelace",ada@example.com\r\n'
  */
-export function toCsv(columns: CsvColumn[], rows: Record<string, unknown>[]): string {
+export function toCsv(
+  columns: CsvColumn[],
+  rows: Record<string, unknown>[],
+): string {
   const header = columns.map((c) => csvField(c.header)).join(",");
-  const lines = rows.map((row) => columns.map((c) => csvField(row[c.key])).join(","));
+  const lines = rows.map((row) =>
+    columns.map((c) => csvField(row[c.key])).join(","),
+  );
   return [header, ...lines].join("\r\n") + "\r\n";
 }
 

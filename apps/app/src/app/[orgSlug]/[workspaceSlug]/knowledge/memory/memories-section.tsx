@@ -9,12 +9,13 @@
  * into client components via a server intermediary.
  */
 import "@oxagen/handlers/register";
-// agent.memory.list is an agent.* capability — its handler is bound by
+// list_memories is an agent.* capability — its handler is bound by
 // @oxagen/agent/register, NOT the foundation register. Without this the kernel
-// throws "No handler registered for capability agent.memory.list" at runtime.
+// throws "No handler registered for capability list_memories" at runtime.
 import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { ErrorState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { MemoriesClient } from "@/components/knowledge/memories/memories-client";
@@ -68,8 +69,11 @@ export async function MemoriesSection({
     )) as { memories: AgentMemoryRecord[]; total: number };
     memories = result.memories;
     total = result.total;
-  } catch (e) {
-    console.error("agent.memory.list failed:", e);
+  } catch (err) {
+    logger.error(
+      { err, orgId, workspaceId },
+      "knowledge.memory: list_memories failed",
+    );
     // A fetch failure is not "no memories yet" — surface it as an error (never
     // throw from RSC, which would blank the streamed header) rather than
     // masquerading the failure as the client's empty state.

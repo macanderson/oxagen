@@ -16,14 +16,35 @@ export interface LowBalanceBannerProps {
   /** Threshold below which the banner is shown (in cents). */
   thresholdCents: number;
   /**
-   * Optional callback invoked when the user clicks "Buy credits". The billing
-   * page passes a handler that scrolls to / focuses the buy-credits widget.
-   * Makes the dependency explicit and testable instead of relying on a DOM id.
+   * Optional callback invoked when the user clicks "Buy credits". Server
+   * Components cannot pass a function across the boundary, so the billing page
+   * leaves this unset and the banner falls back to scrolling the buy-credits
+   * panel into view by DOM id — the same fallback `SubscriptionSummary` uses
+   * for its "Change card" action. Pass it from a Client Component when you want
+   * an explicit, testable dependency instead.
    */
   onBuyCredits?: () => void;
 }
 
 const SESSION_KEY_PREFIX = "oxagen:low-balance-dismissed:";
+
+/** DOM id of the buy-credits panel on the billing subscription tab. */
+const BUY_CREDITS_ANCHOR_ID = "buy-credits";
+
+/**
+ * Read the per-org dismiss flag. sessionStorage throws (not returns null) when
+ * site data is blocked — a private window or a locked-down browser — and this
+ * runs inside a render, so an unguarded read would take the whole billing page
+ * down. Treat any failure as "not dismissed".
+ */
+function readDismissed(sessionKey: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(sessionKey) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * LowBalanceBanner — dismissible warning shown when the org's credit balance
@@ -43,10 +64,9 @@ export function LowBalanceBanner({
   const sessionKey = `${SESSION_KEY_PREFIX}${orgSlug}`;
 
   // Initialise dismissed state from sessionStorage (read once on mount).
-  const [dismissed, setDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem(sessionKey) === "1";
-  });
+  const [dismissed, setDismissed] = React.useState<boolean>(() =>
+    readDismissed(sessionKey),
+  );
 
   // Balance is fine — nothing to show.
   if (balanceCents >= thresholdCents) return null;
@@ -56,9 +76,23 @@ export function LowBalanceBanner({
 
   function handleDismiss() {
     if (typeof window !== "undefined") {
-      sessionStorage.setItem(sessionKey, "1");
+      try {
+        sessionStorage.setItem(sessionKey, "1");
+      } catch {
+        // Storage blocked — dismiss for this render only, don't crash.
+      }
     }
     setDismissed(true);
+  }
+
+  function handleBuyCredits() {
+    if (onBuyCredits) {
+      onBuyCredits();
+      return;
+    }
+    document
+      .getElementById(BUY_CREDITS_ANCHOR_ID)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -73,7 +107,7 @@ export function LowBalanceBanner({
               variant="link"
               size="sm"
               className="h-auto p-0 text-sm font-medium underline-offset-2"
-              onClick={onBuyCredits}
+              onClick={handleBuyCredits}
             >
               Buy credits
             </Button>{" "}

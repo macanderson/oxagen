@@ -88,16 +88,19 @@ export interface MobileSettingsNavProps {
  * MobileSettingsNav — sub-md section switcher for settings-style pages.
  *
  * FIXED to the viewport, docked flush on top of the MobileBottomBar — never
- * sticky. Sticky positioning had two failure modes: on short pages the
- * switcher floated mid-screen right after the content, and on long pages it
- * hovered a bottom-bar-gap above the bar with content scrolling through the
- * gap (the "margin below the nav" bug). Fixed positioning also makes DOM
- * order irrelevant, so layouts can render this anywhere. An in-flow spacer
+ * sticky. Sticky would float the switcher mid-screen on a short page, and on a
+ * long page leave a bottom-bar-sized gap under it that content scrolls
+ * through. Fixed positioning also makes DOM order irrelevant, so layouts can
+ * render this anywhere. An in-flow spacer
  * reserves the switcher's height at the component's DOM position (render it
  * after the page content) so the last content row is never hidden behind
  * the fixed bar.
  */
-export function MobileSettingsNav({ items, label, className }: MobileSettingsNavProps) {
+export function MobileSettingsNav({
+  items,
+  label,
+  className,
+}: MobileSettingsNavProps) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
   const activeHref = resolveActiveTab(items, pathname);

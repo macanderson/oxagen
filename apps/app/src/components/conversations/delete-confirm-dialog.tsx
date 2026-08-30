@@ -49,11 +49,7 @@ export function DeleteConfirmDialog({
           >
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            onClick={onConfirm}
-            disabled={pending}
-          >
+          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
             {pending ? "Deleting…" : confirmLabel}
           </Button>
         </DialogFooter>

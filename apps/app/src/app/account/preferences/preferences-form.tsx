@@ -12,8 +12,15 @@
  * Toast pattern: useToast().add(...), matches billing components.
  */
 import * as React from "react";
-import type { FontSize, Density, PendingPromptBehavior } from "@oxagen/database";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import type {
+  FontSize,
+  Density,
+  PendingPromptBehavior,
+} from "@oxagen/database";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
@@ -25,10 +32,16 @@ import {
   SelectGroup,
   SelectItem,
 } from "@/components/ui/select";
-import { ModelDefaultsFields, type ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
+import {
+  ModelDefaultsFields,
+  type ModelDefaultsValue,
+} from "@/components/settings/model-defaults-fields";
 import { updatePreferencesAction } from "./preferences-action";
 import type { PreferencesInput } from "./preferences-action";
-import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
+import {
+  useRegisterFillableForm,
+  useRegisterPageEntity,
+} from "@/lib/page-context";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { TIMEZONE_OPTIONS, LANGUAGE_OPTIONS } from "./locale-constants";
 
@@ -57,7 +70,9 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
   // ── Local state ────────────────────────────────────────────────────────────
   const [fontSize, setFontSize] = React.useState<FontSize>(initial.fontSize);
   const [density, setDensity] = React.useState<Density>(initial.density);
-  const [enterToSubmit, setEnterToSubmit] = React.useState(initial.enterToSubmit);
+  const [enterToSubmit, setEnterToSubmit] = React.useState(
+    initial.enterToSubmit,
+  );
   const [pendingPromptBehavior, setPendingPromptBehavior] =
     React.useState<PendingPromptBehavior>(initial.pendingPromptBehavior);
 
@@ -71,14 +86,17 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
     videoModel: initial.defaultVideoModel,
   });
 
-  const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [status, setStatus] = React.useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   // ── Register the account preferences entity + fillable form ──────────────
   useRegisterPageEntity({
     kind: "user",
     id: "account-preferences",
     label: "Account Preferences",
-    summary: "User preferences for appearance, interactive agent, and model defaults.",
+    summary:
+      "User preferences for appearance, interactive agent, and model defaults.",
   });
 
   const preferencesFields = React.useMemo<FieldDescriptor[]>(
@@ -142,30 +160,54 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
         required: false,
       },
     ],
-    [fontSize, density, enterToSubmit, pendingPromptBehavior, timezone, language],
+    [
+      fontSize,
+      density,
+      enterToSubmit,
+      pendingPromptBehavior,
+      timezone,
+      language,
+    ],
   );
 
   const applyPreferences = React.useCallback(
     (proposed: Record<string, unknown>) => {
-      if (proposed.fontSize === "small" || proposed.fontSize === "medium" || proposed.fontSize === "large") {
+      if (
+        proposed.fontSize === "small" ||
+        proposed.fontSize === "medium" ||
+        proposed.fontSize === "large"
+      ) {
         setFontSize(proposed.fontSize);
         // Optimistically apply to the document so the change is visible immediately.
         document.documentElement.dataset.fontSize = proposed.fontSize;
       }
-      if (proposed.density === "compact" || proposed.density === "comfortable" || proposed.density === "spacious") {
+      if (
+        proposed.density === "compact" ||
+        proposed.density === "comfortable" ||
+        proposed.density === "spacious"
+      ) {
         setDensity(proposed.density);
         document.documentElement.dataset.density = proposed.density;
       }
       if (typeof proposed.enterToSubmit === "boolean") {
         setEnterToSubmit(proposed.enterToSubmit);
       }
-      if (proposed.pendingPromptBehavior === "queue" || proposed.pendingPromptBehavior === "interrupt") {
+      if (
+        proposed.pendingPromptBehavior === "queue" ||
+        proposed.pendingPromptBehavior === "interrupt"
+      ) {
         setPendingPromptBehavior(proposed.pendingPromptBehavior);
       }
-      if (typeof proposed.timezone === "string" && proposed.timezone.length > 0) {
+      if (
+        typeof proposed.timezone === "string" &&
+        proposed.timezone.length > 0
+      ) {
         setTimezone(proposed.timezone);
       }
-      if (typeof proposed.language === "string" && proposed.language.length >= 2) {
+      if (
+        typeof proposed.language === "string" &&
+        proposed.language.length >= 2
+      ) {
         setLanguage(proposed.language);
       }
     },
@@ -280,12 +322,19 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
               aria-labelledby="density-label"
               disabled={isSaving}
             >
-              <SegmentedControlItem value="compact">Compact</SegmentedControlItem>
-              <SegmentedControlItem value="comfortable">Comfortable</SegmentedControlItem>
-              <SegmentedControlItem value="spacious">Spacious</SegmentedControlItem>
+              <SegmentedControlItem value="compact">
+                Compact
+              </SegmentedControlItem>
+              <SegmentedControlItem value="comfortable">
+                Comfortable
+              </SegmentedControlItem>
+              <SegmentedControlItem value="spacious">
+                Spacious
+              </SegmentedControlItem>
             </SegmentedControl>
             <p className="text-xs text-muted-foreground">
-              Controls spacing and padding in dense lists and the chat interface.
+              Controls spacing and padding in dense lists and the chat
+              interface.
             </p>
           </div>
         </div>
@@ -333,12 +382,18 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
             </Label>
             <SegmentedControl
               value={pendingPromptBehavior}
-              onValueChange={(v) => setPendingPromptBehavior(v as PendingPromptBehavior)}
+              onValueChange={(v) =>
+                setPendingPromptBehavior(v as PendingPromptBehavior)
+              }
               aria-labelledby="pending-prompt-label"
               disabled={isSaving}
             >
-              <SegmentedControlItem value="queue">Queue it</SegmentedControlItem>
-              <SegmentedControlItem value="interrupt">Interrupt the response</SegmentedControlItem>
+              <SegmentedControlItem value="queue">
+                Queue it
+              </SegmentedControlItem>
+              <SegmentedControlItem value="interrupt">
+                Interrupt the response
+              </SegmentedControlItem>
             </SegmentedControl>
             <p className="text-xs text-muted-foreground">
               {pendingPromptBehavior === "queue"
@@ -377,8 +432,17 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
             <Label id="timezone-label" htmlFor="timezone-select">
               Timezone
             </Label>
-            <Select value={timezone} onValueChange={(v) => { if (v) setTimezone(v); }} disabled={isSaving}>
-              <SelectTrigger id="timezone-select" aria-labelledby="timezone-label">
+            <Select
+              value={timezone}
+              onValueChange={(v) => {
+                if (v) setTimezone(v);
+              }}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="timezone-select"
+                aria-labelledby="timezone-label"
+              >
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>
               <SelectPopup className="max-h-72 overflow-y-auto">
@@ -401,8 +465,17 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
             <Label id="language-label" htmlFor="language-select">
               Language
             </Label>
-            <Select value={language} onValueChange={(v) => { if (v) setLanguage(v); }} disabled={isSaving}>
-              <SelectTrigger id="language-select" aria-labelledby="language-label">
+            <Select
+              value={language}
+              onValueChange={(v) => {
+                if (v) setLanguage(v);
+              }}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="language-select"
+                aria-labelledby="language-label"
+              >
                 <SelectValue placeholder="Select language" />
               </SelectTrigger>
               <SelectPopup>

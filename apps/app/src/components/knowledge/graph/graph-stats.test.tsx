@@ -9,7 +9,12 @@ describe("GraphStatsBoxes", () => {
   it("renders node/edge/inferred/source counts with thousands separators", () => {
     const { getByText, getByTestId } = render(
       <GraphStatsBoxes
-        stats={{ nodeCount: 1234, edgeCount: 56, inferredEdgeCount: 7, sourceCount: 3 }}
+        stats={{
+          nodeCount: 1234,
+          edgeCount: 56,
+          inferredEdgeCount: 7,
+          sourceCount: 3,
+        }}
       />,
     );
     expect(getByTestId("graph-stats")).toBeInTheDocument();
@@ -28,7 +33,12 @@ describe("GraphStatsBoxes", () => {
   it("shows a last-updated caption only when lastModifiedAt is a valid timestamp", () => {
     const { queryByText, rerender } = render(
       <GraphStatsBoxes
-        stats={{ nodeCount: 0, edgeCount: 0, inferredEdgeCount: 0, sourceCount: 0 }}
+        stats={{
+          nodeCount: 0,
+          edgeCount: 0,
+          inferredEdgeCount: 0,
+          sourceCount: 0,
+        }}
       />,
     );
     expect(queryByText(/Last updated/)).not.toBeInTheDocument();

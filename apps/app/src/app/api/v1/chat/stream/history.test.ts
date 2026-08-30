@@ -8,7 +8,9 @@ import {
   type ResolvedHistoryImage,
 } from "./history";
 
-function attachmentMeta(...attachments: Array<{ publicId: string; kind?: string; name?: string }>) {
+function attachmentMeta(
+  ...attachments: Array<{ publicId: string; kind?: string; name?: string }>
+) {
   return {
     attachments: attachments.map((a) => ({
       publicId: a.publicId,
@@ -18,7 +20,10 @@ function attachmentMeta(...attachments: Array<{ publicId: string; kind?: string;
   };
 }
 
-function resolvedImage(data: number[] = [1, 2, 3], mediaType = "image/png"): ResolvedHistoryImage {
+function resolvedImage(
+  data: number[] = [1, 2, 3],
+  mediaType = "image/png",
+): ResolvedHistoryImage {
   return { data: Buffer.from(data), mediaType };
 }
 
@@ -38,7 +43,10 @@ function toolCall(
   } as AssistantContentBlock;
 }
 
-function fileComponent(toolCallId: string, name: string): AssistantContentBlock {
+function fileComponent(
+  toolCallId: string,
+  name: string,
+): AssistantContentBlock {
   return {
     type: "component",
     toolCallId,
@@ -57,7 +65,9 @@ describe("summarizeCompletedActions", () => {
     ];
     const summary = summarizeCompletedActions(blocks);
     expect(summary).toContain("DONE, do not repeat");
-    expect(summary).toContain("generate_markdown → uss-nautilus-the-first-nuclear-submarine.md");
+    expect(summary).toContain(
+      "generate_markdown → uss-nautilus-the-first-nuclear-submarine.md",
+    );
     expect(summary).toContain("generate_mermaid");
     expect(summary).toContain("generate_svg");
   });
@@ -97,7 +107,11 @@ describe("summarizeCompletedActions", () => {
   it("returns empty string when there are no re-runnable actions", () => {
     const blocks: AssistantContentBlock[] = [
       { type: "text", text: "hello" } as AssistantContentBlock,
-      { type: "reasoning", reasoningId: "r1", text: "thinking" } as AssistantContentBlock,
+      {
+        type: "reasoning",
+        reasoningId: "r1",
+        text: "thinking",
+      } as AssistantContentBlock,
     ];
     expect(summarizeCompletedActions(blocks)).toBe("");
   });
@@ -105,9 +119,10 @@ describe("summarizeCompletedActions", () => {
 
 describe("buildAssistantHistoryText", () => {
   it("appends the completion summary to assistant text", () => {
-    const out = buildAssistantHistoryText("I'll generate all three artifacts now.", [
-      toolCall("tc1", "generate_markdown"),
-    ]);
+    const out = buildAssistantHistoryText(
+      "I'll generate all three artifacts now.",
+      [toolCall("tc1", "generate_markdown")],
+    );
     expect(out.startsWith("I'll generate all three artifacts now.")).toBe(true);
     expect(out).toContain("generate_markdown");
     expect(out).toContain("DONE");
@@ -147,7 +162,11 @@ describe("buildHistoryMessages (regression for the re-execution bug)", () => {
           fileComponent("tc1", "nautilus.md"),
         ],
       },
-      { role: "user", content: "make a markdown doc about nautilus", contentBlocks: [] },
+      {
+        role: "user",
+        content: "make a markdown doc about nautilus",
+        contentBlocks: [],
+      },
     ];
 
     const messages = buildHistoryMessages(rows);
@@ -197,11 +216,26 @@ describe("collectRecentAttachmentPublicIds", () => {
   it("collects image-kind attachment ids from the most recent 2 user turns", () => {
     // Newest-first, as fetched from the DB.
     const rows = [
-      { role: "user", content: "third", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_3" }) },
+      {
+        role: "user",
+        content: "third",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_3" }),
+      },
       { role: "assistant", content: "reply", contentBlocks: [] },
-      { role: "user", content: "second", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_2" }) },
+      {
+        role: "user",
+        content: "second",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_2" }),
+      },
       { role: "assistant", content: "reply", contentBlocks: [] },
-      { role: "user", content: "first", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_1" }) },
+      {
+        role: "user",
+        content: "first",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_1" }),
+      },
     ];
     // Only the newest 2 user turns (gen_3, gen_2) — gen_1 is the 3rd-back turn.
     expect(collectRecentAttachmentPublicIds(rows)).toEqual(["gen_3", "gen_2"]);
@@ -221,8 +255,18 @@ describe("collectRecentAttachmentPublicIds", () => {
 
   it("ignores malformed metadata without throwing", () => {
     const rows = [
-      { role: "user", content: "hi", contentBlocks: [], metadata: "not-an-object" },
-      { role: "user", content: "hi2", contentBlocks: [], metadata: { attachments: "not-an-array" } },
+      {
+        role: "user",
+        content: "hi",
+        contentBlocks: [],
+        metadata: "not-an-object",
+      },
+      {
+        role: "user",
+        content: "hi2",
+        contentBlocks: [],
+        metadata: { attachments: "not-an-array" },
+      },
       { role: "user", content: "hi3", contentBlocks: [], metadata: null },
     ];
     expect(collectRecentAttachmentPublicIds(rows)).toEqual([]);
@@ -232,7 +276,12 @@ describe("collectRecentAttachmentPublicIds", () => {
 describe("buildHistoryMessages — bounded image replay", () => {
   it("re-attaches a real image part for the most recent user turn when resolved", () => {
     const rows = [
-      { role: "user", content: "what is this?", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_1", name: "photo.png" }) },
+      {
+        role: "user",
+        content: "what is this?",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_1", name: "photo.png" }),
+      },
     ];
     const resolved = new Map([["gen_1", resolvedImage()]]);
 
@@ -241,27 +290,48 @@ describe("buildHistoryMessages — bounded image replay", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]!.role).toBe("user");
     expect(Array.isArray(messages[0]!.content)).toBe(true);
-    const parts = messages[0]!.content as Array<{ type: string; text?: string; mediaType?: string }>;
+    const parts = messages[0]!.content as Array<{
+      type: string;
+      text?: string;
+      mediaType?: string;
+    }>;
     expect(parts.find((p) => p.type === "text")?.text).toBe("what is this?");
     expect(parts.find((p) => p.type === "image")?.mediaType).toBe("image/png");
   });
 
   it("falls back to a text placeholder for the most recent turn when the image isn't in resolvedImages", () => {
     const rows = [
-      { role: "user", content: "what is this?", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_1", name: "photo.png" }) },
+      {
+        role: "user",
+        content: "what is this?",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_1", name: "photo.png" }),
+      },
     ];
     // No resolvedImages passed — simulates the asset failing to resolve.
     const messages = buildHistoryMessages(rows);
 
     expect(messages).toHaveLength(1);
     expect(typeof messages[0]!.content).toBe("string");
-    expect(messages[0]!.content).toBe("what is this?\n[attached image: photo.png]");
+    expect(messages[0]!.content).toBe(
+      "what is this?\n[attached image: photo.png]",
+    );
   });
 
   it("uses a text placeholder for a turn OUTSIDE the recent-2 window even when resolvedImages has the id", () => {
     const rows = [
-      { role: "user", content: "third", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_3" }) },
-      { role: "user", content: "second", contentBlocks: [], metadata: attachmentMeta({ publicId: "gen_2" }) },
+      {
+        role: "user",
+        content: "third",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_3" }),
+      },
+      {
+        role: "user",
+        content: "second",
+        contentBlocks: [],
+        metadata: attachmentMeta({ publicId: "gen_2" }),
+      },
       {
         role: "user",
         content: "first — the old attachment",
@@ -280,7 +350,9 @@ describe("buildHistoryMessages — bounded image replay", () => {
     const messages = buildHistoryMessages(rows, resolved);
 
     // Chronological: first, second, third.
-    expect(messages[0]!.content).toBe("first — the old attachment\n[attached image: old.png]");
+    expect(messages[0]!.content).toBe(
+      "first — the old attachment\n[attached image: old.png]",
+    );
     expect(Array.isArray(messages[1]!.content)).toBe(true); // second: recent
     expect(Array.isArray(messages[2]!.content)).toBe(true); // third: recent
   });
@@ -300,7 +372,10 @@ describe("buildHistoryMessages — bounded image replay", () => {
     const resolved = new Map([["gen_ok", resolvedImage()]]);
 
     const messages = buildHistoryMessages(rows, resolved);
-    const parts = messages[0]!.content as Array<{ type: string; text?: string }>;
+    const parts = messages[0]!.content as Array<{
+      type: string;
+      text?: string;
+    }>;
     expect(parts.filter((p) => p.type === "image")).toHaveLength(1);
     expect(parts.find((p) => p.type === "text")?.text).toBe(
       "compare these\n[attached image: missing.png]",
@@ -310,9 +385,17 @@ describe("buildHistoryMessages — bounded image replay", () => {
   it("does not affect assistant/system rows or attachment-free user rows", () => {
     const rows = [
       { role: "assistant", content: "answer", contentBlocks: [] },
-      { role: "user", content: "plain question", contentBlocks: [], metadata: {} },
+      {
+        role: "user",
+        content: "plain question",
+        contentBlocks: [],
+        metadata: {},
+      },
     ];
     const messages = buildHistoryMessages(rows, new Map());
-    expect(messages.map((m) => m.content)).toEqual(["plain question", "answer"]);
+    expect(messages.map((m) => m.content)).toEqual([
+      "plain question",
+      "answer",
+    ]);
   });
 });

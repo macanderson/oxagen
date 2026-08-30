@@ -11,12 +11,19 @@ describe("parseAuditFilter", () => {
     const f = parseAuditFilter({ event_type: ["auth.sign_in", "bogus.value"] });
     expect(f.eventTypes).toEqual(["auth.sign_in"]);
 
-    const g = parseAuditFilter({ event_type: "auth.sign_in,billing.plan_changed,nope" });
-    expect(g.eventTypes.sort()).toEqual(["auth.sign_in", "billing.plan_changed"]);
+    const g = parseAuditFilter({
+      event_type: "auth.sign_in,billing.plan_changed,nope",
+    });
+    expect(g.eventTypes.sort()).toEqual([
+      "auth.sign_in",
+      "billing.plan_changed",
+    ]);
   });
 
   it("dedupes event types", () => {
-    const f = parseAuditFilter({ event_type: ["auth.sign_in", "auth.sign_in"] });
+    const f = parseAuditFilter({
+      event_type: ["auth.sign_in", "auth.sign_in"],
+    });
     expect(f.eventTypes).toEqual(["auth.sign_in"]);
   });
 
@@ -66,9 +73,14 @@ describe("encodeAuditFilter", () => {
       from: "2026-01-01T00:00:00Z",
     });
     const sp = encodeAuditFilter(original);
-    const roundTripped = parseAuditFilter(Object.fromEntries(
-      [...new Set(sp.keys())].map((k) => [k, sp.getAll(k).length > 1 ? sp.getAll(k) : sp.get(k)!]),
-    ));
+    const roundTripped = parseAuditFilter(
+      Object.fromEntries(
+        [...new Set(sp.keys())].map((k) => [
+          k,
+          sp.getAll(k).length > 1 ? sp.getAll(k) : sp.get(k)!,
+        ]),
+      ),
+    );
     expect(roundTripped.eventTypes.sort()).toEqual(original.eventTypes.sort());
     expect(roundTripped.outcome).toBe(original.outcome);
     expect(roundTripped.actorUserId).toBe(original.actorUserId);
@@ -86,7 +98,10 @@ describe("encodeAuditFilter", () => {
   });
 
   it("can clear the cursor explicitly", () => {
-    const f = parseAuditFilter({ cursor: "2026-06-01T00:00:00.000Z|x", event_type: "auth.sign_in" });
+    const f = parseAuditFilter({
+      cursor: "2026-06-01T00:00:00.000Z|x",
+      event_type: "auth.sign_in",
+    });
     const sp = encodeAuditFilter(f, { cursor: null });
     expect(sp.has("cursor")).toBe(false);
   });

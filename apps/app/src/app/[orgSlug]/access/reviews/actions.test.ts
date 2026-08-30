@@ -52,7 +52,8 @@ const {
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertSecurityManager: mockAssertSecurityManager,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
+  assertSecurityManager: mockAssertSecurityManager,
   assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
@@ -73,8 +74,7 @@ vi.mock("@oxagen/database", () => {
   const makeTx = () => ({
     delete: (_table: unknown) => ({
       where: (_w: unknown) => ({
-        returning: (_cols: unknown) =>
-          Promise.resolve(dbState.deleteReturning),
+        returning: (_cols: unknown) => Promise.resolve(dbState.deleteReturning),
       }),
     }),
   });
@@ -92,10 +92,7 @@ vi.mock("@oxagen/database", () => {
   };
 });
 
-import {
-  confirmMemberAccessAction,
-  revokeMemberAccessAction,
-} from "./actions";
+import { confirmMemberAccessAction, revokeMemberAccessAction } from "./actions";
 
 // SESSION.user.id must be a valid UUID because the action validates targetUserId
 // with z.string().uuid() BEFORE the self_action guard.
@@ -220,7 +217,9 @@ describe("revokeMemberAccessAction", () => {
   });
 
   it("returns internal (NOT forbidden) when the auth gate hits a DB/infra error", async () => {
-    mockAssertSecurityManager.mockRejectedValue(new Error("connection refused"));
+    mockAssertSecurityManager.mockRejectedValue(
+      new Error("connection refused"),
+    );
     const res = await revokeMemberAccessAction({
       orgSlug: "acme",
       targetUserId: VALID_TARGET_UUID,

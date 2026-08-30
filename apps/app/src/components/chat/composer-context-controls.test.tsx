@@ -56,11 +56,19 @@ vi.mock("@/components/ui/select", () => ({
       {children}
     </div>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <div data-value={value}>{children}</div>
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
   ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <div data-value={value}>{children}</div>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -72,7 +80,10 @@ vi.mock("@/components/ui/button", () => ({
     "aria-label": ariaLabel,
     "aria-pressed": ariaPressed,
     ...rest
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => (
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: string;
+    size?: string;
+  }) => (
     <button
       type={(type as "button" | "submit" | "reset") ?? "button"}
       onClick={onClick}
@@ -89,7 +100,9 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ render }: { render: React.ReactElement }) => render,
-  TooltipPopup: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipPopup: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 // Stub the PR chip — its own behaviour is covered in its own test file.
@@ -118,7 +131,11 @@ const REPO: RepoOption = {
   name: "widgets",
   defaultBranch: "main",
 };
-const ENV: EnvironmentOption = { id: "env_default", name: "Default", isDefault: true };
+const ENV: EnvironmentOption = {
+  id: "env_default",
+  name: "Default",
+  isDefault: true,
+};
 
 function base() {
   return {
@@ -136,19 +153,31 @@ describe("ComposerContextControls", () => {
     const { container } = render(
       <ComposerContextControls {...base()} mode="pin" onTogglePin={vi.fn()} />,
     );
-    expect(container.querySelector('[aria-label="Pinned repository"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Pinned environment"]')).not.toBeNull();
+    expect(
+      container.querySelector('[aria-label="Pinned repository"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[aria-label="Pinned environment"]'),
+    ).not.toBeNull();
   });
 
   it("uses code-mode aria-labels in code mode and hides the pin toggle", () => {
-    const { container } = render(<ComposerContextControls {...base()} mode="code" />);
-    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Select environment"]')).not.toBeNull();
+    const { container } = render(
+      <ComposerContextControls {...base()} mode="code" />,
+    );
+    expect(
+      container.querySelector('[aria-label="Select repository"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[aria-label="Select environment"]'),
+    ).not.toBeNull();
     expect(screen.queryByTestId("pin-to-chat")).toBeNull();
   });
 
   it("shows the pin toggle in pin mode, disabled until something is selected", () => {
-    render(<ComposerContextControls {...base()} mode="pin" onTogglePin={vi.fn()} />);
+    render(
+      <ComposerContextControls {...base()} mode="pin" onTogglePin={vi.fn()} />,
+    );
     expect(screen.getByTestId("pin-to-chat")).toBeDisabled();
   });
 
@@ -179,7 +208,10 @@ describe("ComposerContextControls", () => {
         onTogglePin={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("pin-to-chat")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("pin-to-chat")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("renders the PR chip only when a pr + slugs are provided", () => {
@@ -192,7 +224,13 @@ describe("ComposerContextControls", () => {
       <ComposerContextControls
         {...base()}
         mode="code"
-        pr={{ owner: "acme", name: "widgets", number: 42, url: "u", headRef: "b" }}
+        pr={{
+          owner: "acme",
+          name: "widgets",
+          number: 42,
+          url: "u",
+          headRef: "b",
+        }}
         orgSlug="acme"
         workspaceSlug="main"
       />,
@@ -203,7 +241,11 @@ describe("ComposerContextControls", () => {
   it("selecting a repo calls onSelectRepo with the matching option", async () => {
     const onSelectRepo = vi.fn();
     render(
-      <ComposerContextControls {...base()} onSelectRepo={onSelectRepo} mode="code" />,
+      <ComposerContextControls
+        {...base()}
+        onSelectRepo={onSelectRepo}
+        mode="code"
+      />,
     );
     await userEvent.click(screen.getAllByTestId("select")[0]!);
     expect(onSelectRepo).toHaveBeenCalledWith(REPO);

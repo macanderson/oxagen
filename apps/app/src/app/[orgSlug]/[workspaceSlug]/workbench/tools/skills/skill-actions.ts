@@ -13,10 +13,6 @@
  * surface the contract doesn't list makes the kernel throw surface_denied. The
  * app is a trusted server caller (ctx.surface === "app") and omits opts.surface
  * so no surface allowlist is enforced — matching lib/workbench/equip-sources.ts.
- *
- * Adapted from settings/skills/skill-actions.ts (same contracts, same
- * shapes) — the only changes are the route target (workbench, not settings)
- * and the shared `resolveWorkbenchScope` helper, plus the new `createSkillAction`.
  */
 import { z } from "zod";
 import { revalidatePath } from "next/cache";

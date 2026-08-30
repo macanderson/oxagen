@@ -93,37 +93,85 @@ vi.mock("lucide-react", async (importOriginal) => {
 
 describe("ConnectionCreateInline — github variant", () => {
   it("renders the GitHub card title", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="github" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="github"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(screen.getByText("Connect a GitHub repository")).toBeInTheDocument();
   });
 
   it("renders the Connect GitHub button", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="github" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="github"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(
       screen.getByRole("button", { name: "Connect GitHub" }),
     ).toBeInTheDocument();
   });
 
   it("wizard starts closed", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="github" orgSlug="acme" workspaceSlug="main" />);
-    expect(screen.getByTestId("github-wizard-mock")).toHaveAttribute("data-open", "false");
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="github"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(screen.getByTestId("github-wizard-mock")).toHaveAttribute(
+      "data-open",
+      "false",
+    );
   });
 
   it("clicking the button opens the wizard (open=true)", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="github" orgSlug="acme" workspaceSlug="main" />);
-    await userEvent.click(screen.getByRole("button", { name: "Connect GitHub" }));
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="github"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Connect GitHub" }),
+    );
     await waitFor(() => {
-      expect(screen.getByTestId("github-wizard-mock")).toHaveAttribute("data-open", "true");
+      expect(screen.getByTestId("github-wizard-mock")).toHaveAttribute(
+        "data-open",
+        "true",
+      );
     });
   });
 
   it("passes orgSlug and workspaceSlug to the wizard", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="github" orgSlug="my-org" workspaceSlug="my-ws" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="github"
+        orgSlug="my-org"
+        workspaceSlug="my-ws"
+      />,
+    );
     const wizard = screen.getByTestId("github-wizard-mock");
     expect(wizard).toHaveAttribute("data-org", "my-org");
     expect(wizard).toHaveAttribute("data-ws", "my-ws");
@@ -132,7 +180,9 @@ describe("ConnectionCreateInline — github variant", () => {
 
 describe("ConnectionCreateInline — default connectorId", () => {
   it("defaults to github variant when connectorId is omitted", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
     render(<ConnectionCreateInline orgSlug="acme" workspaceSlug="main" />);
     // GitHub card title present means github variant was rendered
     expect(screen.getByText("Connect a GitHub repository")).toBeInTheDocument();
@@ -141,48 +191,84 @@ describe("ConnectionCreateInline — default connectorId", () => {
 
 describe("ConnectionCreateInline — non-github fallback", () => {
   it("renders 'Connect a source' heading for unknown connectors", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="salesforce"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(screen.getByText("Connect a source")).toBeInTheDocument();
   });
 
   it("renders copy saying inline connect is not available", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="salesforce"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(
-      screen.getByText(/Inline connect is not available for this connector yet/),
+      screen.getByText(
+        /Inline connect is not available for this connector yet/,
+      ),
     ).toBeInTheDocument();
   });
 
   it("renders 'Open Sources' link with correct href", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="salesforce"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     const link = screen.getByTestId("connection-create-inline-sources-link");
     expect(link).toHaveAttribute("href", "/acme/main/knowledge/sources");
     expect(link).toHaveTextContent("Open Sources");
   });
 
   it("falls back to href='/' when orgSlug and workspaceSlug are absent", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="salesforce" />);
-    expect(screen.getByTestId("connection-create-inline-sources-link")).toHaveAttribute(
-      "href",
-      "/",
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
     );
+    render(<ConnectionCreateInline connectorId="salesforce" />);
+    expect(
+      screen.getByTestId("connection-create-inline-sources-link"),
+    ).toHaveAttribute("href", "/");
   });
 
   it("falls back to href='/' when only one slug is present", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" />);
-    expect(screen.getByTestId("connection-create-inline-sources-link")).toHaveAttribute(
-      "href",
-      "/",
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
     );
+    render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" />);
+    expect(
+      screen.getByTestId("connection-create-inline-sources-link"),
+    ).toHaveAttribute("href", "/");
   });
 
   it("fallback does not render the GitHub wizard", async () => {
-    const { default: ConnectionCreateInline } = await import("./connection-create-inline");
-    render(<ConnectionCreateInline connectorId="slack" orgSlug="acme" workspaceSlug="main" />);
+    const { default: ConnectionCreateInline } = await import(
+      "./connection-create-inline"
+    );
+    render(
+      <ConnectionCreateInline
+        connectorId="slack"
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
     expect(screen.queryByTestId("github-wizard-mock")).not.toBeInTheDocument();
   });
 });

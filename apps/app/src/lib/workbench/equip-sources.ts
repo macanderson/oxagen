@@ -19,39 +19,20 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "@oxagen/handlers/logger";
+import { withTimeout } from "@/lib/with-timeout";
 import type { WorkbenchCtx } from "./scope";
 import { listAgentTools, type AgentToolRow } from "./tools";
 import { listAgents } from "./agents";
 
 /**
  * A single equip source must never block the builder from rendering. The catch
- * blocks below cover a source that *rejects*; withTimeout covers a source that
- * *hangs* (never settles) — e.g. a cold, expensive capability materialization.
- * Either way the pool degrades to empty and the wizard still opens.
+ * blocks below cover a source that *rejects*; the shared `withTimeout` covers a
+ * source that *hangs* (never settles) — e.g. a cold, expensive capability
+ * materialization. Either way the pool degrades to empty and the wizard still
+ * opens. Tighter than the generic page-read budget: the builder has four of
+ * these in flight and must open promptly.
  */
 const SOURCE_TIMEOUT_MS = 8000;
-
-async function withTimeout<T>(
-  work: Promise<T>,
-  fallback: T,
-  label: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<T>((resolve) => {
-    timer = setTimeout(() => {
-      logger.warn(
-        { label, timeoutMs: SOURCE_TIMEOUT_MS },
-        "equip-sources: source timed out — degrading to empty pool",
-      );
-      resolve(fallback);
-    }, SOURCE_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([work, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 // ── Skills ──────────────────────────────────────────────────────────────────
 
@@ -193,13 +174,29 @@ export async function loadEquipSources(
   workspaceId: string,
 ): Promise<EquipSources> {
   const [skills, tools, agents, mcp] = await Promise.all([
-    withTimeout(listWorkspaceSkills(ctx), [] as WorkspaceSkillRow[], "skills"),
-    withTimeout(listAgentTools(ctx), [] as AgentToolRow[], "tools"),
-    withTimeout(listAgents(ctx), [], "subagents"),
+    withTimeout(
+      listWorkspaceSkills(ctx),
+      [] as WorkspaceSkillRow[],
+      "equip-sources:skills",
+      SOURCE_TIMEOUT_MS,
+    ),
+    withTimeout(
+      listAgentTools(ctx),
+      [] as AgentToolRow[],
+      "equip-sources:tools",
+      SOURCE_TIMEOUT_MS,
+    ),
+    withTimeout(
+      listAgents(ctx),
+      [],
+      "equip-sources:subagents",
+      SOURCE_TIMEOUT_MS,
+    ),
     withTimeout(
       listInstalledMcpServers(ctx, orgId, workspaceId),
       [] as InstalledMcpServerRow[],
-      "mcp",
+      "equip-sources:mcp",
+      SOURCE_TIMEOUT_MS,
     ),
   ]);
   return {

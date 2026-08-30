@@ -5,4 +5,8 @@
 // during the build graph walk. At runtime the real modules are loaded via
 // Node's native require (server-external), so this stub is never actually
 // executed in production.
-throw new Error("blake3 native bindings are not available in this environment");
+throw new Error(
+  "A stubbed native addon (blake3 / duckdb) was required in a bundled context. " +
+    "These packages are listed in serverExternalPackages and must be loaded via " +
+    "Node's native require, not through the bundle.",
+);

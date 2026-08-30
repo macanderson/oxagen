@@ -22,7 +22,12 @@ import type { PluginSettingsGetAuthAlertsOutput } from "@oxagen/oxagen/contracts
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { org as orgRoutes } from "@/lib/routes";
 import { logger } from "@oxagen/handlers/logger";
@@ -39,7 +44,10 @@ async function safeInvoke<T>(
   try {
     return await invokeOrgCapability<T>(orgId, userId, name, input);
   } catch (err) {
-    logger.error({ err, orgId, capability: name }, "governance/policies: read failed");
+    logger.error(
+      { err, orgId, capability: name },
+      "governance/policies: read failed",
+    );
     return null;
   }
 }
@@ -63,16 +71,27 @@ export default async function PoliciesPage({
       limit: 100,
       offset: 0,
     }),
-    safeInvoke<CapabilityRegistryListOutput>(tenant.id, userId, "list_capability_registry", {
-      limit: 1000,
-      offset: 0,
-    }),
-    safeInvoke<PluginSettingsGetAuthAlertsOutput>(tenant.id, userId, "get_auth_alerts", {}),
+    safeInvoke<CapabilityRegistryListOutput>(
+      tenant.id,
+      userId,
+      "list_capability_registry",
+      {
+        limit: 1000,
+        offset: 0,
+      },
+    ),
+    safeInvoke<PluginSettingsGetAuthAlertsOutput>(
+      tenant.id,
+      userId,
+      "get_auth_alerts",
+      {},
+    ),
     getEnterpriseAccess(tenant.id),
     getOrgRole(tenant.id, userId),
   ]);
 
-  const canEditAlerts = viewerRole != null && SECURITY_MANAGER_ROLES.has(viewerRole);
+  const canEditAlerts =
+    viewerRole != null && SECURITY_MANAGER_ROLES.has(viewerRole);
   const entitlements = registry
     ? deriveEntitlementRows(registry.capabilities, access.tier)
     : null;
@@ -97,12 +116,15 @@ export default async function PoliciesPage({
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              Roles and their capability grants are provisioned automatically from each
-              contract&apos;s defaults. Editing roles in the app ships with the IAM write
-              contracts — until then this view is read-only.
+              Roles and their capability grants are provisioned automatically
+              from each contract&apos;s defaults. Editing roles in the app ships
+              with the IAM write contracts — until then this view is read-only.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-left text-sm" data-testid="roles-table">
+              <table
+                className="w-full text-left text-sm"
+                data-testid="roles-table"
+              >
                 <thead className="bg-muted/40 text-xs text-muted-foreground">
                   <tr className="border-b border-border">
                     <th className="px-3 py-2 font-medium">Role</th>
@@ -113,8 +135,12 @@ export default async function PoliciesPage({
                 </thead>
                 <tbody>
                   {roles.roles.map((role) => {
-                    const allow = role.grants.filter((g) => g.effect === "allow").length;
-                    const deny = role.grants.filter((g) => g.effect === "deny").length;
+                    const allow = role.grants.filter(
+                      (g) => g.effect === "allow",
+                    ).length;
+                    const deny = role.grants.filter(
+                      (g) => g.effect === "deny",
+                    ).length;
                     const approval = role.grants.filter(
                       (g) => g.effect === "require_approval",
                     ).length;
@@ -125,7 +151,9 @@ export default async function PoliciesPage({
                       >
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">{role.name}</span>
+                            <span className="font-medium text-foreground">
+                              {role.name}
+                            </span>
                             {role.isSystemDefault ? (
                               <Badge size="sm" variant="muted">
                                 system
@@ -197,23 +225,26 @@ export default async function PoliciesPage({
       >
         {entitlements === null ? (
           <p className="text-sm text-muted-foreground" role="alert">
-            Unable to load the capability registry, so entitlement gates can&apos;t be
-            shown right now.
+            Unable to load the capability registry, so entitlement gates
+            can&apos;t be shown right now.
           </p>
         ) : entitlements.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No entitlement gates configured — no capability in the registry is behind a
-            capability pack.
+            No entitlement gates configured — no capability in the registry is
+            behind a capability pack.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              These capabilities are gated behind a capability pack: the pack must be
-              installed in the invoking workspace, and packs with a minimum plan tier
-              also require the org plan to meet it.
+              These capabilities are gated behind a capability pack: the pack
+              must be installed in the invoking workspace, and packs with a
+              minimum plan tier also require the org plan to meet it.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-left text-sm" data-testid="entitlements-table">
+              <table
+                className="w-full text-left text-sm"
+                data-testid="entitlements-table"
+              >
                 <thead className="bg-muted/40 text-xs text-muted-foreground">
                   <tr className="border-b border-border">
                     <th className="px-3 py-2 font-medium">Capability</th>
@@ -229,14 +260,20 @@ export default async function PoliciesPage({
                       key={row.capability}
                       className="border-b border-border last:border-b-0"
                     >
-                      <td className="px-3 py-2 font-mono text-xs">{row.capability}</td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {row.capability}
+                      </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {row.packId}
                       </td>
                       <td className="px-3 py-2">
                         <Badge
                           size="sm"
-                          variant={row.packTier === "premium" ? "warning-soft" : "muted"}
+                          variant={
+                            row.packTier === "premium"
+                              ? "warning-soft"
+                              : "muted"
+                          }
                         >
                           {row.packTier}
                         </Badge>
@@ -247,7 +284,9 @@ export default async function PoliciesPage({
                       <td className="px-3 py-2">
                         <Badge
                           size="sm"
-                          variant={row.planSatisfied ? "success-soft" : "error-soft"}
+                          variant={
+                            row.planSatisfied ? "success-soft" : "error-soft"
+                          }
                         >
                           {row.planSatisfied ? "allowed" : "blocked"}
                         </Badge>
@@ -284,8 +323,8 @@ export default async function PoliciesPage({
         <Link className="underline" href={orgRoutes.security.mfa(ctx)}>
           org MFA policy
         </Link>{" "}
-        (Security → MFA) · workspace budget policies live in each workspace&apos;s
-        settings (commercial terms are governed per-workspace).
+        (Security → MFA) · workspace budget policies live in each
+        workspace&apos;s settings (commercial terms are governed per-workspace).
       </p>
     </div>
   );

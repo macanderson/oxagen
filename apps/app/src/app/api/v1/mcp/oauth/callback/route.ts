@@ -129,8 +129,9 @@ async function handleCallback(req: NextRequest): Promise<Response> {
   // Exchange the code for tokens (mcpAuth detects the code and calls the token endpoint).
   // A token-exchange failure must NOT become an unhandled rejection (opaque 500)
   // and must NOT leak the ephemeral PKCE state: catch it, return the same
-  // ?mcp=error redirect as the unexpected-REDIRECT path, and clean up state in
-  // `finally` so it is deleted on success, failure, AND throw.
+  // ?mcp=error redirect as the unexpected-REDIRECT path, and delete the state on
+  // BOTH legs — in the catch below and immediately after a successful exchange —
+  // so a single-use PKCE verifier never survives the attempt that consumed it.
   let result: Awaited<ReturnType<typeof mcpAuth>>;
   try {
     result = await mcpAuth(provider, {

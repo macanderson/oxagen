@@ -32,10 +32,17 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsIndicator: () => null,
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -46,7 +53,8 @@ const ENTRIES: McpTabEntry[] = [
     client: "Claude Code",
     key: "claude-code",
     raw: "npx @anthropic-ai/claude-code mcp install",
-    highlightedHtml: "<pre><code>npx @anthropic-ai/claude-code mcp install</code></pre>",
+    highlightedHtml:
+      "<pre><code>npx @anthropic-ai/claude-code mcp install</code></pre>",
   },
   {
     client: "Cursor",
@@ -150,7 +158,7 @@ describe("McpInstallTabs", () => {
 
     it("changes aria-label to '{client} install command copied' after click", async () => {
       const { getAllByRole, getByRole } = render(
-        <McpInstallTabs entries={ENTRIES} />
+        <McpInstallTabs entries={ENTRIES} />,
       );
       const copyBtn = getAllByRole("button", {
         name: "Copy Claude Code install command",
@@ -169,7 +177,7 @@ describe("McpInstallTabs", () => {
       vi.useFakeTimers();
 
       const { getAllByRole, getByRole } = render(
-        <McpInstallTabs entries={ENTRIES} />
+        <McpInstallTabs entries={ENTRIES} />,
       );
       const copyBtn = getAllByRole("button", {
         name: "Copy Claude Code install command",
@@ -213,7 +221,7 @@ describe("McpInstallTabs", () => {
 
       // aria-label should remain in initial state (no setCopied(true) was called)
       expect(copyBtn.getAttribute("aria-label")).toBe(
-        "Copy Claude Code install command"
+        "Copy Claude Code install command",
       );
     });
   });

@@ -33,20 +33,31 @@ vi.mock("@/components/ui/button", () => ({
     type?: string;
     "aria-busy"?: boolean;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled} aria-busy={ariaBusy}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={ariaBusy}
+    >
       {children}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
-  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
-    <label htmlFor={htmlFor}>{children}</label>
-  ),
+  Label: ({
+    children,
+    htmlFor,
+  }: {
+    children: React.ReactNode;
+    htmlFor?: string;
+  }) => <label htmlFor={htmlFor}>{children}</label>,
 }));
 
 vi.mock("@/components/ui/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Select: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SelectTrigger: ({
     children,
     id,
@@ -60,11 +71,19 @@ vi.mock("@/components/ui/select", () => ({
       {children}
     </button>
   ),
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
-    <option value={value}>{children}</option>
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <span>{placeholder}</span>
   ),
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children: React.ReactNode;
+    value: string;
+  }) => <option value={value}>{children}</option>,
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -87,9 +106,13 @@ describe("ModelSettingsInline", () => {
     );
     vi.mocked(updateModelSettingsAction).mockResolvedValue({ ok: true });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
     render(<ModelSettingsInline />);
-    expect(screen.getByRole("form", { name: "Model settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("form", { name: "Model settings" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the default tier label", async () => {
@@ -98,7 +121,9 @@ describe("ModelSettingsInline", () => {
     );
     vi.mocked(updateModelSettingsAction).mockResolvedValue({ ok: true });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
     render(<ModelSettingsInline />);
     expect(screen.getByText("Default model tier")).toBeInTheDocument();
   });
@@ -109,9 +134,13 @@ describe("ModelSettingsInline", () => {
     );
     vi.mocked(updateModelSettingsAction).mockResolvedValue({ ok: true });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
     render(<ModelSettingsInline />);
-    expect(screen.getByRole("button", { name: "Save settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save settings" }),
+    ).toBeInTheDocument();
   });
 
   it("shows error when updateModelSettingsAction fails", async () => {
@@ -123,9 +152,13 @@ describe("ModelSettingsInline", () => {
       error: "Permission denied",
     });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
     render(<ModelSettingsInline orgSlug="my-org" workspaceSlug="default" />);
-    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save settings" }),
+    );
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("Permission denied");
     });
@@ -137,9 +170,13 @@ describe("ModelSettingsInline", () => {
     );
     vi.mocked(updateModelSettingsAction).mockResolvedValue({ ok: true });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
     render(<ModelSettingsInline orgSlug="my-org" workspaceSlug="default" />);
-    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save settings" }),
+    );
     await waitFor(() => {
       expect(screen.getByText("Model settings updated")).toBeInTheDocument();
     });
@@ -151,9 +188,19 @@ describe("ModelSettingsInline", () => {
     );
     vi.mocked(updateModelSettingsAction).mockResolvedValue({ ok: true });
 
-    const { default: ModelSettingsInline } = await import("./model-settings-inline");
-    render(<ModelSettingsInline orgSlug="my-org" workspaceSlug="default" currentTier="fast" />);
-    await userEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    const { default: ModelSettingsInline } = await import(
+      "./model-settings-inline"
+    );
+    render(
+      <ModelSettingsInline
+        orgSlug="my-org"
+        workspaceSlug="default"
+        currentTier="fast"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save settings" }),
+    );
     await waitFor(() => {
       expect(screen.getByText(/Default tier: fast/)).toBeInTheDocument();
     });

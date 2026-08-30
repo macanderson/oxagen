@@ -49,7 +49,11 @@ import {
 } from "./agent-prefs-actions";
 
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 
 // Import the contract to derive its name (config-derived, never hardcoded).

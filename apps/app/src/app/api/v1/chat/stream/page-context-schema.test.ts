@@ -24,14 +24,22 @@ import { z } from "zod";
 // ── Replicate the schema from route.ts so we can test it without importing
 //    the full route handler (which has many server-only side-effects). ────────
 
-const fieldTypeSchema = z.enum(["text", "textarea", "number", "select", "boolean"]);
+const fieldTypeSchema = z.enum([
+  "text",
+  "textarea",
+  "number",
+  "select",
+  "boolean",
+]);
 
 const fieldDescriptorSchema = z.object({
   name: z.string().min(1).max(256),
   label: z.string().min(1).max(256),
   type: fieldTypeSchema,
   current: z.unknown(),
-  options: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+  options: z
+    .array(z.object({ label: z.string(), value: z.string() }))
+    .optional(),
   required: z.boolean().optional(),
 });
 
@@ -160,7 +168,9 @@ describe("pageContext schema", () => {
       fillableForm: {
         formId: "f",
         title: "T",
-        fields: [{ name: "x".repeat(257), label: "L", type: "text", current: null }],
+        fields: [
+          { name: "x".repeat(257), label: "L", type: "text", current: null },
+        ],
       },
     });
     expect(result.success).toBe(false);
@@ -170,7 +180,11 @@ describe("pageContext schema", () => {
   it("rejects formId longer than 256 chars", () => {
     const result = pageContextSchema.safeParse({
       route: "/route",
-      fillableForm: { formId: "f".repeat(257), title: "T", fields: [validField] },
+      fillableForm: {
+        formId: "f".repeat(257),
+        title: "T",
+        fields: [validField],
+      },
     });
     expect(result.success).toBe(false);
   });

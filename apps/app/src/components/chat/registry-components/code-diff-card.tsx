@@ -14,6 +14,7 @@ import {
 import { useCopyToClipboard } from "@/components/ui/copy-button";
 import { transition } from "@oxagen/ui/lib/motion";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 import { diffAnchorId } from "./diff-anchor";
 import { highlightLine, inferLang, type HighlightedToken } from "./diff-syntax";
 import "./diff-token.css";
@@ -631,6 +632,11 @@ export default function CodeDiffCard({
     { additions: 0, deletions: 0 },
   );
 
+  // `externalUrl` is a prop of an agent-authored render directive, so the
+  // scheme is allow-listed before it becomes an href — an unsafe value hides
+  // the "View" chip rather than arming a `javascript:` navigation.
+  const externalHref = safeHref(externalUrl);
+
   if (files.length === 0) {
     return (
       <div
@@ -665,9 +671,9 @@ export default function CodeDiffCard({
             )}
           </span>
         )}
-        {externalUrl ? (
+        {externalHref ? (
           <a
-            href={externalUrl}
+            href={externalHref}
             target="_blank"
             rel="noreferrer noopener"
             className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

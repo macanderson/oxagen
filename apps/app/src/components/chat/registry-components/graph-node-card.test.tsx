@@ -28,7 +28,15 @@ describe("GraphNodeCard", () => {
             properties: { rank: "Admiral" },
           },
         }}
-        links={[{ field: "node.nodeId", recordType: "graph.node", id: "n_7", href: "/acme/ws/knowledge/graph/n_7", label: "Hyman Rickover" }]}
+        links={[
+          {
+            field: "node.nodeId",
+            recordType: "graph.node",
+            id: "n_7",
+            href: "/acme/ws/knowledge/graph/n_7",
+            label: "Hyman Rickover",
+          },
+        ]}
       />,
     );
     expect(screen.getByText("Hyman Rickover")).toBeTruthy();
@@ -40,7 +48,9 @@ describe("GraphNodeCard", () => {
   });
 
   it("renders a graph.node.upsert result with a success-toned New label", () => {
-    render(<GraphNodeCard output={{ nodeId: "n_9", created: true }} links={[]} />);
+    render(
+      <GraphNodeCard output={{ nodeId: "n_9", created: true }} links={[]} />,
+    );
     const newLabel = screen.getByText("New");
     expect(newLabel).toBeTruthy();
     expect(newLabel.className).toContain("text-success");

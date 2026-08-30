@@ -1,7 +1,8 @@
-// Typed shapes for the interleaved chat stream chunks emitted by the
-// agent runtime (see docs/epics/agent-runtime/spec.md §7). Each event is
-// rendered inline against the assistant message identified by
-// `messageId` / `toolCallId` / `approvalId` / `planId` / `fanoutId`.
+// Typed shapes for the interleaved chat stream chunks emitted by the agent
+// runtime. Each event is rendered inline against the assistant message
+// identified by `messageId` / `toolCallId` / `approvalId` / `planId` /
+// `fanoutId`. The producer side lives in
+// apps/app/src/app/api/v1/chat/stream/translate-stream.ts.
 
 // Reuse the background-task status union defined by the tray so the inline
 // streaming card and the tray never drift (queued|running|completed|failed|cancelled).

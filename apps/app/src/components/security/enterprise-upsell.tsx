@@ -21,16 +21,20 @@ export interface EnterpriseUpsellProps {
   currentTier: PlanTier;
 }
 
-export function EnterpriseUpsell({ orgSlug, feature, currentTier }: EnterpriseUpsellProps) {
+export function EnterpriseUpsell({
+  orgSlug,
+  feature,
+  currentTier,
+}: EnterpriseUpsellProps) {
   return (
     <Alert variant="info">
       <Lock className="h-4 w-4" aria-hidden="true" />
       <AlertTitle>{feature} is an Enterprise feature</AlertTitle>
       <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span>
-          {/* The trailing space lives INSIDE the expression: the compiled
-              output was observed dropping the bare text-node space after the
-              expression, rendering "Freeplan". */}
+          {/* " plan" stays INSIDE the template literal — a bare JSX text-node
+              space adjacent to an expression is not guaranteed to survive
+              compilation, and losing it renders "Freeplan". */}
           You&rsquo;re on the {`${TIER_LABELS[currentTier]} plan`}. SOC&nbsp;2
           compliance tooling — exportable audit trails, evidence bundles, and
           SIEM streaming — unlocks on the Enterprise plan. Everything below is

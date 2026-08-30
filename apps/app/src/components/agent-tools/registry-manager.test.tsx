@@ -17,7 +17,10 @@ import userEvent from "@testing-library/user-event";
 import { RegistryManager, type RegistryRow } from "./registry-manager";
 
 // Stub window.confirm — vitest/jsdom doesn't have it wired to resolve true.
-vi.stubGlobal("confirm", vi.fn(() => true));
+vi.stubGlobal(
+  "confirm",
+  vi.fn(() => true),
+);
 
 // Stub @/components/ui/popover — keep test scope lightweight.
 vi.mock("@/components/ui/popover", () => ({
@@ -71,7 +74,9 @@ describe("RegistryManager — list rendering", () => {
     expect(screen.getByTestId("registry-row-r1")).toBeInTheDocument();
     expect(screen.getByTestId("registry-row-r2")).toBeInTheDocument();
     expect(screen.getByTestId("registry-default-badge-r1")).toBeInTheDocument();
-    expect(screen.queryByTestId("registry-default-badge-r2")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("registry-default-badge-r2"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows empty state when no registries", () => {
@@ -101,7 +106,9 @@ describe("RegistryManager — single-default rule", () => {
         removeRegistryAction={noopRemove}
       />,
     );
-    expect(screen.queryByTestId("registry-remove-btn-r1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("registry-remove-btn-r1"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows remove buttons when more than one registry exists", () => {
@@ -152,7 +159,10 @@ describe("RegistryManager — add registry", () => {
 
     await user.click(screen.getByTestId("add-registry-btn"));
     await user.type(screen.getByTestId("registry-name-input"), "My Registry");
-    await user.type(screen.getByTestId("registry-url-input"), "https://my-registry.example.com");
+    await user.type(
+      screen.getByTestId("registry-url-input"),
+      "https://my-registry.example.com",
+    );
     await user.click(screen.getByTestId("registry-submit-btn"));
 
     await waitFor(() =>
@@ -166,13 +176,17 @@ describe("RegistryManager — add registry", () => {
 
     // After success the form closes and the new row appears
     await waitFor(() =>
-      expect(screen.queryByTestId("registry-name-input")).not.toBeInTheDocument(),
+      expect(
+        screen.queryByTestId("registry-name-input"),
+      ).not.toBeInTheDocument(),
     );
     expect(screen.getByText("My Registry")).toBeInTheDocument();
   }, 20000);
 
   it("shows an error when addRegistryAction fails", async () => {
-    const addAction = vi.fn().mockResolvedValue({ ok: false, error: "URL already exists" });
+    const addAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "URL already exists" });
     const user = userEvent.setup();
 
     render(
@@ -188,16 +202,23 @@ describe("RegistryManager — add registry", () => {
 
     await user.click(screen.getByTestId("add-registry-btn"));
     await user.type(screen.getByTestId("registry-name-input"), "Dup");
-    await user.type(screen.getByTestId("registry-url-input"), "https://dup.example.com");
+    await user.type(
+      screen.getByTestId("registry-url-input"),
+      "https://dup.example.com",
+    );
     await user.click(screen.getByTestId("registry-submit-btn"));
 
-    await waitFor(() => expect(screen.getByText("URL already exists")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("URL already exists")).toBeInTheDocument(),
+    );
   });
 });
 
 describe("RegistryManager — remove registry", () => {
   it("calls removeRegistryAction and removes the row on success", async () => {
-    const removeAction = vi.fn().mockResolvedValue({ ok: true, promotedId: null });
+    const removeAction = vi
+      .fn()
+      .mockResolvedValue({ ok: true, promotedId: null });
     const user = userEvent.setup();
 
     render(
@@ -215,16 +236,22 @@ describe("RegistryManager — remove registry", () => {
     );
 
     await user.click(screen.getByTestId("registry-remove-btn-r2"));
-    await waitFor(() => expect(removeAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceSlug: "prod",
-      registryId: "r2",
-    }));
-    await waitFor(() => expect(screen.queryByTestId("registry-row-r2")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(removeAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+        registryId: "r2",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("registry-row-r2")).not.toBeInTheDocument(),
+    );
   });
 
   it("promotes the new default when removeRegistryAction returns promotedId", async () => {
-    const removeAction = vi.fn().mockResolvedValue({ ok: true, promotedId: "r2" });
+    const removeAction = vi
+      .fn()
+      .mockResolvedValue({ ok: true, promotedId: "r2" });
     const user = userEvent.setup();
 
     render(
@@ -242,10 +269,14 @@ describe("RegistryManager — remove registry", () => {
     );
 
     await user.click(screen.getByTestId("registry-remove-btn-r1"));
-    await waitFor(() => expect(screen.queryByTestId("registry-row-r1")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByTestId("registry-row-r1")).not.toBeInTheDocument(),
+    );
     // r2 should now have the Default badge
     await waitFor(() =>
-      expect(screen.getByTestId("registry-default-badge-r2")).toBeInTheDocument(),
+      expect(
+        screen.getByTestId("registry-default-badge-r2"),
+      ).toBeInTheDocument(),
     );
   });
 });

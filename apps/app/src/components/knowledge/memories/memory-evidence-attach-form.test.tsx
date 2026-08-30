@@ -16,7 +16,13 @@
 
 import * as React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  waitFor,
+} from "@testing-library/react";
 
 vi.mock("@/components/ui/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -31,10 +37,14 @@ vi.mock("@/components/ui/popover", () => ({
       {children}
     </button>
   ),
-  PopoverPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
-const SelectContext = React.createContext<{ onValueChange?: (v: string) => void }>({});
+const SelectContext = React.createContext<{
+  onValueChange?: (v: string) => void;
+}>({});
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({
@@ -64,8 +74,16 @@ vi.mock("@/components/ui/select", () => ({
     </div>
   ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => {
     const { onValueChange } = React.useContext(SelectContext);
     return (
       <button type="button" onClick={() => onValueChange?.(value)}>
@@ -107,7 +125,9 @@ const BASE = { orgSlug: "oxagen", workspaceSlug: "main" };
 describe("MemoryEvidenceAttachForm", () => {
   it("shows a validation error and skips the server call when memory id is blank", () => {
     const attachEvidence = vi.fn();
-    render(<MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />);
+    render(
+      <MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /attach evidence/i }));
 
@@ -121,7 +141,9 @@ describe("MemoryEvidenceAttachForm", () => {
     const attachEvidence = vi
       .fn()
       .mockResolvedValue({ ok: true, evidenceId: "ev-1", confidenceScore: 68 });
-    render(<MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />);
+    render(
+      <MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />,
+    );
 
     fireEvent.change(screen.getByLabelText("Memory ID"), {
       target: { value: "  mem-42  " },
@@ -138,7 +160,9 @@ describe("MemoryEvidenceAttachForm", () => {
       refutes: false,
     });
 
-    await waitFor(() => expect(screen.getByText("Evidence attached")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("Evidence attached")).toBeInTheDocument(),
+    );
     expect(screen.getByText("now at 68% confidence")).toBeInTheDocument();
     // The memory id is cited via a CopyableId chip (the sanctioned home for a
     // bare id) — never a raw UUID rendered as a primary label.
@@ -149,14 +173,20 @@ describe("MemoryEvidenceAttachForm", () => {
     const attachEvidence = vi
       .fn()
       .mockResolvedValue({ ok: true, evidenceId: "ev-2", confidenceScore: 40 });
-    render(<MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />);
+    render(
+      <MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />,
+    );
 
-    fireEvent.change(screen.getByLabelText("Memory ID"), { target: { value: "mem-7" } });
+    fireEvent.change(screen.getByLabelText("Memory ID"), {
+      target: { value: "mem-7" },
+    });
     // The mocked SelectItem's accessible name includes both the label and
     // hint spans ("Code scan" + the descriptive hint text), so match by
     // prefix rather than an exact string.
     fireEvent.click(screen.getByRole("button", { name: /^code scan/i }));
-    fireEvent.change(screen.getByLabelText("Evidence strength"), { target: { value: "0.9" } });
+    fireEvent.change(screen.getByLabelText("Evidence strength"), {
+      target: { value: "0.9" },
+    });
     fireEvent.change(screen.getByLabelText("Detail (optional)"), {
       target: { value: "  Static analysis confirmed no direct pushes.  " },
     });
@@ -178,9 +208,13 @@ describe("MemoryEvidenceAttachForm", () => {
     const attachEvidence = vi
       .fn()
       .mockResolvedValue({ ok: true, evidenceId: "ev-3", confidenceScore: 20 });
-    render(<MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />);
+    render(
+      <MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />,
+    );
 
-    fireEvent.change(screen.getByLabelText("Memory ID"), { target: { value: "mem-9" } });
+    fireEvent.change(screen.getByLabelText("Memory ID"), {
+      target: { value: "mem-9" },
+    });
     fireEvent.click(screen.getByLabelText("This evidence refutes the memory"));
     fireEvent.click(screen.getByRole("button", { name: /attach evidence/i }));
 
@@ -189,13 +223,21 @@ describe("MemoryEvidenceAttachForm", () => {
   });
 
   it("shows an inline error and no success banner when the action fails", async () => {
-    const attachEvidence = vi.fn().mockResolvedValue({ ok: false, error: "memory not found" });
-    render(<MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />);
+    const attachEvidence = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "memory not found" });
+    render(
+      <MemoryEvidenceAttachForm {...BASE} attachEvidence={attachEvidence} />,
+    );
 
-    fireEvent.change(screen.getByLabelText("Memory ID"), { target: { value: "mem-missing" } });
+    fireEvent.change(screen.getByLabelText("Memory ID"), {
+      target: { value: "mem-missing" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /attach evidence/i }));
 
-    await waitFor(() => expect(screen.getByText("memory not found")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("memory not found")).toBeInTheDocument(),
+    );
     expect(screen.queryByText("Evidence attached")).not.toBeInTheDocument();
   });
 });

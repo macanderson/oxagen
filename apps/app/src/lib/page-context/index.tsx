@@ -13,10 +13,24 @@
  */
 
 import * as React from "react";
-import type { PageContextValue, PageEntity, RegisteredFillableForm } from "./types";
+import type {
+  PageContextValue,
+  PageEntity,
+  RegisteredFillableForm,
+} from "./types";
 import type { FormFillResult } from "@/lib/ask/fill-types";
-export type { PageContextValue, PageEntity, RegisteredFillableForm } from "./types";
-export type { FillableFormSpec, FieldDescriptor, FieldDiff, FormFillResult, FieldType } from "@/lib/ask/fill-types";
+export type {
+  PageContextValue,
+  PageEntity,
+  RegisteredFillableForm,
+} from "./types";
+export type {
+  FillableFormSpec,
+  FieldDescriptor,
+  FieldDiff,
+  FormFillResult,
+  FieldType,
+} from "@/lib/ask/fill-types";
 
 // ---------------------------------------------------------------------------
 // Context
@@ -29,15 +43,24 @@ PageContext.displayName = "PageContext";
 // Provider
 // ---------------------------------------------------------------------------
 
-export function PageContextProvider({ children }: { children: React.ReactNode }) {
+export function PageContextProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [entity, setEntity] = React.useState<PageEntity | null>(null);
-  const [fillableForm, setFillableForm] = React.useState<RegisteredFillableForm | null>(null);
-  const [fillResult, setFillResult] = React.useState<FormFillResult | null>(null);
+  const [fillableForm, setFillableForm] =
+    React.useState<RegisteredFillableForm | null>(null);
+  const [fillResult, setFillResult] = React.useState<FormFillResult | null>(
+    null,
+  );
   const [isFilling, setIsFilling] = React.useState(false);
   const [isAskOpen, setIsAskOpen] = React.useState(false);
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [isWandOpen, setIsWandOpen] = React.useState(false);
-  const [pendingAskText, setPendingAskText] = React.useState<string | null>(null);
+  const [pendingAskText, setPendingAskText] = React.useState<string | null>(
+    null,
+  );
   const [pendingAskAutoSubmit, setPendingAskAutoSubmit] = React.useState(false);
 
   // Stable callbacks: useCallback with [] dep so these function references
@@ -53,11 +76,14 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
   const closeCommand = React.useCallback(() => setIsCommandOpen(false), []);
   const openWand = React.useCallback(() => setIsWandOpen(true), []);
   const closeWand = React.useCallback(() => setIsWandOpen(false), []);
-  const openAskWithText = React.useCallback((text: string, autoSubmit = false) => {
-    setPendingAskText(text);
-    setPendingAskAutoSubmit(autoSubmit);
-    setIsAskOpen(true);
-  }, []);
+  const openAskWithText = React.useCallback(
+    (text: string, autoSubmit = false) => {
+      setPendingAskText(text);
+      setPendingAskAutoSubmit(autoSubmit);
+      setIsAskOpen(true);
+    },
+    [],
+  );
   const _clearPendingAskText = React.useCallback(() => {
     setPendingAskText(null);
     setPendingAskAutoSubmit(false);
@@ -87,7 +113,25 @@ export function PageContextProvider({ children }: { children: React.ReactNode })
       openAskWithText,
       _clearPendingAskText,
     }),
-    [entity, fillableForm, fillResult, isFilling, isAskOpen, openAsk, closeAsk, isCommandOpen, openCommand, closeCommand, isWandOpen, openWand, closeWand, pendingAskText, pendingAskAutoSubmit, openAskWithText, _clearPendingAskText],
+    [
+      entity,
+      fillableForm,
+      fillResult,
+      isFilling,
+      isAskOpen,
+      openAsk,
+      closeAsk,
+      isCommandOpen,
+      openCommand,
+      closeCommand,
+      isWandOpen,
+      openWand,
+      closeWand,
+      pendingAskText,
+      pendingAskAutoSubmit,
+      openAskWithText,
+      _clearPendingAskText,
+    ],
   );
 
   return <PageContext.Provider value={value}>{children}</PageContext.Provider>;
@@ -157,7 +201,9 @@ export function useRegisterFillableForm(form: RegisteredFillableForm): void {
   // only re-fires when form content actually changes — not on every render when
   // the caller passes a new array literal with identical data.
   const fieldsKey = form.fields.map((f) => f.name).join(",");
-  const fieldsCurrentKey = form.fields.map((f) => `${f.name}:${String(f.current ?? "")}`).join("|");
+  const fieldsCurrentKey = form.fields
+    .map((f) => `${f.name}:${String(f.current ?? "")}`)
+    .join("|");
   const formTitle = form.title;
   // Snapshot the fields array at the time the stable keys are computed so the
   // effect closure captures the latest values without depending on the unstable
@@ -189,5 +235,12 @@ export function useRegisterFillableForm(form: RegisteredFillableForm): void {
     // the infinite-render loop. `fieldsRef`/`applyRef` are refs (stable), and
     // fieldsKey/fieldsCurrentKey re-fire the effect when content genuinely
     // changes.
-  }, [_setFillableForm, formId, formTitle, fieldsKey, fieldsCurrentKey, stableApply]);
+  }, [
+    _setFillableForm,
+    formId,
+    formTitle,
+    fieldsKey,
+    fieldsCurrentKey,
+    stableApply,
+  ]);
 }

@@ -37,9 +37,12 @@ const mockSetDefault = vi.fn();
 const mockRemove = vi.fn();
 
 vi.mock("@/app/[orgSlug]/billing/actions", () => ({
-  syncPaymentMethodsAction: (...args: unknown[]) => mockSyncPaymentMethods(...args),
-  createSetupIntentAction: (...args: unknown[]) => mockCreateSetupIntent(...args),
-  setDefaultPaymentMethodAction: (...args: unknown[]) => mockSetDefault(...args),
+  syncPaymentMethodsAction: (...args: unknown[]) =>
+    mockSyncPaymentMethods(...args),
+  createSetupIntentAction: (...args: unknown[]) =>
+    mockCreateSetupIntent(...args),
+  setDefaultPaymentMethodAction: (...args: unknown[]) =>
+    mockSetDefault(...args),
   removePaymentMethodAction: (...args: unknown[]) => mockRemove(...args),
 }));
 
@@ -59,7 +62,13 @@ vi.mock("next/navigation", () => ({
 // ── UI stubs ────────────────────────────────────────────────────────────────
 
 vi.mock("@/components/ui/panel", () => ({
-  Panel: ({ children, actions }: { children: React.ReactNode; actions?: React.ReactNode }) => (
+  Panel: ({
+    children,
+    actions,
+  }: {
+    children: React.ReactNode;
+    actions?: React.ReactNode;
+  }) => (
     <div>
       {actions}
       {children}
@@ -67,25 +76,41 @@ vi.mock("@/components/ui/panel", () => ({
   ),
 }));
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  Badge: ({ children }: { children: React.ReactNode }) => (
+    <span>{children}</span>
+  ),
 }));
 vi.mock("@/components/ui/button", () => ({
-  Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string }) => (
-    <button {...props}>{props.children}</button>
-  ),
+  Button: (
+    props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string },
+  ) => <button {...props}>{props.children}</button>,
 }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
     open ? <div role="dialog">{children}</div> : null,
-  DialogPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DialogPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogPanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
+  DialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p>{children}</p>
+  ),
 }));
 vi.mock("./stripe-elements-provider", () => ({
-  StripeElementsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  StripeElementsProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 vi.mock("lucide-react", () => ({
   CreditCard: () => null,
@@ -118,7 +143,10 @@ describe("AddCardForm — sync success path", () => {
     toastAdd.mockClear();
     mockConfirmSetup.mockResolvedValue({ error: undefined });
     mockSyncPaymentMethods.mockResolvedValue({ ok: true });
-    mockCreateSetupIntent.mockResolvedValue({ ok: true, clientSecret: "cs_test_123" });
+    mockCreateSetupIntent.mockResolvedValue({
+      ok: true,
+      clientSecret: "cs_test_123",
+    });
   });
 
   it("shows success toast when confirmSetup and sync both succeed", async () => {
@@ -146,7 +174,10 @@ describe("AddCardForm — CRITICAL: sync failure after Stripe confirmSetup succe
     mockConfirmSetup.mockResolvedValue({ error: undefined });
     // But the DB mirror sync throws
     mockSyncPaymentMethods.mockRejectedValue(new Error("DB write failed"));
-    mockCreateSetupIntent.mockResolvedValue({ ok: true, clientSecret: "cs_test_456" });
+    mockCreateSetupIntent.mockResolvedValue({
+      ok: true,
+      clientSecret: "cs_test_456",
+    });
   });
 
   it("shows an error toast (not a success toast) when sync fails", async () => {
@@ -180,7 +211,8 @@ describe("AddCardForm — CRITICAL: sync failure after Stripe confirmSetup succe
 
     // No "Card saved" success toast — only the error toast
     const successCalls = toastAdd.mock.calls.filter(
-      (call) => (call[0] as { title?: string } | undefined)?.title === "Card saved",
+      (call) =>
+        (call[0] as { title?: string } | undefined)?.title === "Card saved",
     );
     expect(successCalls).toHaveLength(0);
   });
@@ -210,7 +242,10 @@ describe("AddCardForm — Stripe confirmSetup error path (pre-existing)", () => 
     mockConfirmSetup.mockResolvedValue({
       error: { message: "Your card was declined." },
     });
-    mockCreateSetupIntent.mockResolvedValue({ ok: true, clientSecret: "cs_test_789" });
+    mockCreateSetupIntent.mockResolvedValue({
+      ok: true,
+      clientSecret: "cs_test_789",
+    });
   });
 
   it("shows a Stripe error toast when confirmSetup returns an error", async () => {

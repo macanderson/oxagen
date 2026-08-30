@@ -16,6 +16,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Route, AlertTriangle } from "lucide-react";
 import type { OntologyQueryOutput } from "@oxagen/oxagen/contracts/ontology.query";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/knowledge.node-ref";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -226,6 +227,24 @@ function TraversalConsole({ orgSlug, workspaceSlug }: QueryConsoleProps) {
   );
 }
 
+/**
+ * Citation for an edge endpoint that `nodes` did not carry — the reachable-node
+ * set is capped by `limit`, so a returned edge can point at a node outside it.
+ * Cited as an unresolved endpoint rather than a bare publicId: the raw id is
+ * never the primary on-screen identifier, it belongs in the popover's copyable
+ * secondary (see node-ref.tsx's citation rule).
+ */
+function unreturnedEndpoint(nodeId: string): KnowledgeNodeRef {
+  return {
+    id: nodeId,
+    label: "Unresolved",
+    displayName: "",
+    properties: {
+      note: "Outside the returned node set — raise the traversal limit to resolve it.",
+    },
+  };
+}
+
 function TraversalResult({
   result,
   orgSlug,
@@ -284,19 +303,23 @@ function TraversalResult({
                   key={i}
                   className="flex flex-wrap items-center gap-1.5 text-xs"
                 >
-                  {from ? (
-                    <NodeRef node={fromTraversedNode(from)} />
-                  ) : (
-                    <span>{edge.fromNodeId}</span>
-                  )}
+                  <NodeRef
+                    node={
+                      from
+                        ? fromTraversedNode(from)
+                        : unreturnedEndpoint(edge.fromNodeId)
+                    }
+                  />
                   <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                     -[{edge.edgeType}]→
                   </span>
-                  {to ? (
-                    <NodeRef node={fromTraversedNode(to)} />
-                  ) : (
-                    <span>{edge.toNodeId}</span>
-                  )}
+                  <NodeRef
+                    node={
+                      to
+                        ? fromTraversedNode(to)
+                        : unreturnedEndpoint(edge.toNodeId)
+                    }
+                  />
                 </div>
               );
             })}

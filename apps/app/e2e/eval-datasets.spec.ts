@@ -22,7 +22,11 @@ import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { signUpFreshUser } from "./helpers/signup";
 
-const SCREENSHOTS_DIR = path.resolve(import.meta.dirname, "screenshots", "eval-datasets");
+const SCREENSHOTS_DIR = path.resolve(
+  import.meta.dirname,
+  "screenshots",
+  "eval-datasets",
+);
 
 // Recreate this spec's screenshot sub-directory on each run (CLAUDE.md convention).
 test.beforeAll(async () => {
@@ -31,7 +35,9 @@ test.beforeAll(async () => {
 });
 
 test.describe("evals — datasets page", () => {
-  test("renders the Evals page shell for a fresh workspace", async ({ page }) => {
+  test("renders the Evals page shell for a fresh workspace", async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
 
     // ── 1. Fresh user + org (owner of the default workspace) ────────────────
@@ -42,7 +48,9 @@ test.describe("evals — datasets page", () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     // ── 3. Header renders with the wedge-aligned copy ────────────────────────
-    await expect(page.getByRole("heading", { name: "Evals", exact: true })).toBeVisible({
+    await expect(
+      page.getByRole("heading", { name: "Evals", exact: true }),
+    ).toBeVisible({
       timeout: 15_000,
     });
     // The rendered description, not the wedge sentence. "score what actually

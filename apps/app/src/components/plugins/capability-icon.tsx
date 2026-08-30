@@ -69,7 +69,11 @@ const ICON_MAP: Record<string, LucideIcon> = {
 // ── Per-type defaults ────────────────────────────────────────────────────────
 
 export const PLUGIN_TYPE_DEFAULTS: Record<
-  "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source",
+  | "mcp_server"
+  | "integration"
+  | "agent_capability"
+  | "agent_skill"
+  | "knowledge_source",
   { iconName: string; color: string }
 > = {
   mcp_server: { iconName: "plug", color: "#3b82f6" },
@@ -126,7 +130,10 @@ export function CapabilityIcon({
  */
 export function resolveIconEntry(
   icons: Array<{ src: string; color?: string }> | undefined,
-): { type: "image"; src: string } | { type: "lucide"; iconName: string; color?: string } | { type: "default" } {
+):
+  | { type: "image"; src: string }
+  | { type: "lucide"; iconName: string; color?: string }
+  | { type: "default" } {
   const first = icons?.[0];
   if (!first) return { type: "default" };
   if (/^https?:\/\//.test(first.src) || first.src.startsWith("data:")) {

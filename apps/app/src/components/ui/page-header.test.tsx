@@ -13,7 +13,9 @@ afterEach(cleanup);
 describe("PageHeader — render", () => {
   it("renders the title as an h1", () => {
     const { getByRole } = render(<PageHeader title="Billing" />);
-    expect(getByRole("heading", { level: 1, name: "Billing" })).toBeInTheDocument();
+    expect(
+      getByRole("heading", { level: 1, name: "Billing" }),
+    ).toBeInTheDocument();
   });
 
   it("does not render description when omitted", () => {
@@ -22,17 +24,26 @@ describe("PageHeader — render", () => {
   });
 
   it("renders description when provided", () => {
-    const { getByText } = render(<PageHeader title="Title" description="Manage your account." />);
+    const { getByText } = render(
+      <PageHeader title="Title" description="Manage your account." />,
+    );
     expect(getByText("Manage your account.")).toBeInTheDocument();
   });
 
   it("renders breadcrumb slot", () => {
-    const { getByText } = render(<PageHeader title="Title" breadcrumb={<nav>Breadcrumb</nav>} />);
+    const { getByText } = render(
+      <PageHeader title="Title" breadcrumb={<nav>Breadcrumb</nav>} />,
+    );
     expect(getByText("Breadcrumb")).toBeInTheDocument();
   });
 
   it("renders actions slot", () => {
-    const { getByRole } = render(<PageHeader title="Title" actions={<button type="button">Upgrade</button>} />);
+    const { getByRole } = render(
+      <PageHeader
+        title="Title"
+        actions={<button type="button">Upgrade</button>}
+      />,
+    );
     expect(getByRole("button", { name: "Upgrade" })).toBeInTheDocument();
   });
 
@@ -42,19 +53,29 @@ describe("PageHeader — render", () => {
   });
 
   it("renders Ask button when onAskAboutThis is provided", () => {
-    const { getByRole } = render(<PageHeader title="Title" onAskAboutThis={vi.fn()} />);
-    expect(getByRole("button", { name: "Ask about this page" })).toBeInTheDocument();
+    const { getByRole } = render(
+      <PageHeader title="Title" onAskAboutThis={vi.fn()} />,
+    );
+    expect(
+      getByRole("button", { name: "Ask about this page" }),
+    ).toBeInTheDocument();
   });
 
   it("calls onAskAboutThis when Ask button is clicked", async () => {
     const onAsk = vi.fn();
-    const { getByRole } = render(<PageHeader title="Title" onAskAboutThis={onAsk} />);
+    const { getByRole } = render(
+      <PageHeader title="Title" onAskAboutThis={onAsk} />,
+    );
     await userEvent.click(getByRole("button", { name: "Ask about this page" }));
     expect(onAsk).toHaveBeenCalledOnce();
   });
 
   it("merges custom className", () => {
-    const { container } = render(<PageHeader title="T" className="my-header" />);
-    expect((container.firstChild as HTMLElement).className).toContain("my-header");
+    const { container } = render(
+      <PageHeader title="T" className="my-header" />,
+    );
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "my-header",
+    );
   });
 });

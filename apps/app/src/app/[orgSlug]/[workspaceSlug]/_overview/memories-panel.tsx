@@ -46,9 +46,14 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Count memories captured in the last 7 days vs the prior 7 days. `Date.now()`
- * lives here (a plain helper) rather than the component body — calling an impure
- * function during render is rejected by the React purity lint rule.
+ * Count memories captured in the last 7 days vs the prior 7 days, over the
+ * createdAt-desc sample the panel fetched. `Date.now()` lives here (a plain
+ * helper) rather than the component body — calling an impure function during
+ * render is rejected by the React purity lint rule.
+ *
+ * NOTE the sample is bounded at SAMPLE_LIMIT. When it comes back full, both
+ * counts are floors and the prior week may be entirely off the end of the list,
+ * so the caller must not present the comparison as a real delta.
  */
 function weeklyDelta(memories: AgentMemoryRecord[]): {
   last7d: number;
@@ -103,6 +108,10 @@ export async function MemoriesPanel({
 
   const { last7d, prior7d } = weeklyDelta(memories);
   const recent = memories.slice(0, RECENT_ROWS);
+  // A full sample means older memories were cut off, so `prior7d` is not a real
+  // prior week — often a structural 0, which the chip would render as a
+  // permanent "new". Show the count as a floor and drop the comparison.
+  const sampleSaturated = memories.length >= SAMPLE_LIMIT;
 
   return (
     <div data-testid="overview-memories-panel">
@@ -140,17 +149,19 @@ export async function MemoriesPanel({
             <div className="flex flex-col gap-4">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-semibold leading-none tabular-nums text-foreground">
-                  {last7d}
+                  {sampleSaturated ? `${last7d}+` : last7d}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   memories · last 7 days
                 </span>
-                <DeltaChip
-                  current={last7d}
-                  previous={prior7d}
-                  goodDirection="up"
-                  label="vs last week"
-                />
+                {sampleSaturated ? null : (
+                  <DeltaChip
+                    current={last7d}
+                    previous={prior7d}
+                    goodDirection="up"
+                    label="vs last week"
+                  />
+                )}
               </div>
               <ul className="flex flex-col divide-y divide-border">
                 {recent.map((m) => (

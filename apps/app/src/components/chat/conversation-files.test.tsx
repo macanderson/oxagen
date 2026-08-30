@@ -33,13 +33,23 @@ vi.mock("@/lib/utils", async (importOriginal) => ({
 
 // Alert primitives — render semantic roles so empty/error states are assertable.
 vi.mock("@/components/ui/alert", () => ({
-  Alert: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
+  Alert: ({
+    children,
+    variant,
+  }: {
+    children: React.ReactNode;
+    variant?: string;
+  }) => (
     <div role="alert" data-variant={variant}>
       {children}
     </div>
   ),
-  AlertTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  AlertDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  AlertDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 // Dialog primitives — used by the in-app SVG preview. Rendered only when open
@@ -56,8 +66,12 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogPopup: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="preview-dialog-popup">{children}</div>
   ),
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("lucide-react", async (importOriginal) => {
@@ -135,7 +149,9 @@ describe("ConversationFilesList", () => {
     const fetchSpy = vi.fn();
     global.fetch = fetchSpy;
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={false} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={false} />,
+    );
     expect(document.body).toBeInTheDocument();
     // Inactive lists never hit the network — the fetch only fires while the
     // "Files" tab is the visible tab.
@@ -145,7 +161,9 @@ describe("ConversationFilesList", () => {
   it("shows the loading spinner while the fetch is in flight", async () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByTestId("icon-loader")).toBeInTheDocument();
     });
@@ -158,9 +176,13 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve(MOCK_ASSETS),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
-      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+      expect(
+        screen.getByText("quarterly-revenue-chart.png"),
+      ).toBeInTheDocument();
       expect(screen.getByText("onboarding-checklist.docx")).toBeInTheDocument();
       expect(screen.getByText("polar-crossing-report.pdf")).toBeInTheDocument();
     });
@@ -176,13 +198,19 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve(MOCK_ASSETS),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
-      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+      expect(
+        screen.getByText("quarterly-revenue-chart.png"),
+      ).toBeInTheDocument();
     });
 
     // The image filename link opens inline in a new tab.
-    const imgLink = screen.getByText("quarterly-revenue-chart.png").closest("a")!;
+    const imgLink = screen
+      .getByText("quarterly-revenue-chart.png")
+      .closest("a")!;
     expect(imgLink).toHaveAttribute("href", "/api/v1/assets/asset_1");
     expect(imgLink).toHaveAttribute("target", "_blank");
     expect(imgLink).not.toHaveAttribute("download");
@@ -205,17 +233,26 @@ describe("ConversationFilesList", () => {
     // EVERY row has a dedicated Download button whose `download` attr is the slug
     // filename — this is what forces the file to save as a human-readable name
     // rather than the opaque gen_ id (the user's reported bug).
-    const imgDownload = screen.getByLabelText("Download quarterly-revenue-chart.png");
-    expect(imgDownload).toHaveAttribute("download", "quarterly-revenue-chart.png");
+    const imgDownload = screen.getByLabelText(
+      "Download quarterly-revenue-chart.png",
+    );
+    expect(imgDownload).toHaveAttribute(
+      "download",
+      "quarterly-revenue-chart.png",
+    );
     expect(imgDownload).toHaveAttribute("href", "/api/v1/assets/asset_1");
 
-    const pdfDownload = screen.getByLabelText("Download polar-crossing-report.pdf");
-    expect(pdfDownload).toHaveAttribute("download", "polar-crossing-report.pdf");
-
-    expect(screen.getByLabelText("Download onboarding-checklist.docx")).toHaveAttribute(
-      "download",
-      "onboarding-checklist.docx",
+    const pdfDownload = screen.getByLabelText(
+      "Download polar-crossing-report.pdf",
     );
+    expect(pdfDownload).toHaveAttribute(
+      "download",
+      "polar-crossing-report.pdf",
+    );
+
+    expect(
+      screen.getByLabelText("Download onboarding-checklist.docx"),
+    ).toHaveAttribute("download", "onboarding-checklist.docx");
   });
 
   it("renders inline <img> thumbnails for image rows (including SVG)", async () => {
@@ -251,7 +288,9 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve(MOCK_ASSETS),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
     });
@@ -289,7 +328,9 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve(MOCK_ASSETS),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
     });
@@ -311,16 +352,22 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve(MOCK_ASSETS),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
-      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+      expect(
+        screen.getByText("quarterly-revenue-chart.png"),
+      ).toBeInTheDocument();
     });
 
     // The header shows the count and a "Download all" anchor pointed at the
     // conversation's archive route, marked `download` so the browser saves the
     // streamed ZIP instead of navigating.
     expect(screen.getByText("4 files")).toBeInTheDocument();
-    const downloadAll = screen.getByLabelText("Download all 4 files as a ZIP archive");
+    const downloadAll = screen.getByLabelText(
+      "Download all 4 files as a ZIP archive",
+    );
     expect(downloadAll).toHaveAttribute(
       "href",
       "/api/v1/conversations/conv_abc/assets/archive",
@@ -335,13 +382,19 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve([MOCK_ASSETS[0]]),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
-      expect(screen.getByText("quarterly-revenue-chart.png")).toBeInTheDocument();
+      expect(
+        screen.getByText("quarterly-revenue-chart.png"),
+      ).toBeInTheDocument();
     });
     // A single file's row already has its own Download button — the bulk ZIP
     // affordance only appears from the second file onward.
-    expect(screen.queryByLabelText(/Download all .* as a ZIP archive/)).toBeNull();
+    expect(
+      screen.queryByLabelText(/Download all .* as a ZIP archive/),
+    ).toBeNull();
     expect(screen.queryByText(/files$/)).toBeNull();
   });
 
@@ -352,7 +405,9 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve([]),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByText("No files yet")).toBeInTheDocument();
     });
@@ -367,7 +422,9 @@ describe("ConversationFilesList", () => {
       json: () => Promise.resolve({ error: { code: "not_found" } }),
     });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
       expect(screen.getByText("No files yet")).toBeInTheDocument();
     });
@@ -380,9 +437,13 @@ describe("ConversationFilesList", () => {
   it("shows an error Alert and a Retry button when the fetch fails", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     const { ConversationFilesList } = await import("./conversation-files");
-    render(<ConversationFilesList conversationPublicId="conv_abc" active={true} />);
+    render(
+      <ConversationFilesList conversationPublicId="conv_abc" active={true} />,
+    );
     await waitFor(() => {
-      expect(screen.getByText("Couldn't load files (HTTP 500)")).toBeInTheDocument();
+      expect(
+        screen.getByText("Couldn't load files (HTTP 500)"),
+      ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     });
     expect(screen.getByRole("alert")).toHaveAttribute("data-variant", "error");

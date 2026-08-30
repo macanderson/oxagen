@@ -66,21 +66,28 @@ export function WorkflowDetailDrawer({
   async function handleCancel() {
     if (!target || target.type !== "workflow") return;
     setCancelling(true);
-    const res = await cancelWorkflowAction({
-      orgSlug,
-      workspaceSlug,
-      workflowId: target.id,
-    });
-    setCancelling(false);
-    if (res.ok) {
-      toast.add({ title: "Workflow cancelled", type: "success" });
-      router.refresh();
-    } else {
-      toast.add({
-        title: "Couldn't cancel",
-        description: res.error,
-        type: "error",
+    // finally: a rejected action would otherwise leave the drawer's Cancel
+    // button disabled and stuck on "Cancelling…" until the page is reloaded.
+    try {
+      const res = await cancelWorkflowAction({
+        orgSlug,
+        workspaceSlug,
+        workflowId: target.id,
       });
+      if (res.ok) {
+        toast.add({ title: "Workflow cancelled", type: "success" });
+        router.refresh();
+      } else {
+        toast.add({
+          title: "Couldn't cancel",
+          description: res.error,
+          type: "error",
+        });
+      }
+    } catch {
+      toast.add({ title: "Couldn't cancel", type: "error" });
+    } finally {
+      setCancelling(false);
     }
   }
 

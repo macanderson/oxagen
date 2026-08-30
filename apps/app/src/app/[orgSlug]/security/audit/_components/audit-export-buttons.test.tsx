@@ -21,7 +21,10 @@ afterEach(() => cleanup());
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/acme/security/audit",
-  useSearchParams: () => new URLSearchParams("event_type=billing.subscription_canceled&cursor=tok-123"),
+  useSearchParams: () =>
+    new URLSearchParams(
+      "event_type=billing.subscription_canceled&cursor=tok-123",
+    ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -41,17 +44,23 @@ describe("AuditExportButtons", () => {
     expect((buttons[0] as HTMLButtonElement)?.disabled).toBe(true);
     expect((buttons[1] as HTMLButtonElement)?.disabled).toBe(true);
     // Both buttons should have the title from disabledReason
-    expect(buttons[0]?.getAttribute("title")).toBe("Upgrade to Enterprise to export");
+    expect(buttons[0]?.getAttribute("title")).toBe(
+      "Upgrade to Enterprise to export",
+    );
   });
 
   it("renders enabled export links when canExport=true", () => {
-    const { getAllByText } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { getAllByText } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     expect(getAllByText("Export NDJSON").length).toBeGreaterThan(0);
     expect(getAllByText("Export CSV").length).toBeGreaterThan(0);
   });
 
   it("NDJSON link includes format=ndjson query param", () => {
-    const { container } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { container } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     const anchors = container.querySelectorAll("a");
     const ndjsonAnchor = Array.from(anchors).find((a) =>
       a.getAttribute("href")?.includes("format=ndjson"),
@@ -60,7 +69,9 @@ describe("AuditExportButtons", () => {
   });
 
   it("CSV link includes format=csv query param", () => {
-    const { container } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { container } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     const anchors = container.querySelectorAll("a");
     const csvAnchor = Array.from(anchors).find((a) =>
       a.getAttribute("href")?.includes("format=csv"),
@@ -69,7 +80,9 @@ describe("AuditExportButtons", () => {
   });
 
   it("export href preserves active filter params", () => {
-    const { container } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { container } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     const anchors = container.querySelectorAll("a");
     const ndjsonAnchor = Array.from(anchors).find((a) =>
       a.getAttribute("href")?.includes("format=ndjson"),
@@ -79,7 +92,9 @@ describe("AuditExportButtons", () => {
   });
 
   it("export href drops the cursor param", () => {
-    const { container } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { container } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     const anchors = container.querySelectorAll("a");
     const ndjsonAnchor = Array.from(anchors).find((a) =>
       a.getAttribute("href")?.includes("format=ndjson"),
@@ -89,7 +104,9 @@ describe("AuditExportButtons", () => {
   });
 
   it("export href points to the /export sub-path", () => {
-    const { container } = render(<AuditExportButtons canExport={true} disabledReason="" />);
+    const { container } = render(
+      <AuditExportButtons canExport={true} disabledReason="" />,
+    );
     const anchors = container.querySelectorAll("a");
     const ndjsonAnchor = Array.from(anchors).find((a) =>
       a.getAttribute("href")?.includes("format=ndjson"),

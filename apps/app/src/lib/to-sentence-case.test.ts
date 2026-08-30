@@ -23,7 +23,9 @@ describe("toSentenceCase", () => {
   });
 
   it("preserves a quoted word", () => {
-    expect(toSentenceCase('Rename The "Foo" Field')).toBe('Rename the "Foo" field');
+    expect(toSentenceCase('Rename The "Foo" Field')).toBe(
+      'Rename the "Foo" field',
+    );
   });
 
   it("preserves a backtick-quoted word", () => {
@@ -31,7 +33,9 @@ describe("toSentenceCase", () => {
   });
 
   it("preserves an I contraction", () => {
-    expect(toSentenceCase("I'll Handle This Later")).toBe("I'll handle this later");
+    expect(toSentenceCase("I'll Handle This Later")).toBe(
+      "I'll handle this later",
+    );
   });
 
   it("leaves a single-word label capitalized", () => {

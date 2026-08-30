@@ -1,6 +1,9 @@
 /**
- * Shared, framework-free formatters + status styling for the Activity /
- * run-trace surface. Imported by both the list and the span-tree.
+ * Shared, framework-free formatters + status styling. Written for the
+ * Activity / run-trace surface, now also used by the lineage explorer, the
+ * workflows table, the repos and memories panels, and anywhere else a run
+ * duration, token pair, cost, or status badge is rendered. Keep it free of
+ * React and of anything server-only so either side of the boundary can call it.
  */
 
 export type RunStatus =
@@ -47,7 +50,10 @@ export function formatCost(usd: string | null): string | null {
   return `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
 }
 
-/** Absolute + relative timestamp label. */
+/**
+ * Absolute timestamp label, in the viewer's locale. Returns the input string
+ * unchanged when it is not a parseable date. See `timeAgo` for the relative form.
+ */
 export function formatTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -60,7 +66,12 @@ export function formatTimestamp(iso: string): string {
   });
 }
 
-/** Coarse relative "time ago" for list rows. */
+/**
+ * Coarse relative "time ago" for list rows.
+ *
+ * Past timestamps only — a future `iso` produces a negative label ("-4m ago").
+ * Callers rendering a scheduled/next-run time must not use this.
+ */
 export function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";

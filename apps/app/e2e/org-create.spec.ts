@@ -18,7 +18,9 @@ test.describe("organization.create — auth guard", () => {
 
 test.describe("organization.create — happy path", () => {
   test("fresh signup lands on new org workspace", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "org-create" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "org-create",
+    });
 
     // Must be on an authenticated org page — not /login.
     await expect(page).not.toHaveURL(/\/login/);

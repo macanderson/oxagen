@@ -22,7 +22,8 @@
  *   - Open state: Cancel button rendered in footer
  *   - Open state: Install selected button is disabled when nothing selected
  *   - Shows server cards when fetch succeeds
- *   - Renders error message when fetch fails
+ *   - Renders a stable error message (never the raw response body) when fetch fails
+ *   - Names the access problem specifically on a 403
  *   - fetchServers calls GET (not POST) with URLSearchParams; initial pluginType=agent_skill
  *   - Tab switching changes activeTab, clears selection, and clears server list
  *   - Switching to mcp_server / agent_capability tab sends the matching pluginType
@@ -62,7 +63,11 @@ vi.mock("./plugin-detail-panel", () => ({
       <button type="button" onClick={onClose} data-testid="detail-panel-close">
         Close
       </button>
-      <button type="button" onClick={onInstalled} data-testid="detail-panel-install">
+      <button
+        type="button"
+        onClick={onInstalled}
+        data-testid="detail-panel-install"
+      >
         Install
       </button>
     </div>
@@ -90,7 +95,9 @@ vi.mock("@/lib/tenant/tenant-context", () => ({
 
 afterEach(cleanup);
 
-const installAction = vi.fn().mockResolvedValue({ ok: true, orgListingId: "listing-1" });
+const installAction = vi
+  .fn()
+  .mockResolvedValue({ ok: true, orgListingId: "listing-1" });
 const installBulkAction = vi.fn().mockResolvedValue({ ok: true });
 
 const defaultProps = {
@@ -119,7 +126,9 @@ afterEach(() => {
 describe("MarketplaceModal — closed", () => {
   it("does not render dialog content when closed", () => {
     render(<MarketplaceModal {...defaultProps} />);
-    expect(screen.queryByText("Agent Tools Marketplace")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Agent Tools Marketplace"),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -132,31 +141,41 @@ describe("MarketplaceModal — open", () => {
   it("renders Skills tab (the default active tab)", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.getByText("Skills")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-agent_skill")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-tab-agent_skill"),
+    ).toBeInTheDocument();
   });
 
   it("renders MCP Servers tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.getByText("MCP Servers")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-mcp_server")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-tab-mcp_server"),
+    ).toBeInTheDocument();
   });
 
   it("renders Capabilities tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.getByText("Capabilities")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-agent_capability")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-tab-agent_capability"),
+    ).toBeInTheDocument();
   });
 
   it("does NOT render the Integrations tab (moved to the Integrations marketplace page)", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.queryByText("Integrations")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("marketplace-tab-integration")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-tab-integration"),
+    ).not.toBeInTheDocument();
   });
 
   it("does NOT render the Knowledge Sources tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.queryByText("Knowledge Sources")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("marketplace-tab-knowledge_source")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-tab-knowledge_source"),
+    ).not.toBeInTheDocument();
   });
 
   it("does NOT render Content Tools tab", () => {
@@ -167,7 +186,9 @@ describe("MarketplaceModal — open", () => {
   it("does NOT render Oxagen Plugins tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     expect(screen.queryByText("Oxagen Plugins")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("marketplace-tab-capability")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-tab-capability"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders search input", () => {
@@ -178,26 +199,41 @@ describe("MarketplaceModal — open", () => {
   it("hides auth filter chips on the default agent_skill tab, shows them after switching to mcp_server", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     // Default tab is agent_skill: auth chips are not applicable and must be hidden.
-    expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-filter-auth-all"),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-filter-auth-all"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    expect(screen.getByTestId("marketplace-filter-auth-oauth")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-filter-auth-secret")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-filter-auth-none")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-filter-auth-oauth"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-filter-auth-secret"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("marketplace-filter-auth-none"),
+    ).toBeInTheDocument();
   });
 
   it("renders the 'Select plugins to bulk-install' placeholder", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText(/select plugins to bulk-install/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/select plugins to bulk-install/i),
+    ).toBeInTheDocument();
   });
 
   it("Cancel button closes the modal", async () => {
     const onOpenChange = vi.fn();
-    render(<MarketplaceModal {...defaultProps} open onOpenChange={onOpenChange} />);
+    render(
+      <MarketplaceModal {...defaultProps} open onOpenChange={onOpenChange} />,
+    );
     await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -237,31 +273,68 @@ describe("MarketplaceModal — server cards", () => {
 
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-1")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-srv-1"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
     expect(screen.getByText("GitHub MCP")).toBeInTheDocument();
   });
 
-  it("renders error message when fetch fails", async () => {
+  it("renders a stable error message — never the raw response body — when fetch fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     mockFetch.mockResolvedValue({
       ok: false,
-      text: () => Promise.resolve("Server error"),
+      status: 500,
+      text: () => Promise.resolve("<html>nginx internal detail</html>"),
       json: () => Promise.resolve({}),
     });
 
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByText("Server error")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByText(/Couldn't load the plugin catalog \(500\)/),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
+    // The raw body is logged for operators, not painted into the dialog.
+    expect(screen.queryByText(/nginx internal detail/)).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it("names the access problem specifically on a 403", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: () => Promise.resolve("forbidden"),
+      json: () => Promise.resolve({}),
+    });
+
+    render(<MarketplaceModal {...defaultProps} open />);
+    await waitFor(
+      () =>
+        expect(
+          screen.getByText(/don't have access to the plugin catalog/),
+        ).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    consoleError.mockRestore();
   });
 });
 
 describe("MarketplaceModal — fetch method", () => {
   it("calls GET (not POST) with URLSearchParams including pluginType=agent_skill by default", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
     const firstCall = mockFetch.mock.calls[0];
     const url = firstCall?.[0] as string;
     expect(url).toMatch(/^\/api\/v1\/plugin\/catalog\/browse\?/);
@@ -273,21 +346,27 @@ describe("MarketplaceModal — fetch method", () => {
 
   it("does NOT include orgId in the browse request URL", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
     const url = mockFetch.mock.calls[0]?.[0] as string;
     expect(url).not.toContain("orgId");
   });
 
   it("includes workspaceId in the browse request URL", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
     const url = mockFetch.mock.calls[0]?.[0] as string;
     expect(url).toContain("workspaceId=ws-123");
   });
 
   it("includes search param when search is set", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     const input = screen.getByPlaceholderText("Search…");
     await userEvent.type(input, "github");
@@ -302,12 +381,17 @@ describe("MarketplaceModal — fetch method", () => {
 
   it("includes authKind param when auth filter is set (on mcp_server tab)", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     // Auth chips only exist on the mcp_server tab; switch there first.
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-filter-auth-oauth")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-filter-auth-oauth"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
@@ -325,13 +409,17 @@ describe("MarketplaceModal — fetch method", () => {
 describe("MarketplaceModal — tab switching", () => {
   it("switches to MCP Servers tab on click", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => {
         const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(true);
+        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(
+          true,
+        );
       },
       { timeout: 3000 },
     );
@@ -339,13 +427,19 @@ describe("MarketplaceModal — tab switching", () => {
 
   it("switches to Capabilities tab on click", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_capability"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-tab-agent_capability"),
+    );
     await waitFor(
       () => {
         const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=agent_capability"))).toBe(true);
+        expect(
+          calls.some((url) => url.includes("pluginType=agent_capability")),
+        ).toBe(true);
       },
       { timeout: 3000 },
     );
@@ -353,14 +447,18 @@ describe("MarketplaceModal — tab switching", () => {
 
   it("returns to the Skills tab and re-fetches pluginType=agent_skill", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     // Leave the default agent_skill tab, then come back to it.
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => {
         const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(true);
+        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(
+          true,
+        );
       },
       { timeout: 3000 },
     );
@@ -372,7 +470,9 @@ describe("MarketplaceModal — tab switching", () => {
         const laterCalls = mockFetch.mock.calls
           .slice(callsBefore)
           .map((c) => c[0] as string);
-        expect(laterCalls.some((url) => url.includes("pluginType=agent_skill"))).toBe(true);
+        expect(
+          laterCalls.some((url) => url.includes("pluginType=agent_skill")),
+        ).toBe(true);
       },
       { timeout: 3000 },
     );
@@ -382,52 +482,77 @@ describe("MarketplaceModal — tab switching", () => {
 describe("MarketplaceModal — auth filter visibility", () => {
   it("auth filter chips are hidden on the default agent_skill tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("marketplace-filter-auth-all"),
+    ).not.toBeInTheDocument();
   });
 
   it("auth filter chips are visible after switching to the mcp_server tab", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-filter-auth-all"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
 
   it("auth filter chips are hidden on agent_capability tab", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     // Show them first (mcp_server), then confirm they disappear on agent_capability.
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-filter-auth-all"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_capability"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-tab-agent_capability"),
+    );
     await waitFor(
-      () => expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument(),
+      () =>
+        expect(
+          screen.queryByTestId("marketplace-filter-auth-all"),
+        ).not.toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
 
   it("auth filter chips are hidden on agent_skill tab", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     // Show them first (mcp_server), then confirm they disappear back on agent_skill.
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-filter-auth-all"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
     await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
     await waitFor(
-      () => expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument(),
+      () =>
+        expect(
+          screen.queryByTestId("marketplace-filter-auth-all"),
+        ).not.toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -466,27 +591,41 @@ describe("MarketplaceModal — selection and bulk install", () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"),
+    );
     expect(screen.getByText("1 selected")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-bulk-install-btn")).not.toBeDisabled();
+    expect(
+      screen.getByTestId("marketplace-bulk-install-btn"),
+    ).not.toBeDisabled();
   });
 
   it("deselecting a server removes it from selection", async () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    const checkbox = screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0");
+    const checkbox = screen.getByTestId(
+      "marketplace-select-reg-uuid:tool-a:1.0",
+    );
     await userEvent.click(checkbox); // select
     await userEvent.click(checkbox); // deselect
-    expect(screen.getByText(/select plugins to bulk-install/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/select plugins to bulk-install/i),
+    ).toBeInTheDocument();
   });
 
   it("bulk install resolves compound id to srv.name — sends name not id as catalogServerId", async () => {
@@ -505,38 +644,58 @@ describe("MarketplaceModal — selection and bulk install", () => {
         installBulkAction={bulkAction}
       />,
     );
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
     await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"),
+    );
     await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
 
-    await waitFor(() => expect(bulkAction).toHaveBeenCalledWith({
-      orgSlug: "acme",
-      workspaceId: "ws-123",
-      // catalogServerId must be the name "tool-a", NOT the compound id
-      items: [{ catalogServerId: "tool-a", pluginType: "mcp_server" }],
-    }));
+    await waitFor(() =>
+      expect(bulkAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        workspaceId: "ws-123",
+        // catalogServerId must be the name "tool-a", NOT the compound id
+        items: [{ catalogServerId: "tool-a", pluginType: "mcp_server" }],
+      }),
+    );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
   it("bulk install error displays error message", async () => {
     mockFetch.mockResolvedValue(serverResponse);
-    const bulkAction = vi.fn().mockResolvedValue({ ok: false, error: "Install failed" });
+    const bulkAction = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Install failed" });
     render(
-      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+      <MarketplaceModal
+        {...defaultProps}
+        open
+        installBulkAction={bulkAction}
+      />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"),
+    );
     await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
 
     await waitFor(
@@ -577,13 +736,24 @@ describe("MarketplaceModal — selection and bulk install", () => {
 
     const bulkAction = vi.fn().mockResolvedValue({ ok: true });
     render(
-      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+      <MarketplaceModal
+        {...defaultProps}
+        open
+        installBulkAction={bulkAction}
+      />,
     );
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_capability"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-tab-agent_capability"),
+    );
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-cap-123")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-cap-123"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
@@ -595,7 +765,10 @@ describe("MarketplaceModal — selection and bulk install", () => {
         expect.objectContaining({
           items: expect.arrayContaining([
             // catalogServerId must be the name/slug "oxagen/media-svg", NOT the UUID "cap-123"
-            expect.objectContaining({ pluginType: "agent_capability", catalogServerId: "oxagen/media-svg" }),
+            expect.objectContaining({
+              pluginType: "agent_capability",
+              catalogServerId: "oxagen/media-svg",
+            }),
           ]),
         }),
       ),
@@ -632,16 +805,29 @@ describe("MarketplaceModal — selection and bulk install", () => {
 
     const bulkAction = vi.fn().mockResolvedValue({ ok: true });
     render(
-      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+      <MarketplaceModal
+        {...defaultProps}
+        open
+        installBulkAction={bulkAction}
+      />,
     );
     // agent_skill is the default tab, so the initial fetch already returns the
     // skill fixture — no tab switch needed before selecting.
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId(
+            "marketplace-server-card-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          ),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-a1b2c3d4-e5f6-7890-abcd-ef1234567890"));
+    await userEvent.click(
+      screen.getByTestId(
+        "marketplace-select-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      ),
+    );
     await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
 
     await waitFor(() =>
@@ -649,7 +835,10 @@ describe("MarketplaceModal — selection and bulk install", () => {
         expect.objectContaining({
           items: expect.arrayContaining([
             // catalogServerId must be the slug "browser-use", NOT the UUID
-            expect.objectContaining({ pluginType: "agent_skill", catalogServerId: "browser-use" }),
+            expect.objectContaining({
+              pluginType: "agent_skill",
+              catalogServerId: "browser-use",
+            }),
           ]),
         }),
       ),
@@ -687,14 +876,18 @@ describe("MarketplaceModal — detail panel", () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-srv-b"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
     await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
     await waitFor(
       // Detail panel is keyed on serverName ("tool-b")
-      () => expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -703,16 +896,24 @@ describe("MarketplaceModal — detail panel", () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-srv-b"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
     await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
-    await waitFor(() => expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument(),
+    );
 
     await userEvent.click(screen.getByTestId("detail-panel-close"));
     await waitFor(
-      () => expect(screen.queryByTestId("detail-panel-tool-b")).not.toBeInTheDocument(),
+      () =>
+        expect(
+          screen.queryByTestId("detail-panel-tool-b"),
+        ).not.toBeInTheDocument(),
       { timeout: 3000 },
     );
   });
@@ -720,14 +921,21 @@ describe("MarketplaceModal — detail panel", () => {
   it("onInstalled callback closes modal", async () => {
     mockFetch.mockResolvedValue(serverResponse);
     const onOpenChange = vi.fn();
-    render(<MarketplaceModal {...defaultProps} open onOpenChange={onOpenChange} />);
+    render(
+      <MarketplaceModal {...defaultProps} open onOpenChange={onOpenChange} />,
+    );
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-b")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-srv-b"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
     await userEvent.click(screen.getByTestId("marketplace-server-card-srv-b"));
-    await waitFor(() => expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("detail-panel-tool-b")).toBeInTheDocument(),
+    );
 
     await userEvent.click(screen.getByTestId("detail-panel-install"));
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -763,14 +971,14 @@ describe("MarketplaceModal — load more", () => {
 
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-load-more")).toBeInTheDocument(),
+      () =>
+        expect(screen.getByTestId("marketplace-load-more")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () =>
-        Promise.resolve({ servers: [], nextOffset: null, total: 60 }),
+      json: () => Promise.resolve({ servers: [], nextOffset: null, total: 60 }),
       text: () => Promise.resolve(""),
     });
 
@@ -813,10 +1021,15 @@ describe("MarketplaceModal — server card variants", () => {
     });
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-icon")).toBeInTheDocument(),
+      () =>
+        expect(
+          screen.getByTestId("marketplace-server-card-srv-icon"),
+        ).toBeInTheDocument(),
       { timeout: 3000 },
     );
-    expect(document.querySelector("img[src='https://example.com/icon.png']")).not.toBeNull();
+    expect(
+      document.querySelector("img[src='https://example.com/icon.png']"),
+    ).not.toBeNull();
   });
 
   it("falls back to server name when title is null", async () => {
@@ -917,9 +1130,13 @@ describe("MarketplaceModal — server card variants", () => {
     });
 
     render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), {
+      timeout: 3000,
+    });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_capability"));
+    await userEvent.click(
+      screen.getByTestId("marketplace-tab-agent_capability"),
+    );
     await waitFor(
       () =>
         expect(

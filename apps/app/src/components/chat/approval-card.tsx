@@ -46,8 +46,12 @@ export function ApprovalCard({
   resolution,
   onResolved,
 }: ApprovalCardProps) {
-  const [pending, setPending] = React.useState<"approved" | "denied" | null>(null);
-  const [optimistic, setOptimistic] = React.useState<ApprovalResolution | undefined>(resolution);
+  const [pending, setPending] = React.useState<"approved" | "denied" | null>(
+    null,
+  );
+  const [optimistic, setOptimistic] = React.useState<
+    ApprovalResolution | undefined
+  >(resolution);
   const [error, setError] = React.useState<string | null>(null);
   const remaining = useCountdown(expiresAt, optimistic !== undefined);
 
@@ -56,7 +60,21 @@ export function ApprovalCard({
     setError(null);
     setPending(decision);
     setOptimistic(decision);
-    const res = await onResolved(approvalId, decision);
+    // A THROWN resolver (network drop, server action error) must not leave the
+    // card wedged: without this catch `pending` stays set, both buttons stay
+    // disabled, and the optimistic `settled` state lies that the approval went
+    // through — while the composer stays blocked on an approval nobody can
+    // resolve. Roll the optimism back and show the failure instead.
+    let res: { ok: boolean; error?: string };
+    try {
+      res = await onResolved(approvalId, decision);
+    } catch (err) {
+      res = {
+        ok: false,
+        error:
+          err instanceof Error ? err.message : "Failed to resolve approval",
+      };
+    }
     setPending(null);
     if (!res.ok) {
       setOptimistic(resolution);
@@ -80,7 +98,9 @@ export function ApprovalCard({
         aria-live="assertive"
         className="my-2 space-y-3 rounded-xl border border-l-4 border-l-warning/40 bg-card p-4 text-card-foreground shadow animate-in"
         data-component="budget-pause-card"
-        data-approval-status={settled ? optimistic : expired ? "expired" : "pending"}
+        data-approval-status={
+          settled ? optimistic : expired ? "expired" : "pending"
+        }
       >
         <div className="flex items-start gap-2">
           <CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
@@ -144,7 +164,9 @@ export function ApprovalCard({
     <div
       className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 border-l-4 border-l-warning/40 p-4 animate-in"
       data-component="approval-card"
-      data-approval-status={settled ? optimistic : expired ? "expired" : "pending"}
+      data-approval-status={
+        settled ? optimistic : expired ? "expired" : "pending"
+      }
     >
       <div className="flex items-center gap-2">
         <ShieldAlert className="h-4 w-4 text-warning" />
@@ -152,7 +174,9 @@ export function ApprovalCard({
         <RiskBadge risk={riskLevel} />
         <span className="text-xs text-muted-foreground">{capability}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {expired || settled ? null : `Expires in ${formatRemaining(remaining)}`}
+          {expired || settled
+            ? null
+            : `Expires in ${formatRemaining(remaining)}`}
         </span>
       </div>
 

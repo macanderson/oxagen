@@ -15,6 +15,7 @@ import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
 // invoke("update_user_preferences", …) can resolve its handler at runtime.
 import "@oxagen/handlers/register";
+import { logger } from "@oxagen/handlers/logger";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── Input schema ─────────────────────────────────────────────────────────────
@@ -68,9 +69,23 @@ export async function updatePreferencesAction(
   };
 
   try {
+    // NOTE: `surface: "agent"` is not a description of where this call came
+    // from — it is the nearest value the contract's `surfaces` allowlist
+    // accepts (["api", "mcp", "agent"]; there is no "app"). Until the contract
+    // gains an "app" surface, preference writes from this page are metered and
+    // traced as agent traffic.
     await invoke("update_user_preferences", data, ctx, { surface: "agent" });
-  } catch {
-    return { ok: false, error: "Failed to save preferences. Please try again." };
+  } catch (err) {
+    // Log before returning the generic message: without this the only trace of
+    // a failed preference write is a toast on the user's screen.
+    logger.error(
+      { err, userId: session.user.id },
+      "[account-preferences] update_user_preferences failed",
+    );
+    return {
+      ok: false,
+      error: "Failed to save preferences. Please try again.",
+    };
   }
 
   // Set appearance cookies so the next SSR render picks up the new values

@@ -9,12 +9,18 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { errorMessageOf, formatStreamError, isRecord, partType } from "./stream-parts";
+import {
+  errorMessageOf,
+  formatStreamError,
+  isRecord,
+  partType,
+} from "./stream-parts";
 
 const ENVELOPE = {
   error: {
     code: "insufficient_credits",
-    message: "Insufficient credits: your balance is empty. Please add credits to continue.",
+    message:
+      "Insufficient credits: your balance is empty. Please add credits to continue.",
   },
   requestId: "27de4a9d-1b01-4249-a174-563ba651aee6",
 };
@@ -47,7 +53,9 @@ describe("formatStreamError — envelope parsing", () => {
   });
 
   it("returns message without code when the envelope omits a code", () => {
-    const result = formatStreamError(JSON.stringify({ error: { message: "Gateway exploded" } }));
+    const result = formatStreamError(
+      JSON.stringify({ error: { message: "Gateway exploded" } }),
+    );
     expect(result.code).toBeUndefined();
     expect(result.message).toBe("Gateway exploded");
   });
@@ -58,7 +66,9 @@ describe("formatStreamError — envelope parsing", () => {
   });
 
   it("parses a flat { message, code } shape", () => {
-    const result = formatStreamError(JSON.stringify({ code: "rate_limited", message: "Slow down" }));
+    const result = formatStreamError(
+      JSON.stringify({ code: "rate_limited", message: "Slow down" }),
+    );
     expect(result).toEqual({ code: "rate_limited", message: "Slow down" });
   });
 });
@@ -83,22 +93,42 @@ describe("formatStreamError — non-envelope fallbacks", () => {
   });
 
   it("falls back to a generic message for null/undefined/number values", () => {
-    expect(formatStreamError(null).message).toBe("Something went wrong. Please try again.");
-    expect(formatStreamError(undefined).message).toBe("Something went wrong. Please try again.");
-    expect(formatStreamError(42).message).toBe("Something went wrong. Please try again.");
+    expect(formatStreamError(null).message).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(formatStreamError(undefined).message).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(formatStreamError(42).message).toBe(
+      "Something went wrong. Please try again.",
+    );
   });
 
   it("falls back to a generic message for an empty/whitespace string", () => {
-    expect(formatStreamError("   ").message).toBe("Something went wrong. Please try again.");
+    expect(formatStreamError("   ").message).toBe(
+      "Something went wrong. Please try again.",
+    );
   });
 
   it("falls back to a generic message for an envelope with a blank message", () => {
-    const result = formatStreamError(JSON.stringify({ error: { code: "x", message: "  " } }));
+    const result = formatStreamError(
+      JSON.stringify({ error: { code: "x", message: "  " } }),
+    );
     expect(result.message).toBe("Something went wrong. Please try again.");
   });
 
   it("always returns a non-empty message (invariant)", () => {
-    const cases: unknown[] = [null, undefined, "", "{}", "[]", 0, false, {}, { error: {} }];
+    const cases: unknown[] = [
+      null,
+      undefined,
+      "",
+      "{}",
+      "[]",
+      0,
+      false,
+      {},
+      { error: {} },
+    ];
     for (const c of cases) {
       expect(formatStreamError(c).message.length).toBeGreaterThan(0);
     }

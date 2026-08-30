@@ -1,12 +1,11 @@
 /**
- * page.tsx — Knowledge → Graph (web-app-2.0 Phase 2; renamed + merged from
- * Knowledge → Explore).
+ * page.tsx — Knowledge → Graph.
  *
  * The read-only knowledge-graph explorer, mounted as a tab of Knowledge. The
- * surrounding Knowledge layout renders the tab strip and asserts membership,
- * so this page is thin: it renders the (client) WebGL explorer canvas
- * (`GraphExplorer`, unchanged — streams from `/api/v1/graph/explore`) plus the
- * new Browse/Search/Query side panel (`GraphSidePanel`, `./_panels/`), which
+ * Knowledge layout renders the tab strip and `[orgSlug]/layout.tsx` asserts
+ * session + org membership, so this page is thin: it renders the (client) WebGL
+ * explorer canvas (`GraphExplorer` — streams from `/api/v1/graph/explore`) plus
+ * the Browse/Search/Query side panel (`GraphSidePanel`, `./_panels/`), which
  * calls the graph and ontology capabilities directly via `invoke()` in
  * `./actions.ts` — a completely separate data path from the canvas.
  *

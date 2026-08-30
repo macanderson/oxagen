@@ -19,7 +19,15 @@ export interface TileProps {
   className?: string;
 }
 
-export function Tile({ title, description, icon: Icon, href, footer, children, className }: TileProps) {
+export function Tile({
+  title,
+  description,
+  icon: Icon,
+  href,
+  footer,
+  children,
+  className,
+}: TileProps) {
   const content = (
     <>
       {Icon && (
@@ -30,10 +38,20 @@ export function Tile({ title, description, icon: Icon, href, footer, children, c
           <Icon />
         </div>
       )}
-      {title && <div className="text-sm font-medium text-foreground">{title}</div>}
-      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
-      {children && <div className={cn(title || description ? "mt-3" : undefined)}>{children}</div>}
-      {footer && <div className="mt-3 border-t border-border pt-3">{footer}</div>}
+      {title && (
+        <div className="text-sm font-medium text-foreground">{title}</div>
+      )}
+      {description && (
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      )}
+      {children && (
+        <div className={cn(title || description ? "mt-3" : undefined)}>
+          {children}
+        </div>
+      )}
+      {footer && (
+        <div className="mt-3 border-t border-border pt-3">{footer}</div>
+      )}
     </>
   );
 

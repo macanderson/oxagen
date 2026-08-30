@@ -9,6 +9,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 import {
   CiStatusSummary,
   type CiCounts,
@@ -166,7 +167,9 @@ function StateBadge({
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">Open</span>
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+      Open
+    </span>
   );
 }
 
@@ -179,8 +182,12 @@ function CommentEntry({ comment }: { comment: PrComment }): ReactElement {
           authorAvatarUrl={comment.authorAvatarUrl}
           size="xs"
         />
-        <span className="font-medium text-foreground">{comment.author ?? "unknown"}</span>
-        <span className="text-muted-foreground">{relativeTime(comment.createdAt)}</span>
+        <span className="font-medium text-foreground">
+          {comment.author ?? "unknown"}
+        </span>
+        <span className="text-muted-foreground">
+          {relativeTime(comment.createdAt)}
+        </span>
         {comment.kind === "review" ? (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-info">
             review
@@ -194,7 +201,9 @@ function CommentEntry({ comment }: { comment: PrComment }): ReactElement {
           </span>
         )}
       </div>
-      <p className="whitespace-pre-wrap break-words text-xs text-foreground">{comment.body}</p>
+      <p className="whitespace-pre-wrap break-words text-xs text-foreground">
+        {comment.body}
+      </p>
     </li>
   );
 }
@@ -224,6 +233,10 @@ export default function PrStatsCard(props: PrStatsCardProps): ReactElement {
   const totalComments = commentCount + reviewCommentCount;
   const hasComments = totalComments > 0;
   const truncated = totalComments > comments.length;
+  // `url` arrives with the capability output, so the scheme is allow-listed
+  // before it becomes an href. An unsafe value degrades to plain text rather
+  // than arming a `javascript:` navigation on click.
+  const prHref = safeHref(url);
 
   return (
     <div
@@ -232,26 +245,43 @@ export default function PrStatsCard(props: PrStatsCardProps): ReactElement {
     >
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-2.5">
-        <GitPullRequest className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <GitPullRequest
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <StateBadge state={state} draft={draft} />
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="inline-flex min-w-0 flex-1 items-center gap-1 text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="shrink-0 text-muted-foreground">#{number}</span>
-          <span className="min-w-0 truncate" title={title}>
-            {title}
+        {prHref ? (
+          <a
+            href={prHref}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex min-w-0 flex-1 items-center gap-1 text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="shrink-0 text-muted-foreground">#{number}</span>
+            <span className="min-w-0 truncate" title={title}>
+              {title}
+            </span>
+            <ExternalLink
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </a>
+        ) : (
+          <span className="inline-flex min-w-0 flex-1 items-center gap-1 text-sm font-medium text-foreground">
+            <span className="shrink-0 text-muted-foreground">#{number}</span>
+            <span className="min-w-0 truncate" title={title}>
+              {title}
+            </span>
           </span>
-          <ExternalLink className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-        </a>
+        )}
       </div>
 
       {/* Meta row: author + created time */}
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
         <AuthorAvatar author={author} authorAvatarUrl={authorAvatarUrl} />
-        <span className="font-medium text-foreground">{author ?? "unknown"}</span>
+        <span className="font-medium text-foreground">
+          {author ?? "unknown"}
+        </span>
         <span>opened {relativeTime(createdAt)}</span>
       </div>
 
@@ -292,15 +322,20 @@ export default function PrStatsCard(props: PrStatsCardProps): ReactElement {
             </ul>
             {truncated ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Showing latest {comments.length} of {totalComments} —{" "}
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  view all on GitHub
-                </a>
+                Showing latest {comments.length} of {totalComments}
+                {prHref ? (
+                  <>
+                    {" — "}
+                    <a
+                      href={prHref}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      view all on GitHub
+                    </a>
+                  </>
+                ) : null}
               </p>
             ) : null}
           </details>
@@ -316,9 +351,15 @@ export default function PrStatsCard(props: PrStatsCardProps): ReactElement {
       <div className="border-t border-border/60 px-4 py-2.5">
         <p className="mb-2 text-xs font-medium text-muted-foreground">Checks</p>
         {ci.runs.length > 0 ? (
-          <CiStatusSummary overall={ci.overall} counts={ci.counts} runs={ci.runs} />
+          <CiStatusSummary
+            overall={ci.overall}
+            counts={ci.counts}
+            runs={ci.runs}
+          />
         ) : (
-          <p className="text-xs text-muted-foreground">No CI checks reported for this PR.</p>
+          <p className="text-xs text-muted-foreground">
+            No CI checks reported for this PR.
+          </p>
         )}
       </div>
     </div>

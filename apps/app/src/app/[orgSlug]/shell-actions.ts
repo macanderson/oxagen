@@ -12,10 +12,6 @@
  * supplies the first available workspace slug or an empty string. If neither
  * org nor workspace can be resolved we return a graceful error so the panel
  * renders without crashing.
- *
- * The legacy stub actions are retained for the existing AskDrawer mounted in
- * the same layout (which is intentionally a stub — the wand panel is the
- * replacement that actually sends).
  */
 
 import "@oxagen/handlers/register";
@@ -130,7 +126,14 @@ async function resolveWorkspaceFromSlugs(
     if (!ws) return null;
 
     return { orgId: org.id, workspaceId: ws.id };
-  } catch {
+  } catch (err) {
+    // Log before degrading: a DB/RLS outage and a genuinely unknown slug are
+    // indistinguishable to the caller, so without this line a systemic lookup
+    // failure reads to operators as "users keep mistyping workspace slugs".
+    logger.warn(
+      { err, orgSlug, workspaceSlug },
+      "shell: workspace slug resolution errored — treating as not found",
+    );
     return null;
   }
 }
@@ -484,9 +487,9 @@ export async function wandResolveApprovalAction(
 // ---------------------------------------------------------------------------
 // wandResolveConsentAction
 //
-// Mirrors wandResolveApprovalAction for first-use external-MCP consent
-//. The orgSlug/workspaceSlug are passed explicitly and resolved to
-// IDs server-side; the consent decision resumes the paused agent stream.
+// Mirrors wandResolveApprovalAction for first-use external-MCP consent. The
+// orgSlug/workspaceSlug are passed explicitly and resolved to IDs server-side;
+// the consent decision resumes the paused agent stream.
 // ---------------------------------------------------------------------------
 
 export async function wandResolveConsentAction(

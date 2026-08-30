@@ -70,10 +70,9 @@ export async function interceptAgentStream(
     }
     chunks.push("event: done\ndata: [DONE]\n\n");
 
-    // Concatenate into a single SSE body. Pacing of individual events
-    // matters less than ordering for the assertions in
-    // `agent-runtime-flow.spec.ts`, so we wait once before responding to
-    // emulate end-to-end stream latency in a deterministic way.
+    // Concatenate into a single SSE body. Ordering, not per-event pacing, is
+    // what the specs assert on, so we wait once before responding to emulate
+    // end-to-end stream latency in a deterministic way.
     await new Promise((r) => setTimeout(r, delayMs));
 
     await route.fulfill({
@@ -128,10 +127,12 @@ export async function interceptAgentStream(
       return `${u.pathname}${u.search}`;
     };
     await page.route(
-      (url) => /\/(sessions|ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
+      (url) =>
+        /\/(sessions|ask|chat)(\?|$)/.test(`${url.pathname}${url.search}`),
       async (route: Route) => {
         const req = route.request();
-        const isSameUrlRefresh = logicalUrl(req.url()) === logicalUrl(page.url());
+        const isSameUrlRefresh =
+          logicalUrl(req.url()) === logicalUrl(page.url());
         const isHeldNavigation =
           !isSameUrlRefresh && !(opts.allowConversationNavigation ?? false);
         if (
@@ -149,8 +150,8 @@ export async function interceptAgentStream(
   }
 }
 
-// Helper: build the canonical set of stream events for the §10 scenario.
-// Exported so the spec stays declarative and reusable.
+// Build the canonical plan → approval → fan-out → memory-write stream for the
+// full agent-runtime scenario. Exported so specs stay declarative and reusable.
 export function scriptedScenarioEvents(args: {
   parentMessageId: string;
 }): StreamEvent[] {

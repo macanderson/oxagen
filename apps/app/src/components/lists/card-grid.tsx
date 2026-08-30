@@ -21,7 +21,13 @@ export interface CardGridProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function CardGrid({ className, children, ...props }: CardGridProps) {
   return (
-    <div className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3", className)} {...props}>
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3",
+        className,
+      )}
+      {...props}
+    >
       {children}
     </div>
   );

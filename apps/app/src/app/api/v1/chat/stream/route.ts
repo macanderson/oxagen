@@ -1774,13 +1774,37 @@ export async function POST(request: NextRequest): Promise<Response> {
         // sandbox-reaper drops it ~2-3 min after the last turn — recovering any
         // uncommitted work to a recovery branch first (spec:
         // sandbox-session-lifecycle). Must run whether the turn succeeded or threw.
-        if (codeWorkspace) await codeWorkspace.release();
-        try {
-          controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
-        } catch {
-          // Controller may already be errored.
+        //
+        // Guarded: a throwing release() must never skip the [DONE] sentinel and
+        // the close() below, or the client's EventSource reader hangs until its
+        // own timeout on every failed teardown.
+        if (codeWorkspace) {
+          try {
+            await codeWorkspace.release();
+          } catch (releaseErr) {
+            logger.warn(
+              { err: String(releaseErr), requestId },
+              "[chat/stream] sandbox release failed — reaper will collect it",
+            );
+          }
         }
-        controller.close();
+        if (!closed) {
+          try {
+            controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+          } catch {
+            // Controller may already be errored.
+            closed = true;
+          }
+        }
+        // close() THROWS on an already-closed/errored controller, and a throw
+        // out of start() surfaces as an unhandled rejection.
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // Already closed by a client disconnect — nothing left to do.
+          }
+        }
       }
     },
   });

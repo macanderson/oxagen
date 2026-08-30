@@ -40,7 +40,10 @@ import {
   useConnectorSchema,
   type FormValues,
 } from "@/components/connectors/connector-schema-provider";
-import { FieldRenderer, validateField } from "@/components/connectors/field-renderer";
+import {
+  FieldRenderer,
+  validateField,
+} from "@/components/connectors/field-renderer";
 
 const API_BASE = "/api";
 
@@ -89,9 +92,12 @@ export function EditSourceConfigSheet({
     setLoadError(null);
     setLoaded(null);
 
-    fetch(`${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/${target.publicId}`, {
-      credentials: "include",
-    })
+    fetch(
+      `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/${target.publicId}`,
+      {
+        credentials: "include",
+      },
+    )
       .then(async (res) => {
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -111,7 +117,9 @@ export function EditSourceConfigSheet({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : "Failed to load connection");
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load connection",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -123,12 +131,29 @@ export function EditSourceConfigSheet({
   }, [open, target, orgSlug, workspaceSlug]);
 
   return (
-    <Sheet open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-      <SheetPopup side="right" className="flex w-full max-w-md flex-col" data-testid="edit-source-sheet">
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <SheetPopup
+        side="right"
+        className="flex w-full max-w-md flex-col"
+        data-testid="edit-source-sheet"
+      >
         <SheetHeader>
           <SheetTitle>Edit configuration</SheetTitle>
           <SheetDescription>
-            {target ? <>Adjust how <span className="font-medium text-foreground">{target.displayName}</span> syncs into your knowledge graph.</> : null}
+            {target ? (
+              <>
+                Adjust how{" "}
+                <span className="font-medium text-foreground">
+                  {target.displayName}
+                </span>{" "}
+                syncs into your knowledge graph.
+              </>
+            ) : null}
           </SheetDescription>
         </SheetHeader>
 
@@ -142,10 +167,18 @@ export function EditSourceConfigSheet({
 
         {!loading && loadError && (
           <SheetPanel>
-            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3" role="alert">
-              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" aria-hidden="true" />
+            <div
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+              role="alert"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive"
+                aria-hidden="true"
+              />
               <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-foreground">Couldn&apos;t load configuration</p>
+                <p className="text-sm font-medium text-foreground">
+                  Couldn&apos;t load configuration
+                </p>
                 <p className="text-xs text-muted-foreground">{loadError}</p>
               </div>
             </div>
@@ -195,13 +228,17 @@ function EditSourceConfigForm({
 }: EditSourceConfigFormProps) {
   const router = useRouter();
   const { add: addToast } = useToast();
-  const { schema, loading, fetchError, formState, setErrors, touchField } = useConnectorSchema();
+  const { schema, loading, fetchError, formState, setErrors, touchField } =
+    useConnectorSchema();
 
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
-  const configFields = React.useMemo(() => schema?.config?.fields ?? [], [schema]);
+  const configFields = React.useMemo(
+    () => schema?.config?.fields ?? [],
+    [schema],
+  );
 
   const handleSave = React.useCallback(async () => {
     setSubmitError(null);
@@ -212,7 +249,10 @@ function EditSourceConfigForm({
         const message = validateField(field, formState.values[field.key]);
         return message ? { field: field.key, message, code: "invalid" } : null;
       })
-      .filter((e): e is { field: string; message: string; code: string } => e !== null);
+      .filter(
+        (e): e is { field: string; message: string; code: string } =>
+          e !== null,
+      );
 
     if (errors.length > 0) {
       setErrors(errors);
@@ -268,7 +308,8 @@ function EditSourceConfigForm({
       onClose();
       router.refresh();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to save configuration";
+      const message =
+        e instanceof Error ? e.message : "Failed to save configuration";
       setSubmitError(message);
       addToast({ title: "Save failed", description: message, type: "error" });
     } finally {
@@ -313,8 +354,8 @@ function EditSourceConfigForm({
 
         {!loading && fetchError && (
           <p className="text-xs text-muted-foreground">
-            This connector&apos;s configuration schema couldn&apos;t be loaded
-            ({fetchError}). You can still rename the source.
+            This connector&apos;s configuration schema couldn&apos;t be loaded (
+            {fetchError}). You can still rename the source.
           </p>
         )}
 
@@ -325,9 +366,16 @@ function EditSourceConfigForm({
         )}
 
         {!loading && !fetchError && configFields.length > 0 && (
-          <div className="flex flex-col gap-4" data-testid="edit-source-config-fields">
+          <div
+            className="flex flex-col gap-4"
+            data-testid="edit-source-config-fields"
+          >
             {configFields.map((field) => (
-              <FieldRenderer key={field.key} field={field} disabled={submitting} />
+              <FieldRenderer
+                key={field.key}
+                field={field}
+                disabled={submitting}
+              />
             ))}
           </div>
         )}
@@ -343,8 +391,14 @@ function EditSourceConfigForm({
         <Button variant="ghost" onClick={onClose} disabled={submitting}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={submitting} data-testid="save-source-config-btn">
-          {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+        <Button
+          onClick={handleSave}
+          disabled={submitting}
+          data-testid="save-source-config-btn"
+        >
+          {submitting && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          )}
           Save changes
         </Button>
       </SheetFooter>

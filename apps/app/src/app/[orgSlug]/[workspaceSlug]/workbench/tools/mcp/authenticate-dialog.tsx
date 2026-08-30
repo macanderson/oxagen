@@ -63,8 +63,8 @@ export function AuthenticateDialog({
             Authentication required
           </DialogTitle>
           <DialogDescription>
-            {serverTitle} was installed successfully, but it will not work
-            until you authenticate with your {serverTitle} credentials.
+            {serverTitle} was installed successfully, but it will not work until
+            you authenticate with your {serverTitle} credentials.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
@@ -76,7 +76,9 @@ export function AuthenticateDialog({
         </DialogPanel>
         <DialogFooter>
           <DialogClose
-            render={<Button variant="ghost" data-testid="mcp-authenticate-later" />}
+            render={
+              <Button variant="ghost" data-testid="mcp-authenticate-later" />
+            }
           >
             Later
           </DialogClose>

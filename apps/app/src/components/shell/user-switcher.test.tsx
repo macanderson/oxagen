@@ -31,7 +31,15 @@ vi.mock("@oxagen/ui", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...rest }: { src: string; alt: string; [key: string]: unknown }) => (
+  default: ({
+    src,
+    alt,
+    ...rest
+  }: {
+    src: string;
+    alt: string;
+    [key: string]: unknown;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim; real next/image requires Next.js runtime
     <img src={src} alt={alt} {...rest} />
   ),
@@ -101,7 +109,11 @@ describe("UserSwitcher — initials logic", () => {
 
 describe("UserSwitcher — with image", () => {
   it("renders an img element when user.image is set", () => {
-    render(<UserSwitcher user={{ ...user, image: "https://example.com/avatar.png" }} />);
+    render(
+      <UserSwitcher
+        user={{ ...user, image: "https://example.com/avatar.png" }}
+      />,
+    );
     const img = screen.getByRole("img");
     expect(img).toHaveAttribute("src", "https://example.com/avatar.png");
   });

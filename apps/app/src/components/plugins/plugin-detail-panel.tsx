@@ -5,12 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
-import { CapabilityIcon, PLUGIN_TYPE_DEFAULTS, resolveIconEntry } from "./capability-icon";
+import {
+  CapabilityIcon,
+  PLUGIN_TYPE_DEFAULTS,
+  resolveIconEntry,
+} from "./capability-icon";
 import { ExternalLink, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PluginTypeValue = "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
+type PluginTypeValue =
+  | "mcp_server"
+  | "integration"
+  | "agent_capability"
+  | "agent_skill"
+  | "knowledge_source";
 
 interface CatalogDetail {
   name: string;
@@ -112,7 +121,8 @@ export function PluginDetailPanel({
         setError(result.error ?? "Install failed");
         toast.add({
           title: "Install failed",
-          description: result.error ?? `Could not install ${detail.title ?? detail.name}.`,
+          description:
+            result.error ?? `Could not install ${detail.title ?? detail.name}.`,
           type: "error",
         });
         return;
@@ -126,7 +136,11 @@ export function PluginDetailPanel({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Install failed";
       setError(message);
-      toast.add({ title: "Install failed", description: message, type: "error" });
+      toast.add({
+        title: "Install failed",
+        description: message,
+        type: "error",
+      });
     } finally {
       setInstalling(false);
     }
@@ -134,7 +148,10 @@ export function PluginDetailPanel({
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-4 p-6" data-testid="plugin-detail-loading">
+      <div
+        className="flex flex-col gap-4 p-6"
+        data-testid="plugin-detail-loading"
+      >
         <div className="h-12 w-12 rounded-xl bg-muted/40 animate-pulse" />
         <div className="h-5 w-48 rounded bg-muted/40 animate-pulse" />
         <div className="h-3 w-full rounded bg-muted/40 animate-pulse" />
@@ -145,7 +162,10 @@ export function PluginDetailPanel({
 
   if (!detail) {
     return (
-      <p className="p-6 text-sm text-destructive" data-testid="plugin-detail-error">
+      <p
+        className="p-6 text-sm text-destructive"
+        data-testid="plugin-detail-error"
+      >
         {error ?? "Not found"}
       </p>
     );
@@ -189,7 +209,10 @@ export function PluginDetailPanel({
           return <CapabilityIcon iconName={iconName} color={color} size={48} />;
         })()}
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold" data-testid="plugin-detail-title">
+          <h3
+            className="text-base font-semibold"
+            data-testid="plugin-detail-title"
+          >
             {detail.title ?? detail.name}
           </h3>
           <p className="text-xs text-muted-foreground">
@@ -225,7 +248,11 @@ export function PluginDetailPanel({
         data-testid="plugin-detail-badges"
       >
         {detail.installed && (
-          <Badge variant="success" size="sm" data-testid="plugin-detail-installed-badge">
+          <Badge
+            variant="success"
+            size="sm"
+            data-testid="plugin-detail-installed-badge"
+          >
             Installed
           </Badge>
         )}
@@ -272,9 +299,11 @@ export function PluginDetailPanel({
 
       {/* Body — description + README */}
       <div className="flex-1 overflow-auto px-6 py-4">
-        <p className="mb-3 text-sm text-muted-foreground">{detail.description}</p>
-        {!isAgentOrKnowledge && (
-          detail.readmeHtml ? (
+        <p className="mb-3 text-sm text-muted-foreground">
+          {detail.description}
+        </p>
+        {!isAgentOrKnowledge &&
+          (detail.readmeHtml ? (
             // TRUST BOUNDARY — readmeHtml is produced by
             // packages/plugins/src/registry/readme.ts `fetchAndRenderReadme`,
             // which runs the pipeline:
@@ -289,11 +318,13 @@ export function PluginDetailPanel({
               data-testid="plugin-detail-readme"
             />
           ) : (
-            <p className="text-xs text-muted-foreground italic" data-testid="plugin-detail-no-readme">
+            <p
+              className="text-xs text-muted-foreground italic"
+              data-testid="plugin-detail-no-readme"
+            >
               No README available.
             </p>
-          )
-        )}
+          ))}
       </div>
 
       {/* Install footer */}
@@ -312,7 +343,12 @@ export function PluginDetailPanel({
           <Button
             className="w-full"
             onClick={handleInstall}
-            disabled={installing || (!isAgentOrKnowledge && detail.status !== "active" && detail.status !== undefined)}
+            disabled={
+              installing ||
+              (!isAgentOrKnowledge &&
+                detail.status !== "active" &&
+                detail.status !== undefined)
+            }
             data-testid="plugin-detail-install-btn"
           >
             {installing ? "Installing…" : "Install to workspace"}

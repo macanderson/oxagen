@@ -24,7 +24,10 @@ import { cn } from "@/lib/utils";
  * Crops `imageSrc` to the pixel region `area` and returns a 512×512 WebP
  * Blob. Pure/DOM-only (canvas + Image), no component state.
  */
-export async function getCroppedBlob(imageSrc: string, area: Area): Promise<Blob> {
+export async function getCroppedBlob(
+  imageSrc: string,
+  area: Area,
+): Promise<Blob> {
   // Load the source image off-screen so we can measure its natural dimensions.
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -70,7 +73,10 @@ export async function getCroppedBlob(imageSrc: string, area: Area): Promise<Blob
 }
 
 /** POSTs a cropped avatar blob to the upload endpoint and returns its CDN URL. */
-export async function uploadAvatarBlob(blob: Blob, filename = "avatar.webp"): Promise<string> {
+export async function uploadAvatarBlob(
+  blob: Blob,
+  filename = "avatar.webp",
+): Promise<string> {
   const fd = new FormData();
   fd.append("file", blob, filename);
 
@@ -79,9 +85,17 @@ export async function uploadAvatarBlob(blob: Blob, filename = "avatar.webp"): Pr
     body: fd,
   });
 
-  // Parse response body regardless of status so we can surface server error
-  // messages to the caller rather than throwing generically.
-  const json = (await res.json()) as { url?: string; error?: string };
+  // Parse the body regardless of status so a server-supplied message reaches
+  // the caller. A proxy/gateway failure answers with HTML, not JSON, so the
+  // parse itself has to be tolerated — otherwise the user sees a JSON syntax
+  // error instead of "Upload failed (502)".
+  let json: { url?: string; error?: string } = {};
+  try {
+    json = (await res.json()) as { url?: string; error?: string };
+  } catch {
+    if (res.ok)
+      throw new Error("Upload succeeded but the response was unreadable");
+  }
 
   if (!res.ok) {
     throw new Error(json.error ?? `Upload failed (${res.status})`);
@@ -122,11 +136,18 @@ export interface UseCropUploadResult {
   reset: () => void;
 }
 
-export function useCropUpload({ onUploaded }: UseCropUploadOptions): UseCropUploadResult {
+export function useCropUpload({
+  onUploaded,
+}: UseCropUploadOptions): UseCropUploadResult {
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
-  const [crop, setCrop] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [crop, setCrop] = React.useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
   const [zoom, setZoom] = React.useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<Area | null>(null);
+  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<Area | null>(
+    null,
+  );
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -141,21 +162,28 @@ export function useCropUpload({ onUploaded }: UseCropUploadOptions): UseCropUplo
     setUploading(false);
   }, []);
 
-  const loadFile = React.useCallback(
-    (file: File) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        setImageSrc(reader.result as string);
-        setError(null);
-      });
-      reader.readAsDataURL(file);
+  const loadFile = React.useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImageSrc(reader.result as string);
+      setError(null);
+    });
+    // Without this the dialog opens onto a permanently empty cropper when the
+    // file can't be read (removed drive, revoked permission) — no error, no
+    // way for the user to tell the pick simply failed.
+    reader.addEventListener("error", () => {
+      setImageSrc(null);
+      setError("Couldn't read that file. Pick another photo.");
+    });
+    reader.readAsDataURL(file);
+  }, []);
+
+  const onCropComplete = React.useCallback(
+    (_croppedArea: Area, croppedAreaPixels: Area) => {
+      setCroppedAreaPixels(croppedAreaPixels);
     },
     [],
   );
-
-  const onCropComplete = React.useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
-    setCroppedAreaPixels(croppedAreaPixels);
-  }, []);
 
   const save = React.useCallback(async () => {
     if (!imageSrc || !croppedAreaPixels) return;
@@ -247,7 +275,10 @@ export function CropSurface({
 
       {/* Zoom slider */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-muted-foreground" htmlFor="avatar-zoom-slider">
+        <label
+          className="text-xs text-muted-foreground"
+          htmlFor="avatar-zoom-slider"
+        >
           Zoom
         </label>
         <input

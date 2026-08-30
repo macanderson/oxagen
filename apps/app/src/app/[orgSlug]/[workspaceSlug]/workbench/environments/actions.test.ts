@@ -42,12 +42,12 @@ const {
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn(
-    (fn: (tx: typeof mockTx) => unknown) => fn(mockTx),
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
   );
   // runInTenantScope immediately calls its callback — same as integration-actions tests
-  const mockRunInTenantScope = vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
   );
 
   return {
@@ -149,7 +149,7 @@ describe("importEnvAction", () => {
     const res = await importEnvAction({
       orgSlug: "acme",
       workspaceSlug: "main",
-      text: 'DATABASE_URL=postgres://localhost/db\nLOG_LEVEL=info',
+      text: "DATABASE_URL=postgres://localhost/db\nLOG_LEVEL=info",
       environmentId: null,
       commit: false,
     });
@@ -162,7 +162,7 @@ describe("importEnvAction", () => {
     expect(mockInvoke).toHaveBeenCalledWith(
       "import_env_secrets",
       {
-        text: 'DATABASE_URL=postgres://localhost/db\nLOG_LEVEL=info',
+        text: "DATABASE_URL=postgres://localhost/db\nLOG_LEVEL=info",
         environmentId: null,
         commit: false,
       },
@@ -183,7 +183,7 @@ describe("importEnvAction", () => {
     const res = await importEnvAction({
       orgSlug: "acme",
       workspaceSlug: "main",
-      text: 'DATABASE_URL=postgres://localhost/db',
+      text: "DATABASE_URL=postgres://localhost/db",
       commit: true,
     });
 

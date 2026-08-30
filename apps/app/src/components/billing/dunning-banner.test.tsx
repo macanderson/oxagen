@@ -41,7 +41,9 @@ const suspendedStatus: OrgBillingStatus = {
 
 describe("DunningBanner — active state", () => {
   it("renders nothing for active orgs", () => {
-    const { container } = render(<DunningBanner orgSlug="acme" status={activeStatus} />);
+    const { container } = render(
+      <DunningBanner orgSlug="acme" status={activeStatus} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 });
@@ -60,7 +62,9 @@ describe("DunningBanner — grace state", () => {
 
   it("shows an 'Update payment method' CTA", () => {
     render(<DunningBanner orgSlug="acme" status={graceStatus} />);
-    expect(screen.getByRole("button", { name: /update payment method/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /update payment method/i }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -77,6 +81,8 @@ describe("DunningBanner — suspended state", () => {
 
   it("shows 'Update payment method' CTA with destructive styling", () => {
     render(<DunningBanner orgSlug="acme" status={suspendedStatus} />);
-    expect(screen.getByRole("button", { name: /update payment method/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /update payment method/i }),
+    ).toBeInTheDocument();
   });
 });

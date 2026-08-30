@@ -22,7 +22,11 @@ import { revalidatePath } from "next/cache";
 import { logger } from "@oxagen/handlers/logger";
 import { workspace } from "@/lib/routes";
 import { resolveAutomationsScope } from "@/lib/automations/scope";
-import { runWorkflow, cancelWorkflow, startResearchSwarm } from "@/lib/automations/workflows";
+import {
+  runWorkflow,
+  cancelWorkflow,
+  startResearchSwarm,
+} from "@/lib/automations/workflows";
 import type { WorkflowRunOutput } from "@oxagen/oxagen/contracts/workflow.run";
 import type { WorkflowCancelOutput } from "@oxagen/oxagen/contracts/workflow.cancel";
 import type { ResearchSwarmStartOutput } from "@oxagen/oxagen/contracts/research.swarm.start";
@@ -62,15 +66,27 @@ export async function runWorkflowAction(
 ): Promise<WorkflowActionResult<{ workflow: WorkflowRunOutput }>> {
   const parsed = runWorkflowSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, goal, title, outputFormat, maxParallelism } = parsed.data;
+  const { orgSlug, workspaceSlug, goal, title, outputFormat, maxParallelism } =
+    parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
-    const workflow = await runWorkflow(ctx, { goal, title, outputFormat, maxParallelism });
+    const workflow = await runWorkflow(ctx, {
+      goal,
+      title,
+      outputFormat,
+      maxParallelism,
+    });
     revalidateWorkflows(orgSlug, workspaceSlug);
     return { ok: true, workflow };
   } catch (err) {
@@ -80,25 +96,35 @@ export async function runWorkflowAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to launch the workflow.",
+      error:
+        err instanceof Error ? err.message : "Failed to launch the workflow.",
     };
   }
 }
 
 // ── Cancel workflow ────────────────────────────────────────────────────────
 
-const cancelWorkflowSchema = z.object({ ...scopeShape, workflowId: z.string().min(1) });
+const cancelWorkflowSchema = z.object({
+  ...scopeShape,
+  workflowId: z.string().min(1),
+});
 
 export async function cancelWorkflowAction(
   input: z.input<typeof cancelWorkflowSchema>,
 ): Promise<WorkflowActionResult<{ result: WorkflowCancelOutput }>> {
   const parsed = cancelWorkflowSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
   const { orgSlug, workspaceSlug, workflowId } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -112,7 +138,8 @@ export async function cancelWorkflowAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to cancel the workflow.",
+      error:
+        err instanceof Error ? err.message : "Failed to cancel the workflow.",
     };
   }
 }
@@ -136,12 +163,25 @@ export async function startResearchSwarmAction(
 ): Promise<WorkflowActionResult<{ swarm: ResearchSwarmStartOutput }>> {
   const parsed = startSwarmSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
-  const { orgSlug, workspaceSlug, topic, depth, maxParallel, targetLabel, searchDepth } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    topic,
+    depth,
+    maxParallel,
+    targetLabel,
+    searchDepth,
+  } = parsed.data;
 
-  const { ctx, canManage } = await resolveAutomationsScope(orgSlug, workspaceSlug);
+  const { ctx, canManage } = await resolveAutomationsScope(
+    orgSlug,
+    workspaceSlug,
+  );
   if (!canManage) return { ok: false, error: MANAGE_DENIED };
 
   try {
@@ -161,7 +201,10 @@ export async function startResearchSwarmAction(
     );
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Failed to start the research swarm.",
+      error:
+        err instanceof Error
+          ? err.message
+          : "Failed to start the research swarm.",
     };
   }
 }

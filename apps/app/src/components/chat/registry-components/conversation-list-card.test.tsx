@@ -11,8 +11,20 @@ describe("ConversationListCard", () => {
       <ConversationListCard
         output={{
           conversations: [
-            { publicId: "c_1", title: "USS Nautilus research", status: "active", archivedAt: null, updatedAt: "2026-06-18T00:00:00Z" },
-            { publicId: "c_2", title: "", status: "active", archivedAt: "2026-06-10T00:00:00Z", updatedAt: "2026-06-10T00:00:00Z" },
+            {
+              publicId: "c_1",
+              title: "USS Nautilus research",
+              status: "active",
+              archivedAt: null,
+              updatedAt: "2026-06-18T00:00:00Z",
+            },
+            {
+              publicId: "c_2",
+              title: "",
+              status: "active",
+              archivedAt: "2026-06-10T00:00:00Z",
+              updatedAt: "2026-06-10T00:00:00Z",
+            },
           ],
           nextCursor: null,
         }}
@@ -30,7 +42,9 @@ describe("ConversationListCard", () => {
   });
 
   it("renders an empty state", () => {
-    render(<ConversationListCard output={{ conversations: [], nextCursor: null }} />);
+    render(
+      <ConversationListCard output={{ conversations: [], nextCursor: null }} />,
+    );
     expect(screen.getByText("No conversations.")).toBeTruthy();
   });
 });

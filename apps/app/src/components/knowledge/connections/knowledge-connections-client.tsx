@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-
-const API_BASE = "/api";
 import {
   Database,
   Plus,
@@ -42,6 +40,8 @@ import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.l
 
 type Connection = ConnectionListOutput["connections"][number];
 
+const API_BASE = "/api";
+
 // ── Display helpers ────────────────────────────────────────────────────────────
 
 const CONNECTOR_DISPLAY_NAMES: Record<string, string> = {
@@ -55,7 +55,10 @@ const CONNECTOR_DISPLAY_NAMES: Record<string, string> = {
   salesforce: "Salesforce",
 };
 
-const CONNECTOR_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+const CONNECTOR_ICONS: Record<
+  string,
+  React.ComponentType<React.SVGProps<SVGSVGElement>>
+> = {
   github: GithubIcon,
 };
 
@@ -124,12 +127,24 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
 };
 
 function getStatusConfig(status: string): StatusConfig {
-  return STATUS_CONFIG[status] ?? {
-    label: status,
-    icon: Clock,
-    className: "text-muted-foreground",
-  };
+  return (
+    STATUS_CONFIG[status] ?? {
+      label: status,
+      icon: Clock,
+      className: "text-muted-foreground",
+    }
+  );
 }
+
+// A source can be re-synced once it is live (or has stalled) — but not while it
+// is still being set up, already syncing, or waiting to be reconnected.
+const RESYNCABLE_STATUSES = new Set([
+  "connected",
+  "active",
+  "paused",
+  "error",
+  "has_errors",
+]);
 
 function formatCount(n: number): string {
   if (n >= 1_000) return `${(n / 1000).toFixed(1)}K`;
@@ -153,11 +168,18 @@ interface ConnectionRowProps {
   resyncing: Set<string>;
 }
 
-function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing }: ConnectionRowProps) {
+function ConnectionRow({
+  connection,
+  onResyncStart,
+  onEdit,
+  onDelete,
+  resyncing,
+}: ConnectionRowProps) {
   const statusConfig = getStatusConfig(connection.status);
   const StatusIcon = statusConfig.icon;
   const ConnectorIcon = CONNECTOR_ICONS[connection.connectorId] ?? Database;
-  const displayName = CONNECTOR_DISPLAY_NAMES[connection.connectorId] ?? connection.connectorId;
+  const displayName =
+    CONNECTOR_DISPLAY_NAMES[connection.connectorId] ?? connection.connectorId;
   const formattedDate = formatDate(connection.lastSyncAt);
   const isSyncing = resyncing.has(connection.publicId);
 
@@ -168,12 +190,19 @@ function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing 
     >
       <div className="flex items-start gap-3 min-w-0">
         <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/60">
-          <ConnectorIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <ConnectorIcon
+            className="h-4 w-4 text-muted-foreground"
+            aria-hidden="true"
+          />
         </div>
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{connection.displayName}</span>
-            <span className="text-[11px] text-muted-foreground">via {displayName}</span>
+            <span className="text-sm font-semibold text-foreground">
+              {connection.displayName}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              via {displayName}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <span
@@ -182,12 +211,18 @@ function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing 
             >
               {isSyncing ? (
                 <>
-                  <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  <RefreshCw
+                    className="h-3 w-3 animate-spin"
+                    aria-hidden="true"
+                  />
                   Syncing…
                 </>
               ) : (
                 <>
-                  <StatusIcon className={`h-3 w-3 ${statusConfig.iconClassName ?? ""}`} aria-hidden="true" />
+                  <StatusIcon
+                    className={`h-3 w-3 ${statusConfig.iconClassName ?? ""}`}
+                    aria-hidden="true"
+                  />
                   {statusConfig.label}
                 </>
               )}
@@ -198,13 +233,15 @@ function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing 
               </span>
             )}
             {formattedDate && (
-              <span className="text-muted-foreground">Last synced {formattedDate}</span>
+              <span className="text-muted-foreground">
+                Last synced {formattedDate}
+              </span>
             )}
           </div>
         </div>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
-        {(connection.status === "connected" || connection.status === "active" || connection.status === "paused" || connection.status === "error" || connection.status === "has_errors") && (
+        {RESYNCABLE_STATUSES.has(connection.status) && (
           <button
             type="button"
             className="flex items-center gap-1 rounded-md border border-border/60 bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
@@ -212,7 +249,10 @@ function ConnectionRow({ connection, onResyncStart, onEdit, onDelete, resyncing 
             onClick={() => onResyncStart(connection.publicId)}
             data-testid={`resync-btn-${connection.publicId}`}
           >
-            <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} aria-hidden="true" />
+            <RefreshCw
+              className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
             Re-sync
           </button>
         )}
@@ -276,7 +316,9 @@ export function KnowledgeConnectionsClient({
   // the sessionStorage handoff the wizard stored before leaving for GitHub so the
   // wizard resumes at Step 2 instead of restarting at Step 1 (which orphaned the
   // pending_setup row). Resolved post-mount to avoid a hydration mismatch.
-  const [resumeConnectionId, setResumeConnectionId] = React.useState<string | null>(null);
+  const [resumeConnectionId, setResumeConnectionId] = React.useState<
+    string | null
+  >(null);
 
   React.useEffect(() => {
     if (setupConnector !== "github") return;
@@ -288,7 +330,10 @@ export function KnowledgeConnectionsClient({
     }
     const pending = readPendingGithubConnection();
     if (!pending) return; // No handoff → genuine fresh start; leave wizard at Step 1.
-    if (pending.orgSlug !== orgSlug || pending.workspaceSlug !== workspaceSlug) {
+    if (
+      pending.orgSlug !== orgSlug ||
+      pending.workspaceSlug !== workspaceSlug
+    ) {
       // GitHub's stateless leg can resolve to a different workspace than the one
       // the connect flow started in. Self-correct to the originating workspace so
       // the resume targets the connection that actually lives there.
@@ -303,14 +348,20 @@ export function KnowledgeConnectionsClient({
   // Connection id that seeds the wizard's initial step: the URL value (OAuth leg)
   // takes precedence, else the recovered handoff (Setup-URL leg).
   const initialGithubConnectionId =
-    setupConnector === "github" ? (setupConnectionId ?? resumeConnectionId ?? undefined) : undefined;
+    setupConnector === "github"
+      ? (setupConnectionId ?? resumeConnectionId ?? undefined)
+      : undefined;
 
   const [resyncing, setResyncing] = React.useState<Set<string>>(new Set());
   const [editTarget, setEditTarget] = React.useState<Connection | null>(null);
-  const [deleteTarget, setDeleteTarget] = React.useState<Connection | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<Connection | null>(
+    null,
+  );
 
   const activeConnections = connections.filter((c) => c.status !== "deleted");
-  const syncedCount = activeConnections.filter((c) => c.status === "connected" || c.status === "active").length;
+  const syncedCount = activeConnections.filter(
+    (c) => c.status === "connected" || c.status === "active",
+  ).length;
   const totalRecords = activeConnections.reduce((s, c) => s + c.entityCount, 0);
 
   // Stable derived targets — memoized on the selected connection's identity so
@@ -385,7 +436,9 @@ export function KnowledgeConnectionsClient({
               </span>
             </div>
             <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
-              <span className="text-xs text-muted-foreground">Total records</span>
+              <span className="text-xs text-muted-foreground">
+                Total records
+              </span>
               <span className="text-xl font-semibold tabular-nums text-foreground">
                 {formatCount(totalRecords)}
               </span>
@@ -442,9 +495,9 @@ export function KnowledgeConnectionsClient({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Connected sources are synced either a set schedule or via inbound webhooks. 
-        Manual sync is available per-source. Information ingested from sources is
-        searchable by all agents in this workspace.
+        Connected sources sync on a set schedule or when a webhook arrives, and
+        you can sync any source by hand. Everything a source brings in can be
+        searched by every agent in this workspace.
       </p>
 
       <GitHubConnectionWizard

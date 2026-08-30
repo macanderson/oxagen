@@ -1,9 +1,18 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
-import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Loader2, ListTree } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ListTree,
+} from "lucide-react";
 import { formatDuration } from "../tool-call-card";
-import TerminalTraceCard, { type TerminalTraceCardProps } from "./terminal-trace-card";
+import TerminalTraceCard, {
+  type TerminalTraceCardProps,
+} from "./terminal-trace-card";
 import CodeDiffCard, { type CodeDiffCardProps } from "./code-diff-card";
 
 /**
@@ -45,21 +54,38 @@ function overallStatus(steps: CodingTraceStep[]): OverallStatus {
 const STATUS_ICON: Record<OverallStatus, ReactElement> = {
   success: <CheckCircle2 className="size-4 text-success" aria-hidden="true" />,
   error: <XCircle className="size-4 text-error" aria-hidden="true" />,
-  running: <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />,
+  running: (
+    <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+  ),
 };
 
 const STEP_STATUS_ICON: Record<
   NonNullable<CodingTraceStep["status"]>,
   ReactElement
 > = {
-  success: <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-hidden="true" />,
-  error: <XCircle className="size-3.5 shrink-0 text-error" aria-hidden="true" />,
-  running: <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />,
+  success: (
+    <CheckCircle2
+      className="size-3.5 shrink-0 text-success"
+      aria-hidden="true"
+    />
+  ),
+  error: (
+    <XCircle className="size-3.5 shrink-0 text-error" aria-hidden="true" />
+  ),
+  running: (
+    <Loader2
+      className="size-3.5 shrink-0 animate-spin text-primary"
+      aria-hidden="true"
+    />
+  ),
 };
 
 function StepRow({ step, index }: { step: CodingTraceStep; index: number }) {
   return (
-    <div className="border-b border-border/60 px-4 py-3 last:border-b-0" data-step-kind={step.kind}>
+    <div
+      className="border-b border-border/60 px-4 py-3 last:border-b-0"
+      data-step-kind={step.kind}
+    >
       <div className="mb-2 flex items-center gap-2">
         {step.status ? STEP_STATUS_ICON[step.status] : null}
         <span className="text-xs font-medium text-foreground">
@@ -72,13 +98,20 @@ function StepRow({ step, index }: { step: CodingTraceStep; index: number }) {
           </span>
         ) : null}
       </div>
-      {step.kind === "terminal" && step.terminal ? <TerminalTraceCard {...step.terminal} /> : null}
-      {step.kind === "diff" && step.diff ? <CodeDiffCard {...step.diff} /> : null}
+      {step.kind === "terminal" && step.terminal ? (
+        <TerminalTraceCard {...step.terminal} />
+      ) : null}
+      {step.kind === "diff" && step.diff ? (
+        <CodeDiffCard {...step.diff} />
+      ) : null}
     </div>
   );
 }
 
-export default function CodingTracePanel({ steps, title }: CodingTracePanelProps): ReactElement {
+export default function CodingTracePanel({
+  steps,
+  title,
+}: CodingTracePanelProps): ReactElement {
   const [open, setOpen] = useState(false);
 
   if (steps.length === 0) {
@@ -92,7 +125,10 @@ export default function CodingTracePanel({ steps, title }: CodingTracePanelProps
     );
   }
 
-  const totalDurationMs = steps.reduce((sum, s) => sum + (s.durationMs ?? 0), 0);
+  const totalDurationMs = steps.reduce(
+    (sum, s) => sum + (s.durationMs ?? 0),
+    0,
+  );
   const status = overallStatus(steps);
 
   return (
@@ -106,7 +142,10 @@ export default function CodingTracePanel({ steps, title }: CodingTracePanelProps
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ListTree className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ListTree
+          className="size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="text-sm font-semibold">{title ?? "Coding run"}</span>
         {STATUS_ICON[status]}
         <span className="text-xs text-muted-foreground">
@@ -116,9 +155,15 @@ export default function CodingTracePanel({ steps, title }: CodingTracePanelProps
           {formatDuration(totalDurationMs)}
         </span>
         {open ? (
-          <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ChevronDown
+            className="ml-auto size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         ) : (
-          <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <ChevronRight
+            className="ml-auto size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
         )}
       </button>
       {open ? (

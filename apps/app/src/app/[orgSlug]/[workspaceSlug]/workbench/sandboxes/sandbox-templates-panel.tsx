@@ -1,4 +1,15 @@
 "use client";
+/**
+ * sandbox-templates-panel.tsx — the sandbox-template section of the Sandboxes
+ * page: templates grouped by environment, plus the create/edit dialog and the
+ * manifest import dialog.
+ *
+ * Every server action it calls is INJECTED as a prop by `page.tsx` rather than
+ * imported here, so this file stays a pure client component and the same panel
+ * can be driven by a mock in tests. `canManage` hides every mutating control;
+ * the actions re-check the workspace role server-side regardless, because a
+ * hidden button is not an authorization gate.
+ */
 
 import { useState, useMemo, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -181,7 +192,10 @@ export function SandboxTemplatesPanel(props: Props) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    // Revoke on the next task, not inline: some browsers only begin reading the
+    // blob after the click handler returns, and revoking synchronously cancels
+    // the download before a single byte is written.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   return (

@@ -11,7 +11,6 @@
  *
  * See docs/web-app-2.0/workspace/overview/spec.md.
  */
-import { notFound } from "next/navigation";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   resolveOrg,
@@ -40,9 +39,9 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
     getSessionOrRedirect(),
     resolveOrg(orgSlug),
   ]);
-  if (!org) notFound();
+  // resolveOrg / resolveWorkspace 404 internally on a miss, so neither result
+  // needs a null check here — they either return a row or never return.
   const ws = await resolveWorkspace(org.id, workspaceSlug);
-  if (!ws) notFound();
   await assertOrgMember(org.id, session.user.id);
 
   const tileProps = {

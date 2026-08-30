@@ -28,7 +28,14 @@
  *     for both the ok and error outcomes.
  */
 import * as React from "react";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { AutomationListOutput } from "@oxagen/oxagen/contracts/automation.list";
 import { workspace } from "@/lib/routes";
@@ -56,9 +63,12 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("../actions", () => ({
-  enableAutomationAction: (...args: unknown[]) => mockEnableAutomationAction(...args),
-  disableAutomationAction: (...args: unknown[]) => mockDisableAutomationAction(...args),
-  triggerAutomationAction: (...args: unknown[]) => mockTriggerAutomationAction(...args),
+  enableAutomationAction: (...args: unknown[]) =>
+    mockEnableAutomationAction(...args),
+  disableAutomationAction: (...args: unknown[]) =>
+    mockDisableAutomationAction(...args),
+  triggerAutomationAction: (...args: unknown[]) =>
+    mockTriggerAutomationAction(...args),
 }));
 
 // Menu → items render as plain elements; MenuItem supports the Base UI
@@ -73,7 +83,9 @@ vi.mock("@/components/ui/menu", () => ({
     children: React.ReactNode;
     render: React.ReactElement;
   }) => React.cloneElement(render, undefined, children),
-  MenuPopup: ({ children }: { children: React.ReactNode }) => <div role="menu">{children}</div>,
+  MenuPopup: ({ children }: { children: React.ReactNode }) => (
+    <div role="menu">{children}</div>
+  ),
   MenuItem: ({
     children,
     onClick,
@@ -95,7 +107,13 @@ vi.mock("@/components/ui/menu", () => ({
       );
     }
     return (
-      <button type="button" role="menuitem" onClick={onClick} disabled={disabled} data-testid={testId}>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onClick}
+        disabled={disabled}
+        data-testid={testId}
+      >
         {children}
       </button>
     );
@@ -107,7 +125,9 @@ vi.mock("@/components/ui/menu", () => ({
 // test.tsx. Query select items by role="button" to disambiguate from row
 // Badges that render the same label text ("Enabled"/"Schedule"/etc) as plain
 // spans.
-const SelectMockCtx = React.createContext<{ onValueChange?: (v: string) => void }>({});
+const SelectMockCtx = React.createContext<{
+  onValueChange?: (v: string) => void;
+}>({});
 vi.mock("@/components/ui/select", () => ({
   Select: ({
     children,
@@ -116,13 +136,28 @@ vi.mock("@/components/ui/select", () => ({
     children: React.ReactNode;
     value?: string;
     onValueChange?: (v: string) => void;
-  }) => <SelectMockCtx.Provider value={{ onValueChange }}>{children}</SelectMockCtx.Provider>,
-  SelectTrigger: ({ children, ...rest }: { children: React.ReactNode } & Record<string, unknown>) => (
+  }) => (
+    <SelectMockCtx.Provider value={{ onValueChange }}>
+      {children}
+    </SelectMockCtx.Provider>
+  ),
+  SelectTrigger: ({
+    children,
+    ...rest
+  }: { children: React.ReactNode } & Record<string, unknown>) => (
     <div {...rest}>{children}</div>
   ),
   SelectValue: () => null,
-  SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+  SelectPopup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  SelectItem: ({
+    value,
+    children,
+  }: {
+    value: string;
+    children: React.ReactNode;
+  }) => {
     const ctx = React.useContext(SelectMockCtx);
     return (
       <button type="button" onClick={() => ctx.onValueChange?.(value)}>
@@ -145,7 +180,11 @@ vi.mock("./enable-confirm-dialog", () => ({
     open ? (
       <div data-testid="enable-dialog-stub">
         <span>enabling {automationName}</span>
-        <button type="button" onClick={() => void onConfirm()} data-testid="confirm-enable-stub">
+        <button
+          type="button"
+          onClick={() => void onConfirm()}
+          data-testid="confirm-enable-stub"
+        >
           confirm
         </button>
       </div>
@@ -160,14 +199,21 @@ vi.mock("./trigger-now-dialog", () => ({
   }: {
     open: boolean;
     automationName: string;
-    onTrigger: (
-      payload: Record<string, unknown> | undefined,
-    ) => Promise<{ ok: boolean; executionId?: string; status?: string; error?: string }>;
+    onTrigger: (payload: Record<string, unknown> | undefined) => Promise<{
+      ok: boolean;
+      executionId?: string;
+      status?: string;
+      error?: string;
+    }>;
   }) =>
     open ? (
       <div data-testid="trigger-now-dialog-stub">
         <span>triggering {automationName}</span>
-        <button type="button" onClick={() => void onTrigger(undefined)} data-testid="fire-trigger-stub">
+        <button
+          type="button"
+          onClick={() => void onTrigger(undefined)}
+          data-testid="fire-trigger-stub"
+        >
           fire
         </button>
       </div>
@@ -186,7 +232,12 @@ vi.mock("./new-automation-button", () => ({
     orgSlug: string;
     workspaceSlug: string;
   }) => (
-    <button type="button" data-testid="new-automation" data-org={orgSlug} data-ws={workspaceSlug}>
+    <button
+      type="button"
+      data-testid="new-automation"
+      data-org={orgSlug}
+      data-ws={workspaceSlug}
+    >
       New automation
     </button>
   ),
@@ -214,8 +265,14 @@ const BASE_PROPS = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockEnableAutomationAction.mockResolvedValue({ ok: true, result: { enabled: true } });
-  mockDisableAutomationAction.mockResolvedValue({ ok: true, result: { enabled: false } });
+  mockEnableAutomationAction.mockResolvedValue({
+    ok: true,
+    result: { enabled: true },
+  });
+  mockDisableAutomationAction.mockResolvedValue({
+    ok: true,
+    result: { enabled: false },
+  });
   mockTriggerAutomationAction.mockResolvedValue({
     ok: true,
     result: { execution_id: "aex_1", status: "running" },
@@ -226,18 +283,24 @@ afterEach(() => cleanup());
 
 describe("AutomationsTable — empty state", () => {
   it("renders the true empty state when there are no automations at all", () => {
-    render(<AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />);
+    render(
+      <AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />,
+    );
     expect(screen.getByText("No automations yet")).toBeTruthy();
     expect(screen.queryByTestId("automations-table")).toBeNull();
   });
 
   it("offers a create action inside the empty state when the user can manage", () => {
-    render(<AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />);
+    render(
+      <AutomationsTable automations={[]} canManage={true} {...BASE_PROPS} />,
+    );
     expect(screen.getByTestId("new-automation")).toBeTruthy();
   });
 
   it("omits the create action from the empty state for read-only members", () => {
-    render(<AutomationsTable automations={[]} canManage={false} {...BASE_PROPS} />);
+    render(
+      <AutomationsTable automations={[]} canManage={false} {...BASE_PROPS} />,
+    );
     expect(screen.getByText("No automations yet")).toBeTruthy();
     expect(screen.queryByTestId("new-automation")).toBeNull();
   });
@@ -247,12 +310,17 @@ describe("AutomationsTable — filters", () => {
   it("filters rows by name via search", () => {
     render(
       <AutomationsTable
-        automations={[row({ id: "a1", name: "Alpha" }), row({ id: "a2", name: "Beta" })]}
+        automations={[
+          row({ id: "a1", name: "Alpha" }),
+          row({ id: "a2", name: "Beta" }),
+        ]}
         canManage={true}
         {...BASE_PROPS}
       />,
     );
-    fireEvent.change(screen.getByTestId("automations-search"), { target: { value: "Beta" } });
+    fireEvent.change(screen.getByTestId("automations-search"), {
+      target: { value: "Beta" },
+    });
     expect(screen.queryByText("Alpha")).toBeNull();
     expect(screen.getByText("Beta")).toBeTruthy();
   });
@@ -291,9 +359,15 @@ describe("AutomationsTable — filters", () => {
 
   it("shows a no-match message (not the true empty state) when filters exclude every row", () => {
     render(
-      <AutomationsTable automations={[row({ id: "a1", name: "Alpha" })]} canManage={true} {...BASE_PROPS} />,
+      <AutomationsTable
+        automations={[row({ id: "a1", name: "Alpha" })]}
+        canManage={true}
+        {...BASE_PROPS}
+      />,
     );
-    fireEvent.change(screen.getByTestId("automations-search"), { target: { value: "nope" } });
+    fireEvent.change(screen.getByTestId("automations-search"), {
+      target: { value: "nope" },
+    });
     expect(screen.getByText("No automations match your filters.")).toBeTruthy();
     expect(screen.queryByText("No automations yet")).toBeNull();
   });
@@ -316,11 +390,18 @@ describe("AutomationsTable — permissions", () => {
 
   it("Edit links to the automation's editor route", () => {
     render(
-      <AutomationsTable automations={[row({ id: "a1" })]} canManage={true} {...BASE_PROPS} />,
+      <AutomationsTable
+        automations={[row({ id: "a1" })]}
+        canManage={true}
+        {...BASE_PROPS}
+      />,
     );
     const editLink = screen.getByRole("link", { name: /Edit/i });
     expect(editLink.getAttribute("href")).toBe(
-      workspace.automations.automation({ orgSlug: "acme", workspaceSlug: "main" }, "a1"),
+      workspace.automations.automation(
+        { orgSlug: "acme", workspaceSlug: "main" },
+        "a1",
+      ),
     );
   });
 });
@@ -335,7 +416,9 @@ describe("AutomationsTable — enable (human gate)", () => {
       />,
     );
     fireEvent.click(screen.getByTestId("enable-a1"));
-    expect(screen.getByTestId("enable-dialog-stub").textContent).toContain("Alpha");
+    expect(screen.getByTestId("enable-dialog-stub").textContent).toContain(
+      "Alpha",
+    );
     expect(mockEnableAutomationAction).not.toHaveBeenCalled();
   });
 
@@ -359,12 +442,17 @@ describe("AutomationsTable — enable (human gate)", () => {
       }),
     );
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
     expect(screen.queryByTestId("enable-dialog-stub")).toBeNull();
   });
 
   it("a failed enable shows an error toast, does not refresh, and closes the dialog", async () => {
-    mockEnableAutomationAction.mockResolvedValue({ ok: false, error: "Only owners can enable." });
+    mockEnableAutomationAction.mockResolvedValue({
+      ok: false,
+      error: "Only owners can enable.",
+    });
     render(
       <AutomationsTable
         automations={[row({ id: "a1", name: "Alpha", status: "disabled" })]}
@@ -378,7 +466,10 @@ describe("AutomationsTable — enable (human gate)", () => {
     });
     await waitFor(() =>
       expect(mockAddToast).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "error", description: "Only owners can enable." }),
+        expect.objectContaining({
+          type: "error",
+          description: "Only owners can enable.",
+        }),
       ),
     );
     expect(mockRefresh).not.toHaveBeenCalled();
@@ -407,11 +498,16 @@ describe("AutomationsTable — disable (direct)", () => {
       }),
     );
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(mockAddToast).toHaveBeenCalledWith(expect.objectContaining({ type: "success" }));
+    expect(mockAddToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "success" }),
+    );
   });
 
   it("a failed disable shows an error toast and does not refresh", async () => {
-    mockDisableAutomationAction.mockResolvedValue({ ok: false, error: "Nope." });
+    mockDisableAutomationAction.mockResolvedValue({
+      ok: false,
+      error: "Nope.",
+    });
     render(
       <AutomationsTable
         automations={[row({ id: "a1", name: "Alpha", status: "active" })]}
@@ -441,7 +537,9 @@ describe("AutomationsTable — trigger now", () => {
       />,
     );
     fireEvent.click(screen.getByTestId("trigger-a1"));
-    expect(screen.getByTestId("trigger-now-dialog-stub").textContent).toContain("Alpha");
+    expect(screen.getByTestId("trigger-now-dialog-stub").textContent).toContain(
+      "Alpha",
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("fire-trigger-stub"));
@@ -458,7 +556,10 @@ describe("AutomationsTable — trigger now", () => {
   });
 
   it("a failed trigger surfaces the capability error without refreshing", async () => {
-    mockTriggerAutomationAction.mockResolvedValue({ ok: false, error: "Rate limited." });
+    mockTriggerAutomationAction.mockResolvedValue({
+      ok: false,
+      error: "Rate limited.",
+    });
     render(
       <AutomationsTable
         automations={[row({ id: "a1", name: "Alpha" })]}

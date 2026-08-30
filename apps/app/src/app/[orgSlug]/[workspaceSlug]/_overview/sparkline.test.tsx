@@ -30,7 +30,9 @@ describe("Sparkline", () => {
   });
 
   it("scales an increasing series across the full height", () => {
-    const { container } = render(<Sparkline values={[0, 5, 10]} height={32} width={120} />);
+    const { container } = render(
+      <Sparkline values={[0, 5, 10]} height={32} width={120} />,
+    );
     const polyline = container.querySelector("polyline");
     const points = (polyline?.getAttribute("points") ?? "").split(" ");
     expect(points).toHaveLength(3);
@@ -41,7 +43,9 @@ describe("Sparkline", () => {
   });
 
   it("uses the provided aria-label", () => {
-    const { getByRole } = render(<Sparkline values={[1, 2, 3]} aria-label="Daily spend trend" />);
+    const { getByRole } = render(
+      <Sparkline values={[1, 2, 3]} aria-label="Daily spend trend" />,
+    );
     expect(getByRole("img", { name: "Daily spend trend" })).toBeInTheDocument();
   });
 });

@@ -126,7 +126,8 @@ export function DeleteSourceDialog({
       // Reflect the new "deleting"/removed status in the server-rendered list.
       router.refresh();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to delete source";
+      const message =
+        e instanceof Error ? e.message : "Failed to delete source";
       setError(message);
       addToast({ title: "Delete failed", description: message, type: "error" });
     } finally {
@@ -144,15 +145,21 @@ export function DeleteSourceDialog({
       <DialogPopup className="max-w-lg" data-testid="delete-source-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden="true" />
+            <AlertTriangle
+              className="h-4 w-4 text-destructive"
+              aria-hidden="true"
+            />
             Delete source
           </DialogTitle>
           <DialogDescription>
             {target ? (
               <>
                 You&apos;re about to delete{" "}
-                <span className="font-medium text-foreground">{target.displayName}</span>. Choose
-                what happens to the knowledge it ingested. This cannot be undone.
+                <span className="font-medium text-foreground">
+                  {target.displayName}
+                </span>
+                . Choose what happens to the knowledge it ingested. This cannot
+                be undone.
               </>
             ) : null}
           </DialogDescription>
@@ -179,8 +186,12 @@ export function DeleteSourceDialog({
               >
                 <Radio value={opt.value} className="mt-0.5 shrink-0" />
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">{opt.label}</span>
-                  <span className="text-xs text-muted-foreground">{opt.description}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {opt.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {opt.description}
+                  </span>
                 </div>
               </label>
             ))}
@@ -203,7 +214,12 @@ export function DeleteSourceDialog({
             disabled={submitting || !target}
             data-testid="confirm-delete-source-btn"
           >
-            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+            {submitting && (
+              <Loader2
+                className="h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
+            )}
             {mode === "full" ? "Delete source & data" : "Delete source"}
           </Button>
         </DialogFooter>

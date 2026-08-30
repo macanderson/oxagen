@@ -1,5 +1,9 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Placeholder for a detail pane: a heading line over three text lines of
+ * decreasing width. Wrap it in `LoadingRegion`; it is `aria-hidden` on its own.
+ */
 export function DetailSkeleton() {
   return (
     <div aria-hidden="true" className="space-y-4">

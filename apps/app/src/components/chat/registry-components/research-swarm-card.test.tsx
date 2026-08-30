@@ -23,7 +23,13 @@ describe("ResearchSwarmCard", () => {
   it("shows a running progress indicator from completed/total tasks", () => {
     render(
       <ResearchSwarmCard
-        output={{ swarmId: "swm_1", dispatchId: "fan_1", status: "running", completedTasks: 3, totalTasks: 15 }}
+        output={{
+          swarmId: "swm_1",
+          dispatchId: "fan_1",
+          status: "running",
+          completedTasks: 3,
+          totalTasks: 15,
+        }}
       />,
     );
     expect(screen.getByText("Running")).toBeTruthy();
@@ -46,7 +52,11 @@ describe("ResearchSwarmCard", () => {
               query: "USS Nautilus crew",
               resultCount: 5,
               hits: [
-                { title: "Crew roster", url: "https://example.com/crew", snippet: "The crew…" },
+                {
+                  title: "Crew roster",
+                  url: "https://example.com/crew",
+                  snippet: "The crew…",
+                },
               ],
             },
             { query: "Nautilus Arctic voyage", resultCount: 3, hits: [] },
@@ -67,7 +77,11 @@ describe("ResearchSwarmCard", () => {
   });
 
   it("renders a failed swarm", () => {
-    render(<ResearchSwarmCard output={{ status: "failed", completedTasks: 0, totalTasks: 4 }} />);
+    render(
+      <ResearchSwarmCard
+        output={{ status: "failed", completedTasks: 0, totalTasks: 4 }}
+      />,
+    );
     expect(screen.getByText("Failed")).toBeTruthy();
   });
 
@@ -76,7 +90,12 @@ describe("ResearchSwarmCard", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(
       <ResearchSwarmCard
-        output={{ swarmId: "swm_x", status: "running", completedTasks: 0, totalTasks: 5 }}
+        output={{
+          swarmId: "swm_x",
+          status: "running",
+          completedTasks: 0,
+          totalTasks: 5,
+        }}
       />,
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -89,7 +108,13 @@ describe("ResearchSwarmCard", () => {
       <ResearchSwarmCard
         orgSlug="acme"
         workspaceSlug="main"
-        output={{ swarmId: "swm_done", status: "complete", completedTasks: 5, totalTasks: 5, results: [] }}
+        output={{
+          swarmId: "swm_done",
+          status: "complete",
+          completedTasks: 5,
+          totalTasks: 5,
+          results: [],
+        }}
       />,
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -107,7 +132,13 @@ describe("ResearchSwarmCard", () => {
           {
             query: "USS Nautilus reactor",
             resultCount: 1,
-            hits: [{ title: "S2W reactor", url: "https://example.com/s2w", snippet: "The reactor…" }],
+            hits: [
+              {
+                title: "S2W reactor",
+                url: "https://example.com/s2w",
+                snippet: "The reactor…",
+              },
+            ],
           },
         ],
       }),
@@ -119,7 +150,12 @@ describe("ResearchSwarmCard", () => {
       <ResearchSwarmCard
         orgSlug="acme"
         workspaceSlug="main"
-        output={{ swarmId: "swm_live", status: "running", completedTasks: 0, totalTasks: 2 }}
+        output={{
+          swarmId: "swm_live",
+          status: "running",
+          completedTasks: 0,
+          totalTasks: 2,
+        }}
       />,
     );
     expect(screen.getByText("Running")).toBeTruthy();
@@ -133,7 +169,9 @@ describe("ResearchSwarmCard", () => {
     // The poll hit the org+workspace-scoped status route with the swarm id.
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/acme/main/research/swarm/status?swarmId=swm_live",
-      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+      }),
     );
   });
 });

@@ -91,7 +91,8 @@ export function formatRelativeRenewal(
     return `${verb} in ${diffDays} days on ${label}`;
   }
 
-  // > 30 days: switch to months (round: 45d → 1 month, 75d → 2 months).
+  // > 30 days: switch to months, rounding days/30 (44d → 1 month, 45d → 2
+  // months, 74d → 2 months, 75d → 3 months). Matches the table in the docblock.
   const months = Math.round(diffDays / 30);
   const monthLabel = months === 1 ? "1 month" : `${months} months`;
   return `${verb} in ${monthLabel} on ${label}`;

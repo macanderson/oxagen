@@ -48,7 +48,10 @@ export function EnableConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (!pending ? onOpenChange(next) : undefined)}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => (!pending ? onOpenChange(next) : undefined)}
+    >
       <DialogPopup>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -56,9 +59,12 @@ export function EnableConfirmDialog({
             Enable this automation?
           </DialogTitle>
           <DialogDescription>
-            <span className="font-medium text-foreground">{automationName}</span> will start
-            firing live on its configured trigger. Enabling is a deliberate human action — it
-            cannot be done by an agent on your behalf. You can disable it again at any time.
+            <span className="font-medium text-foreground">
+              {automationName}
+            </span>{" "}
+            will start firing live on its configured trigger. Enabling is a
+            deliberate human action — it cannot be done by an agent on your
+            behalf. You can disable it again at any time.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -70,7 +76,12 @@ export function EnableConfirmDialog({
           >
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={pending} type="button" data-testid="confirm-enable">
+          <Button
+            onClick={handleConfirm}
+            disabled={pending}
+            type="button"
+            data-testid="confirm-enable"
+          >
             {pending ? "Enabling…" : "Enable automation"}
           </Button>
         </DialogFooter>

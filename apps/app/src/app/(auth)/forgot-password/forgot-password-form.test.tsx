@@ -45,14 +45,20 @@ vi.mock("@/components/ui/button", () => ({
     size?: string;
     className?: string;
   }) => (
-    <button type={(type as "button" | "submit" | "reset") ?? "button"} onClick={onClick} disabled={disabled}>
+    <button
+      type={(type as "button" | "submit" | "reset") ?? "button"}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
     </button>
   ),
 }));
 
 vi.mock("@/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
 }));
 
 vi.mock("@/components/ui/label", () => ({
@@ -88,7 +94,9 @@ describe("ForgotPasswordForm", () => {
     render(<ForgotPasswordForm />);
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send reset link/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send reset link/i }),
+    ).toBeInTheDocument();
   });
 
   it("email input has type=email and is enabled initially", () => {
@@ -117,7 +125,9 @@ describe("ForgotPasswordForm", () => {
 
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
     expect(mockRequestResetAction).toHaveBeenCalledOnce();
-    expect(mockRequestResetAction).toHaveBeenCalledWith({ email: "user@example.com" });
+    expect(mockRequestResetAction).toHaveBeenCalledWith({
+      email: "user@example.com",
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -140,7 +150,9 @@ describe("ForgotPasswordForm", () => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Please enter a valid email address.");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Please enter a valid email address.",
+    );
     // Form should still be visible (not replaced by confirmation)
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   });
@@ -194,12 +206,16 @@ describe("ForgotPasswordForm", () => {
     });
 
     // Click "Send another link"
-    await user.click(screen.getByRole("button", { name: /send another link/i }));
+    await user.click(
+      screen.getByRole("button", { name: /send another link/i }),
+    );
 
     // Form should be restored
     await waitFor(() => {
       expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /send reset link/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send reset link/i }),
+    ).toBeInTheDocument();
   });
 });

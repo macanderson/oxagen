@@ -7,7 +7,11 @@
  * inline step indicator, generalized to WIZARD_STEPS.
  */
 
-import { WIZARD_STEPS, WIZARD_STEP_LABELS, type WizardStepId } from "./wizard-types";
+import {
+  WIZARD_STEPS,
+  WIZARD_STEP_LABELS,
+  type WizardStepId,
+} from "./wizard-types";
 
 export interface WizardProgressProps {
   currentStep: WizardStepId;
@@ -38,7 +42,9 @@ export function WizardProgress({ currentStep }: WizardProgressProps) {
         <span>
           Step {currentIndex + 1} of {WIZARD_STEPS.length}
         </span>
-        <span className="font-medium text-foreground">{WIZARD_STEP_LABELS[currentStep]}</span>
+        <span className="font-medium text-foreground">
+          {WIZARD_STEP_LABELS[currentStep]}
+        </span>
       </div>
     </div>
   );

@@ -7,9 +7,9 @@
  * type rather than blindly stringified. Pure + node-testable.
  */
 
-// Re-exported so the module's existing consumers (copyable-id, edge-hover-popover,
-// graph-canvas-view) don't need an import-path change — the shared @/lib/utils
-// implementation is byte-identical to this module's former local definition.
+// String truncation lives in @/lib/utils (one implementation, app-wide);
+// re-exported here so this module stays the single formatting import for the
+// graph explorer's consumers.
 export { truncate, truncateMiddle } from "@/lib/utils";
 
 export type PropertyKind =
@@ -22,7 +22,8 @@ export type PropertyKind =
   | "array"
   | "object";
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+const ISO_DATE_RE =
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 const URL_RE = /^https?:\/\/[^\s]+$/i;
 
 /** Detect the rendering kind for an arbitrary property value. */
@@ -105,7 +106,9 @@ export function humanizeKey(key: string): string {
     .map((word, index) => {
       if (word.length > 1 && word === word.toUpperCase()) return word; // acronym
       const lower = word.toLowerCase();
-      return index === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
+      return index === 0
+        ? lower.charAt(0).toUpperCase() + lower.slice(1)
+        : lower;
     })
     .join(" ");
 }

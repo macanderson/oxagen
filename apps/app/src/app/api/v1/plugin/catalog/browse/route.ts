@@ -32,7 +32,9 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") ?? undefined;
   const rawAuthKind = searchParams.get("authKind");
   const authKind =
-    rawAuthKind === "oauth" || rawAuthKind === "secret" || rawAuthKind === "none"
+    rawAuthKind === "oauth" ||
+    rawAuthKind === "secret" ||
+    rawAuthKind === "none"
       ? rawAuthKind
       : undefined;
   const rawPluginType = searchParams.get("pluginType");
@@ -46,12 +48,18 @@ export async function GET(request: NextRequest) {
       : undefined;
   const rawInstalled = searchParams.get("installed");
   const installed =
-    rawInstalled === "true" ? true : rawInstalled === "false" ? false : undefined;
+    rawInstalled === "true"
+      ? true
+      : rawInstalled === "false"
+        ? false
+        : undefined;
   // Safe parse: parseInt can return NaN for non-numeric input; NaN flows into
   // SQL LIMIT/OFFSET as an invalid value. Clamp to sane bounds after guarding
   // against NaN. Defaults match the JSDoc above (limit 30, offset 0; max 100).
   const rawLimit = Number.parseInt(searchParams.get("limit") ?? "", 10);
-  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 30;
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(rawLimit, 1), 100)
+    : 30;
   const rawOffset = Number.parseInt(searchParams.get("offset") ?? "", 10);
   const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
   // The client sends only workspaceId; orgId is resolved server-side from it

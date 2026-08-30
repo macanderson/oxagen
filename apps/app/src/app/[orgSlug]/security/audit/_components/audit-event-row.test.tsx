@@ -13,7 +13,14 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
 import { AuditEventRow } from "./audit-event-row";
 import type { AuditEventRowData } from "./audit-event-row";
 
@@ -83,7 +90,9 @@ describe("AuditEventRow", () => {
   });
 
   it("expanded state shows IP address in the detail section", async () => {
-    const { getByRole, getAllByText } = render(<AuditEventRow row={BASE_ROW} />);
+    const { getByRole, getAllByText } = render(
+      <AuditEventRow row={BASE_ROW} />,
+    );
     await act(async () => {
       fireEvent.click(getByRole("button"));
     });
@@ -112,7 +121,9 @@ describe("AuditEventRow", () => {
       requestId: null,
       capability: null,
     };
-    const { getByRole, getAllByText } = render(<AuditEventRow row={rowWithNulls} />);
+    const { getByRole, getAllByText } = render(
+      <AuditEventRow row={rowWithNulls} />,
+    );
     await act(async () => {
       fireEvent.click(getByRole("button"));
     });
@@ -125,8 +136,12 @@ describe("AuditEventRow", () => {
   it("second click collapses the row back (aria-expanded=false)", async () => {
     const { getByRole } = render(<AuditEventRow row={BASE_ROW} />);
     const btn = getByRole("button");
-    await act(async () => { fireEvent.click(btn); });
-    await act(async () => { fireEvent.click(btn); });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
     expect(btn.getAttribute("aria-expanded")).toBe("false");
   });
 

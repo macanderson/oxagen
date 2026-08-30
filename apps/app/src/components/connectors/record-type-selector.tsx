@@ -40,7 +40,10 @@ export function RecordTypeSelector() {
       return;
     }
     if (selected.includes(id)) {
-      setFieldValue(RECORD_TYPE_KEY, selected.filter((s) => s !== id));
+      setFieldValue(
+        RECORD_TYPE_KEY,
+        selected.filter((s) => s !== id),
+      );
     } else {
       setFieldValue(RECORD_TYPE_KEY, [...selected, id]);
     }
@@ -51,26 +54,36 @@ export function RecordTypeSelector() {
     if (allSelected) {
       setFieldValue(RECORD_TYPE_KEY, []);
     } else {
-      setFieldValue(RECORD_TYPE_KEY, recordTypes.items.map((rt) => rt.id));
+      setFieldValue(
+        RECORD_TYPE_KEY,
+        recordTypes.items.map((rt) => rt.id),
+      );
     }
   };
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">Record types to sync</p>
-        {recordTypes.selectionMode === "multi" && recordTypes.items.length > 2 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="text-xs text-primary hover:underline"
-          >
-            {allSelected ? "Deselect all" : "Select all"}
-          </button>
-        )}
+        <p className="text-sm font-medium text-foreground">
+          Record types to sync
+        </p>
+        {recordTypes.selectionMode === "multi" &&
+          recordTypes.items.length > 2 && (
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="text-xs text-primary hover:underline"
+            >
+              {allSelected ? "Deselect all" : "Select all"}
+            </button>
+          )}
       </div>
 
-      <div className="flex flex-col gap-1.5" role="group" aria-label="Record types">
+      <div
+        className="flex flex-col gap-1.5"
+        role="group"
+        aria-label="Record types"
+      >
         {recordTypes.items.map((rt) => {
           const checked = selected.includes(rt.id);
           return (
@@ -94,13 +107,20 @@ export function RecordTypeSelector() {
                 {checked ? (
                   <CheckSquare className="h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <Square className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Square
+                    className="h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 )}
               </button>
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-sm font-medium text-foreground">{rt.displayName}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {rt.displayName}
+                </span>
                 {rt.description && (
-                  <span className="text-xs text-muted-foreground leading-relaxed">{rt.description}</span>
+                  <span className="text-xs text-muted-foreground leading-relaxed">
+                    {rt.description}
+                  </span>
                 )}
               </div>
             </label>

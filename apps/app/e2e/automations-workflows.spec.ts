@@ -87,11 +87,16 @@ test("launch dialog: Workflow tab client-validates an empty goal inline, Swarm t
   // Submitting an empty goal shows the capability-bound inline error — never
   // a generic toast — and never calls run_workflow.
   await page.getByTestId("launch-submit").click();
-  await expect(page.getByTestId("launch-error")).toHaveText("Goal is required.");
+  await expect(page.getByTestId("launch-error")).toHaveText(
+    "Goal is required.",
+  );
 
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   await page.screenshot({
-    path: path.join(SCREENSHOT_DIR, "automations-workflows-launch-validation.png"),
+    path: path.join(
+      SCREENSHOT_DIR,
+      "automations-workflows-launch-validation.png",
+    ),
     fullPage: true,
   });
 

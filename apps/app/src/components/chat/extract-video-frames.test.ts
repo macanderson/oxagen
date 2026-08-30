@@ -65,7 +65,9 @@ describe("extractVideoFrames", () => {
       return {} as HTMLElement;
     });
     const { extractVideoFrames } = await import("./extract-video-frames");
-    const frames = await extractVideoFrames(videoFile(), { metadataTimeoutMs: 10 });
+    const frames = await extractVideoFrames(videoFile(), {
+      metadataTimeoutMs: 10,
+    });
     expect(frames).toEqual([]);
   });
 
@@ -77,7 +79,9 @@ describe("extractVideoFrames", () => {
       return {} as HTMLElement;
     });
     const { extractVideoFrames } = await import("./extract-video-frames");
-    const promise = extractVideoFrames(videoFile(), { metadataTimeoutMs: 1000 });
+    const promise = extractVideoFrames(videoFile(), {
+      metadataTimeoutMs: 1000,
+    });
     fakeVideo.dispatchEvent(new Event("error"));
     expect(await promise).toEqual([]);
   });
@@ -186,7 +190,10 @@ describe("extractVideoFrames", () => {
     });
 
     const { extractVideoFrames } = await import("./extract-video-frames");
-    const promise = extractVideoFrames(videoFile(), { maxFrames: 2, seekTimeoutMs: 10 });
+    const promise = extractVideoFrames(videoFile(), {
+      maxFrames: 2,
+      seekTimeoutMs: 10,
+    });
 
     fakeVideo.duration = 4;
     fakeVideo.dispatchEvent(new Event("loadedmetadata"));

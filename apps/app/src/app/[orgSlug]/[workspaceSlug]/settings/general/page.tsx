@@ -2,17 +2,19 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSession } from "@/lib/session";
 import { WorkspaceGeneralForm } from "./workspace-general-form";
 import { WorkspaceMembersPanel } from "./workspace-members-panel";
-import { GeneralSettingsTabs, type GeneralSettingsTab } from "./general-settings-tabs";
+import {
+  GeneralSettingsTabs,
+  type GeneralSettingsTab,
+} from "./general-settings-tabs";
 
 /**
- * Workspace Settings → General (web-app-2.0 Phase 2 consolidation).
+ * Workspace Settings → General.
  *
  * Tabbed shell with two in-page sub-tabs: "General" (the workspace identity
  * form) and "Members" (the read-only workspace roster), controlled by the
- * `?tab=general|members` search param — see general-settings-tabs.tsx and
- * docs/web-app-2.0/workspace/settings/general/spec.md. Both panels' data is
- * fetched up front (in parallel) so switching tabs is an instant client-side
- * toggle with no re-fetch/flash.
+ * `?tab=general|members` search param — see general-settings-tabs.tsx. Both
+ * panels' data is fetched up front (in parallel) so switching tabs is an
+ * instant client-side toggle with no re-fetch/flash.
  */
 export default async function SettingsGeneralPage({
   params,
@@ -23,7 +25,8 @@ export default async function SettingsGeneralPage({
 }) {
   const { orgSlug, workspaceSlug } = await params;
   const sp = await searchParams;
-  const initialTab: GeneralSettingsTab = sp.tab === "members" ? "members" : "general";
+  const initialTab: GeneralSettingsTab =
+    sp.tab === "members" ? "members" : "general";
 
   const org = await resolveOrg(orgSlug);
   const [ws, session] = await Promise.all([

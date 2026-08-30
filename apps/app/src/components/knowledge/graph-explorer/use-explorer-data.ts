@@ -95,8 +95,11 @@ export function useExplorerData(tenant: TenantSlugs): ExplorerGraphState {
       try {
         const payload = await expandNode(tenant, nodeId);
         if (payload.found) addSubgraph(payload.nodes, payload.edges);
-      } catch {
-        // Non-fatal: a failed expand leaves the current view intact.
+      } catch (err) {
+        // Non-fatal: a failed expand leaves the current view intact. Logged so
+        // a node that simply refuses to expand is diagnosable rather than a
+        // silent no-op on double-click.
+        console.error("graph explorer: expand failed:", nodeId, err);
       } finally {
         setExpandingId(null);
       }

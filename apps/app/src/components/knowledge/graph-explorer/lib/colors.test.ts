@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { colorForLabel, colorForEdge, INFERRED_EDGE_COLOR, CONFIRMED_EDGE_COLOR } from "./colors";
+import {
+  colorForLabel,
+  colorForEdge,
+  INFERRED_EDGE_COLOR,
+  CONFIRMED_EDGE_COLOR,
+} from "./colors";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -17,7 +22,16 @@ describe("colorForLabel", () => {
   });
 
   it("maps distinct labels across more than one palette hue", () => {
-    const labels = ["Issue", "Topic", "Person", "Document", "Project", "Commit", "Repo", "Org"];
+    const labels = [
+      "Issue",
+      "Topic",
+      "Person",
+      "Document",
+      "Project",
+      "Commit",
+      "Repo",
+      "Org",
+    ];
     const colors = new Set(labels.map(colorForLabel));
     expect(colors.size).toBeGreaterThan(1);
   });

@@ -6,6 +6,7 @@
  * dropdown menu:
  *   Profile  → /account/profile
  *   Settings → /account
+ *   Privacy  → /account/privacy
  *   Sign out → better-auth client signOut + redirect to /login
  *
  * The menu also exposes theme switching (Light / Dark / System) via the shared
@@ -16,7 +17,16 @@
 import * as React from "react";
 import { EntityAvatar } from "@/components/avatar/entity-avatar";
 import { useRouter } from "next/navigation";
-import { User, LogOut, Settings, Shield, ChevronsUpDown, Monitor, Moon, Sun } from "lucide-react";
+import {
+  User,
+  LogOut,
+  Settings,
+  Shield,
+  ChevronsUpDown,
+  Monitor,
+  Moon,
+  Sun,
+} from "lucide-react";
 import { signOut } from "@oxagen/auth/client";
 import { useTheme } from "@oxagen/ui";
 import {
@@ -58,7 +68,11 @@ const THEME_OPTIONS = [
   { value: "system", label: "System", icon: Monitor },
 ] as const;
 
-export function UserSwitcher({ user, variant = "full", className }: UserSwitcherProps) {
+export function UserSwitcher({
+  user,
+  variant = "full",
+  className,
+}: UserSwitcherProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -83,7 +97,12 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
   // all three value kinds: photo URL, designed avatar:v1: spec, and the
   // initials fallback.
   const avatar = (
-    <EntityAvatar value={user.image} name={displayName} shape="circle" size="md" />
+    <EntityAvatar
+      value={user.image}
+      name={displayName}
+      shape="circle"
+      size="md"
+    />
   );
 
   return (
@@ -115,17 +134,28 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
           <>
             <span className="grid min-w-0 flex-1 leading-tight">
               <span className="truncate font-medium">{displayName}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </span>
             </span>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronsUpDown
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           </>
         )}
       </MenuTrigger>
 
-      <MenuPopup align="end" side={variant === "avatar" ? "bottom" : "top"} className="w-56">
+      <MenuPopup
+        align="end"
+        side={variant === "avatar" ? "bottom" : "top"}
+        className="w-56"
+      >
         <MenuGroupLabel className="font-normal">
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium leading-tight">{displayName}</span>
+            <span className="text-sm font-medium leading-tight">
+              {displayName}
+            </span>
             <span className="text-xs font-normal text-muted-foreground leading-tight">
               {user.email}
             </span>
@@ -151,7 +181,9 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
 
         <MenuSeparator />
 
-        <MenuGroupLabel className="text-xs font-normal text-muted-foreground">Theme</MenuGroupLabel>
+        <MenuGroupLabel className="text-xs font-normal text-muted-foreground">
+          Theme
+        </MenuGroupLabel>
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
           <MenuItem
             key={value}
@@ -160,7 +192,12 @@ export function UserSwitcher({ user, variant = "full", className }: UserSwitcher
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
             <span className="flex-1">{label}</span>
-            {theme === value && <span className="size-1.5 rounded-full bg-foreground" aria-hidden="true" />}
+            {theme === value && (
+              <span
+                className="size-1.5 rounded-full bg-foreground"
+                aria-hidden="true"
+              />
+            )}
           </MenuItem>
         ))}
 

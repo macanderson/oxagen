@@ -51,7 +51,9 @@ export function TenantProvider({
       value.workspaceName,
     ],
   );
-  return <TenantContext.Provider value={memo}>{children}</TenantContext.Provider>;
+  return (
+    <TenantContext.Provider value={memo}>{children}</TenantContext.Provider>
+  );
 }
 
 /** The active org+workspace. Throws if used outside a workspace route. */

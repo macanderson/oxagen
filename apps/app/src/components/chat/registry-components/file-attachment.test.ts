@@ -52,24 +52,30 @@ describe("formatBytes", () => {
 type KindCase = { kind: string; expectedLabel: string };
 
 const KIND_CASES: KindCase[] = [
-  { kind: "document",     expectedLabel: "Document"     },
-  { kind: "spreadsheet",  expectedLabel: "Spreadsheet"  },
+  { kind: "document", expectedLabel: "Document" },
+  { kind: "spreadsheet", expectedLabel: "Spreadsheet" },
   { kind: "presentation", expectedLabel: "Presentation" },
-  { kind: "pdf",          expectedLabel: "PDF"          },
-  { kind: "archive",      expectedLabel: "Archive"      },
-  { kind: "unknown",      expectedLabel: "File"         },
-  { kind: "",             expectedLabel: "File"         },
+  { kind: "pdf", expectedLabel: "PDF" },
+  { kind: "archive", expectedLabel: "Archive" },
+  { kind: "unknown", expectedLabel: "File" },
+  { kind: "", expectedLabel: "File" },
 ];
 
 // Inline replica of the kindMeta label logic (no icon dependency).
 function kindLabel(kind: string): string {
   switch (kind) {
-    case "document":     return "Document";
-    case "spreadsheet":  return "Spreadsheet";
-    case "presentation": return "Presentation";
-    case "pdf":          return "PDF";
-    case "archive":      return "Archive";
-    default:             return "File";
+    case "document":
+      return "Document";
+    case "spreadsheet":
+      return "Spreadsheet";
+    case "presentation":
+      return "Presentation";
+    case "pdf":
+      return "PDF";
+    case "archive":
+      return "Archive";
+    default:
+      return "File";
   }
 }
 
@@ -81,7 +87,13 @@ describe("file-attachment — kind → label mapping", () => {
   }
 
   it("exactly 5 named kinds (document/spreadsheet/presentation/pdf/archive)", () => {
-    const namedKinds = ["document", "spreadsheet", "presentation", "pdf", "archive"];
+    const namedKinds = [
+      "document",
+      "spreadsheet",
+      "presentation",
+      "pdf",
+      "archive",
+    ];
     expect(namedKinds).toHaveLength(5);
     for (const k of namedKinds) {
       expect(kindLabel(k)).not.toBe("File");
@@ -101,7 +113,11 @@ describe("file-attachment — kind → label mapping", () => {
 
 vi.mock("react", () => ({
   default: {},
-  lazy: (loader: unknown) => ({ $$typeof: Symbol("react.lazy"), _payload: loader, _init: () => null }),
+  lazy: (loader: unknown) => ({
+    $$typeof: Symbol("react.lazy"),
+    _payload: loader,
+    _init: () => null,
+  }),
 }));
 
 import { CHAT_COMPONENTS } from "../chat-component-registry";

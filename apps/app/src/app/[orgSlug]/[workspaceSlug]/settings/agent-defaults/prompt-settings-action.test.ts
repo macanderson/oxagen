@@ -21,14 +21,20 @@ const {
   mockRevalidatePath,
   dbState,
 } = vi.hoisted(() => {
-  const dbState: { wsRoleRows: Array<{ role: string }> } = { wsRoleRows: [{ role: "owner" }] };
+  const dbState: { wsRoleRows: Array<{ role: string }> } = {
+    wsRoleRows: [{ role: "owner" }],
+  };
   const mockLimit = vi.fn(() => Promise.resolve(dbState.wsRoleRows));
   const mockWhere = vi.fn(() => ({ limit: mockLimit }));
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
   const mockTx = { select: mockSelect };
-  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) => fn(mockTx));
-  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) => fn());
+  const mockWithTenantDb = vi.fn((fn: (tx: typeof mockTx) => unknown) =>
+    fn(mockTx),
+  );
+  const mockRunInTenantScope = vi.fn((_scope: unknown, fn: () => unknown) =>
+    fn(),
+  );
   return {
     mockGetSession: vi.fn(),
     mockResolveOrg: vi.fn(),
@@ -55,8 +61,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: mockWithTenantDb,
-
+    withTenantDb: mockWithTenantDb,
   };
 });
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
@@ -64,8 +69,13 @@ vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
     settings: {
-      agentDefaults: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
+      agentDefaults: ({
+        orgSlug,
+        workspaceSlug,
+      }: {
+        orgSlug: string;
+        workspaceSlug: string;
+      }) => `/${orgSlug}/${workspaceSlug}/settings/agent-defaults`,
     },
   },
 }));
@@ -110,11 +120,21 @@ describe("updatePromptSettingsAction", () => {
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
       "update_prompt_settings",
-      { additionalInstructions: "Be concise.", overrides: null, autoImprovePrompts: true },
-      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1", userId: "user-1" }),
+      {
+        additionalInstructions: "Be concise.",
+        overrides: null,
+        autoImprovePrompts: true,
+      },
+      expect.objectContaining({
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        userId: "user-1",
+      }),
       expect.objectContaining({ surface: expect.any(String) }),
     );
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/agent-defaults");
+    expect(mockRevalidatePath).toHaveBeenCalledWith(
+      "/acme/main/settings/agent-defaults",
+    );
   });
 
   it("returns ok:false when the capability throws", async () => {
@@ -125,7 +145,9 @@ describe("updatePromptSettingsAction", () => {
   });
 
   it("flags tierDenied when overrides are rejected for a non-enterprise plan", async () => {
-    mockInvoke.mockRejectedValue(new Error("tier 'build' is below required 'enterprise'"));
+    mockInvoke.mockRejectedValue(
+      new Error("tier 'build' is below required 'enterprise'"),
+    );
     const res = await updatePromptSettingsAction({
       ...BASE,
       overrides: { "svg.generate": "flat brand style" },

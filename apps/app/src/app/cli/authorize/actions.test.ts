@@ -42,9 +42,7 @@ const {
       throw new Error(`REDIRECT:${url}`);
     }),
     mockWithSystemDb: vi.fn(),
-    mockRunInTenantScope: vi.fn(
-      (_scope: unknown, fn: () => unknown) => fn(),
-    ),
+    mockRunInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
     mockGenerateCliAuthCode: vi.fn().mockReturnValue("test-code-abc"),
     mockCreateCliAuthCode: vi.fn().mockResolvedValue(undefined),
     // Default: validate as true; individual tests override.
@@ -89,7 +87,9 @@ vi.mock("@oxagen/database", () => ({
 }));
 
 vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((_col: unknown, _val: unknown) => `eq(${String(_col)},${String(_val)})`),
+  eq: vi.fn(
+    (_col: unknown, _val: unknown) => `eq(${String(_col)},${String(_val)})`,
+  ),
   and: vi.fn((...args: unknown[]) => `and(${args.join(",")})`),
 }));
 
@@ -234,9 +234,9 @@ describe("approveCliAuth", () => {
   });
 
   it("throws on missing state", async () => {
-    await expect(
-      approveCliAuth(makeFormData({ state: "" })),
-    ).rejects.toThrow("Missing state");
+    await expect(approveCliAuth(makeFormData({ state: "" }))).rejects.toThrow(
+      "Missing state",
+    );
     expect(mockCreateCliAuthCode).not.toHaveBeenCalled();
   });
 

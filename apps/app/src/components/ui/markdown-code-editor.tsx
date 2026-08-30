@@ -75,9 +75,7 @@ export function MarkdownCodeEditor({
       // the hard limit enforced at the source instead of truncating after the
       // fact (which would fight the user's cursor).
       base.push(
-        EditorState.changeFilter.of((tr) =>
-          tr.newDoc.length > maxLength ? false : true,
-        ),
+        EditorState.changeFilter.of((tr) => tr.newDoc.length <= maxLength),
       );
     }
     return base;

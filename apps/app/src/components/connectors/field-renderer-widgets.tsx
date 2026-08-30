@@ -23,7 +23,15 @@ import type {
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
 
-export function TagInput({ id, value, onChange, onBlur, placeholder, disabled, itemPattern }: TagInputProps) {
+export function TagInput({
+  id,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  disabled,
+  itemPattern,
+}: TagInputProps) {
   const [inputVal, setInputVal] = React.useState("");
   const [tagError, setTagError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -106,7 +114,9 @@ export function TagInput({ id, value, onChange, onBlur, placeholder, disabled, i
         aria-label="Add tag"
       />
       {tagError && (
-        <p role="alert" className="w-full text-xs text-destructive mt-0.5">{tagError}</p>
+        <p role="alert" className="w-full text-xs text-destructive mt-0.5">
+          {tagError}
+        </p>
       )}
     </div>
   );
@@ -114,9 +124,18 @@ export function TagInput({ id, value, onChange, onBlur, placeholder, disabled, i
 
 // ── MultiSelectWidget ─────────────────────────────────────────────────────────
 
-export function MultiSelectWidget({ id, value, onChange, onBlur, options, disabled }: MultiSelectWidgetProps) {
+export function MultiSelectWidget({
+  id,
+  value,
+  onChange,
+  onBlur,
+  options,
+  disabled,
+}: MultiSelectWidgetProps) {
   const toggle = (opt: string) => {
-    onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
+    onChange(
+      value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt],
+    );
   };
 
   return (
@@ -179,7 +198,8 @@ export function JsonCodeField({
   ariaDescribedBy,
 }: JsonCodeFieldProps) {
   const serialize = React.useCallback(
-    (v: unknown) => (v === undefined || v === null ? "" : JSON.stringify(v, null, 2)),
+    (v: unknown) =>
+      v === undefined || v === null ? "" : JSON.stringify(v, null, 2),
     [],
   );
 

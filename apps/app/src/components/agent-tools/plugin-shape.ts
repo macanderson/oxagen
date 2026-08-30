@@ -1,13 +1,13 @@
 /**
- * plugin-shape.ts — pure shaping logic for the Workspace → Settings → Plugins tab.
+ * plugin-shape.ts — pure shaping logic for Workbench → Tools → Capabilities.
  *
  * Extracted from page.tsx so the install-visibility rules can be unit-tested
  * without rendering a server component or touching the DB.
  *
- * Post-workspace-scoping (2026-06-17): plugins live in `plugin.installed_plugins`
- * with `workspace_id` required. There is no separate org-listings table or
- * per-workspace enable/disable join — the row IS the workspace install. The
- * `enabled` column on the row is the single source of truth for on/off state.
+ * A plugin row in `plugin.installed_plugins` always carries a `workspace_id`,
+ * so the row itself IS the workspace install — there is no separate listing
+ * table and no per-workspace enable/disable join. The row's `enabled` column is
+ * the single source of truth for on/off state.
  */
 import type { InstalledPlugin } from "./workspace-plugins-panel";
 
@@ -29,7 +29,9 @@ export interface InstalledPluginRow {
  *
  * @param rows - Non-deleted `plugin.installed_plugins` rows for the workspace.
  */
-export function shapeInstalledPlugins(rows: InstalledPluginRow[]): InstalledPlugin[] {
+export function shapeInstalledPlugins(
+  rows: InstalledPluginRow[],
+): InstalledPlugin[] {
   return rows.map((row) => ({
     id: row.id,
     name: row.name,

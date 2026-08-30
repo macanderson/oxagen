@@ -16,8 +16,8 @@ export function SuccessState({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-1">
         <p className="text-sm font-semibold text-foreground">Sync started!</p>
         <p className="text-xs text-muted-foreground">
-          Your GitHub repositories are being indexed. This may take a few minutes.
-          You can check the status on the Sources page.
+          Your GitHub repositories are being indexed. This may take a few
+          minutes. You can check the status on the Sources page.
         </p>
       </div>
       <button

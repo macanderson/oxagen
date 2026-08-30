@@ -37,7 +37,9 @@ test.describe("memories bulk import — open and structure", () => {
     }
   });
 
-  test("Bulk Import opens the upload sheet with its controls", async ({ page }) => {
+  test("Bulk Import opens the upload sheet with its controls", async ({
+    page,
+  }) => {
     const { orgSlug } = await signUpFreshUser(page, {
       orgPrefix: "mem-bulk",
     });

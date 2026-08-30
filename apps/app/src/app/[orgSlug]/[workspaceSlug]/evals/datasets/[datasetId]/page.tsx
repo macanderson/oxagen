@@ -1,8 +1,7 @@
 /**
  * page.tsx — Workspace → Evals → Dataset detail (streaming RSC).
  *
- * The full-page replacement for the dataset detail drawer. Renders one
- * dataset's items, a run-setup launcher (provider→model dropdowns for the
+ * Renders one dataset's items, a run-setup launcher (provider→model dropdowns for the
  * target + judge models), a server-driven sortable/paginated/date-filtered
  * table of every run ever executed against this dataset, and score/model
  * charts + gauges.

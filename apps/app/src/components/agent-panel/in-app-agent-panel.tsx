@@ -448,15 +448,21 @@ function AgentChatShell({
       formData.set("orgSlug", orgSlug);
       formData.set("workspaceSlug", workspaceSlug);
       onStatusChange("active");
-      const result = await wandSendAction(formData);
-      onStatusChange("completed");
-      // For an already-established conversation, reload right away so the just-
-      // sent user prompt appears while the assistant streams (the first turn is
-      // covered by handleConversationCreated instead).
-      if (result.ok && conversationPublicIdRef.current) {
-        void reloadMessages();
+      // finally, not a straight-line call: a rejected send (network drop, a
+      // server-action error) would otherwise leave the status pinned on
+      // "active" and the indicator pulsing forever.
+      try {
+        const result = await wandSendAction(formData);
+        // For an already-established conversation, reload right away so the
+        // just-sent user prompt appears while the assistant streams (the first
+        // turn is covered by handleConversationCreated instead).
+        if (result.ok && conversationPublicIdRef.current) {
+          void reloadMessages();
+        }
+        return result;
+      } finally {
+        onStatusChange("completed");
       }
-      return result;
     },
     [orgSlug, workspaceSlug, onStatusChange, reloadMessages],
   );

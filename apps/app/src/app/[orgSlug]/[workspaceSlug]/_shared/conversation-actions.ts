@@ -69,8 +69,9 @@ async function resolveScope(ctx: ConversationActionCtx) {
 }
 
 function revalidateConversationSurfaces(ctx: ConversationActionCtx) {
-  // /ask is the canonical full-page conversation surface; revalidate it so the
-  // nav list is fresh after a mutation. (Legacy /chat is now a redirect to /ask.)
+  // /sessions is the canonical full-page conversation surface and the only
+  // route that renders the history nav; revalidate it so the list is fresh
+  // after a mutation.
   revalidatePath(`/${ctx.orgSlug}/${ctx.workspaceSlug}/sessions`);
 }
 

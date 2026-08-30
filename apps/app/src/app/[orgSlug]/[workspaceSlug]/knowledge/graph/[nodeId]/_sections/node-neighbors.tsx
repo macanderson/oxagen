@@ -18,6 +18,10 @@ import { workspace } from "@/lib/routes";
 import { EmptyState } from "@/app/[orgSlug]/[workspaceSlug]/_shared/components";
 import { NodeRefLink } from "@/components/knowledge/graph/node-ref-link";
 import { humanizeKey } from "@/components/knowledge/graph-explorer/lib/format";
+// One shared mapper per capability shape — the same adapter the graph panels
+// use, so the inspectable property bag (description, edge type, direction) is
+// identical wherever a neighbor is cited.
+import { fromNeighbor } from "../../_panels/node-ref-adapters";
 import { groupNeighborsByType } from "./group-neighbors";
 
 export interface NodeNeighborsProps {
@@ -94,12 +98,7 @@ export async function NodeNeighbors({
             {group.neighbors.map((neighbor) => (
               <NodeRefLink
                 key={`${neighbor.nodeId}:${neighbor.edgeType}:${neighbor.direction}`}
-                node={{
-                  id: neighbor.nodeId,
-                  label: neighbor.label,
-                  displayName: neighbor.displayName,
-                  properties: {},
-                }}
+                node={fromNeighbor(neighbor)}
                 href={workspace.knowledge.node(scope, neighbor.nodeId)}
               />
             ))}

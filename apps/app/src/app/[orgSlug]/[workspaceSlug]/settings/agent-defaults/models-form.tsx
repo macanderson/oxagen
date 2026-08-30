@@ -83,12 +83,23 @@ export function WorkspaceModelsForm({
     (proposed: Record<string, unknown>) => {
       setValue((prev) => ({
         textTier:
-          proposed.textTier === "fast" || proposed.textTier === "balanced" || proposed.textTier === "precise"
+          proposed.textTier === "fast" ||
+          proposed.textTier === "balanced" ||
+          proposed.textTier === "precise"
             ? proposed.textTier
             : prev.textTier,
-        textModel: typeof proposed.textModel === "string" ? proposed.textModel || null : prev.textModel,
-        imageModel: typeof proposed.imageModel === "string" ? proposed.imageModel || null : prev.imageModel,
-        videoModel: typeof proposed.videoModel === "string" ? proposed.videoModel || null : prev.videoModel,
+        textModel:
+          typeof proposed.textModel === "string"
+            ? proposed.textModel || null
+            : prev.textModel,
+        imageModel:
+          typeof proposed.imageModel === "string"
+            ? proposed.imageModel || null
+            : prev.imageModel,
+        videoModel:
+          typeof proposed.videoModel === "string"
+            ? proposed.videoModel || null
+            : prev.videoModel,
       }));
     },
     [],
@@ -106,14 +117,15 @@ export function WorkspaceModelsForm({
     setIsSaving(true);
     setError(null);
     try {
-      const result: WorkspaceModelsActionResult = await updateWorkspaceModelsAction({
-        orgSlug,
-        workspaceSlug,
-        defaultTextTier: value.textTier,
-        defaultTextModel: value.textModel,
-        defaultImageModel: value.imageModel,
-        defaultVideoModel: value.videoModel,
-      });
+      const result: WorkspaceModelsActionResult =
+        await updateWorkspaceModelsAction({
+          orgSlug,
+          workspaceSlug,
+          defaultTextTier: value.textTier,
+          defaultTextModel: value.textModel,
+          defaultImageModel: value.imageModel,
+          defaultVideoModel: value.videoModel,
+        });
       if (result.ok) {
         setSavedAt(new Date());
       } else {

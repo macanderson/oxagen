@@ -13,7 +13,9 @@ import { safeJson, formatDuration } from "./tool-call-card";
 
 describe("safeJson", () => {
   it("serialises a plain object", () => {
-    expect(safeJson({ a: 1, b: "hello" })).toBe('{\n  "a": 1,\n  "b": "hello"\n}');
+    expect(safeJson({ a: 1, b: "hello" })).toBe(
+      '{\n  "a": 1,\n  "b": "hello"\n}',
+    );
   });
 
   it("serialises an array", () => {

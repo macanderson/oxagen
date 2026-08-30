@@ -32,8 +32,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withSystemDb: vi.fn(),
-
+    withSystemDb: vi.fn(),
   };
 });
 vi.mock("@oxagen/billing", async (importOriginal) => {

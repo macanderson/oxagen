@@ -34,7 +34,15 @@ const InstallSchema = z.object({
   catalogServerId: z.string().optional(),
   pluginId: z.string().optional(),
   pluginType: z
-    .enum(["mcp_server", "integration", "content_tool", "capability", "agent_skill", "agent_capability", "knowledge_source"])
+    .enum([
+      "mcp_server",
+      "integration",
+      "content_tool",
+      "capability",
+      "agent_skill",
+      "agent_capability",
+      "knowledge_source",
+    ])
     .default("mcp_server"),
 });
 
@@ -90,7 +98,10 @@ export async function installPlugin(
       revalidatePath(capabilitiesPath(routeCtx));
       return { ok: true };
     } else if (pluginType === "agent_capability") {
-      installInput = { pluginType, pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId };
+      installInput = {
+        pluginType,
+        pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId,
+      };
     } else {
       // mcp_server, integration, knowledge_source: catalogServerId is the registry name.
       installInput = { pluginType };
@@ -103,17 +114,28 @@ export async function installPlugin(
         };
       }
     }
-    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-      invoke("install_plugin", installInput, ctx, { surface: "agent" }),
+    const out = await runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      () => invoke("install_plugin", installInput, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
     revalidatePath(workspace.workbench.tools.mcp(routeCtx));
 
-    const typed = out as { orgListingId: string; authKind?: "oauth" | "secret" | "none" };
-    return { ok: true, orgListingId: typed.orgListingId, authKind: typed.authKind };
+    const typed = out as {
+      orgListingId: string;
+      authKind?: "oauth" | "secret" | "none";
+    };
+    return {
+      ok: true,
+      orgListingId: typed.orgListingId,
+      authKind: typed.authKind,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Install failed",
+    };
   }
 }
 
@@ -128,7 +150,15 @@ const InstallBulkSchema = z.object({
       z.object({
         catalogServerId: z.string().optional(),
         pluginType: z
-          .enum(["mcp_server", "integration", "content_tool", "capability", "agent_skill", "agent_capability", "knowledge_source"])
+          .enum([
+            "mcp_server",
+            "integration",
+            "content_tool",
+            "capability",
+            "agent_skill",
+            "agent_capability",
+            "knowledge_source",
+          ])
           .default("mcp_server"),
         pluginId: z.string().optional(),
       }),
@@ -158,9 +188,8 @@ export async function installBulkPlugin(
     // the single-install action builds: agent_capability needs `pluginId`;
     // mcp_server / integration / knowledge_source need `custom` (endpoint resolved
     // from the workspace registries by name); agent_skill installs through a
-    // different contract entirely. Passing the raw rows made installOne throw
-    // "pluginId is required when pluginType is 'agent_capability'" on every item,
-    // so bulk install always failed. Normalise here, mirroring installPlugin.
+    // different contract entirely. Normalise here, mirroring installPlugin — the
+    // raw rows would make installOne reject every item.
     const items = parsed.data.items;
     const failures: string[] = [];
     let attempted = 0;
@@ -191,7 +220,8 @@ export async function installBulkPlugin(
       .filter((i) => i.pluginType !== "agent_skill")
       .map((it) => {
         const rowId = it.pluginId ?? it.catalogServerId;
-        const pluginType = it.pluginType === "capability" ? "agent_capability" : it.pluginType;
+        const pluginType =
+          it.pluginType === "capability" ? "agent_capability" : it.pluginType;
         if (pluginType === "agent_capability") {
           return { pluginType, pluginId: rowId };
         }
@@ -215,13 +245,27 @@ export async function installBulkPlugin(
 
     if (bulkItems.length > 0) {
       attempted += bulkItems.length;
-      const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
-        invoke("install_plugins_bulk", { items: bulkItems }, ctx, { surface: "agent" }),
-      )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
+      const result = (await runInTenantScope(
+        { orgId: org.id, workspaceId: ws.id },
+        () =>
+          invoke("install_plugins_bulk", { items: bulkItems }, ctx, {
+            surface: "agent",
+          }),
+      )) as {
+        installed: Array<{
+          pluginId: string | null;
+          orgListingId: string | null;
+          error: string | null;
+        }>;
+      };
 
       // The handler always returns HTTP 200; partial failures are embedded in the
       // installed[] array rather than thrown.
-      failures.push(...result.installed.filter((r) => r.error !== null).map((r) => r.error as string));
+      failures.push(
+        ...result.installed
+          .filter((r) => r.error !== null)
+          .map((r) => r.error as string),
+      );
     }
 
     if (failures.length > 0) {
@@ -236,7 +280,10 @@ export async function installBulkPlugin(
     revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Bulk install failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Bulk install failed",
+    };
   }
 }
 
@@ -273,7 +320,10 @@ export async function togglePlugin(
     revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Update failed",
+    };
   }
 }
 
@@ -304,7 +354,10 @@ export async function uninstallPlugin(
     revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Uninstall failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Uninstall failed",
+    };
   }
 }
 
@@ -319,7 +372,12 @@ const AddRegistrySchema = z.object({
 
 export async function addRegistry(
   input: z.infer<typeof AddRegistrySchema>,
-): Promise<{ ok: boolean; registryId?: string; isDefault?: boolean; error?: string }> {
+): Promise<{
+  ok: boolean;
+  registryId?: string;
+  isDefault?: boolean;
+  error?: string;
+}> {
   const parsed = AddRegistrySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
@@ -338,9 +396,16 @@ export async function addRegistry(
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(capabilitiesPath(routeCtx));
     const typed = out as { registryId: string; isDefault: boolean };
-    return { ok: true, registryId: typed.registryId, isDefault: typed.isDefault };
+    return {
+      ok: true,
+      registryId: typed.registryId,
+      isDefault: typed.isDefault,
+    };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Registry add failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Registry add failed",
+    };
   }
 }
 
@@ -375,6 +440,9 @@ export async function removeRegistry(
     const typed = out as { ok: boolean; promotedId: string | null };
     return { ok: true, promotedId: typed.promotedId };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Registry remove failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Registry remove failed",
+    };
   }
 }

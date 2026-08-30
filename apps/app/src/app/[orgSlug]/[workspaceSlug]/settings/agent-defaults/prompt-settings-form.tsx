@@ -19,7 +19,10 @@ import { Label } from "@/components/ui/label";
 import { MarkdownCodeEditor } from "@/components/ui/markdown-code-editor";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import type { PromptSettingsActionResult, PromptSettingsInput } from "./prompt-settings-action";
+import type {
+  PromptSettingsActionResult,
+  PromptSettingsInput,
+} from "./prompt-settings-action";
 import { updatePromptSettingsAction } from "./prompt-settings-action";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
 import { useRegisterFillableForm } from "@/lib/page-context";
@@ -97,11 +100,15 @@ export function PromptSettingsForm({
   const { add: addToast } = useToast();
 
   // ── Local state ─────────────────────────────────────────────────────────────
-  const [autoImprove, setAutoImprove] = React.useState(initial.autoImprovePrompts);
+  const [autoImprove, setAutoImprove] = React.useState(
+    initial.autoImprovePrompts,
+  );
   const [additionalInstructions, setAdditionalInstructions] = React.useState(
     initial.additionalInstructions ?? "",
   );
-  const [overrides, setOverrides] = React.useState<Partial<Record<OverrideKey, string>>>(() => {
+  const [overrides, setOverrides] = React.useState<
+    Partial<Record<OverrideKey, string>>
+  >(() => {
     const o = initial.overrides ?? {};
     const out: Partial<Record<OverrideKey, string>> = {};
     for (const { key } of OVERRIDE_FIELDS) {
@@ -136,8 +143,10 @@ export function PromptSettingsForm({
 
   const applyPromptSettings = React.useCallback(
     (proposed: Record<string, unknown>) => {
-      if (typeof proposed.autoImprove === "boolean") setAutoImprove(proposed.autoImprove);
-      if (typeof proposed.additionalInstructions === "string") setAdditionalInstructions(proposed.additionalInstructions);
+      if (typeof proposed.autoImprove === "boolean")
+        setAutoImprove(proposed.autoImprove);
+      if (typeof proposed.additionalInstructions === "string")
+        setAdditionalInstructions(proposed.additionalInstructions);
     },
     [],
   );
@@ -175,7 +184,8 @@ export function PromptSettingsForm({
     };
 
     try {
-      const result: PromptSettingsActionResult = await updatePromptSettingsAction(input);
+      const result: PromptSettingsActionResult =
+        await updatePromptSettingsAction(input);
       if (result.ok) {
         addToast({
           title: "Prompt settings saved",
@@ -230,8 +240,9 @@ export function PromptSettingsForm({
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                A model judges whether your prompt is sufficient as-is; if not, an attempt will be
-                made to enhance context, which may yield unintended results.
+                A model judges whether your prompt is sufficient as-is; if not,
+                an attempt will be made to enhance context, which may yield
+                unintended results.
               </p>
             </div>
             <Switch
@@ -257,8 +268,9 @@ export function PromptSettingsForm({
             Workspace instructions
           </Label>
           <p className="text-xs text-muted-foreground">
-            These instructions are appended to every agent prompt in this workspace. Use this to set
-            workspace-wide context, tone, or constraints.
+            These instructions are appended to every agent prompt in this
+            workspace. Use this to set workspace-wide context, tone, or
+            constraints.
           </p>
           <MarkdownCodeEditor
             id="additional-instructions"
@@ -288,11 +300,11 @@ export function PromptSettingsForm({
           aria-expanded={overridesOpen}
           aria-controls="overrides-panel"
         >
-          <SectionLabel>
-            Per-prompt overrides
-          </SectionLabel>
+          <SectionLabel>Per-prompt overrides</SectionLabel>
           <span className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-            {!isEnterprise && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+            {!isEnterprise && (
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
             {!isEnterprise && (
               <Badge variant="outline" size="sm">
                 Enterprise
@@ -309,11 +321,14 @@ export function PromptSettingsForm({
         {overridesOpen && (
           <div id="overrides-panel" className="flex flex-col gap-4 mt-2">
             <p className="text-xs text-muted-foreground">
-              Replace the built-in system prompt for specific agent capabilities. These overrides
-              apply workspace-wide and are only available on the Enterprise plan. The core
-              orchestration prompt is never replaceable — use{" "}
-              <span className="font-medium text-foreground">Workspace instructions</span> above for
-              append-only additions.
+              Replace the built-in system prompt for specific agent
+              capabilities. These overrides apply workspace-wide and are only
+              available on the Enterprise plan. The core orchestration prompt is
+              never replaceable — use{" "}
+              <span className="font-medium text-foreground">
+                Workspace instructions
+              </span>{" "}
+              above for append-only additions.
             </p>
 
             {OVERRIDE_FIELDS.map(({ key, label, description, placeholder }) => (

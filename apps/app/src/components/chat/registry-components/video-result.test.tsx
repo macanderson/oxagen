@@ -35,7 +35,12 @@ describe("VideoResult", () => {
 
   it("shows prompt text while rendering", () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-    render(<VideoResult url="/api/v1/assets/gen_video" prompt="A sunset timelapse" />);
+    render(
+      <VideoResult
+        url="/api/v1/assets/gen_video"
+        prompt="A sunset timelapse"
+      />,
+    );
     // Component wraps prompt in regular double-quote chars: "prompt"
     expect(screen.getByText(/A sunset timelapse/)).toBeInTheDocument();
   });
@@ -58,7 +63,13 @@ describe("VideoResult", () => {
 
   it("shows prompt caption in ready state", async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true });
-    render(<VideoResult url="/api/v1/assets/gen_video" prompt="A sunset" pollMs={10} />);
+    render(
+      <VideoResult
+        url="/api/v1/assets/gen_video"
+        prompt="A sunset"
+        pollMs={10}
+      />,
+    );
     await waitFor(() => {
       // In ready state the prompt is shown as plain text (not quoted)
       expect(screen.getByText("A sunset")).toBeInTheDocument();

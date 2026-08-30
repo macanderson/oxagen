@@ -50,16 +50,27 @@ export async function saveAuthAlertsAction(input: {
   try {
     await assertOrgAdmin(tenant.id, userId);
   } catch {
-    return { ok: false, error: "Only org owners and admins can change alert settings." };
+    return {
+      ok: false,
+      error: "Only org owners and admins can change alert settings.",
+    };
   }
 
   try {
-    await invokeOrgCapability<{ ok: boolean }>(tenant.id, userId, "set_auth_alerts", {
-      sendEmail,
-      roles,
-    });
+    await invokeOrgCapability<{ ok: boolean }>(
+      tenant.id,
+      userId,
+      "set_auth_alerts",
+      {
+        sendEmail,
+        roles,
+      },
+    );
   } catch (err) {
-    logger.error({ err, orgId: tenant.id }, "governance/policies: set_auth_alerts failed");
+    logger.error(
+      { err, orgId: tenant.id },
+      "governance/policies: set_auth_alerts failed",
+    );
     return { ok: false, error: "Saving the alert setting failed. Try again." };
   }
 

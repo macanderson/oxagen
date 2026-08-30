@@ -37,8 +37,12 @@ export function ConsentCard({
   resolution,
   onResolved,
 }: ConsentCardProps) {
-  const [pending, setPending] = React.useState<"granted" | "denied" | null>(null);
-  const [optimistic, setOptimistic] = React.useState<ConsentResolution | undefined>(resolution);
+  const [pending, setPending] = React.useState<"granted" | "denied" | null>(
+    null,
+  );
+  const [optimistic, setOptimistic] = React.useState<
+    ConsentResolution | undefined
+  >(resolution);
   const [grantAll, setGrantAll] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const remaining = useCountdown(expiresAt, optimistic !== undefined);
@@ -48,7 +52,23 @@ export function ConsentCard({
     setError(null);
     setPending(decision);
     setOptimistic(decision);
-    const res = await onResolved(approvalId, decision, decision === "granted" && grantAll);
+    // A THROWN resolver must not wedge the card: without this catch `pending`
+    // stays set (both buttons permanently disabled), the optimistic `settled`
+    // state lies that consent was recorded, and the composer stays blocked on
+    // a consent nobody can resolve. Roll back and surface the failure.
+    let res: { ok: boolean; error?: string };
+    try {
+      res = await onResolved(
+        approvalId,
+        decision,
+        decision === "granted" && grantAll,
+      );
+    } catch (err) {
+      res = {
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to resolve consent",
+      };
+    }
     setPending(null);
     if (!res.ok) {
       setOptimistic(resolution);
@@ -63,20 +83,25 @@ export function ConsentCard({
     <div
       className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 border-l-4 border-l-primary/40 p-4 animate-in"
       data-component="consent-card"
-      data-consent-status={settled ? optimistic : expired ? "expired" : "pending"}
+      data-consent-status={
+        settled ? optimistic : expired ? "expired" : "pending"
+      }
     >
       <div className="flex items-center gap-2">
         <ShieldCheck className="h-4 w-4 text-primary" />
         <span className="font-semibold">Allow external tool?</span>
         <span className="text-xs text-muted-foreground">{toolName}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {expired || settled ? null : `Expires in ${formatRemaining(remaining)}`}
+          {expired || settled
+            ? null
+            : `Expires in ${formatRemaining(remaining)}`}
         </span>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        The agent wants to call <span className="font-mono">{toolName}</span> on an external MCP
-        server for the first time. Granting lets it run this tool without asking again.
+        The agent wants to call <span className="font-mono">{toolName}</span> on
+        an external MCP server for the first time. Granting lets it run this
+        tool without asking again.
       </p>
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -131,7 +156,11 @@ export function ConsentCard({
             >
               Deny
             </Button>
-            <Button size="sm" onClick={() => handle("granted")} disabled={pending !== null}>
+            <Button
+              size="sm"
+              onClick={() => handle("granted")}
+              disabled={pending !== null}
+            >
               {pending === "granted" ? "Allowing…" : "Allow"}
             </Button>
           </>

@@ -15,7 +15,10 @@ interface EvidenceAttachSectionProps {
   workspaceSlug: string;
 }
 
-export function EvidenceAttachSection({ orgSlug, workspaceSlug }: EvidenceAttachSectionProps) {
+export function EvidenceAttachSection({
+  orgSlug,
+  workspaceSlug,
+}: EvidenceAttachSectionProps) {
   return (
     <MemoryEvidenceAttachForm
       orgSlug={orgSlug}

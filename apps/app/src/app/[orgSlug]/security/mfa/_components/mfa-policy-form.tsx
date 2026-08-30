@@ -37,12 +37,16 @@ export function MfaPolicyForm({
   initialMfaGraceHours,
 }: MfaPolicyFormProps) {
   const [mfaRequired, setMfaRequired] = React.useState(initialMfaRequired);
-  const [mfaGraceHours, setMfaGraceHours] = React.useState(initialMfaGraceHours);
-  const [status, setStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [mfaGraceHours, setMfaGraceHours] =
+    React.useState(initialMfaGraceHours);
+  const [status, setStatus] = React.useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const isDirty =
-    mfaRequired !== initialMfaRequired || mfaGraceHours !== initialMfaGraceHours;
+    mfaRequired !== initialMfaRequired ||
+    mfaGraceHours !== initialMfaGraceHours;
 
   async function handleSave() {
     setStatus("saving");
@@ -54,7 +58,11 @@ export function MfaPolicyForm({
       setTimeout(() => setStatus("idle"), 2500);
     } else {
       setStatus("error");
-      setErrorMsg("error" in result ? result.error : "Permission denied. Owner or admin role required.");
+      setErrorMsg(
+        "error" in result
+          ? result.error
+          : "Permission denied. Owner or admin role required.",
+      );
     }
   }
 
@@ -67,9 +75,9 @@ export function MfaPolicyForm({
             Require MFA for all members
           </span>
           <span className="text-xs text-muted-foreground">
-            When enabled, every member must enroll in multi-factor authentication.
-            Members who have not enrolled are blocked after the grace period.
-            (CC6.1 / CC6.2)
+            When enabled, every member must enroll in multi-factor
+            authentication. Members who have not enrolled are blocked after the
+            grace period. (CC6.1 / CC6.2)
           </span>
         </div>
         <Switch
@@ -117,7 +125,9 @@ export function MfaPolicyForm({
         <p className="text-sm text-destructive">{errorMsg}</p>
       )}
       {status === "saved" && (
-        <p className="text-sm text-[hsl(142_71%_45%)]">Policy saved.</p>
+        <p className="text-sm text-success" role="status">
+          Policy saved.
+        </p>
       )}
 
       {/* Save button */}
@@ -131,7 +141,9 @@ export function MfaPolicyForm({
             {status === "saving" ? "Saving…" : "Save policy"}
           </Button>
           {!isDirty && status === "idle" && (
-            <Badge variant="muted" className="text-xs">No changes</Badge>
+            <Badge variant="muted" className="text-xs">
+              No changes
+            </Badge>
           )}
         </div>
       )}

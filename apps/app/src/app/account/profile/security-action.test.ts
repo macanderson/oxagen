@@ -24,11 +24,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // because vi.mock() calls are hoisted to the top of the file by Vitest.
 // ---------------------------------------------------------------------------
 
-const { mockListUserAccounts, mockSetPassword, mockUnlinkAccount } = vi.hoisted(() => ({
-  mockListUserAccounts: vi.fn(),
-  mockSetPassword: vi.fn(),
-  mockUnlinkAccount: vi.fn(),
-}));
+const { mockListUserAccounts, mockSetPassword, mockUnlinkAccount } = vi.hoisted(
+  () => ({
+    mockListUserAccounts: vi.fn(),
+    mockSetPassword: vi.fn(),
+    mockUnlinkAccount: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/session", () => ({
   getSessionOrRedirect: vi.fn(),
@@ -52,7 +54,11 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-import { fetchConnectedAccountsState, setPasswordAction, unlinkAccountAction } from "./security-action";
+import {
+  fetchConnectedAccountsState,
+  setPasswordAction,
+  unlinkAccountAction,
+} from "./security-action";
 import { getSessionOrRedirect } from "@/lib/session";
 
 // ---------------------------------------------------------------------------
@@ -61,7 +67,10 @@ import { getSessionOrRedirect } from "@/lib/session";
 
 const mockSession = { user: { id: "user-123", email: "user@example.com" } };
 
-function makeAccount(providerId: string, overrides: Record<string, unknown> = {}) {
+function makeAccount(
+  providerId: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: `acc-${providerId}`,
     providerId,
@@ -190,7 +199,9 @@ describe("setPasswordAction", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toBe("Passwords do not match");
+    expect((result as { ok: false; error: string }).error).toBe(
+      "Passwords do not match",
+    );
     expect(mockSetPassword).not.toHaveBeenCalled();
   });
 
@@ -201,7 +212,9 @@ describe("setPasswordAction", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/at least 8/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /at least 8/i,
+    );
     expect(mockSetPassword).not.toHaveBeenCalled();
   });
 
@@ -214,7 +227,9 @@ describe("setPasswordAction", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/already set/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /already set/i,
+    );
   });
 
   it("returns ok:false with generic message on unexpected error", async () => {
@@ -226,7 +241,9 @@ describe("setPasswordAction", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/failed to set password/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /failed to set password/i,
+    );
   });
 });
 
@@ -285,7 +302,10 @@ describe("unlinkAccountAction", () => {
     ]);
     mockUnlinkAccount.mockResolvedValue({ status: true });
 
-    await unlinkAccountAction({ providerId: "google", accountId: "google-external-id" });
+    await unlinkAccountAction({
+      providerId: "google",
+      accountId: "google-external-id",
+    });
 
     expect(mockUnlinkAccount).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -300,7 +320,9 @@ describe("unlinkAccountAction", () => {
       makeAccount("google"),
       makeAccount("github"),
     ]);
-    mockUnlinkAccount.mockRejectedValue(new Error("FAILED_TO_UNLINK_LAST_ACCOUNT"));
+    mockUnlinkAccount.mockRejectedValue(
+      new Error("FAILED_TO_UNLINK_LAST_ACCOUNT"),
+    );
 
     const result = await unlinkAccountAction({ providerId: "google" });
 
@@ -320,7 +342,9 @@ describe("unlinkAccountAction", () => {
     const result = await unlinkAccountAction({ providerId: "google" });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/failed to disconnect/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /failed to disconnect/i,
+    );
   });
 
   it("returns ok:false with 'Account not found' on ACCOUNT_NOT_FOUND error", async () => {
@@ -333,11 +357,16 @@ describe("unlinkAccountAction", () => {
     const result = await unlinkAccountAction({ providerId: "google" });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/account not found/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /account not found/i,
+    );
   });
 
   it("returns ok:false validation_error when providerId is empty string", async () => {
-    mockListUserAccounts.mockResolvedValue([makeAccount("google"), makeAccount("github")]);
+    mockListUserAccounts.mockResolvedValue([
+      makeAccount("google"),
+      makeAccount("github"),
+    ]);
 
     const result = await unlinkAccountAction({ providerId: "" });
 
@@ -367,7 +396,9 @@ describe("setPasswordAction — additional error branches", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toMatch(/too short/i);
+    expect((result as { ok: false; error: string }).error).toMatch(
+      /too short/i,
+    );
   });
 
   it("returns ok:false with max-length message when API throws PASSWORD_TOO_LONG", async () => {

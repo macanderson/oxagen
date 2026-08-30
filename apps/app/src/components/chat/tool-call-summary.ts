@@ -1,9 +1,10 @@
 /**
  * tool-call-summary — extracts a short, human one-liner from a tool call's
- * input so the compact activity row can show "what" a call is doing without
- * expanding the full structured tree (e.g. `web.search` → "Captain William…").
+ * input so the compact activity row can show WHAT a call is doing without
+ * expanding the full structured tree. A `search_web` call whose input is
+ * `{ query: "tide tables for Monterey" }` summarises as that query string.
  *
- * We pick the most salient string field in a fixed priority order, prefering
+ * We pick the most salient string field in a fixed priority order, preferring
  * the fields a human reads first (a query, a name, a path) and falling back to
  * an id only as a last resort. Anything else returns null — the caller then
  * shows only the human label, never raw JSON.
@@ -36,7 +37,9 @@ function isIdKey(key: string): boolean {
 function tidy(value: string): string | null {
   const oneLine = value.replace(/\s+/g, " ").trim();
   if (oneLine.length === 0) return null;
-  return oneLine.length > MAX_LEN ? `${oneLine.slice(0, MAX_LEN - 1).trimEnd()}…` : oneLine;
+  return oneLine.length > MAX_LEN
+    ? `${oneLine.slice(0, MAX_LEN - 1).trimEnd()}…`
+    : oneLine;
 }
 
 /** Pull the most salient string value out of an arbitrary tool input. */
@@ -62,7 +65,8 @@ function extractSalient(input: unknown): string | null {
   }
   // Last resort: a string-valued id field.
   for (const [key, val] of Object.entries(record)) {
-    if (isIdKey(key) && typeof val === "string" && val.trim().length > 0) return val;
+    if (isIdKey(key) && typeof val === "string" && val.trim().length > 0)
+      return val;
   }
   return null;
 }
@@ -71,7 +75,10 @@ function extractSalient(input: unknown): string | null {
  * A short one-line detail for a tool call, or null when nothing salient is
  * present. Never returns raw JSON, object braces, or a multi-line string.
  */
-export function toolCallSummary(_capability: string, inputPreview: unknown): string | null {
+export function toolCallSummary(
+  _capability: string,
+  inputPreview: unknown,
+): string | null {
   const salient = extractSalient(inputPreview);
   return salient === null ? null : tidy(salient);
 }

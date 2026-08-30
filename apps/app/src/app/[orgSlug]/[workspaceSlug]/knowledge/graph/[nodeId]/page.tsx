@@ -11,12 +11,12 @@
  *     the header/properties.
  */
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Network, ArrowLeft, ExternalLink } from "lucide-react";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import type { GraphNodeGetOutput } from "@oxagen/oxagen/contracts/graph.node.get";
 import type { GraphNodeLabelsGetOutput } from "@oxagen/oxagen/contracts/graph.node_label.get";
 import { getSessionOrRedirect } from "@/lib/session";
@@ -39,6 +39,24 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+/**
+ * The heading citation for this node. `displayName` is the server's
+ * last-resort coalesce (displayName → name → publicId), so when it is just the
+ * id, fall back to the domain label — a UUID is never the primary on-screen
+ * identifier; it lives only in the Metadata section's CopyableId. Mirrors
+ * `nodeCitationLabel` (components/knowledge/graph/node-ref.tsx), inlined
+ * because that module is "use client" and this is a Server Component.
+ */
+function headingFor(node: {
+  displayName: string;
+  label: string;
+  nodeId: string;
+}): string {
+  const name = node.displayName.trim();
+  if (name && name !== node.nodeId) return name;
+  return node.label || "Unknown node";
+}
+
 function formatWhen(iso: string | null): string | null {
   if (!iso) return null;
   const t = Date.parse(iso);
@@ -50,10 +68,10 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   const { orgSlug, workspaceSlug, nodeId } = await params;
   const session = await getSessionOrRedirect();
 
+  // resolveOrg/resolveWorkspace call notFound() themselves on a miss — they
+  // return a non-nullable row or never return at all.
   const org = await resolveOrg(orgSlug);
-  if (!org) notFound();
   const ws = await resolveWorkspace(org.id, workspaceSlug);
-  if (!ws) notFound();
   await assertOrgMember(org.id, session.user.id);
 
   const ctx = {
@@ -94,7 +112,13 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
     );
     node = result.nodeResult.node;
     labels = result.labelsResult?.labels ?? [];
-  } catch {
+  } catch (err) {
+    // A graph outage is not "no such node" — it renders the same way to the
+    // user (never throw from this page), but it must not vanish from the logs.
+    logger.error(
+      { err, orgId: org.id, workspaceId: ws.id, nodeId },
+      "knowledge.graph.node: get_node failed",
+    );
     node = null;
   }
 
@@ -143,7 +167,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold">
-              {node.displayName}
+              {headingFor(node)}
             </h1>
             {node.description ? (
               <p className="mt-1 text-sm text-muted-foreground">

@@ -30,12 +30,18 @@ describe("CardGrid — render", () => {
   });
 
   it("merges a caller-supplied className", () => {
-    const { container } = render(<CardGrid className="custom-grid">Content</CardGrid>);
-    expect((container.firstChild as HTMLElement).className).toContain("custom-grid");
+    const { container } = render(
+      <CardGrid className="custom-grid">Content</CardGrid>,
+    );
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "custom-grid",
+    );
   });
 
   it("lets a caller override the column count via className", () => {
-    const { container } = render(<CardGrid className="grid-cols-2">Content</CardGrid>);
+    const { container } = render(
+      <CardGrid className="grid-cols-2">Content</CardGrid>,
+    );
     const el = container.firstChild as HTMLElement;
     // tailwind-merge resolves the conflicting grid-cols-* utility in favor of
     // the caller-supplied class.
@@ -44,7 +50,9 @@ describe("CardGrid — render", () => {
   });
 
   it("forwards other HTML attributes (e.g. data-testid)", () => {
-    const { getByTestId } = render(<CardGrid data-testid="agent-grid">Content</CardGrid>);
+    const { getByTestId } = render(
+      <CardGrid data-testid="agent-grid">Content</CardGrid>,
+    );
     expect(getByTestId("agent-grid")).toBeInTheDocument();
   });
 });
