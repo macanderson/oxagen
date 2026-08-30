@@ -147,8 +147,10 @@ tools/eval-out/
 .oxagen/settings.local.json
 
 # Stella agent local state (context/memory DBs; the agent now lives in its
-# own repo — accidentally git-tracked in the past, pruned with crates/)
-.stella/
+# own repo — accidentally git-tracked in the past, pruned with crates/).
+# .stella/commands/ is shared project config (custom slash commands), tracked.
+.stella/*
+!.stella/commands/
 
 # Python bytecode caches (orphaned .pyc files were git-tracked in bench/
 # after their sources were removed)
