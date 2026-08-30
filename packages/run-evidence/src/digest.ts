@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import canonicalize from "canonicalize";
-import { type JsonWireValue, snapshotJsonWire } from "./json-wire.js";
+import { type JsonWireValue, snapshotJsonWire } from "./json-wire";
 
 export type Sha256Digest = `sha256:${string}`;
 

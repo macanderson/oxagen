@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { describe, expect, it } from "vitest";
-import { assertDigest, digestJcs, jcsBytes, sha256Digest } from "./digest.js";
+import { assertDigest, digestJcs, jcsBytes, sha256Digest } from "./digest";
 
 interface DigestCase {
   name: string;

@@ -13,7 +13,7 @@ import {
   MAX_TOOL_CALLS,
   MAX_VERIFICATIONS,
   RUN_STAGE_COUNT,
-} from "./limits.js";
+} from "./limits";
 
 describe("run-evidence limits", () => {
   it("pins every collection and envelope limit", () => {
@@ -55,7 +55,7 @@ describe("run-evidence limits", () => {
   });
 
   it("exports the contract core from the package barrel", async () => {
-    const core = await import("./index.js");
+    const core = await import("./index");
 
     expect(core.MAX_ENVELOPE_JCS_BYTES).toBe(MAX_ENVELOPE_JCS_BYTES);
     expect(core.normalizeContextFrameV1).toBeTypeOf("function");
@@ -63,7 +63,7 @@ describe("run-evidence limits", () => {
   });
 
   it("does not expose raw Context Graph Zod schemas from the runtime barrel", async () => {
-    const core = await import("./index.js");
+    const core = await import("./index");
     const rawSchemaNames = [
       "contextFrameKindV1Schema",
       "contextProvenanceV1Schema",

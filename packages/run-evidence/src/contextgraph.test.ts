@@ -15,8 +15,8 @@ import {
   isProtocolTimestampV1,
   normalizeContextFrameV1,
   normalizeContextQueryV1,
-} from "./contextgraph.js";
-import { digestJcs, jcsBytes, sha256Digest } from "./digest.js";
+} from "./contextgraph";
+import { digestJcs, jcsBytes, sha256Digest } from "./digest";
 
 interface DigestCase {
   name: string;
