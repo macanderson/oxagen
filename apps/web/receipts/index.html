@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Oxagen × Stella — agents you can check</title>
+<meta name="description" content="Agents that prove their work. Stella ships receipts. Oxagen runs the whole thing inside your firewall, on models you own.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0A0C'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23EFC53F' font-family='monospace'%3E*%3C/text%3E%3C/svg%3E">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Stella v2 palette — crates/stella-tui-theme/src/token.rs
+   Gold is identity only. Never a state. Green passes, red fails.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --bg:#0A0A0C; --panel:#0F0F12; --hl:#17171B; --border:#26262C; --rule:#2C2C33;
+  --gold:#EFC53F; --gold-br:#F7D96B;
+  --silver:#A9AAB5; --silver-t:#BFC1CC; --text:#E8E8EC; --muted:#777782; --dim:#4B4B56;
+  --green:#74C991; --red:#E0687A;
+  --add:#10201A; --del:#241019;
+  --paper:#FFFCF5; --ink:#141413;
+
+  --mono:ui-monospace,"JetBrains Mono","SFMono-Regular","SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
+
+  --gut:clamp(20px,5vw,64px);
+  --max:1180px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--sans); font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+
+/* film grain — keeps the flat black from looking dead */
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:9999;
+  opacity:.035; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.wrap{width:100%;max-width:var(--max);margin:0 auto;padding-inline:var(--gut)}
+
+/* ── keyboard focus ───────────────────────────────────── */
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:1px}
+.btn:focus-visible{outline-offset:4px}
+.skip{
+  position:absolute;left:var(--gut);top:-100px;z-index:200;
+  font-family:var(--mono);font-size:.8rem;padding:11px 16px;
+  background:var(--gold);color:var(--bg);text-decoration:none;
+  transition:top .18s var(--ease);
+}
+.skip:focus{top:10px}
+
+/* ── type ─────────────────────────────────────────────── */
+h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-.03em;line-height:1.02;margin:0}
+h1{font-size:clamp(2.1rem,8.4vw,4.4rem)}
+h2{font-size:clamp(1.7rem,6.2vw,3rem)}
+h3{font-size:clamp(1.05rem,3.4vw,1.3rem);letter-spacing:-.02em;line-height:1.2}
+p{margin:0}
+a{color:inherit}
+
+.kicker{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--gold);display:flex;align-items:center;gap:10px;margin-bottom:18px;
+}
+.kicker::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--rule),transparent);max-width:180px}
+
+.lede{font-size:clamp(1.02rem,3.4vw,1.24rem);color:var(--silver-t);line-height:1.55}
+.small{font-size:.86rem;color:var(--muted);line-height:1.55}
+.mono{font-family:var(--mono)}
+.gold{color:var(--gold)}
+.pass{color:var(--green)}
+.fail{color:var(--red)}
+
+/* ── nav ──────────────────────────────────────────────── */
+header{
+  position:fixed;inset:0 0 auto 0;z-index:100;
+  background:rgba(10,10,12,.72);backdrop-filter:blur(14px) saturate(1.4);
+  -webkit-backdrop-filter:blur(14px) saturate(1.4);
+  border-bottom:1px solid var(--border);
+}
+.bar{display:flex;align-items:center;justify-content:space-between;height:56px}
+.mark{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.9rem;
+  font-weight:600;letter-spacing:-.02em;text-decoration:none}
+.mark .x{color:var(--dim);font-weight:400}
+.mark .star{color:var(--gold);animation:twinkle 4.5s var(--ease) infinite}
+@keyframes twinkle{0%,88%,100%{opacity:1}92%{opacity:.28}96%{opacity:1}}
+.navlinks{display:none;gap:26px;font-family:var(--mono);font-size:.76rem;letter-spacing:.04em;color:var(--muted)}
+.navlinks a{text-decoration:none;transition:color .2s}
+.navlinks a:hover{color:var(--gold)}
+@media(min-width:840px){.navlinks{display:flex}}
+#progress{position:absolute;left:0;bottom:-1px;height:1px;background:var(--gold);width:0;
+  box-shadow:0 0 8px rgba(239,197,63,.7)}
+
+/* ── buttons ──────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.82rem;
+  font-weight:500;letter-spacing:.01em;text-decoration:none;padding:13px 20px;
+  border:1px solid var(--gold);color:var(--bg);background:var(--gold);
+  position:relative;overflow:hidden;transition:transform .2s var(--ease),box-shadow .25s;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 26px -8px rgba(239,197,63,.55)}
+.btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%);
+  transform:translateX(-130%)}
+.btn:hover::after{transform:translateX(130%);transition:transform .7s var(--ease)}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--border)}
+.btn.ghost:hover{border-color:var(--gold);color:var(--gold);box-shadow:none}
+
+/* ── section rhythm ───────────────────────────────────── */
+section{padding-block:clamp(64px,13vw,132px);position:relative}
+.hair{height:1px;background:linear-gradient(90deg,transparent,var(--border) 18%,var(--border) 82%,transparent)}
+
+/* ── hero ─────────────────────────────────────────────── */
+#hero{padding-top:calc(56px + clamp(48px,12vw,104px));overflow:hidden}
+#hero::before{
+  content:"";position:absolute;top:-30%;left:50%;translate:-50% 0;
+  width:min(1100px,150vw);aspect-ratio:1;pointer-events:none;
+  background:radial-gradient(circle,rgba(239,197,63,.10),rgba(239,197,63,.03) 42%,transparent 66%);
+}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.66rem;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--silver);
+  border:1px solid var(--border);background:var(--panel);padding:7px 13px;margin-bottom:26px;
+}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 0 rgba(116,201,145,.7);animation:ping 2.4s var(--ease) infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(116,201,145,.6)}70%{box-shadow:0 0 0 8px rgba(116,201,145,0)}100%{box-shadow:0 0 0 0 rgba(116,201,145,0)}}
+
+h1 .ln{display:block;overflow:hidden}
+h1 .ln>span{display:block;transform:translateY(105%);animation:rise .95s var(--ease) forwards}
+h1 .ln:nth-child(2)>span{animation-delay:.1s}
+h1 .ln:nth-child(3)>span{animation-delay:.2s}
+@keyframes rise{to{transform:translateY(0)}}
+
+.hero-sub{margin-top:26px;max-width:34em}
+.hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.hero-note{margin-top:22px;font-family:var(--mono);font-size:.72rem;color:var(--dim);letter-spacing:.02em}
+
+/* ── terminal screen ──────────────────────────────────── */
+.screen{
+  position:relative;margin:clamp(38px,8vw,64px) auto 0;max-width:880px;
+  border:1px solid var(--border);background:var(--panel);
+  box-shadow:0 30px 90px -40px rgba(0,0,0,.95),0 0 0 1px rgba(239,197,63,.05);
+}
+.screen-head{
+  display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--border);
+  background:var(--hl);font-family:var(--mono);font-size:.66rem;color:var(--dim);letter-spacing:.08em;
+}
+.tl{width:8px;height:8px;border-radius:50%;background:var(--rule)}
+.tl.on{background:var(--gold)}
+.screen-head .path{margin-left:6px;color:var(--muted)}
+/* Scrollable only while the frame is wider than the phone. On desktop it fits,
+   and a scroll container there would swallow the page's own wheel events. */
+.screen-body{position:relative}
+.screen-body svg{display:block;width:100%;height:auto}
+@media(max-width:779px){
+  .screen-body{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .screen-body svg{width:680px;min-width:680px}
+}
+.swipe{
+  position:absolute;right:10px;bottom:10px;font-family:var(--mono);font-size:.62rem;
+  color:var(--dim);letter-spacing:.14em;background:rgba(10,10,12,.86);padding:4px 8px;
+  border:1px solid var(--border);pointer-events:none;
+}
+@media(min-width:780px){.swipe{display:none}}
+.cap{
+  font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.03em;
+  padding:11px 14px;border-top:1px solid var(--border);background:var(--bg);
+}
+.cap b{color:var(--silver-t);font-weight:500}
+
+/* Staggered line reveal inside the inlined TUI frames.
+   The resting state under .go is opacity:1, so the frame stays readable even
+   once the animation is finished, interrupted or never ran. */
+.anim:not(.go) svg>*{opacity:0}
+.anim.go svg>*{opacity:1;animation:lineIn .34s var(--ease) both;animation-delay:calc(var(--i,0)*20ms)}
+@keyframes lineIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* Scan sweep, once, while the frame draws. Its own layer, so it can never
+   leave the frame's own content in a half-faded state. */
+.anim.go .sweep{
+  position:absolute;inset:0;z-index:3;pointer-events:none;
+  background:linear-gradient(180deg,transparent 42%,rgba(239,197,63,.12) 50%,transparent 58%);
+  animation:sweep 1.25s var(--ease) 1 both;
+}
+@keyframes sweep{from{transform:translateY(-100%);opacity:1}99%{opacity:1}to{transform:translateY(100%);opacity:0}}
+
+/* The blocking row and the merge banner keep breathing after the draw. */
+.anim.go [data-beat]{animation:beat 2.6s ease-in-out 2s infinite both}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ── the three failures ───────────────────────────────── */
+.grid{display:grid;gap:14px}
+@media(min-width:760px){.grid.g3{grid-template-columns:repeat(3,1fr)}}
+.card{
+  border:1px solid var(--border);background:var(--panel);padding:22px;position:relative;
+  transition:border-color .3s,transform .3s var(--ease),background .3s;
+}
+.card:hover{border-color:var(--rule);transform:translateY(-3px);background:var(--hl)}
+/* terminal corner brackets */
+.card::before,.card::after{
+  content:"";position:absolute;width:9px;height:9px;border:1px solid var(--gold);
+  opacity:0;transition:opacity .3s;
+}
+.card::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.card::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.card:hover::before,.card:hover::after{opacity:.8}
+.card .num{font-family:var(--mono);font-size:.66rem;color:var(--dim);letter-spacing:.2em;display:block;margin-bottom:14px}
+.card h3{margin-bottom:9px}
+.card .x{color:var(--red);font-family:var(--mono);margin-right:6px}
+
+/* ── two-column split ─────────────────────────────────── */
+.split{display:grid;gap:clamp(34px,6vw,60px);align-items:center}
+@media(min-width:960px){.split{grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr)}
+  .split.flip>*:first-child{order:2}}
+
+/* ── numbered steps ───────────────────────────────────── */
+.steps{list-style:none;padding:0;margin:30px 0 0;display:grid;gap:2px}
+.steps li{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;
+  padding:16px 0;border-top:1px solid var(--border)}
+.steps li:last-child{border-bottom:1px solid var(--border)}
+.steps .n{font-family:var(--mono);font-size:.7rem;color:var(--gold);letter-spacing:.1em;padding-top:3px}
+.steps b{display:block;font-family:var(--mono);font-weight:600;font-size:.95rem;letter-spacing:-.01em;margin-bottom:4px}
+.steps span{font-size:.9rem;color:var(--muted);line-height:1.5}
+
+/* ── receipt chip row ─────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chip{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;padding:6px 11px;
+  border:1px solid var(--border);background:var(--panel);color:var(--silver)}
+.chip.g{color:var(--green);border-color:rgba(116,201,145,.3);background:var(--add)}
+.chip.r{color:var(--red);border-color:rgba(224,104,122,.3);background:var(--del)}
+
+/* ── diagrams ─────────────────────────────────────────── */
+.dgm{border:1px solid var(--border);background:var(--panel);padding:clamp(14px,3vw,22px)}
+.dgm svg{display:block;width:100%;height:auto;overflow:visible}
+.dgm .lbl{font-family:var(--mono);font-size:9.5px;fill:var(--muted);letter-spacing:.06em}
+.dgm .lbl-b{font-family:var(--mono);font-size:11px;fill:var(--text);font-weight:500}
+.dgm .lbl-g{font-family:var(--mono);font-size:9.5px;fill:var(--gold);letter-spacing:.14em}
+
+/* firewall: packets that die at the wall */
+.pkt{opacity:0}
+.reveal.go .pkt{animation:runwall 3.4s linear infinite}
+.reveal.go .pkt:nth-of-type(2){animation-delay:1.1s}
+.reveal.go .pkt:nth-of-type(3){animation-delay:2.2s}
+@keyframes runwall{
+  0%{opacity:0;transform:translateX(0)}
+  8%{opacity:1}
+  46%{opacity:1;transform:translateX(96px)}
+  56%{opacity:1;transform:translateX(104px)}
+  70%{opacity:0;transform:translateX(104px) scale(2.4)}
+  100%{opacity:0;transform:translateX(104px) scale(2.4)}
+}
+.wallglow{opacity:0}
+.reveal.go .wallglow{animation:wallhit 3.4s linear infinite}
+@keyframes wallhit{0%,44%{opacity:0}56%{opacity:.85}76%,100%{opacity:0}}
+
+/* tuning loop: a bead running the circuit */
+.reveal.go .bead{animation:orbit 5.2s linear infinite}
+@keyframes orbit{to{offset-distance:100%}}
+.dash{stroke-dasharray:4 5}
+.reveal.go .dash{animation:march 1.4s linear infinite}
+@keyframes march{to{stroke-dashoffset:-18}}
+.reveal.go .drawin{stroke-dasharray:600;stroke-dashoffset:600;animation:draw 1.6s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+/* ── enterprise band ──────────────────────────────────── */
+.band{border:1px solid var(--gold);background:
+  linear-gradient(180deg,rgba(239,197,63,.07),rgba(239,197,63,.02));padding:clamp(26px,6vw,48px);position:relative}
+.band::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(45deg,transparent 0 9px,rgba(239,197,63,.028) 9px 18px)}
+.tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.63rem;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+  border:1px solid rgba(239,197,63,.42);padding:6px 12px;margin-bottom:20px}
+
+/* ── stat strip ───────────────────────────────────────── */
+.stats{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);margin-top:38px}
+@media(min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--panel);padding:22px 18px}
+.stat .v{font-family:var(--mono);font-size:clamp(1.5rem,5vw,2rem);font-weight:600;letter-spacing:-.03em;color:var(--gold);line-height:1}
+.stat .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:9px}
+
+/* ── final cta ────────────────────────────────────────── */
+#cta{text-align:center}
+#cta .lede{margin-inline:auto}
+#cta .hero-cta{justify-content:center}
+
+/* ── footer ───────────────────────────────────────────── */
+footer{border-top:1px solid var(--border);padding-block:34px;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+.foot{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center}
+
+/* ── scroll reveal ────────────────────────────────────── */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.reveal.go{opacity:1;transform:none}
+.reveal[data-d="1"]{transition-delay:.06s}
+.reveal[data-d="2"]{transition-delay:.12s}
+.reveal[data-d="3"]{transition-delay:.18s}
+
+/* Everything off for anyone who asked for that. Each animation below is
+   accounted for, and check.py fails the build if a new one is not.
+   silences: beat draw lineIn march orbit ping rise runwall sweep twinkle wallhit */
+@media (prefers-reduced-motion:reduce){
+  .reveal,.anim svg>*{opacity:1!important;transform:none!important;transition:none!important;animation:none!important}
+  h1 .ln>span{transform:none;animation:none}
+  .sweep,.dot,.mark .star,.pkt,.bead,.dash,.wallglow,.drawin{animation:none!important}
+  .sweep{display:none}
+  .pkt{opacity:1}
+  .wallglow{opacity:.5}
+  /* .drawin hides itself with a full stroke-dashoffset and lets the animation
+     draw it back in. With the animation off, that offset has to go too, or the
+     firewall boundary is invisible for exactly the people who opted out. */
+  .drawin{stroke-dasharray:none!important;stroke-dashoffset:0!important}
+  .btn:hover{transform:none}
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#top">Skip to content</a>
+
+<header>
+  <div class="wrap bar">
+    <a class="mark" href="#top">oxagen <span class="x">×</span> stella <span class="star">*</span></a>
+    <nav class="navlinks">
+      <a href="#problem">problem</a>
+      <a href="#receipts">receipts</a>
+      <a href="#control">control plane</a>
+      <a href="#models">your model</a>
+    </nav>
+    <a class="btn" href="#cta" style="padding:9px 15px">Book a demo</a>
+    <div id="progress"></div>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ════════ HERO ════════ -->
+<section id="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span> Behind your firewall</span>
+
+    <h1>
+      <span class="ln"><span>Nobody trusts</span></span>
+      <span class="ln"><span>AI agents.</span></span>
+      <span class="ln"><span class="gold">So we ship receipts.</span></span>
+    </h1>
+
+    <p class="lede hero-sub">
+      Stella proves each job is done with a real test that passed.
+      Oxagen runs the whole thing inside your network, on models you own.
+      Your code never leaves the building.
+    </p>
+
+    <div class="hero-cta">
+      <a class="btn" href="#cta">Book a demo <span aria-hidden="true">→</span></a>
+      <a class="btn ghost" href="#receipts">See a receipt</a>
+    </div>
+
+    <p class="hero-note">open source agent · bring your own keys · no telemetry by default</p>
+
+    <div class="screen anim reveal">
+      <div class="screen-head">
+        <span class="tl on"></span><span class="tl"></span><span class="tl"></span>
+        <span class="path">stella — plan review — nothing runs until you say go</span>
+      </div>
+      <div class="screen-body">
+        <svg role="img" aria-label="Stella showing a draft plan: four numbered tasks, each with what proves it, waiting for approval before anything runs." viewBox="0 0 680 520" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, JetBrains Mono, monospace">
+<rect x="0" y="0" width="680" height="520" rx="6" fill="#0A0A0C" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="22" font-size="11" fill="#777782">SESSION  AGENTS  TRACES  GRAPH  FILES  SKILLS  MCP</text>
+<text x="400" y="22" font-size="11" fill="#EFC53F" font-weight="500">ISSUES</text>
+<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">stella</text>
+<text x="645" y="22" font-size="12" fill="#EFC53F" font-weight="500">*</text>
+<line x1="0" y1="32" x2="680" y2="32" stroke="#26262C" stroke-width="1"/>
+<text x="24" y="56" font-size="11" fill="#4B4B56">▶ OXA-142  token refresh race            in progress   plan r3</text>
+<text x="24" y="76" font-size="11" fill="#4B4B56">○ OXA-151  dedup digest persists across CI runs   triage</text>
+<rect x="56" y="90" width="568" height="374" fill="#0F0F12" stroke="#EFC53F" stroke-width="1"/>
+<text x="72" y="114" font-size="12" fill="#EFC53F" font-weight="500">w start work</text>
+<text x="180" y="114" font-size="12" fill="#E8E8EC">OXA-151 dedup digest persists across CI runs</text>
+<text x="72" y="134" font-size="11" fill="#777782">draft plan r1 · built from issue text + graph + memory</text>
+<line x1="56" y1="144" x2="624" y2="144" stroke="#26262C" stroke-width="1"/>
+<text x="72" y="164" font-size="11" fill="#A9AAB5">sources</text>
+<text x="140" y="164" font-size="11" fill="#777782">issue OXA-151 · graph: 3 coupled files · memory RULE:</text>
+<text x="140" y="180" font-size="11" fill="#777782">"dedup keys must be stable across runs"</text>
+<line x1="56" y1="192" x2="624" y2="192" stroke="#26262C" stroke-width="1"/>
+<text x="72" y="214" font-size="12" fill="#4B4B56">○</text>
+<text x="88" y="214" font-size="12" fill="#E8E8EC">1 read seen-set write path</text>
+<text x="404" y="214" font-size="11" fill="#4B4B56">read only · no contract</text>
+<text x="72" y="240" font-size="12" fill="#4B4B56">○</text>
+<text x="88" y="240" font-size="12" fill="#E8E8EC">2 persist digest set to .stella/seen</text>
+<text x="104" y="258" font-size="11" fill="#777782">done means: file exists after run</text>
+<text x="404" y="258" font-size="11" fill="#A9AAB5">graph · det</text>
+<text x="72" y="284" font-size="12" fill="#4B4B56">○</text>
+<text x="88" y="284" font-size="12" fill="#E8E8EC">3 restore on start</text>
+<text x="104" y="302" font-size="11" fill="#777782">done means: unit seen_restore green</text>
+<text x="404" y="302" font-size="11" fill="#A9AAB5">unit · det</text>
+<text x="72" y="328" font-size="12" fill="#EFC53F">◇</text>
+<text x="88" y="328" font-size="12" fill="#EFC53F">4 verify · 5 gates</text>
+<text x="404" y="328" font-size="11" fill="#777782">blocks merge</text>
+<line x1="56" y1="344" x2="624" y2="344" stroke="#26262C" stroke-width="1"/>
+<text x="72" y="366" font-size="11" fill="#777782">estimate</text>
+<text x="144" y="366" font-size="11" fill="#EFC53F">~$0.40</text>
+<text x="204" y="366" font-size="11" fill="#E8E8EC">~60k tok</text>
+<text x="282" y="366" font-size="11" fill="#A9AAB5">det est 84%</text>
+<text x="384" y="366" font-size="11" fill="#E8E8EC">~8 min</text>
+<line x1="56" y1="382" x2="624" y2="382" stroke="#26262C" stroke-width="1"/>
+<text x="72" y="406" font-size="12" fill="#EFC53F">a approve and start</text>
+<text x="240" y="406" font-size="11" fill="#A9AAB5">e edit tasks</text>
+<text x="344" y="406" font-size="11" fill="#A9AAB5">x cancel</text>
+<text x="72" y="430" font-size="11" fill="#4B4B56">nothing runs before approval · on a: branch created, plan becomes r1,</text>
+<text x="72" y="446" font-size="11" fill="#4B4B56">[:NEXT] edges written, breadcrumb updates</text>
+<line x1="0" y1="474" x2="680" y2="474" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="496" font-size="11" fill="#777782">kimi-k3 · idle · ctx</text>
+<text x="166" y="496" font-size="12" fill="#EFC53F">██▊</text>
+<text x="196" y="496" font-size="12" fill="#26262C">░░░░░░░</text>
+<text x="258" y="496" font-size="11" fill="#E8E8EC">27%</text>
+<text x="298" y="496" font-size="11" fill="#EFC53F">$0.45</text>
+<text x="356" y="496" font-size="11" fill="#A9AAB5">det 86%</text>
+<text x="430" y="496" font-size="11" fill="#A9AAB5">✉ 21</text>
+<text x="606" y="496" font-size="11" fill="#777782">? help</text>
+</svg>
+        <span class="swipe">↔ swipe</span>
+        <span class="sweep" aria-hidden="true"></span>
+      </div>
+      <p class="cap"><b>The agent shows its plan first.</b> Every step says what it will touch and what will prove it.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ PROBLEM ════════ -->
+<section id="problem">
+  <div class="wrap">
+    <p class="kicker reveal">The trust problem</p>
+    <h2 class="reveal" data-d="1">Three ways an agent<br>lets you down.</h2>
+
+    <div class="grid g3" style="margin-top:44px">
+      <div class="card reveal">
+        <span class="num">01</span>
+        <h3><span class="x">✗</span>It says it is done.</h3>
+        <p class="small">Nothing checked. Nobody looked. You find out in production, on a Friday.</p>
+      </div>
+      <div class="card reveal" data-d="1">
+        <span class="num">02</span>
+        <h3><span class="x">✗</span>You cannot see what it did.</h3>
+        <p class="small">No trail. No cost. No way to tell a good run from a lucky one.</p>
+      </div>
+      <div class="card reveal" data-d="2">
+        <span class="num">03</span>
+        <h3><span class="x">✗</span>Your code went out.</h3>
+        <p class="small">Straight to someone else's cloud. You cannot say where it slept.</p>
+      </div>
+    </div>
+
+    <p class="lede reveal" data-d="3" style="margin-top:44px;max-width:30em">
+      Every one of these is the same problem wearing a different hat.
+      <span style="color:var(--text)">You have no proof.</span>
+    </p>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ RECEIPTS ════════ -->
+<section id="receipts">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <p class="kicker reveal">01 / Receipts</p>
+        <h2 class="reveal" data-d="1">Done means<br>a test passed.</h2>
+        <p class="lede reveal" data-d="2" style="margin-top:22px">
+          Stella does not grade its own homework. A second model writes a test that
+          <span class="fail">fails</span> on the old code. The worker fixes the code.
+          The test flips to <span class="pass">green</span>. That flip is the receipt.
+        </p>
+
+      </div>
+
+      <div>
+        <ol class="steps reveal" data-d="1" style="margin-top:0">
+          <li><span class="n">01</span><div><b>Write the failing test</b><span>A different model writes it. Not the one doing the work.</span></div></li>
+          <li><span class="n">02</span><div><b>Do the work</b><span>The worker cannot touch the test. If it does, the receipt is void.</span></div></li>
+          <li><span class="n">03</span><div><b>Watch the flip</b><span>Red to green, recorded. No flip, no done. It is that simple.</span></div></li>
+        </ol>
+
+        <div class="chips reveal" data-d="2">
+          <span class="chip g">✓ types</span>
+          <span class="chip g">✓ lint</span>
+          <span class="chip g">✓ unit 214/214</span>
+          <span class="chip r">✗ e2e smoke</span>
+          <span class="chip">merge blocked</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen anim reveal">
+      <div class="screen-head">
+        <span class="tl"></span><span class="tl on"></span><span class="tl"></span>
+        <span class="path">stella — gate board — one red gate stops the merge</span>
+      </div>
+      <div class="screen-body">
+        <svg role="img" aria-label="Stella's gate board: four gates passing green, one end-to-end test failing red, and the merge blocked until it goes green." viewBox="0 0 680 520" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, JetBrains Mono, monospace">
+<rect x="0" y="0" width="680" height="520" rx="6" fill="#0A0A0C" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="22" font-size="11" fill="#EFC53F" font-weight="500">SESSION</text>
+<text x="80" y="22" font-size="11" fill="#777782">▸ plan r3 · task 6 verify · 5/6</text>
+<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">stella</text>
+<text x="645" y="22" font-size="12" fill="#EFC53F" font-weight="500">*</text>
+<line x1="0" y1="32" x2="680" y2="32" stroke="#26262C" stroke-width="1"/>
+<line x1="16" y1="52" x2="664" y2="52" stroke="#2C2C33" stroke-width="1"/>
+<rect x="24" y="44" width="290" height="14" fill="#0A0A0C"/>
+<text x="28" y="56" font-size="11" fill="#EFC53F">turn 15</text>
+<text x="82" y="56" font-size="11" fill="#777782">verify · gates · det only · $0.00</text>
+<line x1="20" y1="70" x2="20" y2="196" stroke="#EFC53F" stroke-width="2"/>
+<text x="32" y="82" font-size="12" fill="#EFC53F">◇ gate board</text>
+<text x="146" y="82" font-size="11" fill="#777782">patch-7 · 4/5 green</text>
+<text x="588" y="82" font-size="11" fill="#4B4B56">$0.00</text>
+<text x="32" y="106" font-size="12" fill="#74C991">✓</text>
+<text x="48" y="106" font-size="12" fill="#777782">types</text>
+<text x="588" y="106" font-size="11" fill="#74C991">pass</text>
+<text x="32" y="126" font-size="12" fill="#74C991">✓</text>
+<text x="48" y="126" font-size="12" fill="#777782">lint + format</text>
+<text x="588" y="126" font-size="11" fill="#74C991">pass</text>
+<text x="32" y="146" font-size="12" fill="#74C991">✓</text>
+<text x="48" y="146" font-size="12" fill="#777782">unit 214/214</text>
+<text x="588" y="146" font-size="11" fill="#74C991">pass</text>
+<text x="32" y="166" font-size="12" fill="#74C991">✓</text>
+<text x="48" y="166" font-size="12" fill="#777782">graph parity</text>
+<text x="588" y="166" font-size="11" fill="#74C991">pass</text>
+<rect x="26" y="174" width="638" height="18" fill="#241019"/>
+<text x="32" y="187" font-size="12" fill="#E0687A">✗</text>
+<text x="48" y="187" font-size="12" fill="#E8E8EC" font-weight="500">e2e smoke</text>
+<text x="140" y="187" font-size="11" fill="#E0687A">failed · 1/3 cases · 41s</text>
+<text x="560" y="187" font-size="11" fill="#E0687A">blocking</text>
+<line x1="20" y1="204" x2="20" y2="278" stroke="#E0687A" stroke-width="2"/>
+<rect x="32" y="208" width="632" height="72" fill="#0F0F12" stroke="#E0687A" stroke-width="1"/>
+<text x="44" y="228" font-size="11" fill="#E0687A">✗ case auth_refresh_parallel</text>
+<text x="44" y="248" font-size="11" fill="#565660">assertion failed: findings.len() == 1</text>
+<text x="44" y="264" font-size="11" fill="#565660">expected 1 finding, got 2 (duplicate digest)</text>
+<text x="380" y="228" font-size="11" fill="#4B4B56">^N jump · l full log · r rerun gate</text>
+<line x1="20" y1="292" x2="20" y2="384" stroke="#F7D96B" stroke-width="2"/>
+<rect x="32" y="296" width="632" height="92" fill="#0F0F12" stroke="#EFC53F" stroke-width="1"/>
+<text x="44" y="316" font-size="12" fill="#F7D96B">↯ propose r4</text>
+<text x="156" y="316" font-size="11" fill="#E8E8EC">add task 3b "stabilize auth fixture; assert single writer"</text>
+<text x="44" y="338" font-size="11" fill="#777782">cause: duplicate digest under parallel refresh</text>
+<text x="404" y="338" font-size="11" fill="#777782">linked OXA-142</text>
+<text x="44" y="360" font-size="11" fill="#EFC53F">a approve r4</text>
+<text x="152" y="360" font-size="11" fill="#A9AAB5">e edit</text>
+<text x="212" y="360" font-size="11" fill="#A9AAB5">x dismiss</text>
+<text x="44" y="380" font-size="11" fill="#4B4B56">nothing runs until approval · the model cannot argue with a red gate</text>
+<rect x="16" y="400" width="648" height="34" fill="#17171B" stroke="#EFC53F" stroke-width="1"/>
+<text x="28" y="422" font-size="12" fill="#EFC53F" font-weight="500">◇ merge blocked</text>
+<text x="164" y="422" font-size="11" fill="#777782">unblocks on green · verify remains $0.00 · det</text>
+<text x="16" y="460" font-size="12" fill="#EFC53F" font-weight="500">&gt;&gt;&gt;</text>
+<rect x="46" y="450" width="7" height="13" fill="#E8E8EC"/>
+<line x1="0" y1="472" x2="680" y2="472" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="494" font-size="11" fill="#777782">kimi-k3 · verify · ctx</text>
+<text x="182" y="494" font-size="12" fill="#EFC53F">████▏</text>
+<text x="232" y="494" font-size="12" fill="#26262C">░░░░░</text>
+<text x="284" y="494" font-size="11" fill="#E8E8EC">42%</text>
+<text x="324" y="494" font-size="11" fill="#EFC53F">$0.45</text>
+<text x="382" y="494" font-size="11" fill="#A9AAB5">det 87%</text>
+<text x="456" y="494" font-size="11" fill="#E0687A">1 gate red</text>
+<text x="606" y="494" font-size="11" fill="#777782">? help</text>
+</svg>
+        <span class="swipe">↔ swipe</span>
+        <span class="sweep" aria-hidden="true"></span>
+      </div>
+      <p class="cap"><b>The model cannot argue with a red gate.</b> It proposes a fix and waits for you.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ CONTROL PLANE ════════ -->
+<section id="control">
+  <div class="wrap">
+    <div class="split flip">
+      <div>
+        <p class="kicker reveal">02 / Control plane</p>
+        <h2 class="reveal" data-d="1">Oxagen watches<br>every agent.</h2>
+        <p class="lede reveal" data-d="2" style="margin-top:22px">
+          One place to see every run in your company. Who started it. What it touched.
+          What it cost. What proved it. All of it stays on your side of the wall.
+        </p>
+
+        <ol class="steps reveal" data-d="3">
+          <li><span class="n">▸</span><div><b>Set the rules once</b><span>Which models, which repos, which tools, how much spend. Rules travel with the repo.</span></div></li>
+          <li><span class="n">▸</span><div><b>Every run leaves a trace</b><span>Full detail. Replayable. You can open any turn and see the whole thing.</span></div></li>
+          <li><span class="n">▸</span><div><b>Nothing calls out</b><span>No telemetry. No update pings. The wall holds by default.</span></div></li>
+        </ol>
+      </div>
+
+      <div class="dgm reveal" data-d="1">
+        <svg viewBox="0 0 420 300" role="img" aria-label="Diagram: agents and the Oxagen control plane sit inside your firewall; traffic to the public web is blocked at the wall.">
+          <!-- inside boundary -->
+          <rect x="8" y="30" width="248" height="238" fill="#0A0A0C" stroke="#26262C" class="drawin"/>
+          <text x="20" y="22" class="lbl-g">YOUR NETWORK</text>
+
+          <!-- agents -->
+          <g>
+            <rect x="24" y="52" width="102" height="34" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="34" y="73" class="lbl-b">stella ×12</text>
+            <rect x="24" y="96" width="102" height="34" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="34" y="117" class="lbl-b">stella ×8</text>
+            <rect x="24" y="140" width="102" height="34" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="34" y="161" class="lbl-b">fleet</text>
+            <text x="34" y="196" class="lbl">agents</text>
+          </g>
+
+          <!-- links to control plane -->
+          <path d="M126 69 H150 V128" stroke="#26262C" fill="none" class="dash"/>
+          <path d="M126 113 H150" stroke="#26262C" fill="none" class="dash"/>
+          <path d="M126 157 H150 V128" stroke="#26262C" fill="none" class="dash"/>
+
+          <!-- control plane -->
+          <rect x="150" y="96" width="94" height="112" fill="#0F0F12" stroke="#EFC53F"/>
+          <text x="161" y="117" class="lbl-b" fill="#EFC53F">oxagen</text>
+          <text x="161" y="136" class="lbl">policy</text>
+          <text x="161" y="152" class="lbl">traces</text>
+          <text x="161" y="168" class="lbl">cost</text>
+          <text x="161" y="184" class="lbl">receipts</text>
+          <text x="161" y="200" class="lbl">models</text>
+
+          <!-- the wall -->
+          <g>
+            <rect x="286" y="30" width="10" height="238" fill="#17171B" stroke="#EFC53F"/>
+            <g class="wallglow"><rect x="278" y="30" width="26" height="238" fill="#EFC53F" opacity=".16"/></g>
+            <text x="291" y="22" class="lbl-g" text-anchor="middle">FIREWALL</text>
+          </g>
+
+          <!-- packets that die at the wall -->
+          <g class="pkt"><rect x="186" y="238" width="14" height="7" fill="#E0687A"/></g>
+          <g class="pkt"><rect x="186" y="238" width="14" height="7" fill="#E0687A"/></g>
+          <g class="pkt"><rect x="186" y="238" width="14" height="7" fill="#E0687A"/></g>
+          <text x="150" y="262" class="lbl" fill="#E0687A">egress · blocked</text>
+
+          <!-- outside -->
+          <text x="320" y="120" class="lbl">public</text>
+          <text x="320" y="136" class="lbl">web</text>
+          <text x="320" y="164" class="lbl" fill="#4B4B56">never</text>
+          <text x="320" y="178" class="lbl" fill="#4B4B56">reached</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="stats reveal">
+      <div class="stat"><div class="v">100%</div><div class="k">runs traced</div></div>
+      <div class="stat"><div class="v">0</div><div class="k">bytes out by default</div></div>
+      <div class="stat"><div class="v">1</div><div class="k">place to look</div></div>
+      <div class="stat"><div class="v">$0.00</div><div class="k">to check a receipt</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ YOUR CODE ════════ -->
+<section id="code">
+  <div class="wrap">
+    <p class="kicker reveal">03 / Your code</p>
+    <h2 class="reveal" data-d="1">It reads your whole<br>codebase first.</h2>
+    <p class="lede reveal" data-d="2" style="margin-top:24px;max-width:36em">
+      Before it changes a line, Stella maps your code. Which files lean on which.
+      What breaks if this moves. So a small fix in one folder does not quietly
+      snap something three folders away.
+    </p>
+
+    <div class="screen anim reveal">
+      <div class="screen-head">
+        <span class="tl on"></span><span class="tl"></span><span class="tl on"></span>
+        <span class="path">stella — graph — 438 nodes, 12ms, same answer every time</span>
+      </div>
+      <div class="screen-body">
+        <svg role="img" aria-label="Stella's code graph: 438 indexed nodes, with the files and symbols that a selected file is coupled to." viewBox="0 0 680 468" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, JetBrains Mono, monospace">
+<rect x="0" y="0" width="680" height="468" rx="6" fill="#0A0A0C" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="22" font-size="11" fill="#777782">SESSION  AGENTS  TRACES</text>
+<text x="212" y="22" font-size="11" fill="#EFC53F" font-weight="500">GRAPH</text>
+<text x="262" y="22" font-size="11" fill="#777782">FILES  SKILLS  MCP  ISSUES</text>
+<text x="600" y="22" font-size="12" fill="#E8E8EC" font-weight="500">stella</text>
+<text x="645" y="22" font-size="12" fill="#EFC53F" font-weight="500">*</text>
+<line x1="0" y1="32" x2="680" y2="32" stroke="#26262C" stroke-width="1"/>
+<rect x="12" y="42" width="656" height="24" fill="#0F0F12" stroke="#26262C" stroke-width="1"/>
+<text x="22" y="59" font-size="11" fill="#EFC53F">⌕</text>
+<text x="38" y="59" font-size="11" fill="#E8E8EC">file:stella-protocol/src/lib.rs</text>
+<text x="290" y="59" font-size="11" fill="#4B4B56">q free-form query</text>
+<text x="518" y="59" font-size="11" fill="#777782">438 nodes · 12ms · det</text>
+<text x="16" y="88" font-size="11" fill="#777782">nodes · 27 in file</text>
+<rect x="12" y="96" width="244" height="296" fill="#0F0F12" stroke="#26262C" stroke-width="1"/>
+<rect x="13" y="102" width="242" height="18" fill="#17171B"/>
+<text x="22" y="115" font-size="11" fill="#EFC53F">▤ lib.rs</text>
+<text x="160" y="115" font-size="11" fill="#F7D96B">● hot</text>
+<text x="22" y="137" font-size="11" fill="#BFC1CC">▢ Attachment</text>
+<text x="196" y="137" font-size="11" fill="#4B4B56">18</text>
+<text x="22" y="155" font-size="11" fill="#BFC1CC">▢ AttachmentKind</text>
+<text x="196" y="155" font-size="11" fill="#4B4B56">7</text>
+<text x="22" y="173" font-size="11" fill="#BFC1CC">▢ AttachmentSource</text>
+<text x="196" y="173" font-size="11" fill="#4B4B56">5</text>
+<text x="22" y="191" font-size="11" fill="#A9AAB5">ƒ classify_media_type</text>
+<text x="196" y="191" font-size="11" fill="#4B4B56">4</text>
+<text x="22" y="209" font-size="11" fill="#A9AAB5">ƒ human_bytes</text>
+<text x="196" y="209" font-size="11" fill="#4B4B56">3</text>
+<text x="22" y="227" font-size="11" fill="#BFC1CC">▢ CandidateDenial</text>
+<text x="196" y="227" font-size="11" fill="#4B4B56">6</text>
+<text x="22" y="245" font-size="11" fill="#BFC1CC">▢ CandidateHandle</text>
+<text x="196" y="245" font-size="11" fill="#4B4B56">9</text>
+<text x="22" y="263" font-size="11" fill="#BFC1CC">▢ CompactionRewrite</text>
+<text x="196" y="263" font-size="11" fill="#4B4B56">11</text>
+<text x="22" y="281" font-size="11" fill="#BFC1CC">▢ CompletionRequest</text>
+<text x="196" y="281" font-size="11" fill="#4B4B56">14</text>
+<text x="22" y="299" font-size="11" fill="#BFC1CC">▢ CompletionResult</text>
+<text x="196" y="299" font-size="11" fill="#4B4B56">8</text>
+<text x="22" y="317" font-size="11" fill="#A9AAB5">ƒ media_type_for_path</text>
+<text x="196" y="317" font-size="11" fill="#4B4B56">2</text>
+<text x="22" y="335" font-size="11" fill="#4B4B56">⋯ 16 more</text>
+<text x="22" y="362" font-size="11" fill="#4B4B56">▤ file · ▢ type · ƒ fn</text>
+<text x="22" y="380" font-size="11" fill="#4B4B56">right column = edge count</text>
+<rect x="268" y="96" width="400" height="150" fill="#0F0F12" stroke="#26262C" stroke-width="1"/>
+<text x="280" y="116" font-size="11" fill="#EFC53F">▤ crates/stella-protocol/src/lib.rs</text>
+<text x="576" y="116" font-size="11" fill="#F7D96B">turn 14</text>
+<line x1="268" y1="124" x2="668" y2="124" stroke="#26262C" stroke-width="1"/>
+<text x="280" y="144" font-size="11" fill="#E8E8EC">imports 24 →</text>
+<text x="386" y="144" font-size="11" fill="#E8E8EC">← imported-by 12</text>
+<text x="524" y="144" font-size="11" fill="#E8E8EC">writes 2 · tests 6</text>
+<text x="280" y="166" font-size="11" fill="#777782">→</text>
+<text x="296" y="166" font-size="11" fill="#A9AAB5">attachment::Attachment</text>
+<text x="280" y="184" font-size="11" fill="#777782">→</text>
+<text x="296" y="184" font-size="11" fill="#A9AAB5">cache::CacheCause</text>
+<text x="280" y="202" font-size="11" fill="#777782">←</text>
+<text x="296" y="202" font-size="11" fill="#A9AAB5">stella-cli::self_driving_cmd</text>
+<text x="510" y="202" font-size="11" fill="#F7D96B">edited turn 14</text>
+<text x="280" y="220" font-size="11" fill="#777782">←</text>
+<text x="296" y="220" font-size="11" fill="#A9AAB5">stella-engine::compaction</text>
+<text x="280" y="238" font-size="11" fill="#4B4B56">⋯ e expand all edges</text>
+<rect x="268" y="256" width="400" height="136" fill="#0F0F12" stroke="#26262C" stroke-width="1"/>
+<text x="280" y="276" font-size="11" fill="#777782">coupling · neighbors by edge count</text>
+<line x1="268" y1="284" x2="668" y2="284" stroke="#26262C" stroke-width="1"/>
+<text x="280" y="304" font-size="11" fill="#A9AAB5">attachment::Attachment</text>
+<text x="472" y="304" font-size="11" fill="#EFC53F">████████▌</text>
+<text x="586" y="304" font-size="11" fill="#777782">18</text>
+<text x="280" y="322" font-size="11" fill="#A9AAB5">completion::Request</text>
+<text x="472" y="322" font-size="11" fill="#EFC53F">█████▎</text>
+<text x="586" y="322" font-size="11" fill="#777782">11</text>
+<text x="280" y="340" font-size="11" fill="#A9AAB5">compaction::Rewrite</text>
+<text x="472" y="340" font-size="11" fill="#EFC53F">███▊</text>
+<text x="586" y="340" font-size="11" fill="#777782">8</text>
+<text x="280" y="358" font-size="11" fill="#A9AAB5">cache::CacheCause</text>
+<text x="472" y="358" font-size="11" fill="#EFC53F">██▉</text>
+<text x="586" y="358" font-size="11" fill="#777782">6</text>
+<text x="280" y="380" font-size="11" fill="#4B4B56">high coupling = blast radius if you edit this file</text>
+<line x1="0" y1="404" x2="680" y2="404" stroke="#26262C" stroke-width="1"/>
+<text x="16" y="426" font-size="11" fill="#4B4B56">↵ open file · e edges · q query · t touched this session · ⇥ panes</text>
+<text x="16" y="450" font-size="11" fill="#777782">every answer here is deterministic · $0.00 · 12ms</text>
+</svg>
+        <span class="swipe">↔ swipe</span>
+        <span class="sweep" aria-hidden="true"></span>
+      </div>
+      <p class="cap"><b>The map is built on your machine and stays there.</b> It is also what makes your own model good — it learns a real codebase, not a pile of snippets.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ YOUR OWN MODEL ════════ -->
+<section id="models">
+  <div class="wrap">
+    <p class="kicker reveal">04 / Your own model</p>
+    <h2 class="reveal" data-d="1">Your runs train<br>your own model.</h2>
+    <p class="lede reveal" data-d="2" style="margin-top:24px;max-width:36em">
+      Every run leaves a full trace of what worked and what did not. We feed those traces
+      back into an open-weight model on your own hardware. You end up with a model that knows
+      your code, your rules and your habits — and it never leaves your network.
+    </p>
+
+    <div class="split" style="margin-top:clamp(38px,7vw,64px)">
+      <div class="dgm reveal">
+        <svg viewBox="0 0 420 260" role="img" aria-label="Diagram: runs produce traces, traces tune an open-weight model, the tuned model runs the next job, all inside your network.">
+          <defs>
+            <path id="loop" d="M80 60 H340 A26 26 0 0 1 340 112 H80 A26 26 0 0 0 80 164 H340" fill="none"/>
+            <marker id="ar" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+              <path d="M0 0 L7 3.5 L0 7 z" fill="#EFC53F"/>
+            </marker>
+          </defs>
+
+          <!-- 4 stations -->
+          <g>
+            <rect x="14" y="40" width="112" height="42" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="26" y="60" class="lbl-b">agents run</text>
+            <text x="26" y="74" class="lbl">real work, all day</text>
+
+            <rect x="152" y="40" width="112" height="42" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="164" y="60" class="lbl-b">traces</text>
+            <text x="164" y="74" class="lbl">every turn, kept</text>
+
+            <rect x="290" y="40" width="116" height="42" fill="#0F0F12" stroke="#EFC53F"/>
+            <text x="302" y="60" class="lbl-b" fill="#EFC53F">tune</text>
+            <text x="302" y="74" class="lbl">open weights</text>
+
+            <rect x="152" y="150" width="112" height="42" fill="#0F0F12" stroke="#2C2C33"/>
+            <text x="164" y="170" class="lbl-b">your model</text>
+            <text x="164" y="184" class="lbl">frontier quality</text>
+          </g>
+
+          <!-- flow -->
+          <path d="M126 61 H150" stroke="#EFC53F" fill="none" marker-end="url(#ar)"/>
+          <path d="M264 61 H288" stroke="#EFC53F" fill="none" marker-end="url(#ar)"/>
+          <path d="M348 82 V128 H208 V148" stroke="#EFC53F" fill="none" marker-end="url(#ar)" class="dash"/>
+          <path d="M208 192 V214 H70 V82" stroke="#EFC53F" fill="none" marker-end="url(#ar)" class="dash"/>
+
+          <text x="222" y="232" class="lbl" text-anchor="middle">it gets better every week</text>
+
+          <!-- bead on the loop -->
+          <circle class="bead" r="3.5" fill="#F7D96B" style="offset-path:path('M126 61 H288 M348 82 V128 H208 V148 M208 192 V214 H70 V82');offset-rotate:0deg"/>
+        </svg>
+      </div>
+
+      <div>
+        <ol class="steps reveal" data-d="1" style="margin-top:0">
+          <li><span class="n">▸</span><div><b>It learns your code</b><span>Your file layout, your names, your rules. Not the average of the internet.</span></div></li>
+          <li><span class="n">▸</span><div><b>It learns what passed</b><span>Receipts label the data for free. A green flip is a right answer.</span></div></li>
+          <li><span class="n">▸</span><div><b>It stays home</b><span>Weights on your hardware. No call out. Nothing to leak.</span></div></li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="screen anim reveal">
+      <div class="screen-head">
+        <span class="tl"></span><span class="tl"></span><span class="tl on"></span>
+        <span class="path">stella — trace stream — this is the training data</span>
+      </div>
+      <div class="screen-body">
+        <svg role="img" aria-label="Stella's trace stream: a file written, a file deleted, a memory promoted to a rule, each with its cost and timing." viewBox="0 0 680 508" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, JetBrains Mono, monospace">
+<rect x="0" y="0" width="680" height="508" rx="6" fill="#0A0A0C" stroke="#26262C" stroke-width="1"/>
+<line x1="20" y1="20" x2="20" y2="176" stroke="#EFC53F" stroke-width="2"/>
+<text x="32" y="32" font-size="12" fill="#EFC53F">＋ write</text>
+<text x="100" y="32" font-size="11" fill="#E8E8EC">crates/stella-cli/src/dedup.rs</text>
+<text x="342" y="32" font-size="11" fill="#74C991">new file · 34 lines</text>
+<text x="600" y="32" font-size="11" fill="#777782">⚡1ms</text>
+<rect x="32" y="40" width="632" height="112" fill="#0F0F12"/>
+<text x="40" y="58" font-size="11" fill="#4B4B56">1</text>
+<text x="64" y="58" font-size="11" fill="#EFC53F">use</text>
+<text x="94" y="58" font-size="11" fill="#E8E8EC">std::collections::</text>
+<text x="238" y="58" font-size="11" fill="#BFC1CC">BTreeSet</text>
+<text x="302" y="58" font-size="11" fill="#E8E8EC">;</text>
+<text x="40" y="76" font-size="11" fill="#4B4B56">2</text>
+<text x="64" y="76" font-size="11" fill="#565660">/// Stable dedup key for findings.</text>
+<text x="40" y="94" font-size="11" fill="#4B4B56">3</text>
+<text x="64" y="94" font-size="11" fill="#EFC53F">pub struct</text>
+<text x="150" y="94" font-size="11" fill="#BFC1CC">DigestKey</text>
+<text x="222" y="94" font-size="11" fill="#E8E8EC">(</text>
+<text x="230" y="94" font-size="11" fill="#EFC53F">pub</text>
+<text x="260" y="94" font-size="11" fill="#BFC1CC">u64</text>
+<text x="286" y="94" font-size="11" fill="#E8E8EC">);</text>
+<text x="40" y="112" font-size="11" fill="#4B4B56">4</text>
+<text x="64" y="112" font-size="11" fill="#EFC53F">impl</text>
+<text x="100" y="112" font-size="11" fill="#BFC1CC">DigestKey</text>
+<text x="172" y="112" font-size="11" fill="#E8E8EC">{</text>
+<text x="40" y="130" font-size="11" fill="#4B4B56">5</text>
+<text x="64" y="130" font-size="11" fill="#EFC53F">  pub fn</text>
+<text x="128" y="130" font-size="11" fill="#E8E8EC">of(text: &amp;</text>
+<text x="208" y="130" font-size="11" fill="#BFC1CC">str</text>
+<text x="232" y="130" font-size="11" fill="#E8E8EC">) -&gt; </text>
+<text x="270" y="130" font-size="11" fill="#BFC1CC">Self</text>
+<text x="302" y="130" font-size="11" fill="#E8E8EC"> {</text>
+<text x="40" y="148" font-size="11" fill="#4B4B56">⋯ 29 more · ↵ expand</text>
+<text x="32" y="170" font-size="11" fill="#4B4B56">→ task 4 · registered in graph as module node</text>
+<line x1="20" y1="192" x2="20" y2="222" stroke="#E0687A" stroke-width="2"/>
+<text x="32" y="204" font-size="12" fill="#E0687A">✗ delete</text>
+<text x="102" y="204" font-size="11" fill="#E8E8EC">src/old_digest.rs</text>
+<text x="242" y="204" font-size="11" fill="#E0687A">-118 lines</text>
+<text x="528" y="204" font-size="11" fill="#777782">git-backed · u undo</text>
+<text x="32" y="222" font-size="11" fill="#777782">graph check</text>
+<text x="122" y="222" font-size="11" fill="#A9AAB5">0 inbound refs · det</text>
+<text x="286" y="222" font-size="11" fill="#4B4B56">safe to remove, verified before the tool ran</text>
+<line x1="20" y1="238" x2="20" y2="300" stroke="#A9AAB5" stroke-width="2"/>
+<text x="32" y="250" font-size="12" fill="#A9AAB5">◆ memory</text>
+<text x="112" y="250" font-size="11" fill="#E8E8EC">logged</text>
+<text x="566" y="250" font-size="11" fill="#4B4B56">mem_83b3…d29a</text>
+<text x="32" y="268" font-size="11" fill="#E8E8EC">"dedup keys must be stable across runs; hash finding text only"</text>
+<text x="32" y="286" font-size="11" fill="#E8E8EC">OBSERVATION</text>
+<text x="126" y="286" font-size="11" fill="#4B4B56">▸ RULE ▸ FACT</text>
+<text x="240" y="286" font-size="11" fill="#777782">conf 0.62 · kind PERFORMANCE · decays</text>
+<text x="32" y="302" font-size="11" fill="#4B4B56">promotes to RULE at 0.85 · e edit · x reject</text>
+<line x1="20" y1="318" x2="20" y2="330" stroke="#A9AAB5" stroke-width="2"/>
+<text x="32" y="330" font-size="12" fill="#A9AAB5">◆ memory</text>
+<text x="112" y="330" font-size="11" fill="#E8E8EC">promoted</text>
+<text x="186" y="330" font-size="11" fill="#777782">OBSERVATION → RULE</text>
+<text x="342" y="330" font-size="11" fill="#74C991">conf 0.87</text>
+<text x="420" y="330" font-size="11" fill="#4B4B56">· audit event mem_evt_112 · now prompt-injected</text>
+<text x="32" y="360" font-size="11" fill="#4B4B56">↓ compacted 74k→69k · 0 evicted · 0 deduped</text>
+<line x1="16" y1="384" x2="664" y2="384" stroke="#2C2C33" stroke-width="1"/>
+<rect x="24" y="376" width="340" height="14" fill="#0A0A0C"/>
+<text x="28" y="388" font-size="11" fill="#EFC53F">turn 16</text>
+<text x="82" y="388" font-size="11" fill="#777782">execute · queued: "also persist across CI runs"</text>
+<line x1="20" y1="402" x2="20" y2="432" stroke="#F7D96B" stroke-width="2"/>
+<text x="32" y="414" font-size="12" fill="#F7D96B">◐ model</text>
+<text x="102" y="414" font-size="11" fill="#E8E8EC">applying queued steer to task 4</text>
+<text x="588" y="414" font-size="11" fill="#777782">6 tok/s</text>
+<text x="32" y="432" font-size="11" fill="#4B4B56">irreducible generation · 1 of 2 budgeted model calls this turn</text>
+<text x="16" y="464" font-size="12" fill="#EFC53F" font-weight="500">&gt;&gt;&gt;</text>
+<rect x="46" y="454" width="7" height="13" fill="#E8E8EC"/>
+<text x="16" y="490" font-size="11" fill="#4B4B56">rails:</text>
+<text x="62" y="490" font-size="11" fill="#EFC53F">gold = stella acting</text>
+<text x="220" y="490" font-size="11" fill="#A9AAB5">silver = world in</text>
+<text x="356" y="490" font-size="11" fill="#E0687A">red fail</text>
+<text x="424" y="490" font-size="11" fill="#74C991">green pass</text>
+<text x="510" y="490" font-size="11" fill="#4B4B56">· one glance, no reading</text>
+</svg>
+        <span class="swipe">↔ swipe</span>
+        <span class="sweep" aria-hidden="true"></span>
+      </div>
+      <p class="cap"><b>Every edit, tool call and cost, kept in order.</b> Good runs teach. Bad runs teach more.</p>
+    </div>
+
+    <div class="band reveal" style="margin-top:clamp(40px,7vw,68px)">
+      <span class="tag">★ Enterprise only</span>
+      <h3 style="font-size:clamp(1.3rem,4.6vw,2rem);max-width:18em">
+        Frontier quality from a model that never touches the public web.
+      </h3>
+      <p class="lede" style="margin-top:18px;max-width:34em">
+        Tuning on your own traces is for enterprise customers. Your data stays yours,
+        the weights stay yours, and the whole loop runs on hardware you control.
+      </p>
+      <div class="chips">
+        <span class="chip">open weights</span>
+        <span class="chip">on your hardware</span>
+        <span class="chip">air gapped</span>
+        <span class="chip">yours to keep</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="hair"></div></div>
+
+<!-- ════════ CTA ════════ -->
+<section id="cta">
+  <div class="wrap">
+    <p class="kicker reveal" style="justify-content:center">Get started</p>
+    <h2 class="reveal" data-d="1">Point it at your<br>hardest repo.</h2>
+    <p class="lede reveal" data-d="2" style="margin-top:22px;max-width:30em">
+      We will run it on your code, behind your wall, and hand you the receipts.
+    </p>
+    <div class="hero-cta reveal" data-d="3">
+      <a class="btn" href="#top">Book a demo <span aria-hidden="true">→</span></a>
+      <a class="btn ghost" href="#top">Read the docs</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>oxagen <span style="color:var(--dim)">×</span> stella <span class="gold">*</span></span>
+    <span>agents you can check</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* index every direct child of an inlined TUI frame so CSS can stagger it */
+  document.querySelectorAll('.anim svg').forEach(function(svg){
+    Array.prototype.forEach.call(svg.children, function(el, i){
+      el.style.setProperty('--i', i);
+    });
+    /* keep the blocking row and the merge banner breathing after the draw */
+    svg.querySelectorAll('[fill="#241019"], [fill="#17171B"][stroke="#EFC53F"]').forEach(function(el){
+      el.setAttribute('data-beat','');
+    });
+  });
+
+  if (reduce) {
+    document.querySelectorAll('.reveal,.anim').forEach(function(el){ el.classList.add('go'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('go'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.06, rootMargin: '0px 0px -4% 0px' });
+    document.querySelectorAll('.reveal,.anim').forEach(function(el){ io.observe(el); });
+  }
+
+  /* scroll progress hairline under the nav */
+  var bar = document.getElementById('progress'), tick = false;
+  function draw(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+    tick = false;
+  }
+  window.addEventListener('scroll', function(){
+    if (!tick) { tick = true; requestAnimationFrame(draw); }
+  }, { passive: true });
+  draw();
+})();
+</script>
+</body>
+</html>
