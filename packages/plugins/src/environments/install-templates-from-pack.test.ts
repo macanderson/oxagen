@@ -1,8 +1,8 @@
 /**
  * install-templates-from-pack.test.ts
  *
- * Covers installTemplatesFromPack (Spec §6 — plugin-pack distribution of
- * portable sandbox templates):
+ * Covers installTemplatesFromPack (plugin-pack distribution of portable
+ * sandbox templates):
  *  - seeds the template into the workspace DEFAULT environment (non-default)
  *  - re-install is idempotent (updates in place, no duplicate)
  *  - a bare-slug collision with an UNRELATED template (in another environment)

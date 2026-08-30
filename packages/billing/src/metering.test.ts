@@ -54,7 +54,7 @@ describe("meterCreditsForUsage", () => {
     ).toBe(0n);
   });
 
-  // ── #1076 cache-aware metering witnesses ──────────────────────────────────
+  // ── cache-aware metering witnesses ────────────────────────────────────────
   // These prove the billed credit amount actually reflects the cache split — the
   // whole point of the feature — not just that the cost function returns a number.
 
@@ -69,9 +69,9 @@ describe("meterCreditsForUsage", () => {
   });
 
   it("bills a cache-write-heavy call MORE credits than treating those tokens as fresh input", () => {
-    // The core #1076 fix: 8k of the input were cache writes (1.25x premium on
-    // Anthropic), so the call must bill MORE than the identical call that (pre-fix)
-    // counted those tokens as fresh 1x input.
+    // 8k of the input are cache writes (1.25x premium on Anthropic), so the
+    // call must bill MORE than the identical call that counts those tokens
+    // as fresh 1x input.
     const asFresh = meterCreditsForUsage(sonnetCall, { markup: MARKUP });
     const withWrites = meterCreditsForUsage(
       { ...sonnetCall, cacheWriteTokens: 8_000 },

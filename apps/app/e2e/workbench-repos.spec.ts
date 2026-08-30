@@ -3,7 +3,7 @@
  *
  * A fresh workspace has no GitHub connections (installing the Oxagen GitHub
  * App requires a live OAuth round-trip this harness can't drive), so this
- * spec covers what's honestly reachable without stubbing:
+ * spec covers what's actually reachable without stubbing:
  *   1. The list page renders its header actions and the empty state.
  *   2. Direct navigation to a repo detail URL for an id that doesn't belong
  *      to this workspace 404s (list_connections is tenant-scoped — proves
@@ -45,7 +45,7 @@ test("Repos list renders the empty state without the toolbar; an unknown repo id
   // on `repos.length > 0` and offers Create inside the empty card instead. The
   // unit test "hides the inoperable toolbar and puts Create repo inside the
   // empty state" pins the same contract. Asserting the absence keeps this spec
-  // honest about which of the two Create buttons a fresh workspace gets.
+  // precise about which of the two Create buttons a fresh workspace gets.
   await expect(page.getByTestId("repos-empty-create-btn")).toBeVisible();
   await expect(page.getByTestId("repos-create-btn")).toHaveCount(0);
   await expect(page.getByTestId("repos-fork-btn")).toHaveCount(0);

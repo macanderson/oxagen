@@ -53,8 +53,8 @@ export interface ProviderModelRate {
    * USD per 1,000,000 prompt-cache WRITE (cache creation) tokens. Anthropic
    * bills these at 1.25x base input (5-minute TTL); providers with no write
    * premium (OpenAI's automatic caching) charge fresh input rate, so their
-   * value equals `inputPer1M`. Folding cache writes into `inputPer1M` — the
-   * pre-#1076 behavior — under-charges the Anthropic premium by 25%.
+   * value equals `inputPer1M`. Folding cache writes into `inputPer1M` would
+   * under-charge the Anthropic premium by 25%.
    */
   cacheWritePer1M: number;
 }
@@ -62,10 +62,10 @@ export interface ProviderModelRate {
 export type RateCard = Record<string, ProviderModelRate>;
 
 /**
- * Public list prices as of 2026-05. Update to match your provider invoices —
- * the gate reads these directly. Keys match the AI SDK model ids used by
- * @oxagen/ai; a versioned/date-stamped id (e.g. `claude-sonnet-5-2026…`)
- * resolves to the longest matching prefix via {@link resolveRate}.
+ * Public list prices. Update to match your provider invoices — the gate
+ * reads these directly. Keys match the AI SDK model ids used by @oxagen/ai;
+ * a versioned/date-stamped id (e.g. `claude-sonnet-5-2026…`) resolves to the
+ * longest matching prefix via {@link resolveRate}.
  */
 export const PROVIDER_RATE_CARD: RateCard = {
   // Claude Fable 5 is Anthropic's most capable model — priced at (and above) the
@@ -74,8 +74,8 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // explicit entry Fable would fall back to the Sonnet rate and silently
   // UNDER-charge. Matches the CLI/agent-engine fable rows ($15/$75).
   // Anthropic cache writes bill at 1.25x base input (5-min TTL) — cacheWritePer1M
-  // = inputPer1M * 1.25. Folding them into fresh input (the pre-#1076 behavior)
-  // under-charged the premium by 25% on every cache-write token.
+  // = inputPer1M * 1.25. Folding them into fresh input would under-charge the
+  // premium by 25% on every cache-write token.
   "claude-fable-5": {
     provider: "anthropic",
     inputPer1M: 15.0,
@@ -260,8 +260,8 @@ export interface TokenUsageInput {
   /**
    * Prompt-cache WRITE (cache creation) tokens, billed at the provider's write
    * rate ({@link ProviderModelRate.cacheWritePer1M} — a premium on Anthropic).
-   * A subset of `inputTokens` like `cachedTokens`. Defaults to 0, which reproduces
-   * the pre-#1076 behavior (writes billed as fresh input).
+   * A subset of `inputTokens` like `cachedTokens`. Defaults to 0, which bills
+   * writes as fresh input.
    */
   cacheWriteTokens?: number;
 }
@@ -300,9 +300,9 @@ export function providerCostUsdMicros(
 // cards hold the USD the provider invoices us per asset, keyed by the gateway
 // model id (creator/model form) that @oxagen/ai passes through. Like the token
 // card, a versioned/variant id resolves to the longest matching key prefix via
-// {@link resolveMediaRate}. Numbers are public list-price estimates as of
-// 2026-05 — keep them in sync with real provider invoices; the gate reads them
-// directly and applies the same solved meter markup as token calls, so margin is
+// {@link resolveMediaRate}. Numbers are public list-price estimates — keep
+// them in sync with real provider invoices; the gate reads them directly and
+// applies the same solved meter markup as token calls, so margin is
 // consistent across text, image, and video.
 
 export interface ImageModelRate {
@@ -351,7 +351,7 @@ export const IMAGE_RATE_CARD: Record<string, ImageModelRate> = {
 
 /** Per-second provider list prices (USD), keyed by gateway model id prefix. */
 export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
-  // Google Veo 3 — "fast" tier ~$0.35/sec, standard ~$0.75/sec (list, 2026-05).
+  // Google Veo 3 — "fast" tier ~$0.35/sec, standard ~$0.75/sec (list price).
   "google/veo-3.0-fast": {
     vendor: "google",
     usdPerSecond: 0.35,
@@ -365,7 +365,7 @@ export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
   },
   "google/veo-3.1": { vendor: "google", usdPerSecond: 0.8, defaultSeconds: 5 },
   "google/veo": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
-  // OpenAI Sora 2 — ~$0.10/sec, pro ~$0.30–0.50/sec (list, 2026-05; bias high).
+  // OpenAI Sora 2 — ~$0.10/sec, pro ~$0.30–0.50/sec (list price; bias high).
   "openai/sora-2-pro": {
     vendor: "openai",
     usdPerSecond: 0.5,

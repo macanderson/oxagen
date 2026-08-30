@@ -102,7 +102,7 @@ test("role picker: select Operator → review effective scope → save → list 
   await expect(page.getByTestId("scope-mcp")).toContainText(
     /all mcp tool calls allowed/i,
   );
-  // Skills/subagents: nothing equipped — rendered honestly, not hidden.
+  // Skills/subagents: nothing equipped — the real empty state renders, not hidden.
   await expect(page.getByTestId("scope-skills-list")).toContainText(
     /no skills equipped/i,
   );
@@ -160,12 +160,11 @@ test("role picker: select Operator → review effective scope → save → list 
   });
   await page.getByTestId("builder-step-access").click();
   await expect(page.getByTestId("step-access")).toBeVisible();
-  await expect(
-    page.getByTestId("role-option-agent-operator"),
-  ).toHaveAttribute("aria-checked", "true");
-  await expect(
-    page.getByTestId("role-current-agent-operator"),
-  ).toBeVisible();
+  await expect(page.getByTestId("role-option-agent-operator")).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(page.getByTestId("role-current-agent-operator")).toBeVisible();
 
   await page.screenshot({
     path: path.join(SCREENSHOT_DIR, "agent-rbac-edit-current-role.png"),

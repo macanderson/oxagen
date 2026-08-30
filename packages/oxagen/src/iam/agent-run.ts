@@ -1,19 +1,10 @@
 // agent-run.ts — the PINNED grant ceiling and the LIVE deny check for a
 // governed agent run (docs/specs/run-evidence-ingress/spec.md §"Security and
-// retention rules"; 02-run-attempt-foundation-plan.md Task 5; Agent RBAC
-// docs/specs/agent-rbac/spec.md §3.4/§3.5).
+// retention rules"; docs/specs/agent-rbac/spec.md §3.4/§3.5).
 //
-// ── What replaced what ──────────────────────────────────────────────────────
+// ── Two authorization models, on purpose ────────────────────────────────────
 //
-// This module used to hold a once-per-run, never-refreshed resolution cache
-// (`AgentRunIAMContext.resolution`): the first IAM check of a run fetched a
-// snapshot, resolved a capability, memoized the outcome by capability name,
-// and every later operation in the run reused it verbatim. That is exactly the
-// cache the run-evidence spec deletes (launch change #7): a suspension, a role
-// revocation, or an emergency deny landing mid-run could not reach an already
-// running agent, and a JIT grant landing mid-run silently WIDENED it.
-//
-// The replacement is asymmetric on purpose:
+// A governed run carries two separate authority checks:
 //
 //   PINNED   an immutable `AgentRunAuthorizationBinding` — the human ∩ agent
 //            ceiling resolved at admission, preserving assignment ids, role
@@ -29,23 +20,22 @@
 //            invalidates the entry on the clock.
 //
 // Ceiling ∩ live authority is therefore monotonically NARROWING for the life
-// of the run, which is the property the spec's acceptance criterion 19 states:
-// "Later grants cannot expand an active run, while agent suspension, explicit
-// revocation, or an emergency-deny generation invalidates cached allows before
-// the next operation."
+// of the run: later grants cannot expand an active run, while agent
+// suspension, explicit revocation, or an emergency-deny generation invalidates
+// cached allows before the next operation.
 //
-// ── V1 delegated runs keep the resolution cache ─────────────────────────────
+// ── V1 delegated runs use a different path ──────────────────────────────────
 //
-// "Replaced" is scoped to GOVERNED V2 RUNS. The legacy V1 delegated path
-// (Agent RBAC Phase 2b/4a/4b) has no admission snapshot to pin and no attempt
-// to fence, so it still resolves through `AgentRunIAMResolution` /
-// `resolveAgentRunCapability` below — which is also the only carrier of the
-// run-constant `resourceScope` dimensions (MCP rules, skills, subagent refs)
-// that the pinned/live pair does not model. Both live here on purpose: they
-// share `resolveAgentEffectivePermissions`, so there is exactly ONE policy
-// engine and the two models can never disagree about agent ∩ human deny-wins.
-// V2 execution never populates `resolution`, and the V1 memo is never the
-// gate for a V2 run.
+// The pinned/live pair above governs V2 runs. The V1 delegated path (Agent
+// RBAC) has no admission snapshot to pin and no attempt to fence, so it
+// resolves through `AgentRunIAMResolution` / `resolveAgentRunCapability`
+// below — which is also the only carrier of the run-constant `resourceScope`
+// dimensions (MCP rules, skills, subagent refs) that the pinned/live pair
+// does not model. Both live here on purpose: they share
+// `resolveAgentEffectivePermissions`, so there is exactly ONE policy engine
+// and the two models can never disagree about agent ∩ human deny-wins. V2
+// execution never populates `resolution`, and the V1 memo is never the gate
+// for a V2 run.
 //
 // This module stays PURE — no I/O, no digest primitives, no DB. It owns the
 // shapes and the deterministic ordering; `@oxagen/iam` owns reading rows,

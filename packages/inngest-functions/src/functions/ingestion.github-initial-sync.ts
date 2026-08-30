@@ -92,7 +92,7 @@ export const [ingestionGithubInitialSync] = createFunction(
       workspaceId: string;
       owner: string;
       repo: string;
-      // defaultBranch (legacy) is ignored — we resolve the real one below.
+      // defaultBranch is ignored here — the real branch is resolved below.
       // syncDepthDays bounds the commit-history backfill window (the wizard's
       // "sync history depth" selector); PRs/issues/releases stay bounded by
       // MAX_RECORDS_PER_TYPE.

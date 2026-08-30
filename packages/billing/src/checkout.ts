@@ -52,7 +52,7 @@ export async function createCheckoutSession(
   // Guard: refuse to create a second subscription when one is active.
   // billing.subscriptions is org-scoped (withTenantDb); billing.plans is a shared
   // catalog (no org_id, RLS not enabled) read via withSystemDb to match the
-  // catalog-read convention used in public-plans.ts / subscription/page.tsx. — OXA-1515
+  // catalog-read convention used in public-plans.ts / subscription/page.tsx.
   const [existingActive, plan] = await Promise.all([
     withTenantDb((tx) =>
       tx.query.subscriptions.findFirst({
@@ -77,7 +77,9 @@ export async function createCheckoutSession(
   if (!plan) throw new Error(`plan ${input.planSlug} not found`);
 
   const priceId =
-    input.interval === "year" ? plan.stripePriceIdAnnual : plan.stripePriceIdMonthly;
+    input.interval === "year"
+      ? plan.stripePriceIdAnnual
+      : plan.stripePriceIdMonthly;
   if (!priceId) {
     throw new Error(`plan ${input.planSlug} has no ${input.interval} price`);
   }
@@ -90,11 +92,21 @@ export async function createCheckoutSession(
     seats: input.seats ?? 1,
     subscriptionMetadata: { org_id: input.orgId, plan_id: plan.id },
     successUrl:
-      input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/subscription`,
+      input.successUrl ??
+      `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl:
+      input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/subscription`,
   });
 
-  logger.info({ orgId: input.orgId, planSlug: input.planSlug, seats: input.seats ?? 1, sessionId: result.sessionId }, "billing: created subscription checkout session");
+  logger.info(
+    {
+      orgId: input.orgId,
+      planSlug: input.planSlug,
+      seats: input.seats ?? 1,
+      sessionId: result.sessionId,
+    },
+    "billing: created subscription checkout session",
+  );
   return result;
 }
 
@@ -134,10 +146,14 @@ export async function createCreditPackCheckoutSession(
     quantity: input.quantity ?? 1,
     metadata: { org_id: input.orgId },
     successUrl:
-      input.successUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
+      input.successUrl ??
+      `${env.NEXT_PUBLIC_APP_URL}/billing/return?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: input.cancelUrl ?? `${env.NEXT_PUBLIC_APP_URL}/billing/credits`,
   });
 
-  logger.info({ orgId: input.orgId, priceId: input.priceId, sessionId: result.sessionId }, "billing: created credit-pack checkout session");
+  logger.info(
+    { orgId: input.orgId, priceId: input.priceId, sessionId: result.sessionId },
+    "billing: created credit-pack checkout session",
+  );
   return result;
 }

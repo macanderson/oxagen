@@ -1,4 +1,4 @@
-// bootstrap.test.ts — unit tests for bootstrapIAMRuntime() (OXA-1524).
+// bootstrap.test.ts — unit tests for bootstrapIAMRuntime().
 //
 // Tests:
 //   - Wires checkIAM into setKernelIAMRuntime() with enforced=true always

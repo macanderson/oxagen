@@ -1,9 +1,9 @@
 // Security → Audit: filterable, paginated audit-log viewer with signed export.
+// See docs/architecture/security/soc2-simplification.html.
 //
-// Rec 2 / OXA-1558 of docs/architecture/security/soc2-simplification.html.
-// Replaces the static 50-row list with URL-driven filters, keyset pagination,
-// per-row forensic drill-down, and a signed NDJSON/CSV export. Export is an
-// Enterprise feature and additionally requires an owner/admin role; both gates
+// URL-driven filters, keyset pagination, per-row forensic drill-down, and a
+// signed NDJSON/CSV export. Export is an Enterprise feature and additionally
+// requires an owner/admin role; both gates
 // are re-checked in the export route (the disabled button is cosmetic).
 
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -12,12 +12,21 @@ import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
-import { resolveOrg, assertOrgMember, getOrgRole, SECURITY_MANAGER_ROLES } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  assertOrgMember,
+  getOrgRole,
+  SECURITY_MANAGER_ROLES,
+} from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { getEnterpriseAccess } from "@/lib/enterprise";
 import { org } from "@/lib/routes";
 import { EnterpriseUpsell } from "@/components/security/enterprise-upsell";
-import { parseAuditFilter, encodeAuditFilter, hasActiveFilter } from "@/lib/audit-filters";
+import {
+  parseAuditFilter,
+  encodeAuditFilter,
+  hasActiveFilter,
+} from "@/lib/audit-filters";
 import { queryAuditPage } from "@/lib/audit-query";
 import { AuditFilterBar } from "./_components/audit-filter-bar";
 import { AuditEventRow } from "./_components/audit-event-row";
@@ -31,7 +40,11 @@ async function resolveActorNames(
   if (unique.length === 0) return new Map();
   const rows = await withSystemDb((tx) =>
     tx
-      .select({ id: schema.users.id, displayName: schema.users.displayName, email: schema.users.email })
+      .select({
+        id: schema.users.id,
+        displayName: schema.users.displayName,
+        email: schema.users.email,
+      })
       .from(schema.users)
       .where(inArray(schema.users.id, unique)),
   );
@@ -50,7 +63,10 @@ export default async function SecurityAuditPage({
   const { orgSlug } = await params;
   const sp = await searchParams;
 
-  const [session, tenant] = await Promise.all([getSessionOrRedirect(), resolveOrg(orgSlug)]);
+  const [session, tenant] = await Promise.all([
+    getSessionOrRedirect(),
+    resolveOrg(orgSlug),
+  ]);
   await assertOrgMember(tenant.id, session.user.id);
 
   const [access, role, filter] = await Promise.all([
@@ -83,16 +99,26 @@ export default async function SecurityAuditPage({
   return (
     <div className="flex flex-col gap-6">
       {!access.isEnterprise && (
-        <EnterpriseUpsell orgSlug={orgSlug} feature="Audit log export" currentTier={access.tier} />
+        <EnterpriseUpsell
+          orgSlug={orgSlug}
+          feature="Audit log export"
+          currentTier={access.tier}
+        />
       )}
 
       <Panel
         title="Audit log"
-        actions={<AuditExportButtons canExport={canExport} disabledReason={disabledReason} />}
+        actions={
+          <AuditExportButtons
+            canExport={canExport}
+            disabledReason={disabledReason}
+          />
+        }
       >
         <div className="flex flex-col gap-4">
           <p className="mb-4 text-sm text-muted-foreground">
-            Append-only security event stream. Filter, drill down, and export signed evidence.
+            Append-only security event stream. Filter, drill down, and export
+            signed evidence.
           </p>
           <AuditFilterBar
             selectedEventTypes={filter.eventTypes}
@@ -119,7 +145,9 @@ export default async function SecurityAuditPage({
                     eventType: e.eventType,
                     outcome: e.outcome,
                     actorUserId: e.actorUserId,
-                    actorName: e.actorUserId ? (actorNames.get(e.actorUserId) ?? null) : null,
+                    actorName: e.actorUserId
+                      ? (actorNames.get(e.actorUserId) ?? null)
+                      : null,
                     workspaceId: e.workspaceId,
                     capability: e.capability,
                     ip: e.ip,
@@ -135,7 +163,11 @@ export default async function SecurityAuditPage({
           {(nextHref || !onFirstPage) && (
             <div className="flex items-center justify-between pt-1">
               {!onFirstPage ? (
-                <Button variant="ghost" size="sm" render={<Link href={firstHref} />}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  render={<Link href={firstHref} />}
+                >
                   <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                   First page
                 </Button>
@@ -143,12 +175,18 @@ export default async function SecurityAuditPage({
                 <span />
               )}
               {nextHref ? (
-                <Button variant="outline" size="sm" render={<Link href={nextHref} />}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href={nextHref} />}
+                >
                   Next
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
               ) : (
-                <span className="text-xs text-muted-foreground">End of results</span>
+                <span className="text-xs text-muted-foreground">
+                  End of results
+                </span>
               )}
             </div>
           )}

@@ -376,7 +376,7 @@ describe("insert helpers — insertRows delegation", () => {
     expect(call.values[0]!.input_tokens).toBe(7);
   });
 
-  // #1076: a text caller that actually wrote cache must forward the real
+  // A text caller that actually wrote cache must forward the real
   // cache_write_tokens count (the fourth token class) — not lose it to the
   // coalescing default — so the billing rollup prices it at the write premium.
   it("forwards a real cache_write_tokens count through to the row", async () => {

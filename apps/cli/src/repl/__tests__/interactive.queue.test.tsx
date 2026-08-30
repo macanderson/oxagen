@@ -67,8 +67,7 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
     }),
 }));
 
-// The two mocks below are what the original #271 skip ("pending mock setup
-// investigation") was missing: handleSubmit's first turn awaits
+// The two mocks below are required: handleSubmit's first turn awaits
 // initializeProject behind an interactive approval prompt when the cwd isn't
 // project-initialized, so without this stub the prompt parks forever and
 // runTurn is never reached — the exact waitFor timeout the suite flaked on.
@@ -134,8 +133,8 @@ vi.mock("../../agent/model.js", () => ({
 // avoids loading the tree-sitter builder / DuckDB store.
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
-  // Mount-time warm-up (PR #654): a missing export here crashes ReplApp at
-  // mount and every waitFor starves on empty frames — keep in sync.
+  // Mount-time warm-up: a missing export here crashes ReplApp at mount and
+  // every waitFor starves on empty frames — keep in sync.
   warmCodeGraph: () => {},
 }));
 

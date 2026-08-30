@@ -4,7 +4,10 @@ import pino from "pino";
 import { agentMcpSetEnabled } from "@oxagen/oxagen/contracts/agent.mcp.set_enabled";
 import type { CapabilityContext } from "../types";
 import { healthcheck } from "../dispatch/mcp-client";
-import { captureToolSnapshots, recordServerChange } from "../runtime/mcp-snapshots";
+import {
+  captureToolSnapshots,
+  recordServerChange,
+} from "../runtime/mcp-snapshots";
 import { decryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
 import type {
   AgentMcpSetEnabledInput,
@@ -13,7 +16,10 @@ import type {
 
 export type { AgentMcpSetEnabledInput, AgentMcpSetEnabledOutput };
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.mcp" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.mcp" },
+});
 
 export async function agentMcpSetEnabledHandler(
   input: AgentMcpSetEnabledInput,
@@ -48,7 +54,7 @@ export async function agentMcpSetEnabledHandler(
   let snapshotCount = 0;
   let healthStatus: "healthy" | "degraded" | "unreachable" = "degraded";
   if (input.enabled && server.transportType === "streamable-http") {
-    // Decrypt (OXA-1982): server.authConfig is the envelope-encrypted (or
+    // Decrypt: server.authConfig is the envelope-encrypted (or
     // legacy plaintext, pre-backfill) jsonb value read from the DB.
     const decryptedAuthConfig = await decryptMcpAuthConfig(server.authConfig);
     const probe = await healthcheck({
@@ -92,7 +98,7 @@ export async function agentMcpSetEnabledHandler(
       .where(eq(schema.mcpServers.id, server.id)),
   );
 
-  // Audit the lifecycle change (OXA-820).
+  // Audit the lifecycle change.
   await recordServerChange({
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,

@@ -25,7 +25,10 @@ import {
 import { AgentAvatar } from "./agent-avatar";
 import { AgentInfoButton } from "./agent-info-button";
 import { FOCUS_COMPOSER_EVENT } from "./focus-composer-event";
-import { pushRecentAgentId, readRecentAgentIds } from "../session/recent-agents";
+import {
+  pushRecentAgentId,
+  readRecentAgentIds,
+} from "../session/recent-agents";
 import { useChatSessionContext } from "../session/session-store";
 import { useRepoBranches } from "../session/use-session-settings-data";
 import { RepoSelector, type RepoOption } from "../repo-selector";
@@ -202,7 +205,8 @@ export function AgentPickerPanel({
   // It keys off the step's PENDING repo, not the session's — the panel can
   // render outside a ChatSessionProvider, so it can't read the store.
   const setupRepo = React.useMemo(
-    () => (setupRepoKey ? (repos.find((r) => r.key === setupRepoKey) ?? null) : null),
+    () =>
+      setupRepoKey ? (repos.find((r) => r.key === setupRepoKey) ?? null) : null,
     [repos, setupRepoKey],
   );
   const { branches, branchesLoading, defaultBranch, onLoadBranches } =
@@ -251,9 +255,7 @@ export function AgentPickerPanel({
       // A CODE agent deliberately falls through to the setup step below in BOTH
       // trees: its target (org → repository → branch → environment) is chosen
       // once, up front, and is then immutable for the conversation, so the pick
-      // is the only moment it can be chosen. v2 used to apply a code agent
-      // immediately and prefill from remembered context, leaving the rail as the
-      // adjust surface — that contradicts the immutable-target model.
+      // is the only moment it can be chosen.
       if (v2 && !agent?.isCode) {
         onApply({ agentId: agent?.agentId ?? null });
         if (agent) {
@@ -429,7 +431,9 @@ export function AgentPickerPanel({
                           the items aren't mounted until the popup first opens),
                           so resolve the label here — the sentinel must read as
                           "Repository default", never as its raw id. */}
-                      <SelectValue placeholder={defaultBranchLabel(defaultBranch)}>
+                      <SelectValue
+                        placeholder={defaultBranchLabel(defaultBranch)}
+                      >
                         {(value: string | null) =>
                           value && value !== DEFAULT_BRANCH_VALUE
                             ? value
@@ -509,7 +513,10 @@ export function AgentPickerPanel({
               />
             </div>
             {v2 && recentAgents.length > 0 ? (
-              <div className="border-b border-border px-2.5 py-2" data-testid="recent-agents-row">
+              <div
+                className="border-b border-border px-2.5 py-2"
+                data-testid="recent-agents-row"
+              >
                 <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
                   Recent
                 </p>

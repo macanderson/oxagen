@@ -61,9 +61,9 @@ function formatCost(costUsdMicros: number): string {
 
 /**
  * Pass signal for a run. The list row carries only the run-level avgScore +
- * passThreshold (not per-item pass flags), so the honest signal here is
- * whether the average met the threshold — not a per-item pass *rate*. Null
- * until there's a score to compare.
+ * passThreshold (not per-item pass flags), so this reports whether the
+ * average met the threshold — not a per-item pass *rate*. Null until there's
+ * a score to compare.
  */
 function passSignal(run: Run): { label: string; variant: BadgeVariant } | null {
   if (run.avgScore === null) return null;

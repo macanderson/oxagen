@@ -1,5 +1,5 @@
 /**
- * lineage.query handler tests (issue #1078).
+ * lineage.query handler tests.
  *
  * Strategy: the tree-shape/outcome/truncation/principal-resolution logic
  * lives in the pure `assembleLineageTree` (+ `deriveLineageOutcome` /

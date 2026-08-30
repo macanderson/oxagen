@@ -1,6 +1,6 @@
 /**
  * lib/lineage/canvas-map.ts — pure LineageNodeDto[] → reagraph node/edge
- * mapping for the fleet-lineage explorer canvas (issue #1078).
+ * mapping for the fleet-lineage explorer canvas.
  *
  * Kept out of the canvas component (a reagraph/WebGL renderer that cannot be
  * unit-tested in jsdom — see lineage-canvas-view.test.tsx) so every visual
@@ -26,7 +26,7 @@ const OUTCOME_COLOR: Record<LineageNodeDto["outcome"], string> = {
   running: "#0ea5e9", // info sky
   completed: "#10b981", // success emerald
   failed: "#ef4444", // error red
-  cancelled: "#a855f7", // violet
+  cancelled: "#a16207", // bronze — inert, not alarming
 };
 const VIOLATION_COLOR = "#f97316"; // amber — distinct from OUTCOME_COLOR.failed
 const ROOT_COLOR = "#64748b"; // neutral slate, distinguishes the synthetic root

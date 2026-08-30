@@ -105,8 +105,8 @@ describe("effectiveResourceScope()", () => {
 
     const scope = effectiveResourceScope({ ...ctx, agentRun });
 
-    // The regression this pins: an empty memo used to yield `undefined`, which
-    // every downstream dimension gate reads as "no restriction".
+    // An empty memo must never resolve to `undefined` — every downstream
+    // dimension gate reads that as "no restriction".
     expect(scope).toBeDefined();
     expect(scope?.skills?.slugs).toEqual(["skill_a"]);
   });

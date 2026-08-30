@@ -65,8 +65,8 @@ export const graphNodeListHandler: CapabilityHandler<
       // Promise.all(). A Neo4j session allows only a single in-flight query
       // (auto-commit transaction) at a time, so firing both session.run() calls
       // concurrently throws "Queries cannot be run directly on a session with an
-      // open transaction" (regression #303). The two reads are cheap; parallelism
-      // would require a session per query.
+      // open transaction". The two reads are cheap; parallelism would require a
+      // session per query.
       const countResult = await session.run(
         `MATCH (n:GraphNode)
            ${whereClause}
@@ -108,8 +108,7 @@ export const graphNodeListHandler: CapabilityHandler<
           // matching the documented shape (e.g. ["Issue", "KnowledgeNode"]).
           labels: ["KnowledgeNode", label],
           // safeParseProperties never throws — a single node with a corrupt
-          // properties blob must not 500 the whole listing (it previously
-          // blanked the entire graph explorer). Absent/unreadable → {}.
+          // properties blob must not 500 the whole listing. Absent/unreadable → {}.
           properties: safeParseProperties(rawProperties, { nodeId: id }),
           displayName: record.get("displayName") as string,
           ...(sourceId != null ? { sourceId } : {}),

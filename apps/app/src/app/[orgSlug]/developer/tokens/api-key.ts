@@ -12,7 +12,7 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgAdmin } from "@/lib/resolve-org";
 import { revalidatePath } from "next/cache";
 
-// API keys are org-scoped. Sentinel workspace ID for org-only routes. — OXA-1515
+// API keys are org-scoped. Sentinel workspace ID for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 async function buildApiKeyCtx(orgSlug: string) {

@@ -2,7 +2,7 @@
  * Code Graph Panel — real stats for the daemon's DuckDB code-graph store,
  * scoped to THIS repo, read strictly read-only.
  *
- * Four honest states, never a fabricated one:
+ * Four real states, never a fabricated one:
  *   absent  — the store file doesn't exist (never indexed on this machine)
  *   locked  — the file exists but a running daemon holds the write lock / it
  *             can't be opened read-only right now
@@ -22,7 +22,12 @@ export function CodeGraphPanel({
   now: number;
 }): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.dim} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.dim}
+      paddingX={1}
+    >
       <Box marginBottom={1}>
         <Text bold color={theme.cyan}>
           ◈ CODE GRAPH
@@ -53,7 +58,9 @@ function Body({
       return (
         <Box flexDirection="column">
           <Text color={theme.amber}>◐ present, can&apos;t read now</Text>
-          <Text dimColor>The daemon holds the write lock — try again shortly.</Text>
+          <Text dimColor>
+            The daemon holds the write lock — try again shortly.
+          </Text>
         </Box>
       );
     case "empty":
@@ -65,7 +72,9 @@ function Body({
       );
     case "ready": {
       const coverage =
-        status.files > 0 ? Math.round((status.embeddedFiles / status.files) * 100) : 0;
+        status.files > 0
+          ? Math.round((status.embeddedFiles / status.files) * 100)
+          : 0;
       return (
         <Box flexDirection="column">
           <Box gap={2}>
@@ -94,7 +103,9 @@ function Body({
           </Box>
           {status.lastIndexedAt !== null ? (
             <Box marginTop={1}>
-              <Text dimColor>indexed {formatAge(status.lastIndexedAt, now)}</Text>
+              <Text dimColor>
+                indexed {formatAge(status.lastIndexedAt, now)}
+              </Text>
             </Box>
           ) : null}
         </Box>

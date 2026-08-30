@@ -28,7 +28,10 @@ function sanitizeSvg(raw: string): string {
   // The regex matches the attribute name with optional whitespace around =.
   out = out.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, "");
   // Remove javascript: href/xlink:href values.
-  out = out.replace(/(href|xlink:href)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi, "");
+  out = out.replace(
+    /(href|xlink:href)\s*=\s*["']?\s*javascript:[^"'\s>]*/gi,
+    "",
+  );
   return out.trim();
 }
 
@@ -48,12 +51,17 @@ const svgModelSchema = z.object({
   title: z
     .string()
     .min(1)
-    .describe("A concise, human-readable title for the graphic (5–60 characters)."),
+    .describe(
+      "A concise, human-readable title for the graphic (5–60 characters).",
+    ),
 });
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (input, ctx) => {
+export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
+  input,
+  ctx,
+) => {
   const width = input.width ?? 400;
   const height = input.height ?? 400;
   const messageId = ctx.messageId ?? ctx.requestId;
@@ -61,7 +69,7 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
   // Resolve the system prompt through the registry so an enterprise workspace
   // can override the svg.generate baseline (it's a curated-overridable key) and
   // any workspace's "additional instructions" are appended. Best-effort load —
-  // a missing config simply yields the untouched baseline.
+  // a missing config yields the untouched baseline.
   const promptConfig = await loadWorkspacePromptConfigSafe(ctx.workspaceId);
 
   // Auto-improve (Beta): when the workspace toggle is on (default), let the LLM
@@ -70,7 +78,12 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
     prompt: input.prompt,
     kind: "svg",
     autoImprove: promptConfig.autoImprovePrompts ?? true,
-    telemetry: { orgId: ctx.orgId, workspaceId: ctx.workspaceId, surface: ctx.surface, messageId },
+    telemetry: {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      surface: ctx.surface,
+      messageId,
+    },
   });
 
   let rawSvg: string;
@@ -104,7 +117,12 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
   } catch (err) {
     // Never throw — return a minimal placeholder SVG so the render path always works.
     logger.warn(
-      { err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, prompt: input.prompt },
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        prompt: input.prompt,
+      },
       "svg.generate: model error — returning placeholder SVG",
     );
     rawSvg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" fill="none" stroke="currentColor" stroke-width="2" rx="8"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" fill="currentColor" font-size="14">SVG generation failed</text></svg>`;

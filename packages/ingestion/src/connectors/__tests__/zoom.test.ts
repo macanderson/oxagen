@@ -98,7 +98,13 @@ describe("zoom connector – verifyWebhook", () => {
   });
 
   it("rejects wrong token", () => {
-    expect(zoom.verifyWebhook!(payload, { authorization: "wrong-token" }, "correct-token")).toBe(false);
+    expect(
+      zoom.verifyWebhook!(
+        payload,
+        { authorization: "wrong-token" },
+        "correct-token",
+      ),
+    ).toBe(false);
   });
 
   it("rejects missing authorization header", () => {
@@ -106,18 +112,28 @@ describe("zoom connector – verifyWebhook", () => {
   });
 
   it("rejects null secret", () => {
-    expect(zoom.verifyWebhook!(payload, { authorization: "any" }, null)).toBe(false);
+    expect(zoom.verifyWebhook!(payload, { authorization: "any" }, null)).toBe(
+      false,
+    );
   });
 
-  // OXA-2051: verifyWebhook previously used a plain `===` comparison, which is
-  // not constant-time and can throw/leak on length differences depending on
-  // the comparison strategy. It must never throw and must fail closed.
+  // verifyWebhook must never throw on a length mismatch, and must fail
+  // closed, since a plain `===` comparison here would leak timing
+  // information about the secret.
   it("rejects a mismatched-length token without throwing", () => {
     expect(() =>
-      zoom.verifyWebhook!(payload, { authorization: "short" }, "a-much-longer-webhook-secret-token"),
+      zoom.verifyWebhook!(
+        payload,
+        { authorization: "short" },
+        "a-much-longer-webhook-secret-token",
+      ),
     ).not.toThrow();
     expect(
-      zoom.verifyWebhook!(payload, { authorization: "short" }, "a-much-longer-webhook-secret-token"),
+      zoom.verifyWebhook!(
+        payload,
+        { authorization: "short" },
+        "a-much-longer-webhook-secret-token",
+      ),
     ).toBe(false);
   });
 });

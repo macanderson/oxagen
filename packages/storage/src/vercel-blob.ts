@@ -1,10 +1,14 @@
 import { put as blobPut, del as blobDel, get as blobGet } from "@vercel/blob";
 import { StorageNotFoundError } from "./errors";
 import { logger } from "./logger";
-import type { GetObjectResult, PutObjectInput, PutObjectResult, StorageAdapter, StorageBody } from "./types";
+import type {
+  GetObjectResult,
+  PutObjectInput,
+  PutObjectResult,
+  StorageAdapter,
+  StorageBody,
+} from "./types";
 
-// Re-export for backward compatibility -- consumers that imported from
-// "./vercel-blob" directly continue to work without changes.
 export { StorageNotFoundError } from "./errors";
 
 /**
@@ -29,7 +33,12 @@ export function publicBaseUrlFromToken(token: string): string {
   // Segments (split on "_"):  [0]=vercel  [1]=blob  [2]=rw  [3]=<storeId>  [4..]=<secret parts>
   const segments = token.split("_");
   const storeId = segments[3];
-  if (!storeId || segments[0] !== "vercel" || segments[1] !== "blob" || segments[2] !== "rw") {
+  if (
+    !storeId ||
+    segments[0] !== "vercel" ||
+    segments[1] !== "blob" ||
+    segments[2] !== "rw"
+  ) {
     throw new Error(
       "publicBaseUrlFromToken: BLOB_READ_WRITE_TOKEN has an unexpected format. " +
         "Expected `vercel_blob_rw_<storeId>_<secret>`.",
@@ -122,7 +131,13 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       const sizeBytes = result.blob.size ?? null;
 
       logger.info(
-        { driver: "vercel-blob", key, contentType, sizeBytes, durationMs: Date.now() - start },
+        {
+          driver: "vercel-blob",
+          key,
+          contentType,
+          sizeBytes,
+          durationMs: Date.now() - start,
+        },
         "storage: object read",
       );
       return {
@@ -177,7 +192,14 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       });
 
       logger.info(
-        { driver: "vercel-blob", key: input.key, access: effectiveAccess, contentType: input.contentType, bytes, durationMs: Date.now() - start },
+        {
+          driver: "vercel-blob",
+          key: input.key,
+          access: effectiveAccess,
+          contentType: input.contentType,
+          bytes,
+          durationMs: Date.now() - start,
+        },
         "storage: object written",
       );
       // For private blobs, result.url is the authenticated access URL (not a
@@ -185,7 +207,12 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // cases; callers must use the adapter get() to retrieve private bytes.
       // `effectiveAccess` reflects the visibility the blob was actually written
       // with (see the public-only fallback above).
-      return { url: result.url, key: result.pathname, bytes, access: effectiveAccess };
+      return {
+        url: result.url,
+        key: result.pathname,
+        bytes,
+        access: effectiveAccess,
+      };
     },
 
     async delete(urlOrKey: string): Promise<void> {
@@ -193,7 +220,11 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // `del` accepts either the URL or the pathname.
       await blobDel(urlOrKey, { token });
       logger.info(
-        { driver: "vercel-blob", key: urlOrKey, durationMs: Date.now() - start },
+        {
+          driver: "vercel-blob",
+          key: urlOrKey,
+          durationMs: Date.now() - start,
+        },
         "storage: object deleted",
       );
     },

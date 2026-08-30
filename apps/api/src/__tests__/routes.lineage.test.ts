@@ -1,5 +1,5 @@
 /**
- * Unit tests for the lineage.query route (query_lineage, issue #1078 —
+ * Unit tests for the lineage.query route (query_lineage —
  * the fleet-lineage explorer's data spine).
  *
  * Pattern: mock at the adapter seam (invoke), assert the handler forwards the

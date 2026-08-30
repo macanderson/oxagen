@@ -40,7 +40,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   read_page: () => import("./browser"),
   // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
   verify_feature: () => import("./agent.feature.verify"),
-  // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
+  // Code-execution surface peers of agent.code.execute. Co-located
   // here so the whole sandboxed code surface registers through one path.
   diff_code: () => import("./code.diff"),
   patch_code: () => import("./code.patch"),

@@ -126,20 +126,21 @@ export const mcpCredentials = mcpSchema.table(
 
 /**
  * mcp.mcp_servers — installed MCP server instances per org/workspace.
- * Moved from agent.ts so all MCP-protocol artefacts share one domain schema.
+ * Lives with the other MCP-protocol tables so they share one domain schema.
  */
 export const mcpServers = mcpSchema.table(
   "mcp_servers",
   {
     ...idMixin("mcs"),
     ...auditMixin(),
-    // Soft-delete (OXA-820): deleting a server stops tool registration but
+    // Soft-delete: deleting a server stops tool registration but
     // retains tool-descriptor snapshots >= 365 days for replay durability. The
     // retention Inngest job keys off deleted_at to purge old snapshots.
     ...softDeleteMixin(),
     ...orgScopeMixin(),
-    // Links back to plugin.installed_plugins — nullable because column was added to an existing
-    // table; the plugin install handler requires it on every new insert.
+    // Links back to plugin.installed_plugins. Nullable so older rows that
+    // predate this column stay valid; the plugin install handler requires it
+    // on every new insert.
     orgListingId: uuid("org_listing_id"),
     name: text("name").notNull(),
     transportType: text("transport_type").notNull(),
@@ -162,8 +163,8 @@ export const mcpServers = mcpSchema.table(
     wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
       .on(t.workspaceId, t.orgListingId)
       .where(sql`org_listing_id IS NOT NULL`),
-    // Missing CHECK constraints on enum-shaped text (2026-07-11 audit §5
-    // item 4). Value sets confirmed against live write paths:
+    // CHECK constraints on enum-shaped text. Value sets confirmed against
+    // live write paths:
     //   healthStatus  — agent.mcp.set_enabled.ts, plugin.set_enabled.ts,
     //                    the oauth/callback route.
     //   transportType — the agent.mcp.register/list contracts only declare
@@ -190,8 +191,8 @@ export const mcpServers = mcpSchema.table(
 );
 
 /**
- * mcp.consents — first-use consent + scope grants for external MCP tools
- * (OXA-816). The FIRST time an agent invokes a `mcp.<serverId>.<tool>` for a
+ * mcp.consents — first-use consent + scope grants for external MCP tools.
+ * The FIRST time an agent invokes a `mcp.<serverId>.<tool>` for a
  * given workspace+user+server+tool, the runtime pauses and renders a consent
  * card; the user's approve/deny lands here. Subsequent calls within the TTL
  * (expires_at) run inline without pausing.
@@ -350,7 +351,7 @@ export const mcpCatalogServers = mcpSchema.table(
 );
 
 /**
- * mcp.tool_snapshots — descriptor snapshots for external MCP tools (OXA-820).
+ * mcp.tool_snapshots — descriptor snapshots for external MCP tools.
  * Each external tool's JSONSchema descriptor is captured at registration (and
  * on re-enable) so replay of an old run can render the tool even after the
  * server is disabled or soft-deleted. Disabling a server stops registration

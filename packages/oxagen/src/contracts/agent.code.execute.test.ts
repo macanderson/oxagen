@@ -10,17 +10,26 @@ describe("agent.code.execute capability", () => {
   // ── input: language enum ──────────────────────────────────────────────────
 
   it("accepts language='node'", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "console.log(1)" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "console.log(1)",
+    });
     expect(parsed.language).toBe("node");
   });
 
   it("accepts language='python'", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "python", code: "print(1)" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "python",
+      code: "print(1)",
+    });
     expect(parsed.language).toBe("python");
   });
 
   it("accepts language='shell'", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "shell", code: "echo hi" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "shell",
+      code: "echo hi",
+    });
     expect(parsed.language).toBe("shell");
   });
 
@@ -39,98 +48,158 @@ describe("agent.code.execute capability", () => {
   });
 
   it("accepts a non-empty code string", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+    });
     expect(parsed.code).toBe("x");
   });
 
   // ── input: defaults ───────────────────────────────────────────────────────
 
   it("defaults timeoutMs to 30000", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+    });
     expect(parsed.timeoutMs).toBe(30_000);
   });
 
   it("defaults memoryMb to 256", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+    });
     expect(parsed.memoryMb).toBe(256);
   });
 
   it("defaults network to 'deny'", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+    });
     expect(parsed.network).toBe("deny");
   });
 
   // ── input: timeoutMs bounds ───────────────────────────────────────────────
 
   it("accepts timeoutMs=1000 (min)", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", timeoutMs: 1000 });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      timeoutMs: 1000,
+    });
     expect(parsed.timeoutMs).toBe(1000);
   });
 
   it("accepts timeoutMs=300000 (max)", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", timeoutMs: 300_000 });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      timeoutMs: 300_000,
+    });
     expect(parsed.timeoutMs).toBe(300_000);
   });
 
   it("rejects timeoutMs=999 (below min)", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", timeoutMs: 999 }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        timeoutMs: 999,
+      }),
     ).toThrow();
   });
 
   it("rejects timeoutMs=300001 (above max)", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", timeoutMs: 300_001 }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        timeoutMs: 300_001,
+      }),
     ).toThrow();
   });
 
   it("rejects a non-integer timeoutMs", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", timeoutMs: 1000.5 }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        timeoutMs: 1000.5,
+      }),
     ).toThrow();
   });
 
   // ── input: memoryMb bounds ────────────────────────────────────────────────
 
   it("accepts memoryMb=64 (min)", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", memoryMb: 64 });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      memoryMb: 64,
+    });
     expect(parsed.memoryMb).toBe(64);
   });
 
   it("accepts memoryMb=2048 (max)", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", memoryMb: 2048 });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      memoryMb: 2048,
+    });
     expect(parsed.memoryMb).toBe(2048);
   });
 
   it("rejects memoryMb=63 (below min)", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", memoryMb: 63 }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        memoryMb: 63,
+      }),
     ).toThrow();
   });
 
   it("rejects memoryMb=2049 (above max)", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", memoryMb: 2049 }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        memoryMb: 2049,
+      }),
     ).toThrow();
   });
 
   // ── input: network enum ───────────────────────────────────────────────────
 
   it("accepts network='allow'", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", network: "allow" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      network: "allow",
+    });
     expect(parsed.network).toBe("allow");
   });
 
   it("rejects an unknown network value", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", network: "blocked" }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        network: "blocked",
+      }),
     ).toThrow();
   });
 
   // ── input: optional fields ────────────────────────────────────────────────
 
   it("accepts optional stdin", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", stdin: "hello" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      stdin: "hello",
+    });
     expect(parsed.stdin).toBe("hello");
   });
 
@@ -144,8 +213,8 @@ describe("agent.code.execute capability", () => {
   });
 
   // ── input: env is forwarded verbatim; sanitization lives in the handler ───
-  // PR #637 deliberately moved env sanitization OUT of the contract input schema
-  // and INTO the handler (packages/agent/src/handlers/agent.code.execute.ts via
+  // Sanitization lives OUTSIDE the contract input schema and INSIDE the
+  // handler (packages/agent/src/handlers/agent.code.execute.ts via
   // sanitizeSandboxEnv + _environment-env.ts). That lets vault secrets resolved
   // from `environmentId` be merged BELOW the caller env WITHOUT the reserved-key
   // denylist stripping them, and lets stripped keys be reported in
@@ -166,32 +235,52 @@ describe("agent.code.execute capability", () => {
       MODAL_TOKEN: "secret",
       DATABASE_URL: "postgres://...",
     };
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env,
+    });
     expect(parsed.env).toEqual(env);
   });
 
   it("forwards non-POSIX-shaped env names verbatim (handler drops them)", () => {
     const env = { "bad-key": "v", "1leading": "v", GOOD_KEY: "v" };
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env,
+    });
     expect(parsed.env).toEqual(env);
   });
 
   it("keeps an all-unsafe env as-is at the contract seam (handler collapses it to undefined)", () => {
     const env = { PATH: "/x", "bad key": "v" };
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env,
+    });
     expect(parsed.env).toEqual(env);
   });
 
   it("does not cap env key count at the contract seam (handler enforces the 32-key cap)", () => {
     const env: Record<string, string> = {};
     for (let i = 0; i < 40; i++) env[`K${i}`] = "v";
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+      env,
+    });
     expect(Object.keys(parsed.env ?? {})).toHaveLength(40);
   });
 
   it("rejects a non-string env value (schema shape enforcement)", () => {
     expect(() =>
-      agentCodeExecute.input.parse({ language: "node", code: "x", env: { FOO: 1 } }),
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        env: { FOO: 1 },
+      }),
     ).toThrow();
   });
 
@@ -203,11 +292,17 @@ describe("agent.code.execute capability", () => {
       code: "require('./util')",
       files: { "util.js": "module.exports = 1", "lib/a.js": "1" },
     });
-    expect(parsed.files).toEqual({ "util.js": "module.exports = 1", "lib/a.js": "1" });
+    expect(parsed.files).toEqual({
+      "util.js": "module.exports = 1",
+      "lib/a.js": "1",
+    });
   });
 
   it("treats files as optional", () => {
-    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "x",
+    });
     expect(parsed.files).toBeUndefined();
   });
 

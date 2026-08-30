@@ -20,11 +20,12 @@ import {
 // fallbacks fetch existing rows if the conflict fires.
 
 // Only the free tier is seeded statically — it has no paid Stripe price, so a
-// placeholder product id is honest here. Paid plans (Pro, Scale, …) and their
+// placeholder product id is correct here. Paid plans (Pro, Scale, …) and their
 // real Stripe product/price ids are created from the single source of truth
 // (packages/billing/src/pricing.ts) by `pnpm billing:stripe-sync --apply`.
-// Seed must NOT hardcode paid-plan Stripe ids — that's what drifted before, and
-// seed can't import @oxagen/billing without a database↔billing dependency cycle.
+// Seed must NOT hardcode paid-plan Stripe ids — they drift out of sync with
+// Stripe, and seed can't import @oxagen/billing without a database↔billing
+// dependency cycle.
 const PLAN_SEEDS = [
   {
     name: "Free",
@@ -45,9 +46,7 @@ const PLAN_SEEDS = [
   },
 ];
 
-// NOTE: The catalog sync machinery (mcpCatalogServers, ensureOfficialMcpRegistry,
-// MCP_CATALOG_SEED_DATA) was removed in the workspace-scoping rebuild (2026-06-17).
-// The marketplace now queries plugin.installed_plugins directly; there is no
+// The marketplace queries plugin.installed_plugins directly; there is no
 // server-side registry cache. Registries are created per org+workspace on demand.
 
 /**
@@ -63,7 +62,10 @@ export async function seedPlatform(): Promise<void> {
   // FORCE RLS policies would then reject every insert and break DB bootstrap.
   await withSystemDb(async (tx) => {
     for (const plan of PLAN_SEEDS) {
-      await tx.insert(plans).values(plan).onConflictDoNothing({ target: plans.slug });
+      await tx
+        .insert(plans)
+        .values(plan)
+        .onConflictDoNothing({ target: plans.slug });
     }
   });
 }
@@ -92,7 +94,11 @@ export async function seedDev(): Promise<void> {
       })
       .onConflictDoNothing({ target: organizations.slug });
     const orgRow = (
-      await tx.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
+      await tx
+        .select()
+        .from(organizations)
+        .where(eq(organizations.slug, orgSlug))
+        .limit(1)
     )[0];
     if (!orgRow) throw new Error("Failed to upsert dev org");
 
@@ -121,7 +127,12 @@ export async function seedDev(): Promise<void> {
       await tx
         .select()
         .from(workspaces)
-        .where(and(eq(workspaces.orgId, orgRow.id), eq(workspaces.slug, workspaceSlug)))
+        .where(
+          and(
+            eq(workspaces.orgId, orgRow.id),
+            eq(workspaces.slug, workspaceSlug),
+          ),
+        )
         .limit(1)
     )[0];
     if (!workspaceRow) throw new Error("Failed to upsert dev workspace");
@@ -144,7 +155,9 @@ export async function seedDev(): Promise<void> {
         role: "owner",
         joinedAt: new Date(),
       })
-      .onConflictDoNothing({ target: [workspaceUsers.workspaceId, workspaceUsers.userId] });
+      .onConflictDoNothing({
+        target: [workspaceUsers.workspaceId, workspaceUsers.userId],
+      });
 
     // Seed the built-in qa-chat agent for the dev workspace. Inline logic avoids
     // importing @oxagen/handlers (would create a database ↔ handlers dep cycle).
@@ -166,7 +179,12 @@ export async function seedDev(): Promise<void> {
       await tx
         .select({ id: agents.id, activeVersionId: agents.activeVersionId })
         .from(agents)
-        .where(and(eq(agents.workspaceId, workspaceRow.id), eq(agents.slug, "qa-chat")))
+        .where(
+          and(
+            eq(agents.workspaceId, workspaceRow.id),
+            eq(agents.slug, "qa-chat"),
+          ),
+        )
         .limit(1)
     )[0];
     if (!agentRow) throw new Error("Failed to upsert dev qa-chat agent");
@@ -189,10 +207,16 @@ export async function seedDev(): Promise<void> {
         await tx
           .select({ id: agentVersions.id })
           .from(agentVersions)
-          .where(and(eq(agentVersions.agentId, agentRow.id), eq(agentVersions.version, 1)))
+          .where(
+            and(
+              eq(agentVersions.agentId, agentRow.id),
+              eq(agentVersions.version, 1),
+            ),
+          )
           .limit(1)
       )[0];
-      if (!versionRow) throw new Error("Failed to upsert dev qa-chat agent version");
+      if (!versionRow)
+        throw new Error("Failed to upsert dev qa-chat agent version");
 
       await tx
         .update(agents)
@@ -221,7 +245,9 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "seed")) {
       process.exit(0);
     })
     .catch((err) => {
-      process.stderr.write(`Seed failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+      process.stderr.write(
+        `Seed failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+      );
       process.exit(1);
     });
 }

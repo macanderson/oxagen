@@ -1,7 +1,7 @@
 "use client";
 /**
  * spend-budgets-panel.tsx — client orchestrator for Workspace → Settings →
- * Spend Budgets (OXA-1079). Always renders BOTH an Organization and a
+ * Spend Budgets. Always renders BOTH an Organization and a
  * Workspace card (never a blank scope) and keeps each scope's live status in
  * local state, updated directly from set_spend_budget's return value on a
  * successful save — no full-page reload needed for the "success" state.

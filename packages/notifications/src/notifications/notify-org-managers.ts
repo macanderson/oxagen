@@ -47,7 +47,7 @@ export interface NotifyOrgManagersInput {
  * send an email to each and stamp emailedAt.
  *
  * Email failures do NOT prevent the in-app notification (log-and-continue, no
- * silent total failure per spec §7).
+ * silent total failure — see docs/specs/installable-plugins/specs/2026-06-06-installable-plugins-mcp-design.md §7).
  */
 export async function notifyOrgManagers(
   input: NotifyOrgManagersInput,
@@ -80,13 +80,16 @@ export async function notifyOrgManagers(
         .limit(1);
 
       const rawSettings = (orgRow?.settings ?? {}) as Record<string, unknown>;
-      const alertSettings = (rawSettings["mcp_auth_alerts"] ?? {}) as McpAuthAlertsSetting;
+      const alertSettings = (rawSettings["mcp_auth_alerts"] ??
+        {}) as McpAuthAlertsSetting;
       const roles: string[] =
         Array.isArray(alertSettings.roles) && alertSettings.roles.length > 0
           ? alertSettings.roles
           : (DEFAULT_ALERT_ROLES as unknown as string[]);
       const sendEmailFlag =
-        typeof alertSettings.send_email === "boolean" ? alertSettings.send_email : true;
+        typeof alertSettings.send_email === "boolean"
+          ? alertSettings.send_email
+          : true;
       return { alertRoles: roles, sendEmailEnabled: sendEmailFlag };
     });
 
@@ -105,7 +108,10 @@ export async function notifyOrgManagers(
     });
 
     if (userIds.length === 0) {
-      logger.warn({ orgId }, "[notifyOrgManagers] no recipients resolved; skipping");
+      logger.warn(
+        { orgId },
+        "[notifyOrgManagers] no recipients resolved; skipping",
+      );
       return;
     }
 
@@ -145,8 +151,8 @@ export async function notifyOrgManagers(
         { orgId, userId: recipient.userId, err },
         "[notifyOrgManagers] failed to create in-app notification",
       );
-      // Per spec: email failure must not silently suppress the notification.
-      // In-app failure is logged; continue to next recipient.
+      // In-app failure is logged; continue to the next recipient so one bad
+      // row doesn't block notifying the rest.
       continue;
     }
 

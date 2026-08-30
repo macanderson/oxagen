@@ -1,15 +1,8 @@
 /**
- * Integration smoke test (oxagen #1081, made real by #1132): boot a real
- * `stella-serve` binary and drive a **complete multi-step agentic turn**
- * through it, with this test acting as the host — it owns the model and it owns
- * the tools, exactly as oxagen's kernel will.
- *
- * This is the test #1132 exists for. Its predecessor asserted a
- * session-oriented HTTP surface that `stella-serve` has never served, and had
- * no way to answer a reverse-RPC request, so it could not have driven a turn
- * even against the right routes — and because its capability probe looked for a
- * nonexistent `stella serve` subcommand, it skipped in every environment and
- * that was never discovered. See wire-types.ts for the drift table.
+ * Integration smoke test: boot a real `stella-serve` binary and drive a
+ * **complete multi-step agentic turn** through it, with this test acting as
+ * the host — it owns the model and it owns the tools, exactly as oxagen's
+ * kernel will.
  *
  * ## Why this needs no API key and no network
  *
@@ -48,10 +41,10 @@ const TOKEN = "oxagen-smoke-test-bearer-token-0123456789";
 const config = readSidecarConfig();
 const resolution = await resolveStellaBinary(config);
 
-// The ONLY skip condition is an absent binary (oxagen #1081: a missing Stella
-// must never fail the suite hard). A version mismatch deliberately does NOT
-// skip — the assertions below are the drift detector, and skipping on mismatch
-// is what made the nightly `latest` job permanently skip-green.
+// The ONLY skip condition is an absent binary — a missing Stella binary must
+// never fail the suite hard. A version mismatch deliberately does NOT skip:
+// the assertions below are the drift detector, and skipping on mismatch would
+// let a nightly `latest` job pass without ever checking anything.
 const skipReason = resolution
   ? undefined
   : `no stella-serve binary found (checked $${config.binaryEnvVar}, ` +

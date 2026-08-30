@@ -1,7 +1,7 @@
 // tenancy: system bypass via withSystemDb (dispute.created / dispute.closed /
 // charge.refunded webhooks arrive with external Stripe ids; orgId is resolved from charge
 // metadata or prior billing_disputes rows before any tenant scope exists;
-// billing is org_only, no workspace_id) — OXA-1515
+// billing is org_only, no workspace_id).
 import { withSystemDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -21,13 +21,14 @@ import type { BillingDispute, BillingRefundedCharge } from "./provider";
  * Priority order:
  *  1. dispute.orgId (from Stripe charge metadata)
  *  2. Existing billing_disputes row (idempotent re-delivery can carry orgId)
- *  3. subscriptions table keyed by stripeCustomerId derived from the charge's
- *     paymentIntentId or chargeId fields
- *  4. paymentMethods table keyed by stripeCustomerId (same derivation)
  *
- * Falls back to null if all paths fail.
+ * Falls back to null if both paths fail, and logs a warning so ops can
+ * correlate the dispute manually.
  */
-async function resolveOrgFromDispute(tx: Tx, dispute: BillingDispute): Promise<string | null> {
+async function resolveOrgFromDispute(
+  tx: Tx,
+  dispute: BillingDispute,
+): Promise<string | null> {
   if (dispute.orgId) return dispute.orgId;
 
   // Path 2: existing billing_disputes row (prior partial insert or re-delivery).
@@ -39,21 +40,11 @@ async function resolveOrgFromDispute(tx: Tx, dispute: BillingDispute): Promise<s
     if (existingDispute?.orgId) return existingDispute.orgId;
   }
 
-  // Path 3+4: look up subscriptions / payment_methods by stripeCustomerId.
-  // We don't have a customerId directly on the dispute, but the chargeId is
-  // stored in billing_disputes.stripeChargeId and paymentIntentId in
-  // billing_disputes.paymentIntentId. Cross-reference via subscriptions
-  // (which carries stripeCustomerId) by paymentIntentId stored on the dispute.
-  //
-  // In practice, when Stripe embeds org_id in charge metadata (our standard),
-  // dispute.orgId will already be set at path 1. These paths protect the rare
-  // case where metadata was absent (e.g. migrated charges, legacy test data).
+  // When Stripe embeds org_id in charge metadata (our standard), dispute.orgId
+  // is already set at path 1. Both paths above are exhausted here, so leave a
+  // breadcrumb for ops to correlate manually.
 
   if (dispute.paymentIntentId) {
-    // subscriptions doesn't carry paymentIntentId directly; check payment_methods
-    // which stores stripeCustomerId. But we don't have customerId here — skip
-    // to billing_disputes fallback already exhausted above.
-    // Leave a breadcrumb so ops can correlate manually.
     logger.warn(
       {
         disputeId: dispute.id,
@@ -77,29 +68,16 @@ async function resolveOrgFromDispute(tx: Tx, dispute: BillingDispute): Promise<s
  *
  * Priority order:
  *  1. charge.orgId (from Stripe charge metadata)
- *  2. subscriptions table keyed by stripeCustomerId — we pivot via
- *     paymentIntentId: find any payment_methods row that shares the
- *     stripeCustomerId, then follow to subscriptions.
- *  3. paymentMethods table (same pivot).
+ *  2. billing_disputes row keyed by paymentIntentId (the charge was disputed before)
+ *  3. billing_disputes row keyed by chargeId
  *
  * Falls back to null if unresolved.
  */
-async function resolveOrgFromCharge(tx: Tx, charge: BillingRefundedCharge): Promise<string | null> {
+async function resolveOrgFromCharge(
+  tx: Tx,
+  charge: BillingRefundedCharge,
+): Promise<string | null> {
   if (charge.orgId) return charge.orgId;
-
-  // Attempt to resolve via subscriptions by paymentIntentId stored in the
-  // billing_disputes table (shared lookup point for charges/PIs).
-  // In the normal payment flow, charges are created by PaymentIntents whose
-  // metadata carries org_id; absent that, look up any subscription whose
-  // payment_methods share the same stripeCustomerId.
-  //
-  // Since we don't store paymentIntentId on subscriptions directly, attempt
-  // resolution via payment_methods: find a payment_method row by paymentIntentId
-  // → get stripeCustomerId → look up subscription → get orgId.
-  //
-  // This covers the case where a charge was made via an off-session PI on a
-  // known customer (credit auto-reload, subscription renewal) but org_id was
-  // missing from the charge metadata.
 
   if (charge.paymentIntentId) {
     // Try: billing_disputes for this paymentIntentId (may have been disputed before).
@@ -108,8 +86,6 @@ async function resolveOrgFromCharge(tx: Tx, charge: BillingRefundedCharge): Prom
       columns: { orgId: true },
     });
     if (disputeRow?.orgId) return disputeRow.orgId;
-
-    // Try: subscriptions — no direct paymentIntentId column; fall through.
   }
 
   // Try: billing_disputes for this chargeId.
@@ -142,7 +118,7 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (dispute webhook, org resolved from Stripe
-    // charge metadata or billing_disputes fallback, no tenant scope) — OXA-1515
+    // charge metadata or billing_disputes fallback, no tenant scope).
     const orgId = await resolveOrgFromDispute(tx, dispute);
     if (!orgId) {
       logger.fatal(
@@ -187,7 +163,11 @@ export async function onDisputeCreated(dispute: BillingDispute): Promise<void> {
     } else if (existing.clawedBackCents > 0n) {
       // Clawback already applied — idempotent return.
       logger.debug(
-        { disputeId: dispute.id, orgId, clawedBackCents: Number(existing.clawedBackCents) },
+        {
+          disputeId: dispute.id,
+          orgId,
+          clawedBackCents: Number(existing.clawedBackCents),
+        },
         "billing: dispute.created — clawback already applied, skipping",
       );
       return;
@@ -274,7 +254,7 @@ export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (dispute.closed webhook, updates by
-    // stripeDisputeId with no tenant scope) — OXA-1515
+    // stripeDisputeId with no tenant scope).
     await tx
       .update(schema.billingDisputes)
       .set({ status: dispute.status, resolvedAt: now, updatedAt: now })
@@ -282,7 +262,11 @@ export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
   });
 
   logger.info(
-    { disputeId: dispute.id, status: dispute.status, durationMs: Date.now() - start },
+    {
+      disputeId: dispute.id,
+      status: dispute.status,
+      durationMs: Date.now() - start,
+    },
     "billing: dispute closed",
   );
 }
@@ -306,12 +290,14 @@ export async function onDisputeClosed(dispute: BillingDispute): Promise<void> {
  * If orgId cannot be resolved after all fallback paths, logs at CRITICAL level
  * with an alert tag — does NOT silently swallow.
  */
-export async function onChargeRefunded(charge: BillingRefundedCharge): Promise<void> {
+export async function onChargeRefunded(
+  charge: BillingRefundedCharge,
+): Promise<void> {
   const start = Date.now();
 
   await withSystemDb(async (tx) => {
     // tenancy: system bypass via withSystemDb (charge.refunded webhook, org resolved from
-    // Stripe charge metadata or billing_disputes fallback, no tenant scope) — OXA-1515
+    // Stripe charge metadata or billing_disputes fallback, no tenant scope).
     const orgId = await resolveOrgFromCharge(tx, charge);
     if (!orgId) {
       logger.fatal(

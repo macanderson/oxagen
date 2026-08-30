@@ -1,6 +1,6 @@
 -- 0013_graph_observed_labels.sql
 --
--- OXA-schema-registry §4.9: graph_observed_labels (ClickHouse)
+-- See docs/specs/workspace-schema-registry/spec.md §4.9: graph_observed_labels (ClickHouse)
 --
 -- Replaces the durable observation role of ingestion.entity_types (§1.3, §3.1).
 -- Emitted by ingestion as it writes nodes/relationships; read by schema.recommend

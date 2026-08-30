@@ -1,5 +1,5 @@
 // mcp-snapshots.ts — external MCP tool-descriptor snapshots, descriptor
-// pinning, + server-change audit (OXA-820).
+// pinning, + server-change audit.
 //
 // At registration (and on re-enable) every discovered tool's JSONSchema
 // descriptor is captured into mcp.tool_snapshots so replay of an old run can

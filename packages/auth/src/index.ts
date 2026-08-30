@@ -1,10 +1,17 @@
 export { auth } from "./auth";
 export type { Auth, Session } from "./auth";
-export { authClient, signIn, signOut, signUp, useSession, getSession } from "./client";
+export {
+  authClient,
+  signIn,
+  signOut,
+  signUp,
+  useSession,
+  getSession,
+} from "./client";
 
 // Env predicate — mirrors auth.ts requireEmailVerification gating. Surface for
 // callers (e.g. apps/api /health) that need to evaluate the same condition
-// without re-deriving it (OXA-1753).
+// without re-deriving it.
 export { isEmailVerificationRequired, resolveIsLocalEnv } from "./local-env";
 export type { LocalEnvSignals } from "./local-env";
 
@@ -38,5 +45,8 @@ export type {
 } from "./resolvers/index";
 export { resolveOrgScope } from "./resolvers/index";
 
-export type { WorkspaceScopeResult, WorkspaceScopeResolution } from "./resolvers/index";
+export type {
+  WorkspaceScopeResult,
+  WorkspaceScopeResolution,
+} from "./resolvers/index";
 export { resolveWorkspaceScope } from "./resolvers/index";

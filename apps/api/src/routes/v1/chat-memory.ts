@@ -5,7 +5,7 @@ import type { MemoryProvider } from "@oxagen/agent-engine";
 
 // Deterministic per-turn memory recall for the REST chat + A2A agent surfaces.
 //
-// This mirrors the app-chat surface's recall wiring (PR #437, ADR-021 §2/§8):
+// This mirrors the app-chat surface's recall wiring (ADR-021 §2/§8):
 // recall workspace memory BEFORE the turn acts, via the metered, IAM-gated
 // `agent.memory.recall` capability (never a raw Neo4j call), and inject the
 // result per-turn AFTER the stable/cached system prefix — never into the cached

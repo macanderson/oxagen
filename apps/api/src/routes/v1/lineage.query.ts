@@ -9,9 +9,9 @@ import type { AppEnv } from "../../app";
 export const lineageQueryRoute = new Hono<AppEnv>();
 
 // GET /:dispatchId?maxDepth=N&maxNodes=N — the dispatch tree rooted at one
-// agent.subagent_fanouts row (issue #1078), the data spine for the
-// fleet-lineage explorer. Path param + optional numeric query caps mirrors
-// agent.debug.trace.ts's shape.
+// agent.subagent_fanouts row, the data spine for the fleet-lineage explorer.
+// Path param + optional numeric query caps mirrors agent.debug.trace.ts's
+// shape.
 lineageQueryRoute.get("/:dispatchId", async (c) => {
   const maxDepthRaw = c.req.query("maxDepth");
   const maxNodesRaw = c.req.query("maxNodes");

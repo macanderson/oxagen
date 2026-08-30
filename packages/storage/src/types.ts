@@ -4,8 +4,7 @@
  * Every file/blob in Oxagen is written through this interface so the concrete
  * backend (Vercel Blob today; S3 / Cloudflare R2 tomorrow) is a config-only
  * swap — never an import-site change. App / API / MCP code depends on
- * `StorageAdapter`, never on `@vercel/blob` directly. See
- * [[storage-vercel-blob-adapter]] and the vendor-neutrality policy.
+ * `StorageAdapter`, never on `@vercel/blob` directly.
  *
  * A stored object always yields a public, durable URL plus the canonical key
  * used to address it for later deletion. Binary payloads are accepted as the

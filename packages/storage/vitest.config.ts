@@ -9,9 +9,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // Ratcheted after adding the fs driver + tests (measured 92.93 lines/
-      // statements, 87.87 branches, 95.83 functions). Each floor kept ≥2.5%
-      // below measured per the coverage-ratchet rule (functions capped at 90).
+      // Thresholds only move up, capped at 90, with at least 2.5% headroom
+      // below measured coverage.
       thresholds: {
         lines: 90,
         branches: 85,

@@ -1,4 +1,4 @@
-// consent.ts — first-use consent + scope grants for external MCP tools (OXA-816).
+// consent.ts — first-use consent + scope grants for external MCP tools.
 //
 // The FIRST time an agent invokes a `mcp.<serverId>.<tool>` for a given
 // workspace+user+server+tool, the runtime pauses (HITL) and renders a consent
@@ -48,7 +48,7 @@ export type ConsentStatus = "granted" | "denied";
 
 /**
  * Consent subject discriminator (Agent RBAC Phase 4a, spec §3.7).
- * - "user": the original OXA-816 semantics — the subject id is a human user
+ * - "user": the original semantics — the subject id is a human user
  *   id and the consent gates that user's own first use of a tool.
  * - "agent": an agent-scoped consent created when a role's resourceScope.mcp
  *   rule resolves "ask" for an agent run — the subject id is the AGENT

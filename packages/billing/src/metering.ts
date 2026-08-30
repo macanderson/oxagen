@@ -77,7 +77,7 @@ export async function assertCanStartTurn(orgId: string): Promise<void> {
  * The cost meter that lives inside the gate. Converts one metered call into
  * (a) the provider cost we incurred and (b) the credits to debit, then charges
  * them. Inputs are exactly what providers bill on — tokens in/out for text,
- * images/seconds for media — so the meter stays honest against the invoice.
+ * images/seconds for media — so the meter matches the real invoice.
  *
  * Text, image, and video all funnel through one DB-charging chokepoint
  * ({@link chargeCostUsd}) so the markup → credits → atomic-debit path is solved
@@ -122,9 +122,9 @@ export interface ChargeUsageResult {
  * `consume_token_overage`), which row-locks the balance and clamps the debit to
  * what's available — credit_balances enforces `balance_cents >= 0` (no
  * overdraft). A non-zero `shortfallCredits` means the org outran its credits
- * mid-turn; the pre-turn guard ({@link hasCreditBalance}) is the real admission
- * gate. May throw on a DB failure — callers invoke it best-effort (try/catch in
- * the gate) so metering never fails the user's turn.
+ * mid-turn; the pre-turn guard ({@link assertCanStartTurn}) is the real
+ * admission gate. May throw on a DB failure — callers invoke it best-effort
+ * (try/catch in the gate) so metering never fails the user's turn.
  *
  * Instrumentation: logs orgId, model, costUsdMicros, creditsMetered/charged,
  * shortfall, durationMs, plus any modality-specific `logFields`, on every call.

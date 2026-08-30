@@ -39,11 +39,11 @@ CREATE CONSTRAINT skill_version_public_id IF NOT EXISTS FOR (n:SkillVersion) REQ
 CREATE CONSTRAINT background_task_public_id IF NOT EXISTS FOR (n:BackgroundTask) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId IS UNIQUE;
 
-// --- Fleet lineage graph projection (issue #1078) ---
+// --- Fleet lineage graph projection ---
 // Idempotent MERGE projection of agent.subagent_fanouts / agent.subagent_runs
 // (Postgres chain-of-custody authority) into graph nodes/edges — see
-// packages/agent/src/dispatch/lineage-projection.ts. Distinct from the retired
-// :Fanout/BRANCHED_TO_SUBAGENT pair above (superseded automatic projection).
+// packages/agent/src/dispatch/lineage-projection.ts. Distinct from the
+// :Fanout/BRANCHED_TO_SUBAGENT pair above (a separate, message-based projection).
 CREATE CONSTRAINT subagent_fanout_public_id IF NOT EXISTS FOR (n:SubagentFanout) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT subagent_run_public_id IF NOT EXISTS FOR (n:SubagentRun) REQUIRE n.publicId IS UNIQUE;
 
@@ -63,8 +63,8 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 //   APPROVED_BY          :Execution -> :User (approval audit)
 //   PROMOTED             :Promotion -> :Memory (auditable class promotion)
 //   DEMOTED              :Demotion -> :Memory (auditable class demotion)
-//   DISPATCHED           :SubagentFanout -> :SubagentRun (direct child, issue #1078)
-//   SPAWNED_FANOUT       :SubagentRun -> :SubagentFanout (nested dispatch, issue #1078)
+//   DISPATCHED           :SubagentFanout -> :SubagentRun (direct child)
+//   SPAWNED_FANOUT       :SubagentRun -> :SubagentFanout (nested dispatch)
 
 // --- Org-scope range indexes for fast filtering ---
 // Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts

@@ -57,8 +57,8 @@ export function computeChainMetrics(
 }
 
 /**
- * Render a sampled count honestly: audit reads are page-bounded, so when the
- * page is full and more rows exist the true total is unknown — show "N+".
+ * Audit reads are page-bounded, so when the page is full and more rows
+ * exist the true total is unknown — show "N+" instead of a wrong count.
  */
 export function formatCappedCount(count: number, hasMore: boolean): string {
   return hasMore ? `${count}+` : String(count);

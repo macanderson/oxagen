@@ -1,7 +1,6 @@
 "use server";
 /**
- * budget-action.ts — server action for Workspace → Settings → Budget
- * (OXA-2081).
+ * budget-action.ts — server action for Workspace → Settings → Budget.
  *
  * Writes the workspace's governed per-turn dollar budget via the
  * `workspace.budget.policy.write` capability. Owner/Admin-gated: `apps/app`
@@ -25,7 +24,11 @@ import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 
 // ── Input schema ─────────────────────────────────────────────────────────────
 
@@ -61,8 +64,15 @@ export async function updateWorkspaceBudgetAction(
     };
   }
 
-  const { orgSlug, workspaceSlug, enabled, limitUsd, mode, graceOveragePct, enforcement } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    enabled,
+    limitUsd,
+    mode,
+    graceOveragePct,
+    enforcement,
+  } = parsed.data;
 
   // Resolve org + workspace — notFound() on slug mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
@@ -71,58 +81,65 @@ export async function updateWorkspaceBudgetAction(
   // Assert the caller is an org member first (IDOR guard).
   await assertOrgMember(org.id, session.user.id);
 
-  return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
-    // Re-read the caller's workspace role server-side — never trust the
-    // client. apps/app does not enforce IAM via invoke(), so this IS the gate
-    // for a capability whose contract declares Owner/Admin-only authorization.
-    const wsRoleRows = await withTenantDb((tx) =>
-      tx
-        .select({ role: schema.workspaceUsers.role })
-        .from(schema.workspaceUsers)
-        .where(
-          and(
-            eq(schema.workspaceUsers.workspaceId, ws.id),
-            eq(schema.workspaceUsers.userId, session.user.id),
-          ),
-        )
-        .limit(1),
-    );
-
-    const wsRole = wsRoleRows[0]?.role ?? "";
-    if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
-      return {
-        ok: false,
-        error: "Only workspace owners and admins can edit the workspace budget.",
-      };
-    }
-
-    const ctx = {
-      orgId: org.id,
-      workspaceId: ws.id,
-      userId: session.user.id,
-      apiKeyId: null as string | null,
-      requestId: crypto.randomUUID(),
-      surface: "app" as const,
-      messageId: null as string | null,
-    };
-
-    try {
-      // { surface: "agent" } — the contract's `surfaces` is
-      // ["api","mcp","agent"] and does not include "app".
-      await invoke(
-        "update_budget_policy",
-        { enabled, limitUsd, mode, graceOveragePct, enforcement },
-        ctx,
-        { surface: "agent" },
+  return await runInTenantScope(
+    { orgId: org.id, workspaceId: ws.id },
+    async () => {
+      // Re-read the caller's workspace role server-side — never trust the
+      // client. apps/app does not enforce IAM via invoke(), so this IS the gate
+      // for a capability whose contract declares Owner/Admin-only authorization.
+      const wsRoleRows = await withTenantDb((tx) =>
+        tx
+          .select({ role: schema.workspaceUsers.role })
+          .from(schema.workspaceUsers)
+          .where(
+            and(
+              eq(schema.workspaceUsers.workspaceId, ws.id),
+              eq(schema.workspaceUsers.userId, session.user.id),
+            ),
+          )
+          .limit(1),
       );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save workspace budget.";
-      return { ok: false, error: message };
-    }
 
-    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(workspace.settings.agentDefaults(routeCtx));
+      const wsRole = wsRoleRows[0]?.role ?? "";
+      if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
+        return {
+          ok: false,
+          error:
+            "Only workspace owners and admins can edit the workspace budget.",
+        };
+      }
 
-    return { ok: true };
-  });
+      const ctx = {
+        orgId: org.id,
+        workspaceId: ws.id,
+        userId: session.user.id,
+        apiKeyId: null as string | null,
+        requestId: crypto.randomUUID(),
+        surface: "app" as const,
+        messageId: null as string | null,
+      };
+
+      try {
+        // { surface: "agent" } — the contract's `surfaces` is
+        // ["api","mcp","agent"] and does not include "app".
+        await invoke(
+          "update_budget_policy",
+          { enabled, limitUsd, mode, graceOveragePct, enforcement },
+          ctx,
+          { surface: "agent" },
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to save workspace budget.";
+        return { ok: false, error: message };
+      }
+
+      const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+      revalidatePath(workspace.settings.agentDefaults(routeCtx));
+
+      return { ok: true };
+    },
+  );
 }

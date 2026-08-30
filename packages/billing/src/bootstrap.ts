@@ -24,7 +24,7 @@ export function bootstrapBillingRuntime(): void {
   if (booted) return;
   booted = true;
   setBillingAdmissionGate((orgId) => assertCanStartTurn(orgId));
-  // Hard period-to-date spend ceiling (OXA-1079). Fires right after the billing
+  // Hard period-to-date spend ceiling. Fires right after the billing
   // admission gate inside the kernel's tenant scope; denies with
   // BudgetExceededError when an org/workspace ceiling is reached.
   setBudgetAdmissionGate((args) => assertWithinSpendBudget(args));

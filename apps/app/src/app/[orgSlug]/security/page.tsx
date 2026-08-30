@@ -1,14 +1,12 @@
-// Security → Overview: a live control-posture dashboard.
+// Security → Overview: a live control-posture dashboard an enterprise buyer
+// can open during their own security review. See
+// docs/architecture/security/soc2-simplification.html.
 //
-// Rec 5 / OXA-N3 of docs/architecture/security/soc2-simplification.html. This
-// replaces the old redirect-to-audit landing with an at-a-glance posture view
-// an enterprise buyer can open during their own security review.
-//
-// HONESTY RULE: every figure here is read from live data, and controls that are
-// not yet built (org-wide MFA / SSO enforcement, automated evidence snapshots,
-// automated access review) are shown as "Not configured" / "Pending" rather than
-// faked green. The audit trail IS live (security_events + the consolidated
-// emit path), so CC7.2 reflects that truthfully.
+// Every figure here is read from live data. Controls that are not yet built
+// (org-wide MFA / SSO enforcement, automated evidence snapshots, automated
+// access review) must show as "Not configured" / "Pending", never a faked
+// green. The audit trail is live (security_events + the consolidated emit
+// path), so CC7.2 reflects that.
 
 import { and, count, desc, eq, gte, isNull, or } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -34,7 +32,7 @@ import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 import { Stat, StatGroup } from "@/components/ui/stat";
 
-// Org-only route — sentinel workspaceId (no workspace context). — OXA-1515
+// Org-only route — sentinel workspaceId (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -128,7 +126,10 @@ async function loadPosture(orgId: string): Promise<Posture> {
 
 type ControlState = "active" | "partial" | "open";
 
-const CONTROL_BADGE: Record<ControlState, "success-soft" | "warning-soft" | "error-soft"> = {
+const CONTROL_BADGE: Record<
+  ControlState,
+  "success-soft" | "warning-soft" | "error-soft"
+> = {
   active: "success-soft",
   partial: "warning-soft",
   open: "error-soft",
@@ -141,10 +142,25 @@ const CONTROL_LABEL: Record<ControlState, string> = {
 
 function ControlIcon({ state }: { state: ControlState }) {
   if (state === "active")
-    return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />;
+    return (
+      <CheckCircle2
+        className="mt-0.5 h-4 w-4 shrink-0 text-success"
+        aria-hidden="true"
+      />
+    );
   if (state === "partial")
-    return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />;
-  return <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />;
+    return (
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+        aria-hidden="true"
+      />
+    );
+  return (
+    <XCircle
+      className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+      aria-hidden="true"
+    />
+  );
 }
 
 export default async function SecurityOverviewPage({
@@ -259,8 +275,8 @@ export default async function SecurityOverviewPage({
       {/* SOC 2 control status */}
       <Panel title="SOC 2 control status">
         <p className="mb-4 text-sm text-muted-foreground">
-          Live status for the Trust Service Criteria this workspace touches, derived from
-          current platform signals.
+          Live status for the Trust Service Criteria this workspace touches,
+          derived from current platform signals.
         </p>
         <div className="flex flex-col gap-2">
           {controls.map((c) => (
@@ -275,12 +291,19 @@ export default async function SecurityOverviewPage({
                     <span className="font-mono text-xs font-semibold text-foreground">
                       {c.criterion}
                     </span>
-                    <span className="text-sm font-medium text-foreground">{c.title}</span>
+                    <span className="text-sm font-medium text-foreground">
+                      {c.title}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-snug">{c.rationale}</p>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    {c.rationale}
+                  </p>
                 </div>
               </div>
-              <Badge variant={CONTROL_BADGE[c.state]} className="shrink-0 text-xs">
+              <Badge
+                variant={CONTROL_BADGE[c.state]}
+                className="shrink-0 text-xs"
+              >
                 {CONTROL_LABEL[c.state]}
               </Badge>
             </div>
@@ -291,40 +314,57 @@ export default async function SecurityOverviewPage({
       {/* Evidence snapshot status + quick links */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Evidence snapshots">
-          <p className="mb-4 text-sm text-muted-foreground">Automated monthly compliance evidence bundles.</p>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Automated monthly compliance evidence bundles.
+          </p>
           <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 py-3">
             <Badge variant="outline" className="shrink-0 text-xs">
               Pending
             </Badge>
             <p className="text-sm text-muted-foreground">
-              Automated monthly evidence snapshots are not yet enabled. Once live, the most
-              recent bundles will appear here for one-click auditor download.
+              Automated monthly evidence snapshots are not yet enabled. Once
+              live, the most recent bundles will appear here for one-click
+              auditor download.
             </p>
           </div>
         </Panel>
 
         <Panel title="Jump to">
-          <p className="mb-4 text-sm text-muted-foreground">Drill into the underlying security surfaces.</p>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Drill into the underlying security surfaces.
+          </p>
           <div className="flex flex-col gap-2">
             <Link
               href={org.security.audit(ctx)}
               className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-center gap-2">
-                <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <ScrollText
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 Audit log
               </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ArrowRight
+                className="h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              />
             </Link>
             <Link
               href={org.security.compliance(ctx)}
               className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="flex items-center gap-2">
-                <ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <ClipboardCheck
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 Compliance controls
               </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <ArrowRight
+                className="h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              />
             </Link>
           </div>
         </Panel>

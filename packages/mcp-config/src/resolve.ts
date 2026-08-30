@@ -259,7 +259,7 @@ export function resolveSettings(opts: ResolveOptions = {}): ResolvedConfig {
 
 /**
  * Find the project root by walking up from cwd looking for .oxagen/ directory.
- * Falls back to cwd if not found (the settings files simply won't exist).
+ * Falls back to cwd if not found (the settings files won't exist there).
  */
 export function findProjectRoot(startDir?: string): string {
   let dir = startDir ?? process.cwd();

@@ -1,6 +1,6 @@
 /**
- * lineage-node-tree.tsx — indented tree list of every run in a fleet dispatch
- * (issue #1078). Renders the nested `LineageTreeNode[]` from
+ * lineage-node-tree.tsx — indented tree list of every run in a fleet dispatch.
+ * Renders the nested `LineageTreeNode[]` from
  * `buildLineageTree` (lib/lineage/tree.ts) as a keyboard-navigable list.
  *
  * Every run is cited through `NodeRef` (never a raw runId as the primary

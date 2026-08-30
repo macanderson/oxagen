@@ -189,7 +189,7 @@ describe("runPipeline — full 6-stage integration", () => {
     await runPipeline(event, ctx);
 
     // upsertEntityNode runs a MERGE — find the specific call (after Pass A + Pass B session.run).
-    // §3.3 dual-write: the real label (`CodeChange`) is PRIMARY, `:EntityNode` secondary.
+    // The real label (`CodeChange`) is primary, `:EntityNode` secondary.
     // Labels are PascalCase (sanitizeLabel); the entityType *property* stays the
     // lowercase slug (`code_change`).
     const upsertCall = mocks.sessionRun.mock.calls.find(
@@ -208,11 +208,10 @@ describe("runPipeline — full 6-stage integration", () => {
     );
     expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
     expect(params["entityType"]).toBe("code_change");
-    // OXA-2062 (#608): upsertEntityNode now binds $orgId EXPLICITLY in its params,
-    // no longer relying solely on scopedSession's auto-injection of orgId/workspaceId.
-    // This mock replaces scopedSession with a bare fn that does NOT inject, so the
-    // captured params reflect exactly what upsertEntityNode passes — and orgId is
-    // now present (was `undefined` before #608 bound it explicitly).
+    // upsertEntityNode binds $orgId explicitly in its params, rather than
+    // relying on scopedSession's own orgId/workspaceId injection. This mock
+    // replaces scopedSession with a bare fn that does not inject, so the
+    // captured params reflect exactly what upsertEntityNode passes.
     expect(params["orgId"]).toBe("org-integration");
     expect(params["connectionId"]).toBe("conn-integration-1");
     expect(params["workspaceId"]).toBe("ws-integration");
@@ -267,7 +266,7 @@ describe("runPipeline — full 6-stage integration", () => {
 
     await runPipeline(event, ctx);
 
-    // Find the upsertEntityNode MERGE call (§3.3 dual-write: `Task` PRIMARY label —
+    // Find the upsertEntityNode MERGE call (`Task` is the primary label,
     // PascalCase via sanitizeLabel)
     const upsertCall = mocks.sessionRun.mock.calls.find(
       ([cypher]) =>

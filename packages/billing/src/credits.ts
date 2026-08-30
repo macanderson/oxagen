@@ -31,15 +31,17 @@ export interface CreateCreditLotResult {
 
 /**
  * Create a credit lot and a matching credit_ledger row in one transaction.
- * Also upserts credit_balances so legacy callers that read the cached mirror
- * remain correct.
+ * Also upserts credit_balances, the cached balance table other reads use
+ * instead of summing every lot.
  *
  * Invariants:
  *  - amountCents must be > 0
  *  - reason must be in ALLOWED_REASONS
  *  - source must be one of the three allowed values
  */
-export async function createCreditLot(args: CreateCreditLotArgs): Promise<CreateCreditLotResult> {
+export async function createCreditLot(
+  args: CreateCreditLotArgs,
+): Promise<CreateCreditLotResult> {
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
   }
@@ -101,12 +103,17 @@ export async function createCreditLot(args: CreateCreditLotArgs): Promise<Create
       .where(
         and(
           eq(schema.creditLots.orgId, args.orgId),
-          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+          or(
+            isNull(schema.creditLots.expiresAt),
+            gt(schema.creditLots.expiresAt, now),
+          ),
         ),
       );
 
     const effectiveBalanceCents = balanceRows.reduce(
-      (acc, r) => acc + (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
+      (acc, r) =>
+        acc +
+        (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
       0n,
     );
 
@@ -133,7 +140,9 @@ export interface GrantCreditsArgs {
  * This shim is kept for backward compatibility: positive deltas create a
  * free_grant lot; negative deltas (consumption) call consumeCredits internally.
  */
-export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCents: bigint }> {
+export async function grantCredits(
+  args: GrantCreditsArgs,
+): Promise<{ balanceCents: bigint }> {
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
   }
@@ -196,13 +205,18 @@ export async function effectiveBalance(
       .where(
         and(
           eq(schema.creditLots.orgId, orgId),
-          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+          or(
+            isNull(schema.creditLots.expiresAt),
+            gt(schema.creditLots.expiresAt, now),
+          ),
         ),
       ),
   );
 
   return rows.reduce(
-    (acc, r) => acc + (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
+    (acc, r) =>
+      acc +
+      (typeof r.remaining === "bigint" ? r.remaining : BigInt(r.remaining)),
     0n,
   );
 }
@@ -239,7 +253,9 @@ export interface ConsumeCreditsResult {
  * a zero delta). credit_balances is decremented in the same transaction to keep
  * the cached mirror consistent.
  */
-export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeCreditsResult> {
+export async function consumeCredits(
+  args: ConsumeCreditsArgs,
+): Promise<ConsumeCreditsResult> {
   if (!ALLOWED_REASONS.has(args.reason)) {
     throw new Error(`invalid credit reason: ${args.reason}`);
   }
@@ -262,7 +278,10 @@ export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeC
       .where(
         and(
           eq(schema.creditLots.orgId, args.orgId),
-          or(isNull(schema.creditLots.expiresAt), gt(schema.creditLots.expiresAt, now)),
+          or(
+            isNull(schema.creditLots.expiresAt),
+            gt(schema.creditLots.expiresAt, now),
+          ),
           gt(schema.creditLots.remainingCents, 0n),
         ),
       )
@@ -271,26 +290,43 @@ export async function consumeCredits(args: ConsumeCreditsArgs): Promise<ConsumeC
 
     // Compute how much we can charge across all lots.
     const totalAvailable = lots.reduce(
-      (acc, l) => acc + (typeof l.remainingCents === "bigint" ? l.remainingCents : BigInt(l.remainingCents)),
+      (acc, l) =>
+        acc +
+        (typeof l.remainingCents === "bigint"
+          ? l.remainingCents
+          : BigInt(l.remainingCents)),
       0n,
     );
-    const charge = args.requestedCents <= totalAvailable ? args.requestedCents : totalAvailable;
+    const charge =
+      args.requestedCents <= totalAvailable
+        ? args.requestedCents
+        : totalAvailable;
     const shortfall = args.requestedCents - charge;
 
     if (charge <= 0n) {
-      return { chargedCents: 0n, shortfallCents: shortfall, balanceCents: totalAvailable };
+      return {
+        chargedCents: 0n,
+        shortfallCents: shortfall,
+        balanceCents: totalAvailable,
+      };
     }
 
     // Drain lots in order, decrementing remaining_cents.
     let remaining = charge;
     for (const lot of lots) {
       if (remaining <= 0n) break;
-      const lotRemaining = typeof lot.remainingCents === "bigint" ? lot.remainingCents : BigInt(lot.remainingCents);
+      const lotRemaining =
+        typeof lot.remainingCents === "bigint"
+          ? lot.remainingCents
+          : BigInt(lot.remainingCents);
       const debit = remaining <= lotRemaining ? remaining : lotRemaining;
       remaining -= debit;
       await tx
         .update(schema.creditLots)
-        .set({ remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`, updatedAt: new Date() })
+        .set({
+          remainingCents: sql`${schema.creditLots.remainingCents} - ${debit}`,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.creditLots.id, lot.id));
     }
 

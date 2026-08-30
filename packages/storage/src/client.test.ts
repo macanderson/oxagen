@@ -15,10 +15,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const requireEnvMock = vi.hoisted(() =>
-  vi.fn((_keys: readonly string[]): Record<string, string | undefined> => ({
-    STORAGE_DRIVER: "vercel-blob",
-    BLOB_READ_WRITE_TOKEN: undefined,
-  })),
+  vi.fn(
+    (_keys: readonly string[]): Record<string, string | undefined> => ({
+      STORAGE_DRIVER: "vercel-blob",
+      BLOB_READ_WRITE_TOKEN: undefined,
+    }),
+  ),
 );
 
 const createVercelBlobAdapterMock = vi.hoisted(() =>
@@ -70,7 +72,8 @@ afterEach(() => {
 describe("storage() — missing token", () => {
   it("throws when BLOB_READ_WRITE_TOKEN is undefined", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: undefined };
     });
     const { storage } = await freshStorage();
@@ -79,7 +82,8 @@ describe("storage() — missing token", () => {
 
   it("throws when BLOB_READ_WRITE_TOKEN is an empty string", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: "" };
     });
     const { storage } = await freshStorage();
@@ -94,7 +98,8 @@ describe("storage() — missing token", () => {
 describe("storage() — valid token", () => {
   beforeEach(() => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_someSecret" };
     });
   });
@@ -102,7 +107,9 @@ describe("storage() — valid token", () => {
   it("calls createVercelBlobAdapter with the token", async () => {
     const { storage } = await freshStorage();
     storage();
-    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith("vercel_blob_rw_testStore_someSecret");
+    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith(
+      "vercel_blob_rw_testStore_someSecret",
+    );
   });
 
   it("returned adapter has driver: 'vercel-blob'", async () => {
@@ -119,7 +126,8 @@ describe("storage() — valid token", () => {
 describe("storage() — singleton memoization", () => {
   it("two calls return the exact same adapter reference", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" };
     });
     const { storage } = await freshStorage();
@@ -130,7 +138,8 @@ describe("storage() — singleton memoization", () => {
 
   it("createVercelBlobAdapter is called exactly once for multiple storage() calls", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_secret" };
     });
     const { storage } = await freshStorage();
@@ -154,18 +163,23 @@ describe("storage() — driver selection", () => {
     const { storage } = await freshStorage();
     const adapter = storage();
     expect(adapter.driver).toBe("vercel-blob");
-    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith("vercel_blob_rw_testStore_secret");
+    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith(
+      "vercel_blob_rw_testStore_secret",
+    );
   });
 
   it("resolves to vercel-blob when STORAGE_DRIVER is explicitly 'vercel-blob'", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
-      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "vercel-blob" };
+      if (keys.includes("STORAGE_DRIVER"))
+        return { STORAGE_DRIVER: "vercel-blob" };
       return { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_testStore_explicit" };
     });
     const { storage } = await freshStorage();
     const adapter = storage();
     expect(adapter.driver).toBe("vercel-blob");
-    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith("vercel_blob_rw_testStore_explicit");
+    expect(createVercelBlobAdapterMock).toHaveBeenCalledWith(
+      "vercel_blob_rw_testStore_explicit",
+    );
   });
 
   it("throws a clear error listing supported drivers for an unknown STORAGE_DRIVER", async () => {
@@ -176,23 +190,23 @@ describe("storage() — driver selection", () => {
     const { storage } = await freshStorage();
     expect(() => storage()).toThrow(/Unknown STORAGE_DRIVER: "s3"/);
     expect(() => storage()).toThrow(/vercel-blob/);
-    // The error must enumerate the fs driver too, now that it is supported.
+    // The error must enumerate the fs driver too.
     expect(() => storage()).toThrow(/fs/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// fs driver — resolves WITHOUT a Vercel Blob token (the CI/local fix)
+// fs driver — resolves WITHOUT a Vercel Blob token
 // ---------------------------------------------------------------------------
 
 describe("storage() — fs driver", () => {
   it("resolves the fs adapter without BLOB_READ_WRITE_TOKEN present", async () => {
-    // Critical regression guard: the whole point of the fs driver is that
-    // storage() must NOT require a Vercel Blob token. requireEnv only ever
-    // returns STORAGE_DRIVER + STORAGE_FS_ROOT here — no blob token at all.
+    // storage() must not require a Vercel Blob token on the fs path. requireEnv
+    // only ever returns STORAGE_DRIVER + STORAGE_FS_ROOT here — no blob token.
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
       if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "fs" };
-      if (keys.includes("STORAGE_FS_ROOT")) return { STORAGE_FS_ROOT: "/tmp/oxagen-storage" };
+      if (keys.includes("STORAGE_FS_ROOT"))
+        return { STORAGE_FS_ROOT: "/tmp/oxagen-storage" };
       return {};
     });
     const { storage } = await freshStorage();
@@ -207,7 +221,8 @@ describe("storage() — fs driver", () => {
   it("passes an undefined root through to the fs adapter (driver defaults it)", async () => {
     requireEnvMock.mockImplementation((keys: readonly string[]) => {
       if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "fs" };
-      if (keys.includes("STORAGE_FS_ROOT")) return { STORAGE_FS_ROOT: undefined };
+      if (keys.includes("STORAGE_FS_ROOT"))
+        return { STORAGE_FS_ROOT: undefined };
       return {};
     });
     const { storage } = await freshStorage();

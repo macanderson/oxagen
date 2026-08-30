@@ -4,7 +4,7 @@
 // Exports honor the in-page filters (it reads the live URL search params), and
 // are disabled unless the caller is both on the Enterprise plan AND an
 // owner/admin. The disabled state is cosmetic — the export route re-checks both
-// gates server-side (OXA-1558).
+// gates server-side.
 
 import * as React from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -17,7 +17,10 @@ export interface AuditExportButtonsProps {
   disabledReason: string;
 }
 
-export function AuditExportButtons({ canExport, disabledReason }: AuditExportButtonsProps) {
+export function AuditExportButtons({
+  canExport,
+  disabledReason,
+}: AuditExportButtonsProps) {
   const pathname = usePathname();
   const params = useSearchParams();
 
@@ -45,7 +48,11 @@ export function AuditExportButtons({ canExport, disabledReason }: AuditExportBut
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" render={<a href={hrefFor("ndjson")} />}>
+      <Button
+        variant="outline"
+        size="sm"
+        render={<a href={hrefFor("ndjson")} />}
+      >
         <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
         Export NDJSON
       </Button>

@@ -2,7 +2,7 @@
  * Ink tests for the agents screen root. The fleet is a plain EventEmitter fake
  * of the Fleet surface FleetApp actually touches (snapshot / start / drain /
  * dispatchPrompt / loadPlan / "update" events), so renders are deterministic —
- * no engine, no gateway, no worktrees. Covered: immediate start + the honest
+ * no engine, no gateway, no worktrees. Covered: immediate start + the real
  * empty roster, update-event repaints, dispatch through the input line, the
  * Ctrl-T detail toggle, Ctrl-C cancel-drain (idempotent, exits once settled),
  * the planning banner for a goal, and the fatal planning-error frame. `exit`
@@ -156,7 +156,14 @@ describe("FleetApp", () => {
     await until(() => plain().includes("No agents yet"), 3000, plain);
     fake.push(
       emptySnap({
-        agents: [agentSnap(), agentSnap({ taskId: "t-2", title: "write the docs", status: "queued" })],
+        agents: [
+          agentSnap(),
+          agentSnap({
+            taskId: "t-2",
+            title: "write the docs",
+            status: "queued",
+          }),
+        ],
         runningCount: 1,
         queuedCount: 1,
       }),

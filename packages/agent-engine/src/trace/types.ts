@@ -237,8 +237,7 @@ export interface TurnTrace {
   mutationGates?: MutationGateResult[];
   /**
    * The model's reasoning / chain-of-thought, captured per execution round.
-   * Previously these deltas were streamed dim to the terminal and DISCARDED;
-   * persisting them makes the agent's thinking inspectable in `/replay`, and is
+   * Persisting it makes the agent's thinking inspectable in `/replay`, and is
    * the substrate for mining durable lessons (a wrong assumption the model
    * voiced) into memory candidates. Each round's text is truncated for storage.
    */

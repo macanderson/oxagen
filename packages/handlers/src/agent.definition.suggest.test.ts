@@ -690,10 +690,10 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(result.suggestedRole?.roleName).toBe("Agent Contributor");
   });
 
-  it("computes the role from tools alone — stray trigger data never changes it (triggers removed, #1010)", async () => {
-    // Agent definitions are trigger-free as of #1010: triggering moved to the
-    // automations subsystem, so the definition no longer carries an
-    // attended/unattended signal. A high-risk destructive capability under the
+  it("computes the role from tools alone — stray trigger data never changes it", async () => {
+    // Agent definitions are trigger-free: triggering lives in the automations
+    // subsystem, so the definition never carries an attended/unattended
+    // signal. A high-risk destructive capability under the
     // attended default lands at Contributor (a human is assumed present to
     // answer its approval prompts). Any stray `triggers` field left in the raw
     // synthesis must NOT feed the suggestion — this guards against config.triggers

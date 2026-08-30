@@ -40,8 +40,7 @@ export default async function WorkspaceLayout({
   // layer up ([orgSlug]/layout.tsx) — if it was stale the redirect already
   // fired before this layout ran, so the orgSlug here is always canonical.
   const hdrs = await headers();
-  const rawUrl =
-    hdrs.get("x-url") ?? `/${orgSlug}/${workspaceSlug}`;
+  const rawUrl = hdrs.get("x-url") ?? `/${orgSlug}/${workspaceSlug}`;
   const { pathname, search } = parseRequestUrl(rawUrl, orgSlug, workspaceSlug);
   const workspace = await resolveWorkspaceOrRedirect(
     tenant.id,
@@ -53,10 +52,10 @@ export default async function WorkspaceLayout({
   // Tenant isolation: gate every workspace-scoped page on workspace membership.
   // Without this, any org member can read another workspace's data within the
   // same org by guessing the workspace slug (IDOR). Non-members get a 404 via
-  // notFound() — consistent with assertOrgMember above. — OXA-1515
+  // notFound() — consistent with assertOrgMember above.
   await assertWorkspaceMember(workspace.id, session.user.id);
 
-  // Workspace-scoped CommandMenu mount (OXA-1464).
+  // Workspace-scoped CommandMenu mount.
   //
   // The org layout also mounts this overlay, but with only `{orgSlug}`
   // context — which causes `enumerateNavTargets` to omit every workspace

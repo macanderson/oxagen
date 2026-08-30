@@ -295,10 +295,10 @@ const ATTACHMENT_VISION_TIER_FALLBACK = [
 // URL and returns a deterministic scripted response so no LLM call is made
 // during e2e runs.
 //
-// This route is the SINGLE LLM caller per turn (OXA-1509). The server action
-// (`sendMessageAction`) handles Postgres persistence only — it no longer calls
-// the model. History is loaded here directly from the messages table, scoped to
-// the resolved workspace and ordered deterministically by createdAt.
+// This route is the SINGLE LLM caller per turn. The server action
+// (`sendMessageAction`) only handles Postgres persistence. History is loaded
+// here directly from the messages table, scoped to the resolved workspace and
+// ordered deterministically by createdAt.
 export async function POST(request: NextRequest): Promise<Response> {
   // Auth: reject unauthenticated requests before consuming the body.
   let session: Awaited<ReturnType<typeof getSessionOrRedirect>>;
@@ -432,8 +432,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   // ── Media-generation branch ───────────────────────────────────────────────
   // This turn generates an image/video instead of running the text agent when
-  // media intent is present. The app no longer has manual "Generate image /
-  // video" toggles — an explicit `generate` (legacy/API clients) still wins,
+  // media intent is present. There is no manual "Generate image / video"
+  // toggle in the app — an explicit `generate` (from API clients) still wins,
   // but otherwise we INFER intent from the prompt ("make me a logo", "create a
   // short video of waves"). inferMediaIntent is conservative and never fires on
   // attachment or code-mode turns, so ordinary chat is unaffected. Resolve the
@@ -585,7 +585,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   // Load conversation history from Postgres so the model has context for every
-  // prior turn (without this the model has SSE amnesia, OXA-1509).
+  // prior turn — without this the model has no memory of earlier messages.
   let historyMessages: ModelMessage[] = [];
   // True when the trailing (newest) history row IS this turn's user message —
   // detected by message id, not text. sendMessageAction persists the user turn
@@ -600,7 +600,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // the OLDEST N rows and drop all recent context.
     //
     // Tenant isolation: wrapped in runInTenantScope + withTenantDb so the
-    // Postgres RLS policies (OXA-1515) enforce isolation at the DB layer. The
+    // Postgres RLS policies enforce isolation at the DB layer. The
     // eq(orgId)/eq(workspaceId) predicates are belt-and-suspenders planner hints.
     const rows = await runInTenantScope(
       { orgId: tenant.id, workspaceId: workspace.id },
@@ -723,7 +723,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       let codeWorkspace: ModalSandboxWorkspace | null = null;
 
       // Persist the assistant reply so it survives a refresh and is included in
-      // the next turn's history (OXA-1509). Best-effort: a DB failure here must
+      // the next turn's history. Best-effort: a DB failure here must
       // NOT corrupt the SSE response the client already consumed, and must not
       // escape into the outer catch (it wraps its own try/catch).
       async function persistAssistantTurn(
@@ -877,8 +877,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         //   • agentType "code"/"coding" → the ONLY thing that can put a turn
         //     in coding flow: `useCodeModePrompt` and the authoritative
         //     `codeMode` gate below both derive from `agentIsCode`. A `code`
-        //     payload without a code agent — including the legacy no-agent
-        //     manual toggle — is dropped regardless of what the client sent.
+        //     payload without a code agent is dropped regardless of what the
+        //     client sent.
         // Absent an agent, every effective value is exactly the request value.
         //
         // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
@@ -1074,7 +1074,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                 : budgetPolicyReadHandler({}, capCtx)
                     .then(turnBudgetPolicyFromSaved)
                     .catch(() => TURN_BUDGET_OFF),
-              // Workspace-level budget governance (OXA-2081): a workspace
+              // Workspace-level budget governance: a workspace
               // Owner/Admin may impose a governed budget (a soft "default"
               // that seeds a member who hasn't opted in, or a hard "ceiling"
               // that clamps every member's effective policy — see
@@ -1110,7 +1110,7 @@ export async function POST(request: NextRequest): Promise<Response> {
             ]),
         );
 
-        // Merge in workspace-level governance (OXA-2081) on top of the
+        // Merge in workspace-level governance on top of the
         // member's own resolved policy. `resolveEffectiveTurnBudget` is the
         // SAME pure merge every surface (CLI/API/app) will share once org-level
         // governance also lands — org governance is a separate follow-up, so
@@ -1146,10 +1146,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         // types. It rides as a per-turn USER message (built by
         // buildPageContextMessage), NOT the cached system prompt, so navigation
         // and typing never bust the Anthropic prompt-cache breakpoint on the
-        // byte-stable system prefix (ADR-021 §2). This mirrors the code-mode /
-        // pinned / references context messages below. The message content is
-        // substantively identical to the text that previously rode in the
-        // system prompt — only its position changes.
+        // byte-stable system prefix (docs/adr/ADR-021 §2). This mirrors the
+        // code-mode / pinned / references context messages below.
         //
         // When a fillableForm is present, also register a request-scoped
         // `page_form_fill` tool that routes through the kernel.invoke() boundary

@@ -100,8 +100,8 @@ export interface GitHubBranch {
 
 /**
  * Vendor-neutral interface for GitHub write operations.
- * Backed by @octokit/rest; swap the backing by providing a different
- * createGitHubClient implementation without changing callers.
+ * Swap the backing by providing a different createGitHubClient
+ * implementation without changing callers.
  */
 export interface GitHubClient {
   /**
@@ -174,7 +174,7 @@ export interface GitHubClient {
 
   /**
    * Return basic repository metadata, including the default branch — the
-   * lookup behind the never-write-to-default-branch guard (OXA-2117).
+   * lookup behind the never-write-to-default-branch guard.
    */
   getRepoInfo(args: {
     owner: string;

@@ -80,7 +80,13 @@ type DbFn = (tx: TxLike) => Promise<unknown>;
 
 const ONE_MAPPING_INPUT = {
   connectionId: "con_ABC",
-  mappings: [{ sourceRecordType: "pull_request", oxagenEntityType: "code_change", propertyMappings: {} }],
+  mappings: [
+    {
+      sourceRecordType: "pull_request",
+      oxagenEntityType: "code_change",
+      propertyMappings: {},
+    },
+  ],
   activateConnection: true,
 };
 
@@ -98,10 +104,7 @@ const GITHUB_CONN_ROW = {
  *         (terminates at .where()) resolves to existingRow; inserts/updates
  *         within the same tx resolve to empty.
  */
-function setupDbSequence(
-  connRow: unknown[],
-  existingRow: unknown[],
-) {
+function setupDbSequence(connRow: unknown[], existingRow: unknown[]) {
   let callIdx = 0;
   mocks.withTenantDb.mockImplementation((fn: DbFn) => {
     callIdx++;
@@ -126,7 +129,9 @@ describe("connectionMappingsSetHandler — not found", () => {
     mocks.withTenantDb.mockImplementation((fn: DbFn) =>
       fn(makeTxReturning([]) as TxLike),
     );
-    await expect(connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX)).rejects.toMatchObject({
+    await expect(
+      connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX),
+    ).rejects.toMatchObject({
       status: 404,
     });
   });
@@ -138,7 +143,10 @@ describe("connectionMappingsSetHandler — new mapping (insert)", () => {
   it("inserts a new mapping when none exists and returns mappingsCreated=1", async () => {
     // Non-GitHub connector → no default-mapping seeding, so the raw insert count
     // is exactly the one supplied mapping.
-    setupDbSequence([{ ...GITHUB_CONN_ROW, connectorId: "linear", status: "connected" }], []);
+    setupDbSequence(
+      [{ ...GITHUB_CONN_ROW, connectorId: "linear", status: "connected" }],
+      [],
+    );
 
     const result = await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, activateConnection: false },
@@ -247,15 +255,25 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: null }], []);
 
     await connectionMappingsSetHandler(
-      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api", "acme/web"], syncDepthDays: 30 },
+      {
+        ...ONE_MAPPING_INPUT,
+        selectedRepos: ["acme/api", "acme/web"],
+        syncDepthDays: 30,
+      },
       CTX,
     );
 
     expect(mocks.inngestSend).toHaveBeenCalledTimes(2);
     const calls = mocks.inngestSend.mock.calls.map(
-      (c) => c[0] as { data: { owner: string; repo: string; syncDepthDays: number } },
+      (c) =>
+        c[0] as {
+          data: { owner: string; repo: string; syncDepthDays: number };
+        },
     );
-    expect(calls.map((c) => `${c.data.owner}/${c.data.repo}`)).toEqual(["acme/api", "acme/web"]);
+    expect(calls.map((c) => `${c.data.owner}/${c.data.repo}`)).toEqual([
+      "acme/api",
+      "acme/web",
+    ]);
     expect(calls[0]!.data.syncDepthDays).toBe(30);
   });
 
@@ -267,7 +285,13 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     const result = await connectionMappingsSetHandler(
       {
         connectionId: "con_ABC",
-        mappings: [{ sourceRecordType: "repository", oxagenEntityType: "source_repository", propertyMappings: {} }],
+        mappings: [
+          {
+            sourceRecordType: "repository",
+            oxagenEntityType: "source_repository",
+            propertyMappings: {},
+          },
+        ],
         activateConnection: true,
         selectedRepos: ["acme/my-api"],
       },
@@ -278,9 +302,9 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
   });
 
   it("uses request-supplied owner/repo when deliveryConfig is null (OXA-1806 root cause)", async () => {
-    // This is the exact failure mode from OXA-1806: the stored deliveryConfig
-    // is null (wizard never persisted owner/repo before this fix). The handler
-    // must use the values from the request input, not empty strings from the DB.
+    // The stored deliveryConfig can be null if the wizard never persisted
+    // owner/repo. The handler must use the values from the request input,
+    // not empty strings from the DB.
     setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: null }], []);
 
     await connectionMappingsSetHandler(
@@ -293,7 +317,9 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
       CTX,
     );
 
-    const sent = mocks.inngestSend.mock.calls[0]?.[0] as { data: { owner: string; repo: string; defaultBranch: string } };
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: { owner: string; repo: string; defaultBranch: string };
+    };
     expect(sent.data.owner).toBe("acme");
     expect(sent.data.repo).toBe("api");
     expect(sent.data.defaultBranch).toBe("develop");
@@ -344,7 +370,10 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
    * assert what the activation UPDATE wrote (e.g. displayName). Mirrors
    * makeTxReturning's select/insert chain.
    */
-  function makeTxCapturingSets(rows: unknown[], sets: Array<Record<string, unknown>>) {
+  function makeTxCapturingSets(
+    rows: unknown[],
+    sets: Array<Record<string, unknown>>,
+  ) {
     const whereResult = Object.assign(Promise.resolve(rows), {
       limit: vi.fn().mockResolvedValue(rows),
     });
@@ -353,7 +382,9 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnValue(whereResult),
       }),
-      insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue([{}]) }),
+      insert: vi
+        .fn()
+        .mockReturnValue({ values: vi.fn().mockResolvedValue([{}]) }),
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockImplementation((payload: Record<string, unknown>) => {
           sets.push(payload);
@@ -403,7 +434,10 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
     const sets = setupCapture([{ ...GITHUB_CONN_ROW, deliveryConfig: null }]);
 
     await connectionMappingsSetHandler(
-      { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api", "acme/web", "acme/infra"] },
+      {
+        ...ONE_MAPPING_INPUT,
+        selectedRepos: ["acme/api", "acme/web", "acme/infra"],
+      },
       CTX,
     );
 
@@ -412,10 +446,16 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
   });
 
   it("renames even when the connection is NOT being activated (config-only PUT)", async () => {
-    const sets = setupCapture([{ ...GITHUB_CONN_ROW, status: "connected", deliveryConfig: null }]);
+    const sets = setupCapture([
+      { ...GITHUB_CONN_ROW, status: "connected", deliveryConfig: null },
+    ]);
 
     await connectionMappingsSetHandler(
-      { ...ONE_MAPPING_INPUT, activateConnection: false, selectedRepos: ["acme/renamed"] },
+      {
+        ...ONE_MAPPING_INPUT,
+        activateConnection: false,
+        selectedRepos: ["acme/renamed"],
+      },
       CTX,
     );
 
@@ -424,7 +464,9 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
   });
 
   it("does NOT rename non-GitHub connectors", async () => {
-    const sets = setupCapture([{ ...GITHUB_CONN_ROW, connectorId: "linear", deliveryConfig: null }]);
+    const sets = setupCapture([
+      { ...GITHUB_CONN_ROW, connectorId: "linear", deliveryConfig: null },
+    ]);
 
     await connectionMappingsSetHandler(
       { ...ONE_MAPPING_INPUT, selectedRepos: ["acme/api"] },
@@ -439,7 +481,11 @@ describe("connectionMappingsSetHandler — auto-name to repo slug", () => {
 
     // No selectedRepos, no owner/repo, and stored deliveryConfig is null → nothing to name to.
     await connectionMappingsSetHandler(
-      { connectionId: "con_ABC", mappings: ONE_MAPPING_INPUT.mappings, activateConnection: true },
+      {
+        connectionId: "con_ABC",
+        mappings: ONE_MAPPING_INPUT.mappings,
+        activateConnection: true,
+      },
       CTX,
     );
 

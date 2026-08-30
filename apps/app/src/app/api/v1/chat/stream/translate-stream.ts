@@ -63,10 +63,17 @@ export function emitUsageEvent(
   const totalTokens = usage.totalTokens ?? 0;
   // Clamp cache reads to [0, inputTokens] — cached tokens are a subset of the
   // prompt, so they can never exceed it (guards against noisy provider counts).
-  const cachedTokens = Math.max(0, Math.min(usage.cachedInputTokens ?? 0, inputTokens));
+  const cachedTokens = Math.max(
+    0,
+    Math.min(usage.cachedInputTokens ?? 0, inputTokens),
+  );
   let creditsCharged: number | undefined;
   try {
-    const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
+    const credits = meterCreditsForUsage({
+      model: modelId,
+      inputTokens,
+      outputTokens,
+    });
     creditsCharged = Number(credits);
   } catch {
     // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
@@ -153,7 +160,8 @@ export function createTurnTranslator(args: {
   // card. Namespace every reasoning id by the current step so it stays unique
   // across the whole turn (server-side only; the event/block shapes are
   // unchanged — the id is an opaque correlation key the client never parses).
-  const reasoningKey = (id: string): string => `s${stepIndex < 0 ? 0 : stepIndex}:${id}`;
+  const reasoningKey = (id: string): string =>
+    `s${stepIndex < 0 ? 0 : stepIndex}:${id}`;
 
   const onPart = (raw: unknown): void => {
     const pType = partType(raw);
@@ -210,7 +218,11 @@ export function createTurnTranslator(args: {
       });
     } else if (pType === "tool-input-delta") {
       const part = raw as ToolInputDeltaPart;
-      emit({ type: "tool-input-delta", toolCallId: part.id, delta: part.delta });
+      emit({
+        type: "tool-input-delta",
+        toolCallId: part.id,
+        delta: part.delta,
+      });
     } else if (pType === "tool-call") {
       const part = raw as ToolCallPart;
       toolStartedAt[part.toolCallId] = Date.now();
@@ -297,7 +309,11 @@ export function createTurnTranslator(args: {
       // Either way the client renders CHAT_COMPONENTS[componentId] inline.
       const rawResult = part.output;
       let emittedComponent = false;
-      if (rawResult !== null && rawResult !== undefined && typeof rawResult === "object") {
+      if (
+        rawResult !== null &&
+        rawResult !== undefined &&
+        typeof rawResult === "object"
+      ) {
         const render = (rawResult as Record<string, unknown>)["render"] as
           | RenderDirective
           | undefined;
@@ -358,14 +374,16 @@ export function createTurnTranslator(args: {
           });
         }
       }
-      // Background-task lifecycle (OXA-1469): when the agent dispatches a
+      // Background-task lifecycle: when the agent dispatches a
       // long-running Inngest job via agent.task.background.start, surface a live
       // BackgroundTaskCard and persist a terminal block so the task is visible
       // inline (and linked to the BackgroundTaskTray), not only after a refresh.
       if (capabilityForResult === "start_background_task") {
         const startOut = isRecord(rawResult) ? rawResult : null;
         const taskId =
-          startOut !== null && typeof startOut.taskId === "string" ? startOut.taskId : null;
+          startOut !== null && typeof startOut.taskId === "string"
+            ? startOut.taskId
+            : null;
         if (taskId !== null) {
           const inngestRunId =
             startOut !== null && typeof startOut.inngestRunId === "string"
@@ -441,7 +459,10 @@ export function createTurnTranslator(args: {
     // ReasoningCard renders as a "Thought for Xs" pill). Drop only orphan
     // reasoning-start blocks that never ended.
     const persistedBlocks = blocks.filter(
-      (b) => b.type !== "reasoning" || b.text.length > 0 || b.durationMs !== undefined,
+      (b) =>
+        b.type !== "reasoning" ||
+        b.text.length > 0 ||
+        b.durationMs !== undefined,
     );
     return { assistantText, persistedBlocks };
   };
@@ -469,7 +490,15 @@ export async function translateAgentStream(args: {
   modelId: string;
   emit: (event: StreamEvent) => void;
 }): Promise<TranslatedTurn> {
-  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, modelId, emit } = args;
+  const {
+    fullStream,
+    requestId,
+    toolNameMap,
+    orgSlug,
+    workspaceSlug,
+    modelId,
+    emit,
+  } = args;
   const translator = createTurnTranslator({
     requestId,
     toolNameMap,
@@ -482,14 +511,20 @@ export async function translateAgentStream(args: {
     const pType = partType(raw);
     if (pType === "finish") {
       const part = raw as {
-        totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+        totalUsage: {
+          inputTokens?: number;
+          outputTokens?: number;
+          totalTokens?: number;
+        };
       };
       emitUsageEvent(emit, part.totalUsage, modelId);
     } else if (pType === "error") {
       // Forward a structured `error` event (NOT text) so the client shows a
       // readable toast instead of raw JSON. Never folded into assistantText —
       // persisting it would feed the error into the next turn's history.
-      const { code, message } = formatStreamError((raw as { error?: unknown }).error);
+      const { code, message } = formatStreamError(
+        (raw as { error?: unknown }).error,
+      );
       emit({
         type: "error",
         messageId: requestId,

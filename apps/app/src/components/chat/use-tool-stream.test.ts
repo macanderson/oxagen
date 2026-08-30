@@ -55,15 +55,20 @@ const TOOL_ID = "tc-1";
 const MSG_ID = "msg-1";
 
 // A minimal running tool-call entry in state
-function stateWithRunningTool(overrides?: Partial<ToolStreamState>): ToolStreamState {
-  const s = reducer(INITIAL_STATE, event({
-    type: "tool-call-start",
-    toolCallId: TOOL_ID,
-    messageId: MSG_ID,
-    capability: "fs.read",
-    inputPreview: { path: "/tmp/x" },
-    riskLevel: "low",
-  }));
+function stateWithRunningTool(
+  overrides?: Partial<ToolStreamState>,
+): ToolStreamState {
+  const s = reducer(
+    INITIAL_STATE,
+    event({
+      type: "tool-call-start",
+      toolCallId: TOOL_ID,
+      messageId: MSG_ID,
+      capability: "fs.read",
+      inputPreview: { path: "/tmp/x" },
+      riskLevel: "low",
+    }),
+  );
   return { ...s, ...overrides };
 }
 
@@ -79,14 +84,17 @@ describe("reset", () => {
   });
 
   it("clears a pending approval when reset fires mid-stream", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "approval-required",
-      approvalId: "apr-1",
-      capability: "fs.write",
-      inputPreview: {},
-      riskLevel: "high",
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "approval-required",
+        approvalId: "apr-1",
+        capability: "fs.write",
+        inputPreview: {},
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
     expect(Object.keys(s.pendingApprovals)).toHaveLength(1);
     s = reducer(s, { type: "reset" });
     expect(Object.keys(s.pendingApprovals)).toHaveLength(0);
@@ -99,20 +107,29 @@ describe("reset", () => {
 
 describe("text events", () => {
   it("appends text for the same messageId", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "Hello" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "Hello" }),
+    );
     s = reducer(s, event({ type: "text", messageId: MSG_ID, text: ", world" }));
     expect(s.messages[MSG_ID]?.text).toBe("Hello, world");
   });
 
   it("creates separate entries for different messageIds", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: "a", text: "A" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: "a", text: "A" }),
+    );
     s = reducer(s, event({ type: "text", messageId: "b", text: "B" }));
     expect(s.messages["a"]?.text).toBe("A");
     expect(s.messages["b"]?.text).toBe("B");
   });
 
   it("starts with empty string when messageId is first seen", () => {
-    const s = reducer(INITIAL_STATE, event({ type: "text", messageId: "new", text: "Hi" }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: "new", text: "Hi" }),
+    );
     expect(s.messages["new"]?.text).toBe("Hi");
   });
 });
@@ -135,14 +152,17 @@ describe("tool-call-start", () => {
 
   it("preserves existing toolCalls when adding a new one", () => {
     let s = stateWithRunningTool();
-    s = reducer(s, event({
-      type: "tool-call-start",
-      toolCallId: "tc-2",
-      messageId: MSG_ID,
-      capability: "fetch_web_page",
-      inputPreview: {},
-      riskLevel: "medium",
-    }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-start",
+        toolCallId: "tc-2",
+        messageId: MSG_ID,
+        capability: "fetch_web_page",
+        inputPreview: {},
+        riskLevel: "medium",
+      }),
+    );
     expect(Object.keys(s.toolCalls)).toHaveLength(2);
   });
 });
@@ -154,22 +174,57 @@ describe("tool-call-start", () => {
 describe("tool-call-output", () => {
   it("appends to stdout channel", () => {
     let s = stateWithRunningTool();
-    s = reducer(s, event({ type: "tool-call-output", toolCallId: TOOL_ID, chunk: { channel: "stdout", data: "line1\n" } }));
-    s = reducer(s, event({ type: "tool-call-output", toolCallId: TOOL_ID, chunk: { channel: "stdout", data: "line2\n" } }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-output",
+        toolCallId: TOOL_ID,
+        chunk: { channel: "stdout", data: "line1\n" },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-output",
+        toolCallId: TOOL_ID,
+        chunk: { channel: "stdout", data: "line2\n" },
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.stdout).toBe("line1\nline2\n");
   });
 
   it("appends to stderr channel separately from stdout", () => {
     let s = stateWithRunningTool();
-    s = reducer(s, event({ type: "tool-call-output", toolCallId: TOOL_ID, chunk: { channel: "stdout", data: "out" } }));
-    s = reducer(s, event({ type: "tool-call-output", toolCallId: TOOL_ID, chunk: { channel: "stderr", data: "err" } }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-output",
+        toolCallId: TOOL_ID,
+        chunk: { channel: "stdout", data: "out" },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-output",
+        toolCallId: TOOL_ID,
+        chunk: { channel: "stderr", data: "err" },
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.stdout).toBe("out");
     expect(s.toolCalls[TOOL_ID]?.stderr).toBe("err");
   });
 
   it("returns the same state reference when toolCallId is unknown", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "tool-call-output", toolCallId: "unknown", chunk: { channel: "stdout", data: "x" } }));
+    const next = reducer(
+      s,
+      event({
+        type: "tool-call-output",
+        toolCallId: "unknown",
+        chunk: { channel: "stdout", data: "x" },
+      }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -181,13 +236,16 @@ describe("tool-call-output", () => {
 describe("tool-call-end", () => {
   it("sets status, output, and durationMs", () => {
     let s = stateWithRunningTool();
-    s = reducer(s, event({
-      type: "tool-call-end",
-      toolCallId: TOOL_ID,
-      status: "completed",
-      output: { data: 42 },
-      durationMs: 123,
-    }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-end",
+        toolCallId: TOOL_ID,
+        status: "completed",
+        output: { data: 42 },
+        durationMs: 123,
+      }),
+    );
     const tc = s.toolCalls[TOOL_ID]!;
     expect(tc.status).toBe("completed");
     expect(tc.output).toEqual({ data: 42 });
@@ -196,20 +254,31 @@ describe("tool-call-end", () => {
 
   it("sets errorReason on failed status", () => {
     let s = stateWithRunningTool();
-    s = reducer(s, event({
-      type: "tool-call-end",
-      toolCallId: TOOL_ID,
-      status: "failed",
-      errorReason: "timeout",
-      durationMs: 500,
-    }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-end",
+        toolCallId: TOOL_ID,
+        status: "failed",
+        errorReason: "timeout",
+        durationMs: 500,
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.status).toBe("failed");
     expect(s.toolCalls[TOOL_ID]?.errorReason).toBe("timeout");
   });
 
   it("returns the same state reference when toolCallId is unknown", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "tool-call-end", toolCallId: "nope", status: "completed", durationMs: 0 }));
+    const next = reducer(
+      s,
+      event({
+        type: "tool-call-end",
+        toolCallId: "nope",
+        status: "completed",
+        durationMs: 0,
+      }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -220,14 +289,17 @@ describe("tool-call-end", () => {
 
 describe("approval-required", () => {
   it("creates a pending approval keyed by approvalId", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "approval-required",
-      approvalId: "apr-1",
-      capability: "fs.write",
-      inputPreview: { path: "/etc/passwd" },
-      riskLevel: "high",
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "approval-required",
+        approvalId: "apr-1",
+        capability: "fs.write",
+        inputPreview: { path: "/etc/passwd" },
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
     const a = s.pendingApprovals["apr-1"];
     expect(a).toBeDefined();
     expect(a?.resolution).toBeUndefined();
@@ -237,40 +309,60 @@ describe("approval-required", () => {
 
 describe("approval-resolved", () => {
   it("sets resolution on an existing approval", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "approval-required",
-      approvalId: "apr-1",
-      capability: "fs.write",
-      inputPreview: {},
-      riskLevel: "high",
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
-    s = reducer(s, event({ type: "approval-resolved", approvalId: "apr-1", resolution: "approved" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "approval-required",
+        approvalId: "apr-1",
+        capability: "fs.write",
+        inputPreview: {},
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "approval-resolved",
+        approvalId: "apr-1",
+        resolution: "approved",
+      }),
+    );
     expect(s.pendingApprovals["apr-1"]?.resolution).toBe("approved");
   });
 
   it("returns same state reference on unknown approvalId", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "approval-resolved", approvalId: "nope", resolution: "denied" }));
+    const next = reducer(
+      s,
+      event({
+        type: "approval-resolved",
+        approvalId: "nope",
+        resolution: "denied",
+      }),
+    );
     expect(next).toBe(s);
   });
 });
 
 // ---------------------------------------------------------------------------
-// consent-required / consent-resolved (OXA-816 external-MCP first-use consent)
+// consent-required / consent-resolved (external-MCP first-use consent)
 // ---------------------------------------------------------------------------
 
 describe("consent-required", () => {
   it("creates a pending consent keyed by approvalId and adds a consent order key", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "consent-required",
-      approvalId: "apr-c1",
-      capability: "mcp.srv_1.list_prs",
-      serverId: "srv_1",
-      toolName: "list_prs",
-      inputPreview: { repo: "oxagen" },
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "consent-required",
+        approvalId: "apr-c1",
+        capability: "mcp.srv_1.list_prs",
+        serverId: "srv_1",
+        toolName: "list_prs",
+        inputPreview: { repo: "oxagen" },
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
     const c = s.pendingConsents["apr-c1"];
     expect(c).toBeDefined();
     expect(c?.resolution).toBeUndefined();
@@ -282,35 +374,55 @@ describe("consent-required", () => {
 
 describe("consent-resolved", () => {
   it("sets resolution on an existing consent", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "consent-required",
-      approvalId: "apr-c1",
-      capability: "mcp.srv_1.list_prs",
-      serverId: "srv_1",
-      toolName: "list_prs",
-      inputPreview: {},
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
-    s = reducer(s, event({ type: "consent-resolved", approvalId: "apr-c1", resolution: "granted" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "consent-required",
+        approvalId: "apr-c1",
+        capability: "mcp.srv_1.list_prs",
+        serverId: "srv_1",
+        toolName: "list_prs",
+        inputPreview: {},
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "consent-resolved",
+        approvalId: "apr-c1",
+        resolution: "granted",
+      }),
+    );
     expect(s.pendingConsents["apr-c1"]?.resolution).toBe("granted");
   });
 
   it("returns the same state reference on an unknown approvalId", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "consent-resolved", approvalId: "nope", resolution: "denied" }));
+    const next = reducer(
+      s,
+      event({
+        type: "consent-resolved",
+        approvalId: "nope",
+        resolution: "denied",
+      }),
+    );
     expect(next).toBe(s);
   });
 
   it("reset clears pending consents", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "consent-required",
-      approvalId: "apr-c1",
-      capability: "mcp.srv_1.list_prs",
-      serverId: "srv_1",
-      toolName: "list_prs",
-      inputPreview: {},
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "consent-required",
+        approvalId: "apr-c1",
+        capability: "mcp.srv_1.list_prs",
+        serverId: "srv_1",
+        toolName: "list_prs",
+        inputPreview: {},
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
     expect(Object.keys(s.pendingConsents)).toHaveLength(1);
     s = reducer(s, { type: "reset" });
     expect(Object.keys(s.pendingConsents)).toHaveLength(0);
@@ -323,35 +435,54 @@ describe("consent-resolved", () => {
 
 describe("hasBlockingApproval logic", () => {
   it("is true when there is at least one approval without a resolution", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "approval-required",
-      approvalId: "apr-1",
-      capability: "fs.write",
-      inputPreview: {},
-      riskLevel: "high",
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "approval-required",
+        approvalId: "apr-1",
+        capability: "fs.write",
+        inputPreview: {},
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
     // Derive hasBlockingApproval the same way the hook does
-    const hasBlocking = Object.values(s.pendingApprovals).some((a) => a.resolution === undefined);
+    const hasBlocking = Object.values(s.pendingApprovals).some(
+      (a) => a.resolution === undefined,
+    );
     expect(hasBlocking).toBe(true);
   });
 
   it("is false when all approvals have a resolution", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "approval-required",
-      approvalId: "apr-1",
-      capability: "fs.write",
-      inputPreview: {},
-      riskLevel: "high",
-      expiresAt: "2099-01-01T00:00:00Z",
-    }));
-    s = reducer(s, event({ type: "approval-resolved", approvalId: "apr-1", resolution: "approved" }));
-    const hasBlocking = Object.values(s.pendingApprovals).some((a) => a.resolution === undefined);
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "approval-required",
+        approvalId: "apr-1",
+        capability: "fs.write",
+        inputPreview: {},
+        riskLevel: "high",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "approval-resolved",
+        approvalId: "apr-1",
+        resolution: "approved",
+      }),
+    );
+    const hasBlocking = Object.values(s.pendingApprovals).some(
+      (a) => a.resolution === undefined,
+    );
     expect(hasBlocking).toBe(false);
   });
 
   it("is false on INITIAL_STATE (empty map)", () => {
-    const hasBlocking = Object.values(INITIAL_STATE.pendingApprovals).some((a) => a.resolution === undefined);
+    const hasBlocking = Object.values(INITIAL_STATE.pendingApprovals).some(
+      (a) => a.resolution === undefined,
+    );
     expect(hasBlocking).toBe(false);
   });
 });
@@ -362,13 +493,24 @@ describe("hasBlockingApproval logic", () => {
 
 describe("plan-proposed", () => {
   it("creates a plan in pending status keyed by planId", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "plan-proposed",
-      planId: "plan-1",
-      title: "Research task",
-      steps: [{ id: "s1", summary: "Look it up", intent: "search", capability: "search_web", dependsOn: [] }],
-      rationale: "Because",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "plan-proposed",
+        planId: "plan-1",
+        title: "Research task",
+        steps: [
+          {
+            id: "s1",
+            summary: "Look it up",
+            intent: "search",
+            capability: "search_web",
+            dependsOn: [],
+          },
+        ],
+        rationale: "Because",
+      }),
+    );
     const p = s.plans["plan-1"];
     expect(p?.status).toBe("pending");
     expect(p?.title).toBe("Research task");
@@ -378,19 +520,28 @@ describe("plan-proposed", () => {
 
 describe("plan-resolved", () => {
   it("sets decision on an existing plan", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "plan-proposed",
-      planId: "plan-1",
-      title: "T",
-      steps: [],
-    }));
-    s = reducer(s, event({ type: "plan-resolved", planId: "plan-1", decision: "approved" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "plan-proposed",
+        planId: "plan-1",
+        title: "T",
+        steps: [],
+      }),
+    );
+    s = reducer(
+      s,
+      event({ type: "plan-resolved", planId: "plan-1", decision: "approved" }),
+    );
     expect(s.plans["plan-1"]?.status).toBe("approved");
   });
 
   it("returns same state reference on unknown planId", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "plan-resolved", planId: "nope", decision: "denied" }));
+    const next = reducer(
+      s,
+      event({ type: "plan-resolved", planId: "nope", decision: "denied" }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -401,14 +552,21 @@ describe("plan-resolved", () => {
 
 describe("subagent-dispatched", () => {
   it("creates fanout with running status and children", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "subagent-dispatched",
-      fanoutId: "fan-1",
-      parentMessageId: MSG_ID,
-      children: [
-        { childMessageId: "child-1", capability: "fetch_web_page", label: "Fetch" },
-      ],
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "subagent-dispatched",
+        fanoutId: "fan-1",
+        parentMessageId: MSG_ID,
+        children: [
+          {
+            childMessageId: "child-1",
+            capability: "fetch_web_page",
+            label: "Fetch",
+          },
+        ],
+      }),
+    );
     const f = s.activeFanouts["fan-1"];
     expect(f?.status).toBe("running");
     expect(f?.children).toHaveLength(1);
@@ -418,18 +576,24 @@ describe("subagent-dispatched", () => {
 
 describe("subagent-completed", () => {
   it("sets status and results on existing fanout", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "subagent-dispatched",
-      fanoutId: "fan-1",
-      parentMessageId: MSG_ID,
-      children: [{ childMessageId: "child-1", capability: "fetch_web_page" }],
-    }));
-    s = reducer(s, event({
-      type: "subagent-completed",
-      fanoutId: "fan-1",
-      status: "completed",
-      results: [{ childMessageId: "child-1", output: { ok: true } }],
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "subagent-dispatched",
+        fanoutId: "fan-1",
+        parentMessageId: MSG_ID,
+        children: [{ childMessageId: "child-1", capability: "fetch_web_page" }],
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "subagent-completed",
+        fanoutId: "fan-1",
+        status: "completed",
+        results: [{ childMessageId: "child-1", output: { ok: true } }],
+      }),
+    );
     const f = s.activeFanouts["fan-1"]!;
     expect(f.status).toBe("completed");
     expect(f.results).toHaveLength(1);
@@ -437,7 +601,14 @@ describe("subagent-completed", () => {
 
   it("returns same state reference on unknown fanoutId", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "subagent-completed", fanoutId: "nope", status: "completed" }));
+    const next = reducer(
+      s,
+      event({
+        type: "subagent-completed",
+        fanoutId: "nope",
+        status: "completed",
+      }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -448,28 +619,34 @@ describe("subagent-completed", () => {
 
 describe("memory-recalled", () => {
   it("keyed by queryId with memories array", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "memory-recalled",
-      queryId: "q-1",
-      memories: [
-        {
-          id: "m-1",
-          lesson: "Don't do that",
-          memoryClass: "FACT",
-          memoryKind: "constraint",
-          confidenceScore: 95,
-          enforcementScore: 100,
-          score: 0.9,
-        },
-      ],
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "memory-recalled",
+        queryId: "q-1",
+        memories: [
+          {
+            id: "m-1",
+            lesson: "Don't do that",
+            memoryClass: "FACT",
+            memoryKind: "constraint",
+            confidenceScore: 95,
+            enforcementScore: 100,
+            score: 0.9,
+          },
+        ],
+      }),
+    );
     const r = s.memoryRecalls["q-1"];
     expect(r?.queryId).toBe("q-1");
     expect(r?.memories).toHaveLength(1);
   });
 
   it("overwrites for the same queryId", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "memory-recalled", queryId: "q-1", memories: [] }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "memory-recalled", queryId: "q-1", memories: [] }),
+    );
     s = reducer(
       s,
       event({
@@ -494,13 +671,16 @@ describe("memory-recalled", () => {
 
 describe("memory-written", () => {
   it("keyed by memoryId with nodeRef and memoryClass", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "memory-written",
-      memoryId: "mem-1",
-      nodeRef: "node://mem-1",
-      memoryClass: "FACT",
-      enforcementScore: 100,
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "memory-written",
+        memoryId: "mem-1",
+        nodeRef: "node://mem-1",
+        memoryClass: "FACT",
+        enforcementScore: 100,
+      }),
+    );
     const w = s.memoryWrites["mem-1"];
     expect(w?.memoryId).toBe("mem-1");
     expect(w?.nodeRef).toBe("node://mem-1");
@@ -515,20 +695,39 @@ describe("memory-written", () => {
 
 describe("component event", () => {
   it("keyed by toolCallId with componentId and props", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "component",
-      toolCallId: TOOL_ID,
-      componentId: "svg-preview",
-      props: { svg: "<svg/>" },
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "component",
+        toolCallId: TOOL_ID,
+        componentId: "svg-preview",
+        props: { svg: "<svg/>" },
+      }),
+    );
     const c = s.components[TOOL_ID];
     expect(c?.componentId).toBe("svg-preview");
     expect(c?.props).toEqual({ svg: "<svg/>" });
   });
 
   it("overwrites for the same toolCallId", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "component", toolCallId: TOOL_ID, componentId: "a", props: {} }));
-    s = reducer(s, event({ type: "component", toolCallId: TOOL_ID, componentId: "b", props: { x: 1 } }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "component",
+        toolCallId: TOOL_ID,
+        componentId: "a",
+        props: {},
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "component",
+        toolCallId: TOOL_ID,
+        componentId: "b",
+        props: { x: 1 },
+      }),
+    );
     expect(s.components[TOOL_ID]?.componentId).toBe("b");
   });
 });
@@ -539,14 +738,31 @@ describe("component event", () => {
 
 describe("usage event", () => {
   it("stores turnUsage from the event", () => {
-    const usage = { promptTokens: 100, completionTokens: 50, totalTokens: 150, creditsCharged: 15 };
+    const usage = {
+      promptTokens: 100,
+      completionTokens: 50,
+      totalTokens: 150,
+      creditsCharged: 15,
+    };
     const s = reducer(INITIAL_STATE, event({ type: "usage", usage }));
     expect(s.turnUsage).toEqual(usage);
   });
 
   it("replaces prior turnUsage on a second usage event", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "usage", usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } }));
-    s = reducer(s, event({ type: "usage", usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "usage",
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "usage",
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      }),
+    );
     expect(s.turnUsage?.totalTokens).toBe(15);
   });
 });
@@ -579,7 +795,9 @@ describe("suggested-prompts event", () => {
       INITIAL_STATE,
       event({ type: "suggested-prompts", suggestions: trio }),
     );
-    const next = [{ label: "Publish It", prompt: "Publish to the marketplace." }];
+    const next = [
+      { label: "Publish It", prompt: "Publish to the marketplace." },
+    ];
     s = reducer(s, event({ type: "suggested-prompts", suggestions: next }));
     expect(s.suggestedPrompts).toEqual(next);
   });
@@ -609,12 +827,15 @@ describe("suggested-prompts event", () => {
 
 describe("error event", () => {
   it("stores turnError without touching textSegments or messages", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "error",
-      messageId: MSG_ID,
-      code: "insufficient_credits",
-      message: "Insufficient credits: your balance is empty.",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "error",
+        messageId: MSG_ID,
+        code: "insufficient_credits",
+        message: "Insufficient credits: your balance is empty.",
+      }),
+    );
     expect(s.turnError).toEqual({
       code: "insufficient_credits",
       message: "Insufficient credits: your balance is empty.",
@@ -628,19 +849,28 @@ describe("error event", () => {
   });
 
   it("stores turnError without a code when none is provided", () => {
-    const s = reducer(INITIAL_STATE, event({
-      type: "error",
-      messageId: MSG_ID,
-      message: "Gateway timeout",
-    }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "error",
+        messageId: MSG_ID,
+        message: "Gateway timeout",
+      }),
+    );
     expect(s.turnError).toEqual({ message: "Gateway timeout" });
     expect(s.turnError?.code).toBeUndefined();
   });
 
   it("breaks the active text segment so trailing prose is not appended to it", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "partial" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "partial" }),
+    );
     expect(s.activeTextKey).not.toBeNull();
-    s = reducer(s, event({ type: "error", messageId: MSG_ID, message: "boom" }));
+    s = reducer(
+      s,
+      event({ type: "error", messageId: MSG_ID, message: "boom" }),
+    );
     expect(s.activeTextKey).toBeNull();
     // Prior partial text is preserved; the error is held separately.
     expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("partial");
@@ -648,13 +878,27 @@ describe("error event", () => {
   });
 
   it("a new error event replaces the prior turnError", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "error", messageId: MSG_ID, message: "first" }));
-    s = reducer(s, event({ type: "error", messageId: MSG_ID, code: "rate_limited", message: "second" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "error", messageId: MSG_ID, message: "first" }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "error",
+        messageId: MSG_ID,
+        code: "rate_limited",
+        message: "second",
+      }),
+    );
     expect(s.turnError).toEqual({ code: "rate_limited", message: "second" });
   });
 
   it("reset clears turnError", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "error", messageId: MSG_ID, message: "boom" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "error", messageId: MSG_ID, message: "boom" }),
+    );
     expect(s.turnError).toBeDefined();
     s = reducer(s, { type: "reset" });
     expect(s.turnError).toBeUndefined();
@@ -667,35 +911,59 @@ describe("error event", () => {
 
 describe("reasoning events", () => {
   it("creates a thinking segment, appends deltas, and finalizes on end", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }),
+    );
     expect(s.reasonings["r-1"]?.status).toBe("thinking");
     expect(s.order).toContain("reasoning:r-1");
 
-    s = reducer(s, event({ type: "reasoning-delta", reasoningId: "r-1", text: "Let me " }));
-    s = reducer(s, event({ type: "reasoning-delta", reasoningId: "r-1", text: "think." }));
+    s = reducer(
+      s,
+      event({ type: "reasoning-delta", reasoningId: "r-1", text: "Let me " }),
+    );
+    s = reducer(
+      s,
+      event({ type: "reasoning-delta", reasoningId: "r-1", text: "think." }),
+    );
     expect(s.reasonings["r-1"]?.text).toBe("Let me think.");
 
-    s = reducer(s, event({ type: "reasoning-end", reasoningId: "r-1", durationMs: 1200 }));
+    s = reducer(
+      s,
+      event({ type: "reasoning-end", reasoningId: "r-1", durationMs: 1200 }),
+    );
     expect(s.reasonings["r-1"]?.status).toBe("done");
     expect(s.reasonings["r-1"]?.durationMs).toBe(1200);
   });
 
   it("breaks the active text segment so text after reasoning is a new node", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "Answer A" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "Answer A" }),
+    );
     expect(s.activeTextKey).not.toBeNull();
-    s = reducer(s, event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }));
+    s = reducer(
+      s,
+      event({ type: "reasoning-start", messageId: MSG_ID, reasoningId: "r-1" }),
+    );
     expect(s.activeTextKey).toBeNull();
   });
 
   it("creates a defensive entry when reasoning-delta arrives without a start", () => {
-    const s = reducer(INITIAL_STATE, event({ type: "reasoning-delta", reasoningId: "r-x", text: "orphan" }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "reasoning-delta", reasoningId: "r-x", text: "orphan" }),
+    );
     expect(s.reasonings["r-x"]?.text).toBe("orphan");
     expect(s.order).toContain("reasoning:r-x");
   });
 
   it("returns same state reference on reasoning-end for an unknown id", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "reasoning-end", reasoningId: "nope", durationMs: 0 }));
+    const next = reducer(
+      s,
+      event({ type: "reasoning-end", reasoningId: "nope", durationMs: 0 }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -706,7 +974,10 @@ describe("reasoning events", () => {
 
 describe("step events", () => {
   it("creates a running step and marks it done on finish", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "step-start", messageId: MSG_ID, stepIndex: 0 }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "step-start", messageId: MSG_ID, stepIndex: 0 }),
+    );
     expect(s.steps[0]?.status).toBe("running");
     expect(s.order).toContain("step:0");
     s = reducer(s, event({ type: "step-finish", stepIndex: 0 }));
@@ -726,36 +997,59 @@ describe("step events", () => {
 
 describe("streaming tool input", () => {
   it("creates a pending tool call and accumulates partial args", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "tool-input-start",
-      messageId: MSG_ID,
-      toolCallId: TOOL_ID,
-      capability: "fs.read",
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "tool-input-start",
+        messageId: MSG_ID,
+        toolCallId: TOOL_ID,
+        capability: "fs.read",
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.status).toBe("pending");
     expect(s.order).toContain(`tool:${TOOL_ID}`);
 
-    s = reducer(s, event({ type: "tool-input-delta", toolCallId: TOOL_ID, delta: '{"path":' }));
-    s = reducer(s, event({ type: "tool-input-delta", toolCallId: TOOL_ID, delta: '"/tmp"}' }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-input-delta",
+        toolCallId: TOOL_ID,
+        delta: '{"path":',
+      }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "tool-input-delta",
+        toolCallId: TOOL_ID,
+        delta: '"/tmp"}',
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.partialInput).toBe('{"path":"/tmp"}');
   });
 
   it("flips pending → running on tool-call-start, preserving startedAt", () => {
-    let s = reducer(INITIAL_STATE, event({
-      type: "tool-input-start",
-      messageId: MSG_ID,
-      toolCallId: TOOL_ID,
-      capability: "fs.read",
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({
+        type: "tool-input-start",
+        messageId: MSG_ID,
+        toolCallId: TOOL_ID,
+        capability: "fs.read",
+      }),
+    );
     const startedAt = s.toolCalls[TOOL_ID]?.startedAt;
-    s = reducer(s, event({
-      type: "tool-call-start",
-      toolCallId: TOOL_ID,
-      messageId: MSG_ID,
-      capability: "fs.read",
-      inputPreview: { path: "/tmp" },
-      riskLevel: "low",
-    }));
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-start",
+        toolCallId: TOOL_ID,
+        messageId: MSG_ID,
+        capability: "fs.read",
+        inputPreview: { path: "/tmp" },
+        riskLevel: "low",
+      }),
+    );
     expect(s.toolCalls[TOOL_ID]?.status).toBe("running");
     expect(s.toolCalls[TOOL_ID]?.inputPreview).toEqual({ path: "/tmp" });
     expect(s.toolCalls[TOOL_ID]?.startedAt).toBe(startedAt);
@@ -765,7 +1059,10 @@ describe("streaming tool input", () => {
 
   it("returns same state reference on tool-input-delta for an unknown id", () => {
     const s = INITIAL_STATE;
-    const next = reducer(s, event({ type: "tool-input-delta", toolCallId: "nope", delta: "x" }));
+    const next = reducer(
+      s,
+      event({ type: "tool-input-delta", toolCallId: "nope", delta: "x" }),
+    );
     expect(next).toBe(s);
   });
 });
@@ -776,18 +1073,28 @@ describe("streaming tool input", () => {
 
 describe("ordered timeline", () => {
   it("records entities in first-appearance order and splits text around a tool", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "before " }));
-    s = reducer(s, event({
-      type: "tool-call-start",
-      toolCallId: TOOL_ID,
-      messageId: MSG_ID,
-      capability: "fs.read",
-      inputPreview: {},
-      riskLevel: "low",
-    }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "before " }),
+    );
+    s = reducer(
+      s,
+      event({
+        type: "tool-call-start",
+        toolCallId: TOOL_ID,
+        messageId: MSG_ID,
+        capability: "fs.read",
+        inputPreview: {},
+        riskLevel: "low",
+      }),
+    );
     s = reducer(s, event({ type: "text", messageId: MSG_ID, text: "after" }));
 
-    expect(s.order).toEqual([`text:${MSG_ID}:0`, `tool:${TOOL_ID}`, `text:${MSG_ID}:2`]);
+    expect(s.order).toEqual([
+      `text:${MSG_ID}:0`,
+      `tool:${TOOL_ID}`,
+      `text:${MSG_ID}:2`,
+    ]);
     expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("before ");
     expect(s.textSegments[`text:${MSG_ID}:2`]?.text).toBe("after");
     // The full accumulated message text is still available.
@@ -795,7 +1102,10 @@ describe("ordered timeline", () => {
   });
 
   it("keeps a contiguous run of text deltas in a single segment", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "a" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "a" }),
+    );
     s = reducer(s, event({ type: "text", messageId: MSG_ID, text: "b" }));
     expect(s.order).toEqual([`text:${MSG_ID}:0`]);
     expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("ab");
@@ -810,7 +1120,10 @@ describe("unknown event type", () => {
   it("returns state unchanged for an unrecognised event type", () => {
     const s = stateWithRunningTool();
     // Cast to any to inject a fake event type that the switch default handles
-    const next = reducer(s, { type: "event", event: { type: "unknown-future-event" } as unknown as StreamEvent });
+    const next = reducer(s, {
+      type: "event",
+      event: { type: "unknown-future-event" } as unknown as StreamEvent,
+    });
     expect(next).toBe(s);
   });
 });
@@ -823,15 +1136,25 @@ describe("warning events", () => {
   it("stashes turnWarning without marking the turn failed", () => {
     const s = reducer(
       INITIAL_STATE,
-      event({ type: "warning", message: "reply not saved", code: "assistant_persist_failed" }),
+      event({
+        type: "warning",
+        message: "reply not saved",
+        code: "assistant_persist_failed",
+      }),
     );
-    expect(s.turnWarning).toEqual({ message: "reply not saved", code: "assistant_persist_failed" });
+    expect(s.turnWarning).toEqual({
+      message: "reply not saved",
+      code: "assistant_persist_failed",
+    });
     // A warning is NON-fatal: it must not populate turnError.
     expect(s.turnError).toBeUndefined();
   });
 
   it("does not clear an in-progress text segment (turn still succeeding)", () => {
-    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "hi" }));
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "text", messageId: MSG_ID, text: "hi" }),
+    );
     const activeBefore = s.activeTextKey;
     s = reducer(s, event({ type: "warning", message: "heads up" }));
     // Unlike an error, a warning leaves the active timeline untouched.
@@ -840,7 +1163,10 @@ describe("warning events", () => {
   });
 
   it("omits code when the warning has none", () => {
-    const s = reducer(INITIAL_STATE, event({ type: "warning", message: "just so you know" }));
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "warning", message: "just so you know" }),
+    );
     expect(s.turnWarning).toEqual({ message: "just so you know" });
   });
 });

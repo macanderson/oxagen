@@ -8,9 +8,9 @@ import {
 } from "./agent-schema";
 
 /**
- * Witness for #1010 / OXA-2137: the agent.trigger.* subsystem is removed and
- * triggering lives only on automations/playbooks. An agent definition is now a
- * pure, portable, trigger-free config.
+ * Witness that the agent.trigger.* subsystem stays removed and triggering
+ * lives only on automations/playbooks. An agent definition is a pure,
+ * portable, trigger-free config.
  *
  * The invariant we assert is "no LIVE runtime source references the subsystem",
  * so the scan is deliberately scoped to first-party TypeScript source under

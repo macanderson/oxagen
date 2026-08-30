@@ -1240,7 +1240,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./schema.validate.relationship"))
         .schemaValidateRelationshipHandler as CapabilityHandlerFn,
   );
-  // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
   registerHandler(
     "create_environment",
     async () =>

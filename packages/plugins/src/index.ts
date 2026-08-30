@@ -1,5 +1,5 @@
-// @oxagen/plugins — installable-plugin spine.
-// Plan 1 ships the credential service; the PluginType spine lands in Plan 3.
+// @oxagen/plugins — installable-plugin spine: credential storage, OAuth,
+// entitlements, the credential vault, environments, and sandbox templates.
 export {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
@@ -32,7 +32,7 @@ export {
 } from "./entitlements/entitlement-service";
 export { bootstrapEntitlementRuntime } from "./entitlements/bootstrap";
 
-// Credential vault + environments (Spec: 2026-06-24-credential-vault-…).
+// Credential vault + environments.
 export {
   upsertSecretKey,
   listSecretKeys,
@@ -53,8 +53,16 @@ export type {
   ImportPreviewRow,
   ResolvedSource,
 } from "./vault/vault-secret-service";
-export { resolveVaultKms, WORKSPACE_VAULT_KEY_ID, VaultLockedError } from "./vault/vault-kms";
-export { parseEnvText, isValidSecretKeyName, SECRET_KEY_PATTERN } from "./vault/env-parse";
+export {
+  resolveVaultKms,
+  WORKSPACE_VAULT_KEY_ID,
+  VaultLockedError,
+} from "./vault/vault-kms";
+export {
+  parseEnvText,
+  isValidSecretKeyName,
+  SECRET_KEY_PATTERN,
+} from "./vault/env-parse";
 export type { ParsedEnvEntry } from "./vault/env-parse";
 export {
   createEnvironment,
@@ -66,10 +74,14 @@ export {
   isValidEnvironmentSlug,
   ENVIRONMENT_SLUG_PATTERN,
 } from "./environments/environment-service";
-export type { EnvironmentActor, EnvironmentSummary } from "./environments/environment-service";
+export type {
+  EnvironmentActor,
+  EnvironmentSummary,
+} from "./environments/environment-service";
 export type { SecretSelection } from "./vault/vault-secret-service";
 
-// Sandbox templates + portable artifacts + agent-environment bindings (Spec §5.2–§5.6).
+// Sandbox templates + portable artifacts + agent-environment bindings
+// (see docs/specs/sandbox-templates-portable/plan.md).
 export {
   createTemplate,
   listTemplates,

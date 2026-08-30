@@ -1,4 +1,4 @@
-// Read path for durable-sandbox command output (spec: sandbox-session-lifecycle
+// Read path for durable-sandbox command output (docs/specs/sandbox-session-lifecycle/spec.md
 // §7.2). The sandbox inspector's log console calls fetchSandboxLogs; the write
 // path is insertSandboxLogs in ./clickhouse (fired from ModalSandboxWorkspace.exec).
 import { clickhouse } from "./clickhouse";
@@ -102,7 +102,9 @@ export async function fetchSandboxLogs(args: {
   // Fetched newest-first for the tail; hand back oldest-first for the console.
   return rows.reverse().map((r) => ({
     ts: r.ts_text,
-    stream: (r.stream === "stderr" || r.stream === "system" ? r.stream : "stdout") as SandboxLogLine["stream"],
+    stream: (r.stream === "stderr" || r.stream === "system"
+      ? r.stream
+      : "stdout") as SandboxLogLine["stream"],
     level: r.level === "debug" ? "debug" : "normal",
     command: r.command,
     seq: Number(r.seq),

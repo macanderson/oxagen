@@ -1,6 +1,6 @@
 -- 0008_skill_loads.sql
 --
--- OXA-1750: Skill lifecycle telemetry. One row per skill load — emitted when a
+-- Skill lifecycle telemetry. One row per skill load — emitted when a
 -- workspace skill is loaded into an agent run (agent.skill.load) or surfaced
 -- through any other entry point. Powers the skill.metrics.read handler: loads
 -- per skill, loads per version, and last-used.

@@ -35,8 +35,12 @@ const VALID_ENV: NodeJS.ProcessEnv = {
 
 describe("normalizeEnv", () => {
   it("strips exactly one surrounding double-quote pair from known keys", () => {
-    const result = normalizeEnv({ DATABASE_URL: '"postgresql://user:pass@localhost:5432/db"' });
-    expect(result["DATABASE_URL"]).toBe("postgresql://user:pass@localhost:5432/db");
+    const result = normalizeEnv({
+      DATABASE_URL: '"postgresql://user:pass@localhost:5432/db"',
+    });
+    expect(result["DATABASE_URL"]).toBe(
+      "postgresql://user:pass@localhost:5432/db",
+    );
   });
 
   it("leaves unknown keys untouched even when double-quoted", () => {
@@ -45,8 +49,12 @@ describe("normalizeEnv", () => {
   });
 
   it("does not mutate values that are not double-wrapped", () => {
-    const result = normalizeEnv({ DATABASE_URL: "postgresql://user:pass@localhost:5432/db" });
-    expect(result["DATABASE_URL"]).toBe("postgresql://user:pass@localhost:5432/db");
+    const result = normalizeEnv({
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+    });
+    expect(result["DATABASE_URL"]).toBe(
+      "postgresql://user:pass@localhost:5432/db",
+    );
   });
 
   it("does not strip a single leading or trailing quote without a match", () => {
@@ -206,10 +214,8 @@ describe("isProductionRuntime", () => {
 });
 
 // ── Promoted-to-schema vars (registry → baseEnvSchema) ────────────────────────
-// These were previously read via raw process.env and tracked only in
-// ENV_REGISTRY. Now validated by baseEnvSchema: each is optional (its consuming
-// surface enforces presence or falls back), so an absent value never fails a
-// service that does not use it.
+// Each of these is optional (its consuming surface enforces presence or falls
+// back), so an absent value never fails a service that does not use it.
 
 describe("promoted env vars", () => {
   beforeEach(() => {
@@ -247,9 +253,9 @@ describe("promoted env vars", () => {
     });
     expect(ok.NEXT_PUBLIC_DOCS_URL).toBe("https://docs.example.com");
     expect(ok.MCP_URL).toBe("https://mcp.example.com");
-    expect(() => requireEnv(["MCP_URL"] as const, { MCP_URL: "not-a-url" })).toThrow(
-      /Invalid environment/,
-    );
+    expect(() =>
+      requireEnv(["MCP_URL"] as const, { MCP_URL: "not-a-url" }),
+    ).toThrow(/Invalid environment/);
   });
 
   it("restricts INGESTION_CRYPTO_PROVIDER to env|kms", () => {
@@ -306,7 +312,9 @@ describe("requireEnv", () => {
   it("throws when a required key is absent from the source", () => {
     const incomplete = { ...VALID_ENV };
     delete incomplete.DATABASE_URL;
-    expect(() => requireEnv(["DATABASE_URL"] as const, incomplete)).toThrow(/Invalid environment/);
+    expect(() => requireEnv(["DATABASE_URL"] as const, incomplete)).toThrow(
+      /Invalid environment/,
+    );
   });
 
   it("does not require keys outside the requested subset", () => {

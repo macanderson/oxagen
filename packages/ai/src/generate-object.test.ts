@@ -255,7 +255,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
   });
 
-  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter (#1076)", async () => {
+  it("forwards prompt-cache writes (inputTokenDetails.cacheWriteTokens) to telemetry and the meter", async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: FIXED_OBJECT,
       // Flat inputTokens is the INCLUSIVE total: 20 fresh + 12 read + 8 write.

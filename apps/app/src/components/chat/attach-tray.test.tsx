@@ -5,7 +5,7 @@
  * The chat_ux_v2 mobile attach tray (bottom sheet opened by the condensed
  * row's plus button). Covers: the three expected rows render with NO
  * "Record voice" row (the server has no "audio" asset kind — see
- * packages/storage/src/assets.ts), each row's hidden input has the honest
+ * packages/storage/src/assets.ts), each row's hidden input has the right
  * `accept` for what it claims to offer, picking a file routes to the right
  * callback and closes the tray, and an empty pick (cancel) doesn't fire the
  * callback or leave the tray dangling in a bad state.
@@ -95,9 +95,15 @@ describe("AttachTray", () => {
       />,
     );
     expect(screen.getByTestId("attach-tray")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take photo" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose photos" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose files" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Take photo" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose photos" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose files" }),
+    ).toBeInTheDocument();
     // The server has no "audio" asset kind (packages/storage/src/assets.ts)
     // — a voice-recording row would 415 on every attempt, so it must not exist.
     expect(
@@ -105,7 +111,7 @@ describe("AttachTray", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("wires honest accept/capture attributes per row", () => {
+  it("wires the right accept/capture attributes per row", () => {
     const { container } = render(
       <AttachTray
         open
@@ -117,7 +123,9 @@ describe("AttachTray", () => {
     );
     const inputs = container.querySelectorAll('input[type="file"]');
     expect(inputs).toHaveLength(3);
-    const [camera, photos, documents] = Array.from(inputs) as HTMLInputElement[];
+    const [camera, photos, documents] = Array.from(
+      inputs,
+    ) as HTMLInputElement[];
     expect(camera!.accept).toBe("image/*");
     // jsdom doesn't reflect the non-standard `capture` attribute as an IDL
     // property, so read the raw attribute.

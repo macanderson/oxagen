@@ -109,11 +109,11 @@ export const baseEnvSchema = z.object({
   GITHUB_APP_CLIENT_ID: z.string().optional(),
   GITHUB_APP_CLIENT_SECRET: z.string().optional(),
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
-  // Second App (oxagen-sh) — same endpoint, different signer. See #1200.
+  // Second App (oxagen-sh) — same endpoint, different signer.
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
   GITHUB_APP_SLUG: z.string().optional(),
-  // ADR-020: per-workspace write credential resolution. When set, the
+  // Per-workspace write credential resolution (docs/adr/ADR-020-per-workspace-github-write-credentials.md). When set, the
   // resolveGitHubToken() chain mints short-lived installation access tokens
   // via the App private key instead of falling back to per-user OAuth tokens.
   // Both vars are required together; omitting either disables path (1) and
@@ -140,14 +140,14 @@ export const baseEnvSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
-  // Bug fix (b): client-side billing components read the NEXT_PUBLIC_ prefixed
+  // Client-side billing components read the NEXT_PUBLIC_ prefixed
   // name; the server keeps the unprefixed key for server-only routes.
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_").optional(),
   // Stripe Tax master switch. Ships dark ("false"); the provider reads
   // process.env.STRIPE_TAX_ENABLED directly so it stays edge/runtime-agnostic.
   STRIPE_TAX_ENABLED: z.string().optional(),
 
-  // OXA-1349: INNGEST keys are optional in base schema.
+  // INNGEST keys are optional in the base schema.
   // @oxagen/inngest-functions enforces required-in-production itself.
   INNGEST_EVENT_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
@@ -242,10 +242,9 @@ export const baseEnvSchema = z.object({
   // builds stay green without it — the address form degrades to plain manual
   // entry when absent.
   // GOOGLE_MAPS_URL_SIGNING_SECRET is the server-only URL-signing secret.
-  // It must NEVER be referenced in client bundle code. The NEXT_PUBLIC_ prefix
-  // was removed (was NEXT_PUBLIC_GOOGLE_MAPS_API_SECRET) to prevent Next.js
-  // from inlining it into the browser bundle — a signing secret must remain
-  // server-side only.
+  // It must NEVER be referenced in client bundle code or carry a NEXT_PUBLIC_
+  // prefix — Next.js inlines any NEXT_PUBLIC_ var into the browser bundle,
+  // and a signing secret must stay server-side only.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
   GOOGLE_MAPS_URL_SIGNING_SECRET: z.string().min(1).optional(),
 
@@ -307,7 +306,7 @@ export const baseEnvSchema = z.object({
   // SDK. Optional: unset = ClickHouse error_events recording only, no webhook.
   ALERT_WEBHOOK_URL: z.string().url().optional(),
 
-  // OXA-1348: when true (default off in prod), agent.code.execute is
+  // When true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal
   // runner is deployed (see ops/modal/README.md).
   // Accept "true"/"false" and "1"/"0" — a value pasted as 1/0 (a natural way
@@ -320,11 +319,11 @@ export const baseEnvSchema = z.object({
   // hosted Firecracker runner; `docker` runs Dockerode locally; `vercel`
   // runs Firecracker microVMs via @vercel/sandbox (first-party, no extra
   // deployment needed on Vercel Functions). Unset = auto-detect (modal if
-  // MODAL_RUNNER_URL is present, else docker). See ADR-011.
+  // MODAL_RUNNER_URL is present, else docker). See docs/adr/ADR-011-vercel-sandbox-driver.md.
   SANDBOX_DRIVER: z.enum(["modal", "docker", "vercel"]).optional(),
   MODAL_RUNNER_URL: z.string().url().optional(),
   MODAL_RUNNER_TOKEN: z.string().min(16).optional(),
-  // OXA-1348: Vercel Sandbox driver credentials. All three are optional
+  // Vercel Sandbox driver credentials. All three are optional
   // in the base schema because Vercel Functions auto-resolve auth via OIDC
   // (VERCEL_OIDC_TOKEN injected by the runtime). Only required for local
   // dev when SANDBOX_DRIVER=vercel outside a Vercel project.
@@ -332,14 +331,14 @@ export const baseEnvSchema = z.object({
   VERCEL_SANDBOX_TEAM_ID: z.string().min(1).optional(),
   VERCEL_SANDBOX_PROJECT_ID: z.string().min(1).optional(),
 
-  // OXA-1420: Vercel-native master key (KEK) used to wrap OAuth token data
+  // Vercel-native master key (KEK) used to wrap OAuth token data
   // encryption keys. Base64-encoded 256-bit (32-byte) key. Required in
   // production (enforced by the auth startup guard); optional in
   // development/test so local dev can boot without it. Generate with
   // `openssl rand -base64 32`.
   AUTH_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
 
-  // OXA-1720: ingestion connector-credential encryption. INGESTION_CRYPTO_PROVIDER
+  // Ingestion connector-credential encryption. INGESTION_CRYPTO_PROVIDER
   // selects the KMS adapter: "env" (default) wraps with a local base64 master key
   // held in INGESTION_ENCRYPTION_KEY; "kms" wraps via AWS KMS keyed by
   // AWS_KMS_INGESTION_KEY_ARN. All optional in the base schema — createIngestion-
@@ -363,7 +362,7 @@ export const baseEnvSchema = z.object({
   // schema; packages/web throws a precise error at call time when it is absent.
   TAVILY_API_KEY: z.string().min(1).optional(),
 
-  // OXA-1515: Row-Level Security enforcement gate. Fail-CLOSED in production:
+  // Row-Level Security enforcement gate. Fail-CLOSED in production:
   // when unset, this defaults ON in any production runtime (NODE_ENV or
   // VERCEL_ENV = "production") and OFF everywhere else (dev/test/preview seeding
   // window). withTenantDb always sets the scope GUCs; when this resolves false
@@ -415,7 +414,7 @@ export const baseEnvSchema = z.object({
     ])
     .optional()
     .transform((v) => v === "1" || v === "true"),
-  // Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON by
+  // Deterministic judge-skip / adaptive compute ladder (docs/adr/ADR-021-inference-doctrine.md §1). ON by
   // DEFAULT: when executed evidence (oracle flipped + tests green + diff size,
   // or a read-only turn with no diff) already settles completeness, the frontier
   // completeness judge is skipped. Set to 0/false to OPT OUT and force the judge
@@ -467,10 +466,9 @@ let cached: Env | null = null;
  * Env values pasted into the Vercel dashboard with literal quotes arrive
  * double-wrapped (`vercel env pull` writes `KEY="\"value\""`); Node's
  * `--env-file` unwraps only the outer pair, leaving `"value"` — which then
- * fails URL/enum validation. To keep the side-effect visible and bounded we
- * (a) only touch keys this schema actually validates — never arbitrary vars
- * another tool set — and (b) warn once, listing exactly what was stripped, so
- * a legitimately-quoted value isn't silently mutated.
+ * fails URL/enum validation. To keep the side effect bounded, this only
+ * touches keys this schema actually validates — never arbitrary vars another
+ * tool set.
  */
 export function normalizeEnv(
   source: NodeJS.ProcessEnv,

@@ -16,7 +16,11 @@ export async function chInsert(
   rows: ReadonlyArray<Record<string, unknown>>,
 ): Promise<void> {
   const { orgId, workspaceId } = requireScope();
-  const values = rows.map((r) => ({ ...r, org_id: orgId, workspace_id: workspaceId }));
+  const values = rows.map((r) => ({
+    ...r,
+    org_id: orgId,
+    workspace_id: workspaceId,
+  }));
   await clickhouse().insert({ table, values, format: "JSONEachRow" });
 }
 
@@ -33,9 +37,6 @@ export async function chInsert(
  * A query that genuinely must run unscoped must use the raw `clickhouse()`
  * client directly inside `packages/telemetry` — not this helper.
  *
- * @returns The `.json<T>()` result from the ClickHouse ResultSet.
- */
-/**
  * @returns A `ResponseJSON<T>` envelope with a `data: T[]` field. The "JSON"
  * ClickHouse wire format always wraps rows in this shape; callers destructure
  * `result.data` to access the row array.

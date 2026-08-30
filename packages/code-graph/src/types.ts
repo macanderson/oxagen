@@ -43,8 +43,8 @@ export type ParsedLanguage = "typescript" | "python" | "markdown" | "unknown";
  *
  * The `enclosingSymbol` is the name of the function/method/arrow_function whose
  * line range contains the call expression, or null for module-level calls.  The
- * caller name is used for same-file CALLS edge resolution; cross-file resolution
- * is a documented follow-up.
+ * caller name is used for same-file CALLS edge resolution; cross-file
+ * resolution is not implemented yet.
  */
 export interface CallSite {
   /** The function or method name being called (identifier or member property). */

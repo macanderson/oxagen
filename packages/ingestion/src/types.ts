@@ -134,11 +134,11 @@ export interface DeduplicationResult {
   aliasNodeId?: string;
   action: DeduplicationAction | "rejected_nonconformant";
   /**
-   * Set when enforcement_mode='strict' rejected the write as non-conformant
-   * (§8). The node was NOT written; the pipeline surfaces a filtered result.
+   * Set when enforcement_mode='strict' rejected the write as non-conformant.
+   * The node was not written; the pipeline surfaces a filtered result.
    */
   rejected?: boolean;
-  /** Conformance score (0.0–1.0) when a pinned schema was evaluated (§8). */
+  /** Conformance score (0.0–1.0) when a pinned schema was evaluated. */
   conformanceScore?: number;
   /**
    * Confidence that this entity IS the same real-world entity as the principal.
@@ -204,7 +204,7 @@ export interface PipelineResult {
   operation: EntityOperation;
   dedup: DeduplicationResult;
   embedded: boolean;
-  /** Conformance score (0.0–1.0) of the written node, when a schema was pinned (§8). */
+  /** Conformance score (0.0–1.0) of the written node, when a schema was pinned. */
   conformanceScore?: number;
 }
 

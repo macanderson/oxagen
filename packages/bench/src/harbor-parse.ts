@@ -14,7 +14,12 @@
 //      headless event stream from `oxagen solve --json` (see
 //      resultEnvelope() in apps/cli/src/tui/best-of-n-view/index.tsx).
 
-import { BENCH_TOOL_NAMES, type BenchTestSpec, type BenchToolCallCounts, type BenchToolName } from "./types";
+import {
+  BENCH_TOOL_NAMES,
+  type BenchTestSpec,
+  type BenchToolCallCounts,
+  type BenchToolName,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Harbor run config.json
@@ -37,7 +42,9 @@ export function agentNameFromHarborConfig(config: HarborRunConfig): string {
   if (!name) return "unknown";
   if (name.includes(":")) {
     const cls = name.split(":").pop() ?? "";
-    const stripped = cls.endsWith("Agent") ? cls.slice(0, -"Agent".length) : cls;
+    const stripped = cls.endsWith("Agent")
+      ? cls.slice(0, -"Agent".length)
+      : cls;
     return stripped.toLowerCase().replace(/_/g, "-") || "unknown";
   }
   return name;
@@ -93,13 +100,19 @@ function finiteOrZero(v: number | null | undefined): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
-function numberMetadata(metadata: Record<string, unknown> | null | undefined, key: string): number {
+function numberMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): number {
   const v = metadata?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
 /** True when a numeric metadata key is present and finite (distinguishes "absent" from a real 0). */
-function hasNumberMetadata(metadata: Record<string, unknown> | null | undefined, key: string): boolean {
+function hasNumberMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): boolean {
   const v = metadata?.[key];
   return typeof v === "number" && Number.isFinite(v);
 }
@@ -131,10 +144,8 @@ export function agentSplitTokens(trial: HarborTaskResult): AgentSplitTokens {
  * undifferentiated total in `agent_result.metadata.oxagen_total_tokens` (it
  * does not split input/output/cache — see oxagen_agent.py), while competitor
  * adapters report the split. Prefer the metadata total when present, else fall
- * back to the sum of the split fields. This mirrors the normalization already
- * done in bench/swe-bench/summarize.py and terminal-bench eval_normalize.py —
- * the TS ingest previously read only the split fields, so oxagen runs landed
- * with an all-zero token total.
+ * back to the sum of the split fields. This mirrors the normalization done in
+ * bench/swe-bench/summarize.py and terminal-bench eval_normalize.py.
  */
 export function agentTotalTokens(trial: HarborTaskResult): number {
   const meta = trial.agent_result?.metadata;
@@ -154,7 +165,10 @@ export function agentCostUsd(trial: HarborTaskResult): number {
   return finiteOrZero(trial.agent_result?.cost_usd);
 }
 
-function stringMetadata(metadata: Record<string, unknown> | null | undefined, key: string): string {
+function stringMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): string {
   const v = metadata?.[key];
   return typeof v === "string" ? v : "";
 }
@@ -228,9 +242,11 @@ export function parseVerifierReport(
   report: HarborVerifierReport | null | undefined,
   taskId: string,
 ): ParsedVerifierReport {
-  if (!report) return { resolved: null, testSpec: { FAIL_TO_PASS: [], PASS_TO_PASS: [] } };
+  if (!report)
+    return { resolved: null, testSpec: { FAIL_TO_PASS: [], PASS_TO_PASS: [] } };
   const entry = report[taskId] ?? Object.values(report)[0];
-  if (!entry) return { resolved: null, testSpec: { FAIL_TO_PASS: [], PASS_TO_PASS: [] } };
+  if (!entry)
+    return { resolved: null, testSpec: { FAIL_TO_PASS: [], PASS_TO_PASS: [] } };
   return {
     resolved: typeof entry.resolved === "boolean" ? entry.resolved : null,
     testSpec: {
@@ -345,27 +361,46 @@ export function parseTrajectory(text: string): ParsedTrajectory {
     return { ...EMPTY_TRAJECTORY, problemStatement, aggregateToolCalls };
   }
 
-  const winnerCandidateId = typeof resultEvent.winnerId === "string" ? resultEvent.winnerId : "";
-  const winnerFiles = Array.isArray(resultEvent.winnerFiles) ? resultEvent.winnerFiles.length : 0;
-  const rawCandidates = Array.isArray(resultEvent.candidates) ? resultEvent.candidates : [];
+  const winnerCandidateId =
+    typeof resultEvent.winnerId === "string" ? resultEvent.winnerId : "";
+  const winnerFiles = Array.isArray(resultEvent.winnerFiles)
+    ? resultEvent.winnerFiles.length
+    : 0;
+  const rawCandidates = Array.isArray(resultEvent.candidates)
+    ? resultEvent.candidates
+    : [];
 
-  const candidates: TrajectoryCandidate[] = rawCandidates.filter(isRecord).map((c) => {
-    const id = typeof c.id === "string" ? c.id : "";
-    return {
-      id,
-      model: typeof c.model === "string" ? c.model : (modelByCandidate.get(id) ?? ""),
-      steps: typeof c.steps === "number" ? c.steps : 0,
-      filesChanged: Array.isArray(c.changedFiles) ? c.changedFiles.length : 0,
-      failed: c.failed === true,
-      isWinner: id !== "" && id === winnerCandidateId,
-      toolCalls: toolCallsByCandidate.get(id) ?? {},
-    };
-  });
+  const candidates: TrajectoryCandidate[] = rawCandidates
+    .filter(isRecord)
+    .map((c) => {
+      const id = typeof c.id === "string" ? c.id : "";
+      return {
+        id,
+        model:
+          typeof c.model === "string"
+            ? c.model
+            : (modelByCandidate.get(id) ?? ""),
+        steps: typeof c.steps === "number" ? c.steps : 0,
+        filesChanged: Array.isArray(c.changedFiles) ? c.changedFiles.length : 0,
+        failed: c.failed === true,
+        isWinner: id !== "" && id === winnerCandidateId,
+        toolCalls: toolCallsByCandidate.get(id) ?? {},
+      };
+    });
 
-  return { problemStatement, winnerCandidateId, winnerFiles, candidates, aggregateToolCalls };
+  return {
+    problemStatement,
+    winnerCandidateId,
+    winnerFiles,
+    candidates,
+    aggregateToolCalls,
+  };
 }
 
 /** Total calls across every counted tool — used for `code_graph_calls`/`grep_calls`-style single-tool rollups. */
-export function toolCallCount(counts: BenchToolCallCounts, tool: BenchToolName): number {
+export function toolCallCount(
+  counts: BenchToolCallCounts,
+  tool: BenchToolName,
+): number {
   return counts[tool] ?? 0;
 }

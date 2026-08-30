@@ -1,7 +1,7 @@
 /**
- * Unit tests for the OAuth Proxy configuration (OXA-1789).
+ * Unit tests for the OAuth Proxy configuration.
  *
- * These cover the multi-environment social-login wiring that fixes GitHub's
+ * These cover the multi-environment social-login wiring that avoids GitHub's
  * "The redirect_uri is not associated with this application" error when one
  * OAuth app is shared across production and preview deployments:
  *
@@ -29,13 +29,19 @@ type ProxyPluginShape = {
 
 describe("resolveOAuthProxyProductionURL", () => {
   it("falls back to the canonical production origin when unset", () => {
-    expect(resolveOAuthProxyProductionURL(undefined)).toBe(DEFAULT_OAUTH_PROXY_PRODUCTION_URL);
+    expect(resolveOAuthProxyProductionURL(undefined)).toBe(
+      DEFAULT_OAUTH_PROXY_PRODUCTION_URL,
+    );
     expect(DEFAULT_OAUTH_PROXY_PRODUCTION_URL).toBe("https://app.oxagen.sh");
   });
 
   it("falls back when given an empty or whitespace-only value", () => {
-    expect(resolveOAuthProxyProductionURL("")).toBe(DEFAULT_OAUTH_PROXY_PRODUCTION_URL);
-    expect(resolveOAuthProxyProductionURL("   ")).toBe(DEFAULT_OAUTH_PROXY_PRODUCTION_URL);
+    expect(resolveOAuthProxyProductionURL("")).toBe(
+      DEFAULT_OAUTH_PROXY_PRODUCTION_URL,
+    );
+    expect(resolveOAuthProxyProductionURL("   ")).toBe(
+      DEFAULT_OAUTH_PROXY_PRODUCTION_URL,
+    );
   });
 
   it("uses and trims an explicit override", () => {
@@ -50,12 +56,18 @@ describe("resolveOAuthProxyProductionURL", () => {
 
 describe("resolveOAuthProxySecret", () => {
   it("prefers the dedicated proxy secret", () => {
-    expect(resolveOAuthProxySecret("dedicated-secret", "main-secret")).toBe("dedicated-secret");
-    expect(resolveOAuthProxySecret("  dedicated-secret  ", "main-secret")).toBe("dedicated-secret");
+    expect(resolveOAuthProxySecret("dedicated-secret", "main-secret")).toBe(
+      "dedicated-secret",
+    );
+    expect(resolveOAuthProxySecret("  dedicated-secret  ", "main-secret")).toBe(
+      "dedicated-secret",
+    );
   });
 
   it("falls back to BETTER_AUTH_SECRET when the dedicated secret is unset/blank", () => {
-    expect(resolveOAuthProxySecret(undefined, "main-secret")).toBe("main-secret");
+    expect(resolveOAuthProxySecret(undefined, "main-secret")).toBe(
+      "main-secret",
+    );
     expect(resolveOAuthProxySecret("", "main-secret")).toBe("main-secret");
     expect(resolveOAuthProxySecret("   ", "main-secret")).toBe("main-secret");
   });

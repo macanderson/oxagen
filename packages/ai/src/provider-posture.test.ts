@@ -238,7 +238,7 @@ describe("provider posture registry — row hygiene", () => {
     }
   });
 
-  it("keeps image-only vendors as honest n/a rows rather than forcing a text shape", () => {
+  it("keeps image-only vendors as accurate n/a rows rather than forcing a text shape", () => {
     // bfl (FLUX) reaches the platform through selectImageModel(), never the
     // chat path — claiming a cache or reasoning posture for it would be fiction.
     expect(CACHE_POSTURE.bfl.kind).toBe("not-applicable");

@@ -34,14 +34,10 @@ vi.mock("@oxagen/agent/handlers/_agent-role", () => ({
   resolveRoleByName,
 }));
 vi.mock("@oxagen/database", () => ({
-  withTenantDb: vi.fn(
-    (fn: (tx: Record<string, never>) => unknown) => fn({}),
-  ),
+  withTenantDb: vi.fn((fn: (tx: Record<string, never>) => unknown) => fn({})),
 }));
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: vi.fn(
-    (_scope: unknown, fn: () => unknown) => fn(),
-  ),
+  runInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
 }));
 
 import { AGENT_ROLE_SPECS } from "@oxagen/handlers/lib/agent-role-defaults";
@@ -219,7 +215,7 @@ describe("listAgentRoleOptions", () => {
 });
 
 describe("fallbackSystemRoleOptions", () => {
-  it("returns the three system roles from the shared specs, degraded honestly", () => {
+  it("returns the three system roles from the shared specs, correctly degraded", () => {
     const options = fallbackSystemRoleOptions();
     expect(options.map((o) => o.roleName)).toEqual(
       AGENT_ROLE_SPECS.map((s) => s.name),
@@ -236,7 +232,10 @@ describe("assignment reads & writes", () => {
   it("getAssignedAgentRole returns the newest assignment's role name", async () => {
     invoke.mockResolvedValue({
       agentId: "agt_1",
-      roles: [{ roleName: "Agent Operator" }, { roleName: "Agent Contributor" }],
+      roles: [
+        { roleName: "Agent Operator" },
+        { roleName: "Agent Contributor" },
+      ],
       total: 2,
     });
     await expect(getAssignedAgentRole(ctx, "agt_1")).resolves.toBe(
@@ -299,9 +298,7 @@ describe("isCeilingError", () => {
       ),
     ).toBe(true);
     expect(isCeilingError(new Error("x"))).toBe(false);
-    expect(
-      isCeilingError({ code: "agent_role_ceiling_exceeded" }),
-    ).toBe(false); // no capabilities array
+    expect(isCeilingError({ code: "agent_role_ceiling_exceeded" })).toBe(false); // no capabilities array
     expect(isCeilingError(null)).toBe(false);
   });
 });

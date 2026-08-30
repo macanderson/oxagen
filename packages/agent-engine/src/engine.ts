@@ -202,9 +202,9 @@ export async function runCodingAgent(
       })
     : ({} as ToolSet);
   // Merge caller-supplied extra tools (e.g. MCP), then apply the caller's final
-  // wrapper (e.g. the CLI's permission-gate + hooks + per-tool-timeout). This is
-  // what lets a SINGLE loop replace the old duplicate legacy loop: every entry
-  // point injects its safety wiring here instead of maintaining a second engine.
+  // wrapper (e.g. the CLI's permission-gate + hooks + per-tool-timeout). Every
+  // entry point injects its safety wiring here, through this one loop, instead
+  // of maintaining a separate engine.
   if (opts.extraTools) tools = { ...tools, ...opts.extraTools };
   // Partitioned dispatch guard (agent-engine v2 Phase 0): the AI SDK runs a
   // step's tool calls concurrently, unawaited and uncapped — this gate caps
@@ -254,11 +254,11 @@ export async function runCodingAgent(
   // Keep `system` STABLE across turns so Anthropic prompt caching keeps its
   // ephemeral breakpoint (set on the system block in @oxagen/ai's streamAgentReply)
   // warm — a warm prefix re-bills at ~1/10th the input price. Recalled memory
-  // changes every turn, so folding it into `system` (as this used to) busted the
-  // cached prefix on every single turn. Instead it rides as a volatile user
-  // message placed right before the instruction: the model still sees it, but it
-  // sits AFTER the cached system block, and it is a `user` (not `system`) message
-  // so the platform's /v1/agent/llm route does not hoist it back into the cached
+  // changes every turn, so it must not fold into `system` — that would bust the
+  // cached prefix on every turn. Instead it rides as a volatile user message
+  // placed right before the instruction: the model still sees it, but it sits
+  // AFTER the cached system block, and it is a `user` (not `system`) message so
+  // the platform's /v1/agent/llm route does not hoist it back into the cached
   // system string.
   const system = opts.system ?? DEFAULT_SYSTEM;
   // Pasted images (REPL Ctrl-V) and attached videos ride alongside the
@@ -266,8 +266,7 @@ export async function runCodingAgent(
   // videos as AI-SDK `file` parts (only ever passed for a video-capable model;
   // the caller downgrades to keyframe `images` otherwise). Text-only (the
   // common case, and every retry step after the first — see the pipeline)
-  // keeps the plain-string content shape, unchanged from before these options
-  // existed.
+  // keeps the plain-string content shape.
   const attachedImages = opts.images ?? [];
   const attachedVideos = opts.videos ?? [];
   const instructionMessage: ModelMessage =

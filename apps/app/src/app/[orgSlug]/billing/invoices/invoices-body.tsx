@@ -4,14 +4,14 @@ import type { InvoiceRow } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { resolveOrg } from "@/lib/resolve-org";
 
-// Sentinel workspaceId for org-only routes (no workspace context). — OXA-1515
+// Sentinel workspaceId for org-only routes (no workspace context).
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { InvoiceList } from "@/components/billing/invoice-list";
 
 export async function BillingInvoicesBody({ orgSlug }: { orgSlug: string }) {
   const tenant = await resolveOrg(orgSlug);
 
-  // Org-only route — sentinel workspaceId. — OXA-1515
+  // Org-only route — sentinel workspaceId.
   const invoiceRows = await (async () => {
     try {
       return await runInTenantScope(

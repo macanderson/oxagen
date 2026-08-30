@@ -1,26 +1,16 @@
 /**
- * The sidecar transport (oxagen #1072): drives one turn against a running
- * `stella-serve` process over its headless HTTP+SSE surface, acting as the
- * host — which means oxagen supplies the model completion and every tool
- * result, and the Rust engine supplies the orchestration.
+ * Drives one turn against a running `stella-serve` process over its headless
+ * HTTP+SSE surface, acting as the host — oxagen supplies the model completion
+ * and every tool result, and the Rust engine supplies the orchestration.
  *
- * This is intentionally the smallest possible client: it exists so the smoke
- * test can prove the wire contract, not to be oxagen's production sidecar
- * integration (that lives in the platform's agent-runner once ADR-033 Track 2
- * lands — see docs/adr/ADR-033-stella-engine-core.md and
- * docs/specs/agent-engine-v2/). Keep it dependency-free (fetch only) so it
- * stays easy to keep in lockstep with stella's serve surface.
+ * This is the smallest possible client: it exists so the smoke test can prove
+ * the wire contract, not to be oxagen's production sidecar integration (that
+ * lives in the platform's agent-runner once ADR-033 Track 2 lands — see
+ * docs/adr/ADR-033-stella-engine-core.md and docs/specs/agent-engine-v2/).
+ * Keep it dependency-free (fetch only) so it stays easy to keep in lockstep
+ * with stella's serve surface.
  *
- * ## Why this file was rewritten (oxagen #1132)
- *
- * The previous revision spoke a session-oriented surface — `POST /sessions`,
- * `POST /sessions/{id}/turns`, `DELETE /sessions/{id}` — that `stella-serve`
- * has never served: every one of those routes is a 404. More importantly it
- * had no way to answer a reverse-RPC request, so even against the correct
- * routes it could not have driven a single turn to completion: the engine
- * would have parked on its first model call and aborted at the deadline.
- *
- * The corrected surface, verified against a locally built stella-serve 0.6.2:
+ * The routes:
  *
  * | Method | Path                                             |
  * |--------|--------------------------------------------------|
@@ -319,11 +309,10 @@ export class StellaSidecarClient {
  * Parses an SSE byte stream of `data: <json>\n\n` frames into {@link ServerFrame}s.
  *
  * Splits on the SSE record separator (a blank line) rather than on every
- * newline, and concatenates multi-line `data:` fields per the SSE spec — the
- * previous revision parsed each `data:` line as standalone JSON, which would
- * throw a bare `SyntaxError` on any payload the server chose to wrap. stella
- * emits single-line frames today, so this is robustness against a future
- * change rather than a live bug.
+ * newline, and concatenates multi-line `data:` fields per the SSE spec, so a
+ * payload the server wraps across lines still parses as one JSON value.
+ * stella emits single-line frames today, but the SSE spec allows wrapping, so
+ * this guards against a future change rather than a live bug.
  *
  * The stream carries no `event:`, `id:` or `retry:` fields and no heartbeat
  * comments; discrimination is entirely by the JSON `type` key.

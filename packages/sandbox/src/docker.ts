@@ -4,7 +4,7 @@
 // (for isSandboxAvailable / getSandbox), and a static value import of dockerode
 // drags the native modules into esbuild/rspack and breaks the bundle. The
 // runtime ctor is loaded lazily inside createDockerSandbox() instead, and the
-// serverless builds mark `dockerode` external. (OXA-1515 merge: sandbox in bundle)
+// serverless builds mark `dockerode` external.
 import type Dockerode from "dockerode";
 import { createRequire } from "node:module";
 import { PassThrough } from "node:stream";
@@ -42,10 +42,9 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024; // 8 MB
 const MAX_QUEUE_ITEMS = 1000;
 
 // Docker's built-in hardened seccomp policy (ships with every Docker Engine
-// ≥ 1.10 and Docker Desktop).  "seccomp=builtin" is the canonical reference
-// added in Docker 25+ / Moby 25+ for the profile that was previously known
-// as the "default" profile.  Using the explicit name rather than relying on
-// the daemon's implicit default means:
+// ≥ 1.10 and Docker Desktop). "seccomp=builtin" is the explicit name for
+// what some docs call the "default" profile. Using the explicit name rather
+// than relying on the daemon's implicit default means:
 //   1. The policy is applied even if a future daemon changes its default.
 //   2. The intent is visible in code review without consulting daemon config.
 //   3. It composes correctly with no-new-privileges (both stay in the array).
@@ -66,7 +65,10 @@ function envArray(env: Record<string, string> | undefined): string[] {
 // than handed straight to the daemon.
 const MAX_VCPU = 4;
 
-export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.HostConfig {
+export function hostConfigFor(
+  req: SandboxRequest,
+  spec: ImageSpec,
+): Dockerode.HostConfig {
   // Never allow a non-positive memory limit through to Docker (0 == unlimited).
   const memoryBytes = Math.max(req.memoryMb, MIN_MEMORY_MB) * 1024 * 1024;
   // A template's vcpu maps to NanoCpus (1 vCPU = 1e9); default is the 0.5-CPU
@@ -76,7 +78,8 @@ export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.H
     req.vcpu && req.vcpu > 0
       ? Math.min(req.vcpu, MAX_VCPU) * 1_000_000_000
       : NANOCPUS;
-  const workBytes = req.diskMb && req.diskMb > 0 ? req.diskMb * 1024 * 1024 : spec.tmpfsBytes;
+  const workBytes =
+    req.diskMb && req.diskMb > 0 ? req.diskMb * 1024 * 1024 : spec.tmpfsBytes;
   return {
     AutoRemove: true,
     Memory: memoryBytes,
@@ -128,7 +131,9 @@ function packWorkspaceTar(
   return new Promise((resolve, reject) => {
     const pack = tar.pack();
     const codeName = spec.codePath.replace(/^\/work\//, "");
-    const extra = Object.entries(files ?? {}).filter(([name]) => name !== codeName);
+    const extra = Object.entries(files ?? {}).filter(
+      ([name]) => name !== codeName,
+    );
 
     // Sequence the async pack.entry() calls (the callback API does not queue).
     const dirEntries = parentDirsFor(extra.map(([name]) => name)).map(
@@ -136,10 +141,15 @@ function packWorkspaceTar(
     );
     const fileEntries = [
       { kind: "file" as const, name: codeName, content: code },
-      ...extra.map(([name, content]) => ({ kind: "file" as const, name, content })),
+      ...extra.map(([name, content]) => ({
+        kind: "file" as const,
+        name,
+        content,
+      })),
     ];
     const queue: Array<
-      { kind: "dir"; name: string } | { kind: "file"; name: string; content: string }
+      | { kind: "dir"; name: string }
+      | { kind: "file"; name: string; content: string }
     > = [...dirEntries, ...fileEntries];
 
     let i = 0;
@@ -150,8 +160,10 @@ function packWorkspaceTar(
       }
       const item = queue[i++]!;
       if (item.kind === "dir") {
-        pack.entry({ name: item.name, type: "directory", mode: 0o755 }, "", (err) =>
-          err ? reject(err) : next(),
+        pack.entry(
+          { name: item.name, type: "directory", mode: 0o755 },
+          "",
+          (err) => (err ? reject(err) : next()),
         );
       } else {
         pack.entry({ name: item.name, mode: 0o755 }, item.content, (err) =>
@@ -193,7 +205,8 @@ async function ensureImage(docker: Dockerode, image: string): Promise<void> {
   if (imgs.length > 0) return;
   await new Promise<void>((resolve, reject) => {
     docker.pull(image, {}, (err, stream) => {
-      if (err || !stream) return reject(err ?? new Error("pull returned no stream"));
+      if (err || !stream)
+        return reject(err ?? new Error("pull returned no stream"));
       docker.modem.followProgress(stream, (e) => (e ? reject(e) : resolve()));
     });
   });
@@ -237,14 +250,18 @@ async function createAndLoad(
   return { container, spec };
 }
 
-export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDriver {
+export function createDockerSandbox(
+  dockerFactory?: () => Dockerode,
+): SandboxDriver {
   // Lazy runtime load of the dockerode value (see the type-only import note at
   // the top of the file). This require only executes when the docker driver is
   // actually selected — never in serverless prod, where SANDBOX_DRIVER is
   // vercel/modal — so the externalized `dockerode` is never resolved there.
   const require = createRequire(import.meta.url);
   const DockerodeCtor = require("dockerode") as typeof import("dockerode");
-  const docker: Dockerode = dockerFactory ? dockerFactory() : new DockerodeCtor();
+  const docker: Dockerode = dockerFactory
+    ? dockerFactory()
+    : new DockerodeCtor();
 
   async function run(req: SandboxRequest): Promise<SandboxResult> {
     const start = Date.now();
@@ -281,7 +298,8 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
     const streamEnded = new Promise<void>((resolve) => {
       // @types/dockerode types attach() as NodeJS.ReadWriteStream, which omits
       // the readableEnded flag present on the concrete Readable at runtime.
-      if ((stream as unknown as { readableEnded?: boolean }).readableEnded) resolve();
+      if ((stream as unknown as { readableEnded?: boolean }).readableEnded)
+        resolve();
       else stream.once("end", () => resolve());
     });
 
@@ -315,7 +333,12 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
 
     let exitCode = 0;
     let oomKilled = false;
-    if (!timedOut && typeof outcome === "object" && outcome !== null && "StatusCode" in outcome) {
+    if (
+      !timedOut &&
+      typeof outcome === "object" &&
+      outcome !== null &&
+      "StatusCode" in outcome
+    ) {
       exitCode = Number((outcome as { StatusCode: number }).StatusCode);
     } else if (timedOut) {
       exitCode = 137;
@@ -331,7 +354,9 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
     const { stdout, stderr } = demux(merged);
     const result: SandboxResult = {
       exitCode,
-      stdout: outputTruncated ? stdout + "\n[output truncated: exceeded 8 MB limit]" : stdout,
+      stdout: outputTruncated
+        ? stdout + "\n[output truncated: exceeded 8 MB limit]"
+        : stdout,
       stderr,
       durationMs: Date.now() - start,
       timedOut,
@@ -340,7 +365,9 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
     return result;
   }
 
-  async function* stream(req: SandboxRequest): AsyncIterable<SandboxStreamChunk> {
+  async function* stream(
+    req: SandboxRequest,
+  ): AsyncIterable<SandboxStreamChunk> {
     const { container } = await createAndLoad(docker, req);
     const attached = await container.attach({
       stream: true,
@@ -374,7 +401,11 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
         container.kill({ signal: "SIGKILL" }).catch(() => undefined);
         return;
       }
-      queue.push({ channel: "stdout", data: c.toString("utf8"), at: Date.now() });
+      queue.push({
+        channel: "stdout",
+        data: c.toString("utf8"),
+        at: Date.now(),
+      });
       notify();
     });
     stderrPipe.on("data", (c: Buffer) => {
@@ -382,7 +413,11 @@ export function createDockerSandbox(dockerFactory?: () => Dockerode): SandboxDri
         container.kill({ signal: "SIGKILL" }).catch(() => undefined);
         return;
       }
-      queue.push({ channel: "stderr", data: c.toString("utf8"), at: Date.now() });
+      queue.push({
+        channel: "stderr",
+        data: c.toString("utf8"),
+        at: Date.now(),
+      });
       notify();
     });
 

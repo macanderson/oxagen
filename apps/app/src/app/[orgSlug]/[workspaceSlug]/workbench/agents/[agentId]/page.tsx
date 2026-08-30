@@ -13,7 +13,10 @@ import {
   type AgentRoleOption,
 } from "@/lib/workbench/agent-roles";
 import { AgentBuilder } from "../agent-builder";
-import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
+import {
+  installPlugin,
+  installBulkPlugin,
+} from "@/lib/agent-tools/install-actions";
 import { AgentEnvironmentsCard } from "./agent-environments-card";
 import {
   readAgentBindingsAction,
@@ -61,7 +64,7 @@ export default async function EditAgentPage({ params }: PageProps) {
   const readOnly = agent.managed || !canManage;
 
   // Role picker data (Agent RBAC Phase 5a). Fail-soft, same posture as the
-  // create page: system-role fallback + honest error when the load fails.
+  // create page: system-role fallback + a visible error when the load fails.
   let roleOptions: AgentRoleOption[];
   let customRolesAvailable = false;
   let rolesError: string | null = null;
@@ -123,7 +126,11 @@ export default async function EditAgentPage({ params }: PageProps) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={agent.name}
-        description={readOnly ? "Read-only agent view." : "Edit this agent's identity, instructions, and equipment."}
+        description={
+          readOnly
+            ? "Read-only agent view."
+            : "Edit this agent's identity, instructions, and equipment."
+        }
         className="pb-0"
         breadcrumb={
           <Breadcrumb
@@ -138,36 +145,36 @@ export default async function EditAgentPage({ params }: PageProps) {
         }
       />
       <AgentBuilder
-      mode="edit"
-      orgSlug={orgSlug}
-      workspaceSlug={workspaceSlug}
-      canManage={canManage}
-      readOnly={readOnly}
-      initialAgent={{
-        publicId: agent.publicId,
-        slug: agent.slug,
-        agentKey: agent.agentKey,
-        name: agent.name,
-        description: agent.description,
-        avatarUrl: agent.avatarUrl,
-        agentType: agent.agentType,
-        status: agent.status,
-        deploymentStatus: agent.deploymentStatus,
-        version: agent.version,
-        isPublished: agent.isPublished,
-        config: agent.config,
-      }}
-      sources={{
-        ...sources,
-        // A subagent may not load itself; exclude the current agent from the pool.
-        subagents: sources.subagents.filter((a) => a.ref !== agent.publicId),
-      }}
-      installAction={installPlugin}
-      installBulkAction={installBulkPlugin}
-      roleOptions={roleOptions}
-      customRolesAvailable={customRolesAvailable}
-      rolesError={rolesError}
-      initialRoleName={initialRoleName}
+        mode="edit"
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
+        canManage={canManage}
+        readOnly={readOnly}
+        initialAgent={{
+          publicId: agent.publicId,
+          slug: agent.slug,
+          agentKey: agent.agentKey,
+          name: agent.name,
+          description: agent.description,
+          avatarUrl: agent.avatarUrl,
+          agentType: agent.agentType,
+          status: agent.status,
+          deploymentStatus: agent.deploymentStatus,
+          version: agent.version,
+          isPublished: agent.isPublished,
+          config: agent.config,
+        }}
+        sources={{
+          ...sources,
+          // A subagent may not load itself; exclude the current agent from the pool.
+          subagents: sources.subagents.filter((a) => a.ref !== agent.publicId),
+        }}
+        installAction={installPlugin}
+        installBulkAction={installBulkPlugin}
+        roleOptions={roleOptions}
+        customRolesAvailable={customRolesAvailable}
+        rolesError={rolesError}
+        initialRoleName={initialRoleName}
       />
       <AgentEnvironmentsCard
         scope={scope}

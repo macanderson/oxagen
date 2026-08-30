@@ -95,7 +95,7 @@ describe("splitStatements", () => {
 });
 
 // ---------------------------------------------------------------------------
-// skill_loads (OXA-1750) — assert the table is created by the migrate inputs.
+// skill_loads — assert the table is created by the migrate inputs.
 //
 // migrate() runs schema.sql then every migrations/*.sql on each run. We assert
 // the skill_loads CREATE is present in BOTH the canonical schema.sql (desired

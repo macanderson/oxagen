@@ -1,4 +1,4 @@
-// Signed audit-log export (OXA-1558).
+// Signed audit-log export.
 //
 // GET /{orgSlug}/security/audit/export?format=ndjson|csv&<same filters as the viewer>
 //

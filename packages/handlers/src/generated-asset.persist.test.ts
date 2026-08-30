@@ -35,13 +35,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
   return {
     ...real,
-  db: () => tx,
-  // withSystemDb passthrough: the handler uses withSystemDb for both
-  // persistGeneratedAsset and createPendingGeneratedAsset inserts (OXA-1515).
-  // Forward fn to a fake tx that exposes the insert + select mocks.
-  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
-    fn(tx as unknown as Record<string, unknown>),
-
+    db: () => tx,
+    // withSystemDb passthrough: the handler uses withSystemDb for both
+    // persistGeneratedAsset and createPendingGeneratedAsset inserts.
+    // Forward fn to a fake tx that exposes the insert + select mocks.
+    withSystemDb: async (
+      fn: (tx: Record<string, unknown>) => Promise<unknown>,
+    ) => fn(tx as unknown as Record<string, unknown>),
   };
 });
 
@@ -67,7 +67,9 @@ beforeEach(() => {
     bytes: 2048,
     access: "private",
   });
-  mocks.returning.mockResolvedValue([{ id: "asset-uuid", publicId: "gen_ABC" }]);
+  mocks.returning.mockResolvedValue([
+    { id: "asset-uuid", publicId: "gen_ABC" },
+  ]);
   mocks.values.mockReturnValue({ returning: mocks.returning });
   mocks.insert.mockReturnValue({ values: mocks.values });
   // Default: no message row → resolveConversationId returns null.
@@ -111,7 +113,9 @@ describe("persistGeneratedAsset", () => {
     // sizeBytes is persisted as a bigint from the storage byte count.
     expect(row.sizeBytes).toBe(BigInt(2048));
     // storageUrl is the private blob URL (not a public CDN URL).
-    expect(row.storageUrl).toBe("https://private.blob.vercel-storage.com/x.png?token=x");
+    expect(row.storageUrl).toBe(
+      "https://private.blob.vercel-storage.com/x.png?token=x",
+    );
   });
 
   it("opts an asset up to the `org` policy when requested (the chat path)", async () => {
@@ -217,7 +221,9 @@ describe("displayName → metadata", () => {
       displayName: "USS Nautilus Polar Crossing",
     });
     const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.metadata).toEqual({ displayName: "USS Nautilus Polar Crossing" });
+    expect(row.metadata).toEqual({
+      displayName: "USS Nautilus Polar Crossing",
+    });
   });
 
   it("leaves metadata undefined when no displayName is supplied", async () => {
@@ -244,7 +250,9 @@ describe("displayName → metadata", () => {
   });
 
   it("stores displayName for a pending (video) asset too", async () => {
-    const { createPendingGeneratedAsset } = await import("./generated-asset.persist");
+    const { createPendingGeneratedAsset } = await import(
+      "./generated-asset.persist"
+    );
     await createPendingGeneratedAsset({
       ...BASE,
       kind: "video",
@@ -276,7 +284,9 @@ describe("conversation linkage (resolveConversationId)", () => {
   it("resolves conversationId from the message when only messageId is given", async () => {
     // The agent-tool generators (image.create/video.generate/documents) carry
     // only messageId — the panel filter is on conversation_id, so we backfill it.
-    mocks.msgSelect.mockResolvedValueOnce([{ conversationId: "conv-from-msg" }]);
+    mocks.msgSelect.mockResolvedValueOnce([
+      { conversationId: "conv-from-msg" },
+    ]);
     await persistGeneratedAsset({
       ...BASE,
       kind: "image",
@@ -350,7 +360,9 @@ describe("conversation linkage (resolveConversationId)", () => {
 
   it("resolves conversationId from messageId for a pending (video) asset too", async () => {
     mocks.msgSelect.mockResolvedValueOnce([{ conversationId: "conv-video" }]);
-    const { createPendingGeneratedAsset } = await import("./generated-asset.persist");
+    const { createPendingGeneratedAsset } = await import(
+      "./generated-asset.persist"
+    );
     await createPendingGeneratedAsset({
       ...BASE,
       kind: "video",
@@ -366,7 +378,9 @@ describe("conversation linkage (resolveConversationId)", () => {
 
 describe("createPendingGeneratedAsset", () => {
   it("inserts a pending row with no blob yet and returns the serving URL", async () => {
-    const { createPendingGeneratedAsset } = await import("./generated-asset.persist");
+    const { createPendingGeneratedAsset } = await import(
+      "./generated-asset.persist"
+    );
     const out = await createPendingGeneratedAsset({
       ...BASE,
       kind: "video",

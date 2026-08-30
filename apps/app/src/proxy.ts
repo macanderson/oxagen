@@ -216,7 +216,7 @@ export function proxy(request: NextRequest): NextResponse {
 
   // 3. Surface the request URL on a request header so RSCs and layouts can
   //    read pathname + search reliably. Next.js does NOT expose either to RSC
-  //    natively — the slug-history resolver (OXA-1779) needs them to build a
+  //    natively — the slug-history resolver needs them to build a
   //    redirect URL that preserves the rest of the path and the query.
   const downstreamHeaders = new Headers(request.headers);
   downstreamHeaders.set(

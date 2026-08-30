@@ -1,7 +1,10 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
-import type { AgentMcpListInput, AgentMcpListOutput } from "@oxagen/oxagen/contracts/agent.mcp.list";
+import type {
+  AgentMcpListInput,
+  AgentMcpListOutput,
+} from "@oxagen/oxagen/contracts/agent.mcp.list";
 
 export type { AgentMcpListInput, AgentMcpListOutput };
 
@@ -25,7 +28,7 @@ export async function agentMcpListHandler(
         and(
           eq(schema.mcpServers.orgId, ctx.orgId),
           eq(schema.mcpServers.workspaceId, ctx.workspaceId),
-          // Hide soft-deleted servers (OXA-820) from the live list.
+          // Hide soft-deleted servers from the live list.
           isNull(schema.mcpServers.deletedAt),
         ),
       ),
@@ -37,8 +40,12 @@ export async function agentMcpListHandler(
       transportType: r.transportType as "streamable-http" | "stdio",
       endpointUrl: r.endpointUrl,
       healthStatus: r.healthStatus as "healthy" | "degraded" | "unreachable",
-      lastHealthcheckAt: r.lastHealthcheckAt ? r.lastHealthcheckAt.toISOString() : null,
-      toolCount: Array.isArray(r.discoveredTools) ? (r.discoveredTools as unknown[]).length : 0,
+      lastHealthcheckAt: r.lastHealthcheckAt
+        ? r.lastHealthcheckAt.toISOString()
+        : null,
+      toolCount: Array.isArray(r.discoveredTools)
+        ? (r.discoveredTools as unknown[]).length
+        : 0,
     })),
   };
 }

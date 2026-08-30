@@ -4,7 +4,7 @@
  * Mock seam: @oxagen/oxagen → invoke, plus each contract module (passthrough
  * parse). Verifies each helper dispatches the right capability name with the
  * right input shape, threads ctx, and — critically — omits opts.surface (so the
- * kernel surface gate is skipped and ctx.surface="app" is the honest surface).
+ * kernel surface gate is skipped and ctx.surface="app" is the surface used).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -13,37 +13,34 @@ vi.mock("@oxagen/oxagen", () => ({ invoke: vi.fn() }));
 
 // vi.hoisted so the hoisted vi.mock factories below can reference it without a
 // temporal-dead-zone error (vi.mock calls are lifted above plain const decls).
-const passthrough = vi.hoisted(
-  () =>
-    (name: string) => ({
-      [name]: {
-        name,
-        input: { parse: (v: unknown) => v },
-        output: { parse: (v: unknown) => v },
-      },
-    }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.list", () =>
-  ({ automationList: passthrough("list_automations").list_automations }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.get", () =>
-  ({ automationGet: passthrough("get_automation").get_automation }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.create", () =>
-  ({ automationCreate: passthrough("create_automation").create_automation }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.enable", () =>
-  ({ automationEnable: passthrough("enable_automation").enable_automation }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.disable", () =>
-  ({ automationDisable: passthrough("disable_automation").disable_automation }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.trigger", () =>
-  ({ automationTrigger: passthrough("trigger_automation").trigger_automation }),
-);
-vi.mock("@oxagen/oxagen/contracts/automation.update", () =>
-  ({ automationUpdate: passthrough("update_automation").update_automation }),
-);
+const passthrough = vi.hoisted(() => (name: string) => ({
+  [name]: {
+    name,
+    input: { parse: (v: unknown) => v },
+    output: { parse: (v: unknown) => v },
+  },
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.list", () => ({
+  automationList: passthrough("list_automations").list_automations,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.get", () => ({
+  automationGet: passthrough("get_automation").get_automation,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.create", () => ({
+  automationCreate: passthrough("create_automation").create_automation,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.enable", () => ({
+  automationEnable: passthrough("enable_automation").enable_automation,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.disable", () => ({
+  automationDisable: passthrough("disable_automation").disable_automation,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.trigger", () => ({
+  automationTrigger: passthrough("trigger_automation").trigger_automation,
+}));
+vi.mock("@oxagen/oxagen/contracts/automation.update", () => ({
+  automationUpdate: passthrough("update_automation").update_automation,
+}));
 
 import { invoke } from "@oxagen/oxagen";
 import {
@@ -77,13 +74,21 @@ describe("automation.* helpers", () => {
   it("listAutomations dispatches list_automations scoped to the workspace, no opts", async () => {
     mockInvoke.mockResolvedValue([]);
     await listAutomations(CTX);
-    expect(mockInvoke).toHaveBeenCalledWith("list_automations", { workspace_id: "ws-1" }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "list_automations",
+      { workspace_id: "ws-1" },
+      CTX,
+    );
   });
 
   it("getAutomation dispatches get_automation with the id, no opts", async () => {
     mockInvoke.mockResolvedValue({});
     await getAutomation(CTX, "plt_9");
-    expect(mockInvoke).toHaveBeenCalledWith("get_automation", { automation_id: "plt_9" }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "get_automation",
+      { automation_id: "plt_9" },
+      CTX,
+    );
   });
 
   it("createAutomation dispatches create_automation with the given input", async () => {
@@ -102,13 +107,21 @@ describe("automation.* helpers", () => {
   it("enableAutomation dispatches enable_automation with the id, no opts", async () => {
     mockInvoke.mockResolvedValue({});
     await enableAutomation(CTX, "plt_1");
-    expect(mockInvoke).toHaveBeenCalledWith("enable_automation", { automation_id: "plt_1" }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "enable_automation",
+      { automation_id: "plt_1" },
+      CTX,
+    );
   });
 
   it("disableAutomation dispatches disable_automation with the id", async () => {
     mockInvoke.mockResolvedValue({});
     await disableAutomation(CTX, "plt_2");
-    expect(mockInvoke).toHaveBeenCalledWith("disable_automation", { automation_id: "plt_2" }, CTX);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "disable_automation",
+      { automation_id: "plt_2" },
+      CTX,
+    );
   });
 
   it("triggerAutomation forwards the optional payload", async () => {

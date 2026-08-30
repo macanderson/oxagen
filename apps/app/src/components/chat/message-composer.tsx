@@ -358,21 +358,23 @@ function CondensedComposerRow({
 }) {
   return (
     <div className="flex items-center gap-1" data-testid={testId}>
-      {canAttach ? (
-        attachTrigger ?? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Add attachment"
-            disabled={pending || disabled || attachmentCount >= MAX_ATTACHMENTS}
-            onClick={onAttachClick}
-            className="h-11 w-11 shrink-0 p-0"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        )
-      ) : null}
+      {canAttach
+        ? (attachTrigger ?? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Add attachment"
+              disabled={
+                pending || disabled || attachmentCount >= MAX_ATTACHMENTS
+              }
+              onClick={onAttachClick}
+              className="h-11 w-11 shrink-0 p-0"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          ))
+        : null}
       {/* No `required`: the spec bans the native browser validation tooltip —
         an empty message simply leaves send disabled. */}
       <Textarea
@@ -400,7 +402,10 @@ function CondensedComposerRow({
             <span
               aria-hidden="true"
               data-testid="composer-cog-dot"
-              className={cn("absolute right-2 top-2 size-1.5 rounded-full", cogDotClass)}
+              className={cn(
+                "absolute right-2 top-2 size-1.5 rounded-full",
+                cogDotClass,
+              )}
             />
           ) : null}
         </Button>
@@ -489,7 +494,7 @@ export function MessageComposer({
   /** Toggle the workspace default agent from the picker's star. Omitted ⇒ star hidden. */
   onSetDefaultAgent?: (agentId: string | null) => void;
   /**
-   * Workspace-level per-turn budget governance (OXA-2081), resolved
+   * Workspace-level per-turn budget governance, resolved
    * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
    * governance — the composer behaves exactly as before this feature.
    */
@@ -531,7 +536,7 @@ export function MessageComposer({
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  // Seed once at mount, applying any workspace budget governance (OXA-2081)
+  // Seed once at mount, applying any workspace budget governance
   // on top of the server-resolved default — a "default" governance pre-fills
   // an unset control, a "ceiling" clamps it. Governance is resolved
   // server-side and doesn't change over the composer's lifetime. When the
@@ -663,14 +668,13 @@ export function MessageComposer({
   }, []);
 
   // ── chat_ux_v2 condensed row (mobile + desktop) ───────────────────────────
-  // A single condensed row (plus/textarea/cog?/send) replaces the entire
-  // legacy toolbar ONLY when the unified session store is mounted — on a
+  // A single condensed row (plus/textarea/cog?/send) replaces the full
+  // toolbar only when the unified session store is mounted — on a
   // phone-width viewport (v2Mobile, cog always shown — there's no rail there)
   // or any non-mobile viewport (v2Desktop, cog shown only at mid-width via
   // `showComposerCog`, wired by chat-shell-client.tsx's breakpoint check).
-  // Every other surface (legacy toolbar, or mobile/desktop without the v2
-  // session provider) renders byte-identical to before. The hook runs
-  // unconditionally per rules-of-hooks; only the booleans below branch on it.
+  // The hook runs unconditionally per rules-of-hooks; only the booleans
+  // below branch on it.
   const chatSession = useChatSessionContext();
   const v2Active = chatSession !== null;
   const v2Mobile = isMobile && v2Active;
@@ -795,11 +799,10 @@ export function MessageComposer({
   // (its system prompt documents the commands — see @oxagen/ai slash-commands).
   const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
   const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
-  // `clientAction` commands (today: `/pin`) are filtered OUT of the app's menu.
-  // Pinning a repo/environment per turn no longer exists here — the chat context
-  // is chosen once at agent-pick time and is immutable for the conversation — so
-  // offering `/pin` would be a control that cannot do anything. The command stays
-  // in @oxagen/ai for the CLI, which still has its own pin semantics.
+  // `clientAction` commands (`/pin`) are filtered out of the app's menu. The
+  // chat context is chosen once at agent-pick time and is immutable for the
+  // conversation, so offering `/pin` would be a control that cannot do
+  // anything. The CLI keeps its own pin semantics for `/pin`.
   const slashCommands = React.useMemo(
     () =>
       slashQuery === null
@@ -954,26 +957,23 @@ export function MessageComposer({
   // Apply a chosen slash command. Client-action commands (e.g. /pin) run
   // locally and clear the input; the rest insert "/<name> " so the user can
   // type args, then submit — the agent interprets the literal command.
-  const applySlashCommand = React.useCallback(
-    (command: SlashCommand) => {
-      setSlashQuery(null);
-      const ta = formRef.current?.elements.namedItem(
-        "content",
-      ) as HTMLTextAreaElement | null;
-      // No `clientAction` branch: those commands are filtered out of this
-      // menu (see `slashCommands` above) — the app has no per-turn pinning.
-      if (ta) {
-        ta.value = `/${command.name} `;
-        ta.focus();
-        ta.setSelectionRange(ta.value.length, ta.value.length);
-        if (!inputHasContentRef.current) {
-          inputHasContentRef.current = true;
-          onInputHasContentChangeRef.current?.(true);
-        }
+  const applySlashCommand = React.useCallback((command: SlashCommand) => {
+    setSlashQuery(null);
+    const ta = formRef.current?.elements.namedItem(
+      "content",
+    ) as HTMLTextAreaElement | null;
+    // No `clientAction` branch: those commands are filtered out of this
+    // menu (see `slashCommands` above) — the app has no per-turn pinning.
+    if (ta) {
+      ta.value = `/${command.name} `;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      if (!inputHasContentRef.current) {
+        inputHasContentRef.current = true;
+        onInputHasContentChangeRef.current?.(true);
       }
-    },
-    [],
-  );
+    }
+  }, []);
 
   // Stage 1 → 2: the user picked a reference type. Reset the typed filter back
   // to a bare "@" in the textarea and scope the live search to the type.
@@ -1189,7 +1189,7 @@ export function MessageComposer({
    * attachments linked to the video's local id, uploading each as kind=image.
    * Best-effort: extractVideoFrames never throws (returns [] on an unsupported
    * codec), in which case the turn relies on a video-capable model or the
-   * server returns an honest 422. Runs after the video is queued so the video
+   * server returns a 422. Runs after the video is queued so the video
    * chip appears immediately.
    */
   const attachVideoKeyframes = React.useCallback(
@@ -1422,7 +1422,7 @@ export function MessageComposer({
           ? `Message ${selectedAgent.name}…`
           : "Send a message…";
 
-  // Image/video generation is no longer a manual composer mode — the server
+  // Image/video generation is not a manual composer mode — the server
   // infers it from the prompt (infer-media-intent.ts). `model.generate` stays a
   // latent field of ComposerModelState (still honored for explicit API callers
   // and the model picker's media catalog), so `generate === null` below is a
@@ -1474,7 +1474,12 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnv, selectedBranch);
+    const code = codePayload(
+      codeMode,
+      selectedRepo,
+      selectedEnv,
+      selectedBranch,
+    );
     if (code) fd.set("code", JSON.stringify(code));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
     // Pinned chat context — only when pinned and NOT in code mode (code mode
@@ -1903,7 +1908,7 @@ export function MessageComposer({
   );
 
   // Shared send-button aria-label — used by both the v2 condensed row
-  // (mobile and desktop) and the legacy toolbar's Send button below, so all
+  // (mobile and desktop) and the full toolbar's Send button below, so all
   // three can never drift.
   const sendAriaLabel =
     isStreaming && pendingPromptBehavior === "interrupt"
@@ -2108,7 +2113,11 @@ export function MessageComposer({
           status chip remains: it is read-only output, not a control. */}
         {/* The chip's CI fetch is org/workspace-scoped, so it only renders when
           both slugs are known (the embedded panel omits them). */}
-        {!v2Condensed && !collapsed && codeSessionPr && orgSlug && workspaceSlug ? (
+        {!v2Condensed &&
+        !collapsed &&
+        codeSessionPr &&
+        orgSlug &&
+        workspaceSlug ? (
           <div className="flex items-center justify-end px-1 pb-1">
             <ComposerPrStatusChip
               pr={codeSessionPr}
@@ -2154,7 +2163,9 @@ export function MessageComposer({
               />
             ) : null}
             <CondensedComposerRow
-              testId={v2Mobile ? "composer-v2-mobile-row" : "composer-v2-desktop-row"}
+              testId={
+                v2Mobile ? "composer-v2-mobile-row" : "composer-v2-desktop-row"
+              }
               canAttach={canAttach}
               pending={pending}
               disabled={disabled}
@@ -2299,7 +2310,7 @@ export function MessageComposer({
                       )}
 
                       {/* Per-turn dollar budget — off by default. Every change is
-                    re-clamped against workspace governance (OXA-2081) so a
+                    re-clamped against workspace governance so a
                     "ceiling" can never be exceeded, even transiently, by a
                     member's own edit. */}
                       {budgetControl}

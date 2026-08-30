@@ -8,7 +8,11 @@ import {
   type AgentSubagentAggregateOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 import { FanoutNotFoundError } from "./subagent-errors";
-import { capPayload, fallbackRunSummary, payloadByteSize } from "./subagent-payload";
+import {
+  capPayload,
+  fallbackRunSummary,
+  payloadByteSize,
+} from "./subagent-payload";
 
 export type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput };
 
@@ -80,7 +84,10 @@ function mergeOutputs(runs: RunRow[]): {
 
 // fanoutUuid is the fan-out's internal uuid (subagent_fanouts.id), which is
 // what subagent_runs.fanout_id stores — NOT the external public_id.
-async function loadRuns(fanoutUuid: string, ctx: CapabilityContext): Promise<RunRow[]> {
+async function loadRuns(
+  fanoutUuid: string,
+  ctx: CapabilityContext,
+): Promise<RunRow[]> {
   return withTenantDb((tx) =>
     tx
       .select({
@@ -107,7 +114,10 @@ async function loadRuns(fanoutUuid: string, ctx: CapabilityContext): Promise<Run
 
 // The fanoutId argument here is the external public_id (the dispatchId callers
 // receive from agent.subagent.dispatch); we look the fan-out up by public_id.
-async function loadFanout(fanoutId: string, ctx: CapabilityContext): Promise<FanoutRow | null> {
+async function loadFanout(
+  fanoutId: string,
+  ctx: CapabilityContext,
+): Promise<FanoutRow | null> {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
@@ -137,13 +147,12 @@ const IN_PROGRESS_STATUSES = new Set(["pending", "running"]);
 type AggStatus = AgentSubagentAggregateOutput["status"];
 
 /**
- * Derive the honest aggregate status from the current snapshot — never a poll.
+ * Derive the aggregate status from the current snapshot — never a poll.
  *
- * OXA: the old handler busy-waited a 2s poll for up to 30 min, which exhausts
- * the serverless function timeout, and collapsed every failure into "failed"
- * while reporting still-running fanouts as terminal. This is a non-blocking
- * snapshot: callers (or the agent.aggregate-fanout Inngest function via
- * step.waitForEvent) decide when to read; we report exactly what is true now.
+ * A busy-wait poll here would exhaust the serverless function timeout on a
+ * long-running fanout. This is a non-blocking snapshot: callers (or the
+ * agent.aggregate-fanout Inngest function via step.waitForEvent) decide when
+ * to read; we report exactly what is true now.
  *
  *   - pending/running, within the snapshot window → "running"
  *   - pending/running, older than timeoutMs        → "timed_out"
@@ -176,7 +185,8 @@ function deriveAggregateStatus(
     return ageMs >= timeoutMs ? "timed_out" : "running";
   }
   if (fanout.status === "timed_out") return "timed_out";
-  if (completedCount >= fanout.totalChildren && failedCount === 0) return "completed";
+  if (completedCount >= fanout.totalChildren && failedCount === 0)
+    return "completed";
   if (completedCount === 0 && failedCount > 0) return "failed";
   return "partial";
 }
@@ -225,10 +235,10 @@ export async function agentSubagentAggregateHandler(
   // input+output into the parent LLM's context on every aggregate call
   // (docs/specs/graph-mediated-fanout).
   //
-  // Legacy mode (includeOutputs, deprecated): attach full input + capped
-  // output to each entry — preserved for callers that post-process payloads
-  // server-side (research.swarm.status, agent.subagent.logs), including while
-  // the fanout is still running (progressive results).
+  // includeOutputs mode: attach full input + capped output to each entry,
+  // for callers that post-process payloads server-side (research.swarm.status,
+  // agent.subagent.logs), including while the fanout is still running
+  // (progressive results).
   //
   // Compact mode while still running returns NO children at all — counts +
   // recheckAfterMs are all a caller can act on mid-flight; timeline still
@@ -241,12 +251,16 @@ export async function agentSubagentAggregateHandler(
             runId: r.publicId,
             capabilityName: r.capabilityName,
             status: r.status,
-            summary: r.summary ?? fallbackRunSummary(r.outputPayload, r.errorReason),
+            summary:
+              r.summary ?? fallbackRunSummary(r.outputPayload, r.errorReason),
             outputBytes: payloadByteSize(r.outputPayload),
             errorReason: r.errorReason,
           };
           if (!input.includeOutputs) return base;
-          const capped = capPayload(r.outputPayload, AGGREGATE_CHILD_OUTPUT_CAP_BYTES);
+          const capped = capPayload(
+            r.outputPayload,
+            AGGREGATE_CHILD_OUTPUT_CAP_BYTES,
+          );
           return {
             ...base,
             input: r.inputPayload,
@@ -258,17 +272,23 @@ export async function agentSubagentAggregateHandler(
   // Merge only completed children's output. For an all-failed or still-running
   // fanout we never surface partial data as if usable — aggregatedData is null.
   // A "partial" fanout DOES return the merged output of the children that
-  // succeeded, honestly labelled partial so callers never mistake it for done.
+  // succeeded, labelled partial so callers never mistake it for done.
   // conflicts[] is always computed for mergeable states (cheap, server-side);
   // aggregatedData itself ships only when includeMerged asks for it AND the
   // merge fits the size cap — an oversized merge is flagged, not relayed.
   const canMerge = status === "completed" || status === "partial";
   const { aggregatedData: mergedData, conflicts } = canMerge
     ? mergeOutputs(runs)
-    : { aggregatedData: null, conflicts: [] as AgentSubagentAggregateOutput["conflicts"] };
+    : {
+        aggregatedData: null,
+        conflicts: [] as AgentSubagentAggregateOutput["conflicts"],
+      };
   const mergedOverCap =
-    input.includeMerged && mergedData !== null && payloadByteSize(mergedData) > AGGREGATE_MERGED_CAP_BYTES;
-  const aggregatedData = input.includeMerged && !mergedOverCap ? mergedData : null;
+    input.includeMerged &&
+    mergedData !== null &&
+    payloadByteSize(mergedData) > AGGREGATE_MERGED_CAP_BYTES;
+  const aggregatedData =
+    input.includeMerged && !mergedOverCap ? mergedData : null;
 
   return {
     fanoutId: input.fanoutId,
@@ -301,7 +321,10 @@ const RECHECK_MAX_MS = 60_000;
 function estimateRecheckMs(runs: RunRow[]): number {
   const durations = runs
     .filter((r) => r.status === "completed" && r.startedAt && r.completedAt)
-    .map((r) => (r.completedAt as Date).getTime() - (r.startedAt as Date).getTime())
+    .map(
+      (r) =>
+        (r.completedAt as Date).getTime() - (r.startedAt as Date).getTime(),
+    )
     .filter((ms) => ms > 0)
     .sort((a, b) => a - b);
   if (durations.length === 0) return RECHECK_DEFAULT_MS;

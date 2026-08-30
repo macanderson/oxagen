@@ -70,7 +70,7 @@ export const org = {
     trust: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/trust`,
   },
 
-  // Billing — promoted from legacy settings/billing
+  // Billing
   billing: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing`,
     subscription: (ctx: ScopeContext): string =>
@@ -178,16 +178,15 @@ export const workspace = {
       `${wsBase(ctx)}/workbench/tools/mcp`,
   },
 
-  // Automations (web-app-2.0) — human-gated agent automation: the automations
-  // list + editor and parallel workflow/swarm runs. The biggest
-  // previously-headless section (automation.* + workflow.*).
+  // Human-gated agent automation: the automations list + editor and parallel
+  // workflow/swarm runs (automation.* + workflow.*).
   automations: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automations`,
     automation: (ctx: Required<ScopeContext>, automationId: string): string =>
       `${wsBase(ctx)}/automations/${encodeURIComponent(automationId)}`,
     workflows: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/automations/workflows`,
-    // Fleet lineage explorer (issue #1078) — the dispatch tree for one
+    // Fleet lineage explorer — the dispatch tree for one
     // agent.subagent_fanouts row (query_lineage). Natural drill-through from a
     // Workflows run's fan-out. `dispatchId` deep-links via `?dispatchId=`,
     // mirroring how knowledge/graph/page.tsx deep-links `?focus=`.
@@ -250,7 +249,7 @@ export const workspace = {
     mcpServerRegistries: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/mcp-server-registries`,
     // Hard period-to-date spend ceilings (org + workspace scope) — powers
-    // get_spend_budget / set_spend_budget (OXA-1079). Workspace-scoped
+    // get_spend_budget / set_spend_budget. Workspace-scoped
     // (real workspaceId) so the RLS-narrowed read returns BOTH scopes; see
     // ./settings/spend-budgets/actions.ts for the placement rationale.
     spendBudgets: (ctx: Required<ScopeContext>): string =>

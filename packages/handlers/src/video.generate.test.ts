@@ -25,7 +25,7 @@ vi.mock("@oxagen/config/env", () => ({
 vi.mock("@oxagen/ai", () => ({
   videoTierModelId: mocks.videoTierModelId,
   // Real duration-snapping logic is covered by @oxagen/ai's own tests; these
-  // mirror its behaviour for the veo/sora catalog so handler tests stay honest.
+  // mirror its behaviour for the veo/sora catalog so handler tests match reality.
   resolveVideoDurationSeconds: (modelId: string, requested?: number) => {
     const supported = modelId.startsWith("google/veo")
       ? [4, 6, 8]
@@ -33,10 +33,18 @@ vi.mock("@oxagen/ai", () => ({
         ? [4, 8, 12]
         : undefined;
     if (!supported) {
-      return { effectiveSeconds: requested, requestedSeconds: requested, adjusted: false };
+      return {
+        effectiveSeconds: requested,
+        requestedSeconds: requested,
+        adjusted: false,
+      };
     }
     if (requested === undefined) {
-      return { effectiveSeconds: supported[0], adjusted: false, supportedSeconds: supported };
+      return {
+        effectiveSeconds: supported[0],
+        adjusted: false,
+        supportedSeconds: supported,
+      };
     }
     if (supported.includes(requested)) {
       return {
@@ -106,19 +114,21 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
   // ── gateway key absent ──────────────────────────────────────────────────────
 
   it("throws when AI_GATEWAY_API_KEY is not configured", async () => {
-    mocks.requireEnv.mockImplementationOnce(() => { throw new Error("missing"); });
-    await expect(videoGenerateHandler({ prompt: "Ocean waves" }, CTX)).rejects.toThrow(
-      "AI_GATEWAY_API_KEY is not configured",
-    );
+    mocks.requireEnv.mockImplementationOnce(() => {
+      throw new Error("missing");
+    });
+    await expect(
+      videoGenerateHandler({ prompt: "Ocean waves" }, CTX),
+    ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
   });
 
   // ── auth guard ──────────────────────────────────────────────────────────────
 
   it("throws when userId is null", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
-    await expect(videoGenerateHandler({ prompt: "Test" }, anonCtx)).rejects.toThrow(
-      "video.generate requires an authenticated user",
-    );
+    await expect(
+      videoGenerateHandler({ prompt: "Test" }, anonCtx),
+    ).rejects.toThrow("video.generate requires an authenticated user");
   });
 
   // ── happy path ──────────────────────────────────────────────────────────────
@@ -153,7 +163,10 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
   });
 
   it("snaps an unsupported durationSeconds and reports the adjustment", async () => {
-    const result = await videoGenerateHandler({ prompt: "Epic", durationSeconds: 30 }, CTX);
+    const result = await videoGenerateHandler(
+      { prompt: "Epic", durationSeconds: 30 },
+      CTX,
+    );
 
     // The render is still queued — at the nearest supported duration.
     const sentEvent = mocks.inngestSend.mock.calls[0]![0];
@@ -167,7 +180,11 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
       effectiveSeconds: 8,
       supportedSeconds: [4, 6, 8],
       alternatives: [
-        { model: "openai/sora-2", supportedSeconds: [4, 8, 12], closestSeconds: 12 },
+        {
+          model: "openai/sora-2",
+          supportedSeconds: [4, 8, 12],
+          closestSeconds: 12,
+        },
       ],
     });
 
@@ -186,7 +203,10 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
   });
 
   it("uses an explicit input.model over the tier default", async () => {
-    await videoGenerateHandler({ prompt: "Sora", model: "openai/sora-2", durationSeconds: 12 }, CTX);
+    await videoGenerateHandler(
+      { prompt: "Sora", model: "openai/sora-2", durationSeconds: 12 },
+      CTX,
+    );
     expect(mocks.videoTierModelId).not.toHaveBeenCalled();
     const sentEvent = mocks.inngestSend.mock.calls[0]![0];
     expect(sentEvent.data.model).toBe("openai/sora-2");
@@ -201,8 +221,16 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
 
   it("returns a unique jobId per call", async () => {
     mocks.createPendingGeneratedAsset
-      .mockResolvedValueOnce({ id: "uuid-1", publicId: "vas_1", serveUrl: "/api/v1/assets/vas_1" })
-      .mockResolvedValueOnce({ id: "uuid-2", publicId: "vas_2", serveUrl: "/api/v1/assets/vas_2" });
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        publicId: "vas_1",
+        serveUrl: "/api/v1/assets/vas_1",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-2",
+        publicId: "vas_2",
+        serveUrl: "/api/v1/assets/vas_2",
+      });
 
     const a = await videoGenerateHandler({ prompt: "A" }, CTX);
     const b = await videoGenerateHandler({ prompt: "B" }, CTX);

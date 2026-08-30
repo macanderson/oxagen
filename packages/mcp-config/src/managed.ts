@@ -2,18 +2,16 @@
  * managed.ts — Org-level managed policy enforcement.
  *
  * Enterprise orgs can push a managed configuration file that acts as an
- * unoverridable floor. It is synced via `oxagen org sync-policy` and stored at
- * ~/.config/oxagen/managed.json.
+ * unoverridable floor, stored at ~/.config/oxagen/managed.json.
  *
  * The managed policy provides:
  *   - Org-provisioned servers (users can't remove or change auth)
  *   - Allowlist: only permitted server URLs/commands can be registered
  *   - Denylist: blocked URLs/commands/tools that no user config can override
  *
- * Enforcement points:
- *   - At `oxagen mcp add` time: validate the server URL/command against policy
- *   - At tool materialization time: deny tools matching deniedTools patterns
- *   - At merge time: managed servers are injected and cannot be overridden
+ * Enforcement today happens at tool materialization time: managed servers
+ * are injected into the effective config, and tools matching deniedTools
+ * are dropped before they reach the model.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -124,7 +122,6 @@ export function checkStdioCommand(
 
   const fullCommand = [command, ...args].join(" ");
 
-  // Denylist (not currently in schema but reserved for future use)
   // Allowlist: if non-empty, the command must match at least one pattern
   if (policy.allowedCommands && policy.allowedCommands.length > 0) {
     const allowed = policy.allowedCommands.some((pattern) =>
@@ -163,8 +160,7 @@ export function checkToolDenied(
 }
 
 /**
- * Validate a server config against the managed policy BEFORE registration.
- * Called by `oxagen mcp add` to fail fast with a clear message.
+ * Validate a server config against the managed policy before registration.
  *
  * @returns null if the server is permitted, or a PolicyViolation explaining the block
  */

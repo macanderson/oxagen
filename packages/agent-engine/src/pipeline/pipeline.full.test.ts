@@ -551,11 +551,10 @@ describe("runTurn — full pipeline path", () => {
   });
 
   it("surfaces the semantic fallback in the enhance stage label instead of narrating 'no extra context found'", async () => {
-    // Regression test: usedSemanticFallback never pushes onto `resolved` (see
-    // enhancePrompt — semantic hits land in `sections`/the injected prompt,
-    // not `resolved`), so a prompt that resolves nothing literally but DOES
-    // get real semantically-retrieved context used to be mislabeled as no
-    // context found at all, even though the agent's prompt carried it.
+    // usedSemanticFallback never pushes onto `resolved` (see enhancePrompt —
+    // semantic hits land in `sections`/the injected prompt, not `resolved`),
+    // so a prompt that resolves nothing literally but DOES get real
+    // semantically-retrieved context must not be labeled as no context found.
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     // "search"/"file_symbols" miss (no literal candidate in this prompt);
     // "semantic_search" hits — this is the fallback path exactly.

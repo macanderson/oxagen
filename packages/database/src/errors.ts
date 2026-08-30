@@ -1,7 +1,7 @@
 /**
  * Postgres error classification that survives the drizzle error wrapper.
  *
- * drizzle-orm (0.45) wraps every driver error in a `DrizzleQueryError` whose
+ * drizzle-orm wraps every driver error in a `DrizzleQueryError` whose
  * `.cause` holds the original postgres.js error carrying the SQLSTATE `code`.
  * A naive `err.code === "23505"` therefore misses EVERY wrapped violation —
  * the friendly conflict path is skipped and the raw `Failed query: insert …`
@@ -22,7 +22,9 @@ interface PgLikeError {
 }
 
 function asPgError(value: unknown): PgLikeError | undefined {
-  return typeof value === "object" && value !== null ? (value as PgLikeError) : undefined;
+  return typeof value === "object" && value !== null
+    ? (value as PgLikeError)
+    : undefined;
 }
 
 /**

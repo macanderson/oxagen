@@ -11,12 +11,9 @@
 //
 // ── Why the memo is not assumed to be populated ─────────────────────────────
 //
-// This helper used to rely on the kernel having resolved the invoked
-// capability before the handler ran, leaving at least one memo entry behind.
-// That stopped being true when the run-evidence work replaced the kernel's
-// agent seam with the pinned ∩ live evaluator (packages/iam's
-// live-agent-run-authorization.ts), which keys its own generation-scoped cache
-// and never writes `byCapability`. An empty memo would have made every
+// The agent seam (packages/iam's live-agent-run-authorization.ts) keys its
+// own generation-scoped cache and never writes `byCapability`, so the memo
+// can be empty when this handler runs. An empty memo would make every
 // dimension gate here a silent pass-through — a WIDENING. So when the memo is
 // empty we resolve an inert sentinel capability against the run's snapshot
 // through the SAME pure resolver, exactly as mcp-rbac.ts does for the MCP

@@ -17,7 +17,7 @@ import { resolveOrg, assertSecurityManager } from "@/lib/resolve-org";
 import { isAuthDenialError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
-// Sentinel workspaceId for org-only actions. — OXA-1515
+// Sentinel workspaceId for org-only actions.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const RevokeSessionSchema = z.object({
@@ -61,7 +61,10 @@ export async function revokeSessionAction(
     if (isAuthDenialError(err)) {
       return { ok: false, code: "forbidden" };
     }
-    logger.error({ orgSlug, err: String(err) }, "revoke-session: auth gate failed unexpectedly");
+    logger.error(
+      { orgSlug, err: String(err) },
+      "revoke-session: auth gate failed unexpectedly",
+    );
     return { ok: false, code: "internal", error: "Failed to verify access" };
   }
 

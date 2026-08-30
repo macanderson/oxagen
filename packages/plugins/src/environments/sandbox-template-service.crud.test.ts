@@ -675,8 +675,8 @@ describe("bindAgentEnvironment", () => {
   });
 
   it("resolves an agt_ public id to the internal uuid before querying bindings", async () => {
-    // Regression: the app UI sends the agent's PUBLIC id; passing it raw into
-    // the uuid agent_id column made every bind throw at the driver.
+    // The app UI sends the agent's PUBLIC id; the agent_id column is a uuid,
+    // so the id must resolve before it reaches the query.
     state.selectQueue = [
       [
         { id: "33333333-3333-4333-8333-333333333333" },

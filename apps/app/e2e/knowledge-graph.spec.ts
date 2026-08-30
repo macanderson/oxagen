@@ -13,12 +13,11 @@
  *      (Neo4j pre-seeded), it asserts real rows instead.
  *   3. Search filters: typing into the Search tab's box drives a query
  *      without crashing the page (fuzzy search over an empty/seeded graph).
- *   4. Query console runs a typed traversal and renders its outcome. #1087
- *      ("retire unsafe workspace graph authority") replaced the raw Cypher
- *      box with an ontology.query traversal from a known start node —
- *      query-console.tsx accepts no database query language at all, so the
- *      old `RETURN 1 AS one` probe has nothing left to type into. Traversing
- *      from a publicId that cannot exist is the equivalent always-safe read:
+ *   4. Query console runs a typed traversal and renders its outcome. The
+ *      console runs an ontology.query traversal from a known start node —
+ *      query-console.tsx accepts no database query language at all, so there
+ *      is no raw query box to type into. Traversing from a publicId that
+ *      cannot exist is the equivalent always-safe read:
  *      the handler returns startNode:null for an unknown id rather than
  *      erroring (packages/handlers/src/ontology.query.ts), so the assertion
  *      needs Neo4j running but never pre-seeded.
@@ -33,7 +32,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SCREENSHOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "screenshots");
+const SCREENSHOT_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "screenshots",
+);
 
 function shot(page: import("@playwright/test").Page, name: string) {
   return page.screenshot({
@@ -50,8 +52,12 @@ test.describe("Knowledge → Graph", () => {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   });
 
-  test("canvas loads, side panel mounts with stats header and Browse/Search/Query tabs", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-canvas" });
+  test("canvas loads, side panel mounts with stats header and Browse/Search/Query tabs", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-canvas",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
@@ -62,7 +68,9 @@ test.describe("Knowledge → Graph", () => {
     // (the canvas itself is `next/dynamic({ ssr:false })`, so the toolbar is
     // the stable, immediately-paintable proof point instead of the canvas
     // element, which loads behind a skeleton).
-    await expect(page.getByLabel("Search the graph")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("Search the graph")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator('[aria-label="View mode"]')).toBeVisible();
 
     // The new side panel: header + stat boxes + tab strip.
@@ -71,7 +79,9 @@ test.describe("Knowledge → Graph", () => {
     await expect(
       page.getByRole("heading", { name: "Graph", exact: true }),
     ).toBeVisible();
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByRole("tab", { name: "Browse" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Search" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Query" })).toBeVisible();
@@ -79,15 +89,21 @@ test.describe("Knowledge → Graph", () => {
     await shot(page, "01-canvas-and-panel-loaded");
   });
 
-  test("Browse panel lists nodes (or the Connect-a-source empty state on a fresh graph)", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-browse" });
+  test("Browse panel lists nodes (or the Connect-a-source empty state on a fresh graph)", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-browse",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
 
     // Browse is the default tab.
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     const emptyState = page.getByText("Connect a source");
     const hasEmptyState = await emptyState.isVisible().catch(() => false);
@@ -98,7 +114,9 @@ test.describe("Knowledge → Graph", () => {
       const sourcesLink = page.getByRole("link", { name: /go to sources/i });
       await expect(sourcesLink).toBeVisible();
       await sourcesLink.click();
-      await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/knowledge/sources$`));
+      await expect(page).toHaveURL(
+        new RegExp(`/${orgSlug}/${ws}/knowledge/sources$`),
+      );
       return;
     }
 
@@ -110,17 +128,23 @@ test.describe("Knowledge → Graph", () => {
     const openLink = firstRow.getByRole("link", { name: /open .* detail/i });
     if (await openLink.isVisible().catch(() => false)) {
       await openLink.click();
-      await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/knowledge/graph/`));
+      await expect(page).toHaveURL(
+        new RegExp(`/${orgSlug}/${ws}/knowledge/graph/`),
+      );
     }
   });
 
   test("Search tab filters as you type", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-search" });
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-search",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("tab", { name: "Search" }).click();
     const searchBox = page.getByLabel("Search graph nodes");
@@ -130,25 +154,33 @@ test.describe("Knowledge → Graph", () => {
     // Debounced (300ms) — give it room, then assert the panel settled into
     // either a result list or the no-match state (never a crash/blank panel).
     await expect(
-      page.getByText("No matches").or(page.getByTestId("graph-result-row").first()),
+      page
+        .getByText("No matches")
+        .or(page.getByTestId("graph-result-row").first()),
     ).toBeVisible({ timeout: 10_000 });
 
     await shot(page, "03-search-results");
   });
 
-  test("Query console runs a typed traversal and reports an unknown start node", async ({ page }) => {
-    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "graph-query" });
+  test("Query console runs a typed traversal and reports an unknown start node", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, {
+      orgPrefix: "graph-query",
+    });
     const ws = "default";
 
     await gotoStable(page, `/${orgSlug}/${ws}/knowledge/graph`);
     await page.waitForLoadState("networkidle", { timeout: 20_000 });
-    await expect(page.getByTestId("graph-stats")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("graph-stats")).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("tab", { name: "Query" }).click();
 
-    // The Query tab is a typed ontology.query traversal since #1087 — a start
-    // node plus relationship types / direction / depth. There is no Cypher
-    // box and no "Run" button to drive one.
+    // The Query tab is a typed ontology.query traversal — a start
+    // node plus relationship types / direction / depth. There is no raw
+    // query box and no "Run" button to drive one.
     const startNodeInput = page.getByLabel("Start node ID");
     await expect(startNodeInput).toBeVisible({ timeout: 10_000 });
     const traverse = page.getByRole("button", { name: "Traverse" });
@@ -156,7 +188,7 @@ test.describe("Knowledge → Graph", () => {
 
     // A publicId that cannot exist in a workspace created seconds ago — the
     // traversal still round-trips through ontologyQueryAction → query_ontology
-    // and comes back startNode:null, which the console reports honestly
+    // and comes back startNode:null, which the console reports plainly
     // instead of erroring or blanking the panel.
     await startNodeInput.fill("e2e-no-such-public-id");
     await expect(traverse).toBeEnabled();

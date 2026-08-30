@@ -45,9 +45,11 @@ import {
 const CANDIDATE_LIMIT = 5;
 
 /**
- * A strict-mode non-conformant rejection result (§8). The node is NOT written.
+ * A strict-mode non-conformant rejection result. The node is not written.
  */
-function rejectedResult(conformanceScore: number | undefined): DeduplicationResult {
+function rejectedResult(
+  conformanceScore: number | undefined,
+): DeduplicationResult {
   return {
     principalNodeId: null,
     action: "rejected_nonconformant",
@@ -60,7 +62,7 @@ function rejectedResult(conformanceScore: number | undefined): DeduplicationResu
 /**
  * Resolve an EntityMutation against the existing graph.
  *
- * @param opts Optional §8 schema-validation context (pinned active vocabulary
+ * @param opts Optional schema-validation context (pinned active vocabulary
  *   + source metadata) threaded from the pipeline into the node write.
  * @returns DeduplicationResult describing what happened and which node to embed.
  */
@@ -105,7 +107,11 @@ export async function resolveEntity(
   if (mutation.displayName) textParts.push(mutation.displayName);
   for (const [k, v] of Object.entries(mutation.properties)) {
     if (v == null) continue;
-    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+    if (
+      typeof v === "string" ||
+      typeof v === "number" ||
+      typeof v === "boolean"
+    ) {
       textParts.push(`${k}:${v}`);
     }
   }
@@ -126,7 +132,13 @@ export async function resolveEntity(
 
   // Query the entity_node_embedding_index for similar nodes of the same entityType.
   const searchSession = scopedSession();
-  let bestCandidate: { nodeId: string; displayName?: string; email?: string; url?: string; score: number } | null = null;
+  let bestCandidate: {
+    nodeId: string;
+    displayName?: string;
+    email?: string;
+    url?: string;
+    score: number;
+  } | null = null;
   try {
     // The index returns the GLOBAL top-K by similarity, but we only keep nodes
     // matching this org + entityType. Over-fetch (K = limit x factor) so the
@@ -154,7 +166,9 @@ export async function resolveEntity(
 
     for (const record of result.records) {
       const candidateId = record.get("nodeId") as string;
-      const candidateDisplayName = record.get("displayName") as string | undefined;
+      const candidateDisplayName = record.get("displayName") as
+        | string
+        | undefined;
       const rawProperties = record.get("properties") as string | null;
       const embeddingSimilarity = record.get("score") as number;
 
@@ -169,15 +183,29 @@ export async function resolveEntity(
 
       const candidate = {
         displayName: candidateDisplayName,
-        email: typeof parsedProps["email"] === "string" ? parsedProps["email"] : undefined,
-        url: typeof parsedProps["url"] === "string" ? parsedProps["url"] : undefined,
+        email:
+          typeof parsedProps["email"] === "string"
+            ? parsedProps["email"]
+            : undefined,
+        url:
+          typeof parsedProps["url"] === "string"
+            ? parsedProps["url"]
+            : undefined,
       };
 
-      const combinedScore = scoreCandidate(mutation, candidate, embeddingSimilarity);
+      const combinedScore = scoreCandidate(
+        mutation,
+        candidate,
+        embeddingSimilarity,
+      );
 
       if (combinedScore >= ALIAS_THRESHOLD) {
         if (!bestCandidate || combinedScore > bestCandidate.score) {
-          bestCandidate = { nodeId: candidateId, ...candidate, score: combinedScore };
+          bestCandidate = {
+            nodeId: candidateId,
+            ...candidate,
+            score: combinedScore,
+          };
         }
       }
     }
@@ -193,11 +221,16 @@ export async function resolveEntity(
     }
     const aliasNodeId = aliasUpsert.nodeId;
     const tentative = bestCandidate.score < CONFIRM_THRESHOLD;
-    await createAliasEdge(aliasNodeId, bestCandidate.nodeId, {
-      confidence: bestCandidate.score,
-      matchReason: "name_embedding",
-      tentative,
-    }, orgId);
+    await createAliasEdge(
+      aliasNodeId,
+      bestCandidate.nodeId,
+      {
+        confidence: bestCandidate.score,
+        matchReason: "name_embedding",
+        tentative,
+      },
+      orgId,
+    );
     return {
       principalNodeId: bestCandidate.nodeId,
       aliasNodeId,
@@ -240,7 +273,11 @@ export function scoreCandidate(
   const incomingEmail = incoming.properties["email"] as string | undefined;
   const incomingUrl = incoming.properties["url"] as string | undefined;
 
-  if (incomingEmail && candidate.email && incomingEmail.toLowerCase() === candidate.email.toLowerCase()) {
+  if (
+    incomingEmail &&
+    candidate.email &&
+    incomingEmail.toLowerCase() === candidate.email.toLowerCase()
+  ) {
     score += 0.4;
   } else if (incomingUrl && candidate.url && incomingUrl === candidate.url) {
     score += 0.4;
@@ -263,7 +300,11 @@ export function scoreCandidate(
  *          "Mac Anderson" vs "John Smith" → ~0.15
  */
 export function fuzzyNameScore(a: string, b: string): number {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .trim();
   const na = normalize(a);
   const nb = normalize(b);
   if (na === nb) return 1;

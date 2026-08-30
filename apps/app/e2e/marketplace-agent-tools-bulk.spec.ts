@@ -9,7 +9,7 @@
  *
  * Resilient to catalog seeding: when the browse grid has installable cards it
  * exercises select → toolbar → bulk install; when the catalog is empty it
- * asserts the honest "No plugins found" state. Either way the page renders and
+ * asserts the real "No plugins found" state. Either way the page renders and
  * the multi-select affordance is present when a card exists.
  *
  * NOTE: needs the full local stack (`pnpm dev`: Postgres :5433 + app server),
@@ -55,7 +55,7 @@ test.describe("Marketplace Agent Tools — bulk install", () => {
     const count = await cards.count();
 
     if (count === 0) {
-      // Empty catalog for a fresh workspace — assert the honest empty state and
+      // Empty catalog for a fresh workspace — assert the real empty state and
       // that no selection toolbar is shown. The multi-select code path is still
       // covered by the unit tests (browse-panel.test.tsx).
       await expect(

@@ -15,11 +15,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Top-level mocks are hoisted by vitest — they apply to all dynamic imports.
 //
 // Each factory carries `satisfies Pick<typeof import(...), the names it
-// replaces>`, per ADR-037. That is what makes #1171 impossible here: when the
-// kernel renamed its admission-gate export, this factory kept returning the old
-// name, the module the importer received had no new name, and a *different*
-// test died on an undefined call. With the annotation the rename fails in this
-// file, at typecheck:
+// replaces>`, per ADR-037. This guards against a kernel rename of its
+// admission-gate export silently leaving the factory returning a stale name,
+// which would only surface later as a different test failing on an undefined
+// call. With the annotation the rename fails in this file, at typecheck:
 //
 //   TS2344: Type '"setBudgetAdmissionGate"' does not satisfy the constraint
 //   'keyof typeof import(".../kernel")'.

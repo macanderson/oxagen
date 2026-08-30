@@ -1,13 +1,12 @@
 /**
  * Daemon lifecycle — start, stop, status, and the recorded-session commands.
  *
- * Output discipline (ADR-023 §4): every handler is writer-parameterized (REPL-
- * bridge safe) and speaks both modes. `--json` emits ONE single-line JSON value
- * on stdout — session list/fork/replay keep their legacy response SHAPES
- * (previously pretty-printed; now one line, byte-compatible for jq consumers) —
- * while status/start/stop gain machine envelopes. Human confirmations and
- * progress go to stderr via `info`; the status/list/replay ANSWERS render on
- * stdout in pretty mode; failures are uniform stderr error lines with exit 1.
+ * Every handler is writer-parameterized (REPL-bridge safe) and speaks both
+ * modes. `--json` emits ONE single-line JSON value on stdout, byte-compatible
+ * for jq consumers, for every subcommand. Human confirmations and progress go
+ * to stderr via `info`; the status/list/replay ANSWERS render on stdout in
+ * pretty mode; failures are uniform stderr error lines with exit 1. See
+ * ../../../docs/adr/ADR-023-cli-fleet-session-event-log.md §4.
  */
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -42,7 +41,10 @@ export async function startDaemon(
   const running = await client.isRunning();
 
   if (running) {
-    out.data({ running: true, started: false, socket: SOCKET_PATH }, () => "✓ Daemon is already running.");
+    out.data(
+      { running: true, started: false, socket: SOCKET_PATH },
+      () => "✓ Daemon is already running.",
+    );
     return;
   }
 
@@ -79,8 +81,11 @@ export async function startDaemon(
     const child = spawn(
       process.execPath,
       [
-        "--import", "tsx",
-        import.meta.url.replace("file://", "").replace("lifecycle.js", "lifecycle.ts"),
+        "--import",
+        "tsx",
+        import.meta.url
+          .replace("file://", "")
+          .replace("lifecycle.js", "lifecycle.ts"),
         "--daemon-child",
       ],
       {
@@ -99,7 +104,12 @@ export async function startDaemon(
     );
     child.unref();
     out.data(
-      { running: true, started: true, pid: child.pid ?? null, socket: SOCKET_PATH },
+      {
+        running: true,
+        started: true,
+        pid: child.pid ?? null,
+        socket: SOCKET_PATH,
+      },
       () => `✓ Daemon started (pid ${child.pid}).\n  Socket: ${SOCKET_PATH}`,
     );
   }
@@ -114,7 +124,10 @@ export async function stopDaemon(
   const running = await client.isRunning();
 
   if (!running) {
-    out.data({ running: false, stopped: false }, () => "Daemon is not running.");
+    out.data(
+      { running: false, stopped: false },
+      () => "Daemon is not running.",
+    );
     return;
   }
 
@@ -127,7 +140,10 @@ export async function stopDaemon(
       const pid = parseInt(readFileSync(PID_FILE, "utf8"), 10);
       try {
         process.kill(pid, "SIGTERM");
-        out.data({ running: false, stopped: true, signalled: pid }, () => `✓ Sent SIGTERM to daemon (pid ${pid}).`);
+        out.data(
+          { running: false, stopped: true, signalled: pid },
+          () => `✓ Sent SIGTERM to daemon (pid ${pid}).`,
+        );
       } catch {
         out.error("Could not stop daemon. It may have already exited.");
       }
@@ -148,17 +164,30 @@ export async function daemonStatus(
   if (!running) {
     out.data(
       { running: false, socket: SOCKET_PATH },
-      () => `● Daemon is not running.\n  Socket: ${SOCKET_PATH}\n  Start with: oxagen daemon start`,
+      () =>
+        `● Daemon is not running.\n  Socket: ${SOCKET_PATH}\n  Start with: oxagen daemon start`,
     );
     return;
   }
 
   try {
-    const response = await client.send({ id: "status", method: "health", params: {} });
-    const result = response.result as { status: string; uptime: number; pid: number } | undefined;
+    const response = await client.send({
+      id: "status",
+      method: "health",
+      params: {},
+    });
+    const result = response.result as
+      | { status: string; uptime: number; pid: number }
+      | undefined;
     if (result) {
       out.data(
-        { running: true, pid: result.pid, uptimeSeconds: result.uptime, socket: SOCKET_PATH, db: DB_PATH },
+        {
+          running: true,
+          pid: result.pid,
+          uptimeSeconds: result.uptime,
+          socket: SOCKET_PATH,
+          db: DB_PATH,
+        },
         () =>
           `● Daemon is running (pid ${result.pid})\n` +
           `  Uptime:  ${formatUptime(result.uptime)}\n` +
@@ -167,7 +196,9 @@ export async function daemonStatus(
       );
     }
   } catch (err) {
-    out.error(`Daemon status unknown: ${err instanceof Error ? err.message : String(err)}`);
+    out.error(
+      `Daemon status unknown: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -184,9 +215,15 @@ interface SessionSummary {
   createdAt: number;
 }
 
-async function requireRunningDaemon(client: DaemonClient, out: Output): Promise<boolean> {
+async function requireRunningDaemon(
+  client: DaemonClient,
+  out: Output,
+): Promise<boolean> {
   if (await client.isRunning()) return true;
-  out.error("Daemon is not running. Start it with `oxagen daemon start`.", "daemon_down");
+  out.error(
+    "Daemon is not running. Start it with `oxagen daemon start`.",
+    "daemon_down",
+  );
   return false;
 }
 
@@ -199,9 +236,11 @@ export async function sessionList(
   const client = getClient();
   if (!(await requireRunningDaemon(client, out))) return;
 
-  const result = (await client.listSessions()) as { sessions: SessionSummary[] };
+  const result = (await client.listSessions()) as {
+    sessions: SessionSummary[];
+  };
   if (out.isJson) {
-    out.data(result); // legacy shape: the {sessions: […]} envelope
+    out.data(result); // jq consumers expect the {sessions: […]} envelope
     return;
   }
   if (result.sessions.length === 0) {
@@ -212,8 +251,12 @@ export async function sessionList(
     return;
   }
   for (const s of result.sessions) {
-    const lineage = s.parentId ? ` (forked from ${s.parentId} @${s.forkPoint})` : "";
-    writer.write(`${s.sessionId}  ${s.status}  ${s.eventCount} event(s)${lineage}`);
+    const lineage = s.parentId
+      ? ` (forked from ${s.parentId} @${s.forkPoint})`
+      : "";
+    writer.write(
+      `${s.sessionId}  ${s.status}  ${s.eventCount} event(s)${lineage}`,
+    );
   }
 }
 
@@ -240,7 +283,9 @@ export async function sessionFork(
         `✓ Forked session ${result.parentId} at event ${result.forkPoint} -> new session ${result.sessionId}`,
     );
   } catch (err) {
-    out.error(`Fork failed: ${err instanceof Error ? err.message : String(err)}`);
+    out.error(
+      `Fork failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -256,7 +301,11 @@ export async function sessionReplay(
 
   try {
     const result = (await client.replaySession(sessionId)) as {
-      replay: { deterministic: boolean; stepsReplayed: number; divergences: unknown[] };
+      replay: {
+        deterministic: boolean;
+        stepsReplayed: number;
+        divergences: unknown[];
+      };
       turns: {
         turnId: string;
         compileMs: number;
@@ -282,7 +331,9 @@ export async function sessionReplay(
       return lines.join("\n");
     });
   } catch (err) {
-    out.error(`Replay failed: ${err instanceof Error ? err.message : String(err)}`);
+    out.error(
+      `Replay failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 

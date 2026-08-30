@@ -25,13 +25,12 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
 /**
- * Resolve this module's directory LAZILY and in both module systems. This must
- * never run at module scope: apps/api bundles this package with esbuild in CJS
- * mode, which rewrites `import.meta` to an empty object, so a module-scope
- * `fileURLToPath(import.meta.url)` throws ERR_INVALID_ARG_TYPE on every cold
- * start and takes the whole API function down (this is what broke the connector
- * "Configure" flow in prod). Same failure class fixed for the tree-sitter wasm
- * loader in @oxagen/code-graph (P0 2026-06-12).
+ * Resolve this module's directory lazily, and in a way that works in both
+ * module systems. This must never run at module scope: apps/api bundles this
+ * package with esbuild in CJS mode, which rewrites `import.meta` to an empty
+ * object, so a module-scope `fileURLToPath(import.meta.url)` throws
+ * ERR_INVALID_ARG_TYPE on every cold start and takes down the whole API
+ * function.
  */
 function moduleDir(): string {
   try {

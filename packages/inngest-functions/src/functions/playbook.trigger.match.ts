@@ -155,8 +155,8 @@ async function matchTriggersForEvent(
   );
 
   // Filter: config.entityType matches AND the trigger's graph event type
-  // matches the incoming one. Back-compat: an ABSENT eventType behaves as
-  // node.created (its historical default), so it still fires on creates only.
+  // matches the incoming one. An ABSENT eventType behaves as node.created,
+  // so it fires on creates only.
   const candidates = triggers.filter((t) => {
     const cfg = t.config;
     if (cfg.entityType !== entityType) return false;

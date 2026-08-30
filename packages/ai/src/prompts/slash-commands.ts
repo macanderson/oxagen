@@ -41,27 +41,27 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     args: "<pr-number>",
     summary: "Show pull-request stats — comments, checks, and files changed.",
     agentGuidance:
-      "Call `repo.pr.get` for the given PR number in the pinned repository and render the pr-stats card. If no repository is pinned, ask the user to pin one (or name owner/repo).",
+      "Call `get_pr` for the given PR number in the pinned repository and render the pr-stats card. If no repository is pinned, ask the user to pin one (or name owner/repo).",
   },
   {
     name: "diff",
     args: "<pr-number>",
     summary: "Show the git diff (file patches) for a pull request.",
     agentGuidance:
-      "Call `repo.pr.diff` for the given PR number in the pinned repository and render the code-diff card.",
+      "Call `get_pr_diff` for the given PR number in the pinned repository and render the code-diff card.",
   },
   {
     name: "ci",
     args: "[ref]",
     summary: "Show CI / check status for a branch, commit, or PR head.",
     agentGuidance:
-      "Call `repo.ci.status` for the given ref in the pinned repository (default to the repo's default branch when no ref is given) and render the ci-status card.",
+      "Call `get_ci_status` for the given ref in the pinned repository (default to the repo's default branch when no ref is given) and render the ci-status card.",
   },
   {
     name: "repos",
     summary: "List the GitHub repositories connected to this workspace.",
     agentGuidance:
-      "List the workspace's connected GitHub repositories (connection.list filtered to the GitHub connector) so the user can pick one to pin.",
+      "List the workspace's connected GitHub repositories (list_connections filtered to the GitHub connector) so the user can pick one to pin.",
   },
   {
     name: "pin",
@@ -84,7 +84,10 @@ export function matchSlashCommands(query: string): readonly SlashCommand[] {
  */
 export function slashCommandsPromptSection(): string {
   const rows = SLASH_COMMANDS.filter((c) => c.agentGuidance)
-    .map((c) => `- \`/${c.name}${c.args ? ` ${c.args}` : ""}\` — ${c.agentGuidance}`)
+    .map(
+      (c) =>
+        `- \`/${c.name}${c.args ? ` ${c.args}` : ""}\` — ${c.agentGuidance}`,
+    )
     .join("\n");
   return `## Slash commands
 

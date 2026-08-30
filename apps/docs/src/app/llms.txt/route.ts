@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { source } from "@/lib/source";
+import { collectOrderedPageUrls, source } from "@/lib/source";
 
 // Matches sitemap.ts — the canonical production origin for docs. Keeping the
 // two in sync means every llms.txt link resolves to a real, crawlable URL.
@@ -43,19 +43,6 @@ function pageLine(url: string): string | null {
   return `- [${page.data.title}](${rawMarkdownUrl(page.url)})${description}`;
 }
 
-/** Depth-first page URLs under a node, index page first (sidebar order). */
-function collectPageUrls(nodes: readonly TreeNode[]): string[] {
-  const urls: string[] = [];
-  for (const node of nodes) {
-    if (node.type === "page") urls.push(node.url);
-    else if (node.type === "folder") {
-      if (node.index) urls.push(node.index.url);
-      urls.push(...collectPageUrls(node.children));
-    }
-  }
-  return urls;
-}
-
 /**
  * GET /llms.txt — the LLM-friendly site index.
  *
@@ -82,7 +69,7 @@ export function GET() {
   for (const node of source.pageTree.children) {
     if (node.type !== "folder") continue;
     const sectionTitle = nodeText(node.name).trim() || "Section";
-    const urls = collectPageUrls([node]);
+    const urls = collectOrderedPageUrls([node]);
     const sectionLines = urls
       .map(pageLine)
       .filter((line): line is string => line !== null);

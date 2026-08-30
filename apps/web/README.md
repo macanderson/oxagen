@@ -6,10 +6,23 @@ Vercel serves this directory as-is (framework preset: Other, root directory
 
 ## Layout
 
-- `index.html` — the marketing one-pager: the terminal coding agent, the
-  platform, a `#field-manual` section with the ebook lead-capture form, and
-  the "Get a demo" lead form. Self-contained (inline CSS/JS); fonts load from
-  `/fonts/`.
+- `index.html` — the marketing one-pager: a Products strip linking the three
+  product pages, the terminal coding agent, the platform, a `#field-manual`
+  section with the ebook lead-capture form, and the "Get a demo" lead form.
+  Pulls the shared shell from `/assets/`; fonts load from `/fonts/`.
+- `products/stella/`, `products/oxagen/`, `products/private-llms/` — one page
+  per product: the open-source terminal agent, the control plane, and running
+  models on hardware you own. Each is a single `index.html` that links the
+  shared shell and adds only its own page-specific block.
+- `assets/oxagen.css` + `assets/oxagen.js` — the shared shell: tokens, nav
+  (Products dropdown + mobile drawer), footer, buttons, textures, the
+  application-window chrome, the deck tab strip, the typewriters, and the lead
+  forms. Anything used by more than one page belongs here; the pages keep only
+  what is theirs alone.
+- `assets/tui/*.svg` — the ten Stella TUI v2 renderings the product pages
+  frame. Drawn in the same token table as the site, so a screenshot and the
+  chrome around it are one surface rather than two that nearly match. Do not
+  recolour them by hand.
 - `read/index.html` — the interactive reader for the ebook *Engineering
   Deterministic AI Coding Agents* (fully self-contained; fonts embedded).
   Serves two editions off one page, picked by `?e=field-manual` or
@@ -32,9 +45,55 @@ Vercel serves this directory as-is (framework preset: Other, root directory
   `packages/ui/src/styles/fonts/`), plus Literata variable serif
   (normal + italic, latin subset, from Google Fonts) for the book reader —
   all cached immutable for a year.
-- `favicon.svg` — the Oxagen hexagon mark.
+- `favicon.svg` — the Oxagen hexagon mark, solid gold (it carried a
+  three-stop ember gradient until the palette change described below).
 - `og.png` / `research-assets/book-og.png` — social share cards referenced by
   the Open Graph tags on `index.html` and `read/index.html` respectively.
+
+## The palette, and the four rules
+
+`assets/oxagen.css` holds the palette in **two layers**, and the split is the
+whole discipline:
+
+- **Primitives** — the `--st-*` table, Stella's canonical colours byte-for-byte.
+  This is the only place in the site a hex may appear.
+- **Semantics** — `--ground`, `--gold`, `--ink-3` and the rest, each aliasing a
+  primitive. Rules and pages name these.
+
+Reskinning means repointing an alias. It never means re-hexing a primitive, and
+it never means writing a colour into a rule or a page.
+
+The same table is what `assets/tui/*.svg` is drawn in, which is the point: the
+product screenshots and the page around them are one surface. Gold (`--gold`,
+`#EFC53F`) is identity and action only, never a state; `--pass` and `--fail`
+carry state.
+
+Four rules hold the look together. Breaking one is a review question, not a
+matter of taste:
+
+1. **No gradients.** Not in CSS, not in the wordmark, not in the favicon. The
+   `--tex-*` textures are hard-stop repeating patterns, which read as texture
+   rather than as a fade. A `mask-image` is not a paint and does not count.
+2. **Corners are 2px** (`--r`). Circles (`50%`) are exempt.
+3. **Texture never sits behind body copy.** A `.tex` layer paints at
+   `z-index:-1` beneath a solid panel, so contrast is a property of the layout
+   rather than of an opacity guess.
+4. **`--faint` and `--muted` are terminal tokens.** They measure roughly 2.3
+   and 4.3 against the canvas and fail WCAG AA for small text. They belong to
+   the mock terminal chrome; real copy uses `--ink-3` or lighter. Every page
+   currently measures zero contrast failures — keep it that way.
+
+`.reveal` is gated on a `.js` class set by a one-line script in each page's
+`<head>`. Without it nothing is hidden, so a script that fails to load costs
+the animation rather than the content.
+
+`assets/` is excluded from the root ESLint config: this directory has no
+tsconfig, so the TypeScript project service reports its browser JS as a parse
+error rather than as findings.
+
+**`read/index.html` is not on this system yet** — it still carries its own
+`:root` block of hardcoded hexes rather than consuming `assets/oxagen.css`.
+The colours match, but nothing keeps them matching (#1437).
 
 ## Lead capture
 

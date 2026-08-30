@@ -1,6 +1,4 @@
-// skill-telemetry.ts
-//
-// OXA-1750: Skill lifecycle telemetry. Insert + read helpers for the
+// Skill lifecycle telemetry. Insert + read helpers for the
 // `skill_loads` MergeTree table (defined in schema.sql / migration 0008).
 //
 // - recordSkillLoad: append one skill_loads row when a workspace skill is
@@ -182,7 +180,7 @@ export interface SkillTokenCost {
  * Best-effort token-cost attribution for `skill.metrics.read`.
  *
  * Joins `skill_loads` → `token_usage` on `execution_step_id` and sums the cost
- * of every step that loaded each skill. Two guards keep the number honest:
+ * of every step that loaded each skill. Two guards keep the number accurate:
  *
  *   1. The (skill_id, execution_step_id) pairs are de-duplicated BEFORE the
  *      join, so a skill loaded twice in one step counts that step's cost once.

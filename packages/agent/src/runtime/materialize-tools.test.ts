@@ -78,7 +78,7 @@ const dbMocks = vi.hoisted(() => {
       orgId: "mcp.orgId",
       workspaceId: "mcp.workspaceId",
       enabled: "mcp.enabled",
-      // OXA-820: soft-delete column the contributor now filters on.
+      // soft-delete column the contributor now filters on.
       deletedAt: "mcp.deletedAt",
       healthStatus: "mcp.healthStatus",
       orgListingId: "mcp.orgListingId",
@@ -265,7 +265,7 @@ vi.mock("./approval", () => ({
   waitForApproval: mocks.waitForApproval,
 }));
 
-// Consent gate (OXA-816). checkConsent/recordConsent are spied so we can drive
+// Consent gate. checkConsent/recordConsent are spied so we can drive
 // first-use prompt / pre-grant-inline / denial-short-circuit paths.
 const consentMocks = vi.hoisted(() => ({
   checkConsent: vi.fn(
@@ -827,11 +827,11 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
   });
 });
 
-// ── First-use consent gate (OXA-816) ─────────────────────────────────────────
+// ── First-use consent gate ─────────────────────────────────────────
 // These tests verify the external-MCP consent gate runs AFTER the IAM gate and
 // BEFORE the transport: a first-use call (no grant) solicits consent + blocks;
 // a denied grant short-circuits; a pre-existing grant runs inline.
-describe("materializeTools — first-use consent gate (OXA-816)", () => {
+describe("materializeTools — first-use consent gate", () => {
   const MCP_SERVER = {
     id: "srv_abc",
     name: "GitHub",
@@ -1445,7 +1445,7 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
 // seams: listing (deny → never registered, the model cannot SEE it) and
 // execution (deny → blocked + audited even if the tool somehow reached the
 // model; ask → the existing mcp_consents flow with the AGENT PRINCIPAL as the
-// consent subject). No agentRun → both seams inert (the OXA-816 user-consent
+// consent subject). No agentRun → both seams inert (the user-consent
 // tests above prove the unchanged paths).
 describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () => {
   const AGENT_PRN = "prn_agent_1";

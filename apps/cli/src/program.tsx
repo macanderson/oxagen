@@ -684,7 +684,7 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── lineage: fleet-lineage explorer data spine (query_lineage, #1078) ───────
+  // ── lineage: fleet-lineage explorer data spine (query_lineage) ───────
 
   const lineage = program
     .command("lineage")

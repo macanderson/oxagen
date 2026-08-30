@@ -15,7 +15,7 @@ export interface DispatchFanoutArgs {
   parentMessageId: string;
   children: FanoutChild[];
   /**
-   * Current nesting depth of the dispatch (OXA-1498: infinite fanout guard).
+   * Current nesting depth of the dispatch (infinite fanout guard).
    * Default 0 (root dispatch). Incremented by the caller for each nested level.
    * The Inngest executor rejects fanouts that exceed MAX_FANOUT_DEPTH (3).
    * Carried in the event payload only — NOT a DB column.
@@ -30,7 +30,9 @@ export interface DispatchedFanout {
 
 // Writes the fanout row + per-child rows transactionally, then emits a
 // single Inngest event the runner picks up to execute each child.
-export async function dispatchFanout(args: DispatchFanoutArgs): Promise<DispatchedFanout> {
+export async function dispatchFanout(
+  args: DispatchFanoutArgs,
+): Promise<DispatchedFanout> {
   const childMessageIds = args.children.map(() => randomUUID());
   const { fanoutId } = await withTenantDb(async (tx) => {
     const [fan] = await tx
@@ -60,7 +62,7 @@ export async function dispatchFanout(args: DispatchFanoutArgs): Promise<Dispatch
   });
 
   // Carry depth in the event payload so the executor can enforce the depth
-  // guard without a DB column (OXA-1498: infinite fanout protection).
+  // guard without a DB column (infinite fanout protection).
   const currentDepth = args.depth ?? 0;
   await getInngestClient().send({
     name: "agent/subagent.dispatch",

@@ -10,7 +10,11 @@ import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
-import { initTracer, recordSecurityEvent, captureError } from "@oxagen/telemetry";
+import {
+  initTracer,
+  recordSecurityEvent,
+  captureError,
+} from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { extractBearerToken } from "./context";
@@ -40,7 +44,6 @@ bootstrapEntitlementRuntime();
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, immediately after bootstrapIAMRuntime(), so the db
 // client is available before any tool invocation can emit a kernel event.
-// makeSecurityEventInserter() now uses withSystemDb internally — no db() arg needed.
 const _securityInsert = makeSecurityEventInserter();
 setSecurityEventEmitter((kernelEvent) => {
   recordSecurityEvent(_securityInsert, {

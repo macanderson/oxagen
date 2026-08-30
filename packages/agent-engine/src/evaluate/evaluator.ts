@@ -36,11 +36,7 @@ export const LOCAL_EVALUATOR = "local";
 
 /** The evaluator model slug, or `"local"` for the heuristic coordinator. */
 function evaluatorModel(override?: string): string {
-  return (
-    override ??
-    process.env["OXAGEN_LLM_EVALUATOR"] ??
-    LOCAL_EVALUATOR
-  );
+  return override ?? process.env["OXAGEN_LLM_EVALUATOR"] ?? LOCAL_EVALUATOR;
 }
 
 const evalSchema = z.object({
@@ -70,7 +66,9 @@ const evalSchema = z.object({
     ),
   missing: z
     .array(z.string())
-    .describe("Specific information the prompt lacks to be fully actionable. Empty if none."),
+    .describe(
+      "Specific information the prompt lacks to be fully actionable. Empty if none.",
+    ),
   contextQueries: z
     .array(z.string())
     .describe(
@@ -86,10 +84,14 @@ const evalSchema = z.object({
     ),
   removed: z
     .array(z.string())
-    .describe("Phrases removed from the original because they add no value. Empty if none."),
+    .describe(
+      "Phrases removed from the original because they add no value. Empty if none.",
+    ),
   reasoning: z
     .string()
-    .describe("2–4 sentence explanation of the scores and what context will help."),
+    .describe(
+      "2–4 sentence explanation of the scores and what context will help.",
+    ),
 });
 
 export interface EvaluatePromptOptions {
@@ -103,7 +105,7 @@ const EVALUATOR_SYSTEM = [
   "You are the evaluation stage of an agentic coding system. A coding agent is about",
   "to act on the user's prompt against a real repository. Your job is to triage it.",
   "",
-  "Score it honestly:",
+  "Score it plainly:",
   "- completeness: can the agent act on this WITHOUT guessing? Penalize missing files,",
   "  undefined terms, and 'fix it' with no symptom. Reward concrete targets and acceptance.",
   "- complexity: estimate the work, risk, and blast radius — not the prompt's length.",

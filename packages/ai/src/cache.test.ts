@@ -316,8 +316,7 @@ describe("readCache", () => {
 });
 
 describe("writeCache", () => {
-  // Fixture factory: CachedUsage gained cacheWriteTokens (#1076) after these
-  // tests were written; one factory keeps a future field addition a one-line fix.
+  // One factory for CachedUsage keeps a future field addition a one-line fix.
   const makeUsage = (overrides: Partial<CachedUsage> = {}): CachedUsage => ({
     model: "m",
     inputTokens: 1,

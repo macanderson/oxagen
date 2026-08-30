@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Tests for the Quick Actions section in CommandMenu (OXA-1769).
+ * Tests for the Quick Actions section in CommandMenu.
  *
  * Verifies:
  *   1. Quick Actions section appears when matching templates exist for the page.
@@ -71,10 +71,17 @@ vi.mock("@/components/ui/dialog", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
-  has: (_t, prop) => prop !== "then",
-}));
+vi.mock(
+  "lucide-react",
+  () =>
+    new Proxy({} as Record<string | symbol, unknown>, {
+      get: (_t, prop) =>
+        prop === "then"
+          ? undefined
+          : () => <svg aria-hidden="true" data-icon={String(prop)} />,
+      has: (_t, prop) => prop !== "then",
+    }),
+);
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
@@ -84,25 +91,24 @@ vi.mock("@/lib/utils", () => ({
 const mockGetApplicableTemplates = vi.fn();
 const mockRenderTemplate = vi.fn(
   (body: string, vars: Record<string, string>) => ({
-    rendered: body.replace(/\{\{(\w+)\}\}/g, (_: string, name: string) => vars[name] ?? `{{${name}}}`),
+    rendered: body.replace(
+      /\{\{(\w+)\}\}/g,
+      (_: string, name: string) => vars[name] ?? `{{${name}}}`,
+    ),
     missing: [] as string[],
   }),
 );
-const mockResolveVariables = vi.fn(
-  (_vars: unknown, _ctx: unknown) => ({
-    resolved: { run_id: "run_123" } as Record<string, string>,
-    unresolved: [] as string[],
-  }),
-);
+const mockResolveVariables = vi.fn((_vars: unknown, _ctx: unknown) => ({
+  resolved: { run_id: "run_123" } as Record<string, string>,
+  unresolved: [] as string[],
+}));
 
 vi.mock("@oxagen/prompt-templates", () => ({
   getApplicableTemplates: (ctx: unknown) => mockGetApplicableTemplates(ctx),
   renderTemplate: (body: string, vars: Record<string, string>) =>
     mockRenderTemplate(body, vars),
-  resolveVariables: (
-    vars: unknown[],
-    ctx: unknown,
-  ) => mockResolveVariables(vars, ctx),
+  resolveVariables: (vars: unknown[], ctx: unknown) =>
+    mockResolveVariables(vars, ctx),
 }));
 
 import { CommandMenu } from "./command-menu";
@@ -123,7 +129,12 @@ const mockTemplate = {
   autoSubmit: true,
   body: "Summarize the failure of run {{run_id}}.",
   variables: [
-    { name: "run_id", resolver: "param" as const, source: "params.runId", required: true },
+    {
+      name: "run_id",
+      resolver: "param" as const,
+      source: "params.runId",
+      required: true,
+    },
   ],
 };
 
@@ -149,7 +160,7 @@ beforeEach(() => {
   });
 });
 
-describe("CommandMenu — Quick Actions section (OXA-1769)", () => {
+describe("CommandMenu — Quick Actions section", () => {
   it("shows Quick Actions section when templates match the current route", () => {
     mockGetApplicableTemplates.mockReturnValue([mockTemplate]);
     render(<CommandMenu ctx={mockCtx} />);
@@ -204,7 +215,9 @@ describe("CommandMenu — Quick Actions section (OXA-1769)", () => {
     render(<CommandMenu ctx={mockCtx} />);
 
     // Find and click the Quick Action item.
-    const qaItem = screen.getByText("Summarize this run's failure").closest('[role="option"]');
+    const qaItem = screen
+      .getByText("Summarize this run's failure")
+      .closest('[role="option"]');
     expect(qaItem).not.toBeNull();
     fireEvent.click(qaItem!);
 

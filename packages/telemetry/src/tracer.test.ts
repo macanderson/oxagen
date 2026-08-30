@@ -1,6 +1,6 @@
 // tracer.test.ts
 //
-// Unit tests for @oxagen/telemetry tracer module (OXA-1544).
+// Unit tests for @oxagen/telemetry tracer module.
 //
 // These tests verify:
 // 1. No-op behaviour when OTEL_EXPORTER_OTLP_ENDPOINT is unset.
@@ -135,13 +135,14 @@ describe("initTracer", () => {
     }
   });
 
-  it("builds a real NodeSDK with an injected exporter when an endpoint is set (OXA-2059)", async () => {
+  it("builds a real NodeSDK with an injected exporter when an endpoint is set", async () => {
     // Exercises the `overrideExporter ?? new OTLPTraceExporter(...)` branch
     // (line 119-126) by supplying a test exporter so the real OTLP HTTP
     // exporter is never constructed, while still driving initTracer() down
     // its "endpoint configured" path (NodeSDK + BatchSpanProcessor wiring).
     const saved = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://collector.example.com:4318";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT =
+      "http://collector.example.com:4318";
     const testExporter = new InMemorySpanExporterForInit();
     try {
       expect(() => initTracer(testExporter)).not.toThrow();
@@ -154,13 +155,14 @@ describe("initTracer", () => {
     }
   });
 
-  it("constructs a real OTLPTraceExporter when no override is supplied (OXA-2059)", async () => {
+  it("constructs a real OTLPTraceExporter when no override is supplied", async () => {
     // Exercises the `new OTLPTraceExporter(...)` arm of the ternary (line
     // 119-126) — no test exporter is passed, so initTracer must build the real
     // HTTP exporter itself. `.start()` only registers processors; it does not
     // make a network call, so this is safe to run without a live collector.
     const saved = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://collector.example.com:4318";
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT =
+      "http://collector.example.com:4318";
     try {
       expect(() => initTracer()).not.toThrow();
     } finally {
@@ -239,9 +241,13 @@ describe("withSpan", () => {
   });
 
   it("creates a finished span in the exporter", async () => {
-    await withSpan("my.operation", { "capability.name": "test.cap" }, async () => {
-      // work happens here
-    });
+    await withSpan(
+      "my.operation",
+      { "capability.name": "test.cap" },
+      async () => {
+        // work happens here
+      },
+    );
     const spans = exporter.getFinishedSpans();
     const span = spans.find((s) => s.name === "my.operation");
     expect(span).toBeDefined();
@@ -264,7 +270,7 @@ describe("withSpan", () => {
     expect(failedSpan?.status.message).toBe("boom");
   });
 
-  it("stringifies a non-Error rejection in the span status message (OXA-2059)", async () => {
+  it("stringifies a non-Error rejection in the span status message", async () => {
     await expect(
       withSpan("failing.non-error", {}, async () => {
         // Intentionally a non-Error throw — exercises the `String(err)` fallback arm.
@@ -282,9 +288,9 @@ describe("withSpan", () => {
     await withSpan(
       "pii.test",
       {
-        "capability.name": "safe.cap",        // IN allowlist → must appear
+        "capability.name": "safe.cap", // IN allowlist → must appear
         "prompt.content": "secret user text", // NOT in allowlist → must NOT appear
-        "user.email": "user@example.com",     // NOT in allowlist → must NOT appear
+        "user.email": "user@example.com", // NOT in allowlist → must NOT appear
       },
       async () => {},
     );
@@ -345,10 +351,10 @@ describe("setSpanAttrs", () => {
   it("only sets attributes that are in the allowlist", () => {
     const span = getTracer("test").startSpan("attr.test");
     setSpanAttrs(span, {
-      "capability.name": "allowed",         // IN allowlist
-      "tool.name": "also-allowed",          // IN allowlist
-      "secret.key": "should-not-appear",    // NOT in allowlist
-      "user.password": "p@ssw0rd",          // NOT in allowlist
+      "capability.name": "allowed", // IN allowlist
+      "tool.name": "also-allowed", // IN allowlist
+      "secret.key": "should-not-appear", // NOT in allowlist
+      "user.password": "p@ssw0rd", // NOT in allowlist
     });
     span.end();
 

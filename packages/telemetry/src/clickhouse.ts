@@ -170,7 +170,7 @@ export async function sumTokenUsage(args: {
 
 /**
  * Sum `token_usage.cost_usd_micros` (period-to-date spend, micro-USD) for a
- * scope between two timestamps. Powers the kernel spend-budget gate (OXA-1079):
+ * scope between two timestamps. Powers the kernel spend-budget gate:
  * an org-level ceiling omits `workspaceId` (all workspaces roll up); a
  * workspace-level ceiling passes it to scope the sum to that workspace.
  *
@@ -357,10 +357,9 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
  * established pattern for `workspace_id` (DEFAULT toUUID('0…0')). Callers
  * therefore express "no step" as `null`/`undefined`, and we coalesce to the nil
  * UUID here, at the single insert boundary, so a non-UUID string can never reach
- * the column. This is what eliminated the `CANNOT_PARSE_INPUT_ASSERTION_FAILED`
- * (code 27) flood: ingestion callers used to synthesize ids like
- * `embed:<nodeId>` / `dedup:<key>` / `embed-file:<key>` / the literal
- * `"unknown"`, which the UUID text parser over-read on and aborted the whole row.
+ * the column. Any non-UUID string in this column (like `embed:<nodeId>` or the
+ * literal `"unknown"`) makes the UUID text parser over-read and abort the
+ * whole row with `CANNOT_PARSE_INPUT_ASSERTION_FAILED` (code 27).
  */
 export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -495,8 +494,8 @@ export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
 // ── Local dev console capture (tools/scripts/dev.ts) ──────────────────────────
 //
 // One row per line of `pnpm dev`'s combined turbo stream. Written fire-and-forget
-// from the dev orchestrator's log shipper so the terminal output that used to
-// vanish on scroll is queryable. Local-only; 14-day TTL (see schema.sql dev_logs).
+// from the dev orchestrator's log shipper so output scrolled past the terminal
+// stays queryable. Local-only; 14-day TTL (see schema.sql dev_logs).
 // No org/workspace scope — this is machine-level dev telemetry, not tenant data.
 export interface DevLogRow {
   /** One id per `pnpm dev` invocation — groups a single session's stream. */
@@ -516,7 +515,7 @@ export interface DevLogRow {
 export const insertDevLogs = (rows: readonly DevLogRow[]) =>
   insertRows("dev_logs", rows);
 
-// ── Durable-sandbox command output (spec: sandbox-session-lifecycle §5.2) ──────
+// ── Durable-sandbox command output (docs/specs/sandbox-session-lifecycle/spec.md §5.2) ──────
 //
 // One row per line of a coding-session command's stdout/stderr, plus a
 // 'system'/'debug' line per command (echo + exit + duration). Powers the sandbox
@@ -586,7 +585,7 @@ export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
   );
 };
 
-// Agent runtime epic (spec §9). One row per tool invocation. Analytics
+// Agent runtime (docs/specs/agent-runtime/spec.md §9). One row per tool invocation. Analytics
 // mirror of execution.tool_calls; durable record stays in Postgres.
 export interface ToolInvocationRow {
   invocation_id: string;
@@ -765,13 +764,13 @@ export function providerFromModelId(modelId: string): Provider {
   return "";
 }
 
-// ── IAM audit events (OXA-1390, Phase 3) ─────────────────────────────────────
+// ── IAM audit events ───────────────────────────────────────────────────────
 //
 // One row per capability invocation. Written fire-and-forget from inside
 // defineContract().invoke(). The hash_chain links each event to the previous
 // one for the same (org_id, capability) pair; tamper-evidence is best-effort
-// because concurrent calls may read the same prev_hash (documented in
-// plan.md Phase 3 §Risks).
+// because concurrent calls may read the same prev_hash (see
+// docs/specs/iam/plan.md, Phase 3, §Risks).
 
 export interface AuditEventRow {
   occurred_at: string;
@@ -804,7 +803,7 @@ export interface AuditEventRow {
 export const insertAuditEvent = (row: AuditEventRow): Promise<void> =>
   insertRows("audit_events", [row]);
 
-// ── Memory decay / reinforcement events (OXA-1374) ────────────────────────────
+// ── Memory decay / reinforcement events ───────────────────────────────────────
 //
 // One row per confidence change to an AgentMemory node. Callers write
 // fire-and-forget; the table is append-only with a 365-day TTL.
@@ -819,9 +818,9 @@ export interface MemoryChangeRow {
   confidence_before: number;
   confidence_after: number;
   /**
-   * Two-axis model (OXA-1374 follow-up): enforcement_score before/after this
-   * change, for auditing the policy axis alongside confidence (the evidence
-   * axis). Default 0 — most causes (e.g. decay) never touch enforcement.
+   * Two-axis model: enforcement_score before/after this change, for auditing
+   * the policy axis alongside confidence (the evidence axis). Default 0 —
+   * most causes (e.g. decay) never touch enforcement.
    */
   enforcement_before?: number;
   enforcement_after?: number;
@@ -841,8 +840,7 @@ export const insertMemoryChange = (row: MemoryChangeRow): Promise<void> =>
 //
 // Append-only record of every agent-eval run, for measuring the code agent
 // improving over time and catching behavioral regression per task. See the
-// `eval_runs` / `eval_results` tables in schema.sql and the canonical
-// improvement/regression queries in docs/cli/eval-results-schema.md.
+// `eval_runs` / `eval_results` tables in schema.sql.
 //
 // Protocol shape: a few typed core dimensions every harness shares, plus open
 // `metrics` (numeric) and `labels` (string) maps so a NEW metric never needs a
@@ -959,7 +957,7 @@ export const insertEvalResults = (
  * Race note: two concurrent invocations for the same (org_id, capability) may
  * read the same prev_hash and produce a forked chain. This is intentional —
  * chain hash provides best-effort tamper-evidence at the range level, not
- * strict per-event ordering. See plan.md Phase 3 §Risks.
+ * strict per-event ordering. See docs/specs/iam/plan.md, Phase 3, §Risks.
  */
 export async function latestAuditChainHash(args: {
   orgId: string;
@@ -992,7 +990,7 @@ export async function latestAuditChainHash(args: {
 // already passed UsageEventPayloadSchema.strict() (usage-events.ts) — this
 // row type mirrors that schema exactly, plus the server-stamped `timestamp`
 // (never client-supplied; see usage-events.ts for why). Anonymous/aggregate
-// only: no org/workspace scope, no user identity — see TELEMETRY.md.
+// only: no org/workspace scope, no user identity.
 export interface UsageEventRow {
   /** ISO-8601, stamped by the route handler at insert time. */
   timestamp: string;

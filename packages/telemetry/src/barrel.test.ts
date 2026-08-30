@@ -11,7 +11,11 @@ import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
 
 vi.mock("@clickhouse/client", () => ({
-  createClient: vi.fn(() => ({ close: vi.fn(), insert: vi.fn(), query: vi.fn() })),
+  createClient: vi.fn(() => ({
+    close: vi.fn(),
+    insert: vi.fn(),
+    query: vi.fn(),
+  })),
 }));
 vi.mock("@oxagen/config/env", () => ({
   requireEnv: () => ({
@@ -53,7 +57,7 @@ describe("index.ts barrel exports", () => {
     // Security
     expect(typeof mod.chInsert).toBe("function");
     expect(typeof mod.chSelect).toBe("function");
-    // Skill telemetry (OXA-1750)
+    // Skill telemetry
     expect(typeof mod.recordSkillLoad).toBe("function");
     expect(typeof mod.readSkillMetrics).toBe("function");
   });

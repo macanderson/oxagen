@@ -1,6 +1,6 @@
 /**
- * Workspace environments (Spec §6). CRUD plus the only-one-default invariant
- * with promote-before-remove semantics. The default swap is atomic in one tx;
+ * Workspace environments. CRUD plus the only-one-default invariant with
+ * promote-before-remove semantics. The default swap is atomic in one tx;
  * the DB partial-unique `(workspace_id) WHERE is_default` is the backstop, the
  * handler guards are the user-facing contract. RLS-enforced via withTenantDb.
  */
@@ -66,7 +66,11 @@ function toSummary(row: EnvRow): EnvironmentSummary {
   };
 }
 
-async function loadEnv(tx: Tx, workspaceId: string, publicId: string): Promise<EnvRow> {
+async function loadEnv(
+  tx: Tx,
+  workspaceId: string,
+  publicId: string,
+): Promise<EnvRow> {
   const [row] = await tx
     .select(envColumns())
     .from(schema.environments)
@@ -78,7 +82,8 @@ async function loadEnv(tx: Tx, workspaceId: string, publicId: string): Promise<E
       ),
     )
     .limit(1);
-  if (!row) throw new Error(`[environments] environment not found: ${publicId}`);
+  if (!row)
+    throw new Error(`[environments] environment not found: ${publicId}`);
   return row;
 }
 
@@ -110,7 +115,9 @@ export async function createEnvironment(
   });
 }
 
-export async function listEnvironments(actor: EnvironmentActor): Promise<EnvironmentSummary[]> {
+export async function listEnvironments(
+  actor: EnvironmentActor,
+): Promise<EnvironmentSummary[]> {
   return withTenantDb(async (tx) => {
     const rows = await tx
       .select(envColumns())
@@ -130,7 +137,9 @@ export async function getEnvironment(
   actor: EnvironmentActor,
   input: { environmentId: string },
 ): Promise<EnvironmentSummary> {
-  return withTenantDb(async (tx) => toSummary(await loadEnv(tx, actor.workspaceId, input.environmentId)));
+  return withTenantDb(async (tx) =>
+    toSummary(await loadEnv(tx, actor.workspaceId, input.environmentId)),
+  );
 }
 
 export async function updateEnvironment(
@@ -145,14 +154,15 @@ export async function updateEnvironment(
 ): Promise<EnvironmentSummary> {
   return withTenantDb(async (tx) => {
     const existing = await loadEnv(tx, actor.workspaceId, input.environmentId);
-    // The default environment must always stay active (Spec §6) — promote
-    // another environment to default before deactivating this one.
+    // The default environment must always stay active — promote another
+    // environment to default before deactivating this one.
     if (input.isActive === false && existing.isDefault) {
       throw new Error(
         "[environments] cannot deactivate the default environment — promote another environment to default first",
       );
     }
-    const slug = input.slug !== undefined ? input.slug.toLowerCase() : undefined;
+    const slug =
+      input.slug !== undefined ? input.slug.toLowerCase() : undefined;
     if (slug !== undefined && !isValidEnvironmentSlug(slug)) {
       throw new Error(`[environments] invalid slug: ${input.slug}`);
     }
@@ -161,7 +171,9 @@ export async function updateEnvironment(
       .set({
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(slug !== undefined ? { slug } : {}),
-        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         updatedAt: new Date(),
         updatedByUserId: actor.userId ?? null,
@@ -206,7 +218,11 @@ export async function setDefaultEnvironment(
     // Clear the existing default first so the partial-unique sees at most one.
     await tx
       .update(schema.environments)
-      .set({ isDefault: false, updatedAt: new Date(), updatedByUserId: actor.userId ?? null })
+      .set({
+        isDefault: false,
+        updatedAt: new Date(),
+        updatedByUserId: actor.userId ?? null,
+      })
       .where(
         and(
           eq(schema.environments.workspaceId, actor.workspaceId),

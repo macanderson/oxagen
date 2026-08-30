@@ -8,7 +8,7 @@
  *      shows the real seat-limited state: roster with the creator as owner,
  *      the seat-limit warning banner, and the Add Member dialog's real
  *      "no licenses available" gate (Send disabled). This is the org's
- *      honest out-of-the-box state, not a contrived error path.
+ *      real out-of-the-box state, not a contrived error path.
  *   2. After seeding an active 5-seat subscription (seedSubscription — stands
  *      in for the Stripe webhook, same helper billing-credits-purchase.spec.ts
  *      uses), the full invite pipeline is exercised: invite → the Invited

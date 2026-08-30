@@ -191,9 +191,9 @@ export class RunEventPayloadTooLargeError extends Error {
 
 /**
  * The same `(attempt_id, attempt_seq)` was written twice with DIFFERENT event
- * digests. This is the failure `ON CONFLICT DO NOTHING` used to hide: one of
- * the two writers observed a different execution, so the ordered stream is no
- * longer a single provable history.
+ * digests. `ON CONFLICT DO NOTHING` would silently hide this: one of the two
+ * writers observed a different execution, so the ordered stream is no longer a
+ * single provable history.
  *
  * It is a hard error AND a security event (`agent_run.event_sequence_conflict`,
  * emitted outside the rolled-back transaction so the audit record survives).

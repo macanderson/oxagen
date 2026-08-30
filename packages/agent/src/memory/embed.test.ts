@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// OXA-1425: agent/memory/embed.ts is a thin re-export of @oxagen/ai embedText.
+// agent/memory/embed.ts is a thin re-export of @oxagen/ai embedText.
 // Mock at the @oxagen/ai seam — do NOT mock the gateway SDK here; the vendor
 // SDK is an implementation detail of @oxagen/ai, not of this module.
 const mocks = vi.hoisted(() => ({
@@ -36,7 +36,7 @@ describe("embedText (agent/memory wrapper)", () => {
     const [text, opts] = calls[0]!;
     expect(text).toBe("hello world");
     // Telemetry opts are forwarded verbatim — embeddings are always metered
-    // now that EmbedTextOpts.telemetry is required (OXA-1351 / OXA-1425).
+    // now that EmbedTextOpts.telemetry is required.
     expect(opts).toEqual({ telemetry });
   });
 

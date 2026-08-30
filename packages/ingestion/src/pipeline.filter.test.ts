@@ -243,7 +243,7 @@ describe("runPipeline — Stage 2: label filter", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Stage 5: Legacy embedding opt-out
+// Stage 5: embedding opt-out
 // ---------------------------------------------------------------------------
 
 describe("runPipeline — Stage 5: embedding opt-out", () => {
@@ -251,7 +251,7 @@ describe("runPipeline — Stage 5: embedding opt-out", () => {
     vi.clearAllMocks();
   });
 
-  it("skips embed when the legacy semanticInference.enabled flag is false", async () => {
+  it("skips embed when semanticInference.enabled is false", async () => {
     const event = makeEvent();
     const ctx = makeCtx({ semanticInference: { enabled: false } });
     const result = await runPipeline(event, ctx);
@@ -275,7 +275,7 @@ describe("runPipeline — Stage 5: embedding opt-out", () => {
     expect(embedEntity).not.toHaveBeenCalled();
   });
 
-  it("runs embed when the legacy flag is enabled globally", async () => {
+  it("runs embed when semanticInference.enabled is true globally", async () => {
     const event = makeEvent();
     const ctx = makeCtx({ semanticInference: { enabled: true } });
     const result = await runPipeline(event, ctx);

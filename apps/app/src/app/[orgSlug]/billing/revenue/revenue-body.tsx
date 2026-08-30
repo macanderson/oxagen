@@ -31,7 +31,7 @@ import { getSession } from "@/lib/session";
 import { withTimeout } from "@/lib/with-timeout";
 import { RevenueView } from "./revenue-view";
 
-// Sentinel workspaceId for org-only routes. — OXA-1515
+// Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 /** Current calendar month to date, in UTC — the default re-bill period. */

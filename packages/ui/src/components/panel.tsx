@@ -20,8 +20,8 @@ import { cn } from "../lib/utils";
  *
  * Optional treatments (default off, mirroring `Card`):
  * - `inset`        — removes body padding for flush content (tables).
- * - `glow`         — retained for back-compat; flat UI renders no glow.
- * - `gradientRing` — retained for back-compat; uses the neutral border.
+ * - `glow`         — adds an `ox-glow-violet` class with no matching style; has no visual effect.
+ * - `gradientRing` — adds a `gradient-ring` class with no matching style; has no visual effect.
  */
 export interface PanelProps
   extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
@@ -35,9 +35,9 @@ export interface PanelProps
   footer?: React.ReactNode;
   /** Remove body padding for flush content like tables. */
   inset?: boolean;
-  /** Retained for back-compat; no ambient glow in the flat UI. */
+  /** Adds an `ox-glow-violet` class; no style targets it, so this has no visual effect. */
   glow?: boolean;
-  /** Retained for back-compat; keeps the neutral border in the flat UI. */
+  /** Adds a `gradient-ring` class; no style targets it, so this has no visual effect. */
   gradientRing?: boolean;
 }
 
@@ -50,8 +50,8 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
       actions,
       footer,
       inset = false,
-      glow,
-      gradientRing,
+      glow: _glow,
+      gradientRing: _gradientRing,
       children,
       ...props
     },
@@ -63,8 +63,6 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
         ref={ref}
         className={cn(
           "flex flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm",
-          glow && "ox-glow-violet",
-          gradientRing && "gradient-ring",
           className,
         )}
         {...props}

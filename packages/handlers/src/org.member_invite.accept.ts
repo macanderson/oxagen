@@ -20,19 +20,23 @@ import { and, eq } from "drizzle-orm";
 import { provisionMemberPrincipal } from "./iam-provision";
 import { logger } from "./logger";
 
-export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInviteAccept> = async (
-  input,
-  ctx,
-) => {
+export const orgMemberInviteAcceptHandler: CapabilityHandler<
+  typeof orgMemberInviteAccept
+> = async (input, ctx) => {
   // ── Auth guard ───────────────────────────────────────────────────────────────
   if (!ctx.userId) {
-    logger.warn({}, "org.member.invite.accept: rejected — no authenticated userId");
-    throw new Error("Unauthorized: must be authenticated to accept an invitation");
+    logger.warn(
+      {},
+      "org.member.invite.accept: rejected — no authenticated userId",
+    );
+    throw new Error(
+      "Unauthorized: must be authenticated to accept an invitation",
+    );
   }
 
   // tenancy: system bypass via withSystemDb (cross-org lookup — the invitee's
   // ctx.orgId may differ from the invitation's orgId; the writes below go to the
-  // invitation's org, which cannot satisfy RLS under the caller's scope) — OXA-1515
+  // invitation's org, which cannot satisfy RLS under the caller's scope) (see docs/specs/tenancy-rls/spec.md)
 
   // ── Resolve invitation ───────────────────────────────────────────────────────
   const invitation = await withSystemDb((tx) =>
@@ -63,7 +67,11 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
     await withSystemDb((tx) =>
       tx
         .update(schema.invitations)
-        .set({ status: "expired", updatedAt: new Date(), updatedByUserId: ctx.userId })
+        .set({
+          status: "expired",
+          updatedAt: new Date(),
+          updatedByUserId: ctx.userId,
+        })
         .where(eq(schema.invitations.id, invitation.id)),
     ).catch((err) =>
       logger.warn(
@@ -87,7 +95,11 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
   // Case-insensitive comparison — email is citext in the DB.
   if (userRow.email.toLowerCase() !== invitation.email.toLowerCase()) {
     logger.warn(
-      { orgId: invitation.orgId, invitationId: invitation.publicId, userId: ctx.userId },
+      {
+        orgId: invitation.orgId,
+        invitationId: invitation.publicId,
+        userId: ctx.userId,
+      },
       "org.member.invite.accept: email mismatch",
     );
     throw new Error("This invitation was not issued to your email address");
@@ -139,7 +151,10 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
           ),
         )
         .limit(1);
-      if (!existing) throw new Error("org_users insert returned no row and re-select failed");
+      if (!existing)
+        throw new Error(
+          "org_users insert returned no row and re-select failed",
+        );
       orgUserPublicId = existing.publicId;
     }
 

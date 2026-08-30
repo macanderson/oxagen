@@ -117,7 +117,7 @@ describe("runPipeline", () => {
         naturalKey: "github:conn-abc:42",
       }),
       "org-1",
-      // §8: the pipeline threads the schema-validation opts (pinnedSchema +
+      // The pipeline threads the schema-validation opts (pinnedSchema +
       // source metadata) as the third arg. No pin configured here → null.
       expect.objectContaining({
         pinnedSchema: null,
@@ -185,7 +185,7 @@ describe("runPipeline", () => {
   });
 });
 
-describe("runPipeline — §8 schema validation seam", () => {
+describe("runPipeline — schema validation seam", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

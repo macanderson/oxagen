@@ -5,11 +5,11 @@
  * every state. Sits inside the page's Suspense boundary so the header + tab
  * strip paint first (mirrors AutomationsSection / WorkflowsSection).
  *
- * State coverage (issue #1078's "no dead ends" requirement):
+ * State coverage (no dead ends):
  *   - no dispatchId            → DispatchPicker (recent list + paste-id form)
  *   - queryLineageAction fails → DispatchPicker with a not-found/error banner
- *   - resolves but nodeCount=0 → an honest "no runs yet" panel with the root
- *                                 fan-out's own status (not a blank page)
+ *   - resolves but nodeCount=0 → a "no runs yet" panel with the root fan-out's
+ *                                 own status (not a blank page)
  *   - resolves with nodes      → LineageExplorer (canvas + tree list; the
  *                                 violation banner is itself the "violation
  *                                 state" — handled inside LineageExplorer)

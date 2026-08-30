@@ -65,9 +65,9 @@ function parseRepos(
 
 /**
  * A GitHub connection's display name is always the repo slug it's bound to —
- * `organization-slug/repo-slug` — never a free-form label. This keeps the
- * Knowledge → Repos tab honest: one connection reads as exactly the repo it
- * ingests, so the list can't fill with duplicate-looking generic names.
+ * `organization-slug/repo-slug` — never a free-form label. One connection
+ * reads as exactly the repo it ingests, so the Knowledge → Repos tab list
+ * can't fill with duplicate-looking generic names.
  * Multi-repo selections show the primary repo plus a `(+N more)` count.
  * Returns undefined when no repo is resolvable (nothing to rename to).
  */
@@ -139,9 +139,9 @@ export const connectionMappingsSetHandler: CapabilityHandler<
     : input.mappings;
 
   // Merge EVERY GitHub source-selection field the caller supplied into
-  // deliveryConfig so the initial sync can resolve which repos to pull
-  // (previously dropped → empty owner/repo → 404). Covers both the multi-repo
-  // wizard flow (selectedRepos) and a single owner/repo/defaultBranch (OXA-1806).
+  // deliveryConfig so the initial sync can resolve which repos to pull.
+  // Covers both the multi-repo wizard flow (selectedRepos) and a single
+  // owner/repo/defaultBranch.
   const dcUpdates: Record<string, unknown> = {};
   if (input.owner !== undefined) dcUpdates["owner"] = input.owner;
   if (input.repo !== undefined) dcUpdates["repo"] = input.repo;
@@ -164,8 +164,8 @@ export const connectionMappingsSetHandler: CapabilityHandler<
 
   // Resolve the repo selection ONCE, up front, so both the auto-rename (below,
   // in the activation UPDATE) and the initial-sync fan-out (after the tx) share
-  // the same list — the multi-repo wizard selection, else a single stored/
-  // request owner/repo (legacy + OXA-1806).
+  // the same list — the multi-repo wizard selection, else a single stored or
+  // request owner/repo.
   const dcForRepos =
     ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<
       string,

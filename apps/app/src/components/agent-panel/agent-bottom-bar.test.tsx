@@ -11,7 +11,7 @@
  *   - The open() wiring on the launch + resume buttons.
  *
  * Replaces the stale e2e/agent-panel.spec.ts, which tested a removed
- * "agent-panel-launcher" design (PR #164's glassmorphism panel) on /login.
+ * "agent-panel-launcher" glassmorphism panel design on /login.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

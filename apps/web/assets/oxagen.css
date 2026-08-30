@@ -54,8 +54,7 @@
   --gold:var(--st-gold);
   --gold-hi:var(--st-gold-bright);
   --gold-ink:var(--st-gold-ink);
-  --ink:var(--st-paper-text);   /* was #E8E8EC — the live site resolves its
-                                   foreground to --st-paper-text, not --st-text */
+  --ink:var(--st-paper-text);
   --ink-2:var(--st-silver-type);
   --ink-3:var(--st-silver);
   --muted:var(--st-muted);

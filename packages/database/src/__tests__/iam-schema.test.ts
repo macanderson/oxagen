@@ -1,5 +1,5 @@
 /**
- * IAM schema smoke tests for @oxagen/database (OXA-1389, Phase 2).
+ * IAM schema smoke tests for @oxagen/database.
  *
  * Tests operate entirely on Drizzle table definitions via `getTableConfig` —
  * no live DB, no network, no random/wall-clock values.
@@ -14,9 +14,9 @@
  *  7. access_requests.status CHECK constraint exists and covers all 4 values.
  *  8. roles.scope_kind CHECK exists and includes both 'org' and 'workspace'.
  *
- * Phase 3 (OXA-1390): a `grants` (direct principal→scope effect) table and a
- * `policies` (ABAC policy) table are planned but not yet implemented.
- * Tests for those tables will be added when the migrations land.
+ * A `grants` (direct principal→scope effect) table and a `policies` (ABAC
+ * policy) table are planned but not yet implemented. Tests for those tables
+ * will be added when the migrations land.
  */
 
 import { describe, it, expect } from "vitest";

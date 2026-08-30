@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
@@ -11,7 +16,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -29,7 +36,8 @@ function asArray(v: unknown): unknown[] {
 const zoom: ConnectorDefinition<Config> = {
   connectorId: "zoom",
   displayName: "Zoom",
-  description: "Sync meetings, recordings, participants, and transcripts from Zoom.",
+  description:
+    "Sync meetings, recordings, participants, and transcripts from Zoom.",
   icon: "zoom",
   supportedAuthSchemes: ["oauth2_authorization_code"],
   deliveryMethod: "webhook",
@@ -44,7 +52,8 @@ const zoom: ConnectorDefinition<Config> = {
 
     switch (sourceRecordType) {
       case "meeting": {
-        const id = asNumber(r["id"]) ?? asString(r["id"]) ?? asString(r["uuid"]) ?? "";
+        const id =
+          asNumber(r["id"]) ?? asString(r["id"]) ?? asString(r["uuid"]) ?? "";
         return {
           externalId: String(id),
           displayName: asString(r["topic"]),
@@ -109,13 +118,15 @@ const zoom: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`zoom.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `zoom.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 
   // Zoom sends Authorization: <token> as a static bearer token for webhook
-  // verification. OXA-2051: compare in constant time — a plain `===` here
-  // leaks the secret via response-time analysis on this unauthenticated route.
+  // verification. Compare in constant time — a plain `===` here leaks the
+  // secret via response-time analysis on this unauthenticated route.
   verifyWebhook(_payload, headers, secret): boolean {
     if (!secret) return false;
     const auth = headers["authorization"];

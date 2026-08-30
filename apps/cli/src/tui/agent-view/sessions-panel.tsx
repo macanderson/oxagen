@@ -5,16 +5,23 @@
  * newest first, read from the real ADR-023 session store. Every column is a
  * fact from disk: derived lifecycle state, short id, surface, title, model,
  * turn count, wall-clock duration, and recorded cost. Nothing is synthesized —
- * an empty store shows the honest "no runs yet" invitation.
+ * an empty store shows a "no runs yet" invitation.
  */
 import { Box, Text } from "ink";
 import React from "react";
 import { theme } from "../theme.js";
-import { colorForSid, formatDurationMs, stateGlyph } from "../mission-control/lib.js";
+import {
+  colorForSid,
+  formatDurationMs,
+  stateGlyph,
+} from "../mission-control/lib.js";
 import { shortSid } from "../../sessions/ids.js";
 import { formatUsd, type SessionRow } from "./data.js";
 
-const OWNER_TAG: Record<"tui" | "worker", string> = { tui: "repl", worker: "fleet" };
+const OWNER_TAG: Record<"tui" | "worker", string> = {
+  tui: "repl",
+  worker: "fleet",
+};
 
 function RunLine({ row }: { row: SessionRow }): React.ReactElement {
   const g = stateGlyph(row.state);
@@ -28,7 +35,9 @@ function RunLine({ row }: { row: SessionRow }): React.ReactElement {
         <Text dimColor>{OWNER_TAG[row.owner]}</Text>
       </Box>
       <Box flexGrow={1} minWidth={8}>
-        <Text wrap="truncate">{row.title.trim() === "" ? "(untitled)" : row.title}</Text>
+        <Text wrap="truncate">
+          {row.title.trim() === "" ? "(untitled)" : row.title}
+        </Text>
       </Box>
       <Box width={12}>
         <Text dimColor wrap="truncate">
@@ -59,7 +68,12 @@ export function SessionsPanel({
 }): React.ReactElement {
   const shown = rows.slice(0, limit);
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.dim} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.dim}
+      paddingX={1}
+    >
       <Box marginBottom={1} justifyContent="space-between">
         <Box>
           <Text bold color={theme.cyan}>
@@ -77,8 +91,8 @@ export function SessionsPanel({
           <Text dimColor>No agent runs recorded for this project yet.</Text>
           <Text dimColor>
             Start one:{" "}
-            <Text color={theme.cyan}>oxagen &quot;fix the login bug&quot;</Text> · or ·{" "}
-            <Text color={theme.cyan}>oxagen agents &quot;…&quot;</Text>
+            <Text color={theme.cyan}>oxagen &quot;fix the login bug&quot;</Text>{" "}
+            · or · <Text color={theme.cyan}>oxagen agents &quot;…&quot;</Text>
           </Text>
         </Box>
       ) : (
@@ -112,7 +126,9 @@ export function SessionsPanel({
           ))}
           {rows.length > shown.length ? (
             <Box marginTop={1}>
-              <Text dimColor>+{rows.length - shown.length} older · oxagen fleet list</Text>
+              <Text dimColor>
+                +{rows.length - shown.length} older · oxagen fleet list
+              </Text>
             </Box>
           ) : null}
         </>

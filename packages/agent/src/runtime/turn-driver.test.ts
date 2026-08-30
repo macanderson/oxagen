@@ -485,11 +485,9 @@ describe("createPlatformTurnDriver — happy path", () => {
   });
 });
 
-// NOTE: #1090 also carried an Engram memory-recall block here
-// (createPlatformMemoryProvider wired into executeTurn as `memory`). That is
-// separate agent-memory work whose adapter does not exist on main, so it is
-// deliberately NOT part of this Agent RBAC port — the driver code and these
-// tests were both dropped rather than shipping a dangling import.
+// Engram memory-recall (createPlatformMemoryProvider wired into executeTurn
+// as `memory`) is separate agent-memory work whose adapter does not exist on
+// main, so it is not part of this driver or these tests.
 
 // ── createPlatformTurnDriver — budget guard ─────────────────────────────────
 
@@ -1140,7 +1138,7 @@ describe("createPlatformTurnDriver — agent RBAC delegation (spec §3.4/§3.5)"
     expect(ctx.agentRun?.resolution?.snapshot).toBe(SNAPSHOT);
     expect(ctx.agentRun?.resolution?.byCapability).toBeInstanceOf(Map);
     expect(ctx.agentRun?.resolution?.byCapability.size).toBe(0);
-    // The enqueuing human also rides on ctx.userId (honest attribution).
+    // The enqueuing human also rides on ctx.userId.
     expect(ctx.userId).toBe("usr_inv");
   });
 

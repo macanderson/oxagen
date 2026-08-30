@@ -1,9 +1,8 @@
 /**
  * Tests for renderMarkdownFileText (@oxagen/code-graph/renderers).
  *
- * renderFileText/renderSymbolText already have coverage via
- * packages/ingestion/src/embed/render.test.ts (the re-export's original home);
- * this file covers the new markdown-specific renderer only.
+ * renderFileText is exercised indirectly through its callers elsewhere in the
+ * codebase, so this file covers the markdown-specific renderer only.
  */
 import { describe, it, expect } from "vitest";
 import { renderMarkdownFileText } from "../renderers";
@@ -42,14 +41,22 @@ describe("renderMarkdownFileText", () => {
 
   it("respects a custom maxChars", () => {
     const content = "word ".repeat(5000);
-    const text = renderMarkdownFileText({ path: "docs/huge.md", content, maxChars: 200 });
+    const text = renderMarkdownFileText({
+      path: "docs/huge.md",
+      content,
+      maxChars: 200,
+    });
 
     expect(text.length).toBeLessThan(200 + "docs/huge.md".length + 10);
   });
 
   it("always includes at least the first chunk, even if it alone exceeds maxChars", () => {
     const content = "x".repeat(500);
-    const text = renderMarkdownFileText({ path: "a.md", content, maxChars: 10 });
+    const text = renderMarkdownFileText({
+      path: "a.md",
+      content,
+      maxChars: 10,
+    });
 
     // Truncated to the cap, but never empty.
     expect(text.length).toBeGreaterThan(0);

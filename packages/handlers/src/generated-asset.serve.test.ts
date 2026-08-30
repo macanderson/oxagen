@@ -25,13 +25,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({ select: mocks.dbSelect }),
-  // withSystemDb passthrough: the handler uses withSystemDb for asset row
-  // lookup and org-membership check (OXA-1515). Forward fn to a fake tx with
-  // the same select mock so existing test chains apply.
-  withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
-    fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
-
+    db: () => ({ select: mocks.dbSelect }),
+    // withSystemDb passthrough: the handler uses withSystemDb for asset row
+    // lookup and org-membership check. Forward fn to a fake tx with
+    // the same select mock so existing test chains apply.
+    withSystemDb: async (
+      fn: (tx: Record<string, unknown>) => Promise<unknown>,
+    ) => fn({ select: mocks.dbSelect } as unknown as Record<string, unknown>),
   };
 });
 
@@ -55,8 +55,11 @@ vi.mock("node:crypto", () => ({
   randomUUID: () => "00000000-0000-0000-0000-000000000001",
 }));
 
-const { serveGeneratedAsset, GeneratedAssetNotFoundError, GeneratedAssetForbiddenError } =
-  await import("./generated-asset.serve");
+const {
+  serveGeneratedAsset,
+  GeneratedAssetNotFoundError,
+  GeneratedAssetForbiddenError,
+} = await import("./generated-asset.serve");
 const { StorageNotFoundError } = await import("@oxagen/storage");
 
 function asset(overrides: Record<string, unknown> = {}) {
@@ -83,10 +86,14 @@ function asset(overrides: Record<string, unknown> = {}) {
 
 const STREAM_BODY = new ReadableStream<Uint8Array>();
 
-function apiPrincipal(o: Partial<AssetServePrincipal> = {}): AssetServePrincipal {
+function apiPrincipal(
+  o: Partial<AssetServePrincipal> = {},
+): AssetServePrincipal {
   return { orgId: "org-aaa", workspaceId: "ws-bbb", surface: "api", ...o };
 }
-function appPrincipal(o: Partial<AssetServePrincipal> = {}): AssetServePrincipal {
+function appPrincipal(
+  o: Partial<AssetServePrincipal> = {},
+): AssetServePrincipal {
   return { userId: "user-owner", surface: "app", ...o };
 }
 
@@ -103,9 +110,9 @@ beforeEach(() => {
 describe("serveGeneratedAsset", () => {
   it("404s when the asset row is absent", async () => {
     mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([]));
-    await expect(serveGeneratedAsset("gen_X", apiPrincipal())).rejects.toBeInstanceOf(
-      GeneratedAssetNotFoundError,
-    );
+    await expect(
+      serveGeneratedAsset("gen_X", apiPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
     expect(mocks.storageGet).not.toHaveBeenCalled();
   });
 
@@ -123,22 +130,28 @@ describe("serveGeneratedAsset", () => {
   });
 
   it("404s when the asset is not ready (pending render)", async () => {
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ status: "pending" })]));
-    await expect(serveGeneratedAsset("gen_T1", apiPrincipal())).rejects.toBeInstanceOf(
-      GeneratedAssetNotFoundError,
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ status: "pending" })]),
     );
+    await expect(
+      serveGeneratedAsset("gen_T1", apiPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
   it("404s when the asset is soft-deleted", async () => {
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ deletedAt: new Date() })]));
-    await expect(serveGeneratedAsset("gen_T1", appPrincipal())).rejects.toBeInstanceOf(
-      GeneratedAssetNotFoundError,
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ deletedAt: new Date() })]),
     );
+    await expect(
+      serveGeneratedAsset("gen_T1", appPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
   // ── public policy ──
   it("public — serves to a request with no identity", async () => {
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ accessPolicy: "public" })]));
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ accessPolicy: "public" })]),
+    );
     const result = await serveGeneratedAsset("gen_T1", { surface: "app" });
     expect(result.body).toBe(STREAM_BODY);
     // Inline disposition + a human-readable slug filename (never the gen_ id).
@@ -152,7 +165,10 @@ describe("serveGeneratedAsset", () => {
     mocks.dbSelect
       .mockReturnValueOnce(makeSelectBuilder([asset()])) // asset
       .mockReturnValueOnce(makeSelectBuilder([{ id: "oru-1" }])); // membership
-    const ok = await serveGeneratedAsset("gen_T1", appPrincipal({ userId: "member-1" }));
+    const ok = await serveGeneratedAsset(
+      "gen_T1",
+      appPrincipal({ userId: "member-1" }),
+    );
     expect(ok.body).toBe(STREAM_BODY);
 
     mocks.dbSelect.mockReset();
@@ -178,22 +194,31 @@ describe("serveGeneratedAsset", () => {
 
   // ── user policy ──
   it("user — only the creator may read (app)", async () => {
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ accessPolicy: "user" })]));
-    const ok = await serveGeneratedAsset("gen_T1", appPrincipal({ userId: "user-owner" }));
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ accessPolicy: "user" })]),
+    );
+    const ok = await serveGeneratedAsset(
+      "gen_T1",
+      appPrincipal({ userId: "user-owner" }),
+    );
     expect(ok.body).toBe(STREAM_BODY);
 
     mocks.dbSelect.mockReset();
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ accessPolicy: "user" })]));
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ accessPolicy: "user" })]),
+    );
     await expect(
       serveGeneratedAsset("gen_T1", appPrincipal({ userId: "someone-else" })),
     ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
   it("user — an api key (no user identity) cannot read a user-private asset", async () => {
-    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ accessPolicy: "user" })]));
-    await expect(serveGeneratedAsset("gen_T1", apiPrincipal())).rejects.toBeInstanceOf(
-      GeneratedAssetNotFoundError,
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ accessPolicy: "user" })]),
     );
+    await expect(
+      serveGeneratedAsset("gen_T1", apiPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
   // ── no identity on a non-public asset ──
@@ -208,14 +233,16 @@ describe("serveGeneratedAsset", () => {
   it("maps a missing storage object to 404", async () => {
     mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset()]));
     mocks.storageGet.mockRejectedValue(new StorageNotFoundError("k"));
-    await expect(serveGeneratedAsset("gen_T1", apiPrincipal())).rejects.toBeInstanceOf(
-      GeneratedAssetNotFoundError,
-    );
+    await expect(
+      serveGeneratedAsset("gen_T1", apiPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
   it("video assets serve inline with a slug filename", async () => {
     mocks.dbSelect.mockReturnValueOnce(
-      makeSelectBuilder([asset({ kind: "video", mimeType: "video/mp4", prompt: "Ocean waves" })]),
+      makeSelectBuilder([
+        asset({ kind: "video", mimeType: "video/mp4", prompt: "Ocean waves" }),
+      ]),
     );
     const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
     expect(result.contentDisposition).toBe(
@@ -269,7 +296,9 @@ describe("serveGeneratedAsset", () => {
       ]),
     );
     const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
-    expect(result.contentDisposition).toContain(`filename="polar-crossing-report.md"`);
+    expect(result.contentDisposition).toContain(
+      `filename="polar-crossing-report.md"`,
+    );
   });
 
   it("telemetry failure does not break the response", async () => {

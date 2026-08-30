@@ -266,10 +266,10 @@ const contextTransformV1Schema = z
   })
   .strict();
 
-// Every #33 field is optional with no materialized default: a `.default()`
-// here would change the normalized bytes of every pinned golden fixture. A
-// frame with no `representation` is a `full` frame — the default is semantic
-// (applied by the invariants below), not written into the output.
+// These fields are all optional with no `.default()`. Adding a default would
+// change the normalized bytes of every pinned golden fixture. A frame with
+// no `representation` is a `full` frame — that default is applied by the
+// invariants below, not written into the output.
 const contextFrameObjectV1Schema = z
   .object({
     id: z.string(),
@@ -439,9 +439,10 @@ export function normalizeContextQueryV1(input: unknown): ContextQueryV1 {
 // ─── Canonical token accounting (`SPEC.md` §B3) ─────────────────────────────
 // The cost arithmetic comes from the canonical SDK (`budgetTokens`), not a
 // local re-derivation: `ceil(utf8_byte_length(content) / 4)`, and a frame
-// with no inline content costs 0. Separate from `normalizeContextFrameV1` by
-// design — the pinned golden fixtures predate #33's honesty rule, so honesty
-// is a conformance predicate (as in `contextgraph-types`), not a parse gate.
+// with no inline content costs 0. This check is separate from
+// `normalizeContextFrameV1` because some pinned golden fixtures carry a
+// `token_cost` that does not match their content. Parsing must still accept
+// those fixtures, so the match check is a separate predicate, not a parse gate.
 
 /** The canonical budget-token cost of this frame's inline content. */
 export function expectedInlineTokenCostV1(

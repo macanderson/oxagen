@@ -1,4 +1,39 @@
-# Scalpel — SWE-bench Rank-#1 Spec for the Oxagen CLI
+# SWE-bench Rank-1 Scalpel
+
+Archived spec & plan — status: shipped (audited 2026-07-03).
+
+> **Status: Shipped** — verified against the codebase on 2026-07-03 by an automated audit.
+>
+> All 10 features from the SWE-bench Rank-1 Scalpel spec have been implemented, tested, and wired into the agent-engine and CLI on main. The spec defines ten targeted optimizations (zero-token localization, spec-first oracle, adaptive ladder, cache-forked best-of-N, consensus selection, diff shrinker, hypothesis falsification, repo priors, memory filtering, diagnosis artifact) to maximize SWE-bench score while minimizing tokens and diff size. All feature modules exist with comprehensive unit tests (~350+ tests total), environment flags are registered, and the features are integrated into the pipeline and CLI via fork mode, ladder decision control, and prompt enhancement.
+
+**Implementation evidence**
+
+- docs/specs/swe-rank1-scalpel.md — Spec file with 10-feature design, build plan, dogfooding protocol
+- packages/agent-engine/src/localize/index.ts — F1 deterministic zero-token localization module
+- packages/agent-engine/src/oracle/spec-test.ts — F2 spec-test oracle state machine tracker
+- packages/agent-engine/src/pipeline/ladder.ts — F3 adaptive compute ladder decision controller
+- packages/agent-engine/src/fork/index.ts — F4 cache-forked snapshot + tail planner
+- packages/agent-engine/src/evaluate/consensus.ts — F5 diff consensus and selection ladder
+- packages/agent-engine/src/shrink/index.ts — F6 delta-debug diff shrinker (greedy reverse)
+- packages/agent-engine/src/oracle/hypotheses.ts — F7 hypothesis falsification parser + probe pairing
+- packages/agent-engine/src/priors/index.ts — F8 repo-prior store with legality lint
+- packages/agent-engine/src/evaluate/diagnosis.ts — F10 structured diagnosis schema + extraction
+- packages/agent-engine/src/memory/applicability.ts — F9 memory recall filter (2-stage, lexical + LLM)
+- packages/agent-engine/src/localize/index.test.ts, oracle/spec-test.test.ts, pipeline/ladder.test.ts, fork/index.test.ts, evaluate/consensus.test.ts, shrink/index.test.ts, oracle/hypotheses.test.ts, priors/index.test.ts, evaluate/diagnosis.test.ts, memory/applicability.test.ts — 10 comprehensive test files, ~350+ tests total, passing
+- packages/agent-engine/src/pipeline/index.ts — Ladder and spec-test wiring in main pipeline loop
+- packages/agent-engine/src/pipeline/wiring.ts — F2/F3 integration helpers (spec-gate, ladder signals)
+- apps/cli/src/agent/best-of-n.ts — Fork mode (snapshot/planForks/decideSelection imports), consensus selection ladder
+- packages/agent-engine/src/evaluate/prompt-enhancer.ts — F1 localization + F8 priors + F9 recall filter wired into ENHANCE
+- .env.example — OXAGEN_LADDER, OXAGEN_DIFF_BUDGET, OXAGEN_LADDER_MAX_RUNG, OXAGEN_BEST_OF_N_MODE, OXAGEN_REPO_PRIORS flags registered
+- git log main — PR #514 (spec + F1 + F6), PR #516 (F2-F10 features), PR #534 (F4b CLI fork mode) all merged to main
+
+**Source documents** (archived verbatim below)
+
+- `docs/specs/swe-rank1-scalpel.md`
+
+## Document — `swe-rank1-scalpel.md`
+
+## Scalpel — SWE-bench Rank-#1 Spec for the Oxagen CLI
 
 **Status:** Draft · **Branch:** `feat/swe-rank1-scalpel` · **Owner:** Mac Anderson
 **Goal:** Make the oxagen CLI the highest-scoring agentic coding CLI on SWE-bench-Verified while *simultaneously* minimizing tokens burned, lines of code changed per patch, and wall-clock time per instance.
@@ -6,7 +41,7 @@
 
 ---
 
-## 0. Design thesis
+### 0. Design thesis
 
 The four goals (score, tokens, diff size, latency) are **one goal** on SWE-bench-Verified:
 
@@ -17,7 +52,7 @@ The four goals (score, tokens, diff size, latency) are **one goal** on SWE-bench
 
 Failure-mode evidence from our own runs (2026-07-03, 4-task funded sample): heavy code-graph use, plausible-but-wrong patches, 0/4 resolved, ~$13/instance. Diagnosis and spec inference are the binding constraints — not code-writing ability.
 
-### Architecture at a glance
+#### Architecture at a glance
 
 ```
                     ┌────────────────────────────────────────────────┐
@@ -46,13 +81,13 @@ Failure-mode evidence from our own runs (2026-07-03, 4-task funded sample): heav
 
 ---
 
-## 1. The ten features
+### 1. The ten features
 
 Ordered by build sequence (see §2 for why). Each feature lists: motivation, design, touch points, interfaces, tests, acceptance criteria, and expected budget impact. All engine work lives in `packages/agent-engine/src/`; CLI wiring in `apps/cli/src/`.
 
 ---
 
-### F1 — Deterministic zero-token localization
+#### F1 — Deterministic zero-token localization
 
 **Motivation.** Localization is currently an agent activity (10–15 steps ≈ 50–150k tokens). The code graph + a traceback parser can produce a ranked candidate-file map *before the first LLM call*.
 
@@ -62,7 +97,7 @@ Ordered by build sequence (see §2 for why). Each feature lists: motivation, des
   - `localize(issue: string, graph: CodeGraphProvider): Promise<LocalizationMap>`:
     1. Traceback path: if frames parse, resolve each frame via `code_graph.search` → seed set; expand one hop with `dependents` + `imports`.
     2. Symbol path: extract backtick-quoted identifiers, CamelCase/snake_case tokens (reuse `extractCandidates` from `evaluate/prompt-enhancer.ts`); resolve via `code_graph.search`/`file_symbols`.
-    3. Semantic fallback: `semantic_search` over the issue text when 1–2 yield < 3 files.
+    3. Semantic fallback: `semantic_search` over the issue text when 1–2 yield \< 3 files.
     4. Score fusion: `score = 3·traceback_hit + 2·symbol_hit + 1·semantic_sim + 0.5·dependents_centrality`; return top 5 files with per-file matched symbols and 1-line reasons.
 - `LocalizationMap` renders to ≤ 1,000 tokens: `path — symbols — why`, plus "likely test dir" (nearest `tests/` sibling).
 - Wire into ENHANCE (`pipeline/index.ts`): runs **before** (and can replace most of) the current LLM-adjacent enhancement; injected as a `## Candidate locations (deterministic)` block. Enhancement budget unchanged (`enhanceTimeoutMs`).
@@ -86,7 +121,7 @@ export interface LocalizationMap {
 
 ---
 
-### F2 — Spec-first oracle (failing test before patch)
+#### F2 — Spec-first oracle (failing test before patch)
 
 **Motivation.** Hidden `FAIL_TO_PASS` tests are the real oracle. Our dominant failure is solving the wrong *spec*. Writing "the test the maintainer would add" converts issue prose into an executable spec and yields a free, decisive done-signal.
 
@@ -107,7 +142,7 @@ export interface LocalizationMap {
 
 ---
 
-### F3 — Verification-gated adaptive compute ladder
+#### F3 — Verification-gated adaptive compute ladder
 
 **Motivation.** Uniform pipelines overspend on easy instances and underspend on hard ones. Escalate on **measured** uncertainty only.
 
@@ -128,7 +163,7 @@ export interface LocalizationMap {
 
 ---
 
-### F4 — Cache-forked best-of-N (trunk + tails)
+#### F4 — Cache-forked best-of-N (trunk + tails)
 
 **Motivation.** Current `oxagen solve` runs N *complete independent pipelines* in N worktrees — N× re-exploration. Diagnosis is shared work; only the patch is worth diversifying. Fork the *conversation* at the patch point: under Anthropic prompt caching every fork inherits the full investigation at ~10× input discount, launched together inside the 5-min cache TTL.
 
@@ -154,7 +189,7 @@ export interface TrunkSnapshot { messages: ModelMessage[]; baseCommit: string; o
 
 ---
 
-### F5 — Consensus-or-escalate selection
+#### F5 — Consensus-or-escalate selection
 
 **Motivation.** The comparative selector model call is a per-run tax. Agreement between independently-produced patches is a *free* correctness signal.
 
@@ -176,7 +211,7 @@ export interface TrunkSnapshot { messages: ModelMessage[]; baseCommit: string; o
 
 ---
 
-### F6 — Deterministic diff shrinker (the ratchet)
+#### F6 — Deterministic diff shrinker (the ratchet)
 
 **Motivation.** Delta-debug the passing patch to its minimal green subset. Zero LLM tokens, directly buys score (collateral `PASS_TO_PASS` breakage) *and* the fewest-lines goal. No published scaffold ships this as a standing stage.
 
@@ -200,7 +235,7 @@ export interface ShrinkResult { patch: string; dropped: number; kept: number; or
 
 ---
 
-### F7 — Probe-based hypothesis falsification
+#### F7 — Probe-based hypothesis falsification
 
 **Motivation.** The >81.2% frontier is decided by the ~15% where *diagnosis* is wrong. A patch is the most expensive way to test a theory; a probe (assertion/print/two-line scratch script) falsifies one for a few hundred tokens.
 
@@ -247,7 +282,7 @@ export interface ShrinkResult { patch: string; dropped: number; kept: number; or
 
 ---
 
-### F9 — Memory-recall applicability filter
+#### F9 — Memory-recall applicability filter
 
 **Motivation.** Lingxi v1.5's own postmortem: unfiltered retrieved knowledge *biases toward wrong edits*. Our recall (`createCombinedMemory.recallContext`) injects lessons unfiltered today — the same trap.
 
@@ -264,7 +299,7 @@ export interface ShrinkResult { patch: string; dropped: number; kept: number; or
 
 ---
 
-### F10 — Structured diagnosis artifact (fan-out on demand)
+#### F10 — Structured diagnosis artifact (fan-out on demand)
 
 **Motivation.** EVALUATE defaults to a non-LLM heuristic; issue-understanding never produces a first-class artifact. A structured diagnosis is (a) the trunk's plan, (b) F4's fork point marker, (c) F7's hypothesis source.
 
@@ -289,11 +324,11 @@ export interface ShrinkResult { patch: string; dropped: number; kept: number; or
 
 ---
 
-## 2. Optimized build plan
+### 2. Optimized build plan
 
 **Optimization criteria:** evidence-per-effort first (prove value on the fixed 10-task subset before building dependents), dependency order second, dogfood-ability third (early features are pure modules — ideal one-shot targets for the oxagen CLI building itself).
 
-### Dependency graph
+#### Dependency graph
 
 ```
 F1 ──────────► F2 ───► F3 ───► F4 ───► F5
@@ -303,7 +338,7 @@ F1 ──────────► F2 ───► F3 ───► F4 ──�
                         F9 (independent)
 ```
 
-### Phases
+#### Phases
 
 | Phase | Features | Why this order | Verification gate |
 |---|---|---|---|
@@ -319,7 +354,7 @@ F1 ──────────► F2 ───► F3 ───► F4 ──�
 - New behaviors ship behind env flags, default-off, flipped on for the bench profile only after their subset A/B wins. **The baseline must never get worse mid-build.**
 - Full `pnpm gate` + test-completeness-judge once per phase (pre-merge checkpoint), not per commit.
 
-### Dogfooding protocol (build oxagen with oxagen)
+#### Dogfooding protocol (build oxagen with oxagen)
 
 Each feature is implemented by the installed CLI (`oxagen` v0.10.0) in one-shot mode from the worktree root:
 
@@ -334,14 +369,14 @@ oxagen --mode accept-edits --max-steps 120 --output-format json "<feature brief>
 - CLI run telemetry (tokens, steps, duration from `--verbose`/JSON envelope) is recorded in `verifications/<session>/dogfood-<feature>.json` — this doubles as baseline data for measuring the very features being built.
 - Fallback: if a one-shot stalls or exceeds budget, the driver session finishes the feature directly (the spec is the contract either way) and files the failure as a data point.
 
-### Measurement harness
+#### Measurement harness
 
 - **Subset:** the fixed 10-task SWE-bench-Verified subset (existing bench worktree tooling; `bench/swe-bench/{run,compare}.sh`).
 - **Metrics per run:** resolve rate, total tokens (cache-read vs. fresh split), wall-clock/instance, submitted-diff lines, model calls by role (executor/judge/selector), rung distribution.
 - **Ratchet:** a config only graduates to bench-profile default when its A/B shows non-inferior resolve at lower cost, or higher resolve at ≤ 1.2× cost.
 - **Exit criterion for the whole spec:** full-500 Verified run at ≥ 82% pass@1 with ≤ $3 mean cost/instance and mean submitted diff ≤ 1.5× gold-patch size.
 
-### Risks & mitigations
+#### Risks & mitigations
 
 | Risk | Mitigation |
 |---|---|
@@ -354,9 +389,10 @@ oxagen --mode accept-edits --max-steps 120 --output-format json "<feature brief>
 
 ---
 
-## 3. Non-goals
+### 3. Non-goals
 
 - No new pipeline *stages* beyond the ladder controller — every feature reuses existing hooks (ENHANCE, mid-judge, best-of-N, selector).
 - No Lingxi-style separate role-agents with inter-agent chat; roles stay stateless calls or forks of one conversation.
 - No trajectory-abstraction trees (Lingxi V2.0's mechanism) in this spec — F8's procedural priors capture the cheap 80%; revisit only if the exit criterion stalls.
 - No changes to platform API/MCP surfaces; this is engine + CLI internal (no capability-parity work triggered).
+

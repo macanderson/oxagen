@@ -1,4 +1,4 @@
-// iam.ts — IAM data layer (OXA-1389, Phase 2).
+// iam.ts — IAM data layer.
 //
 // All 5 IAM tables live in their own dedicated `iam` Postgres schema
 // (`iamSchema = pgSchema("iam")` in ./_schemas). Atlas reads the desired state
@@ -16,7 +16,7 @@
 //   roles                      → rol_
 //   role_grants                → rlg_
 //   access_requests            → arq_
-//   principal_role_assignments → pra_  (OXA-1498)
+//   principal_role_assignments → pra_
 
 import {
   bigint,
@@ -135,7 +135,7 @@ export const roleGrants = iamSchema.table(
     roleId: uuid("role_id").notNull(),
     // Capability identifier string (e.g. "org.create").
     // Not a FK — capability metadata lives on the contract objects, not a DB
-    // table. Phase 3 (OXA-1390) will validate this at write time.
+    // table.
     capabilityId: text("capability_id").notNull(),
     // CHECK: effect IN ('allow','deny','require_approval')
     effect: text("effect").notNull(),
@@ -207,8 +207,7 @@ export const accessRequests = iamSchema.table(
 
 // ---------------------------------------------------------------------------
 // principal_role_assignments — maps a principal to a role within an org
-// (and optionally a workspace) scope. Replaces the prior "grant everyone
-// every role" shortcut. OXA-1498.
+// (and optionally a workspace) scope.
 //
 // Naming convention prefix: pra_
 //

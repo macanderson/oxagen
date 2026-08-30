@@ -1,7 +1,7 @@
 "use client";
 /**
  * scope-budget-card.tsx — one scope's (org or workspace) ceiling card for the
- * Spend Budgets panel (OXA-1079). Renders one of:
+ * Spend Budgets panel. Renders one of:
  *   - an EmptyState ("No ceiling configured") with a control to set one,
  *   - a configured, DISABLED ceiling — saved but not gating anything right
  *     now (getAllScopeBudgets returns disabled rows too, so this is a real,

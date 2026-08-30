@@ -47,7 +47,7 @@ export const KIND_CONFIG: Record<
   constraint: {
     label: "Constraint",
     icon: Lock,
-    color: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+    color: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
   },
   "bug-root-cause": {
     label: "Bug Root Cause",

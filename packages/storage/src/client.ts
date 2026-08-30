@@ -14,7 +14,7 @@ const SUPPORTED_DRIVERS = ["vercel-blob", "fs"] as const;
  * isolated -- adding a new driver never requires touching unrelated config.
  *
  * To add a new driver:
- *  1. Implement the StorageAdapter interface (see docs/guides/storage-driver-authoring.md).
+ *  1. Implement the StorageAdapter interface.
  *  2. Add the driver name to STORAGE_DRIVER enum in packages/config/src/env.ts.
  *  3. Add a case here that reads the driver's env vars and returns the adapter.
  */
@@ -24,7 +24,9 @@ function resolveAdapter(): StorageAdapter {
 
   switch (driver) {
     case "vercel-blob": {
-      const { BLOB_READ_WRITE_TOKEN } = requireEnv(["BLOB_READ_WRITE_TOKEN"] as const);
+      const { BLOB_READ_WRITE_TOKEN } = requireEnv([
+        "BLOB_READ_WRITE_TOKEN",
+      ] as const);
       if (!BLOB_READ_WRITE_TOKEN) {
         throw new Error(
           "BLOB_READ_WRITE_TOKEN is not set — file uploads are unavailable. Add it to the environment to enable @oxagen/storage.",

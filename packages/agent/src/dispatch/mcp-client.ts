@@ -135,7 +135,7 @@ export async function listMcpTools(client: Client): Promise<string[]> {
 }
 
 // The raw per-tool descriptor as advertised by the MCP server. Captured at
-// registration into mcp.tool_snapshots (OXA-820) so a replayed run can render
+// registration into mcp.tool_snapshots so a replayed run can render
 // the tool even after the server is disabled or deleted.
 export interface McpToolDescriptor {
   name: string;
@@ -230,7 +230,7 @@ export async function healthcheck(args: McpConnectArgs): Promise<{
   status: "healthy" | "degraded" | "unreachable";
   discoveredTools: string[];
   // Full per-tool descriptors (JSONSchema) captured during the probe so the
-  // caller can snapshot them without a second connection (OXA-820).
+  // caller can snapshot them without a second connection.
   descriptors: McpToolDescriptor[];
 }> {
   try {

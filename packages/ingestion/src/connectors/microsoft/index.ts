@@ -299,8 +299,8 @@ const microsoft: ConnectorDefinition<Config> = {
     ] as unknown[];
     if (notifications.length === 0) return false;
 
-    // OXA-2051: constant-time compare — a plain `===` here leaks the secret
-    // via response-time analysis on this unauthenticated route.
+    // Constant-time compare — a plain `===` here leaks the secret via
+    // response-time analysis on this unauthenticated route.
     return notifications.every((n) => {
       if (n === null || typeof n !== "object") return false;
       const clientState = (n as Record<string, unknown>)["clientState"];

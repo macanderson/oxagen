@@ -17,7 +17,7 @@
  *   - Auto-refresh of an EXPIRED oauth access token is NOT performed here (the
  *     runtime does it lazily via the transport's auth provider). An oauth server
  *     whose stored token is absent/stale is returned with `needsReauth: true`.
- *     TODO(OXA-mcp-cli): resolve a fresh oauth access token server-side (or move
+ *     TODO: resolve a fresh oauth access token server-side (or move
  *     to a full server-side call-proxy) so expired-token servers self-heal.
  */
 import { withTenantDb, schema } from "@oxagen/database";

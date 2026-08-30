@@ -52,7 +52,9 @@ export function assertPublicHttpUrl(raw: string): void {
   // Bare hostname blocklist
   const blockedHostnames = new Set(["localhost", "metadata.google.internal"]);
   if (blockedHostnames.has(host)) {
-    throw new Error(`Refusing to fetch non-public URL: hostname "${host}" is not allowed`);
+    throw new Error(
+      `Refusing to fetch non-public URL: hostname "${host}" is not allowed`,
+    );
   }
 
   // IPv6 literal (wrapped in brackets in the URL hostname field)
@@ -139,22 +141,22 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
   if (source === "user_upload") {
     if (kind === "avatar") {
       throw new Error(
-        "asset.upload: source \"user_upload\" is not supported for kind \"avatar\"",
+        'asset.upload: source "user_upload" is not supported for kind "avatar"',
       );
     }
     if (!ctx.userId) {
       throw new Error(
-        "asset.upload: source \"user_upload\" requires an authenticated user (not an API-key-only principal)",
+        'asset.upload: source "user_upload" requires an authenticated user (not an API-key-only principal)',
       );
     }
     if (!ctx.workspaceId) {
       throw new Error(
-        "asset.upload: source \"user_upload\" requires a workspace scope",
+        'asset.upload: source "user_upload" requires a workspace scope',
       );
     }
   } else if (conversationId) {
     throw new Error(
-      "asset.upload: conversationId requires source \"user_upload\"",
+      'asset.upload: conversationId requires source "user_upload"',
     );
   }
 
@@ -233,8 +235,8 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
     };
   }
 
-  // Legacy pure blob-ingest path (avatar/image/document, no source given):
-  // unchanged from the original behavior — public blob, no DB row.
+  // Pure blob-ingest path (avatar/image/document, no source given):
+  // public blob, no DB row.
   // Derive a server-controlled storage key (user-input never touches the path).
   const key = deriveAssetKey(kind, ctx.orgId, ext);
 

@@ -11,7 +11,7 @@ const validInput = {
  * fixture below. The contract extends this shape into seven places (totals,
  * series, byModel, bySurface, byWorkspace, byCapability, byPrincipal, byUser);
  * keeping a single literal here means a new required field is added once
- * instead of drifting across seven hand-written copies (#1172, #1178).
+ * instead of drifting across seven hand-written copies.
  */
 function makeTotals(overrides: Record<string, number> = {}) {
   return {

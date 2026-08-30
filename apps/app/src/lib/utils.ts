@@ -34,6 +34,14 @@ export function formatCentsCompact(cents: number, currency = "USD"): string {
     style: "currency",
     currency,
     notation: "compact",
+    // `minimumFractionDigits` is pinned, not defaulted. Under compact notation
+    // ICU's implied minimum tracks the maximum on newer versions, so a bare
+    // `maximumFractionDigits: 1` renders a round figure as "$10.0K" / "$1.0M"
+    // on ICU 78 and "$10K" / "$1M" on older builds — the same code producing
+    // different UI depending on the Node the surface was rendered by. Stating
+    // the minimum makes the output identical everywhere and keeps the trailing
+    // digit only where it carries information ("$12.3K", "$1.2M").
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   }).format(dollars);
 }

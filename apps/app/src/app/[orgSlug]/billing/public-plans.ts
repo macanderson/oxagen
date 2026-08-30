@@ -2,7 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (shared catalog — billing.plans is a platform-wide
 // plan catalog with no per-tenant rows; no org/workspace filter applies;
-// withSystemDb bypasses RLS deliberately) — OXA-1515
+// withSystemDb bypasses RLS deliberately)
 import type { PlanRow } from "@oxagen/database";
 import { SUBSCRIPTION_PLANS } from "@oxagen/billing";
 import type { Plan } from "@/components/billing/plan-card";
@@ -36,7 +36,12 @@ export const fetchPublicPlans = (): Promise<PlanRow[]> =>
         tx
           .select()
           .from(schema.plans)
-          .where(and(eq(schema.plans.isPublic, true), inArray(schema.plans.slug, PUBLIC_PLAN_SLUGS)))
+          .where(
+            and(
+              eq(schema.plans.isPublic, true),
+              inArray(schema.plans.slug, PUBLIC_PLAN_SLUGS),
+            ),
+          )
           .orderBy(asc(schema.plans.monthlyCents)),
       ),
     [] as PlanRow[],
@@ -91,6 +96,8 @@ export const toPlanCards = (rows: PlanRow[]): Plan[] =>
     includedCreditCents: p.includedCreditCents,
     includedSeats: p.includedSeats,
     features: Array.isArray((p.features as { list?: unknown[] } | null)?.list)
-      ? ((p.features as { list: unknown[] }).list as string[]).map((label) => ({ label }))
+      ? ((p.features as { list: unknown[] }).list as string[]).map((label) => ({
+          label,
+        }))
       : [],
   }));

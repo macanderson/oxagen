@@ -16,7 +16,7 @@ import { Panel } from "@/components/ui/panel";
 import { McpInstallTabs } from "./mcp-install-tabs";
 import type { McpTabEntry } from "./mcp-install-tabs";
 
-// Sentinel workspaceId for org-only routes. — OXA-1515
+// Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const MCP_URL = "https://mcp.oxagen.sh/mcp";
@@ -106,19 +106,22 @@ export default async function DeveloperMcpPage({
   // Read the first active API key for this org.
   let firstKey: string | null = null;
   try {
-    const keys = await runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
-      withTenantDb((tx) =>
-        tx
-          .select({ keyPrefix: schema.apiKeys.keyPrefix, expiresAt: schema.apiKeys.expiresAt })
-          .from(schema.apiKeys)
-          .where(eq(schema.apiKeys.orgId, org.id))
-          .orderBy(desc(schema.apiKeys.createdAt))
-          .limit(10),
-      ),
+    const keys = await runInTenantScope(
+      { orgId: org.id, workspaceId: ORG_ONLY_WS },
+      () =>
+        withTenantDb((tx) =>
+          tx
+            .select({
+              keyPrefix: schema.apiKeys.keyPrefix,
+              expiresAt: schema.apiKeys.expiresAt,
+            })
+            .from(schema.apiKeys)
+            .where(eq(schema.apiKeys.orgId, org.id))
+            .orderBy(desc(schema.apiKeys.createdAt))
+            .limit(10),
+        ),
     );
-    const active = keys.filter(
-      (k) => !k.expiresAt || k.expiresAt > new Date(),
-    );
+    const active = keys.filter((k) => !k.expiresAt || k.expiresAt > new Date());
     if (active[0]) {
       // Show the key prefix only — the full hash is never readable after creation.
       firstKey = `${active[0].keyPrefix}${"•".repeat(32)}`;
@@ -146,12 +149,15 @@ export default async function DeveloperMcpPage({
     <div className="flex flex-col gap-6">
       <Panel title="MCP server">
         <div className="flex flex-col gap-6">
-        <p className="text-sm text-muted-foreground">
-          Connect any MCP-compatible agent client to your Oxagen workspace.
-        </p>
+          <p className="text-sm text-muted-foreground">
+            Connect any MCP-compatible agent client to your Oxagen workspace.
+          </p>
           {/* Endpoint notice */}
           <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            <ExternalLink className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <ExternalLink
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
+            />
             <span>
               The MCP endpoint is live at{" "}
               <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
@@ -164,15 +170,22 @@ export default async function DeveloperMcpPage({
           {/* API key notice */}
           {firstKey ? (
             <div className="flex items-start gap-2 rounded-xl border border-border/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <KeySquare
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>
-                The snippets below use your org&apos;s first active API token (prefix shown).
-                Replace with the full token value you saved when the key was created.
+                The snippets below use your org&apos;s first active API token
+                (prefix shown). Replace with the full token value you saved when
+                the key was created.
               </span>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/12 px-4 py-3 text-sm text-warning">
-              <KeySquare className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <KeySquare
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>
                 No active API token found. Create one on the{" "}
                 <a
@@ -182,8 +195,8 @@ export default async function DeveloperMcpPage({
                   Tokens
                 </a>{" "}
                 tab, then replace{" "}
-                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in the
-                snippets below with your key value.
+                <code className="font-mono text-xs">$OXAGEN_API_KEY</code> in
+                the snippets below with your key value.
               </span>
             </div>
           )}

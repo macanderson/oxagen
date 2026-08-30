@@ -1,5 +1,5 @@
 /**
- * OXA-1420: OAuth token encryption hooks for better-auth.
+ * OAuth token encryption hooks for better-auth.
  *
  * Provides `databaseHooks` for the `account` model that:
  *   - WRITE: encrypt access_token, refresh_token, id_token into the *_enc
@@ -10,21 +10,17 @@
  * does not run automatically on Better Auth reads.
  *
  * COLUMN STATE: The plaintext `access_token`, `refresh_token`, and `id_token`
- * columns are STILL PRESENT in the DB (nullable). They were restored after
- * OXA-1420 because Better Auth's drizzle adapter writes them directly on OAuth
- * account create/link paths that bypass this application-layer hook; dropping
- * them broke sign-in. The strip hooks here are defense-in-depth for hook-covered
- * write paths only — the Postgres BEFORE INSERT/UPDATE trigger (migration
- * archive 0003_soc2_auth_hardening.sql) is the primary backstop that nulls each
- * plaintext column whenever its *_enc counterpart is non-null on ANY write path.
+ * columns are STILL PRESENT in the DB (nullable). Better Auth's drizzle adapter
+ * writes them directly on some OAuth account create/link paths that bypass
+ * this application-layer hook, so the columns can't be dropped without
+ * breaking sign-in. The strip hooks here cover the write paths this module
+ * sees — the Postgres BEFORE INSERT/UPDATE trigger (migration archive
+ * 0003_soc2_auth_hardening.sql) is the backstop that nulls each plaintext
+ * column whenever its *_enc counterpart is non-null on ANY write path.
  *
  * ENCRYPTION COVERAGE: All three token fields — access_token, refresh_token,
  * AND id_token — are encrypted into their *_enc counterparts and their
- * plaintext columns are stripped before any write. The previous "leave idToken
- * plaintext" exception has been removed as part of SOC2 hardening: a Postgres
- * BEFORE INSERT/UPDATE trigger on auth.accounts provides a defense-in-depth
- * backstop, nulling any plaintext col when its *_enc counterpart is NOT NULL.
- * Double protection:
+ * plaintext columns are stripped before any write. Double protection:
  *   1. Application hook (this file) strips plaintext on covered write paths.
  *   2. DB trigger (migration archive 0003_soc2_auth_hardening.sql) strips on ANY
  *      write path, including Better Auth internal paths that bypass this hook.
@@ -120,8 +116,8 @@ export async function encryptAccountTokens(
   ]);
 
   return {
-    // CONTRACT phase: no plaintext columns — return only the encrypted bytea
-    // columns and the KMS key reference.
+    // Only the encrypted bytea columns and the KMS key reference — never the
+    // plaintext values.
     accessTokenEnc,
     refreshTokenEnc,
     idTokenEnc,
@@ -134,8 +130,8 @@ export async function encryptAccountTokens(
  *
  * This function only reads the *_enc bytea columns (the plaintext columns are
  * stripped on write and must not be trusted). If `tokenKmsKeyId` is absent the
- * row predates OXA-1420 encryption and the encrypted tokens are unavailable —
- * returns the record with null token fields.
+ * row predates encryption and the encrypted tokens are unavailable — returns
+ * the record with null token fields.
  */
 export async function decryptAccountTokens(
   data: TokenFields,
@@ -143,9 +139,9 @@ export async function decryptAccountTokens(
 ): Promise<TokenFields> {
   const keyId = data.tokenKmsKeyId;
 
-  // No KMS key id means the row predates OXA-1420 encryption. The plaintext
-  // columns are stripped on write and not trusted, so there is nothing to
-  // return for these rows.
+  // No KMS key id means the row predates encryption. The plaintext columns
+  // are stripped on write and not trusted, so there is nothing to return for
+  // these rows.
   if (!keyId) {
     return { ...data, accessToken: null, refreshToken: null, idToken: null };
   }
@@ -189,8 +185,15 @@ export async function decryptAccountTokens(
  *   the final backstop for any write path that bypasses this hook.
  * MUST run on every account write.
  */
-function stripPlaintextTokens(account: Record<string, unknown>): Record<string, unknown> {
-  const { accessToken: _at, refreshToken: _rt, idToken: _it, ...rest } = account;
+function stripPlaintextTokens(
+  account: Record<string, unknown>,
+): Record<string, unknown> {
+  const {
+    accessToken: _at,
+    refreshToken: _rt,
+    idToken: _it,
+    ...rest
+  } = account;
   void _at;
   void _rt;
   void _it;
@@ -204,21 +207,40 @@ function stripPlaintextTokens(account: Record<string, unknown>): Record<string, 
  * null) but the account + user are still created so social sign-in works.
  */
 export function buildStripOnlyAccountHooks(): {
-  create: { before: (a: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }> };
-  update: { before: (a: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }> };
+  create: {
+    before: (
+      a: Record<string, unknown>,
+    ) => Promise<{ data: Record<string, unknown> }>;
+  };
+  update: {
+    before: (
+      a: Record<string, unknown>,
+    ) => Promise<{ data: Record<string, unknown> }>;
+  };
 } {
   return {
-    create: { before: async (account) => ({ data: stripPlaintextTokens(account) }) },
-    update: { before: async (account) => ({ data: stripPlaintextTokens(account) }) },
+    create: {
+      before: async (account) => ({ data: stripPlaintextTokens(account) }),
+    },
+    update: {
+      before: async (account) => ({ data: stripPlaintextTokens(account) }),
+    },
   };
 }
 
-export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
+export function buildAccountTokenHooks(
+  adapter: KmsAdapter,
+  keyId: string,
+): {
   create: {
-    before: (account: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }>;
+    before: (
+      account: Record<string, unknown>,
+    ) => Promise<{ data: Record<string, unknown> }>;
   };
   update: {
-    before: (account: Record<string, unknown>) => Promise<{ data: Record<string, unknown> }>;
+    before: (
+      account: Record<string, unknown>,
+    ) => Promise<{ data: Record<string, unknown> }>;
   };
 } {
   if (!keyId) {
@@ -230,7 +252,11 @@ export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
   return {
     create: {
       async before(account: Record<string, unknown>) {
-        const encrypted = await encryptAccountTokens(account as TokenFields, keyId, adapter);
+        const encrypted = await encryptAccountTokens(
+          account as TokenFields,
+          keyId,
+          adapter,
+        );
         // Strip plaintext columns and merge encrypted fields.
         return { data: { ...stripPlaintextTokens(account), ...encrypted } };
       },
@@ -251,11 +277,19 @@ export function buildAccountTokenHooks(adapter: KmsAdapter, keyId: string): {
         // breaking future refreshes. The DB trigger only nulls *plaintext*
         // columns; it does not preserve an existing *_enc value.
         const fields = account as TokenFields;
-        const [accessTokenEnc, refreshTokenEnc, idTokenEnc] = await Promise.all([
-          hasAccess ? encryptToken(fields.accessToken, keyId, adapter) : Promise.resolve(undefined),
-          hasRefresh ? encryptToken(fields.refreshToken, keyId, adapter) : Promise.resolve(undefined),
-          hasId ? encryptToken(fields.idToken, keyId, adapter) : Promise.resolve(undefined),
-        ]);
+        const [accessTokenEnc, refreshTokenEnc, idTokenEnc] = await Promise.all(
+          [
+            hasAccess
+              ? encryptToken(fields.accessToken, keyId, adapter)
+              : Promise.resolve(undefined),
+            hasRefresh
+              ? encryptToken(fields.refreshToken, keyId, adapter)
+              : Promise.resolve(undefined),
+            hasId
+              ? encryptToken(fields.idToken, keyId, adapter)
+              : Promise.resolve(undefined),
+          ],
+        );
 
         const encrypted: TokenFields = { tokenKmsKeyId: keyId };
         if (hasAccess) encrypted.accessTokenEnc = accessTokenEnc;

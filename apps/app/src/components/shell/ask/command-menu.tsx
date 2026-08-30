@@ -5,11 +5,11 @@
  * A Radix Dialog with WAI-ARIA combobox keyboard navigation.
  *
  * Sections (in render order):
- *   Suggested for this page — LLM suggestions (OXA-1770); above Quick Actions when no query
- *   Quick Actions           — prompt templates applicable to current page (OXA-1769)
+ *   Suggested for this page — LLM suggestions; above Quick Actions when no query
+ *   Quick Actions           — prompt templates applicable to current page
  *   Navigate                — all nav targets from enumerateNavTargets, filtered by query
  *   Search results          — entity search replacing Quick Actions + Navigate when query
- *                             matches an entity prefix (OXA-1771)
+ *                             matches an entity prefix
  *   Recent                  — last-5 queries from localStorage
  *   Ask                     — free-text "Ask Oxagen" fallback
  *
@@ -236,7 +236,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const entityMatch = React.useMemo(() => matchEntityPrefix(query), [query]);
   const isSearchMode = entityMatch !== null;
 
-  // ── LLM suggestions (OXA-1770) ─────────────────────────────────────────────
+  // ── LLM suggestions ─────────────────────────────────────────────
   const currentPathname =
     pathname ?? `/${ctx.orgSlug ?? ""}/${ctx.workspaceSlug ?? ""}`;
   const { suggestions, loading: suggestionsLoading } = useSuggestions({
@@ -252,7 +252,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
   const showSuggestions =
     !query.trim() && (suggestions.length > 0 || suggestionsLoading);
 
-  // ── Entity search results (OXA-1771) ───────────────────────────────────────
+  // ── Entity search results ───────────────────────────────────────
   const { rows: searchRows, loading: searchLoading } = useEntitySearch({
     kind: entityMatch?.kind,
     query: entityMatch?.queryRemainder ?? "",
@@ -494,7 +494,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
           aria-label="Commands"
           className="max-h-[360px] overflow-y-auto py-2"
         >
-          {/* Suggested for this page (OXA-1770) — shown when no query */}
+          {/* Suggested for this page — shown when no query */}
           {showSuggestions &&
             (() => {
               const baseIdx = sectionOffset;
@@ -534,7 +534,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
               );
             })()}
 
-          {/* Quick Actions — shown when no query and not in search mode (OXA-1769) */}
+          {/* Quick Actions — shown when no query and not in search mode */}
           {quickActions.length > 0 &&
             (() => {
               const baseIdx = sectionOffset;
@@ -570,7 +570,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
               );
             })()}
 
-          {/* Search results (OXA-1771) — replaces Quick Actions + Navigate in search mode */}
+          {/* Search results — replaces Quick Actions + Navigate in search mode */}
           {isSearchMode &&
             (() => {
               const baseIdx = sectionOffset;

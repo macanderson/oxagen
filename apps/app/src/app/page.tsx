@@ -8,7 +8,7 @@ export default async function RootPage() {
   if (!session?.user) redirect("/login");
 
   // Identity resolution: reads the user's org memberships BEFORE a tenant scope
-  // exists (pre-org-selection). withSystemDb bypasses RLS deliberately — OXA-1515.
+  // exists (pre-org-selection). withSystemDb bypasses RLS deliberately
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -16,8 +16,14 @@ export default async function RootPage() {
         workspaceSlug: schema.workspaces.slug,
       })
       .from(schema.orgUsers)
-      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
-      .leftJoin(schema.workspaces, eq(schema.workspaces.orgId, schema.organizations.id))
+      .innerJoin(
+        schema.organizations,
+        eq(schema.organizations.id, schema.orgUsers.orgId),
+      )
+      .leftJoin(
+        schema.workspaces,
+        eq(schema.workspaces.orgId, schema.organizations.id),
+      )
       .where(eq(schema.orgUsers.userId, session.user.id))
       .limit(1),
   );

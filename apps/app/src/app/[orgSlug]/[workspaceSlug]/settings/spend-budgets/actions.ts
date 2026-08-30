@@ -1,7 +1,7 @@
 "use server";
 /**
  * actions.ts — server actions for Workspace → Settings → Spend Budgets
- * (OXA-1079). Wraps get_spend_budget / set_spend_budget.
+ *. Wraps get_spend_budget / set_spend_budget.
  *
  * Placement rationale (do not move this under [orgSlug]/billing/*):
  * getScopeBudgets() in packages/billing/src/spend-budget-store.ts relies on

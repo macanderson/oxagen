@@ -10,12 +10,9 @@
  * routing matrix is unit-testable without a TTY (dispatch-mode.test.ts pins
  * the whole truth table).
  *
- * Routing is fully deterministic — there is no intent heuristic. The spec's
- * v1 originally keyed off `classifyPromptIntent` (word-match "simple" vs
- * "task"), but that module was deliberately removed from the REPL (PR #893,
- * determinism-only policy), so mode ON now dispatches every plain prompt and
- * the user keeps inline control via the explicit `=`/`>` prefix. An LLM
- * triager remains a possible v2.
+ * Routing is fully deterministic — there is no intent heuristic. Mode ON
+ * dispatches every plain prompt, and the user keeps inline control via the
+ * explicit `=`/`>` prefix. An LLM triager remains a possible v2.
  *
  * The decision leans on one primitive that already exists:
  *   - `parseAmpersandDispatch` (sessions/dispatch.ts): the shell-familiar

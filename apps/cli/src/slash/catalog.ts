@@ -283,8 +283,8 @@ export function buildSlashCatalog(
     if (byName.has(c.name)) {
       // A built-in (or an earlier CLI command — top-level `describeCliCommands`
       // order is stable) already owns this bare name. Rather than silently
-      // dropping the CLI command (it used to be genuinely unreachable), expose
-      // it under a `cli:<name>` alias so it stays reachable — see
+      // dropping the CLI command, expose it under a `cli:<name>` alias so it
+      // stays reachable — see
       // CLI_DISAMBIGUATION_PREFIX and the REPL dispatcher in interactive.tsx,
       // which strips the prefix back off before resolving/running it.
       const aliased = `${CLI_DISAMBIGUATION_PREFIX}${c.name}`;

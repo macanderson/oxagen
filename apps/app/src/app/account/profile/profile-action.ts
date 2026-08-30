@@ -6,7 +6,7 @@ import { avatarUrlSchema } from "@oxagen/oxagen/avatar";
 import { withSystemDb, schema } from "@oxagen/database";
 // tenancy: unscoped seam (auth.users is a global identity table managed by
 // Better Auth with no org_id/workspace_id columns; RLS is not applied to it
-// per spec §6.3; withSystemDb bypasses RLS deliberately) — OXA-1515
+// per spec §6.3; withSystemDb bypasses RLS deliberately)
 import { getSessionOrRedirect } from "@/lib/session";
 
 const ProfileSchema = z.object({
@@ -17,9 +17,7 @@ const ProfileSchema = z.object({
 
 export type ProfileInput = z.infer<typeof ProfileSchema>;
 
-export type ProfileActionResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type ProfileActionResult = { ok: true } | { ok: false; error: string };
 
 export async function updateProfileAction(
   input: ProfileInput,
@@ -27,7 +25,10 @@ export async function updateProfileAction(
   const session = await getSessionOrRedirect();
   const parsed = ProfileSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+    };
   }
 
   const { displayName, avatarUrl } = parsed.data;

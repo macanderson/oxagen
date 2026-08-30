@@ -96,16 +96,13 @@ describe("runTurn — bare-mode callbacks", () => {
 
 describe("runTurn — bare mode model accounting", () => {
   it("labels/accounts an unpinned, high-stakes bare run with DEFAULT_AGENT_MODEL, matching what actually executes", async () => {
-    // Regression test: runBare's accounting used to compute the label via
-    // modelForTier("balanced") (Sonnet) while the actual execution call below
-    // it passed `opts.model` through as-is — undefined when unpinned, which
-    // fell through to runCodingAgent's OWN internal default
-    // (DEFAULT_AGENT_MODEL, Fable 5). The label silently diverged from what
-    // ran. Assert BOTH sides agree: the model the stream() call actually
-    // received, and the label recorded on the trace. A prompt that matches
+    // Assert BOTH sides agree: the model the stream() call actually received,
+    // and the label recorded on the trace. An unpinned run falls through to
+    // runCodingAgent's own default (DEFAULT_AGENT_MODEL, Fable 5), so the
+    // label must track that, not a hardcoded tier. A prompt that matches
     // PRECISE_DOMAINS (auth) still floors to the frontier tier — same slug as
     // DEFAULT_AGENT_MODEL — so this also covers the classifyTier escalation
-    // path (Perf #8), not just the old hard-default.
+    // path.
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     let modelUsed: string | undefined;
     const ai: AgentAi = {
@@ -131,10 +128,7 @@ describe("runTurn — bare mode model accounting", () => {
     };
 
     // ONE prompt drives both the run and the oracle — a high-stakes ask that
-    // classifyTier floors to the precise tier. (Previously a stale `prompt`
-    // variable classified a different, trivial string than the one actually
-    // run, so the oracle and execution diverged the moment the tier→model map
-    // shifted — a latent test bug, not a routing bug.)
+    // classifyTier floors to the precise tier.
     const prompt = "fix the authentication bug in the login flow";
     const result = await runTurn({
       prompt,

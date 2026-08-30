@@ -81,7 +81,7 @@ async function contributeMcpTools(
       eq(schema.mcpServers.orgId, ctx.orgId),
       eq(schema.mcpServers.workspaceId, workspaceId),
       eq(schema.mcpServers.enabled, true),
-      // Soft-deleted servers (OXA-820) stop registering tools but keep their
+      // Soft-deleted servers stop registering tools but keep their
       // descriptor snapshots for replay.
       isNull(schema.mcpServers.deletedAt),
       // Accept "healthy" (probed OK, e.g. after OAuth) AND "unknown" (just enabled
@@ -157,7 +157,7 @@ async function contributeMcpTools(
       } else {
         // Static bearer/secret path (Plan 3 behaviour).
         let authStrategy = server.authStrategy as "none" | "bearer" | "header";
-        // Decrypt (OXA-1982): auth_config is envelope-encrypted at rest (or
+        // Decrypt: auth_config is envelope-encrypted at rest (or
         // legacy plaintext, pre-backfill).
         let authConfig = await decryptMcpAuthConfig(server.authConfig);
         if (server.orgListingId && authStrategy !== "none") {

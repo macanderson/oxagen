@@ -1,18 +1,29 @@
 // audit-query.ts — the single tenant-scoped read path for the audit-log viewer
-// AND the signed export, so "what you see is what you export" (OXA-1558).
+// AND the signed export, so "what you see is what you export".
 //
 // Keyset pagination on (occurred_at DESC, id DESC) using the
 // security_events_org_occurred_idx index. We over-fetch by one row to know
 // whether a next page exists without a second COUNT.
 
-import { and, eq, lt, gte, lte, or, ilike, desc, inArray, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  lt,
+  gte,
+  lte,
+  or,
+  ilike,
+  desc,
+  inArray,
+  type SQL,
+} from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "@oxagen/handlers/logger";
 import type { AuditFilter } from "@/lib/audit-filters";
 import { AUDIT_PAGE_SIZE } from "@/lib/audit-filters";
 
-// Org-only route — sentinel workspaceId. — OXA-1515
+// Org-only route — sentinel workspaceId.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 export interface AuditEventRow {
@@ -99,7 +110,10 @@ async function fetchAuditPage(
         .select(COLUMNS)
         .from(schema.securityEvents)
         .where(and(...conds))
-        .orderBy(desc(schema.securityEvents.occurredAt), desc(schema.securityEvents.id))
+        .orderBy(
+          desc(schema.securityEvents.occurredAt),
+          desc(schema.securityEvents.id),
+        )
         .limit(pageSize + 1),
     ),
   );
@@ -109,7 +123,8 @@ async function fetchAuditPage(
   const last = page[page.length - 1];
   return {
     rows: page,
-    nextCursor: hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
+    nextCursor:
+      hasMore && last ? { occurredAt: last.occurredAt, id: last.id } : null,
   };
 }
 

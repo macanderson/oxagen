@@ -188,10 +188,9 @@ vi.mock("@oxagen/ai/catalog", () => ({
 // buildSeededModelState, applyWorkspaceBudgetGovernance) from model-state.ts,
 // which has no UI imports. Pull the REAL implementations from there so the
 // composer's budget-governance path runs faithfully — only the interactive
-// ModelPicker component itself is stubbed. Listing helpers by hand here is how
-// this mock silently dropped applyWorkspaceBudgetGovernance when PR #630 added
-// it (→ undefined at call time); spreading the real module keeps it in sync.
-// Clamp/strip behaviour is covered by model-state.test.ts.
+// ModelPicker component itself is stubbed. Spreading the real module (instead
+// of listing helpers by hand) keeps this mock in sync with model-state.ts as
+// it gains new exports. Clamp/strip behaviour is covered by model-state.test.ts.
 vi.mock("./model-picker", async () => {
   const state =
     await vi.importActual<typeof import("./model-state")>("./model-state");

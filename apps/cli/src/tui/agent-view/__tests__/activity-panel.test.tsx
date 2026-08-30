@@ -1,7 +1,7 @@
 /**
  * Ink tests for the agent-view activity panel. A pure function of the folded
  * ActivityLine list, so each case is a static render asserted on the
- * ANSI-stripped frame: the header + live-surface pointer, the honest empty
+ * ANSI-stripped frame: the header + live-surface pointer, the real empty
  * state, and one line per emphasis class (success / error / dim / normal).
  */
 import { render } from "ink-testing-library";
@@ -28,7 +28,7 @@ const frameOf = (lines: ActivityLine[]): string => {
 };
 
 describe("ActivityPanel", () => {
-  it("shows the honest empty state with the header and live pointer", () => {
+  it("shows the real empty state with the header and live pointer", () => {
     const frame = frameOf([]);
     expect(frame).toContain("RECENT ACTIVITY");
     expect(frame).toContain("newest run");

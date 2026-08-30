@@ -32,11 +32,13 @@ export interface KmsAdapter {
    * plaintext form (for immediate use) and its KMS-wrapped form (for
    * storage alongside the ciphertext).
    */
-  generateDataKey(keyId: string): Promise<{ plaintext: Uint8Array; encrypted: Uint8Array }>;
+  generateDataKey(
+    keyId: string,
+  ): Promise<{ plaintext: Uint8Array; encrypted: Uint8Array }>;
 
   /**
-   * Unwrap a previously KMS-wrapped data encryption key back to
-   * plaintext.  The `keyId` here is informational / for logging; the
+   * Unwrap a KMS-wrapped data encryption key back to plaintext.
+   * The `keyId` here is informational / for logging; the
    * actual wrapping key is embedded in the ciphertext blob by the KMS
    * provider.
    */

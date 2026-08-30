@@ -32,7 +32,7 @@ import type {
 // ── Controlled data-tag vocabulary ───────────────────────────────────────────
 // The planner matches a capability's `produces` tags against another's
 // `consumes` tags. Keeping the vocabulary in one place keeps curated metadata
-// honest (a typo'd tag never silently fails to chain).
+// accurate (a typo'd tag never silently fails to chain).
 export const CAPABILITY_DATA_TAGS = [
   "topic",
   "url",

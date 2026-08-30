@@ -1,6 +1,6 @@
 /**
  * spend-budget-format.ts — pure formatting + validation helpers for the
- * Workspace → Settings → Spend Budgets panel (OXA-1079).
+ * Workspace → Settings → Spend Budgets panel.
  *
  * No "use client" — safe to import from the server page, the client panel,
  * or a unit test. `validateWindowDays` mirrors the DB CHECK / contract

@@ -89,10 +89,10 @@ export function composeModelState(
       tier: state.tier,
       model: state.model,
       effort: state.effort,
-      // `generate` is no longer a session-owned mode — media generation is
-      // inferred from the prompt server-side (infer-media-intent.ts), so the
-      // composer never opts a turn into it. `carrier.generate` (seeded null)
-      // flows through unchanged for any explicit API-seeded carrier.
+      // Media generation is inferred from the prompt server-side
+      // (infer-media-intent.ts), so the composer never sets `generate` itself.
+      // `carrier.generate` (seeded null) flows through unchanged for any
+      // explicit API-seeded carrier.
       budgetEnabled: state.budgetUsd !== null,
       budgetUsd: state.budgetUsd,
       // v2 semantics: a cap always pauses-and-asks at the ceiling.
@@ -126,14 +126,18 @@ export function modelStateToSessionPatch(next: ComposerModelState): {
 export function useSessionModelState(
   initial: ComposerModelState,
   governance: WorkspaceBudgetGovernance | null,
-): [ComposerModelState, React.Dispatch<React.SetStateAction<ComposerModelState>>] {
+): [
+  ComposerModelState,
+  React.Dispatch<React.SetStateAction<ComposerModelState>>,
+] {
   const session = useChatSessionContext();
   // Carrier for the fields the session doesn't own (media tier/model, seeds,
   // budget mode/grace) AND the full fallback state when no provider exists.
   const [carrier, setCarrier] = React.useState<ComposerModelState>(initial);
 
   const composed = React.useMemo(
-    () => (session ? composeModelState(carrier, session.state, governance) : carrier),
+    () =>
+      session ? composeModelState(carrier, session.state, governance) : carrier,
     [session, carrier, governance],
   );
 

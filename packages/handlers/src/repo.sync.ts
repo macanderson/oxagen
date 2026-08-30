@@ -23,10 +23,13 @@ import { logger } from "./logger";
  * estimatedRecords: a true pre-sync estimate would require querying the source
  * API, which this synchronous enqueue path deliberately avoids. For a `full`
  * re-index every already-ingested entity is reprocessed, so the connection's
- * current entityCount is an honest lower-bound; for `incremental` the delta is
+ * current entityCount is a safe lower bound; for `incremental` the delta is
  * unknown until the job diffs the cursor, so we report 0 rather than fabricate.
  */
-export const repoSyncHandler: CapabilityHandler<typeof repoSync> = async (input, ctx) => {
+export const repoSyncHandler: CapabilityHandler<typeof repoSync> = async (
+  input,
+  ctx,
+) => {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
@@ -49,8 +52,13 @@ export const repoSyncHandler: CapabilityHandler<typeof repoSync> = async (input,
   );
 
   if (!row) {
-    logger.warn({ repoId: input.repoId, orgId: ctx.orgId }, "repo.sync: not found");
-    throw new HTTPException(404, { message: "Repository connection not found" });
+    logger.warn(
+      { repoId: input.repoId, orgId: ctx.orgId },
+      "repo.sync: not found",
+    );
+    throw new HTTPException(404, {
+      message: "Repository connection not found",
+    });
   }
 
   if (row.status === "deleting" || row.status === "deleted") {
@@ -60,7 +68,8 @@ export const repoSyncHandler: CapabilityHandler<typeof repoSync> = async (input,
   }
 
   const deliveryConfig = (row.deliveryConfig ?? {}) as DeliveryConfig;
-  const syncMethod = deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
+  const syncMethod =
+    deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
   const syncIntervalSeconds = deliveryConfig.syncIntervalSeconds ?? 300;
   const jobId = "job_" + crypto.randomUUID();
 

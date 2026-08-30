@@ -228,7 +228,7 @@ export async function agentSubagentDispatchHandler(
 
   // The executor (agent.execute-subagent) reads `fanoutId` (the uuid) and loads
   // the child runs from the DB itself, so we do not re-send them here. depth=1:
-  // children execute one level below this root dispatch (OXA-1498 depth guard).
+  // children execute one level below this root dispatch (depth guard).
   //
   // Two failure modes are made observable here, because both manifested as a
   // fan-out that silently "never fires" in production:

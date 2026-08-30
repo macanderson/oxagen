@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   txInsertOrgReturning: vi.fn(),
   txInsertOrgUsers: vi.fn(),
   // withSystemDbFn tracks each withSystemDb call so tests can assert the org
-  // creation wraps its writes in the system-bypass transaction (OXA-1515).
+  // creation wraps its writes in the system-bypass transaction.
   withSystemDbFn: vi.fn(),
   grantFreeCredits: vi.fn(),
   bootstrapOrgIAM: vi.fn(),

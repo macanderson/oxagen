@@ -1,6 +1,6 @@
 /**
  * Persists per-(workspace × org_listing) plugin credentials in mcp.credentials,
- * envelope-encrypted via the Plan 1 credential service. NEVER logs plaintext.
+ * envelope-encrypted via the credential service. NEVER logs plaintext.
  */
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";

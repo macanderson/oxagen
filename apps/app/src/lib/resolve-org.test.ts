@@ -121,7 +121,7 @@ describe("resolveOrg", () => {
   // (f) Malformed slugs (static/metadata paths that fall through to [orgSlug])
   // short-circuit to notFound() WITHOUT a DB round-trip. Regression guard for
   // the production incident where /favicon.ico, /robots.txt were run as org
-  // slug lookups (26 failed queries/12h). — OXA-1779
+  // slug lookups.
   it.each(["favicon.ico", "robots.txt", "sitemap.xml", "apple-touch-icon.png"])(
     "rejects %s with notFound() and never touches the DB",
     async (badSlug) => {
@@ -135,7 +135,7 @@ describe("resolveOrg", () => {
 
 // The layout actually resolves via resolveOrgWithRedirect — assert the guard is
 // present on that (history-aware) path too, so a bad slug skips BOTH the org
-// query and the slug_history fallback query. — OXA-1779
+// query and the slug_history fallback query.
 describe("resolveOrgWithRedirect (guard)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -188,8 +188,8 @@ describe("resolveWorkspace", () => {
   });
 
   // (c2) Reads description off the promoted `description` column — the SAME
-  // column the workspace.settings.write handler writes. This is the
-  // read-back-source === write-target invariant for OXA-1465.
+  // column the workspace.settings.write handler writes. The read-back source
+  // must match the write target.
   it("reads description from the description column", async () => {
     setMockRows([
       {

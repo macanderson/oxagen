@@ -151,7 +151,7 @@ export function BrowsePanel({
   const [error, setError] = React.useState<string | null>(null);
   // Bulk-install multi-select. `selected` holds `srv.id` (the compound catalog
   // id); the handler resolves each back to `srv.name` before dispatching, same
-  // as the legacy MarketplaceModal. Per-item failures surface in `bulkFailures`.
+  // as MarketplaceModal. Per-item failures surface in `bulkFailures`.
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = React.useState(false);
   const [bulkFailures, setBulkFailures] = React.useState<string[]>([]);

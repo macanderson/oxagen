@@ -9,11 +9,11 @@
  * package managers a person can drive from the UI and how to build a safe
  * install command for each.
  *
- * IMPORTANT (honest scope): the base language RUNTIME versions are baked into
- * the Modal image and are chosen at warm time by picking a template — they are
- * not swappable on a live sandbox. This module therefore exposes the runtimes as
- * truthful, read-only info and only offers PACKAGE installation (npm / pip /
- * apt), which is fully wired through `run_sandbox_command`.
+ * IMPORTANT: the base language RUNTIME versions are baked into the Modal
+ * image and are chosen at warm time by picking a template — they are not
+ * swappable on a live sandbox. This module exposes the runtimes as read-only
+ * info and only offers PACKAGE installation (npm / pip / apt), which is
+ * fully wired through `run_sandbox_command`.
  */
 
 import type { SandboxImage } from "./warm-up-templates";

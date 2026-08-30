@@ -242,7 +242,7 @@ describe("translateAgentStream — error part surfaces a structured error event"
   });
 });
 
-describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => {
+describe("translateAgentStream — background-task lifecycle", () => {
   it("emits background-task-progress + persists a block when agent.task.background.start returns", async () => {
     const events: StreamEvent[] = [];
     const parts: Part[] = [

@@ -28,7 +28,9 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   const user = await signUpFreshUser(page);
 
   await gotoStable(page, `/${user.orgSlug}/default/knowledge/sources/connect`);
-  await expect(page.getByText("Connect a source", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Connect a source", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Step 1 of 5")).toBeVisible();
 
   // Step 1 — pick connector. Generic Webhook is not OAuth-only, so selecting
@@ -39,7 +41,9 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // Step 2 — credentials, schema-driven form (get_plugin_schema SSR/CSR
   // fetch resolves and renders real fields, not a hardcoded form).
   await expect(page.getByText("Step 2 of 5")).toBeVisible();
-  await expect(page.getByLabel("Connection name")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel("Connection name")).toBeVisible({
+    timeout: 15_000,
+  });
 
   // Select the "public" auth scheme so no secret/bearer token is required.
   await page.getByRole("radio", { name: /no authentication/i }).click();
@@ -48,7 +52,9 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // (packages/ingestion/src/connectors/custom-webhook/schema.yaml).
   await page
     .getByLabel("Record Type Definitions")
-    .fill('[{"sourceRecordType":"webhook_event","eventTypeJsonPath":"$.event","matcher":"*"}]');
+    .fill(
+      '[{"sourceRecordType":"webhook_event","eventTypeJsonPath":"$.event","matcher":"*"}]',
+    );
 
   await page.getByTestId("credentials-next-btn").click();
 
@@ -61,13 +67,15 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // testid. preview-step.tsx renders ErrorState ("Couldn't preview this
   // connection") when preview_connection throws and EmptyState ("No records
   // found") when it returns nothing, and both are invisible to an assertion
-  // that only looks for the populated card — which is why #1188 could say the
-  // record type was absent but not why.
+  // that only looks for the populated card — so distinguish all three
+  // explicitly instead of just asserting the record type is absent.
   const populated = page.getByTestId("preview-record-type-webhook_event");
   const previewFailed = page.getByText("Couldn't preview this connection");
   const previewEmpty = page.getByText("No records found");
 
-  await expect(populated.or(previewFailed).or(previewEmpty).first()).toBeVisible({
+  await expect(
+    populated.or(previewFailed).or(previewEmpty).first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
   await expect(previewFailed, "preview_connection threw").toHaveCount(0);
@@ -87,12 +95,16 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
   // placeholder, ErrorState ("Couldn't generate mapping suggestions") when the
   // model call fails, and EmptyState ("No mappings to review") when it returns
   // nothing. Waiting only for a row cannot tell a slow call from a failed one
-  // from an empty one, and #1188 spent a long time not knowing which.
+  // from an empty one, so distinguish all three explicitly.
   const mappingRow = page.getByTestId("mapping-row-webhook_event");
-  const mappingsFailed = page.getByText("Couldn't generate mapping suggestions");
+  const mappingsFailed = page.getByText(
+    "Couldn't generate mapping suggestions",
+  );
   const mappingsEmpty = page.getByText("No mappings to review");
 
-  await expect(mappingRow.or(mappingsFailed).or(mappingsEmpty).first()).toBeVisible({
+  await expect(
+    mappingRow.or(mappingsFailed).or(mappingsEmpty).first(),
+  ).toBeVisible({
     timeout: 60_000,
   });
   await expect(
@@ -112,12 +124,17 @@ test("Connect a source wizard: pick → credentials → preview → mappings →
 
   // Step 5 — confirm + activate.
   await expect(page.getByText("Step 5 of 5")).toBeVisible();
-  await expect(page.getByTestId("confirm-mapping-summary")).toContainText("webhook_event");
+  await expect(page.getByTestId("confirm-mapping-summary")).toContainText(
+    "webhook_event",
+  );
   await page.getByTestId("confirm-activate-btn").click();
 
   // set_connection_mappings persists + activates, then redirects to Sources
   // with the new connection visible.
-  await page.waitForURL(new RegExp(`/${user.orgSlug}/default/knowledge/sources$`), { timeout: 30_000 });
+  await page.waitForURL(
+    new RegExp(`/${user.orgSlug}/default/knowledge/sources$`),
+    { timeout: 30_000 },
+  );
 
   // The Sources page's ConnectionsSection (RSC) invokes list_connections to
   // render the list — the freshly created connection's row appearing here is

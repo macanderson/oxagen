@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => {
   const where = vi.fn().mockResolvedValue(undefined);
   const set = vi.fn((_value: unknown) => ({ where }));
   const update = vi.fn(() => ({ set }));
-  // Slug-history capture (OXA-1779): the handler inserts a row into
+  // Slug-history capture: the handler inserts a row into
   // workspace_slug_history inside the SAME withTenantDb tx whenever the slug
   // changes. The mock records every insert so each test can assert (or assert
   // the absence of) a history write.
@@ -44,13 +44,21 @@ describe("workspace.settings.write handler", () => {
   });
 
   it("updates the name and description columns independently", async () => {
-    mocks.findFirst
-      .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research Lab", slug: "research", description: "new desc" });
-    const out = await workspaceSettingsWriteHandler({ name: "Research Lab", description: "new desc" }, CTX);
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research Lab",
+      slug: "research",
+      description: "new desc",
+    });
+    const out = await workspaceSettingsWriteHandler(
+      { name: "Research Lab", description: "new desc" },
+      CTX,
+    );
 
     expect(mocks.update).toHaveBeenCalledTimes(1);
-    const setArg = mocks.set.mock.calls[0]![0] as { name?: string; description?: string | null };
+    const setArg = mocks.set.mock.calls[0]![0] as {
+      name?: string;
+      description?: string | null;
+    };
     expect(setArg.name).toBe("Research Lab");
     // description is a real column now — set directly, never via the settings bag.
     expect(setArg.description).toBe("new desc");
@@ -60,10 +68,13 @@ describe("workspace.settings.write handler", () => {
   });
 
   it("sets the avatarUrl column and returns it", async () => {
-    const avatar = "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}";
-    mocks.findFirst
-      .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: avatar, description: "old" });
+    const avatar = 'avatar:v1:{"emoji":"🔬","bg":"#2563eb","mode":"full"}';
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research",
+      slug: "research",
+      avatarUrl: avatar,
+      description: "old",
+    });
     const out = await workspaceSettingsWriteHandler({ avatarUrl: avatar }, CTX);
 
     const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
@@ -73,8 +84,16 @@ describe("workspace.settings.write handler", () => {
 
   it("clears the avatarUrl column when passed null", async () => {
     mocks.findFirst
-      .mockResolvedValueOnce({ ...EXISTING, avatarUrl: "https://cdn.example.com/a.png" })
-      .mockResolvedValueOnce({ name: "Research", slug: "research", avatarUrl: null, description: "old" });
+      .mockResolvedValueOnce({
+        ...EXISTING,
+        avatarUrl: "https://cdn.example.com/a.png",
+      })
+      .mockResolvedValueOnce({
+        name: "Research",
+        slug: "research",
+        avatarUrl: null,
+        description: "old",
+      });
     const out = await workspaceSettingsWriteHandler({ avatarUrl: null }, CTX);
 
     const setArg = mocks.set.mock.calls[0]![0] as { avatarUrl?: string | null };
@@ -83,11 +102,15 @@ describe("workspace.settings.write handler", () => {
   });
 
   it("clears the description column when passed null", async () => {
-    mocks.findFirst
-      .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research", slug: "research", description: null });
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research",
+      slug: "research",
+      description: null,
+    });
     const out = await workspaceSettingsWriteHandler({ description: null }, CTX);
-    const setArg = mocks.set.mock.calls[0]![0] as { description?: string | null };
+    const setArg = mocks.set.mock.calls[0]![0] as {
+      description?: string | null;
+    };
     expect(setArg.description).toBeNull();
     expect(out.description).toBeNull();
   });
@@ -102,28 +125,30 @@ describe("workspace.settings.write handler", () => {
   it("maps a unique-violation on slug to a friendly error", async () => {
     mocks.findFirst.mockResolvedValueOnce(EXISTING);
     mocks.where.mockRejectedValueOnce({ code: "23505" });
-    await expect(workspaceSettingsWriteHandler({ slug: "taken" }, CTX)).rejects.toThrow(
-      /already in use/,
-    );
+    await expect(
+      workspaceSettingsWriteHandler({ slug: "taken" }, CTX),
+    ).rejects.toThrow(/already in use/);
   });
 
   it("throws when the workspace is not found", async () => {
     mocks.findFirst.mockResolvedValueOnce(undefined);
-    await expect(workspaceSettingsWriteHandler({ name: "X" }, CTX)).rejects.toThrow(
-      "Workspace not found",
-    );
+    await expect(
+      workspaceSettingsWriteHandler({ name: "X" }, CTX),
+    ).rejects.toThrow("Workspace not found");
   });
 
-  // ── Slug-history capture (OXA-1779) ────────────────────────────────────────
+  // ── Slug-history capture ────────────────────────────────────────────────────
   // The handler MUST insert one workspace_slug_history row whenever the
   // workspace slug changes, in the SAME withTenantDb transaction as the
   // workspace UPDATE — so the redirect record never lags the rename even on
   // process crash. These tests assert capture-on-change and skip-on-unchange.
 
   it("writes a workspace_slug_history row when the slug changes", async () => {
-    mocks.findFirst
-      .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research", slug: "new-slug", settings: { description: "old" } });
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research",
+      slug: "new-slug",
+      settings: { description: "old" },
+    });
     await workspaceSettingsWriteHandler({ slug: "new-slug" }, CTX);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
     const insertRow = mocks.insertValues.mock.calls[0]![0] as {
@@ -140,9 +165,11 @@ describe("workspace.settings.write handler", () => {
 
   it("does NOT write history when slug is omitted or unchanged", async () => {
     // name-only update — no slug change → no history row.
-    mocks.findFirst
-      .mockResolvedValueOnce(EXISTING)
-      .mockResolvedValueOnce({ name: "Research Lab", slug: "research", settings: { description: "old" } });
+    mocks.findFirst.mockResolvedValueOnce(EXISTING).mockResolvedValueOnce({
+      name: "Research Lab",
+      slug: "research",
+      settings: { description: "old" },
+    });
     await workspaceSettingsWriteHandler({ name: "Research Lab" }, CTX);
     expect(mocks.insert).not.toHaveBeenCalled();
 

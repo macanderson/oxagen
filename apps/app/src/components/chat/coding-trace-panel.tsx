@@ -45,7 +45,10 @@ import type { TurnUsage } from "./stream-event-types";
 const STAGE_ORDER = ["plan", "tool", "code", "subagent", "result"] as const;
 export type CodingTraceStage = (typeof STAGE_ORDER)[number];
 
-const STAGE_META: Record<CodingTraceStage, { label: string; Icon: React.ComponentType<{ className?: string }> }> = {
+const STAGE_META: Record<
+  CodingTraceStage,
+  { label: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
   plan: { label: "Plan", Icon: ListTodo },
   tool: { label: "Tool calls", Icon: Wrench },
   code: { label: "Code runs", Icon: Terminal },
@@ -53,7 +56,12 @@ const STAGE_META: Record<CodingTraceStage, { label: string; Icon: React.Componen
   result: { label: "Result", Icon: CheckCircle2 },
 };
 
-export type CodingTraceTone = "thinking" | "running" | "done" | "failed" | "idle";
+export type CodingTraceTone =
+  | "thinking"
+  | "running"
+  | "done"
+  | "failed"
+  | "idle";
 
 export interface CodingTraceRow {
   /** The `order` timeline key this row was derived from (or a synthetic id
@@ -224,8 +232,14 @@ const dotToneClass: Record<CodingTraceTone, string> = {
 function TraceRowLink({ row }: { row: CodingTraceRow }) {
   const content = (
     <>
-      <span className={cn("size-1.5 shrink-0 rounded-full", dotToneClass[row.tone])} aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={row.label}>
+      <span
+        className={cn("size-1.5 shrink-0 rounded-full", dotToneClass[row.tone])}
+        aria-hidden="true"
+      />
+      <span
+        className="min-w-0 flex-1 truncate font-mono text-[11px]"
+        title={row.label}
+      >
         {row.label}
       </span>
     </>
@@ -244,7 +258,10 @@ function TraceRowLink({ row }: { row: CodingTraceRow }) {
     <li>
       <a
         href={`#${row.anchorId}`}
-        className={cn(rowClass, "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+        className={cn(
+          rowClass,
+          "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
         data-testid={`trace-row-${row.key}`}
       >
         {content}
@@ -253,7 +270,13 @@ function TraceRowLink({ row }: { row: CodingTraceRow }) {
   );
 }
 
-function StageSection({ stage, rows }: { stage: CodingTraceStage; rows: CodingTraceRow[] }) {
+function StageSection({
+  stage,
+  rows,
+}: {
+  stage: CodingTraceStage;
+  rows: CodingTraceRow[];
+}) {
   const [open, setOpen] = React.useState(true);
   if (rows.length === 0) return null;
   const { label, Icon } = STAGE_META[stage];
@@ -268,13 +291,26 @@ function StageSection({ stage, rows }: { stage: CodingTraceStage; rows: CodingTr
         className="flex min-h-8 w-full items-center gap-1.5 rounded-md px-1 py-1 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ChevronRight
-          className={cn("size-3 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-90",
+          )}
           aria-hidden="true"
         />
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Icon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <span className="flex-1 truncate text-xs font-semibold">{label}</span>
-        {anyActive ? <span className="size-1.5 shrink-0 rounded-full bg-info animate-pulse" aria-hidden="true" /> : null}
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{rows.length}</span>
+        {anyActive ? (
+          <span
+            className="size-1.5 shrink-0 rounded-full bg-info animate-pulse"
+            aria-hidden="true"
+          />
+        ) : null}
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+          {rows.length}
+        </span>
       </button>
       {open ? (
         <ul className="ml-4 border-l border-border/60 pl-1">
@@ -336,16 +372,27 @@ export function CodingTracePanel({
 }: CodingTracePanelProps) {
   const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
   const groups = React.useMemo(
-    () => groupCodingTraceStages({ order, plans, toolCalls, activeFanouts, turnUsage, isStreaming }),
+    () =>
+      groupCodingTraceStages({
+        order,
+        plans,
+        toolCalls,
+        activeFanouts,
+        turnUsage,
+        isStreaming,
+      }),
     [order, plans, toolCalls, activeFanouts, turnUsage, isStreaming],
   );
-  const totalRows = STAGE_ORDER.reduce((sum, stage) => sum + groups[stage].length, 0);
+  const totalRows = STAGE_ORDER.reduce(
+    (sum, stage) => sum + groups[stage].length,
+    0,
+  );
 
   if (totalRows === 0) return null;
 
   return (
-    // The marker now rides on the inner CodingTraceStages (rendered below), so
-    // this wrapper no longer carries it — avoids a duplicate when both render.
+    // The marker lives on the inner CodingTraceStages below, not here, so it
+    // doesn't render twice.
     <div
       className={cn(
         "flex flex-col gap-1 rounded-xl border border-border bg-card p-2 text-card-foreground shadow-sm",
@@ -354,7 +401,9 @@ export function CodingTracePanel({
       )}
     >
       <div className="flex items-center justify-between gap-1">
-        {!collapsed ? <span className="px-1 text-xs font-semibold">Turn trace</span> : null}
+        {!collapsed ? (
+          <span className="px-1 text-xs font-semibold">Turn trace</span>
+        ) : null}
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}

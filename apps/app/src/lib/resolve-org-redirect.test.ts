@@ -1,6 +1,6 @@
 /**
  * resolve-org-redirect.test.ts — unit tests for the slug-history-aware
- * resolvers (OXA-1779).
+ * resolvers.
  *
  * Covers:
  *   (a) resolveOrgWithRedirect returns the current row when the slug matches
@@ -20,8 +20,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Each resolver issues 1–3 sequential queries. The mock pops a precomputed
 // response off a FIFO queue per call so we can script multi-step lookups
 // (current-slug miss → history hit → org-by-id read) cleanly.
-const { notFoundMock, permanentRedirectMock, queue, mockWithSystemDb } = vi.hoisted(
-  () => {
+const { notFoundMock, permanentRedirectMock, queue, mockWithSystemDb } =
+  vi.hoisted(() => {
     const queue: unknown[][] = [];
     const mockLimit = vi.fn(() => Promise.resolve(queue.shift() ?? []));
     const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
@@ -29,8 +29,8 @@ const { notFoundMock, permanentRedirectMock, queue, mockWithSystemDb } = vi.hois
     const mockFrom = vi.fn(() => ({ where: mockWhere }));
     const mockSelect = vi.fn(() => ({ from: mockFrom }));
     const mockTx = { select: mockSelect };
-    const mockWithSystemDb = vi.fn(
-      (fn: (tx: unknown) => Promise<unknown>) => fn(mockTx),
+    const mockWithSystemDb = vi.fn((fn: (tx: unknown) => Promise<unknown>) =>
+      fn(mockTx),
     );
     const notFoundMock = vi.fn(() => {
       throw new Error("NEXT_NOT_FOUND");
@@ -44,8 +44,7 @@ const { notFoundMock, permanentRedirectMock, queue, mockWithSystemDb } = vi.hois
     });
 
     return { notFoundMock, permanentRedirectMock, queue, mockWithSystemDb };
-  },
-);
+  });
 
 vi.mock("next/navigation", () => ({
   notFound: notFoundMock,
@@ -135,7 +134,9 @@ describe("resolveOrgWithRedirect", () => {
 
   it("calls notFound() when neither current slug nor history matches", async () => {
     queueRows([], []); // current miss + history miss
-    await expect(resolveOrgWithRedirect("ghost")).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(resolveOrgWithRedirect("ghost")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
@@ -162,7 +163,9 @@ describe("resolveOrgOrRedirect", () => {
     await expect(
       resolveOrgOrRedirect("acme-old", "/acme-old/ask/123", "?q=abc"),
     ).rejects.toThrow("NEXT_PERMANENT_REDIRECT");
-    expect(permanentRedirectMock).toHaveBeenCalledWith("/acme-new/ask/123?q=abc");
+    expect(permanentRedirectMock).toHaveBeenCalledWith(
+      "/acme-new/ask/123?q=abc",
+    );
   });
 
   it("only rewrites the first path segment (the org slug)", async () => {
@@ -178,9 +181,9 @@ describe("resolveOrgOrRedirect", () => {
 
   it("handles the org root path /{oldSlug} with no trailing segment", async () => {
     queueRows([], [{ orgId: "org-1" }], [ORG]);
-    await expect(resolveOrgOrRedirect("acme-old", "/acme-old", "")).rejects.toThrow(
-      "NEXT_PERMANENT_REDIRECT",
-    );
+    await expect(
+      resolveOrgOrRedirect("acme-old", "/acme-old", ""),
+    ).rejects.toThrow("NEXT_PERMANENT_REDIRECT");
     expect(permanentRedirectMock).toHaveBeenCalledWith("/acme-new");
   });
 });
@@ -204,9 +207,9 @@ describe("resolveWorkspaceWithRedirect", () => {
 
   it("404s when neither current slug nor history matches for the given org", async () => {
     queueRows([], []);
-    await expect(resolveWorkspaceWithRedirect("org-1", "ghost")).rejects.toThrow(
-      "NEXT_NOT_FOUND",
-    );
+    await expect(
+      resolveWorkspaceWithRedirect("org-1", "ghost"),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
 
@@ -245,7 +248,13 @@ describe("resolveWorkspaceOrRedirect", () => {
   it("handles the workspace root path /{orgSlug}/{oldWs} with no trailing segment", async () => {
     queueRows([], [{ workspaceId: "ws-1" }], [WORKSPACE]);
     await expect(
-      resolveWorkspaceOrRedirect("org-1", "acme", "prod-old", "/acme/prod-old", ""),
+      resolveWorkspaceOrRedirect(
+        "org-1",
+        "acme",
+        "prod-old",
+        "/acme/prod-old",
+        "",
+      ),
     ).rejects.toThrow("NEXT_PERMANENT_REDIRECT");
     expect(permanentRedirectMock).toHaveBeenCalledWith("/acme/prod-new");
   });

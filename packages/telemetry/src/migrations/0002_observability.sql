@@ -1,4 +1,4 @@
--- OXA-1351 observability.
+-- Observability columns.
 -- token_usage: provider, duration_ms, surface, prompt_hash, workspace_id.
 -- tool_invocations: surface, provider.
 

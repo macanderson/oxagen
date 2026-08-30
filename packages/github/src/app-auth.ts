@@ -133,7 +133,6 @@ export async function getInstallationToken(
   const key = args.installationId;
   const cached = _cache.get(key);
 
-  // Reuse cache if the token has more than 60 s of lifetime remaining.
   if (cached !== undefined && now() < cached.expiresAt - 60_000) {
     return cached;
   }

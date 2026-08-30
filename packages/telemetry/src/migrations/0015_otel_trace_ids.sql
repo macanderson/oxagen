@@ -1,6 +1,6 @@
 -- 0015_otel_trace_ids.sql
 --
--- OXA-1544: Add trace_id / span_id columns to high-volume telemetry tables
+-- Add trace_id / span_id columns to high-volume telemetry tables
 -- so that ClickHouse rows can be correlated with OpenTelemetry distributed
 -- traces in any OTEL-compatible backend (Jaeger, Honeycomb, Tempo, etc.).
 --

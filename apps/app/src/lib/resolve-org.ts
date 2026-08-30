@@ -8,8 +8,7 @@ import { isValidSlug } from "./slug";
 // before a tenant scope exists — this is the canonical bootstrap step that
 // PRODUCES the orgId/workspaceId used by runInTenantScope in callers;
 // withSystemDb bypasses RLS deliberately; tables read: org.organizations,
-// workspace.workspaces, org.org_users) — OXA-1515
-
+// workspace.workspaces, org.org_users)
 export interface ResolvedOrg {
   id: string;
   publicId: string;
@@ -38,7 +37,7 @@ export interface ResolvedWorkspace {
 export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
   // Reject anything that could never be a real org slug (static/metadata paths
   // like favicon.ico, robots.txt that fall through to [orgSlug]) BEFORE the DB
-  // round-trip — a malformed slug is a guaranteed 404, not a lookup. — OXA-1779
+  // round-trip — a malformed slug is a guaranteed 404, not a lookup.
   if (!isValidSlug(slug)) notFound();
   const rows = await withSystemDb((tx) =>
     tx
@@ -62,7 +61,7 @@ export const resolveOrg = cache(async (slug: string): Promise<ResolvedOrg> => {
  * up org_slug_history for a redirect-enabled entry and resolves the org from
  * its id. Returns the resolved org WITH the canonical slug so the caller can
  * compare against the URL slug and issue a 308 permanent redirect when they
- * differ (spec §4.5; OXA-1779).
+ * differ (spec §4.5).
  *
  * Why this is separate from resolveOrg(): resolveOrg's contract is "current
  * slug → org or 404". Several call sites depend on that contract (the writer
@@ -75,7 +74,7 @@ export const resolveOrgWithRedirect = cache(
     // Short-circuit slugs that can't be valid (favicon.ico, robots.txt,
     // sitemap.xml, … all fall through to [orgSlug]) — skip BOTH the org query
     // and the slug-history fallback: a malformed slug was never a real org, so
-    // it can't be in org_slug_history either. — OXA-1779
+    // it can't be in org_slug_history either.
     if (!isValidSlug(slug)) notFound();
     const direct = await withSystemDb((tx) =>
       tx
@@ -180,7 +179,7 @@ export const resolveWorkspace = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
     // Same guard as resolveOrg: reject impossible slugs before the DB round-trip
     // (static paths like /{org}/favicon.ico reach the nested [workspaceSlug]
-    // route). — OXA-1779
+    // route).
     if (!isValidSlug(slug)) notFound();
     const rows = await withSystemDb((tx) =>
       tx
@@ -220,12 +219,12 @@ function mapWorkspaceRow(
 /**
  * History-aware workspace resolver. Same shape as resolveOrgWithRedirect but
  * scoped to (orgId, oldSlug) — workspace slugs are only unique within their
- * org, so the lookup never collides across tenants (spec §4.5; OXA-1779).
+ * org, so the lookup never collides across tenants (spec §4.5).
  */
 export const resolveWorkspaceWithRedirect = cache(
   async (orgId: string, slug: string): Promise<ResolvedWorkspace> => {
     // Skip both the workspace query and the slug-history fallback for slugs that
-    // can't be valid (static/metadata paths under an org). — OXA-1779
+    // can't be valid (static/metadata paths under an org).
     if (!isValidSlug(slug)) notFound();
     const direct = await withSystemDb((tx) =>
       tx

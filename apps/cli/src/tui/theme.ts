@@ -24,9 +24,8 @@ export const theme = {
   dim: "gray",
   ring: "◯",
   pointer: "❯",
-  // Status colors — shared by every activity surface via tui/activity.ts
-  // (previously each of hud.tsx / fleet-view / best-of-n-view spelled these
-  // out independently as a mix of hex and CSS color names).
+  // Status colors — shared by every activity surface via tui/activity.ts,
+  // so hud.tsx / fleet-view / best-of-n-view stay in sync.
   green: GREEN, // done / success
   amber: AMBER, // queued / caution
   red: "#F87171", // failed / destructive

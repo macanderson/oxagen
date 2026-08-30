@@ -213,9 +213,7 @@ export type CreateFunctionFactory = (
 
 /**
  * Throw this error to permanently fail a function without retries.
- * Provider adapters must translate this error to their native non-retriable
- * type. In Inngest, function handlers still use the SDK-native
- * NonRetriableError directly until createFunction abstraction is implemented.
+ * Provider adapters translate this into their own non-retriable error type.
  */
 export class NonRetriableError extends Error {
   public readonly isNonRetriable = true as const;

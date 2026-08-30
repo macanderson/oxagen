@@ -126,10 +126,9 @@ async function* textStream(text: string) {
 
 /**
  * Wrap a `fullStream` generator in the full StreamTextResult shape the unified
- * agent engine (runCodingAgent, PR #644) now awaits. The engine reads `usage`,
+ * agent engine (runCodingAgent) awaits. The engine reads `usage`,
  * `finishReason`, `response`, and `steps` as top-level promises on the stream
- * result — the pre-unification transport instead carried usage inside the
- * stream's `finish` part. A mock returning only `{ fullStream }` makes the
+ * result. A mock returning only `{ fullStream }` makes the
  * engine throw when it awaits the missing `usage`, aborting the turn before the
  * route can emit the usage event, persist the messages, or record the SOC 2
  * execution — which is exactly what these tests exercise.
@@ -188,7 +187,9 @@ beforeEach(() => {
   mocks.resolvePrompt.mockReturnValue("You are a helpful assistant.");
   mocks.loadWorkspacePromptConfigSafe.mockResolvedValue({});
   mocks.materializeTools.mockResolvedValue({ tools: {}, nameMap: {} });
-  mocks.streamAgentReply.mockReturnValue(streamResult(textStream("Hello world")));
+  mocks.streamAgentReply.mockReturnValue(
+    streamResult(textStream("Hello world")),
+  );
 
   // runInTenantScope executes its callback directly
   mocks.runInTenantScope.mockImplementation(
@@ -573,9 +574,7 @@ describe("chat stream: error handling", () => {
         totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       };
     }
-    mocks.streamAgentReply.mockReturnValue(
-      streamResult(providerErrorStream()),
-    );
+    mocks.streamAgentReply.mockReturnValue(streamResult(providerErrorStream()));
 
     const res = await app.fetch(post({ content: "check errors" }));
     const events = await readSseEvents(res);
@@ -604,9 +603,7 @@ describe("chat stream: error handling", () => {
         totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       };
     }
-    mocks.streamAgentReply.mockReturnValue(
-      streamResult(providerErrorStream()),
-    );
+    mocks.streamAgentReply.mockReturnValue(streamResult(providerErrorStream()));
 
     const insertSpy = vi.fn().mockReturnThis();
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
@@ -697,7 +694,12 @@ describe("chat stream: per-turn budget & workspace governance", () => {
     const res = await app.fetch(
       post({
         content: "Hello",
-        budget: { enabled: true, limitUsd: null, mode: "enforce", graceOveragePct: 0.25 },
+        budget: {
+          enabled: true,
+          limitUsd: null,
+          mode: "enforce",
+          graceOveragePct: 0.25,
+        },
       }),
     );
     expect(res.status).toBe(400);
@@ -707,14 +709,19 @@ describe("chat stream: per-turn budget & workspace governance", () => {
     const res = await app.fetch(
       post({
         content: "Hello",
-        budget: { enabled: true, limitUsd: 2, mode: "enforce", graceOveragePct: 0.25 },
+        budget: {
+          enabled: true,
+          limitUsd: 2,
+          mode: "enforce",
+          graceOveragePct: 0.25,
+        },
       }),
     );
     expect(res.status).toBe(200);
     const events = await readSseEvents(res);
-    expect(
-      events.some((e) => (e as { type: string }).type === "text"),
-    ).toBe(true);
+    expect(events.some((e) => (e as { type: string }).type === "text")).toBe(
+      true,
+    );
   });
 
   it("reads workspace budget governance via invoke(get_budget_policy, surface: agent)", async () => {
@@ -741,9 +748,9 @@ describe("chat stream: per-turn budget & workspace governance", () => {
     const res = await app.fetch(post({ content: "Hello" }));
     expect(res.status).toBe(200);
     const events = await readSseEvents(res);
-    expect(
-      events.some((e) => (e as { type: string }).type === "text"),
-    ).toBe(true);
+    expect(events.some((e) => (e as { type: string }).type === "text")).toBe(
+      true,
+    );
     // Fail-open is logged, never silent.
     expect(
       consoleWarnSpy.mock.calls.some((c) =>

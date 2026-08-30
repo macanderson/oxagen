@@ -30,8 +30,8 @@ export type Effect = "allow" | "deny" | "require_approval";
 
 // ── Agent RBAC system roles (docs/specs/agent-rbac/spec.md §3.2, §3.3) ────────
 //
-// Three SYSTEM agent roles — deliberately NOT four: spec.md §6 Q1 answer is
-// explicit that this is pre-launch with zero customers, so no "Agent Legacy /
+// Three SYSTEM agent roles — deliberately NOT four: this is pre-launch with
+// zero customers (docs/specs/agent-rbac/spec.md), so no "Agent Legacy /
 // unrestricted" back-compat role is seeded here.
 //
 // Unlike the human ORG_ROLES/WORKSPACE_ROLES grants (sourced from each
@@ -40,8 +40,8 @@ export type Effect = "allow" | "deny" | "require_approval";
 // — that type doesn't know about agent roles. Grants are instead computed
 // from `contract.agent.{category,riskLevel}` (CapabilityAgentMetadata,
 // packages/oxagen/src/types.ts), optional presentation metadata that only
-// ~338 of the ~380 contracts declare (the ones relevant to the agent/chat
-// surface). A capability with no `agent` block gets no role_grant row for
+// contracts relevant to the agent/chat surface declare. A capability with
+// no `agent` block gets no role_grant row for
 // any of the three roles and falls through to the contract's own
 // `defaultEffect` (resolver rule 8) — unchanged behavior for all three roles
 // alike, since such a capability was never agent-surface-relevant.
@@ -172,9 +172,9 @@ export function makeAgentRolePublicId(
 
 // Generate a stable, collision-free public_id for a role_grant row.
 // Deterministic so re-runs are idempotent against the public_id UNIQUE
-// constraint. A previous version truncated the capability id to 14 chars,
-// which collided for capabilities sharing a prefix (e.g.
-// agent.task.background.{start,read,cancel}) and silently dropped grants.
+// constraint. Hash the full capability id rather than truncating it: a
+// short prefix can collide across capabilities that share one (e.g.
+// agent.task.background.{start,read,cancel}) and silently drop grants.
 // Shared by tools/scripts/seed-iam-defaults.ts's human-role and Agent RBAC
 // phases alike (and MUST match packages/handlers/src/iam-provision.ts's
 // own makeRoleGrantPublicId, kept as a private duplicate there).

@@ -33,8 +33,17 @@ import {
   upsertRelationship,
 } from "./schema-service";
 import { schemaReconcileDispatchAction } from "./reconcile-actions";
-import type { TenantSlugs, SchemaRegistryData, LabelItem, RelationshipItem } from "./types";
-import type { SchemaToggleOutput, SchemaLabelUpsertInput, SchemaRelationshipUpsertInput } from "./schema-service";
+import type {
+  TenantSlugs,
+  SchemaRegistryData,
+  LabelItem,
+  RelationshipItem,
+} from "./types";
+import type {
+  SchemaToggleOutput,
+  SchemaLabelUpsertInput,
+  SchemaRelationshipUpsertInput,
+} from "./schema-service";
 
 interface SchemaBuilderProps {
   slugs: TenantSlugs;
@@ -43,18 +52,34 @@ interface SchemaBuilderProps {
 
 type Tab = "schemas" | "labels" | "relationships" | "versions";
 
-const ENFORCEMENT_BADGE: Record<SchemaRegistryData["enforcementMode"], { label: string; className: string }> = {
-  strict: { label: "Strict", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
-  lenient: { label: "Lenient", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+const ENFORCEMENT_BADGE: Record<
+  SchemaRegistryData["enforcementMode"],
+  { label: string; className: string }
+> = {
+  strict: {
+    label: "Strict",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  },
+  lenient: {
+    label: "Lenient",
+    className:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  },
   off: { label: "Off", className: "bg-muted text-muted-foreground" },
 };
 
 export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
-  const [registry, setRegistry] = React.useState<SchemaRegistryData | null>(null);
+  const [registry, setRegistry] = React.useState<SchemaRegistryData | null>(
+    null,
+  );
   const [loading, setLoading] = React.useState(true);
   const [activeTab, setActiveTab] = React.useState<Tab>("schemas");
-  const [selectedSchemaName, setSelectedSchemaName] = React.useState<string | null>(null);
-  const [versionId, setVersionId] = React.useState<string | undefined>(undefined);
+  const [selectedSchemaName, setSelectedSchemaName] = React.useState<
+    string | null
+  >(null);
+  const [versionId, setVersionId] = React.useState<string | undefined>(
+    undefined,
+  );
 
   // Dialogs
   const [labelDialog, setLabelDialog] = React.useState<{
@@ -72,8 +97,8 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
   const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [showOnboarding, setShowOnboarding] = React.useState(false);
   // The AI recommendation flow fetches (and shows loading skeletons) on mount,
-  // so it is gated behind an explicit CTA in the empty state — never auto-
-  // mounted, which used to leave two ghost skeleton cards under the empty state.
+  // so it is gated behind an explicit CTA in the empty state. Auto-mounting it
+  // would show two ghost skeleton cards under the empty state.
   const [recommendationsOpen, setRecommendationsOpen] = React.useState(false);
 
   const loadRegistry = React.useCallback(
@@ -94,7 +119,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     void loadRegistry(versionId);
   }, [loadRegistry, versionId]);
 
-  const handleToggle = async (schemaName: string, enabled: boolean): Promise<SchemaToggleOutput> => {
+  const handleToggle = async (
+    schemaName: string,
+    enabled: boolean,
+  ): Promise<SchemaToggleOutput> => {
     const result = await toggleSchema(slugs, schemaName, enabled);
     // Refresh registry to reflect toggle
     const updated = await fetchRegistry(slugs);
@@ -110,7 +138,6 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
       versionId: registry.pinnedVersionId,
       prune: false,
     });
-    // schemaName used to scope which schema triggered reconcile — kept for future filtering
     void schemaName;
   };
 
@@ -120,7 +147,9 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     await loadRegistry(versionId);
   };
 
-  const handleSaveRelationship = async (input: SchemaRelationshipUpsertInput) => {
+  const handleSaveRelationship = async (
+    input: SchemaRelationshipUpsertInput,
+  ) => {
     await upsertRelationship(slugs, input);
     setRelationshipDialog(null);
     await loadRegistry(versionId);
@@ -132,7 +161,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     setPinDialog({ versionId: vid, versionNumber: 1 });
   };
 
-  const handleDispatchReconcile = async (opts: { versionId: string; prune: boolean }) => {
+  const handleDispatchReconcile = async (opts: {
+    versionId: string;
+    prune: boolean;
+  }) => {
     const { executionId } = await schemaReconcileDispatchAction({
       orgSlug: slugs.orgSlug,
       workspaceSlug: slugs.workspaceSlug,
@@ -145,7 +177,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     // Optionally: start polling schemaReconcileStatusAction(slugs.orgSlug, slugs.workspaceSlug, executionId)
   };
 
-  const handleOnboardingApply = async (schemaName: string, labels: LabelItem[]) => {
+  const handleOnboardingApply = async (
+    schemaName: string,
+    labels: LabelItem[],
+  ) => {
     for (const label of labels) {
       await upsertLabel(slugs, {
         schemaName,
@@ -185,7 +220,9 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
     { id: "versions", label: "Version History" },
   ];
 
-  const enforcementInfo = registry ? ENFORCEMENT_BADGE[registry.enforcementMode] : null;
+  const enforcementInfo = registry
+    ? ENFORCEMENT_BADGE[registry.enforcementMode]
+    : null;
 
   return (
     <div className="space-y-6">
@@ -202,8 +239,15 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           )}
           {registry && (
             <Select
-              value={versionId ?? (registry.draftVersionId ? "draft" : registry.pinnedVersionId ?? "draft")}
-              onValueChange={(v) => setVersionId(v == null || v === "draft" ? undefined : v)}
+              value={
+                versionId ??
+                (registry.draftVersionId
+                  ? "draft"
+                  : (registry.pinnedVersionId ?? "draft"))
+              }
+              onValueChange={(v) =>
+                setVersionId(v == null || v === "draft" ? undefined : v)
+              }
             >
               <SelectTrigger className="h-7 text-xs w-36 max-md:h-11">
                 <SelectValue />
@@ -281,7 +325,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                     className="max-md:h-11 shrink-0"
                     onClick={() => setRecommendationsOpen(true)}
                   >
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                    <Sparkles
+                      className="h-3.5 w-3.5 mr-1.5"
+                      aria-hidden="true"
+                    />
                     Use AI recommendations
                   </Button>
                 )}
@@ -315,7 +362,9 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
               size="sm"
               className="max-md:h-11"
               onClick={() =>
-                setLabelDialog({ schemaName: registry.schemas[0]?.schemaName ?? "core" })
+                setLabelDialog({
+                  schemaName: registry.schemas[0]?.schemaName ?? "core",
+                })
               }
               disabled={registry.schemas.length === 0}
             >
@@ -335,12 +384,19 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                   idx > 0 ? "border-t border-border" : ""
                 }`}
                 onClick={() =>
-                  setLabelDialog({ schemaName: label.schemaName, initial: label })
+                  setLabelDialog({
+                    schemaName: label.schemaName,
+                    initial: label,
+                  })
                 }
               >
                 <div>
-                  <span className="font-medium text-sm">{label.displayName}</span>
-                  <span className="ml-2 text-xs text-muted-foreground font-mono">{label.name}</span>
+                  <span className="font-medium text-sm">
+                    {label.displayName}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground font-mono">
+                    {label.name}
+                  </span>
                   <Badge variant="outline" className="ml-2 text-xs">
                     {label.schemaName}
                   </Badge>
@@ -384,11 +440,16 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
                   idx > 0 ? "border-t border-border" : ""
                 }`}
                 onClick={() =>
-                  setRelationshipDialog({ schemaName: rel.schemaName, initial: rel })
+                  setRelationshipDialog({
+                    schemaName: rel.schemaName,
+                    initial: rel,
+                  })
                 }
               >
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-medium">{rel.name}</span>
+                  <span className="font-mono text-sm font-medium">
+                    {rel.name}
+                  </span>
                   <Badge variant="outline" className="text-xs">
                     {rel.schemaName}
                   </Badge>
@@ -417,7 +478,10 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
       )}
 
       {/* Label Dialog */}
-      <Dialog open={!!labelDialog} onOpenChange={(open) => !open && setLabelDialog(null)}>
+      <Dialog
+        open={!!labelDialog}
+        onOpenChange={(open) => !open && setLabelDialog(null)}
+      >
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -443,7 +507,9 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {relationshipDialog?.initial ? "Edit Relationship" : "Add Relationship"}
+              {relationshipDialog?.initial
+                ? "Edit Relationship"
+                : "Add Relationship"}
             </DialogTitle>
           </DialogHeader>
           {relationshipDialog && (

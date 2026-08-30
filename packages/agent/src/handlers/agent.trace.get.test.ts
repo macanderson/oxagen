@@ -125,14 +125,18 @@ function setup(args: {
     if (call === 1) {
       const tx = {
         select: () => ({
-          from: () => ({ where: () => ({ orderBy: () => Promise.resolve(steps) }) }),
+          from: () => ({
+            where: () => ({ orderBy: () => Promise.resolve(steps) }),
+          }),
         }),
       };
       return fn(tx as unknown as Parameters<typeof fn>[0]);
     }
     const tx = {
       select: () => ({
-        from: () => ({ where: () => ({ orderBy: () => Promise.resolve(tools) }) }),
+        from: () => ({
+          where: () => ({ orderBy: () => Promise.resolve(tools) }),
+        }),
       }),
     };
     return fn(tx as unknown as Parameters<typeof fn>[0]);
@@ -238,7 +242,7 @@ describe("agent.trace.get handler", () => {
     expect(out.executionId).toBe("aex_root");
   });
 
-  it("derives turnMetrics + replayDeterministic from steps via @oxagen/engram (OXA-2071)", async () => {
+  it("derives turnMetrics + replayDeterministic from steps via @oxagen/engram", async () => {
     setup({
       root: exec(),
       steps: [

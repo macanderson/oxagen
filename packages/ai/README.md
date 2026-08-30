@@ -1,18 +1,19 @@
 # @oxagen/ai — Single AI Chokepoint
 
-Every LLM call in the platform — streaming completions, structured object generation, embeddings, image and video generation — enters and exits through one `invoke()` boundary, so metering, performance tracking, IAM enforcement, and customer billing happen in exactly one place.
+Every LLM call in the platform — streaming completions, structured object generation, embeddings, image and video generation — goes through this package's helpers, so metering, performance tracking, and customer billing happen in exactly one place.
 
 ## What this is
 
 `@oxagen/ai` wraps the Vercel AI SDK (`streamText`, `generateObject`, `generateText`), embeddings, image generation, and video generation behind a typed facade. Callers receive the same streaming and structured-output ergonomics as the raw SDK, but the boundary layer automatically:
 
 - Records token usage and latency to `@oxagen/telemetry`
-- Enforces the caller's IAM scope
 - Writes usage to `@oxagen/billing` for credit metering
 - Selects the model from a centrally maintained catalog so model IDs are never scattered across the codebase
 
+IAM checks happen earlier, at the capability kernel's `invoke()` boundary (`packages/oxagen`), before a handler ever calls into this package.
+
 ```
-caller → invoke() [IAM · meter · telemetry] → provider (Anthropic / OpenAI / Google) → usage → billing
+caller → capability handler → @oxagen/ai helper [meter · telemetry] → provider (Anthropic / OpenAI / Google) → usage → billing
 ```
 
 ## Install / import
@@ -25,6 +26,9 @@ Workspace-internal package. Add `"@oxagen/ai": "workspace:*"` to the consuming p
 |---|---|
 | `.` | Root barrel — `streamAgentReply`, `generateObjectFor`, `generateImageFor`, `generateVideoFor`, `embedText` |
 | `./catalog` | Typed model catalog — `gatewayModels`, tier helpers, capability flags |
+| `./posture` | Provider capability posture matrix — cache/reasoning/structured-output/attachment support per vendor |
+| `./slash-commands` | Chat slash-command registry, client-safe |
+| `./mentions` | `@`-mention reference grammar (parse/serialize/render), client-safe |
 
 ## Model catalog
 
@@ -34,7 +38,7 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 |---|---|---|
 | `fast` | `OXAGEN_LLM_FAST` | `anthropic/claude-haiku-4.5` |
 | `balanced` | `OXAGEN_LLM_BALANCED` | `anthropic/claude-sonnet-5` |
-| `precise` | `OXAGEN_LLM_PRECISE` | `anthropic/claude-opus-4.8` |
+| `precise` | `OXAGEN_LLM_PRECISE` | `anthropic/claude-fable-5` |
 | `image.basic` | `OXAGEN_LLM_IMAGE_BASIC` | `openai/gpt-image-1` |
 | `image.advanced` | `OXAGEN_LLM_IMAGE_ADVANCED` | `bfl/flux-2-max` |
 | `video.basic` | `OXAGEN_LLM_VIDEO_BASIC` | `google/veo-3.0-fast-generate-001` |
@@ -51,11 +55,15 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 - `src/catalog.ts` — `gatewayModels` constant and capability helpers; client-safe (no provider SDK imports)
 - `src/load-effective-model-defaults.ts` — server-only; loads user + workspace model preferences from the DB
 - `src/resolve-model-defaults.ts` — pure resolver for model defaults; client-safe
+- `src/provider-posture.ts` — per-vendor capability posture matrix (cache/reasoning/structured-output/attachments); client-safe
+- `src/cache.ts` — opt-in exact + semantic response cache for deterministic background inference
+- `src/batch.ts` — Anthropic Message Batches (background inference at half price)
+- `src/prompts/` — prompt registry, slash commands, and `@`-mention grammar
 - `src/index.ts` — root barrel re-exporting the public helpers
 
 ## Dependencies
 
-**External:** `ai@6.0.197`, `@ai-sdk/gateway`, `@ai-sdk/provider`, `zod`, `drizzle-orm`
+**External:** `ai@7.0.14`, `@ai-sdk/gateway`, `@ai-sdk/provider`, `@ai-sdk/openai-compatible`, `@anthropic-ai/sdk`, `@opentelemetry/api`, `zod`, `drizzle-orm`
 
 **Workspace:** `@oxagen/config`, `@oxagen/telemetry`, `@oxagen/billing`, `@oxagen/database`, `@oxagen/tenancy`
 

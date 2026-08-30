@@ -1,17 +1,15 @@
 // history.ts — rebuild model-facing conversation history from persisted rows.
 //
-// Why this exists (the "re-execution" bug):
-// The chat stream route used to rebuild history as `{ role, content }` from the
-// `messages.content` TEXT column alone, dropping any row whose text was empty.
 // An assistant turn that produced ONLY tool calls + render directives (e.g.
 // markdown.generate → a file, image.generate → an image) has an EMPTY text
-// `content` — its real output lives in `content_blocks`. Those turns were
-// therefore filtered out completely, so the model saw a list of USER requests
-// with no evidence any were fulfilled — and dutifully re-ran every prior tool
-// call on each new turn (ask for a doc, then an image, and it remakes the doc
-// too; ask for a third thing and it remakes all three).
+// `messages.content` — its real output lives in `content_blocks`. Rebuilding
+// history from `content` alone would drop those turns, so the model would see
+// a list of USER requests with no evidence any were fulfilled, and would
+// re-run every prior tool call on each new turn (ask for a doc, then an
+// image, and it remakes the doc too; ask for a third thing and it remakes
+// all three).
 //
-// Fix: never drop an assistant turn that did real work. Reconstruct a concise,
+// So: never drop an assistant turn that did real work. Reconstruct a concise,
 // model-facing summary of the actions it ALREADY completed (from content_blocks)
 // and mark them explicitly DONE, so the model treats them as finished history,
 // not pending requests.
@@ -41,8 +39,11 @@ export interface HistoryAttachmentRef {
  * Defensive: malformed/absent metadata (including rows from before this
  * feature shipped) yields `null` rather than throwing.
  */
-function attachmentsFromMetadata(metadata: unknown): HistoryAttachmentRef[] | null {
-  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata)) return null;
+function attachmentsFromMetadata(
+  metadata: unknown,
+): HistoryAttachmentRef[] | null {
+  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata))
+    return null;
   const raw = (metadata as { attachments?: unknown }).attachments;
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const valid = raw.filter(
@@ -68,7 +69,8 @@ function artifactNameFor(
   for (const b of blocks) {
     if (b.type === "component" && b.toolCallId === toolCallId) {
       const props = b.props as Record<string, unknown>;
-      const candidate = props.name ?? props.title ?? props.filename ?? props.label;
+      const candidate =
+        props.name ?? props.title ?? props.filename ?? props.label;
       if (typeof candidate === "string" && candidate.trim().length > 0) {
         return candidate.trim();
       }
@@ -83,7 +85,9 @@ function artifactNameFor(
  * Failed/errored calls are omitted — those may legitimately be retried. Returns
  * "" when the turn completed no re-runnable actions.
  */
-export function summarizeCompletedActions(blocks: AssistantContentBlock[]): string {
+export function summarizeCompletedActions(
+  blocks: AssistantContentBlock[],
+): string {
   const actions: string[] = [];
   // Track tool-call ids we've already described, so a produced component isn't
   // listed twice (once via its tool-call, once as a standalone artifact).
@@ -120,10 +124,15 @@ export function summarizeCompletedActions(blocks: AssistantContentBlock[]): stri
   // composer's explicit image/video buttons stream a component directly). These
   // still represent completed work, so surface them so the turn isn't dropped.
   for (const b of blocks) {
-    if (b.type !== "component" || describedToolCallIds.has(b.toolCallId)) continue;
+    if (b.type !== "component" || describedToolCallIds.has(b.toolCallId))
+      continue;
     const props = b.props as Record<string, unknown>;
     const name = props.name ?? props.title ?? props.filename ?? props.label;
-    actions.push(typeof name === "string" && name.trim() ? `generated ${name.trim()}` : "generated an attachment");
+    actions.push(
+      typeof name === "string" && name.trim()
+        ? `generated ${name.trim()}`
+        : "generated an attachment",
+    );
   }
 
   if (actions.length === 0) return "";
@@ -141,7 +150,9 @@ export function buildAssistantHistoryText(
 ): string {
   const text = content.trim();
   const summary =
-    Array.isArray(blocks) && blocks.length > 0 ? summarizeCompletedActions(blocks) : "";
+    Array.isArray(blocks) && blocks.length > 0
+      ? summarizeCompletedActions(blocks)
+      : "";
 
   if (text.length > 0 && summary.length > 0) return `${text}\n\n${summary}`;
   if (text.length > 0) return text;
@@ -176,7 +187,9 @@ const VALID_ROLES = new Set(["user", "assistant", "system"]);
  * (the stream route) fetches bytes for these ids and passes the result back
  * in as `resolvedImages`.
  */
-export function collectRecentAttachmentPublicIds(rowsNewestFirst: HistoryRow[]): string[] {
+export function collectRecentAttachmentPublicIds(
+  rowsNewestFirst: HistoryRow[],
+): string[] {
   const ids: string[] = [];
   let recentUserTurns = 0;
   for (const r of rowsNewestFirst) {
@@ -195,7 +208,9 @@ export function collectRecentAttachmentPublicIds(rowsNewestFirst: HistoryRow[]):
 /** Build the placeholder text appended for attachments NOT replayed as real
  * image parts — either because the turn fell outside the recent window, or
  * because a particular attachment's bytes failed to resolve. */
-function attachmentPlaceholderText(attachments: HistoryAttachmentRef[]): string {
+function attachmentPlaceholderText(
+  attachments: HistoryAttachmentRef[],
+): string {
   return attachments.map((a) => `[attached image: ${a.name}]`).join("\n");
 }
 
@@ -250,7 +265,11 @@ export function buildHistoryMessages(
           > = [];
           if (text.length > 0) parts.push({ type: "text", text });
           for (const img of resolved) {
-            parts.push({ type: "image", image: img.data, mediaType: img.mediaType });
+            parts.push({
+              type: "image",
+              image: img.data,
+              mediaType: img.mediaType,
+            });
           }
           out.push({ role: "user", content: parts });
           continue;

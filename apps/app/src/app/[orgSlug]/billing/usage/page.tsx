@@ -36,7 +36,7 @@ import {
   formatUsdFromMicros,
 } from "./usage-format";
 
-// Sentinel workspaceId for org-only routes. — OXA-1515
+// Sentinel workspaceId for org-only routes.
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
 const EMPTY: BillingUsageBreakdownOutput = {
@@ -83,7 +83,7 @@ export default async function BillingUsagePage({
 
   // Fetch the breakdown + workspace name map inside one tenant scope. The invoke
   // is wrapped so a ClickHouse outage degrades to zeros rather than a 500 — the
-  // capability itself throws (honest); the dashboard chooses resilience.
+  // capability itself throws; the dashboard chooses to stay resilient.
   const workspaceNames: Record<string, string> = {};
 
   const { breakdown, queryFailed } = await runInTenantScope(
@@ -186,7 +186,7 @@ export default async function BillingUsagePage({
         />
       </StatGroup>
 
-      {/* Cache economics — the discount a cache-friendly agent earns (#1076). */}
+      {/* Cache economics — the discount a cache-friendly agent earns. */}
       <StatGroup columns={4}>
         <Stat
           label="Cache hit rate"

@@ -1,14 +1,12 @@
 /**
  * Per-turn planning for the interactive REPL — every turn gets a REAL plan.
  *
- * The Task Progress panel used to be seeded with the pipeline's fixed stage
- * titles ("Evaluate the request", …) — a hardcoded checklist masquerading as a
- * plan. This module replaces that: each submission is decomposed by the engine's
- * structured-output planner (`planTasks` from `@oxagen/agent-engine`, driven by
- * the session's own AI port, so it works for platform-metered and BYOK sessions
- * alike) into concrete, dependency-ordered tasks. Multi-task plans are executed
- * by the fleet as parallel subagents (see fleet-turn.ts); single-task plans stay
- * in the history-aware main loop.
+ * Each submission is decomposed by the engine's structured-output planner
+ * (`planTasks` from `@oxagen/agent-engine`, driven by the session's own AI port,
+ * so it works for platform-metered and BYOK sessions alike) into concrete,
+ * dependency-ordered tasks. Multi-task plans are executed by the fleet as
+ * parallel subagents (see fleet-turn.ts); single-task plans stay in the
+ * history-aware main loop.
  *
  * The planner sees a compact digest of the recent conversation so follow-ups
  * ("now do the same for the API") plan correctly, not in a vacuum. When the

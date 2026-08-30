@@ -15,13 +15,11 @@
 import { createHash as nodeCreateHash } from "node:crypto";
 
 /**
- * Retained for API compatibility. Hashing no longer requires any async
- * initialization (SHA-256 is synchronous and always available), so this is a
- * no-op that callers may still invoke at startup without effect.
+ * No-op. SHA-256 is synchronous and always available, so there is nothing
+ * to initialize. Kept as an async function so external callers can await
+ * it at startup without changing their code.
  */
-export async function initHash(): Promise<void> {
-  // Intentionally empty — SHA-256 needs no initialization. See module docs.
-}
+export async function initHash(): Promise<void> {}
 
 /**
  * Create a content hash (SHA-256, hex). Deterministic and identical across

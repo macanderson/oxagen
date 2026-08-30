@@ -3,7 +3,10 @@ import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ToolCallCard } from "./tool-call-card";
-import { ToolActivityGroup, type ToolActivityItem } from "./tool-activity-group";
+import {
+  ToolActivityGroup,
+  type ToolActivityItem,
+} from "./tool-activity-group";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
 import { PlanCard, type AgentCapability } from "./plan-card";
@@ -12,9 +15,21 @@ import { MemoryCard } from "./memory-card";
 import { BackgroundTaskCard } from "./background-task-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
-import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
-import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
-import type { AssistantContentBlock, MessageReceipt, ToolCallContentBlock } from "./stream-event-types";
+import {
+  ActivityTimeline,
+  TimelineItem,
+  type TimelineItemProps,
+} from "./activity-timeline";
+import {
+  CHAT_COMPONENTS,
+  logUnknownComponent,
+  UnknownComponentCard,
+} from "./chat-component-registry";
+import type {
+  AssistantContentBlock,
+  MessageReceipt,
+  ToolCallContentBlock,
+} from "./stream-event-types";
 import { MessageReceiptLine } from "./message-receipt";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageFooter } from "./message-footer";
@@ -41,9 +56,9 @@ export interface ChatMessage {
   content: string;
   branchReason: string | null;
   siblingCount: number;
-  // `content_blocks` mirrors the jsonb column on `chat.messages`. We keep
-  // the plain `content` for legacy / text-only rendering and let the
-  // bubble dispatch each block to the matching card when blocks exist.
+  // `content_blocks` mirrors the jsonb column on `chat.messages`. Plain
+  // `content` renders when there are no blocks; each block otherwise
+  // dispatches to its matching card.
   contentBlocks?: AssistantContentBlock[];
   /** User-turn attachments (Phase 1: images), from `messages.metadata.attachments`. */
   attachments?: MessageAttachment[];
@@ -103,10 +118,13 @@ export function MessageBubble({
       .join("\n");
   }, [hasBlocks, blocks, message.content]);
 
-  const showFooter = !isUser && orgSlug !== undefined && workspaceSlug !== undefined;
+  const showFooter =
+    !isUser && orgSlug !== undefined && workspaceSlug !== undefined;
 
   return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+    >
       <div
         className={cn(
           "max-w-[80%] px-4 py-3 text-sm shadow-sm",
@@ -118,7 +136,9 @@ export function MessageBubble({
       >
         <div className="mb-1 flex items-center gap-2 text-xs opacity-80">
           <span className="font-semibold capitalize">{message.role}</span>
-          {message.branchReason ? <Badge variant="muted">{message.branchReason}</Badge> : null}
+          {message.branchReason ? (
+            <Badge variant="muted">{message.branchReason}</Badge>
+          ) : null}
         </div>
 
         {message.attachments && message.attachments.length > 0 ? (
@@ -270,11 +290,7 @@ function renderBlock(
 ): React.ReactNode {
   switch (block.type) {
     case "text":
-      return (
-        <MarkdownMessage key={idx}>
-          {block.text}
-        </MarkdownMessage>
-      );
+      return <MarkdownMessage key={idx}>{block.text}</MarkdownMessage>;
     case "reasoning":
       // Persisted reasoning is terminal: render collapsed ("Thought for Xs"),
       // re-expandable. status="done" so it never shows the live typewriter.
@@ -370,7 +386,13 @@ function renderBlock(
         />
       );
     case "memory-recall":
-      return <MemoryCard key={`memory:${block.queryId}`} queryId={block.queryId} memories={block.memories} />;
+      return (
+        <MemoryCard
+          key={`memory:${block.queryId}`}
+          queryId={block.queryId}
+          memories={block.memories}
+        />
+      );
     case "background-task":
       return (
         <BackgroundTaskCard

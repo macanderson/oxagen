@@ -26,7 +26,7 @@ import { logger } from "./logger";
 export { deriveLineageOutcome };
 
 // query_lineage — walks the dispatch tree rooted at one agent.subagent_fanouts
-// row (issue #1078). Data flow:
+// row. Data flow:
 //   1. Resolve the root fan-out (tenant-scoped by publicId).
 //   2. One recursive CTE over agent.subagent_runs/subagent_fanouts walks the
 //      tree — the recursion spine is subagent_runs.child_message_id =
@@ -73,15 +73,15 @@ interface PrincipalRow {
 }
 
 // The kernel's exact IAM-denial message shapes (packages/oxagen/src/kernel.ts)
-// — see the long HONESTY NOTE on the contract's delegationViolation field for
-// what this can and cannot prove.
+// — see the caveat on the contract's delegationViolation field for what this
+// can and cannot prove.
 const IAM_DENIED_RE = /^IAM denied "[^"]+" for principal: (.+)$/;
 const IAM_PENDING_APPROVAL_PREFIX = 'IAM requires approval for "';
 
 /**
  * Parse `error_reason` for the kernel's IAM-denial message shape. See the
- * HONESTY NOTE on `delegationViolation` in the contract file for exactly what
- * a non-null result does (and does not) prove today.
+ * caveat on `delegationViolation` in the contract file for exactly what
+ * a non-null result does and does not prove.
  */
 export function parseDelegationViolation(
   status: string,
