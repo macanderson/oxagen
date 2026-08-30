@@ -5,7 +5,7 @@ export const researchSwarmStatus = registerCapability({
   name: "get_research_status",
   domain: "research",
   description:
-    "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to agent.subagent.aggregate internally.",
+    "Poll the status of a running research swarm. Returns task completion progress and the web-search results collected by each subagent so the agent can summarize or package them as a governed artifact. Delegates to aggregate_subagents internally.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -25,7 +25,7 @@ export const researchSwarmStatus = registerCapability({
   chainHints: ["generate_document"],
   render: { componentId: "research-swarm-card" },
   input: z.object({
-    swarmId: z.string().describe("Swarm ID returned by research.swarm.start"),
+    swarmId: z.string().describe("Swarm ID returned by start_research_swarm"),
   }),
   output: z.object({
     swarmId: z.string(),

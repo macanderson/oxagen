@@ -46,7 +46,9 @@ describe("workspace.model.settings.read capability", () => {
   });
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("get_model_settings")).toBe(workspaceModelSettingsRead);
+    expect(getCapability("get_model_settings")).toBe(
+      workspaceModelSettingsRead,
+    );
   });
 
   it("declares scoped:true (workspace-scoped)", () => {

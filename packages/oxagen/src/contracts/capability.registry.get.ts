@@ -19,7 +19,9 @@ import { capabilitySummary } from "./capability.registry.list";
 
 const fieldSpec = z.object({
   name: z.string(),
-  type: z.string().describe("Human-readable type (e.g. string, number, enum(a|b))"),
+  type: z
+    .string()
+    .describe("Human-readable type (e.g. string, number, enum(a|b))"),
   required: z.boolean(),
   description: z.string().nullable(),
 });
@@ -35,8 +37,12 @@ const capabilityDetail = capabilitySummary.extend({
     .string()
     .nullable()
     .describe("Input field carrying the audit target id, when declared"),
-  produces: z.array(z.string()).describe("Semantic data tags this capability yields"),
-  consumes: z.array(z.string()).describe("Semantic data tags this capability requires"),
+  produces: z
+    .array(z.string())
+    .describe("Semantic data tags this capability yields"),
+  consumes: z
+    .array(z.string())
+    .describe("Semantic data tags this capability requires"),
   chainHints: z
     .array(z.string())
     .describe("Capability names that commonly run after this one"),
@@ -72,16 +78,24 @@ export const capabilityRegistryGet = registerCapability({
     name: z
       .string()
       .min(1)
-      .describe("Capability name to look up (ADR-025 snake_case, e.g. 'query_audit_log')"),
+      .describe(
+        "Capability name to look up (ADR-025 snake_case, e.g. 'query_audit_log')",
+      ),
   }),
   output: z.object({
     capability: capabilityDetail
       .nullable()
-      .describe("The full contract detail, or null when no capability has that name"),
+      .describe(
+        "The full contract detail, or null when no capability has that name",
+      ),
   }),
 });
 
-export type CapabilityRegistryGetInput = z.output<typeof capabilityRegistryGet.input>;
-export type CapabilityRegistryGetOutput = z.output<typeof capabilityRegistryGet.output>;
+export type CapabilityRegistryGetInput = z.output<
+  typeof capabilityRegistryGet.input
+>;
+export type CapabilityRegistryGetOutput = z.output<
+  typeof capabilityRegistryGet.output
+>;
 export type CapabilityFieldSpec = z.output<typeof fieldSpec>;
 export type CapabilityRegistryDetail = z.output<typeof capabilityDetail>;

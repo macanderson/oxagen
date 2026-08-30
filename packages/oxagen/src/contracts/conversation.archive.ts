@@ -16,7 +16,11 @@ export const conversationArchive = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   // Reversible state change — not destructive despite being a write.
   sensitivity: "low",
   defaultEffect: "deny",
@@ -34,5 +38,9 @@ export const conversationArchive = registerCapability({
   }),
 });
 
-export type ConversationArchiveInput = z.output<typeof conversationArchive.input>;
-export type ConversationArchiveOutput = z.output<typeof conversationArchive.output>;
+export type ConversationArchiveInput = z.output<
+  typeof conversationArchive.input
+>;
+export type ConversationArchiveOutput = z.output<
+  typeof conversationArchive.output
+>;

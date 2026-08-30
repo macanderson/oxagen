@@ -36,7 +36,10 @@ describe("sandbox-template mutation contracts — IAM defaults", () => {
     "%s is deny-by-default and grants only Owner + Admin at org scope",
     (_name, contract) => {
       expect(contract.defaultEffect).toBe("deny");
-      expect(contract.defaultRoles.org).toEqual({ Owner: "allow", Admin: "allow" });
+      expect(contract.defaultRoles.org).toEqual({
+        Owner: "allow",
+        Admin: "allow",
+      });
       // No workspace-scoped grants — these are org-admin operations.
       expect(contract.defaultRoles.workspace ?? {}).toEqual({});
       // The families are scoped (org + workspace tenancy enforced).
@@ -44,8 +47,12 @@ describe("sandbox-template mutation contracts — IAM defaults", () => {
     },
   );
 
-  it("covers every write capability in both families (guards against an untested new mutation)", () => {
-    // A stable roster: adding a mutation contract without adding it here fails.
+  it("pins the roster of write capabilities this suite covers", () => {
+    // Pins the covered set so a rename or an accidental removal from
+    // MUTATION_CONTRACTS fails loudly. It does NOT discover new contracts: a
+    // brand-new sandbox.template.* mutation is invisible here until it is added
+    // to MUTATION_CONTRACTS *and* to this list, so adding both is part of
+    // shipping one.
     expect(MUTATION_CONTRACTS.map((c) => c.name).sort()).toEqual([
       "bind_agent_environment",
       "create_sandbox_template",

@@ -11,7 +11,9 @@ describe("agent.sandbox.stop capability", () => {
 
   it("requires a sessionId", () => {
     expect(() => agentSandboxStop.input.parse({})).toThrow();
-    expect(agentSandboxStop.input.parse({ sessionId: "sbx_1" }).sessionId).toBe("sbx_1");
+    expect(agentSandboxStop.input.parse({ sessionId: "sbx_1" }).sessionId).toBe(
+      "sbx_1",
+    );
   });
 
   it("validates the output shape", () => {

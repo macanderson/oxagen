@@ -10,7 +10,9 @@ describe("privacy.data.export capability", () => {
   });
 
   it("parses user-scope input without orgId", () => {
-    expect(() => privacyDataExport.input.parse({ scope: "user" })).not.toThrow();
+    expect(() =>
+      privacyDataExport.input.parse({ scope: "user" }),
+    ).not.toThrow();
   });
 
   it("parses org-scope input with valid orgId", () => {
@@ -20,7 +22,9 @@ describe("privacy.data.export capability", () => {
   });
 
   it("rejects unknown scope", () => {
-    expect(() => privacyDataExport.input.parse({ scope: "workspace" })).toThrow();
+    expect(() =>
+      privacyDataExport.input.parse({ scope: "workspace" }),
+    ).toThrow();
   });
 
   it("rejects org-scope with invalid orgId UUID", () => {
@@ -31,7 +35,10 @@ describe("privacy.data.export capability", () => {
 
   it("parses queued output without downloadUrl", () => {
     expect(() =>
-      privacyDataExport.output.parse({ exportId: VALID_UUID, status: "queued" }),
+      privacyDataExport.output.parse({
+        exportId: VALID_UUID,
+        status: "queued",
+      }),
     ).not.toThrow();
   });
 

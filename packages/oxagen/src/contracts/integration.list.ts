@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const integrationList = registerCapability({
   name: "list_integrations",
   domain: "integration",
-  description: "Browse installed plugin instances with status, config summary, and sync metrics.",
+  description:
+    "Browse installed plugin instances with status, config summary, and sync metrics.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

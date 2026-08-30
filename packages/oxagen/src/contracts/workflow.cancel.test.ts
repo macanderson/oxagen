@@ -15,20 +15,18 @@ describe("workflow.cancel capability", () => {
 
   it("parses a valid input with an internal UUID", () => {
     expect(() =>
-      workflowCancel.input.parse({ workflowId: "018fae12-0000-7000-8000-000000000001" }),
+      workflowCancel.input.parse({
+        workflowId: "018fae12-0000-7000-8000-000000000001",
+      }),
     ).not.toThrow();
   });
 
   it("rejects input missing workflowId", () => {
-    expect(() =>
-      workflowCancel.input.parse({}),
-    ).toThrow();
+    expect(() => workflowCancel.input.parse({})).toThrow();
   });
 
   it("rejects input with empty workflowId", () => {
-    expect(() =>
-      workflowCancel.input.parse({ workflowId: "" }),
-    ).toThrow();
+    expect(() => workflowCancel.input.parse({ workflowId: "" })).toThrow();
   });
 
   it("parses a valid output when cancelled=true", () => {
@@ -44,9 +42,7 @@ describe("workflow.cancel capability", () => {
   });
 
   it("rejects output missing cancelled field", () => {
-    expect(() =>
-      workflowCancel.output.parse({}),
-    ).toThrow();
+    expect(() => workflowCancel.output.parse({})).toThrow();
   });
 
   it("has correct defaultEffect and defaultRoles", () => {

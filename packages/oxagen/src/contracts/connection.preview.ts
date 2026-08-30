@@ -18,12 +18,17 @@ export const connectionPreview = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
   }),
   output: z.object({
     recordTypes: z.array(
       z.object({
-        sourceRecordType: z.string().describe("Raw record type from the connector"),
+        sourceRecordType: z
+          .string()
+          .describe("Raw record type from the connector"),
         displayName: z.string(),
         description: z.string().optional(),
         sampleCount: z.number(),

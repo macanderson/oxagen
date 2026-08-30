@@ -23,7 +23,9 @@ export const automationDisable = registerCapability({
     automation_id: z
       .string()
       .min(1)
-      .describe("Trigger public ID returned by automation.create / automation.list"),
+      .describe(
+        "Trigger public ID returned by automation.create / automation.list",
+      ),
   }),
   output: z.object({
     automation_id: z.string(),

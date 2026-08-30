@@ -50,12 +50,18 @@ describe("plugin.version.list capability", () => {
   // ── input: limit bounds ───────────────────────────────────────────────────
 
   it("accepts limit=1 (min)", () => {
-    const parsed = pluginVersionList.input.parse({ pluginId: "github", limit: 1 });
+    const parsed = pluginVersionList.input.parse({
+      pluginId: "github",
+      limit: 1,
+    });
     expect(parsed.limit).toBe(1);
   });
 
   it("accepts limit=50 (max)", () => {
-    const parsed = pluginVersionList.input.parse({ pluginId: "github", limit: 50 });
+    const parsed = pluginVersionList.input.parse({
+      pluginId: "github",
+      limit: 50,
+    });
     expect(parsed.limit).toBe(50);
   });
 

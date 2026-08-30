@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const pluginCatalogGet = registerCapability({
   name: "get_catalog_plugin",
   domain: "plugin",
-  description: "Get full detail for one catalog server by name+version, fetched live from the workspace's enabled registries.",
+  description:
+    "Get full detail for one catalog server by name+version, fetched live from the workspace's enabled registries.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },

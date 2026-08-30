@@ -8,7 +8,9 @@ describe("browser.click capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.domain).toBe("browser");
     expect(cap?.scoped).toBe(true);
-    expect(cap?.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "agent"]));
+    expect(cap?.surfaces).toEqual(
+      expect.arrayContaining(["api", "mcp", "agent"]),
+    );
   });
 
   it("applies a default timeoutMs of 60000", () => {
@@ -26,9 +28,7 @@ describe("browser.click capability", () => {
   });
 
   it("rejects when selector is missing", () => {
-    expect(() =>
-      browserClick.input.parse({ sessionId: "sbx_abc" }),
-    ).toThrow();
+    expect(() => browserClick.input.parse({ sessionId: "sbx_abc" })).toThrow();
   });
 
   it("rejects an empty selector", () => {

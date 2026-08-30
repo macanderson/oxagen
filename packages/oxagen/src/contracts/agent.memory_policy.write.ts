@@ -22,5 +22,9 @@ export const agentMemoryPolicyWrite = registerCapability({
   output: memoryPolicySchema,
 });
 
-export type AgentMemoryPolicyWriteInput = z.output<typeof agentMemoryPolicyWrite.input>;
-export type AgentMemoryPolicyWriteOutput = z.output<typeof agentMemoryPolicyWrite.output>;
+export type AgentMemoryPolicyWriteInput = z.output<
+  typeof agentMemoryPolicyWrite.input
+>;
+export type AgentMemoryPolicyWriteOutput = z.output<
+  typeof agentMemoryPolicyWrite.output
+>;

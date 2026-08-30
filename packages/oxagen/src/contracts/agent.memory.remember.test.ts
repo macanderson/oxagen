@@ -66,11 +66,18 @@ describe("agent.memory.remember capability", () => {
   });
 
   it("accepts all valid memoryClass values", () => {
-    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "OBSERVATION" }).memoryClass).toBe(
-      "OBSERVATION",
-    );
-    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "RULE" }).memoryClass).toBe("RULE");
-    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "FACT" }).memoryClass).toBe("FACT");
+    expect(
+      agentMemoryRemember.input.parse({ text: "x", memoryClass: "OBSERVATION" })
+        .memoryClass,
+    ).toBe("OBSERVATION");
+    expect(
+      agentMemoryRemember.input.parse({ text: "x", memoryClass: "RULE" })
+        .memoryClass,
+    ).toBe("RULE");
+    expect(
+      agentMemoryRemember.input.parse({ text: "x", memoryClass: "FACT" })
+        .memoryClass,
+    ).toBe("FACT");
   });
 
   it("accepts an open-string memoryKind, including the canonical values", () => {
@@ -83,7 +90,9 @@ describe("agent.memory.remember capability", () => {
       "FEEDBACK",
       "PREFERENCE",
     ]) {
-      expect(agentMemoryRemember.input.parse({ text: "x", memoryKind }).memoryKind).toBe(memoryKind);
+      expect(
+        agentMemoryRemember.input.parse({ text: "x", memoryKind }).memoryKind,
+      ).toBe(memoryKind);
     }
   });
 
@@ -120,7 +129,11 @@ describe("agent.memory.remember capability", () => {
   it("output parses a valid record with classified:true", () => {
     const parsed = agentMemoryRemember.output.parse({
       memory: VALID_RECORD,
-      inferred: { memoryClass: "OBSERVATION", memoryKind: "constraint", classified: true },
+      inferred: {
+        memoryClass: "OBSERVATION",
+        memoryKind: "constraint",
+        classified: true,
+      },
     });
     expect(parsed.inferred.classified).toBe(true);
     expect(parsed.inferred.memoryClass).toBe("OBSERVATION");
@@ -130,8 +143,17 @@ describe("agent.memory.remember capability", () => {
 
   it("output parses a valid record with classified:false (caller pinned values)", () => {
     const parsed = agentMemoryRemember.output.parse({
-      memory: { ...VALID_RECORD, memoryClass: "RULE", memoryKind: "gotcha", enforcementScore: 80 },
-      inferred: { memoryClass: "RULE", memoryKind: "gotcha", classified: false },
+      memory: {
+        ...VALID_RECORD,
+        memoryClass: "RULE",
+        memoryKind: "gotcha",
+        enforcementScore: 80,
+      },
+      inferred: {
+        memoryClass: "RULE",
+        memoryKind: "gotcha",
+        classified: false,
+      },
     });
     expect(parsed.inferred.classified).toBe(false);
     expect(parsed.inferred.memoryClass).toBe("RULE");

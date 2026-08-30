@@ -15,7 +15,11 @@ export const sandboxTemplateImport = registerCapability({
     "Import a portable sandbox-template manifest into an environment. Creates the template (non-default unless setAsDefault), its tools, and upserts missing secret keys (no values). Returns warnings for uninstalled tool refs and slug collisions.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -34,5 +38,9 @@ export const sandboxTemplateImport = registerCapability({
   }),
 });
 
-export type SandboxTemplateImportInput = z.output<typeof sandboxTemplateImport.input>;
-export type SandboxTemplateImportOutput = z.output<typeof sandboxTemplateImport.output>;
+export type SandboxTemplateImportInput = z.output<
+  typeof sandboxTemplateImport.input
+>;
+export type SandboxTemplateImportOutput = z.output<
+  typeof sandboxTemplateImport.output
+>;

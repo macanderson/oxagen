@@ -4,12 +4,16 @@ import { getCapability } from "../registry";
 
 describe("org.member.invite.accept capability", () => {
   it("parses a valid input", () => {
-    const parsed = orgMemberInviteAccept.input.parse({ invitationPublicId: "inv_abc" });
+    const parsed = orgMemberInviteAccept.input.parse({
+      invitationPublicId: "inv_abc",
+    });
     expect(parsed.invitationPublicId).toBe("inv_abc");
   });
 
   it("rejects an empty invitationPublicId", () => {
-    expect(() => orgMemberInviteAccept.input.parse({ invitationPublicId: "" })).toThrow();
+    expect(() =>
+      orgMemberInviteAccept.input.parse({ invitationPublicId: "" }),
+    ).toThrow();
   });
 
   it("rejects a missing invitationPublicId", () => {
@@ -28,7 +32,11 @@ describe("org.member.invite.accept capability", () => {
 
   it("rejects an output missing joinedAt", () => {
     expect(() =>
-      orgMemberInviteAccept.output.parse({ orgUserId: "oru_1", orgId: "org_1", role: "Member" }),
+      orgMemberInviteAccept.output.parse({
+        orgUserId: "oru_1",
+        orgId: "org_1",
+        role: "Member",
+      }),
     ).toThrow();
   });
 

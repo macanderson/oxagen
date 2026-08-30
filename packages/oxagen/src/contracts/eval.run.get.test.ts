@@ -59,7 +59,12 @@ describe("eval.run.get capability", () => {
 
   it("parses a valid output with zero results", () => {
     const out = evalRunGet.output.parse({
-      run: { ...VALID_RUN, status: "pending", completedCount: 0, avgScore: null },
+      run: {
+        ...VALID_RUN,
+        status: "pending",
+        completedCount: 0,
+        avgScore: null,
+      },
       results: [],
     });
     expect(out.results).toHaveLength(0);

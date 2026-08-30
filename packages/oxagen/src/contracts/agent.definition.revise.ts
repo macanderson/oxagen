@@ -43,7 +43,9 @@ export const agentDefinitionRevise = registerCapability({
   input: z.object({
     agentId: z
       .string()
-      .describe("Agent public id (agt_…), UUID, or slug of the agent to revise."),
+      .describe(
+        "Agent public id (agt_…), UUID, or slug of the agent to revise.",
+      ),
     prompt: z
       .string()
       .min(10)

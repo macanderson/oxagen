@@ -35,7 +35,9 @@ describe("plugin.org.list contract", () => {
   });
 
   it("accepts agent_capability pluginType filter", () => {
-    const parsed = pluginOrgList.input.parse({ pluginType: "agent_capability" });
+    const parsed = pluginOrgList.input.parse({
+      pluginType: "agent_capability",
+    });
     expect(parsed.pluginType).toBe("agent_capability");
   });
 
@@ -44,12 +46,16 @@ describe("plugin.org.list contract", () => {
   });
 
   it("rejects legacy 'content_tool' pluginType (removed in workspace-scoping rebuild)", () => {
-    expect(() => pluginOrgList.input.parse({ pluginType: "content_tool" })).toThrow();
+    expect(() =>
+      pluginOrgList.input.parse({ pluginType: "content_tool" }),
+    ).toThrow();
   });
 
   it("rejects a spoofed workspaceId in input (scope comes from ctx)", () => {
     // Input schema no longer accepts a workspaceId — scope is enforced via ctx.
-    const parsed = pluginOrgList.input.parse({ workspaceId: "ws-spoofed" } as Record<string, unknown>);
+    const parsed = pluginOrgList.input.parse({
+      workspaceId: "ws-spoofed",
+    } as Record<string, unknown>);
     // Unknown keys are stripped by zod; the spoofed field must not appear.
     expect((parsed as Record<string, unknown>).workspaceId).toBeUndefined();
   });

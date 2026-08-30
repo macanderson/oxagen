@@ -19,17 +19,42 @@ const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 const auditSource = z.enum(["all", "security", "playbook"]);
 
 const auditEvent = z.object({
-  source: z.enum(["security", "playbook"]).describe("Which audit spine the event came from"),
-  eventType: z.string().describe("Event classification (e.g. capability.invoked, run_completed)"),
-  occurredAt: z.string().describe("ISO-8601 timestamp of when the event occurred"),
-  actorUserId: z.string().nullable().describe("User who triggered the event, when known"),
+  source: z
+    .enum(["security", "playbook"])
+    .describe("Which audit spine the event came from"),
+  eventType: z
+    .string()
+    .describe("Event classification (e.g. capability.invoked, run_completed)"),
+  occurredAt: z
+    .string()
+    .describe("ISO-8601 timestamp of when the event occurred"),
+  actorUserId: z
+    .string()
+    .nullable()
+    .describe("User who triggered the event, when known"),
   workspaceId: z.string().nullable(),
-  capability: z.string().nullable().describe("Capability name for capability.* security events"),
-  outcome: z.string().nullable().describe("Authz outcome for security events (allow/deny/error/success)"),
+  capability: z
+    .string()
+    .nullable()
+    .describe("Capability name for capability.* security events"),
+  outcome: z
+    .string()
+    .nullable()
+    .describe("Authz outcome for security events (allow/deny/error/success)"),
   requestId: z.string().nullable(),
-  playbookRunId: z.string().nullable().describe("Playbook run id for playbook_events"),
-  sequence: z.number().int().nullable().describe("Per-run monotonic counter for playbook_events"),
-  eventData: z.record(z.unknown()).nullable().describe("Structured payload for playbook_events"),
+  playbookRunId: z
+    .string()
+    .nullable()
+    .describe("Playbook run id for playbook_events"),
+  sequence: z
+    .number()
+    .int()
+    .nullable()
+    .describe("Per-run monotonic counter for playbook_events"),
+  eventData: z
+    .record(z.unknown())
+    .nullable()
+    .describe("Structured payload for playbook_events"),
 });
 
 export const auditLogQuery = registerCapability({
@@ -52,16 +77,50 @@ export const auditLogQuery = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    source: auditSource.default("all").describe("Which audit spine(s) to query"),
-    eventType: z.string().optional().describe("Exact event-type match (e.g. 'billing.plan_changed')"),
-    actorUserId: z.string().optional().describe("Filter security events by the acting user id"),
-    capability: z.string().optional().describe("Filter security events by capability name"),
-    outcome: z.enum(SECURITY_OUTCOMES).optional().describe("Filter security events by authz outcome"),
-    playbookRunId: z.string().optional().describe("Filter playbook events to a single run"),
-    workspaceId: z.string().optional().describe("Restrict to one workspace (default: all in org)"),
-    from: z.string().datetime().optional().describe("Inclusive ISO-8601 lower bound on occurredAt"),
-    to: z.string().datetime().optional().describe("Exclusive ISO-8601 upper bound on occurredAt"),
-    limit: z.number().int().min(1).max(200).default(50).describe("Max events to return (default 50)"),
+    source: auditSource
+      .default("all")
+      .describe("Which audit spine(s) to query"),
+    eventType: z
+      .string()
+      .optional()
+      .describe("Exact event-type match (e.g. 'billing.plan_changed')"),
+    actorUserId: z
+      .string()
+      .optional()
+      .describe("Filter security events by the acting user id"),
+    capability: z
+      .string()
+      .optional()
+      .describe("Filter security events by capability name"),
+    outcome: z
+      .enum(SECURITY_OUTCOMES)
+      .optional()
+      .describe("Filter security events by authz outcome"),
+    playbookRunId: z
+      .string()
+      .optional()
+      .describe("Filter playbook events to a single run"),
+    workspaceId: z
+      .string()
+      .optional()
+      .describe("Restrict to one workspace (default: all in org)"),
+    from: z
+      .string()
+      .datetime()
+      .optional()
+      .describe("Inclusive ISO-8601 lower bound on occurredAt"),
+    to: z
+      .string()
+      .datetime()
+      .optional()
+      .describe("Exclusive ISO-8601 upper bound on occurredAt"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .default(50)
+      .describe("Max events to return (default 50)"),
     offset: z.number().int().min(0).default(0).describe("Pagination offset"),
   }),
   output: z.object({

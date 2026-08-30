@@ -32,7 +32,9 @@ export const agentMemoryCitationsList = registerCapability({
     influenceIn: z
       .array(influenceEnum)
       .optional()
-      .describe("Filter to these influence levels (e.g. [DECISIVE, CONTRIBUTING])"),
+      .describe(
+        "Filter to these influence levels (e.g. [DECISIVE, CONTRIBUTING])",
+      ),
   }),
   output: z.object({
     citations: z.array(

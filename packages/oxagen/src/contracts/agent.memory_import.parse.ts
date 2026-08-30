@@ -50,7 +50,9 @@ export const agentMemoryImportParse = registerCapability({
       )
       .min(1)
       .max(25)
-      .describe("The uploaded documents to extract memories from (max 25 per call)"),
+      .describe(
+        "The uploaded documents to extract memories from (max 25 per call)",
+      ),
     defaultNodeRef: z
       .string()
       .max(256)
@@ -62,8 +64,12 @@ export const agentMemoryImportParse = registerCapability({
   output: z.object({
     drafts: z
       .array(memoryImportDraftSchema)
-      .describe("Extracted, classified, editable draft memories across all documents"),
-    documentCount: z.number().describe("Number of documents that yielded at least one draft"),
+      .describe(
+        "Extracted, classified, editable draft memories across all documents",
+      ),
+    documentCount: z
+      .number()
+      .describe("Number of documents that yielded at least one draft"),
     skipped: z
       .array(
         z.object({
@@ -71,9 +77,15 @@ export const agentMemoryImportParse = registerCapability({
           reason: z.string(),
         }),
       )
-      .describe("Documents that produced no drafts (empty, unparseable, or model error)"),
+      .describe(
+        "Documents that produced no drafts (empty, unparseable, or model error)",
+      ),
   }),
 });
 
-export type AgentMemoryImportParseInput = z.input<typeof agentMemoryImportParse.input>;
-export type AgentMemoryImportParseOutput = z.output<typeof agentMemoryImportParse.output>;
+export type AgentMemoryImportParseInput = z.input<
+  typeof agentMemoryImportParse.input
+>;
+export type AgentMemoryImportParseOutput = z.output<
+  typeof agentMemoryImportParse.output
+>;

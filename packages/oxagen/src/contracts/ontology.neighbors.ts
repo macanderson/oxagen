@@ -8,11 +8,10 @@ import {
 } from "../lib/temporal-query";
 
 /**
- * ontology.neighbors — the one-hop neighborhood of a node. A focused, cheap
+ * get_ontology_neighbors — the one-hop neighborhood of a node. A focused, cheap
  * traversal primitive (depth 1) for "what is directly connected to X?" without
  * the caller writing Cypher. Customer-context only, org + workspace scoped,
- * and read-only. Pairs with
- * `ontology.query` for deeper multi-hop walks.
+ * and read-only. Pairs with `query_ontology` for deeper multi-hop walks.
  */
 
 const ontologyDirection = z

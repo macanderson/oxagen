@@ -52,5 +52,9 @@ export const billingCreditsPurchase = registerCapability({
   }),
 });
 
-export type BillingCreditsPurchaseInput = z.output<typeof billingCreditsPurchase.input>;
-export type BillingCreditsPurchaseOutput = z.output<typeof billingCreditsPurchase.output>;
+export type BillingCreditsPurchaseInput = z.output<
+  typeof billingCreditsPurchase.input
+>;
+export type BillingCreditsPurchaseOutput = z.output<
+  typeof billingCreditsPurchase.output
+>;

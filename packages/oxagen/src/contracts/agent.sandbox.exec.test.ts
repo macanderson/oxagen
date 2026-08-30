@@ -11,16 +11,28 @@ describe("agent.sandbox.exec capability", () => {
 
   it("requires a sessionId and a non-empty command", () => {
     expect(() => agentSandboxExec.input.parse({ command: "ls" })).toThrow();
-    expect(() => agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "" })).toThrow();
-    const ok = agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "ls -la" });
+    expect(() =>
+      agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "" }),
+    ).toThrow();
+    const ok = agentSandboxExec.input.parse({
+      sessionId: "sbx_1",
+      command: "ls -la",
+    });
     expect(ok.sessionId).toBe("sbx_1");
     expect(ok.command).toBe("ls -la");
   });
 
   it("defaults timeout to 2 minutes and caps at 10", () => {
-    expect(agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "x" }).timeoutMs).toBe(120_000);
+    expect(
+      agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "x" })
+        .timeoutMs,
+    ).toBe(120_000);
     expect(() =>
-      agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "x", timeoutMs: 700_000 }),
+      agentSandboxExec.input.parse({
+        sessionId: "sbx_1",
+        command: "x",
+        timeoutMs: 700_000,
+      }),
     ).toThrow();
   });
 
@@ -41,9 +53,15 @@ describe("agent.sandbox.exec capability", () => {
     });
     expect(withCwd.cwd).toBe("/work/repo/src");
     // Omitted cwd is fine (first command in a session).
-    expect(agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "ls" }).cwd).toBeUndefined();
+    expect(
+      agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "ls" }).cwd,
+    ).toBeUndefined();
     expect(() =>
-      agentSandboxExec.input.parse({ sessionId: "sbx_1", command: "ls", cwd: "x".repeat(4_097) }),
+      agentSandboxExec.input.parse({
+        sessionId: "sbx_1",
+        command: "ls",
+        cwd: "x".repeat(4_097),
+      }),
     ).toThrow();
   });
 

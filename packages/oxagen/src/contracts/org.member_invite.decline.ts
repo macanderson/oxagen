@@ -11,7 +11,11 @@ export const orgMemberInviteDecline = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "organization",
+  },
   sensitivity: "low",
   defaultEffect: "allow",
   defaultRoles: {
@@ -27,5 +31,9 @@ export const orgMemberInviteDecline = registerCapability({
   }),
 });
 
-export type OrgMemberInviteDeclineInput = z.output<typeof orgMemberInviteDecline.input>;
-export type OrgMemberInviteDeclineOutput = z.output<typeof orgMemberInviteDecline.output>;
+export type OrgMemberInviteDeclineInput = z.output<
+  typeof orgMemberInviteDecline.input
+>;
+export type OrgMemberInviteDeclineOutput = z.output<
+  typeof orgMemberInviteDecline.output
+>;

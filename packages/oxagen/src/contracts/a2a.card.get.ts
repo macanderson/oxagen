@@ -41,9 +41,7 @@ export const a2aAgentCard = z.object({
   preferredTransport: z.literal("JSONRPC"),
   // Card/agent version — the platform version, so clients can detect changes.
   version: z.string(),
-  provider: z
-    .object({ organization: z.string(), url: z.string() })
-    .optional(),
+  provider: z.object({ organization: z.string(), url: z.string() }).optional(),
   capabilities: z.object({
     streaming: z.boolean(),
     pushNotifications: z.boolean(),

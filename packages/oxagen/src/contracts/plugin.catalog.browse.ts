@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const pluginCatalogBrowse = registerCapability({
   name: "browse_plugin_catalog",
   domain: "plugin",
-  description: "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
+  description:
+    "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
@@ -15,7 +16,13 @@ export const pluginCatalogBrowse = registerCapability({
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
   input: z.object({
     pluginType: z
-      .enum(["mcp_server", "agent_capability", "agent_skill", "knowledge_source", "integration"])
+      .enum([
+        "mcp_server",
+        "agent_capability",
+        "agent_skill",
+        "knowledge_source",
+        "integration",
+      ])
       .optional(),
     search: z.string().optional(),
     categories: z.array(z.string()).optional(),
@@ -39,7 +46,11 @@ export const pluginCatalogBrowse = registerCapability({
         // icon entries follow the SHARED ICON DATA CONTRACT:
         //   src is an http(s)/data URI → render <Image>
         //   src is a plain string (Lucide name) → render CapabilityIcon with color
-        icons: z.array(z.object({ src: z.string(), color: z.string().optional() }).passthrough()),
+        icons: z.array(
+          z
+            .object({ src: z.string(), color: z.string().optional() })
+            .passthrough(),
+        ),
         transportTypes: z.array(z.string()),
         authKind: z.string(),
         categories: z.array(z.string()),

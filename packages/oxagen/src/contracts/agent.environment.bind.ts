@@ -21,7 +21,11 @@ export const agentEnvironmentBind = registerCapability({
     "Bind an agent to an environment (and optionally a specific sandbox template within it). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "medium", category: "configuration" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "medium",
+    category: "configuration",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "medium",
@@ -36,5 +40,9 @@ export const agentEnvironmentBind = registerCapability({
   output: z.object({ binding: agentEnvironmentBindingSchema }),
 });
 
-export type AgentEnvironmentBindInput = z.output<typeof agentEnvironmentBind.input>;
-export type AgentEnvironmentBindOutput = z.output<typeof agentEnvironmentBind.output>;
+export type AgentEnvironmentBindInput = z.output<
+  typeof agentEnvironmentBind.input
+>;
+export type AgentEnvironmentBindOutput = z.output<
+  typeof agentEnvironmentBind.output
+>;

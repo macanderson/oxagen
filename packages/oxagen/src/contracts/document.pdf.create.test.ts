@@ -69,9 +69,7 @@ describe("documents.pdf.create capability", () => {
   });
 
   it("rejects output missing required fields", () => {
-    expect(() =>
-      documentsPdfCreate.output.parse({ assetId: "x" }),
-    ).toThrow();
+    expect(() => documentsPdfCreate.output.parse({ assetId: "x" })).toThrow();
   });
 
   it("rejects output with wrong render componentId", () => {
@@ -86,7 +84,13 @@ describe("documents.pdf.create capability", () => {
         serveUrl: "/api/v1/assets/gen_X",
         render: {
           componentId: "image-preview", // wrong
-          props: { url: "/x", name: "x.pdf", kind: "pdf", mimeType: "application/pdf", sizeBytes: 100 },
+          props: {
+            url: "/x",
+            name: "x.pdf",
+            kind: "pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 100,
+          },
         },
       }),
     ).toThrow();

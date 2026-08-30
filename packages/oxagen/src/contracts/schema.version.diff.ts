@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaVersionDiff = registerCapability({
   name: "diff_schema_versions",
   domain: "schema",
-  description: "Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties.",
+  description:
+    "Structural diff of two versions: added/removed/changed schemas, labels, relationship types, properties.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -23,15 +24,45 @@ export const schemaVersionDiff = registerCapability({
   output: z.object({
     schemasAdded: z.array(z.string()),
     schemasRemoved: z.array(z.string()),
-    labelsAdded: z.array(z.object({ schemaName: z.string(), labelName: z.string() })),
-    labelsRemoved: z.array(z.object({ schemaName: z.string(), labelName: z.string() })),
-    labelsChanged: z.array(z.object({ schemaName: z.string(), labelName: z.string(), changes: z.array(z.string()) })),
-    relationshipTypesAdded: z.array(z.object({ schemaName: z.string(), relationshipTypeName: z.string() })),
-    relationshipTypesRemoved: z.array(z.object({ schemaName: z.string(), relationshipTypeName: z.string() })),
-    relationshipTypesChanged: z.array(z.object({ schemaName: z.string(), relationshipTypeName: z.string(), changes: z.array(z.string()) })),
-    propertiesAdded: z.array(z.object({ ownerName: z.string(), key: z.string() })),
-    propertiesRemoved: z.array(z.object({ ownerName: z.string(), key: z.string() })),
-    propertiesChanged: z.array(z.object({ ownerName: z.string(), key: z.string(), changes: z.array(z.string()) })),
+    labelsAdded: z.array(
+      z.object({ schemaName: z.string(), labelName: z.string() }),
+    ),
+    labelsRemoved: z.array(
+      z.object({ schemaName: z.string(), labelName: z.string() }),
+    ),
+    labelsChanged: z.array(
+      z.object({
+        schemaName: z.string(),
+        labelName: z.string(),
+        changes: z.array(z.string()),
+      }),
+    ),
+    relationshipTypesAdded: z.array(
+      z.object({ schemaName: z.string(), relationshipTypeName: z.string() }),
+    ),
+    relationshipTypesRemoved: z.array(
+      z.object({ schemaName: z.string(), relationshipTypeName: z.string() }),
+    ),
+    relationshipTypesChanged: z.array(
+      z.object({
+        schemaName: z.string(),
+        relationshipTypeName: z.string(),
+        changes: z.array(z.string()),
+      }),
+    ),
+    propertiesAdded: z.array(
+      z.object({ ownerName: z.string(), key: z.string() }),
+    ),
+    propertiesRemoved: z.array(
+      z.object({ ownerName: z.string(), key: z.string() }),
+    ),
+    propertiesChanged: z.array(
+      z.object({
+        ownerName: z.string(),
+        key: z.string(),
+        changes: z.array(z.string()),
+      }),
+    ),
   }),
 });
 

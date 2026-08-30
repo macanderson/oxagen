@@ -27,7 +27,10 @@ describe("code.patch capability", () => {
 
   it("rejects a files map with an absolute path key", () => {
     expect(() =>
-      codePatch.input.parse({ files: { "/etc/passwd": "x" }, diff: SAMPLE_DIFF }),
+      codePatch.input.parse({
+        files: { "/etc/passwd": "x" },
+        diff: SAMPLE_DIFF,
+      }),
     ).toThrow();
   });
 

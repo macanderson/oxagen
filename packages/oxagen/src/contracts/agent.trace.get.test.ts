@@ -108,7 +108,9 @@ describe("agent.trace.get capability", () => {
         },
       ],
     });
-    expect(parsed.steps[0]?.toolCalls[0]?.toolName).toBe("get_ontology_neighbors");
+    expect(parsed.steps[0]?.toolCalls[0]?.toolName).toBe(
+      "get_ontology_neighbors",
+    );
     expect(parsed.children[0]?.executionId).toBe("aex_child");
   });
 

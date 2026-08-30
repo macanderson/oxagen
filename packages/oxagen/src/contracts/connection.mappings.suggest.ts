@@ -18,7 +18,10 @@ export const connectionMappingsSuggest = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
     recordTypes: z
       .array(
         z.object({
@@ -29,7 +32,9 @@ export const connectionMappingsSuggest = registerCapability({
           sampleRecords: z.array(z.record(z.unknown())).optional(),
         }),
       )
-      .describe("Record type samples to analyze (from connection.preview output)"),
+      .describe(
+        "Record type samples to analyze (from connection.preview output)",
+      ),
     existingEntityTypes: z
       .array(z.string())
       .optional()
@@ -43,12 +48,16 @@ export const connectionMappingsSuggest = registerCapability({
         sourceRecordType: z.string(),
         suggestedEntityType: z
           .string()
-          .describe("Recommended entity type string (snake_case, e.g. 'task', 'code_change')"),
+          .describe(
+            "Recommended entity type string (snake_case, e.g. 'task', 'code_change')",
+          ),
         suggestedPropertyMappings: z
           .record(z.string())
           .describe("Source field path → canonical property name mappings"),
         confidence: z.number().min(0).max(1),
-        reasoning: z.string().describe("LLM explanation shown to the user in the setup wizard"),
+        reasoning: z
+          .string()
+          .describe("LLM explanation shown to the user in the setup wizard"),
       }),
     ),
     suggestionIds: z
@@ -57,5 +66,9 @@ export const connectionMappingsSuggest = registerCapability({
   }),
 });
 
-export type ConnectionMappingsSuggestInput = z.output<typeof connectionMappingsSuggest.input>;
-export type ConnectionMappingsSuggestOutput = z.output<typeof connectionMappingsSuggest.output>;
+export type ConnectionMappingsSuggestInput = z.output<
+  typeof connectionMappingsSuggest.input
+>;
+export type ConnectionMappingsSuggestOutput = z.output<
+  typeof connectionMappingsSuggest.output
+>;

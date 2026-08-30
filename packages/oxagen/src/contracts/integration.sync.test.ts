@@ -15,9 +15,7 @@ describe("integration.sync capability", () => {
   });
 
   it("rejects integrationId of wrong type", () => {
-    expect(() =>
-      integrationSync.input.parse({ integrationId: 42 }),
-    ).toThrow();
+    expect(() => integrationSync.input.parse({ integrationId: 42 })).toThrow();
   });
 
   // ── input: mode default ───────────────────────────────────────────────────

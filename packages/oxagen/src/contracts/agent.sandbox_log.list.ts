@@ -68,5 +68,9 @@ export const agentSandboxLogsList = registerCapability({
   }),
 });
 
-export type AgentSandboxLogsListInput = z.output<typeof agentSandboxLogsList.input>;
-export type AgentSandboxLogsListOutput = z.output<typeof agentSandboxLogsList.output>;
+export type AgentSandboxLogsListInput = z.output<
+  typeof agentSandboxLogsList.input
+>;
+export type AgentSandboxLogsListOutput = z.output<
+  typeof agentSandboxLogsList.output
+>;

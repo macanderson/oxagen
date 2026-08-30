@@ -32,5 +32,9 @@ export const schemaReconcileStatus = registerCapability({
   }),
 });
 
-export type SchemaReconcileStatusInput = z.output<typeof schemaReconcileStatus.input>;
-export type SchemaReconcileStatusOutput = z.output<typeof schemaReconcileStatus.output>;
+export type SchemaReconcileStatusInput = z.output<
+  typeof schemaReconcileStatus.input
+>;
+export type SchemaReconcileStatusOutput = z.output<
+  typeof schemaReconcileStatus.output
+>;

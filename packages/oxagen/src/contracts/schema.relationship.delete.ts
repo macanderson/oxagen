@@ -26,5 +26,9 @@ export const schemaRelationshipDelete = registerCapability({
   }),
 });
 
-export type SchemaRelationshipDeleteInput = z.output<typeof schemaRelationshipDelete.input>;
-export type SchemaRelationshipDeleteOutput = z.output<typeof schemaRelationshipDelete.output>;
+export type SchemaRelationshipDeleteInput = z.output<
+  typeof schemaRelationshipDelete.input
+>;
+export type SchemaRelationshipDeleteOutput = z.output<
+  typeof schemaRelationshipDelete.output
+>;

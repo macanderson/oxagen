@@ -36,7 +36,10 @@ describe("documents.generate capability", () => {
       title: "Budget",
       content: {
         headers: ["Month", "Revenue"],
-        rows: [["Jan", 1000], ["Feb", 2000]],
+        rows: [
+          ["Jan", 1000],
+          ["Feb", 2000],
+        ],
       },
     });
     expect(parsed.kind).toBe("spreadsheet");
@@ -87,7 +90,8 @@ describe("documents.generate capability", () => {
       assetId: "asset-uuid-123",
       publicId: "gen_ABC123",
       kind: "document",
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       sizeBytes: 2048,
       url: "https://blob.example.com/doc.docx",
       serveUrl: "/api/v1/assets/gen_ABC123",
@@ -97,7 +101,8 @@ describe("documents.generate capability", () => {
           url: "/api/v1/assets/gen_ABC123",
           name: "My Doc.docx",
           kind: "document",
-          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           sizeBytes: 2048,
         },
       },
@@ -110,9 +115,7 @@ describe("documents.generate capability", () => {
   });
 
   it("rejects output missing required fields", () => {
-    expect(() =>
-      documentsGenerate.output.parse({ assetId: "x" }),
-    ).toThrow();
+    expect(() => documentsGenerate.output.parse({ assetId: "x" })).toThrow();
   });
 
   it("rejects output with invalid kind", () => {
@@ -127,7 +130,13 @@ describe("documents.generate capability", () => {
         serveUrl: "/api/v1/assets/gen_X",
         render: {
           componentId: "file-attachment",
-          props: { url: "/x", name: "x.pdf", kind: "pdf", mimeType: "application/pdf", sizeBytes: 100 },
+          props: {
+            url: "/x",
+            name: "x.pdf",
+            kind: "pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 100,
+          },
         },
       }),
     ).toThrow();

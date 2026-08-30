@@ -28,15 +28,11 @@ describe("agent.ui.render capability", () => {
   });
 
   it("rejects input with empty componentId", () => {
-    expect(() =>
-      agentUiRender.input.parse({ componentId: "" }),
-    ).toThrow();
+    expect(() => agentUiRender.input.parse({ componentId: "" })).toThrow();
   });
 
   it("rejects input missing componentId", () => {
-    expect(() =>
-      agentUiRender.input.parse({}),
-    ).toThrow();
+    expect(() => agentUiRender.input.parse({})).toThrow();
   });
 
   it("parses a valid output", () => {
@@ -59,9 +55,7 @@ describe("agent.ui.render capability", () => {
   });
 
   it("rejects output missing render field", () => {
-    expect(() =>
-      agentUiRender.output.parse({}),
-    ).toThrow();
+    expect(() => agentUiRender.output.parse({})).toThrow();
   });
 
   it("rejects output with render missing componentId", () => {

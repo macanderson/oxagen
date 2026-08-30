@@ -23,7 +23,10 @@ export const skillEnable = registerCapability({
       .string()
       .describe("Public ID of the skill (skl_...) or its slug"),
     enabled: z.boolean().describe("true to enable, false to disable"),
-    workspace_id: z.string().optional().describe("Workspace ID (defaults to current workspace)"),
+    workspace_id: z
+      .string()
+      .optional()
+      .describe("Workspace ID (defaults to current workspace)"),
   }),
   output: z.object({
     skill_id: z.string().describe("Public ID of the skill"),

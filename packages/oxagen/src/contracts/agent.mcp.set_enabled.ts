@@ -28,4 +28,6 @@ export const agentMcpSetEnabled = registerCapability({
 });
 
 export type AgentMcpSetEnabledInput = z.output<typeof agentMcpSetEnabled.input>;
-export type AgentMcpSetEnabledOutput = z.output<typeof agentMcpSetEnabled.output>;
+export type AgentMcpSetEnabledOutput = z.output<
+  typeof agentMcpSetEnabled.output
+>;

@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const schemaVersionCreate = registerCapability({
   name: "create_schema_version",
   domain: "schema",
-  description: "Freeze the current draft into an immutable published version and open a fresh draft.",
+  description:
+    "Freeze the current draft into an immutable published version and open a fresh draft.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -17,7 +18,11 @@ export const schemaVersionCreate = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    label: z.string().max(200).optional().describe("Human tag, e.g. Sales CRM v2"),
+    label: z
+      .string()
+      .max(200)
+      .optional()
+      .describe("Human tag, e.g. Sales CRM v2"),
     changeSummary: z.string().max(2000).optional(),
   }),
   output: z.object({
@@ -27,5 +32,9 @@ export const schemaVersionCreate = registerCapability({
   }),
 });
 
-export type SchemaVersionCreateInput = z.output<typeof schemaVersionCreate.input>;
-export type SchemaVersionCreateOutput = z.output<typeof schemaVersionCreate.output>;
+export type SchemaVersionCreateInput = z.output<
+  typeof schemaVersionCreate.input
+>;
+export type SchemaVersionCreateOutput = z.output<
+  typeof schemaVersionCreate.output
+>;

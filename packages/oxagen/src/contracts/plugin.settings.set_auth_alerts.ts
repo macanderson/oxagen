@@ -31,9 +31,7 @@ export const pluginSettingsSetAuthAlerts = registerCapability({
      * Org role names that should receive alerts.
      * Must be a non-empty subset of valid org roles.
      */
-    roles: z
-      .array(z.enum(["Owner", "Admin", "Compliance", "Billing"]))
-      .min(1),
+    roles: z.array(z.enum(["Owner", "Admin", "Compliance", "Billing"])).min(1),
   }),
   output: z.object({ ok: z.boolean() }),
 });

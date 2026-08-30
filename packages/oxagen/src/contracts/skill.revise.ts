@@ -13,7 +13,7 @@ export const skillRevise = registerCapability({
   agent: { requiresApproval: false, riskLevel: "medium", category: "skill" },
   sensitivity: "medium",
   defaultEffect: "deny",
-  // Mirrors skill.edit — the version-bump path this composes onto.
+  // Mirrors edit_skill — the version-bump path this composes onto.
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Admin: "allow" },

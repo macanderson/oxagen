@@ -19,14 +19,18 @@ export const memoryPolicySchema = z.object({
     .min(0)
     .max(1)
     .default(0.1)
-    .describe("Memories below this confidence fraction (0–1) are excluded from recall"),
+    .describe(
+      "Memories below this confidence fraction (0–1) are excluded from recall",
+    ),
   complianceThreshold: z
     .number()
     .int()
     .min(1)
     .max(100)
     .default(70)
-    .describe("Enforcement at or above which a rule deviation counts as a VIOLATION (else DISCRETION)"),
+    .describe(
+      "Enforcement at or above which a rule deviation counts as a VIOLATION (else DISCRETION)",
+    ),
   defaultDecayFloor: z
     .number()
     .min(0)
@@ -55,4 +59,6 @@ export const agentMemoryPolicyRead = registerCapability({
   output: memoryPolicySchema,
 });
 
-export type AgentMemoryPolicyReadOutput = z.output<typeof agentMemoryPolicyRead.output>;
+export type AgentMemoryPolicyReadOutput = z.output<
+  typeof agentMemoryPolicyRead.output
+>;

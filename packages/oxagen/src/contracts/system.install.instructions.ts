@@ -38,9 +38,9 @@ export const systemInstallInstructions = registerCapability({
   description:
     "Return step-by-step MCP/CLI installation instructions for a given AI client " +
     "(claude-code, cursor, claude-desktop, codex, vscode). " +
-    "Uses the production Vercel app domains from CLAUDE.md. " +
+    "Snippets point at the app and MCP hosts configured in APP_URL / MCP_URL. " +
     "Returns a structured steps list and a render directive for the install-instructions " +
-    "chat component. This is the end-to-end proof of the component registry pipeline.",
+    "chat component.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -75,6 +75,10 @@ export const systemInstallInstructions = registerCapability({
   }),
 });
 
-export type SystemInstallInstructionsInput = z.output<typeof systemInstallInstructions.input>;
-export type SystemInstallInstructionsOutput = z.output<typeof systemInstallInstructions.output>;
+export type SystemInstallInstructionsInput = z.output<
+  typeof systemInstallInstructions.input
+>;
+export type SystemInstallInstructionsOutput = z.output<
+  typeof systemInstallInstructions.output
+>;
 export type InstallStep = z.output<typeof installStepSchema>;

@@ -18,9 +18,21 @@ export const workflowRun = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    goal: z.string().min(1).max(2000).describe("The overarching research or processing goal"),
-    title: z.string().min(1).max(200).optional().describe("Optional display title for the workflow"),
-    outputFormat: z.enum(["json", "csv"]).default("json").describe("Format for the aggregated result"),
+    goal: z
+      .string()
+      .min(1)
+      .max(2000)
+      .describe("The overarching research or processing goal"),
+    title: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe("Optional display title for the workflow"),
+    outputFormat: z
+      .enum(["json", "csv"])
+      .default("json")
+      .describe("Format for the aggregated result"),
     maxParallelism: z
       .number()
       .int()
@@ -30,8 +42,14 @@ export const workflowRun = registerCapability({
       .describe("Maximum concurrent sub-tasks (1-100)"),
   }),
   output: z.object({
-    workflowId: z.string().describe("Internal UUID of the agent_executions row (origin_type=workflow_run)"),
-    publicId: z.string().describe("aex_* prefixed public ID of the agent_executions row"),
+    workflowId: z
+      .string()
+      .describe(
+        "Internal UUID of the agent_executions row (origin_type=workflow_run)",
+      ),
+    publicId: z
+      .string()
+      .describe("aex_* prefixed public ID of the agent_executions row"),
     status: z.literal("planning"),
     render: z.object({
       componentId: z.literal("workflow-progress"),

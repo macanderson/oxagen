@@ -18,14 +18,16 @@ describe("privacy.data.erase capability", () => {
 
   it("parses org-scope input with valid orgId and confirm: true", () => {
     expect(() =>
-      privacyDataErase.input.parse({ scope: "org", orgId: VALID_UUID, confirm: true }),
+      privacyDataErase.input.parse({
+        scope: "org",
+        orgId: VALID_UUID,
+        confirm: true,
+      }),
     ).not.toThrow();
   });
 
   it("rejects input without confirm field", () => {
-    expect(() =>
-      privacyDataErase.input.parse({ scope: "user" }),
-    ).toThrow();
+    expect(() => privacyDataErase.input.parse({ scope: "user" })).toThrow();
   });
 
   it("rejects confirm: false", () => {
@@ -42,7 +44,11 @@ describe("privacy.data.erase capability", () => {
 
   it("rejects org-scope with invalid orgId UUID", () => {
     expect(() =>
-      privacyDataErase.input.parse({ scope: "org", orgId: "bad-uuid", confirm: true }),
+      privacyDataErase.input.parse({
+        scope: "org",
+        orgId: "bad-uuid",
+        confirm: true,
+      }),
     ).toThrow();
   });
 

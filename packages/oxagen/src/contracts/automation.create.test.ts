@@ -251,7 +251,14 @@ describe("automation.create capability", () => {
   });
 
   it("accepts all valid stepType values", () => {
-    const types = ["agent", "tool", "condition", "webhook", "prompt", "human_input"] as const;
+    const types = [
+      "agent",
+      "tool",
+      "condition",
+      "webhook",
+      "prompt",
+      "human_input",
+    ] as const;
     for (const stepType of types) {
       const parsed = automationCreate.input.parse({
         name: "My automation",

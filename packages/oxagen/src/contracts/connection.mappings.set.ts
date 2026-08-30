@@ -18,12 +18,18 @@ export const connectionMappingsSet = registerCapability({
     workspace: { Owner: "allow" },
   },
   input: z.object({
-    connectionId: z.string().min(1).describe("Public ID or internal UUID of the connection"),
+    connectionId: z
+      .string()
+      .min(1)
+      .describe("Public ID or internal UUID of the connection"),
     mappings: z
       .array(
         z.object({
           sourceRecordType: z.string().min(1),
-          oxagenEntityType: z.string().min(1).describe("Target entity type string (snake_case)"),
+          oxagenEntityType: z
+            .string()
+            .min(1)
+            .describe("Target entity type string (snake_case)"),
           propertyMappings: z
             .record(z.string())
             .default({})
@@ -42,7 +48,10 @@ export const connectionMappingsSet = registerCapability({
     // handler can persist them into source_connections.deliveryConfig before
     // firing the ingestion event. Zod strips unknown keys by default, so
     // they must be declared here or they never reach the handler.
-    installationId: z.string().optional().describe("GitHub App installation ID"),
+    installationId: z
+      .string()
+      .optional()
+      .describe("GitHub App installation ID"),
     selectedRepos: z
       .array(z.string())
       .optional()
@@ -53,8 +62,16 @@ export const connectionMappingsSet = registerCapability({
       .positive()
       .optional()
       .describe("How many days of git history to include in the initial sync"),
-    owner: z.string().optional().describe("GitHub org or user login (derived from selectedRepos[0])"),
-    repo: z.string().optional().describe("Repository name without owner (derived from selectedRepos[0])"),
+    owner: z
+      .string()
+      .optional()
+      .describe("GitHub org or user login (derived from selectedRepos[0])"),
+    repo: z
+      .string()
+      .optional()
+      .describe(
+        "Repository name without owner (derived from selectedRepos[0])",
+      ),
     defaultBranch: z
       .string()
       .optional()
@@ -67,5 +84,9 @@ export const connectionMappingsSet = registerCapability({
   }),
 });
 
-export type ConnectionMappingsSetInput = z.output<typeof connectionMappingsSet.input>;
-export type ConnectionMappingsSetOutput = z.output<typeof connectionMappingsSet.output>;
+export type ConnectionMappingsSetInput = z.output<
+  typeof connectionMappingsSet.input
+>;
+export type ConnectionMappingsSetOutput = z.output<
+  typeof connectionMappingsSet.output
+>;

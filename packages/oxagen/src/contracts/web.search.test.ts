@@ -28,9 +28,7 @@ describe("web.search capability", () => {
   });
 
   it("rejects a query exceeding 500 chars", () => {
-    expect(() =>
-      webSearch.input.parse({ query: "q".repeat(501) }),
-    ).toThrow();
+    expect(() => webSearch.input.parse({ query: "q".repeat(501) })).toThrow();
   });
 
   it("accepts a query at exactly 500 chars (max boundary)", () => {

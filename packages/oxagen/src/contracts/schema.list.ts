@@ -19,13 +19,15 @@ export const schemaList = registerCapability({
   },
   input: z.object({}),
   output: z.object({
-    schemas: z.array(z.object({
-      schemaName: z.string(),
-      displayName: z.string(),
-      source: schemaSourceEnum,
-      connectorId: z.string().nullable().optional(),
-      enabled: z.boolean(),
-    })),
+    schemas: z.array(
+      z.object({
+        schemaName: z.string(),
+        displayName: z.string(),
+        source: schemaSourceEnum,
+        connectorId: z.string().nullable().optional(),
+        enabled: z.boolean(),
+      }),
+    ),
   }),
 });
 

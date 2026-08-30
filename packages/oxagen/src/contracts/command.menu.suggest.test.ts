@@ -43,7 +43,9 @@ describe("command.menu.suggest contract", () => {
         label: "Run #4221",
         summary: "Run of playbook churn-investigate. Status: failed.",
       },
-      recentEntities: [{ kind: "playbook", id: "plb_1", label: "Churn Investigate" }],
+      recentEntities: [
+        { kind: "playbook", id: "plb_1", label: "Churn Investigate" },
+      ],
       capabilities: ["run_capability_chain", "query_audit_log"],
       locale: "en-US",
     });
@@ -78,9 +80,21 @@ describe("command.menu.suggest contract", () => {
   it("parses a valid output with 3 suggestions", () => {
     const out = commandMenuSuggest.output.parse({
       suggestions: [
-        { text: "Summarize this run's failure", category: "investigate", confidence: 0.92 },
-        { text: "Show similar failed runs today", category: "investigate", confidence: 0.8 },
-        { text: "Open source playbook in editor", category: "configure", confidence: 0.7 },
+        {
+          text: "Summarize this run's failure",
+          category: "investigate",
+          confidence: 0.92,
+        },
+        {
+          text: "Show similar failed runs today",
+          category: "investigate",
+          confidence: 0.8,
+        },
+        {
+          text: "Open source playbook in editor",
+          category: "configure",
+          confidence: 0.7,
+        },
       ],
     });
     expect(out.suggestions).toHaveLength(3);
@@ -108,7 +122,9 @@ describe("command.menu.suggest contract", () => {
   it("rejects a suggestion with confidence > 1", () => {
     expect(
       commandMenuSuggest.output.safeParse({
-        suggestions: [{ text: "Do something", category: "create", confidence: 1.5 }],
+        suggestions: [
+          { text: "Do something", category: "create", confidence: 1.5 },
+        ],
       }).success,
     ).toBe(false);
   });

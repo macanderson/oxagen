@@ -10,31 +10,54 @@ import { registerCapability } from "../registry";
 // platform-wide, not a raw event firehose. ADR-021 §1: pure SQL, ZERO model
 // calls — this is a fleet-wide histogram, not a diagnosis.
 //
-// Complements `agent.debug.trace` (single-execution failure frame): that
+// Complements `debug_execution` (single-execution failure frame): that
 // capability answers "why did THIS run fail"; this one answers "what error
 // classes are burning across the org right now".
 
 const errorCluster = z.object({
-  fingerprint: z.string().describe("Stable grouping key (SHA-256 of error_class + normalized message)"),
-  errorClass: z.string().describe("Error constructor name (e.g. 'TypeError', 'CapabilityError')"),
-  sampleMessage: z.string().describe("Bounded sample message from the most recent occurrence"),
+  fingerprint: z
+    .string()
+    .describe(
+      "Stable grouping key (SHA-256 of error_class + normalized message)",
+    ),
+  errorClass: z
+    .string()
+    .describe("Error constructor name (e.g. 'TypeError', 'CapabilityError')"),
+  sampleMessage: z
+    .string()
+    .describe("Bounded sample message from the most recent occurrence"),
   severity: z.enum(["fatal", "error", "warn"]),
-  source: z.string().describe("Server runtime that captured the error (api|app|mcp|inngest|runner)"),
-  count: z.number().int().describe("Occurrences of this fingerprint within the window"),
-  firstSeen: z.string().describe("Earliest occurrence timestamp within the window"),
-  lastSeen: z.string().describe("Latest occurrence timestamp within the window"),
+  source: z
+    .string()
+    .describe(
+      "Server runtime that captured the error (api|app|mcp|inngest|runner)",
+    ),
+  count: z
+    .number()
+    .int()
+    .describe("Occurrences of this fingerprint within the window"),
+  firstSeen: z
+    .string()
+    .describe("Earliest occurrence timestamp within the window"),
+  lastSeen: z
+    .string()
+    .describe("Latest occurrence timestamp within the window"),
 });
 
 export const telemetryErrorCluster = registerCapability({
   name: "list_error_clusters",
   domain: "telemetry",
   description:
-    "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use agent.debug.trace; this is the fleet-wide histogram, not a single-run frame.",
+    "Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview. Prefer this over reading raw errors when you want the SHAPE of what's failing platform-wide. Anti-trigger: to diagnose ONE specific failed execution (failing step, stack, suspect files) use debug_execution; this is the fleet-wide histogram, not a single-run frame.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -56,25 +79,50 @@ export const telemetryErrorCluster = registerCapability({
     source: z
       .string()
       .optional()
-      .describe("Restrict to one capturing runtime, e.g. 'api' | 'app' | 'mcp' | 'inngest' | 'runner' (default: all)"),
+      .describe(
+        "Restrict to one capturing runtime, e.g. 'api' | 'app' | 'mcp' | 'inngest' | 'runner' (default: all)",
+      ),
     limit: z
       .number()
       .int()
       .min(1)
       .max(100)
       .optional()
-      .describe("Max distinct clusters to return, ranked by occurrence count (default: 20)"),
+      .describe(
+        "Max distinct clusters to return, ranked by occurrence count (default: 20)",
+      ),
   }),
   output: z.object({
-    clusters: z.array(errorCluster).describe("Error classes ranked by occurrence count, highest first"),
-    totalErrors: z.number().int().describe("Total error occurrences in the window (across all clusters, not just the returned page)"),
-    distinctClusters: z.number().int().describe("Total distinct fingerprints in the window (may exceed `clusters.length` when truncated)"),
-    truncated: z.boolean().describe("True when distinctClusters exceeds the returned `limit`"),
+    clusters: z
+      .array(errorCluster)
+      .describe("Error classes ranked by occurrence count, highest first"),
+    totalErrors: z
+      .number()
+      .int()
+      .describe(
+        "Total error occurrences in the window (across all clusters, not just the returned page)",
+      ),
+    distinctClusters: z
+      .number()
+      .int()
+      .describe(
+        "Total distinct fingerprints in the window (may exceed `clusters.length` when truncated)",
+      ),
+    truncated: z
+      .boolean()
+      .describe("True when distinctClusters exceeds the returned `limit`"),
     window: z.object({
-      sinceHours: z.number().int().describe("Effective lookback window in hours actually applied"),
+      sinceHours: z
+        .number()
+        .int()
+        .describe("Effective lookback window in hours actually applied"),
     }),
   }),
 });
 
-export type TelemetryErrorClusterInput = z.output<typeof telemetryErrorCluster.input>;
-export type TelemetryErrorClusterOutput = z.output<typeof telemetryErrorCluster.output>;
+export type TelemetryErrorClusterInput = z.output<
+  typeof telemetryErrorCluster.input
+>;
+export type TelemetryErrorClusterOutput = z.output<
+  typeof telemetryErrorCluster.output
+>;

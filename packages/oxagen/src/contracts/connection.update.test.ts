@@ -4,12 +4,18 @@ import { getCapability } from "../registry";
 
 describe("connection.update capability", () => {
   it("parses a rename input", () => {
-    const parsed = connectionUpdate.input.parse({ connectionId: "con_1", displayName: "Prod GitHub" });
+    const parsed = connectionUpdate.input.parse({
+      connectionId: "con_1",
+      displayName: "Prod GitHub",
+    });
     expect(parsed.displayName).toBe("Prod GitHub");
   });
 
   it("accepts null to clear deliveryConfig", () => {
-    const parsed = connectionUpdate.input.parse({ connectionId: "con_1", deliveryConfig: null });
+    const parsed = connectionUpdate.input.parse({
+      connectionId: "con_1",
+      deliveryConfig: null,
+    });
     expect(parsed.deliveryConfig).toBeNull();
   });
 

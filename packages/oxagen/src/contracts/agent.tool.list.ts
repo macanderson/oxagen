@@ -4,12 +4,17 @@ import { registerCapability } from "../registry";
 export const agentToolList = registerCapability({
   name: "list_agent_tools",
   domain: "agent",
-  description: "List the capabilities surfaced as agent tools for the active workspace, after allowlist and risk filtering",
+  description:
+    "List the capabilities surfaced as agent tools for the active workspace, after allowlist and risk filtering",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

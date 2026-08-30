@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { agentExecutionRecord, AGENT_EXECUTION_ORIGIN_TYPES } from "./agent.execution.record";
+import {
+  agentExecutionRecord,
+  AGENT_EXECUTION_ORIGIN_TYPES,
+} from "./agent.execution.record";
 import { getCapability } from "../registry";
 
 const BASE_UUID_A = "00000000-0000-0000-0000-000000000001";
@@ -126,7 +129,13 @@ describe("agent.execution.record capability", () => {
   // ── input: originType enum (must match the agent_executions CHECK) ─────────
 
   it("accepts every canonical originType", () => {
-    for (const originType of ["chat", "event_trigger", "scheduled_job", "mcp_request", "workflow_run"]) {
+    for (const originType of [
+      "chat",
+      "event_trigger",
+      "scheduled_job",
+      "mcp_request",
+      "workflow_run",
+    ]) {
       const parsed = agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
@@ -371,16 +380,17 @@ describe("agent.execution.record capability", () => {
   it.each(AGENT_EXECUTION_ORIGIN_TYPES)(
     "accepts canonical originType=%s",
     (originType: (typeof AGENT_EXECUTION_ORIGIN_TYPES)[number]) => {
-    const parsed = agentExecutionRecord.input.parse({
-      agentId: BASE_UUID_A,
-      agentVersionId: BASE_UUID_B,
-      originType,
-      originId: BASE_UUID_C,
-      status: "completed",
-      inputPayload: {},
-    });
-    expect(parsed.originType).toBe(originType);
-  });
+      const parsed = agentExecutionRecord.input.parse({
+        agentId: BASE_UUID_A,
+        agentVersionId: BASE_UUID_B,
+        originType,
+        originId: BASE_UUID_C,
+        status: "completed",
+        inputPayload: {},
+      });
+      expect(parsed.originType).toBe(originType);
+    },
+  );
 
   it("includes the fanout originType (Phase 2 graph projection ritual)", () => {
     expect(AGENT_EXECUTION_ORIGIN_TYPES).toContain("fanout");

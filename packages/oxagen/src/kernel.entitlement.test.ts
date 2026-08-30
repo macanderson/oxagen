@@ -76,7 +76,8 @@ const pluginClaimedUnscopedCap = () =>
   registerCapability({
     name: "generate_svg",
     domain: "svg",
-    description: "Generate SVG (claimed by oxagen/media-svg, unscoped in test).",
+    description:
+      "Generate SVG (claimed by oxagen/media-svg, unscoped in test).",
     mode: "sync" as const,
     surfaces: ["api"] as const,
     layers: ["unit"] as const,
@@ -123,7 +124,11 @@ describe("kernel capability entitlement gate", () => {
 
     expect(gate).toHaveBeenCalledOnce();
     // Entitlement is workspace-scoped — the gate receives (name, orgId, workspaceId).
-    expect(gate).toHaveBeenCalledWith("generate_image", ctx.orgId, ctx.workspaceId);
+    expect(gate).toHaveBeenCalledWith(
+      "generate_image",
+      ctx.orgId,
+      ctx.workspaceId,
+    );
   });
 
   it("propagates the gate throw with code capability_not_installed", async () => {
@@ -137,7 +142,9 @@ describe("kernel capability entitlement gate", () => {
     pluginClaimedCap();
     registerHandler("generate_image", async () => async (input) => input);
 
-    await expect(invoke("generate_image", { v: "hi" }, ctx)).rejects.toMatchObject({
+    await expect(
+      invoke("generate_image", { v: "hi" }, ctx),
+    ).rejects.toMatchObject({
       code: "capability_not_installed",
     });
   });
@@ -147,13 +154,15 @@ describe("kernel capability entitlement gate", () => {
     pluginClaimedCap();
     registerHandler("generate_image", async () => async (input) => input);
 
-    await expect(invoke("generate_image", { v: "hi" }, ctx)).resolves.toEqual({ v: "hi" });
+    await expect(invoke("generate_image", { v: "hi" }, ctx)).resolves.toEqual({
+      v: "hi",
+    });
   });
 
   it("skips the gate when orgId is empty (system/internal invocation)", async () => {
-    const gate = vi.fn<() => Promise<void>>().mockRejectedValue(
-      new Error("should not be called"),
-    );
+    const gate = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new Error("should not be called"));
     setCapabilityEntitlementGate(gate);
     // Use the unscoped variant so runInTenantScope doesn't reject the empty orgId
     // before we reach the entitlement gate — we want to assert the gate itself
@@ -162,7 +171,9 @@ describe("kernel capability entitlement gate", () => {
     registerHandler("generate_svg", async () => async (input) => input);
 
     // ctxNoOrg has orgId: "" — entitlement gate must be bypassed.
-    await expect(invoke("generate_svg", { v: "hi" }, ctxNoOrg)).resolves.toEqual({
+    await expect(
+      invoke("generate_svg", { v: "hi" }, ctxNoOrg),
+    ).resolves.toEqual({
       v: "hi",
     });
     expect(gate).not.toHaveBeenCalled();
@@ -186,7 +197,11 @@ describe("capabilityNotInstalledError", () => {
   });
 
   it("carries the name CapabilityError", () => {
-    const err = capabilityNotInstalledError("generate_svg", "oxagen/media-svg", "SVG Generation");
+    const err = capabilityNotInstalledError(
+      "generate_svg",
+      "oxagen/media-svg",
+      "SVG Generation",
+    );
     expect(err.name).toBe("CapabilityError");
   });
 });

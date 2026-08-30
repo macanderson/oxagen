@@ -9,7 +9,10 @@ describe("code.format capability", () => {
   });
 
   it("accepts language='python'", () => {
-    const parsed = codeFormat.input.parse({ language: "python", source: "x=1" });
+    const parsed = codeFormat.input.parse({
+      language: "python",
+      source: "x=1",
+    });
     expect(parsed.language).toBe("python");
   });
 
@@ -40,7 +43,9 @@ describe("code.format capability", () => {
   });
 
   it("rejects an empty source", () => {
-    expect(() => codeFormat.input.parse({ language: "json", source: "" })).toThrow();
+    expect(() =>
+      codeFormat.input.parse({ language: "json", source: "" }),
+    ).toThrow();
   });
 
   it("rejects an over-large source", () => {
@@ -52,7 +57,7 @@ describe("code.format capability", () => {
 
   it("parses a valid output", () => {
     const parsed = codeFormat.output.parse({
-      formatted: "{\n  \"a\": 1\n}",
+      formatted: '{\n  "a": 1\n}',
       changed: true,
       language: "json",
     });
@@ -62,7 +67,11 @@ describe("code.format capability", () => {
 
   it("rejects an output with an unknown language", () => {
     expect(() =>
-      codeFormat.output.parse({ formatted: "x", changed: false, language: "rust" }),
+      codeFormat.output.parse({
+        formatted: "x",
+        changed: false,
+        language: "rust",
+      }),
     ).toThrow();
   });
 

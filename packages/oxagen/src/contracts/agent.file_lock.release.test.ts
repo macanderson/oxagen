@@ -13,11 +13,15 @@ describe("agent.file.lock.release capability", () => {
   });
 
   it("parses a released:true output", () => {
-    expect(agentFileLockRelease.output.parse({ released: true })).toEqual({ released: true });
+    expect(agentFileLockRelease.output.parse({ released: true })).toEqual({
+      released: true,
+    });
   });
 
   it("parses a released:false output (idempotent, not an error)", () => {
-    expect(agentFileLockRelease.output.parse({ released: false })).toEqual({ released: false });
+    expect(agentFileLockRelease.output.parse({ released: false })).toEqual({
+      released: false,
+    });
   });
 
   it("is registered in the capability registry", () => {
@@ -30,7 +34,8 @@ describe("agent.file.lock.release capability", () => {
     // The workspace role map is intentionally typed as Owner-only, so index it
     // through a widened view to assert Member is genuinely absent (not granted).
     expect(
-      (agentFileLockRelease.defaultRoles.workspace as Record<string, unknown>).Member,
+      (agentFileLockRelease.defaultRoles.workspace as Record<string, unknown>)
+        .Member,
     ).toBeUndefined();
   });
 });

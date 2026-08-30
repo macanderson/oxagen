@@ -18,7 +18,8 @@ export const CHAT_CONTENT_MAX_CHARS = 32_768;
 export const chatMessageSend = registerCapability({
   name: "send_message",
   domain: "chat",
-  description: "Append a user message to a conversation and stream the assistant reply",
+  description:
+    "Append a user message to a conversation and stream the assistant reply",
   mode: "async",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -32,7 +33,9 @@ export const chatMessageSend = registerCapability({
   input: z.object({
     conversationId: z.string().nullable(),
     parentMessageId: z.string().nullable(),
-    branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable(),
+    branchReason: z
+      .enum(["edit", "regenerate", "tool_retry", "manual_fork"])
+      .nullable(),
     content: z.string().min(1).max(CHAT_CONTENT_MAX_CHARS),
     contentBlocks: z.array(z.unknown()).default([]),
   }),

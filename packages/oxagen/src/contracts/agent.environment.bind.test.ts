@@ -8,7 +8,10 @@ describe("agent.environment.bind contract", () => {
   });
   it("accepts a binding with and without an explicit template", () => {
     expect(() =>
-      agentEnvironmentBind.input.parse({ agentId: "a_1", environmentId: "env_1" }),
+      agentEnvironmentBind.input.parse({
+        agentId: "a_1",
+        environmentId: "env_1",
+      }),
     ).not.toThrow();
     expect(() =>
       agentEnvironmentBind.input.parse({
@@ -27,7 +30,9 @@ describe("agent.environment.bind contract", () => {
     ).not.toThrow();
   });
   it("requires agentId and environmentId", () => {
-    expect(() => agentEnvironmentBind.input.parse({ agentId: "a_1" })).toThrow();
+    expect(() =>
+      agentEnvironmentBind.input.parse({ agentId: "a_1" }),
+    ).toThrow();
   });
   it("outputs a binding with resolved names", () => {
     expect(() =>

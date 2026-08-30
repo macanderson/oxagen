@@ -8,7 +8,7 @@ import {
 } from "../lib/temporal-query";
 
 /**
- * ontology.query — first-class, typed multi-hop traversal over the knowledge
+ * query_ontology — first-class, typed multi-hop traversal over the knowledge
  * customer-context graph. The caller never writes Cypher: they name a
  * start node, the relationship type(s) to follow, a direction, and a depth, and
  * the handler walks the graph (org + workspace scoped) and returns the reachable
@@ -51,9 +51,9 @@ export const ontologyQuery = registerCapability({
   description:
     "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); " +
     "returns the reachable customer-context subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. " +
-    "Prefer over ontology.neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not " +
+    "Prefer over get_ontology_neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not " +
     "nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or " +
-    "keyword (use graph.search for semantic lookup or graph.node.search for name/label lookup first).",
+    "keyword (use search_graph for semantic lookup or search_nodes for name/label lookup first).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],

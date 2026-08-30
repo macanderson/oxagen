@@ -70,7 +70,9 @@ export const agentMemoryList = registerCapability({
     sortDir: z
       .enum(["asc", "desc"])
       .default("desc")
-      .describe("Sort direction; defaults to descending (newest / most-cited first)"),
+      .describe(
+        "Sort direction; defaults to descending (newest / most-cited first)",
+      ),
     limit: z.number().int().positive().max(200).default(100),
     offset: z.number().int().nonnegative().default(0),
   }),
@@ -80,7 +82,9 @@ export const agentMemoryList = registerCapability({
       .number()
       .int()
       .nonnegative()
-      .describe("Total matching memories for the tenant, ignoring limit/offset"),
+      .describe(
+        "Total matching memories for the tenant, ignoring limit/offset",
+      ),
   }),
 });
 

@@ -31,4 +31,6 @@ export const workspaceSettingsRead = registerCapability({
   output: workspaceSettingsOutput,
 });
 
-export type WorkspaceSettingsReadOutput = z.output<typeof workspaceSettingsRead.output>;
+export type WorkspaceSettingsReadOutput = z.output<
+  typeof workspaceSettingsRead.output
+>;

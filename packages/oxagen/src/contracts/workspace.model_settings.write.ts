@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const workspaceModelSettingsWrite = registerCapability({
   name: "update_model_settings",
   domain: "workspace",
-  description: "Update the workspace-level model defaults (partial update — only provided fields are changed)",
+  description:
+    "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
@@ -18,7 +19,10 @@ export const workspaceModelSettingsWrite = registerCapability({
   },
   input: z.object({
     // Nullable-optional: omit = no change; null = clear the setting; string = set
-    defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable().optional(),
+    defaultTextTier: z
+      .enum(["fast", "balanced", "precise"])
+      .nullable()
+      .optional(),
     defaultTextModel: z.string().min(1).nullable().optional(),
     defaultImageModel: z.string().min(1).nullable().optional(),
     defaultVideoModel: z.string().min(1).nullable().optional(),
@@ -31,5 +35,9 @@ export const workspaceModelSettingsWrite = registerCapability({
   }),
 });
 
-export type WorkspaceModelSettingsWriteInput = z.output<typeof workspaceModelSettingsWrite.input>;
-export type WorkspaceModelSettingsWriteOutput = z.output<typeof workspaceModelSettingsWrite.output>;
+export type WorkspaceModelSettingsWriteInput = z.output<
+  typeof workspaceModelSettingsWrite.input
+>;
+export type WorkspaceModelSettingsWriteOutput = z.output<
+  typeof workspaceModelSettingsWrite.output
+>;

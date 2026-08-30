@@ -29,7 +29,8 @@ const installItemSchema = z.object({
 export const pluginOrgInstallBulk = registerCapability({
   name: "install_plugins_bulk",
   domain: "plugin",
-  description: "Bulk install catalog or custom plugin servers to the org allow-list. Per-item errors are captured — not all-or-nothing.",
+  description:
+    "Bulk install catalog or custom plugin servers to the org allow-list. Per-item errors are captured — not all-or-nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },

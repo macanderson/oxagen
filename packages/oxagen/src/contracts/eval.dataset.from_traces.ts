@@ -26,10 +26,15 @@ export const evalDatasetFromTraces = registerCapability({
       .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "slug must be lowercase kebab-case")
       .optional(),
     description: z.string().optional(),
-    /** Only sample runs whose metered capability matches (e.g. "chat.message.send"). */
+    /** Only sample runs whose metered capability matches (e.g. "send_message"). */
     capabilityName: z.string().optional(),
     /** Lookback window over the metered traces. */
-    sinceHours: z.number().int().min(1).max(24 * 90).default(24 * 7),
+    sinceHours: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 90)
+      .default(24 * 7),
     /** Cap the number of captured cases (cost + noise control). */
     limit: z.number().int().min(1).max(500).default(50),
   }),

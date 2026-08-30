@@ -4,7 +4,9 @@ import { getCapability } from "../registry";
 
 describe("agent.mcp.delete capability", () => {
   it("parses a valid input", () => {
-    expect(agentMcpDelete.input.parse({ mcpServerId: "mcs_1" }).mcpServerId).toBe("mcs_1");
+    expect(
+      agentMcpDelete.input.parse({ mcpServerId: "mcs_1" }).mcpServerId,
+    ).toBe("mcs_1");
   });
 
   it("rejects a missing server id", () => {
@@ -12,9 +14,10 @@ describe("agent.mcp.delete capability", () => {
   });
 
   it("parses a valid output", () => {
-    expect(agentMcpDelete.output.parse({ mcpServerId: "mcs_1", deleted: true }).deleted).toBe(
-      true,
-    );
+    expect(
+      agentMcpDelete.output.parse({ mcpServerId: "mcs_1", deleted: true })
+        .deleted,
+    ).toBe(true);
   });
 
   it("is registered with high sensitivity", () => {

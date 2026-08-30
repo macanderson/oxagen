@@ -49,7 +49,10 @@ const referenceResultRow = z.object({
     .string()
     .describe("Path / URL / graph address locating the referent; may be empty"),
   label: z.string().describe("Human-readable display name — what chips render"),
-  description: z.string().nullable().describe("One-line context for the picker"),
+  description: z
+    .string()
+    .nullable()
+    .describe("One-line context for the picker"),
   properties: z
     .record(z.string(), z.unknown())
     .describe("Property bag revealed when a mention chip is inspected"),
@@ -76,7 +79,12 @@ export const referenceSearch = registerCapability({
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({
-    query: z.string().min(0).max(500).default("").describe("Free-text search string"),
+    query: z
+      .string()
+      .min(0)
+      .max(500)
+      .default("")
+      .describe("Free-text search string"),
     types: z
       .array(z.enum(REFERENCE_TYPES))
       .min(1)

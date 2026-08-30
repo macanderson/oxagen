@@ -6,7 +6,9 @@ describe("integration.metrics capability", () => {
   // ── input: required field ─────────────────────────────────────────────────
 
   it("accepts a valid integrationId", () => {
-    const parsed = integrationMetrics.input.parse({ integrationId: "inst_abc" });
+    const parsed = integrationMetrics.input.parse({
+      integrationId: "inst_abc",
+    });
     expect(parsed.integrationId).toBe("inst_abc");
   });
 
@@ -40,7 +42,11 @@ describe("integration.metrics capability", () => {
     expect(parsed.displayName).toBe("Acme GitHub");
     expect(parsed.status).toBe("active");
     expect(parsed.entityCount).toBe(500);
-    expect(parsed.entityCountByType).toEqual({ repo: 30, pull_request: 200, issue: 270 });
+    expect(parsed.entityCountByType).toEqual({
+      repo: 30,
+      pull_request: 200,
+      issue: 270,
+    });
     expect(parsed.lastSyncAt).toBe("2024-06-01T12:00:00.000Z");
     expect(parsed.lastSyncDurationMs).toBe(4500);
     expect(parsed.lastErrorAt).toBeNull();

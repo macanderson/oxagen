@@ -9,7 +9,11 @@ export const sandboxTemplateList = registerCapability({
     "List sandbox templates in the active workspace, optionally filtered to one environment.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
@@ -22,5 +26,9 @@ export const sandboxTemplateList = registerCapability({
   output: z.object({ templates: z.array(sandboxTemplateSummarySchema) }),
 });
 
-export type SandboxTemplateListInput = z.output<typeof sandboxTemplateList.input>;
-export type SandboxTemplateListOutput = z.output<typeof sandboxTemplateList.output>;
+export type SandboxTemplateListInput = z.output<
+  typeof sandboxTemplateList.input
+>;
+export type SandboxTemplateListOutput = z.output<
+  typeof sandboxTemplateList.output
+>;

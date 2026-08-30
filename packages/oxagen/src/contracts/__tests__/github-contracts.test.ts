@@ -13,7 +13,13 @@ import { repoPrOpen } from "../repo.pr.open";
 
 // ── Shared metadata assertions ────────────────────────────────────────────────
 
-const ALL_CONTRACTS = [repoCreate, repoFilePut, repoFork, repoBranchCreate, repoPrOpen];
+const ALL_CONTRACTS = [
+  repoCreate,
+  repoFilePut,
+  repoFork,
+  repoBranchCreate,
+  repoPrOpen,
+];
 
 describe("GitHub write contracts — shared metadata", () => {
   it.each(ALL_CONTRACTS.map((c) => [c.name, c] as [string, typeof c]))(
@@ -63,7 +69,7 @@ describe("GitHub write contracts — shared metadata", () => {
 // ── 8a: repo.create input schema ─────────────────────────────────────────────
 
 describe("create_repo", () => {
-  it("name is repo.create", () => {
+  it("name is create_repo", () => {
     expect(repoCreate.name).toBe("create_repo");
   });
 
@@ -114,7 +120,7 @@ describe("create_repo", () => {
 // ── repo.file.put ─────────────────────────────────────────────────────────────
 
 describe("put_repo_file", () => {
-  it("name is repo.file.put", () => {
+  it("name is put_repo_file", () => {
     expect(repoFilePut.name).toBe("put_repo_file");
   });
 
@@ -133,7 +139,12 @@ describe("put_repo_file", () => {
 
   it("rejects input missing content", () => {
     expect(() =>
-      repoFilePut.input.parse({ owner: "x", repo: "y", path: "z", message: "m" }),
+      repoFilePut.input.parse({
+        owner: "x",
+        repo: "y",
+        path: "z",
+        message: "m",
+      }),
     ).toThrow();
   });
 
@@ -152,14 +163,19 @@ describe("put_repo_file", () => {
       diffs: [
         {
           path: "src/index.ts",
-          patch: "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          patch:
+            "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1 @@\n-old\n+new\n",
           additions: 1,
           deletions: 1,
         },
       ],
     });
     expect(parsed.diffs).toHaveLength(1);
-    expect(parsed.diffs?.[0]).toMatchObject({ path: "src/index.ts", additions: 1, deletions: 1 });
+    expect(parsed.diffs?.[0]).toMatchObject({
+      path: "src/index.ts",
+      additions: 1,
+      deletions: 1,
+    });
   });
 
   it("output schema rejects a diffs entry missing required fields", () => {
@@ -176,7 +192,7 @@ describe("put_repo_file", () => {
 // ── repo.fork ─────────────────────────────────────────────────────────────────
 
 describe("fork_repo", () => {
-  it("name is repo.fork", () => {
+  it("name is fork_repo", () => {
     expect(repoFork.name).toBe("fork_repo");
   });
 
@@ -199,7 +215,7 @@ describe("fork_repo", () => {
 // ── repo.branch.create ────────────────────────────────────────────────────────
 
 describe("create_branch", () => {
-  it("name is repo.branch.create", () => {
+  it("name is create_branch", () => {
     expect(repoBranchCreate.name).toBe("create_branch");
   });
 
@@ -226,7 +242,7 @@ describe("create_branch", () => {
 // ── 8b: repo.pr.open input schema ────────────────────────────────────────────
 
 describe("open_pr", () => {
-  it("name is repo.pr.open", () => {
+  it("name is open_pr", () => {
     expect(repoPrOpen.name).toBe("open_pr");
   });
 

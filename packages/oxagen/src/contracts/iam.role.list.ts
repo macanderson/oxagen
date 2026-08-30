@@ -27,15 +27,21 @@ const roleRow = z.object({
   scopeKind: z.enum(["org", "workspace"]),
   isSystemDefault: z
     .boolean()
-    .describe("True for system-seeded roles (Owner, Admin, …) — not user-deletable"),
+    .describe(
+      "True for system-seeded roles (Owner, Admin, …) — not user-deletable",
+    ),
   version: z.string(),
   memberCount: z
     .number()
     .int()
-    .describe("Active (non-deleted, non-expired) principal assignments holding this role"),
+    .describe(
+      "Active (non-deleted, non-expired) principal assignments holding this role",
+    ),
   grants: z
     .array(roleGrantRow)
-    .describe("Capability grants carried by the role (empty when includeGrants=false)"),
+    .describe(
+      "Capability grants carried by the role (empty when includeGrants=false)",
+    ),
 });
 
 export const iamRoleList = registerCapability({
@@ -71,12 +77,23 @@ export const iamRoleList = registerCapability({
       .boolean()
       .default(true)
       .describe("Include each role's capability grant list (default true)"),
-    limit: z.number().int().min(1).max(200).default(100).describe("Max roles to return"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .default(100)
+      .describe("Max roles to return"),
     offset: z.number().int().min(0).default(0).describe("Pagination offset"),
   }),
   output: z.object({
-    roles: z.array(roleRow).describe("Roles sorted system-defaults-first, then by name"),
-    total: z.number().int().describe("Total roles matching the filter before pagination"),
+    roles: z
+      .array(roleRow)
+      .describe("Roles sorted system-defaults-first, then by name"),
+    total: z
+      .number()
+      .int()
+      .describe("Total roles matching the filter before pagination"),
     hasMore: z.boolean(),
     limit: z.number().int(),
     offset: z.number().int(),

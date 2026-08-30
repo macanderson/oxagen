@@ -43,7 +43,11 @@ export const conversationFilesList = registerCapability({
   scoped: true,
   // File listing does not consume AI tokens — billing gate must not block this.
   noBillingGate: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -68,7 +72,13 @@ export const conversationFilesList = registerCapability({
 });
 
 export type ConversationAssetKind = z.output<typeof conversationAssetKind>;
-export type ConversationAssetAccessPolicy = z.output<typeof conversationAssetAccessPolicy>;
+export type ConversationAssetAccessPolicy = z.output<
+  typeof conversationAssetAccessPolicy
+>;
 export type ConversationAssetItem = z.output<typeof conversationAssetItem>;
-export type ConversationFilesListInput = z.output<typeof conversationFilesList.input>;
-export type ConversationFilesListOutput = z.output<typeof conversationFilesList.output>;
+export type ConversationFilesListInput = z.output<
+  typeof conversationFilesList.input
+>;
+export type ConversationFilesListOutput = z.output<
+  typeof conversationFilesList.output
+>;

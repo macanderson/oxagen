@@ -37,17 +37,21 @@ describe("capability.registry.list capability", () => {
   it("enforces limit bounds (1–1000)", () => {
     expect(() => capabilityRegistryList.input.parse({ limit: 0 })).toThrow();
     expect(() => capabilityRegistryList.input.parse({ limit: 1001 })).toThrow();
-    expect(capabilityRegistryList.input.parse({ limit: 1000 }).limit).toBe(1000);
+    expect(capabilityRegistryList.input.parse({ limit: 1000 }).limit).toBe(
+      1000,
+    );
   });
 
   it("rejects an unknown surface or missingLayer filter", () => {
-    expect(() => capabilityRegistryList.input.parse({ surface: "web" })).toThrow();
+    expect(() =>
+      capabilityRegistryList.input.parse({ surface: "web" }),
+    ).toThrow();
     expect(() =>
       capabilityRegistryList.input.parse({ missingLayer: "marketing" }),
     ).toThrow();
-    expect(capabilityRegistryList.input.parse({ missingLayer: "app" }).missingLayer).toBe(
-      "app",
-    );
+    expect(
+      capabilityRegistryList.input.parse({ missingLayer: "app" }).missingLayer,
+    ).toBe("app");
   });
 
   it("parses a valid output row", () => {
@@ -64,7 +68,11 @@ describe("capability.registry.list capability", () => {
           defaultEffect: "deny",
           scoped: true,
           noBillingGate: false,
-          agent: { requiresApproval: false, riskLevel: "low", category: "read" },
+          agent: {
+            requiresApproval: false,
+            riskLevel: "low",
+            category: "read",
+          },
           auditTargetKind: null,
           plugin: null,
           orgRoles: { Owner: "allow", Admin: "allow" },

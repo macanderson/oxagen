@@ -77,7 +77,10 @@ describe("agent.subagent.result.get capability", () => {
 
   it("rejects an unknown status", () => {
     expect(() =>
-      agentSubagentResultGet.output.parse({ ...BASE_OUTPUT, status: "exploded" }),
+      agentSubagentResultGet.output.parse({
+        ...BASE_OUTPUT,
+        status: "exploded",
+      }),
     ).toThrow();
   });
 });

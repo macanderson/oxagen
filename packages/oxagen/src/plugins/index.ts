@@ -1,4 +1,7 @@
-export { oxagenPluginManifestSchema, type OxagenPluginManifest } from "./manifest";
+export {
+  oxagenPluginManifestSchema,
+  type OxagenPluginManifest,
+} from "./manifest";
 export {
   listOxagenPlugins,
   getOxagenPlugin,

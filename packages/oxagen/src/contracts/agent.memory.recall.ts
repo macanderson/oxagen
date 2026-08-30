@@ -41,7 +41,9 @@ export const agentMemoryRecall = registerCapability({
     agentId: z
       .string()
       .optional()
-      .describe("Agent id stamped on the auto-recorded execution (with executionRef)"),
+      .describe(
+        "Agent id stamped on the auto-recorded execution (with executionRef)",
+      ),
   }),
   output: z.object({
     memories: z.array(

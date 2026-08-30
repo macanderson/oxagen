@@ -6,10 +6,14 @@ describe("sandbox.template.delete contract", () => {
     expect(sandboxTemplateDelete.name).toBe("delete_sandbox_template");
   });
   it("requires a templateId", () => {
-    expect(() => sandboxTemplateDelete.input.parse({ templateId: "sbx_1" })).not.toThrow();
+    expect(() =>
+      sandboxTemplateDelete.input.parse({ templateId: "sbx_1" }),
+    ).not.toThrow();
     expect(() => sandboxTemplateDelete.input.parse({})).toThrow();
   });
   it("accepts a valid output", () => {
-    expect(() => sandboxTemplateDelete.output.parse({ ok: true })).not.toThrow();
+    expect(() =>
+      sandboxTemplateDelete.output.parse({ ok: true }),
+    ).not.toThrow();
   });
 });

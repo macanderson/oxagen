@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const integrationDelete = registerCapability({
   name: "delete_integration",
   domain: "integration",
-  description: "Remove a plugin instance and optionally purge its graph data from Neo4j.",
+  description:
+    "Remove a plugin instance and optionally purge its graph data from Neo4j.",
   mode: "async",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -21,7 +22,9 @@ export const integrationDelete = registerCapability({
     purgeData: z
       .boolean()
       .default(false)
-      .describe("Whether to delete all entities and edges from this plugin in Neo4j"),
+      .describe(
+        "Whether to delete all entities and edges from this plugin in Neo4j",
+      ),
   }),
   output: z.object({
     jobId: z.string().describe("Background deletion job ID"),

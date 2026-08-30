@@ -5,7 +5,8 @@ import { enforcementModeEnum } from "./schema.types";
 export const schemaSetup = registerCapability({
   name: "setup_schema",
   domain: "schema",
-  description: "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (schema.chat) → apply → activate.",
+  description:
+    "Interactive LLM-assisted registry walkthrough: recommend → intent Q&A (run_schema_chat) → apply → activate.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -20,7 +21,10 @@ export const schemaSetup = registerCapability({
   input: z.object({
     sampleLimit: z.number().int().min(1).max(5000).default(200).optional(),
     enforcement: enforcementModeEnum.optional(),
-    noInteractive: z.boolean().optional().describe("Apply recommendation verbatim and activate"),
+    noInteractive: z
+      .boolean()
+      .optional()
+      .describe("Apply recommendation verbatim and activate"),
     json: z.boolean().optional(),
   }),
   output: z.object({

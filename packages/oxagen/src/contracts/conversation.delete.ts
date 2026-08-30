@@ -16,7 +16,11 @@ export const conversationDelete = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "high", category: "conversation" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "high",
+    category: "conversation",
+  },
   sensitivity: "destructive",
   defaultEffect: "deny",
   defaultRoles: {
@@ -32,4 +36,6 @@ export const conversationDelete = registerCapability({
 });
 
 export type ConversationDeleteInput = z.output<typeof conversationDelete.input>;
-export type ConversationDeleteOutput = z.output<typeof conversationDelete.output>;
+export type ConversationDeleteOutput = z.output<
+  typeof conversationDelete.output
+>;

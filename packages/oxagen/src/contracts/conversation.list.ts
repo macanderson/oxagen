@@ -27,7 +27,11 @@ export const conversationList = registerCapability({
   // Conversation listing does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.
   noBillingGate: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

@@ -23,17 +23,25 @@ describe("agent.mcp.consent.resolve capability", () => {
 
   it("rejects an unknown decision", () => {
     expect(() =>
-      agentMcpConsentResolve.input.parse({ approvalId: "apr_abc", decision: "maybe" }),
+      agentMcpConsentResolve.input.parse({
+        approvalId: "apr_abc",
+        decision: "maybe",
+      }),
     ).toThrow();
   });
 
   it("parses a valid output and rejects an unknown resolution", () => {
     expect(
-      agentMcpConsentResolve.output.parse({ approvalId: "apr_abc", resolution: "granted" })
-        .resolution,
+      agentMcpConsentResolve.output.parse({
+        approvalId: "apr_abc",
+        resolution: "granted",
+      }).resolution,
     ).toBe("granted");
     expect(() =>
-      agentMcpConsentResolve.output.parse({ approvalId: "apr_abc", resolution: "approved" }),
+      agentMcpConsentResolve.output.parse({
+        approvalId: "apr_abc",
+        resolution: "approved",
+      }),
     ).toThrow();
   });
 

@@ -29,7 +29,11 @@ describe("api.key.revoke capability", () => {
 
   it("rejects a non-boolean revoked in output", () => {
     expect(() =>
-      apiKeyRevoke.output.parse({ revoked: "yes", keyPublicId: "aky_abc123", revokedAt: "" }),
+      apiKeyRevoke.output.parse({
+        revoked: "yes",
+        keyPublicId: "aky_abc123",
+        revokedAt: "",
+      }),
     ).toThrow();
   });
 

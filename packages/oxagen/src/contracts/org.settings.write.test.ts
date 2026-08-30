@@ -10,7 +10,11 @@ describe("org.settings.write capability", () => {
   });
 
   it("accepts null to clear nullable profile fields", () => {
-    const parsed = orgSettingsWrite.input.parse({ avatarUrl: null, website: null, industry: null });
+    const parsed = orgSettingsWrite.input.parse({
+      avatarUrl: null,
+      website: null,
+      industry: null,
+    });
     expect(parsed.avatarUrl).toBeNull();
     expect(parsed.website).toBeNull();
   });
@@ -24,7 +28,9 @@ describe("org.settings.write capability", () => {
   });
 
   it("rejects a non-URL avatarUrl", () => {
-    expect(() => orgSettingsWrite.input.parse({ avatarUrl: "not-a-url" })).toThrow();
+    expect(() =>
+      orgSettingsWrite.input.parse({ avatarUrl: "not-a-url" }),
+    ).toThrow();
   });
 
   it("is registered in the capability registry", () => {

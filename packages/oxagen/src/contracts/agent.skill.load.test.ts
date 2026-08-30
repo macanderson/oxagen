@@ -21,17 +21,26 @@ describe("agent.skill.load capability", () => {
   // ── input: optional version ───────────────────────────────────────────────
 
   it("accepts an exact integer version string", () => {
-    const parsed = agentSkillLoad.input.parse({ skillSlug: "summarize", version: "3" });
+    const parsed = agentSkillLoad.input.parse({
+      skillSlug: "summarize",
+      version: "3",
+    });
     expect(parsed.version).toBe("3");
   });
 
   it("accepts a caret version constraint", () => {
-    const parsed = agentSkillLoad.input.parse({ skillSlug: "summarize", version: "^2" });
+    const parsed = agentSkillLoad.input.parse({
+      skillSlug: "summarize",
+      version: "^2",
+    });
     expect(parsed.version).toBe("^2");
   });
 
   it("accepts a tilde version constraint", () => {
-    const parsed = agentSkillLoad.input.parse({ skillSlug: "summarize", version: "~2" });
+    const parsed = agentSkillLoad.input.parse({
+      skillSlug: "summarize",
+      version: "~2",
+    });
     expect(parsed.version).toBe("~2");
   });
 
@@ -43,7 +52,10 @@ describe("agent.skill.load capability", () => {
   // ── input: optional dependencies ──────────────────────────────────────────
 
   it("accepts an empty dependencies array", () => {
-    const parsed = agentSkillLoad.input.parse({ skillSlug: "summarize", dependencies: [] });
+    const parsed = agentSkillLoad.input.parse({
+      skillSlug: "summarize",
+      dependencies: [],
+    });
     expect(parsed.dependencies).toEqual([]);
   });
 

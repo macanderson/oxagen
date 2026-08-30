@@ -34,7 +34,11 @@ export const orgSettingsRead = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "organization",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

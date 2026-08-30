@@ -10,12 +10,16 @@ describe("conversation.files.list capability", () => {
   // ── input defaults ────────────────────────────────────────────────────────
 
   it("defaults limit to 50", () => {
-    const parsed = conversationFilesList.input.parse({ conversationId: "cnv_1" });
+    const parsed = conversationFilesList.input.parse({
+      conversationId: "cnv_1",
+    });
     expect(parsed.limit).toBe(50);
   });
 
   it("defaults cursor to null", () => {
-    const parsed = conversationFilesList.input.parse({ conversationId: "cnv_1" });
+    const parsed = conversationFilesList.input.parse({
+      conversationId: "cnv_1",
+    });
     expect(parsed.cursor).toBeNull();
   });
 
@@ -61,13 +65,19 @@ describe("conversation.files.list capability", () => {
 
   it("rejects limit=201 (above max)", () => {
     expect(() =>
-      conversationFilesList.input.parse({ conversationId: "cnv_1", limit: 201 }),
+      conversationFilesList.input.parse({
+        conversationId: "cnv_1",
+        limit: 201,
+      }),
     ).toThrow();
   });
 
   it("rejects a non-integer limit", () => {
     expect(() =>
-      conversationFilesList.input.parse({ conversationId: "cnv_1", limit: 1.5 }),
+      conversationFilesList.input.parse({
+        conversationId: "cnv_1",
+        limit: 1.5,
+      }),
     ).toThrow();
   });
 
@@ -102,7 +112,9 @@ describe("conversation.files.list capability", () => {
   });
 
   it("omits kind when not provided (undefined)", () => {
-    const parsed = conversationFilesList.input.parse({ conversationId: "cnv_1" });
+    const parsed = conversationFilesList.input.parse({
+      conversationId: "cnv_1",
+    });
     expect(parsed.kind).toBeUndefined();
   });
 
@@ -196,7 +208,9 @@ describe("conversation.files.list capability", () => {
   // ── registry ──────────────────────────────────────────────────────────────
 
   it("is registered in the capability registry", () => {
-    expect(getCapability("list_conversation_files")).toBe(conversationFilesList);
+    expect(getCapability("list_conversation_files")).toBe(
+      conversationFilesList,
+    );
   });
 
   it("has noBillingGate=true", () => {

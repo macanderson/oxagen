@@ -10,7 +10,11 @@ export const agentSubagentDispatch = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  agent: { requiresApproval: true, riskLevel: "medium", category: "background" },
+  agent: {
+    requiresApproval: true,
+    riskLevel: "medium",
+    category: "background",
+  },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
@@ -18,11 +22,15 @@ export const agentSubagentDispatch = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    parentMessageId: z.string().describe("Message ID that triggered the fanout"),
+    parentMessageId: z
+      .string()
+      .describe("Message ID that triggered the fanout"),
     tasks: z
       .array(
         z.object({
-          capabilityName: z.string().describe("Capability to invoke for this subtask"),
+          capabilityName: z
+            .string()
+            .describe("Capability to invoke for this subtask"),
           input: z.unknown().describe("Input payload for the capability"),
         }),
       )
@@ -44,11 +52,17 @@ export const agentSubagentDispatch = registerCapability({
       .describe("Per-task timeout in seconds"),
   }),
   output: z.object({
-    dispatchId: z.string().describe("Fanout record ID — pass to agent.subagent.aggregate"),
+    dispatchId: z
+      .string()
+      .describe("Fanout record ID — pass to agent.subagent.aggregate"),
     totalTasks: z.number(),
     status: z.enum(["pending", "running"]),
   }),
 });
 
-export type AgentSubagentDispatchInput = z.output<typeof agentSubagentDispatch.input>;
-export type AgentSubagentDispatchOutput = z.output<typeof agentSubagentDispatch.output>;
+export type AgentSubagentDispatchInput = z.output<
+  typeof agentSubagentDispatch.input
+>;
+export type AgentSubagentDispatchOutput = z.output<
+  typeof agentSubagentDispatch.output
+>;

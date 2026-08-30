@@ -53,9 +53,7 @@ describe("plugin.schema.validate capability", () => {
   });
 
   it("rejects input missing pluginId", () => {
-    expect(() =>
-      pluginSchemaValidate.input.parse({ config: {} }),
-    ).toThrow();
+    expect(() => pluginSchemaValidate.input.parse({ config: {} })).toThrow();
   });
 
   it("rejects input missing config", () => {
@@ -147,15 +145,11 @@ describe("plugin.schema.validate capability", () => {
   // ── output schema: invalid cases ─────────────────────────────────────────
 
   it("rejects output missing the valid field", () => {
-    expect(() =>
-      pluginSchemaValidate.output.parse({ errors: [] }),
-    ).toThrow();
+    expect(() => pluginSchemaValidate.output.parse({ errors: [] })).toThrow();
   });
 
   it("rejects output missing the errors array", () => {
-    expect(() =>
-      pluginSchemaValidate.output.parse({ valid: true }),
-    ).toThrow();
+    expect(() => pluginSchemaValidate.output.parse({ valid: true })).toThrow();
   });
 
   it("rejects output where errors is not an array", () => {

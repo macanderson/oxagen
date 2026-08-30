@@ -8,7 +8,8 @@ import { registerCapability } from "../registry";
 export const secretReveal = registerCapability({
   name: "reveal_secret",
   domain: "secret",
-  description: "Reveal a single secret's plaintext value (override ?? default) for an environment. Owner/Admin only; every reveal is recorded in the access log.",
+  description:
+    "Reveal a single secret's plaintext value (override ?? default) for an environment. Owner/Admin only; every reveal is recorded in the access log.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "high", category: "secret" },

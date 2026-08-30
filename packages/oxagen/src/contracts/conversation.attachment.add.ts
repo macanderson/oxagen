@@ -21,7 +21,11 @@ export const conversationAttachmentAdd = registerCapability({
   scoped: true,
   // Linking a file record consumes no AI tokens — billing gate must not block this.
   noBillingGate: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "conversation",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

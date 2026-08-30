@@ -9,7 +9,9 @@ describe("agent.memory.update capability", () => {
       lesson: "Always use batch inserts for high-volume writes",
     });
     expect(parsed.memoryId).toBe("mem_1");
-    expect(parsed.lesson).toBe("Always use batch inserts for high-volume writes");
+    expect(parsed.lesson).toBe(
+      "Always use batch inserts for high-volume writes",
+    );
     expect(parsed.memoryKind).toBeUndefined();
     expect(parsed.source).toBeUndefined();
     expect(parsed.confidenceScore).toBeUndefined();
@@ -35,22 +37,35 @@ describe("agent.memory.update capability", () => {
   });
 
   it("accepts each individual optional field on its own", () => {
-    expect(agentMemoryUpdate.input.parse({ memoryId: "m", memoryKind: "constraint" }).memoryKind).toBe(
-      "constraint",
-    );
     expect(
-      agentMemoryUpdate.input.parse({ memoryId: "m", memoryKind: "routine-change" }).memoryKind,
+      agentMemoryUpdate.input.parse({ memoryId: "m", memoryKind: "constraint" })
+        .memoryKind,
+    ).toBe("constraint");
+    expect(
+      agentMemoryUpdate.input.parse({
+        memoryId: "m",
+        memoryKind: "routine-change",
+      }).memoryKind,
     ).toBe("routine-change");
     expect(
-      agentMemoryUpdate.input.parse({ memoryId: "m", memoryKind: "bug-root-cause" }).memoryKind,
+      agentMemoryUpdate.input.parse({
+        memoryId: "m",
+        memoryKind: "bug-root-cause",
+      }).memoryKind,
     ).toBe("bug-root-cause");
     expect(
-      agentMemoryUpdate.input.parse({ memoryId: "m", memoryKind: "convention-deviation" }).memoryKind,
+      agentMemoryUpdate.input.parse({
+        memoryId: "m",
+        memoryKind: "convention-deviation",
+      }).memoryKind,
     ).toBe("convention-deviation");
-    expect(agentMemoryUpdate.input.parse({ memoryId: "m", source: "user" }).source).toBe("user");
-    expect(agentMemoryUpdate.input.parse({ memoryId: "m", status: "RETRACTED" }).status).toBe(
-      "RETRACTED",
-    );
+    expect(
+      agentMemoryUpdate.input.parse({ memoryId: "m", source: "user" }).source,
+    ).toBe("user");
+    expect(
+      agentMemoryUpdate.input.parse({ memoryId: "m", status: "RETRACTED" })
+        .status,
+    ).toBe("RETRACTED");
   });
 
   it("rejects an empty memoryId", () => {
@@ -76,10 +91,14 @@ describe("agent.memory.update capability", () => {
   });
 
   it("accepts confidenceScore at the boundary values 0 and 100", () => {
-    expect(agentMemoryUpdate.input.parse({ memoryId: "m", confidenceScore: 0 }).confidenceScore).toBe(0);
-    expect(agentMemoryUpdate.input.parse({ memoryId: "m", confidenceScore: 100 }).confidenceScore).toBe(
-      100,
-    );
+    expect(
+      agentMemoryUpdate.input.parse({ memoryId: "m", confidenceScore: 0 })
+        .confidenceScore,
+    ).toBe(0);
+    expect(
+      agentMemoryUpdate.input.parse({ memoryId: "m", confidenceScore: 100 })
+        .confidenceScore,
+    ).toBe(100);
   });
 
   it("rejects an enforcementScore out of the 1-100 range", () => {

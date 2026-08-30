@@ -31,13 +31,19 @@ describe("billing.credits.purchase capability", () => {
 
   it("rejects invalid successUrl", () => {
     expect(() =>
-      billingCreditsPurchase.input.parse({ amountUsd: 50, successUrl: "not-a-url" }),
+      billingCreditsPurchase.input.parse({
+        amountUsd: 50,
+        successUrl: "not-a-url",
+      }),
     ).toThrow();
   });
 
   it("rejects invalid cancelUrl", () => {
     expect(() =>
-      billingCreditsPurchase.input.parse({ amountUsd: 50, cancelUrl: "not-a-url" }),
+      billingCreditsPurchase.input.parse({
+        amountUsd: 50,
+        cancelUrl: "not-a-url",
+      }),
     ).toThrow();
   });
 

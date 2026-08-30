@@ -7,7 +7,7 @@ export const workspaceMemberList = registerCapability({
   description: "List members of a workspace",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
@@ -29,5 +29,9 @@ export const workspaceMemberList = registerCapability({
   ),
 });
 
-export type WorkspaceMemberListInput = z.output<typeof workspaceMemberList.input>;
-export type WorkspaceMemberListOutput = z.output<typeof workspaceMemberList.output>;
+export type WorkspaceMemberListInput = z.output<
+  typeof workspaceMemberList.input
+>;
+export type WorkspaceMemberListOutput = z.output<
+  typeof workspaceMemberList.output
+>;

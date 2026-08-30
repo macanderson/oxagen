@@ -5,7 +5,7 @@ export const researchSwarmStart = registerCapability({
   name: "start_research_swarm",
   domain: "research",
   description:
-    "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via research.swarm.status.",
+    "Fan out parallel web searches for a topic, generate diverse query variations, and dispatch them as concurrent subagent tasks. Returns a swarmId to poll via get_research_status.",
   mode: "async",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -18,7 +18,11 @@ export const researchSwarmStart = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    topic: z.string().min(1).max(500).describe("The research topic to investigate"),
+    topic: z
+      .string()
+      .min(1)
+      .max(500)
+      .describe("The research topic to investigate"),
     depth: z
       .enum(["shallow", "medium", "deep"])
       .default("medium")
@@ -33,19 +37,29 @@ export const researchSwarmStart = registerCapability({
     targetLabel: z
       .string()
       .default("Topic")
-      .describe("KnowledgeNode label for top-level nodes created from research"),
+      .describe(
+        "KnowledgeNode label for top-level nodes created from research",
+      ),
     searchDepth: z
       .enum(["basic", "advanced"])
       .default("basic")
-      .describe("Search depth mode passed to the web.search capability"),
+      .describe("Search depth mode passed to the search_web capability"),
   }),
   output: z.object({
-    swarmId: z.string().describe("Unique ID for this research swarm — pass to research.swarm.status"),
-    dispatchId: z.string().describe("Subagent fanout dispatch ID from agent.subagent.dispatch"),
+    swarmId: z
+      .string()
+      .describe(
+        "Unique ID for this research swarm — pass to get_research_status",
+      ),
+    dispatchId: z
+      .string()
+      .describe("Subagent fanout dispatch ID from dispatch_subagent"),
     status: z.literal("running"),
     estimatedTasks: z.number().describe("Number of search tasks dispatched"),
   }),
 });
 
 export type ResearchSwarmStartInput = z.output<typeof researchSwarmStart.input>;
-export type ResearchSwarmStartOutput = z.output<typeof researchSwarmStart.output>;
+export type ResearchSwarmStartOutput = z.output<
+  typeof researchSwarmStart.output
+>;

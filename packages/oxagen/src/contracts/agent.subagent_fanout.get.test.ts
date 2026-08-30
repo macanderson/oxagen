@@ -32,7 +32,7 @@ describe("agent.subagent.fanout.get capability", () => {
           durationMs: 1000,
           inputBytes: 2,
           outputBytes: 42,
-          outputPreview: "{\"tools\":[]}",
+          outputPreview: '{"tools":[]}',
         },
         {
           runId: "sar_2",

@@ -120,8 +120,14 @@ export interface PinnedRoleGrant {
   /**
    * `role_grants.conditions_jsonb` exactly as stored — the agent-RBAC
    * resourceScope ceiling plus any time/IP conditions. Preserved verbatim so
-   * the live re-check evaluates the pinned side against its ORIGINAL
-   * conditions, not against whatever the row says now.
+   * the pinned side is always read against its ORIGINAL payload, not against
+   * whatever the row says now.
+   *
+   * CAVEAT: only the `resourceScope` key is actually consumed today
+   * (`collectResourceScope` in resolve.ts). The resolver's rule 7 decides a
+   * role grant on its `effect` alone and never evaluates `time_window` /
+   * `ip_ranges` here, so those keys are carried but not enforced on a role
+   * grant. See the "live coverage" note at the top of resolve.ts.
    */
   readonly conditions: unknown | null;
 }
@@ -385,8 +391,9 @@ export type AgentRunAuthorizationOutcome =
 
 /**
  * The platform-created reference to one persisted `iam.authorization_decisions`
- * row. A caller can never supply one: the kernel strips any inbound value and
- * only the IAM runtime, having actually inserted the row, produces it.
+ * row. A caller can never supply one: the kernel REJECTS any invocation whose
+ * inbound context carries the field, and only the IAM runtime, having actually
+ * inserted the row, produces it.
  */
 export interface AuthorizationDecisionRef {
   /** `azd_…` — the public form. The internal UUID never leaves the DB layer. */

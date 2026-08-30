@@ -4,16 +4,24 @@ import { getCapability } from "../registry";
 
 describe("workspace.budget.policy.write capability", () => {
   it("is registered under its name", () => {
-    expect(getCapability("update_budget_policy")).toBe(workspaceBudgetPolicyWrite);
+    expect(getCapability("update_budget_policy")).toBe(
+      workspaceBudgetPolicyWrite,
+    );
   });
 
   it("is workspace-scoped, medium-risk, writable by Owner/Admin only", () => {
     expect(workspaceBudgetPolicyWrite.domain).toBe("workspace");
     expect(workspaceBudgetPolicyWrite.scoped).toBe(true);
-    expect(workspaceBudgetPolicyWrite.defaultRoles.workspace.Owner).toBe("allow");
-    expect(workspaceBudgetPolicyWrite.defaultRoles.workspace.Admin).toBe("allow");
+    expect(workspaceBudgetPolicyWrite.defaultRoles.workspace.Owner).toBe(
+      "allow",
+    );
+    expect(workspaceBudgetPolicyWrite.defaultRoles.workspace.Admin).toBe(
+      "allow",
+    );
     // Member and Viewer are not included in defaultRoles.workspace (only Owner/Admin)
-    expect(Object.keys(workspaceBudgetPolicyWrite.defaultRoles.workspace)).toEqual(["Owner", "Admin"]);
+    expect(
+      Object.keys(workspaceBudgetPolicyWrite.defaultRoles.workspace),
+    ).toEqual(["Owner", "Admin"]);
   });
 
   it("parses an empty input (all optional)", () => {

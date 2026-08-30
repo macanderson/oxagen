@@ -18,7 +18,12 @@ export const notificationsList = registerCapability({
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Compliance: "allow", Billing: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Compliance: "allow",
+      Billing: "allow",
+    },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({

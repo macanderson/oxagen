@@ -3,7 +3,13 @@ import { secretImportEnv } from "./secret.import_env";
 
 const validOutput = {
   rows: [
-    { key: "FOO", isNewKey: true, sensitive: true, target: "default" as const, willOverride: false },
+    {
+      key: "FOO",
+      isNewKey: true,
+      sensitive: true,
+      target: "default" as const,
+      willOverride: false,
+    },
     {
       key: "BAR",
       isNewKey: false,
@@ -23,13 +29,17 @@ describe("secret.import_env contract", () => {
     expect(secretImportEnv.surfaces).toEqual(["api", "mcp", "agent"]);
   });
   it("accepts a valid input", () => {
-    expect(() => secretImportEnv.input.parse({ text: "FOO=bar" })).not.toThrow();
+    expect(() =>
+      secretImportEnv.input.parse({ text: "FOO=bar" }),
+    ).not.toThrow();
   });
   it("defaults `commit` to false", () => {
     expect(secretImportEnv.input.parse({ text: "FOO=bar" }).commit).toBe(false);
   });
   it("honours an explicit commit=true", () => {
-    expect(secretImportEnv.input.parse({ text: "FOO=bar", commit: true }).commit).toBe(true);
+    expect(
+      secretImportEnv.input.parse({ text: "FOO=bar", commit: true }).commit,
+    ).toBe(true);
   });
   it("rejects input missing the required text", () => {
     expect(() => secretImportEnv.input.parse({})).toThrow();

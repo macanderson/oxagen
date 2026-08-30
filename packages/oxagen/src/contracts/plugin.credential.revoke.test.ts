@@ -27,21 +27,31 @@ describe("plugin.credential.revoke contract", () => {
 
   it("requires orgListingId in input", () => {
     expect(() => pluginCredentialRevoke.input.parse({})).toThrow();
-    expect(() => pluginCredentialRevoke.input.parse({ orgListingId: "" })).toThrow();
+    expect(() =>
+      pluginCredentialRevoke.input.parse({ orgListingId: "" }),
+    ).toThrow();
   });
 
   it("accepts a valid orgListingId", () => {
-    const parsed = pluginCredentialRevoke.input.parse({ orgListingId: "ol-123" });
+    const parsed = pluginCredentialRevoke.input.parse({
+      orgListingId: "ol-123",
+    });
     expect(parsed.orgListingId).toBe("ol-123");
   });
 
   it("output schema validates a revoked flag", () => {
-    expect(pluginCredentialRevoke.output.parse({ revoked: true })).toEqual({ revoked: true });
-    expect(pluginCredentialRevoke.output.parse({ revoked: false })).toEqual({ revoked: false });
+    expect(pluginCredentialRevoke.output.parse({ revoked: true })).toEqual({
+      revoked: true,
+    });
+    expect(pluginCredentialRevoke.output.parse({ revoked: false })).toEqual({
+      revoked: false,
+    });
   });
 
   it("output schema rejects a non-boolean revoked", () => {
-    expect(() => pluginCredentialRevoke.output.parse({ revoked: "yes" })).toThrow();
+    expect(() =>
+      pluginCredentialRevoke.output.parse({ revoked: "yes" }),
+    ).toThrow();
     expect(() => pluginCredentialRevoke.output.parse({})).toThrow();
   });
 });

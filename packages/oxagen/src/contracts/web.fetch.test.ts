@@ -28,9 +28,7 @@ describe("web.fetch capability", () => {
   });
 
   it("rejects a non-URL string", () => {
-    expect(() =>
-      webFetch.input.parse({ url: "not-a-url" }),
-    ).toThrow();
+    expect(() => webFetch.input.parse({ url: "not-a-url" })).toThrow();
   });
 
   it("rejects missing url", () => {

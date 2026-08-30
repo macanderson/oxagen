@@ -33,7 +33,9 @@ export const agentSandboxExec = registerCapability({
       .string()
       .min(1)
       .max(100_000)
-      .describe("Shell command line, run via `sh -c` in the session workspace."),
+      .describe(
+        "Shell command line, run via `sh -c` in the session workspace.",
+      ),
     cwd: z
       .string()
       .min(1)
@@ -69,7 +71,9 @@ export const agentSandboxExec = registerCapability({
     timedOut: z.boolean(),
     restored: z
       .boolean()
-      .describe("True when the session had been reaped and was restored from a snapshot before running."),
+      .describe(
+        "True when the session had been reaped and was restored from a snapshot before running.",
+      ),
     cwd: z
       .string()
       .nullable()

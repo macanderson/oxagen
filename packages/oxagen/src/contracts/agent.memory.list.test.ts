@@ -53,12 +53,16 @@ describe("agent.memory.list capability", () => {
   });
 
   it("rejects an unknown memoryClass", () => {
-    expect(() => agentMemoryList.input.parse({ memoryClass: "MAYBE" })).toThrow();
+    expect(() =>
+      agentMemoryList.input.parse({ memoryClass: "MAYBE" }),
+    ).toThrow();
   });
 
   it("rejects a minEnforcement out of the 1-100 range", () => {
     expect(() => agentMemoryList.input.parse({ minEnforcement: 0 })).toThrow();
-    expect(() => agentMemoryList.input.parse({ minEnforcement: 101 })).toThrow();
+    expect(() =>
+      agentMemoryList.input.parse({ minEnforcement: 101 }),
+    ).toThrow();
   });
 
   it("parses a valid output", () => {

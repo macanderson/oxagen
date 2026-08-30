@@ -10,7 +10,11 @@ export const agentMcpConsentList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
+  agent: {
+    requiresApproval: false,
+    riskLevel: "low",
+    category: "introspection",
+  },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {
@@ -38,5 +42,9 @@ export const agentMcpConsentList = registerCapability({
   }),
 });
 
-export type AgentMcpConsentListInput = z.output<typeof agentMcpConsentList.input>;
-export type AgentMcpConsentListOutput = z.output<typeof agentMcpConsentList.output>;
+export type AgentMcpConsentListInput = z.output<
+  typeof agentMcpConsentList.input
+>;
+export type AgentMcpConsentListOutput = z.output<
+  typeof agentMcpConsentList.output
+>;

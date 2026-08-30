@@ -11,15 +11,24 @@ const pluginVersionEntrySchema = z.object({
   breakingChanges: z
     .array(z.string())
     .optional()
-    .describe("Descriptions of breaking changes (only present when isBreaking is true)"),
-  changelog: z.string().optional().describe("Markdown-formatted changelog for this version"),
+    .describe(
+      "Descriptions of breaking changes (only present when isBreaking is true)",
+    ),
+  changelog: z
+    .string()
+    .optional()
+    .describe("Markdown-formatted changelog for this version"),
   schemaVersion: z
     .string()
-    .describe("Schema format version (apiVersion tag) used by this plugin version"),
+    .describe(
+      "Schema format version (apiVersion tag) used by this plugin version",
+    ),
   minimumPlatformVersion: z
     .string()
     .optional()
-    .describe("Minimum Oxagen platform version required for this plugin version"),
+    .describe(
+      "Minimum Oxagen platform version required for this plugin version",
+    ),
 });
 
 export const pluginVersionList = registerCapability({
@@ -39,7 +48,9 @@ export const pluginVersionList = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    pluginId: z.string().describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
+    pluginId: z
+      .string()
+      .describe("Connector plugin identifier (e.g. 'github', 'google-drive')"),
     limit: z
       .number()
       .int()
@@ -50,18 +61,26 @@ export const pluginVersionList = registerCapability({
     includeChangelog: z
       .boolean()
       .default(false)
-      .describe("When true, include full markdown changelog per version. False returns summary only."),
+      .describe(
+        "When true, include full markdown changelog per version. False returns summary only.",
+      ),
   }),
   output: z.object({
     pluginId: z.string(),
-    currentVersion: z.string().describe("Latest available version of this plugin"),
+    currentVersion: z
+      .string()
+      .describe("Latest available version of this plugin"),
     installedVersion: z
       .string()
       .nullable()
-      .describe("Version currently installed for this org, or null if not installed"),
+      .describe(
+        "Version currently installed for this org, or null if not installed",
+      ),
     hasBreakingUpdate: z
       .boolean()
-      .describe("True when any version between installedVersion and currentVersion is breaking"),
+      .describe(
+        "True when any version between installedVersion and currentVersion is breaking",
+      ),
     versions: z.array(pluginVersionEntrySchema),
   }),
 });

@@ -6,7 +6,9 @@ describe("conversation.delete capability", () => {
   // ── input validation ──────────────────────────────────────────────────────
 
   it("parses valid input with a single id", () => {
-    const parsed = conversationDelete.input.parse({ conversationIds: ["cnv_1"] });
+    const parsed = conversationDelete.input.parse({
+      conversationIds: ["cnv_1"],
+    });
     expect(parsed.conversationIds).toEqual(["cnv_1"]);
   });
 
@@ -20,7 +22,9 @@ describe("conversation.delete capability", () => {
   // ── conversationIds bounds ─────────────────────────────────────────────────
 
   it("accepts 1 id (min)", () => {
-    const parsed = conversationDelete.input.parse({ conversationIds: ["cnv_1"] });
+    const parsed = conversationDelete.input.parse({
+      conversationIds: ["cnv_1"],
+    });
     expect(parsed.conversationIds).toHaveLength(1);
   });
 
