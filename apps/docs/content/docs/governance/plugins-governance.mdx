@@ -30,8 +30,9 @@ For MCP server and integration plugins that require authentication, a **Connect*
 
 ## Enable and disable
 
-- **`plugin.org.set_enabled`** — toggles the `enabled` flag on the workspace plugin listing. Disabling a listing prevents agents from using the plugin's tools and (for MCP servers) blocks re-connection until re-enabled.
-- **`plugin.workspace.set_enabled`** — for MCP server and integration plugins: creates or deactivates the workspace-level MCP server connection. Cannot be used to toggle Oxagen Agent Capability plugins (those are managed via `plugin.org.set_enabled`).
+One capability, **`set_plugin_enabled`**, turns a plugin on and off. It toggles the `enabled` flag on the plugin listing, and for an MCP server or integration plugin it also creates or deactivates the workspace-level MCP server connection.
+
+Disabling a listing stops agents from using the plugin's tools, and for MCP servers it blocks re-connection until you enable it again.
 
 ## Credential security
 
@@ -49,8 +50,7 @@ All plugin governance actions are recorded in `security.security_events` (Postgr
 |---|---|
 | `plugin.installed` | Plugin installed into a workspace. |
 | `plugin.uninstalled` | Plugin uninstalled from a workspace. |
-| `plugin.enabled_changed` | Plugin listing enabled or disabled (`plugin.org.set_enabled`). |
-| `plugin.enabled_changed` | Workspace MCP server connection activated or deactivated (`plugin.workspace.set_enabled`). |
+| `plugin.enabled_changed` | Plugin listing enabled or disabled, or a workspace MCP server connection activated or deactivated (`set_plugin_enabled`). |
 | `plugin.denylist_added` | Plugin added to the org denylist. |
 | `plugin.denylist_removed` | Plugin removed from the org denylist. |
 

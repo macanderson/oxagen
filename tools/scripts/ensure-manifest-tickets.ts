@@ -34,25 +34,41 @@ function log(...a: unknown[]) {
   console.log("[manifest-tickets]", ...a);
 }
 
-async function gql<T = any>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+async function gql<T = unknown>(
+  query: string,
+  variables: Record<string, unknown> = {},
+): Promise<T> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: API_KEY as string },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: API_KEY as string,
+    },
     body: JSON.stringify({ query, variables }),
   });
-  const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
+  const json = (await res.json()) as {
+    data?: T;
+    errors?: Array<{ message: string }>;
+  };
   if (json.errors?.length) {
-    throw new Error("Linear GraphQL error: " + json.errors.map((e) => e.message).join("; "));
+    throw new Error(
+      "Linear GraphQL error: " + json.errors.map((e) => e.message).join("; "),
+    );
   }
   return json.data as T;
 }
 
 /** Read the current manifest gaps via the checker's machine-readable mode. */
 function readGaps(): Gap[] {
-  const out = execFileSync("node", ["tools/scripts/check_manifest.mjs", "--json"], {
-    encoding: "utf8",
-  });
-  return (JSON.parse(out).gaps as Gap[]) ?? [];
+  const out = execFileSync(
+    "node",
+    ["tools/scripts/check_manifest.mjs", "--json"],
+    {
+      encoding: "utf8",
+    },
+  );
+  const parsed = JSON.parse(out) as { gaps?: Gap[] };
+  return parsed.gaps ?? [];
 }
 
 /** Functional-area label names to attach per capability domain prefix. */
@@ -88,7 +104,11 @@ async function main() {
   // ── Resolve the static IDs we need from the project ──────────────────────
   const ctx = await gql<{
     viewer: { id: string };
-    project: { id: string; name: string; teams: { nodes: Array<{ id: string }> } } | null;
+    project: {
+      id: string;
+      name: string;
+      teams: { nodes: Array<{ id: string }> };
+    } | null;
     issueLabels: { nodes: Array<{ id: string; name: string }> };
   }>(
     `query($p:String!){
@@ -99,14 +119,17 @@ async function main() {
     { p: PROJECT_ID },
   );
   const teamId = ctx.project?.teams.nodes[0]?.id;
-  if (!teamId) throw new Error(`Could not resolve a team for project ${PROJECT_ID}`);
+  if (!teamId)
+    throw new Error(`Could not resolve a team for project ${PROJECT_ID}`);
   // Mutations require the project's canonical UUID; LINEAR_PROJECT_ID may be the
   // slug form (oxagen-v2-<hex>), which `project(id:)` accepts for reads but
   // issueCreate rejects.
   const projectUuid = ctx.project!.id;
   const assigneeId = ctx.viewer.id;
   const labelId = (name: string) =>
-    ctx.issueLabels.nodes.find((l) => l.name.toLowerCase() === name.toLowerCase())?.id;
+    ctx.issueLabels.nodes.find(
+      (l) => l.name.toLowerCase() === name.toLowerCase(),
+    )?.id;
 
   // ── Find our existing tracker (umbrella) issue, if any, + its sub-issues ──
   const trackerSearch = await gql<{
@@ -117,7 +140,9 @@ async function main() {
         url: string;
         description: string | null;
         state: { type: string };
-        children: { nodes: Array<{ id: string; title: string; state: { type: string } }> };
+        children: {
+          nodes: Array<{ id: string; title: string; state: { type: string } }>;
+        };
       }>;
     };
   }>(
@@ -129,15 +154,28 @@ async function main() {
     }`,
     { q: MARKER },
   );
-  const tracker = trackerSearch.issues.nodes.find((n) => (n.description ?? "").includes(MARKER));
-  const trackerChildIds = new Set(tracker?.children.nodes.map((c) => c.id) ?? []);
-  const trackerChildTitles = new Set(tracker?.children.nodes.map((c) => c.title) ?? []);
+  const tracker = trackerSearch.issues.nodes.find((n) =>
+    (n.description ?? "").includes(MARKER),
+  );
+  const trackerChildIds = new Set(
+    tracker?.children.nodes.map((c) => c.id) ?? [],
+  );
+  const trackerChildTitles = new Set(
+    tracker?.children.nodes.map((c) => c.title) ?? [],
+  );
 
   // ── Determine which capabilities are NOT already covered by another ticket ─
   const uncovered: Gap[] = [];
   for (const gap of gaps) {
     const found = await gql<{
-      issues: { nodes: Array<{ id: string; state: { type: string }; parent: { id: string } | null; description: string | null }> };
+      issues: {
+        nodes: Array<{
+          id: string;
+          state: { type: string };
+          parent: { id: string } | null;
+          description: string | null;
+        }>;
+      };
     }>(
       `query($q:String!){
         issues(first:20, filter:{ searchableContent:{ contains:$q } }){
@@ -155,14 +193,18 @@ async function main() {
         !(n.description ?? "").includes(MARKER),
     );
     if (external.length > 0) {
-      log(`skip ${gap.capability} — covered by ${external.length} existing ticket(s).`);
+      log(
+        `skip ${gap.capability} — covered by ${external.length} existing ticket(s).`,
+      );
     } else {
       uncovered.push(gap);
     }
   }
 
   if (uncovered.length === 0) {
-    log("all gapped capabilities are already covered by existing tickets — nothing to file.");
+    log(
+      "all gapped capabilities are already covered by existing tickets — nothing to file.",
+    );
     return;
   }
 
@@ -191,15 +233,23 @@ async function main() {
   ].join("\n");
 
   if (DRY) {
-    log(`DRY-RUN: would ${tracker ? "update" : "create"} tracker with ${uncovered.length} sub-issue(s):`);
-    uncovered.forEach((g) => log(`  - ${g.capability} (missing: ${g.missing.join(", ")})`));
+    log(
+      `DRY-RUN: would ${tracker ? "update" : "create"} tracker with ${uncovered.length} sub-issue(s):`,
+    );
+    uncovered.forEach((g) =>
+      log(`  - ${g.capability} (missing: ${g.missing.join(", ")})`),
+    );
     return;
   }
 
   // Union of labels across the uncovered capabilities, always incl. agent-created + tech-debt.
   const labelNames = new Set<string>(["agent-created", "tech-debt"]);
-  uncovered.forEach((g) => areaLabelsFor(g.capability).forEach((n) => labelNames.add(n)));
-  const labelIds = [...labelNames].map(labelId).filter((x): x is string => Boolean(x));
+  uncovered.forEach((g) =>
+    areaLabelsFor(g.capability).forEach((n) => labelNames.add(n)),
+  );
+  const labelIds = [...labelNames]
+    .map(labelId)
+    .filter((x): x is string => Boolean(x));
 
   // ── Create or update the umbrella tracker ────────────────────────────────
   let trackerId = tracker?.id;
@@ -210,7 +260,9 @@ async function main() {
     );
     log(`updated tracker ${tracker.identifier} (${tracker.url}).`);
   } else {
-    const created = await gql<{ issueCreate: { issue: { id: string; identifier: string; url: string } } }>(
+    const created = await gql<{
+      issueCreate: { issue: { id: string; identifier: string; url: string } };
+    }>(
       `mutation($input:IssueCreateInput!){ issueCreate(input:$input){ success issue{ id identifier url } } }`,
       {
         input: {
@@ -226,19 +278,27 @@ async function main() {
       },
     );
     trackerId = created.issueCreate.issue.id;
-    log(`created tracker ${created.issueCreate.issue.identifier} (${created.issueCreate.issue.url}).`);
+    log(
+      `created tracker ${created.issueCreate.issue.identifier} (${created.issueCreate.issue.url}).`,
+    );
   }
 
   // ── Ensure one sub-issue per uncovered capability ────────────────────────
   for (const g of uncovered) {
     const title = `Complete layers for ${g.capability}: ${g.missing.join(", ")}`;
     const titlePrefix = `Complete layers for ${g.capability}`;
-    const already = [...trackerChildTitles].some((t) => t.startsWith(titlePrefix));
+    const already = [...trackerChildTitles].some((t) =>
+      t.startsWith(titlePrefix),
+    );
     if (already) {
       log(`sub-issue for ${g.capability} already exists — skipping.`);
       continue;
     }
-    const subLabels = ["agent-created", "tech-debt", ...areaLabelsFor(g.capability)]
+    const subLabels = [
+      "agent-created",
+      "tech-debt",
+      ...areaLabelsFor(g.capability),
+    ]
       .map(labelId)
       .filter((x): x is string => Boolean(x));
     const sub = await gql<{ issueCreate: { issue: { identifier: string } } }>(
@@ -268,6 +328,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("[manifest-tickets] FAILED:", err instanceof Error ? err.message : err);
+  console.error(
+    "[manifest-tickets] FAILED:",
+    err instanceof Error ? err.message : err,
+  );
   process.exit(1);
 });

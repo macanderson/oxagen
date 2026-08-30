@@ -1,7 +1,7 @@
 {
   "$id": "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
   "title": "Oxagen CLI settings.json",
-  "description": "JSON Schema for the Oxagen CLI's settings.json configuration file — model, apiUrl, env, permissions, hooks, mcpServers, toolVisibility, and inline agents. Generated from the canonical Zod schema in apps/cli/src/settings/schema.ts; do not hand-edit.",
+  "description": "JSON Schema for the Oxagen CLI's settings.json configuration file. Generated from the canonical Zod schema in apps/cli/src/settings/schema.ts; do not hand-edit.",
   "$ref": "#/definitions/OxagenCliSettings",
   "definitions": {
     "OxagenCliSettings": {
@@ -24,13 +24,7 @@
         },
         "effort": {
           "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high",
-            "xhigh",
-            "max"
-          ]
+          "enum": ["low", "medium", "high", "xhigh", "max"]
         },
         "apiUrl": {
           "type": "string",
@@ -47,12 +41,7 @@
           "properties": {
             "defaultMode": {
               "type": "string",
-              "enum": [
-                "default",
-                "acceptEdits",
-                "deny",
-                "bypassPermissions"
-              ]
+              "enum": ["default", "acceptEdits", "deny", "bypassPermissions"]
             },
             "allow": {
               "type": "array",
@@ -68,11 +57,7 @@
             },
             "defaultMcpPolicy": {
               "type": "string",
-              "enum": [
-                "allow",
-                "deny",
-                "ask"
-              ]
+              "enum": ["allow", "deny", "ask"]
             },
             "mcpServers": {
               "type": "object",
@@ -81,11 +66,7 @@
                 "properties": {
                   "defaultPolicy": {
                     "type": "string",
-                    "enum": [
-                      "allow",
-                      "deny",
-                      "ask"
-                    ]
+                    "enum": ["allow", "deny", "ask"]
                   },
                   "allow": {
                     "type": "array",
@@ -137,17 +118,13 @@
                           "maximum": 600000
                         }
                       },
-                      "required": [
-                        "command"
-                      ],
+                      "required": ["command"],
                       "additionalProperties": false
                     },
                     "minItems": 1
                   }
                 },
-                "required": [
-                  "hooks"
-                ],
+                "required": ["hooks"],
                 "additionalProperties": false
               }
             },
@@ -179,17 +156,13 @@
                           "maximum": 600000
                         }
                       },
-                      "required": [
-                        "command"
-                      ],
+                      "required": ["command"],
                       "additionalProperties": false
                     },
                     "minItems": 1
                   }
                 },
-                "required": [
-                  "hooks"
-                ],
+                "required": ["hooks"],
                 "additionalProperties": false
               }
             },
@@ -221,17 +194,13 @@
                           "maximum": 600000
                         }
                       },
-                      "required": [
-                        "command"
-                      ],
+                      "required": ["command"],
                       "additionalProperties": false
                     },
                     "minItems": 1
                   }
                 },
-                "required": [
-                  "hooks"
-                ],
+                "required": ["hooks"],
                 "additionalProperties": false
               }
             }
@@ -255,12 +224,7 @@
                   },
                   "auth": {
                     "type": "string",
-                    "enum": [
-                      "oauth",
-                      "bearer",
-                      "header",
-                      "none"
-                    ],
+                    "enum": ["oauth", "bearer", "header", "none"],
                     "default": "none"
                   },
                   "oauthServerUrl": {
@@ -292,10 +256,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "transport",
-                  "url"
-                ],
+                "required": ["transport", "url"],
                 "additionalProperties": false
               },
               {
@@ -311,12 +272,7 @@
                   },
                   "auth": {
                     "type": "string",
-                    "enum": [
-                      "oauth",
-                      "bearer",
-                      "header",
-                      "none"
-                    ],
+                    "enum": ["oauth", "bearer", "header", "none"],
                     "default": "none"
                   },
                   "oauthServerUrl": {
@@ -348,10 +304,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "transport",
-                  "url"
-                ],
+                "required": ["transport", "url"],
                 "additionalProperties": false
               },
               {
@@ -385,10 +338,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "transport",
-                  "command"
-                ],
+                "required": ["transport", "command"],
                 "additionalProperties": false
               },
               {
@@ -404,11 +354,7 @@
                   },
                   "auth": {
                     "type": "string",
-                    "enum": [
-                      "bearer",
-                      "header",
-                      "none"
-                    ],
+                    "enum": ["bearer", "header", "none"],
                     "default": "none"
                   },
                   "envToken": {
@@ -430,10 +376,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "transport",
-                  "url"
-                ],
+                "required": ["transport", "url"],
                 "additionalProperties": false
               }
             ]
@@ -494,9 +437,7 @@
                 }
               }
             },
-            "required": [
-              "prompt"
-            ],
+            "required": ["prompt"],
             "additionalProperties": false
           }
         },

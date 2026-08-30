@@ -19,7 +19,10 @@
       "!**/*.generated.ts",
       "!**/routeTree.gen.ts",
       "!pnpm-lock.yaml",
-      "!**/storage-manifest.json"
+      "!**/storage-manifest.json",
+      "!packages/run-evidence/fixtures/**",
+      "!packages/bench/src/__fixtures__/sample-run/task-six-errored__pqr678/verifier/report.json",
+      "!.claude/workflows/**"
     ]
   },
   "formatter": {

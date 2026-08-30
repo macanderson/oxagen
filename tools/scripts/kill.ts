@@ -17,7 +17,9 @@ async function bestEffort(cmd: string, args: string[]): Promise<void> {
   try {
     await execa(cmd, args, { stdio: "inherit" });
   } catch {
-    console.log(kleur.yellow(`[kill] ${cmd} ${args.join(" ")} exited non-zero`));
+    console.log(
+      kleur.yellow(`[kill] ${cmd} ${args.join(" ")} exited non-zero`),
+    );
   }
 }
 
@@ -32,13 +34,20 @@ async function killStorybookPorts(): Promise<void> {
     let pids: string[] = [];
     try {
       const { stdout } = await execa("lsof", ["-ti", `tcp:${port}`]);
-      pids = stdout.split("\n").map((p) => p.trim()).filter(Boolean);
+      pids = stdout
+        .split("\n")
+        .map((p) => p.trim())
+        .filter(Boolean);
     } catch {
       // lsof exits non-zero when nothing is listening — nothing to kill.
       continue;
     }
     if (pids.length === 0) continue;
-    console.log(kleur.cyan(`[kill] freeing storybook port ${port} (pids: ${pids.join(", ")})`));
+    console.log(
+      kleur.cyan(
+        `[kill] freeing storybook port ${port} (pids: ${pids.join(", ")})`,
+      ),
+    );
     await bestEffort("kill", ["-9", ...pids]);
   }
 }
@@ -49,7 +58,9 @@ async function main(): Promise<void> {
   // Anchoring with the repo path means a tsx process for a different repo
   // is left alone.
   const pattern = `(tsx|node).*${REPO_ROOT.replace(/[/\\$.*+?()[\]{}^|]/g, "\\$&")}`;
-  console.log(kleur.cyan(`[kill] stopping dev processes scoped to ${REPO_ROOT}`));
+  console.log(
+    kleur.cyan(`[kill] stopping dev processes scoped to ${REPO_ROOT}`),
+  );
   await bestEffort("pkill", ["-f", pattern]);
 
   // Free the Storybook ports (apps/app 6007, packages/ui 6008) explicitly.

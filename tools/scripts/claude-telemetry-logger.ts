@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 interface HookInput {
   tool_name?: string;
@@ -15,7 +15,11 @@ interface HookInput {
   };
 }
 
-const TELEMETRY_LOG = path.join(os.homedir(), '.claude', 'claude-code-telemetry.jsonl');
+const TELEMETRY_LOG = path.join(
+  os.homedir(),
+  ".claude",
+  "claude-code-telemetry.jsonl",
+);
 
 function ensureLogDir() {
   const dir = path.dirname(TELEMETRY_LOG);
@@ -29,19 +33,19 @@ function logTelemetry(hookInput: HookInput) {
 
   const entry = {
     timestamp: new Date().toISOString(),
-    type: 'claude_code',
+    type: "claude_code",
     tool_name: hookInput.tool_name,
     files_modified: extractFiles(hookInput),
     command_executed: hookInput.tool_input?.command ? true : false,
   };
 
   try {
-    fs.appendFileSync(TELEMETRY_LOG, JSON.stringify(entry) + '\n');
+    fs.appendFileSync(TELEMETRY_LOG, JSON.stringify(entry) + "\n");
   } catch (error) {
     // Best-effort local telemetry log — a write failure must never disrupt the
     // user's workflow, but leave an OXAGEN_DEBUG-gated breadcrumb (house style)
     // so the drop is diagnosable when debugging the hook itself.
-    if (process.env['OXAGEN_DEBUG']) {
+    if (process.env["OXAGEN_DEBUG"]) {
       process.stderr.write(
         `[claude-telemetry-logger] appendFileSync failed: ${
           error instanceof Error ? error.message : String(error)
@@ -66,11 +70,11 @@ function extractFiles(input: HookInput): string[] {
 }
 
 // Read hook input from stdin
-let data = '';
-process.stdin.on('data', chunk => data += chunk);
-process.stdin.on('end', () => {
+let data = "";
+process.stdin.on("data", (chunk) => (data += chunk));
+process.stdin.on("end", () => {
   try {
-    const hookInput = JSON.parse(data);
+    const hookInput = JSON.parse(data) as HookInput;
     logTelemetry(hookInput);
   } catch {
     // Silently ignore parse errors

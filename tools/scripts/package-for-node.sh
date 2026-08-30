@@ -43,8 +43,14 @@ fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 # Ports. These must match `tools/caddy/Caddyfile` in oxagen-aws-infra, which is
 # what proxies to them; nothing enforces the agreement and a mismatch shows up
-# as a 502. They are the same values as `PORTS` in @oxagen/config, so a service
-# started by hand from a checkout lands where a developer expects.
+# as a 502.
+#
+# app/api/mcp match `PORTS` in @oxagen/config, so a service started by hand from
+# a checkout lands where a developer expects. `docs` does NOT: @oxagen/config
+# has no docs entry at all, and local dev serves docs on 3300. The 3002 below is
+# whatever the Caddyfile proxies to, and it is the Caddyfile — not this file and
+# not @oxagen/config — that decides it. Change one without the other and docs
+# 502s.
 port_for() {
   case $1 in
     app)  echo 3000 ;;

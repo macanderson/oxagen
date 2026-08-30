@@ -29,8 +29,10 @@ const API_KEY = process.env["LINEAR_API_KEY"];
 const PROJECT_ID = process.env["LINEAR_PROJECT_ID"];
 const GITHUB_RUN_ID = process.env["GITHUB_RUN_ID"] ?? "unknown";
 const GITHUB_SHA = process.env["GITHUB_SHA"] ?? "unknown";
-const GITHUB_SERVER_URL = process.env["GITHUB_SERVER_URL"] ?? "https://github.com";
-const GITHUB_REPOSITORY = process.env["GITHUB_REPOSITORY"] ?? "oxagen-ai/oxagen-monorepo";
+const GITHUB_SERVER_URL =
+  process.env["GITHUB_SERVER_URL"] ?? "https://github.com";
+const GITHUB_REPOSITORY =
+  process.env["GITHUB_REPOSITORY"] ?? "oxagen-ai/oxagen-monorepo";
 
 /** Marker embedded in the tracker description so we can find our own ticket. */
 const MARKER = "<!-- oxagen:e2e-failure-tracker v1 -->";
@@ -112,9 +114,13 @@ async function resolveContext(): Promise<{
   }
 
   const labelById = (slug: LabelSlug): string | undefined =>
-    ctx.issueLabels.nodes.find((l) => l.name.toLowerCase() === slug.toLowerCase())?.id;
+    ctx.issueLabels.nodes.find(
+      (l) => l.name.toLowerCase() === slug.toLowerCase(),
+    )?.id;
 
-  const labelIds = LABEL_SLUGS.map(labelById).filter((id): id is string => Boolean(id));
+  const labelIds = LABEL_SLUGS.map(labelById).filter((id): id is string =>
+    Boolean(id),
+  );
 
   return {
     teamId: teamNode.id,
@@ -145,7 +151,9 @@ async function findTracker(): Promise<TrackerIssue | null> {
         first: 10
         filter: {
           searchableContent: { contains: $q }
-          state: { type: { nin: ["cancelled", "completed"] } }
+          # Linear spells it "canceled" with one L; "cancelled" matches no state
+          # type, which would let a canceled tracker keep collecting comments.
+          state: { type: { nin: ["canceled", "completed"] } }
         }
       ) {
         nodes { id identifier url description state { type } }
@@ -155,7 +163,8 @@ async function findTracker(): Promise<TrackerIssue | null> {
   );
 
   return (
-    result.issues.nodes.find((n) => (n.description ?? "").includes(MARKER)) ?? null
+    result.issues.nodes.find((n) => (n.description ?? "").includes(MARKER)) ??
+    null
   );
 }
 
@@ -176,7 +185,9 @@ async function appendComment(issueId: string): Promise<void> {
     { input: { issueId, body } },
   );
 
-  log(`appended comment to existing tracker (run ${GITHUB_RUN_ID}, sha ${shortSha()}).`);
+  log(
+    `appended comment to existing tracker (run ${GITHUB_RUN_ID}, sha ${shortSha()}).`,
+  );
 }
 
 /** Create the rolling tracker ticket. */

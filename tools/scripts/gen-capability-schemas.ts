@@ -18,7 +18,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 // Importing the package root runs its `import "./contracts.generated"` side
 // effect, registering every contract before we enumerate them.
-import { listCapabilities, getCapabilityChain, getRenderHint } from "@oxagen/oxagen";
+import {
+  listCapabilities,
+  getCapabilityChain,
+  getRenderHint,
+} from "@oxagen/oxagen";
 
 type JsonSchema = Record<string, unknown>;
 
@@ -70,7 +74,10 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
     }
     case "ZodNullable": {
       const inner = convert(d.innerType as ZodLike);
-      return { schema: { anyOf: [inner.schema, { type: "null" }] }, optional: inner.optional };
+      return {
+        schema: { anyOf: [inner.schema, { type: "null" }] },
+        optional: inner.optional,
+      };
     }
     case "ZodEffects": {
       return convert(d.schema as ZodLike);
@@ -96,17 +103,25 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
     }
     case "ZodArray": {
       const item = convert(d.type as ZodLike);
-      return { schema: withDesc({ type: "array", items: item.schema }), optional: false };
+      return {
+        schema: withDesc({ type: "array", items: item.schema }),
+        optional: false,
+      };
     }
     case "ZodRecord": {
       const value = d.valueType ? convert(d.valueType as ZodLike).schema : {};
-      return { schema: withDesc({ type: "object", additionalProperties: value }), optional: false };
+      return {
+        schema: withDesc({ type: "object", additionalProperties: value }),
+        optional: false,
+      };
     }
     case "ZodString": {
       const s: JsonSchema = { type: "string" };
       for (const ck of d.checks ?? []) {
-        if (ck.kind === "min" && typeof ck.value === "number") s.minLength = ck.value;
-        if (ck.kind === "max" && typeof ck.value === "number") s.maxLength = ck.value;
+        if (ck.kind === "min" && typeof ck.value === "number")
+          s.minLength = ck.value;
+        if (ck.kind === "max" && typeof ck.value === "number")
+          s.maxLength = ck.value;
         if (ck.kind === "url") s.format = "uri";
         if (ck.kind === "uuid") s.format = "uuid";
         if (ck.kind === "email") s.format = "email";
@@ -117,18 +132,25 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
       const isInt = (d.checks ?? []).some((c) => c.kind === "int");
       const s: JsonSchema = { type: isInt ? "integer" : "number" };
       for (const ck of d.checks ?? []) {
-        if (ck.kind === "min" && typeof ck.value === "number") s.minimum = ck.value;
-        if (ck.kind === "max" && typeof ck.value === "number") s.maximum = ck.value;
+        if (ck.kind === "min" && typeof ck.value === "number")
+          s.minimum = ck.value;
+        if (ck.kind === "max" && typeof ck.value === "number")
+          s.maximum = ck.value;
       }
       return { schema: withDesc(s), optional: false };
     }
     case "ZodBoolean":
       return { schema: withDesc({ type: "boolean" }), optional: false };
     case "ZodEnum":
-      return { schema: withDesc({ type: "string", enum: d.values as unknown[] }), optional: false };
+      return {
+        schema: withDesc({ type: "string", enum: d.values as unknown[] }),
+        optional: false,
+      };
     case "ZodNativeEnum":
       return {
-        schema: withDesc({ enum: Object.values(d.values as Record<string, unknown>) }),
+        schema: withDesc({
+          enum: Object.values(d.values as Record<string, unknown>),
+        }),
         optional: false,
       };
     case "ZodLiteral":
@@ -143,14 +165,20 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
       return { schema: withDesc({ type: "array", items }), optional: false };
     }
     case "ZodDate":
-      return { schema: withDesc({ type: "string", format: "date-time" }), optional: false };
+      return {
+        schema: withDesc({ type: "string", format: "date-time" }),
+        optional: false,
+      };
     case "ZodUnknown":
     case "ZodAny":
       return { schema: withDesc({}), optional: false };
     default:
       // Unknown type — emit an open schema annotated with the Zod type name so
       // the gap is visible rather than silently wrong.
-      return { schema: withDesc({ "x-zod-type": d.typeName ?? "unknown" }), optional: false };
+      return {
+        schema: withDesc({ "x-zod-type": d.typeName ?? "unknown" }),
+        optional: false,
+      };
   }
 }
 
@@ -189,7 +217,10 @@ for (const cap of caps) {
     input: toJsonSchema(cap.input as unknown as ZodLike),
     output: toJsonSchema(cap.output as unknown as ZodLike),
   };
-  writeFileSync(join(outDir, `${cap.name}.json`), JSON.stringify(doc, null, 2) + "\n");
+  writeFileSync(
+    join(outDir, `${cap.name}.json`),
+    JSON.stringify(doc, null, 2) + "\n",
+  );
   index.push({
     name: cap.name,
     domain: cap.domain,
@@ -202,7 +233,11 @@ for (const cap of caps) {
 
 writeFileSync(
   join(outDir, "_index.json"),
-  JSON.stringify({ generatedCount: caps.length, capabilities: index }, null, 2) + "\n",
+  JSON.stringify(
+    { generatedCount: caps.length, capabilities: index },
+    null,
+    2,
+  ) + "\n",
 );
 
 const byDomain = new Map<string, string[]>();
@@ -222,9 +257,14 @@ const readme = [
   ``,
   ...[...byDomain.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([domain, names]) => `- **${domain}** (${names.length}): ${names.join(", ")}`),
+    .map(
+      ([domain, names]) =>
+        `- **${domain}** (${names.length}): ${names.join(", ")}`,
+    ),
   ``,
 ].join("\n");
 writeFileSync(join(outDir, "README.md"), readme);
 
-console.log(`Wrote ${caps.length} capability schema docs to docs/capabilities/schemas/`);
+console.log(
+  `Wrote ${caps.length} capability schema docs to docs/capabilities/schemas/`,
+);

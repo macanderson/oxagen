@@ -73,7 +73,10 @@ export function clickhouseConfigured(): boolean {
 export function gitProvenance(): { git_sha: string; git_branch: string } {
   const read = (cmd: string): string => {
     try {
-      return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      return execSync(cmd, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
     } catch {
       return "";
     }
@@ -94,7 +97,10 @@ function toRunRow(run: NormalizedRun): EvalRunRow {
   };
 }
 
-function toResultRows(run: NormalizedRun, results: NormalizedResult[]): EvalResultRow[] {
+function toResultRows(
+  run: NormalizedRun,
+  results: NormalizedResult[],
+): EvalResultRow[] {
   return results.map((r) => ({
     run_id: run.run_id,
     task_id: r.task_id,
@@ -159,7 +165,9 @@ export async function ingestRun(
 
 /** Read a `.eval.json` file → one or many EvalRunFile objects (the file may be an array). */
 export function loadEvalFile(path: string): EvalRunFile[] {
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as EvalRunFile | EvalRunFile[];
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as
+    | EvalRunFile
+    | EvalRunFile[];
   const arr = Array.isArray(parsed) ? parsed : [parsed];
   return arr.filter((f) => f && f.run && f.run.run_id);
 }

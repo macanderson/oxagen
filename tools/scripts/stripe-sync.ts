@@ -248,6 +248,20 @@ async function syncStripe(
   apply: boolean,
 ): Promise<SyncedPlan[]> {
   const bySlug = new Map(derivation.products.map((p) => [p.slug, p]));
+  // derivePricing() is expected to cover every catalog slug. If it ever stops
+  // doing so, say which slug went missing — the alternative is a bare
+  // "Cannot read properties of undefined (reading 'marginPct')" halfway through
+  // a --apply run that has already written to Stripe.
+  const derived = (slug: string): DerivedProduct => {
+    const d = bySlug.get(slug);
+    if (!d) {
+      throw new Error(
+        `pricing model has no derived product for slug "${slug}" — ` +
+          "packages/billing/src/pricing.ts and the plan/pack catalog have diverged",
+      );
+    }
+    return d;
+  };
   const sharedMeta = {
     oxagen_target_margin: String(derivation.targetMargin),
     oxagen_meter_markup: derivation.meterMarkup.toFixed(6),
@@ -258,7 +272,7 @@ async function syncStripe(
   const synced: SyncedPlan[] = [];
 
   for (const plan of SUBSCRIPTION_PLANS) {
-    const d = bySlug.get(plan.slug) as DerivedProduct;
+    const d = derived(plan.slug);
     const product = await ensureProduct(stripe, {
       slug: plan.slug,
       name: plan.displayName,
@@ -304,7 +318,7 @@ async function syncStripe(
   }
 
   for (const pack of CREDIT_PACKS) {
-    const d = bySlug.get(pack.slug) as DerivedProduct;
+    const d = derived(pack.slug);
     const product = await ensureProduct(stripe, {
       slug: pack.slug,
       name: pack.displayName,

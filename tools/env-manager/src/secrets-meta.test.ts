@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { canonicalize, cliGenCommand, docFor, resolveEnvKey } from "./secrets-meta";
+import {
+  canonicalize,
+  cliGenCommand,
+  docFor,
+  resolveEnvKey,
+} from "./secrets-meta";
 
 describe("canonicalize", () => {
   it("strips the oxagen- prefix and env suffixes, upper-snake-casing the rest", () => {
@@ -31,18 +36,26 @@ describe("resolveEnvKey", () => {
 
 describe("cliGenCommand", () => {
   it("returns an openssl genpkey command for a JWT private key", () => {
-    expect(cliGenCommand("oxagen-jwt-private-key")).toContain("openssl genpkey");
+    expect(cliGenCommand("oxagen-jwt-private-key")).toContain(
+      "openssl genpkey",
+    );
   });
   it("derives the public key from the private one", () => {
     expect(cliGenCommand("oxagen-jwt-public-key")).toContain("pkey");
     expect(cliGenCommand("oxagen-jwt-public-key")).toContain("-pubout");
   });
   it("returns a base64 mint for encryption keys and signing secrets", () => {
-    expect(cliGenCommand("oxagen-encryption-key")).toContain("openssl rand -base64 32");
-    expect(cliGenCommand("oxagen-admin-auth-secret")).toContain("openssl rand -base64 32");
+    expect(cliGenCommand("oxagen-encryption-key")).toContain(
+      "openssl rand -base64 32",
+    );
+    expect(cliGenCommand("oxagen-admin-auth-secret")).toContain(
+      "openssl rand -base64 32",
+    );
   });
   it("returns a shorter base64 mint for passwords", () => {
-    expect(cliGenCommand("oxagen-pgadmin-password")).toContain("openssl rand -base64 24");
+    expect(cliGenCommand("oxagen-pgadmin-password")).toContain(
+      "openssl rand -base64 24",
+    );
   });
   it("returns null for credentials that must come from a vendor", () => {
     expect(cliGenCommand("oxagen-stripe-secret")).toBeNull();
@@ -121,9 +134,12 @@ describe("docFor", () => {
     "oxagen-pgadmin-password",
   ];
 
-  it.each(PROVIDER_SAMPLES)("gives %s a non-empty description and https vendor_url", (name) => {
-    const d = docFor(name, null);
-    expect(d.description.length).toBeGreaterThan(5);
-    expect(d.vendor_url).toMatch(/^https:\/\//);
-  });
+  it.each(PROVIDER_SAMPLES)(
+    "gives %s a non-empty description and https vendor_url",
+    (name) => {
+      const d = docFor(name, null);
+      expect(d.description.length).toBeGreaterThan(5);
+      expect(d.vendor_url).toMatch(/^https:\/\//);
+    },
+  );
 });

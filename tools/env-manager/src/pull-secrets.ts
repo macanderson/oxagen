@@ -34,16 +34,22 @@ interface GcloudVersion {
 }
 
 async function gcloudJson<T>(args: string[]): Promise<T> {
-  const { stdout } = await execFileP("gcloud", [...args, "--format=json", "--project", PROJECT], {
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  const { stdout } = await execFileP(
+    "gcloud",
+    [...args, "--format=json", "--project", PROJECT],
+    {
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  );
   return JSON.parse(stdout) as T;
 }
 
 /** All secret names in the project. */
 async function listSecretNames(): Promise<string[]> {
   const items = await gcloudJson<{ name: string }[]>(["secrets", "list"]);
-  return items.map((i) => i.name.split("/").pop() ?? i.name).sort((a, b) => a.localeCompare(b));
+  return items
+    .map((i) => i.name.split("/").pop() ?? i.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 interface ActiveVersion {
@@ -65,18 +71,33 @@ async function activeVersion(secret: string): Promise<ActiveVersion | null> {
     ]);
     const v = versions[0];
     if (!v) return null;
-    return { version: v.name.split("/").pop() ?? "?", createTime: v.createTime };
+    return {
+      version: v.name.split("/").pop() ?? "?",
+      createTime: v.createTime,
+    };
   } catch {
     return null;
   }
 }
 
 /** Access a specific version's value (raw stdout, never logged). */
-async function accessValue(secret: string, version: string): Promise<string | null> {
+async function accessValue(
+  secret: string,
+  version: string,
+): Promise<string | null> {
   try {
     const { stdout } = await execFileP(
       "gcloud",
-      ["secrets", "versions", "access", version, "--secret", secret, "--project", PROJECT],
+      [
+        "secrets",
+        "versions",
+        "access",
+        version,
+        "--secret",
+        secret,
+        "--project",
+        PROJECT,
+      ],
       { maxBuffer: 32 * 1024 * 1024 },
     );
     return stdout;
@@ -87,17 +108,24 @@ async function accessValue(secret: string, version: string): Promise<string | nu
 
 // ── Concurrency pool ───────────────────────────────────────────────────────────
 
-async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, i: number) => Promise<R>,
+): Promise<R[]> {
   const results = new Array<R>(items.length);
   let cursor = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (cursor < items.length) {
-      const i = cursor++;
-      const item = items[i];
-      if (item === undefined) continue;
-      results[i] = await fn(item, i);
-    }
-  });
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const i = cursor++;
+        const item = items[i];
+        if (item === undefined) continue;
+        results[i] = await fn(item, i);
+      }
+    },
+  );
   await Promise.all(workers);
   return results;
 }
@@ -110,7 +138,9 @@ async function main(): Promise<void> {
 
   const creds = parseEnvFile(join(REPO_ROOT, "creds.txt"));
   const envLocal = parseEnvFile(join(REPO_ROOT, ".env.local"));
-  log(`  parsed creds.txt (${creds.size} keys) · .env.local (${envLocal.size} keys)`);
+  log(
+    `  parsed creds.txt (${creds.size} keys) · .env.local (${envLocal.size} keys)`,
+  );
 
   log(`  scanning codebase for env-var references…`);
   const refIndex = buildEnvRefIndex(REPO_ROOT);

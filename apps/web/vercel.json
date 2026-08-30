@@ -3,8 +3,16 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
-    { "source": "/field-manual", "destination": "/read?e=field-manual", "permanent": false },
-    { "source": "/field-manual/(.*)", "destination": "/read?e=field-manual", "permanent": false },
+    {
+      "source": "/field-manual",
+      "destination": "/read?e=field-manual",
+      "permanent": false
+    },
+    {
+      "source": "/field-manual/(.*)",
+      "destination": "/read?e=field-manual",
+      "permanent": false
+    },
     {
       "source": "/research/deterministic-systems-optimizations-for-ai-agents",
       "destination": "/read?e=page-flip-reader",
@@ -28,7 +36,10 @@
     {
       "source": "/fonts/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     }
   ]

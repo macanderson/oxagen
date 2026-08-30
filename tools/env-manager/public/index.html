@@ -65,6 +65,18 @@
       let DATA = null, STATE = {};
       const srcLabel = (s) => !s ? "—" : s.type === "static" ? "static" : s.type;
 
+      // Everything rendered below is built with innerHTML, and some of it is
+      // not ours: `detail` on a deploy result is verbatim Vercel API error text,
+      // and registry descriptions are free-form prose. Escape at every boundary.
+      const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+      // For a value that lands inside a JS string literal *within* an HTML
+      // attribute: the HTML parser decodes entities before JS sees them, so
+      // esc's `&#39;` would turn back into a quote and close the string early.
+      const jsq = (s) => esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+      const resultLine = (x) =>
+        `<div class="${esc(x.status)}">[${esc(x.status)}] ${esc(x.key)} → ${esc(x.service)}/${esc(x.env)}` +
+        `${x.detail ? "  — " + esc(x.detail) : ""}</div>`;
+
       async function load() {
         DATA = await (await fetch("/api/catalog")).json();
         document.getElementById("tokstatus").textContent =
@@ -92,7 +104,7 @@
       function svcDots(entry, env) {
         return entry.services.map((svc) => {
           const set = (STATE[svc]?.[entry.key] || []).includes(env);
-          return `<span class="svc" title="${svc}"><span class="dot ${set ? "on" : "off"}"></span>${svc}</span>`;
+          return `<span class="svc" title="${esc(svc)}"><span class="dot ${set ? "on" : "off"}"></span>${esc(svc)}</span>`;
         }).join("");
       }
 
@@ -103,8 +115,8 @@
         const svcList = entry.services.join(", ");
         const inputId = `inp_${entry.key}_${env}`;
         return `<div class="paste-row">
-          <input id="${inputId}" type="${isSecret ? "password" : "text"}" placeholder="paste value…" autocomplete="off" />
-          <button onclick="pushValue('${entry.key}','${env}','${inputId}')" title="Push to: ${svcList}">Push → ${entry.services.length}</button>
+          <input id="${esc(inputId)}" type="${isSecret ? "password" : "text"}" placeholder="paste value…" autocomplete="off" />
+          <button onclick="pushValue('${jsq(entry.key)}','${jsq(env)}','${jsq(inputId)}')" title="Push to: ${esc(svcList)}">Push → ${entry.services.length}</button>
         </div>`;
       }
 
@@ -115,12 +127,12 @@
         for (const e of DATA.catalog) {
           if (e.group !== group) {
             group = e.group;
-            rows.insertAdjacentHTML("beforeend", `<tr class="grp"><td colspan="5">${group}</td></tr>`);
+            rows.insertAdjacentHTML("beforeend", `<tr class="grp"><td colspan="5">${esc(group)}</td></tr>`);
           }
           const secret = e.secret ? `<span class="chip badge-secret">secret</span>` : "";
           rows.insertAdjacentHTML("beforeend", `<tr>
-            <td><div class="key">${e.key}</div>${secret}<div class="desc">${e.description}</div>
-                <div>${e.services.map(s=>`<span class="chip">${s}</span>`).join("")}</div></td>
+            <td><div class="key">${esc(e.key)}</div>${secret}<div class="desc">${esc(e.description)}</div>
+                <div>${e.services.map(s=>`<span class="chip">${esc(s)}</span>`).join("")}</div></td>
             <td class="src">${srcLabel(e.sources.development)}<br/>${srcLabel(e.sources.preview)}<br/>${srcLabel(e.sources.production)}</td>
             <td class="cell">${e.sources.development ? svcDots(e,"development") + pasteInput(e,"development") : '<span class="src">—</span>'}</td>
             <td class="cell">${e.sources.preview ? svcDots(e,"preview") + pasteInput(e,"preview") : '<span class="src">—</span>'}</td>
@@ -135,7 +147,7 @@
         if (!value) { alert("Enter a value first."); return; }
         const log = document.getElementById("log");
         log.style.display = "block";
-        log.innerHTML = `<div>pushing ${key} → ${env}…</div>`;
+        log.innerHTML = `<div>pushing ${esc(key)} → ${esc(env)}…</div>`;
         try {
           const r = await fetch("/api/set", {
             method: "POST",
@@ -143,55 +155,60 @@
             body: JSON.stringify({ key, env, value })
           });
           const j = await r.json();
-          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
-          const lines = j.results.map((x) =>
-            `<div class="${x.status}">[${x.status}] ${x.key} → ${x.service}/${x.env}${x.detail ? "  — " + x.detail : ""}</div>`
-          );
+          if (j.error) { log.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
+          const lines = j.results.map(resultLine);
           const ok = j.results.filter((x) => x.status === "ok").length;
-          log.innerHTML = `<div><b>${key}/${env}: ${ok}/${j.results.length} ok</b> — re-deploy the affected projects to apply.</div>` + lines.join("");
+          log.innerHTML = `<div><b>${esc(key)}/${esc(env)}: ${ok}/${j.results.length} ok</b> — re-deploy the affected projects to apply.</div>` + lines.join("");
           // Clear input after push — never display the value back
           if (input) input.value = "";
           await refresh();
-        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+        } catch (e) { log.innerHTML = `<div class="error">${esc(e)}</div>`; }
       }
 
       async function checkGaps(env) {
         const log = document.getElementById("log");
         log.style.display = "block";
-        log.innerHTML = `<div>checking gaps for ${env}…</div>`;
+        log.innerHTML = `<div>checking gaps for ${esc(env)}…</div>`;
         try {
-          const r = await fetch(`/api/gaps?env=${env}`);
+          const r = await fetch(`/api/gaps?env=${encodeURIComponent(env)}`);
           const j = await r.json();
-          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
+          if (j.error) { log.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
           const missing = j.missing || [];
           const extra = j.extra || [];
           if (missing.length === 0 && extra.length === 0) {
-            log.innerHTML = `<div class="ok">✓ No gaps found for ${env}.</div>`;
+            log.innerHTML = `<div class="ok">✓ No gaps found for ${esc(env)}.</div>`;
             return;
           }
           const lines = [
-            `<div><b>Gaps for ${env}: ${missing.length} missing, ${extra.length} unregistered</b></div>`,
-            ...missing.map(({service, key}) => `<div class="missing">✗ MISSING ${key} on ${service}</div>`),
-            ...extra.map(({service, key}) => `<div class="extra">? UNREGISTERED ${key} on ${service} (not in registry)</div>`),
+            `<div><b>Gaps for ${esc(env)}: ${missing.length} missing, ${extra.length} unregistered</b></div>`,
+            ...missing.map(({service, key}) => `<div class="missing">✗ MISSING ${esc(key)} on ${esc(service)}</div>`),
+            ...extra.map(({service, key}) => `<div class="extra">? UNREGISTERED ${esc(key)} on ${esc(service)} (not in registry)</div>`),
           ];
           log.innerHTML = lines.join("");
-        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+        } catch (e) { log.innerHTML = `<div class="error">${esc(e)}</div>`; }
       }
 
       async function deploy(env) {
-        if (!confirm(`Deploy ${env.toUpperCase()} env vars to Vercel (static + generated only)?`)) return;
+        // `generate` vars are MINTED FRESH on every run and overwrite whatever is
+        // live — for BETTER_AUTH_SECRET that signs every session out. Say so.
+        if (!confirm(
+          `Deploy ${env.toUpperCase()} env vars to Vercel (static + generated only)?\n\n` +
+          `WARNING: every "generate" var (e.g. BETTER_AUTH_SECRET) is minted fresh and ` +
+          `REPLACES the value currently live on ${env.toUpperCase()}. Existing sessions ` +
+          `signed with the old secret stop validating.`,
+        )) return;
         const log = document.getElementById("log");
         log.style.display = "block";
-        log.innerHTML = `<div>deploying ${env}…</div>`;
+        log.innerHTML = `<div>deploying ${esc(env)}…</div>`;
         try {
           const r = await fetch("/api/deploy", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ env }) });
           const j = await r.json();
-          if (j.error) { log.innerHTML = `<div class="error">${j.error}</div>`; return; }
-          const lines = j.results.map((x) => `<div class="${x.status}">[${x.status}] ${x.key} → ${x.service}/${x.env}${x.detail ? "  — " + x.detail : ""}</div>`);
+          if (j.error) { log.innerHTML = `<div class="error">${esc(j.error)}</div>`; return; }
+          const lines = j.results.map(resultLine);
           const ok = j.results.filter((x) => x.status === "ok").length;
-          log.innerHTML = `<div><b>${env}: ${ok}/${j.results.length} ok</b> — re-deploy the affected Vercel projects to apply.</div>` + lines.join("");
+          log.innerHTML = `<div><b>${esc(env)}: ${ok}/${j.results.length} ok</b> — re-deploy the affected Vercel projects to apply.</div>` + lines.join("");
           await refresh();
-        } catch (e) { log.innerHTML = `<div class="error">${e}</div>`; }
+        } catch (e) { log.innerHTML = `<div class="error">${esc(e)}</div>`; }
       }
       load();
     </script>

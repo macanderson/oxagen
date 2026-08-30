@@ -56,7 +56,9 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(kleur.green().bold(`[migrate] complete (${[...stores].join(", ")})`));
+  console.log(
+    kleur.green().bold(`[migrate] complete (${[...stores].join(", ")})`),
+  );
 }
 
 main()

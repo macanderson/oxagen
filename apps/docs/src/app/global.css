@@ -51,9 +51,9 @@
      to render regardless of which token scope is active. */
   background-image: linear-gradient(
     100deg,
-    var(--_ember-a, #725A00) 0%,
-    var(--_ember-b, #EFC53F) 46%,
-    var(--_ember-c, #F7D96B) 100%
+    var(--_ember-a, #725a00) 0%,
+    var(--_ember-b, #efc53f) 46%,
+    var(--_ember-c, #f7d96b) 100%
   );
 }
 
@@ -70,11 +70,27 @@
 /* Ambient grid the hero sits on — a dot/line lattice that fades to the page. */
 .lp-grid {
   background-image:
-    linear-gradient(to right, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px);
+    linear-gradient(
+      to right,
+      color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+      transparent 1px
+    );
   background-size: 46px 46px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 38%,
+    #000 0%,
+    transparent 78%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 38%,
+    #000 0%,
+    transparent 78%
+  );
 }
 
 /* A soft ember light source bleeding from behind the hero. */
@@ -97,7 +113,8 @@
   background: rgb(15 15 18 / 0.94);
   box-shadow:
     0 1px 0 0 rgb(255 255 255 / 0.06) inset,
-    0 30px 80px -28px color-mix(in oklch, var(--_ember-c, #F7D96B) 42%, transparent),
+    0 30px 80px -28px
+    color-mix(in oklch, var(--_ember-c, #f7d96b) 42%, transparent),
     0 18px 50px -30px rgb(0 0 0 / 0.7);
   backdrop-filter: blur(8px);
 }
@@ -128,24 +145,55 @@
 }
 
 @keyframes lp-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
 }
 @keyframes lp-rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes lp-glow {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.08); }
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
 }
 @keyframes lp-hexpulse {
-  0%, 100% { opacity: 0.22; transform: scale(0.97); }
-  50% { opacity: 0.7; transform: scale(1.03); }
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.03);
+  }
 }
 @keyframes lp-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-12px) rotate(1.5deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1.5deg);
+  }
 }
 
 /* TUI screenshot components (apps/docs/src/components/tui/*) — a blinking
@@ -158,12 +206,23 @@
   animation: tui-pulse 2.2s ease-in-out infinite;
 }
 @keyframes tui-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
 }
 @keyframes tui-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -176,7 +235,9 @@
   .tui-pulse {
     animation: none !important;
   }
-  .lp-line { opacity: 1; }
+  .lp-line {
+    opacity: 1;
+  }
 }
 
 /* ───────────────────────────────────────────────────────────────────────────

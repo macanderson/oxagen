@@ -1,30 +1,23 @@
 #!/usr/bin/env tsx
 /**
- * seed-skills.ts
+ * seed-skills.ts — kept as an alias; `pnpm db:backfill-workspace-seeds` is the
+ * canonical name.
  *
- * DEPRECATED — this script previously inserted skills into a nil
- * BUILTIN_ORG_ID / BUILTIN_WORKSPACE_ID that the browse query (real
- * orgId + workspaceId) never read, so those rows were phantom seeds that
- * served no user.
- *
- * Skills are now seeded per-workspace by:
+ * Skills belong to a workspace. The browse query reads them by a real
+ * (orgId, workspaceId) pair, so a skill row has to be written per workspace to
+ * be visible to anyone. Two paths write them:
  *   1. The workspace-creation Server Actions (new-workspace/actions.ts and
  *      (onboarding)/new-organization/actions.ts) — every new workspace gets
- *      builtin skill copies immediately on creation.
- *   2. The backfill script (backfill-workspace-seeds.ts) — covers all
- *      existing workspaces created before the Server Actions were updated.
+ *      builtin skill copies on creation.
+ *   2. backfill-workspace-seeds.ts — covers workspaces created before those
+ *      actions wrote skills.
  *
- * This script now delegates to `backfill-workspace-seeds` so that `pnpm
- * db:seed-skills` continues to work and seeds real per-workspace skill rows
- * instead of phantom builtin rows.
+ * This script walks every workspace and calls the same per-workspace seeder,
+ * so `pnpm db:seed-skills` and the backfill do the same thing.
  *
  * Run via:
- *   pnpm db:seed-skills            (delegates to backfill — dry-run by default)
+ *   pnpm db:seed-skills            (dry-run by default)
  *   pnpm db:seed-skills -- --apply (writes per-workspace skill rows)
- *
- * Or use the canonical alias directly:
- *   pnpm db:backfill-workspace-seeds
- *   pnpm db:backfill-workspace-seeds -- --apply
  */
 
 import { createInterface } from "node:readline";
@@ -76,23 +69,44 @@ async function main(): Promise<void> {
   const env = requireEnv(["DATABASE_URL"]);
   const { host, database } = sanitizeUrl(env.DATABASE_URL);
 
-  console.log(kleur.cyan("┌───────────────────────────────────────────────────────────────┐"));
-  console.log(kleur.cyan("│   seed-skills — per-workspace builtin skill seeder (backfill) │"));
-  console.log(kleur.cyan("└───────────────────────────────────────────────────────────────┘"));
+  console.log(
+    kleur.cyan(
+      "┌───────────────────────────────────────────────────────────────┐",
+    ),
+  );
+  console.log(
+    kleur.cyan(
+      "│   seed-skills — per-workspace builtin skill seeder (backfill) │",
+    ),
+  );
+  console.log(
+    kleur.cyan(
+      "└───────────────────────────────────────────────────────────────┘",
+    ),
+  );
   console.log();
-  console.log(kleur.yellow("NOTE: This script was rewritten to seed skills per-workspace (see"));
-  console.log(kleur.yellow("      skill-workspace-seed.ts). The old nil-UUID builtin seed path"));
-  console.log(kleur.yellow("      produced phantom rows the browse query never read."));
-  console.log(kleur.yellow("      Use `pnpm db:backfill-workspace-seeds` as the canonical alias."));
+  console.log(
+    kleur.yellow("NOTE: Seeds builtin skills into every workspace (see"),
+  );
+  console.log(
+    kleur.yellow(
+      "      skill-workspace-seed.ts). `pnpm db:backfill-workspace-seeds`",
+    ),
+  );
+  console.log(kleur.yellow("      is the canonical name for this command."));
   console.log();
   console.log(`  Target host  : ${kleur.yellow(host)}`);
   console.log(`  Database     : ${kleur.yellow(database)}`);
-  console.log(`  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`);
+  console.log(
+    `  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`,
+  );
   console.log();
 
   if (!DRY_RUN && !isLocalHost(host)) {
     console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    const ok = await confirm(
+      "  Proceed with write to production database? [y/N] ",
+    );
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       process.exit(0);
@@ -148,7 +162,9 @@ async function main(): Promise<void> {
     } catch (err: unknown) {
       failed++;
       console.log(
-        kleur.red(`  [fail] ${ws.name} (${ws.id}) org=${ws.orgId} — ${formatError(err)}`),
+        kleur.red(
+          `  [fail] ${ws.name} (${ws.id}) org=${ws.orgId} — ${formatError(err)}`,
+        ),
       );
     }
   }
@@ -156,20 +172,32 @@ async function main(): Promise<void> {
   const totalMs = Date.now() - start;
 
   console.log();
-  console.log(kleur.cyan("─────────────────────────────────────────────────────────────────"));
+  console.log(
+    kleur.cyan(
+      "─────────────────────────────────────────────────────────────────",
+    ),
+  );
   console.log(kleur.cyan(`[seed-skills] Summary (${totalMs}ms)`));
   console.log(`  Workspaces scanned  : ${allWorkspaces.length}`);
   if (!DRY_RUN) {
     console.log(`  Templates scanned   : ${totalScanned}`);
-    console.log(`  Skills inserted     : ${totalInserted > 0 ? kleur.green(String(totalInserted)) : kleur.dim("0")}`);
-    console.log(`  Failed workspaces   : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+    console.log(
+      `  Skills inserted     : ${totalInserted > 0 ? kleur.green(String(totalInserted)) : kleur.dim("0")}`,
+    );
+    console.log(
+      `  Failed workspaces   : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`,
+    );
   } else {
     console.log(kleur.blue("  (dry-run — no writes made)"));
   }
 
   if (DRY_RUN) {
     console.log();
-    console.log(kleur.blue("[seed-skills] This was a dry-run. Re-run with --apply to write."));
+    console.log(
+      kleur.blue(
+        "[seed-skills] This was a dry-run. Re-run with --apply to write.",
+      ),
+    );
   }
 
   await closeDatabase();

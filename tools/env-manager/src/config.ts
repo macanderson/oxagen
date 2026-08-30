@@ -17,7 +17,9 @@ const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
 // Env values pasted into a dashboard arrive double-quoted; strip one balanced pair.
 function deQuote(v: string | undefined): string | undefined {
   if (!v) return v;
-  return v.length >= 2 && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v;
+  return v.length >= 2 && v.startsWith('"') && v.endsWith('"')
+    ? v.slice(1, -1)
+    : v;
 }
 
 export interface Config {
@@ -30,7 +32,9 @@ export interface Config {
 export function loadConfig(): Config {
   const projects = { ...DEFAULT_PROJECTS };
   for (const svc of SERVICE_NAMES) {
-    const override = deQuote(process.env[`VERCEL_PROJECT_${svc.toUpperCase()}`]);
+    const override = deQuote(
+      process.env[`VERCEL_PROJECT_${svc.toUpperCase()}`],
+    );
     if (override) projects[svc] = override;
   }
   return {

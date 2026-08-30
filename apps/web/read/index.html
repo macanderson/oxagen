@@ -43,12 +43,14 @@
 </script>
 <style>
 /* ============ tokens ============
-   The Stella v2 table, same as /assets/oxagen.css. The `--ember-*` and
-   `--indigo` names are kept because the rest of this page's rules reference
-   them; what they hold is the gold and the ink. Nothing here is a gradient. */
+   The Stella palette, re-declared because this page does not link
+   /assets/oxagen.css — it replaces its own document with the reader HTML the
+   API returns, so it carries everything it needs inline. Keep the values here
+   in step with the --st-* table in /assets/oxagen.css.
+   The `--ember-*` and `--indigo` names predate the Stella reskin; what they
+   now hold is the gold, the fail red and the ink. Nothing here is a gradient. */
 :root{
   --bg:#0A0A0C;
-  --bg-raise:#0F0F12;
   --surface:#17171B;
   --card:#0F0F12;
   --line:#26262C;
@@ -60,9 +62,7 @@
   --ember-a:#E0687A;   /* fail */
   --ember-b:#EFC53F;   /* the brand metal */
   --ember-c:#EFC53F;   /* the brand metal */
-  --ember-soft:#17171B;
-  --indigo:#EFC53F;
-  --indigo-soft:#17171B;
+  --indigo:#EFC53F;    /* the brand metal, as a link colour */
   --ok:#74C991;
   --radius:2px;
   --ease-out:cubic-bezier(.22,1,.36,1);
@@ -103,7 +103,7 @@ button,input,textarea,select{font:inherit;color:inherit}
   padding:10px 16px;border-radius:2px;font-weight:600;transition:top .2s;
 }
 .skip:focus{top:12px}
-.grad-text{color:var(--ember-c)}
+.metal{color:var(--ember-c)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 
 .eyebrow{
@@ -325,7 +325,7 @@ main{flex:1;position:relative}
       <div class="book-scene" aria-hidden="true">
         <div class="book">
           <span class="book-kicker">A field manual in 14 parts</span>
-          <span class="book-title">Engineering <span class="grad-text">Deterministic</span> AI Coding Agents</span>
+          <span class="book-title">Engineering <span class="metal">Deterministic</span> AI Coding Agents</span>
           <span class="book-author"><b>Mac Anderson</b><span>Founder &amp; CEO, Oxagen</span></span>
         </div>
       </div>
@@ -513,6 +513,10 @@ main{flex:1;position:relative}
   var effectiveEdition = EDITIONS.indexOf(urlEdition) !== -1 ? urlEdition : DEFAULT_EDITION;
   var code = qs.get("c") || qs.get("code") || "";
 
+  /* The API caps trackingCode at 500 characters and rejects the whole lead if
+     it is longer, so truncate here rather than lose the lead to attribution. */
+  var TRACKING_CODE_MAX = 500;
+
   function buildTrackingCode() {
     var keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "tc", "tracking_code"];
     var parts = [];
@@ -520,9 +524,20 @@ main{flex:1;position:relative}
       var v = qs.get(k);
       if (v) { parts.push(k + "=" + v); }
     });
-    return parts.length ? parts.join("&") : undefined;
+    return parts.length ? parts.join("&").slice(0, TRACKING_CODE_MAX) : undefined;
   }
   var trackingCode = buildTrackingCode();
+
+  /* The gate form is reachable with a `c=` still in the URL (an expired or
+     already-used link lands here), and pagePath is stored on the lead row —
+     so drop the access code before recording where the visitor was. */
+  function safePagePath() {
+    var scrubbed = new URLSearchParams(location.search);
+    scrubbed.delete("c");
+    scrubbed.delete("code");
+    var rest = scrubbed.toString();
+    return location.pathname + (rest ? "?" + rest : "");
+  }
 
   var loadingState = document.getElementById("loadingState");
   var gateCard = document.getElementById("gateCard");
@@ -609,8 +624,15 @@ main{flex:1;position:relative}
   var successPanel = document.getElementById("successPanel");
   var successMessage = document.getElementById("successMessage");
 
+  /* `msg` is markup, so every caller must pass a literal defined in this file. */
   function setStatus(el, msg, isErr) {
     el.innerHTML = msg;
+    el.classList.toggle("err", !!isErr);
+  }
+
+  /* Anything the API sent us goes through here instead — it is text, not markup. */
+  function setStatusText(el, msg, isErr) {
+    el.textContent = msg;
     el.classList.toggle("err", !!isErr);
   }
 
@@ -629,7 +651,7 @@ main{flex:1;position:relative}
         email: String(fd.get("email") || "").trim().toLowerCase(),
         edition: String(fd.get("edition") || DEFAULT_EDITION),
         source: "ebook-gate",
-        pagePath: location.pathname + location.search,
+        pagePath: safePagePath(),
         website: String(fd.get("website") || "")
       };
       [
@@ -721,7 +743,7 @@ main{flex:1;position:relative}
         var data = r.data || {};
         btn.disabled = false;
         if (r.status >= 200 && r.status < 300 && data.ok) {
-          setStatus(statusEl, data.message || (data.sent ? "The link to the book has been sent to your email." : "We couldn’t find that email. Please fill out the form to get the book."));
+          setStatusText(statusEl, data.message || (data.sent ? "The link to the book has been sent to your email." : "We couldn’t find that email. Please fill out the form to get the book."));
           announce(statusEl.textContent);
         } else {
           setStatus(

@@ -1,9 +1,4 @@
 {
   "title": "REST API",
-  "pages": [
-    "overview",
-    "authentication",
-    "capabilities",
-    "chat-streaming"
-  ]
+  "pages": ["overview", "authentication", "capabilities", "chat-streaming"]
 }

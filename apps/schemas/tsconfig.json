@@ -1,7 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
+    // No `outDir`: this package never emits. `scripts/generate.ts` is run
+    // through tsx and `public/` is served as-is, so tsc only typechecks.
     // This package imports the CLI's settings schema by relative source path
     // (apps/cli is not published for import) rather than duplicating it, so
     // rootDir must cover both apps/schemas and apps/cli.

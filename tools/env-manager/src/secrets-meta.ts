@@ -43,7 +43,7 @@ export const ALIAS: Record<string, string> = {
   "oxagen-embedding-api-key": "AI_GATEWAY_API_KEY",
   // Postgres
   "oxagen-database-url": "DATABASE_URL",
-  "DATABASE_URL": "DATABASE_URL",
+  DATABASE_URL: "DATABASE_URL",
   // ClickHouse (telemetry analytics store)
   "oxagen-clickhouse-url": "CLICKHOUSE_URL",
   "oxagen-clickhouse-user": "CLICKHOUSE_USERNAME",
@@ -98,7 +98,9 @@ export function canonicalize(name: string): string {
 }
 
 const REGISTRY_KEYS = Object.keys(ENV_REGISTRY);
-const REGISTRY_BY_CANON = new Map<string, string>(REGISTRY_KEYS.map((k) => [canonicalize(k), k]));
+const REGISTRY_BY_CANON = new Map<string, string>(
+  REGISTRY_KEYS.map((k) => [canonicalize(k), k]),
+);
 
 /**
  * Resolve the repo env var a GCP secret maps to, if any. Alias first, then exact
@@ -133,7 +135,8 @@ export function cliGenCommand(gcpName: string): string | null {
     )
   )
     return "Generate: `openssl rand -base64 32`";
-  if (/password|valkey-auth|-auth$|pgadmin/.test(n)) return "Generate: `openssl rand -base64 24`";
+  if (/password|valkey-auth|-auth$|pgadmin/.test(n))
+    return "Generate: `openssl rand -base64 24`";
   return null;
 }
 
@@ -159,19 +162,22 @@ const PROVIDERS: Provider[] = [
     id: "anthropic",
     test: (n) => n.includes("anthropic"),
     url: "https://console.anthropic.com/settings/keys",
-    describe: () => "Anthropic API key. The platform routes Claude calls through the Vercel AI Gateway, so prefer AI_GATEWAY_API_KEY in deployed envs.",
+    describe: () =>
+      "Anthropic API key. The platform routes Claude calls through the Vercel AI Gateway, so prefer AI_GATEWAY_API_KEY in deployed envs.",
   },
   {
     id: "openai",
     test: (n) => n.includes("openai"),
     url: "https://platform.openai.com/api-keys",
-    describe: () => "OpenAI API key (image/embeddings). Routed through the AI Gateway in deployed envs.",
+    describe: () =>
+      "OpenAI API key (image/embeddings). Routed through the AI Gateway in deployed envs.",
   },
   {
     id: "mistral",
     test: (n) => n.includes("mistral"),
     url: "https://console.mistral.ai/api-keys",
-    describe: () => "Mistral API key. Routed through the AI Gateway in deployed envs.",
+    describe: () =>
+      "Mistral API key. Routed through the AI Gateway in deployed envs.",
   },
   {
     id: "elevenlabs",
@@ -207,25 +213,31 @@ const PROVIDERS: Provider[] = [
     id: "embedding",
     test: (n) => n.includes("embedding"),
     url: "https://platform.openai.com/api-keys",
-    describe: () => "Embedding-model API key. Routed through the AI Gateway in deployed envs.",
+    describe: () =>
+      "Embedding-model API key. Routed through the AI Gateway in deployed envs.",
   },
   {
     id: "stripe-price",
     test: (n) => n.includes("stripe-price"),
     url: "https://dashboard.stripe.com/products",
-    describe: (n) => `Stripe price id for "${humanize(n).replace("stripe price ", "")}". Synced via \`pnpm billing:stripe-sync\`.`,
+    describe: (n) =>
+      `Stripe price id for "${humanize(n).replace("stripe price ", "")}". Synced via \`pnpm billing:stripe-sync\`.`,
   },
   {
     id: "stripe-webhook",
     test: (n) => n.includes("stripe") && n.includes("webhook"),
     url: "https://dashboard.stripe.com/webhooks",
-    describe: () => "Stripe webhook signing secret (whsec_) validating inbound Stripe events.",
+    describe: () =>
+      "Stripe webhook signing secret (whsec_) validating inbound Stripe events.",
   },
   {
     id: "stripe",
     test: (n) => n.includes("stripe"),
     url: "https://dashboard.stripe.com/apikeys",
-    describe: (n) => (n.includes("publishable") ? "Stripe publishable key (pk_)." : "Stripe secret key (sk_)."),
+    describe: (n) =>
+      n.includes("publishable")
+        ? "Stripe publishable key (pk_)."
+        : "Stripe secret key (sk_).",
   },
   {
     id: "linear",
@@ -255,8 +267,9 @@ const PROVIDERS: Provider[] = [
     url: "https://console.cloud.google.com/apis/credentials",
     describe: (n) => {
       const svc =
-        /calendar|gmail|drive|docs|sheets|slides|meet|contacts|bigquery|admin|connections|internal|website/.exec(n)?.[0] ??
-        "login";
+        /calendar|gmail|drive|docs|sheets|slides|meet|contacts|bigquery|admin|connections|internal|website/.exec(
+          n,
+        )?.[0] ?? "login";
       return `Google OAuth client ${n.includes("secret") ? "secret" : "id"} for the ${svc} scope/surface.`;
     },
   },
@@ -273,13 +286,15 @@ const PROVIDERS: Provider[] = [
     id: "clickhouse",
     test: (n) => n.includes("clickhouse") || n.includes("clickpipes"),
     url: "https://clickhouse.cloud/",
-    describe: (n) => `ClickHouse ${/(url|user|password)/.exec(n)?.[0] ?? "credential"} for the telemetry store.`,
+    describe: (n) =>
+      `ClickHouse ${/(url|user|password)/.exec(n)?.[0] ?? "credential"} for the telemetry store.`,
   },
   {
     id: "plaid",
     test: (n) => n.includes("plaid"),
     url: "https://dashboard.plaid.com/developers/keys",
-    describe: (n) => `Plaid ${n.includes("client-id") ? "client id" : "secret"} for the financial-data connector.`,
+    describe: (n) =>
+      `Plaid ${n.includes("client-id") ? "client id" : "secret"} for the financial-data connector.`,
   },
   {
     id: "twilio",
@@ -301,31 +316,40 @@ const PROVIDERS: Provider[] = [
     test: (n) => n.includes("resend") || n.includes("smtp"),
     url: "https://resend.com/api-keys",
     describe: (n) =>
-      n.includes("webhook") ? "Resend webhook signing secret." : "Resend API key, used as the SMTP password (re_…).",
+      n.includes("webhook")
+        ? "Resend webhook signing secret."
+        : "Resend API key, used as the SMTP password (re_…).",
   },
   {
     id: "posthog",
     test: (n) => n.includes("posthog"),
     url: "https://us.posthog.com/settings/project",
-    describe: (n) => (n.includes("host") ? "PostHog ingestion host URL." : "PostHog project API key."),
+    describe: (n) =>
+      n.includes("host")
+        ? "PostHog ingestion host URL."
+        : "PostHog project API key.",
   },
   {
     id: "vercel",
     test: (n) => n.includes("vercel"),
     url: "https://vercel.com/account/settings/tokens",
-    describe: () => "Vercel API token used by tooling to read/write project env vars.",
+    describe: () =>
+      "Vercel API token used by tooling to read/write project env vars.",
   },
   {
     id: "redis",
-    test: (n) => n.includes("redis") || n.includes("valkey") || n.includes("celery"),
+    test: (n) =>
+      n.includes("redis") || n.includes("valkey") || n.includes("celery"),
     url: "https://console.upstash.com/",
-    describe: (n) => `Redis/Valkey ${n.includes("celery") ? "Celery broker/result URL" : "connection credential"}.`,
+    describe: (n) =>
+      `Redis/Valkey ${n.includes("celery") ? "Celery broker/result URL" : "connection credential"}.`,
   },
   {
     id: "alloydb",
     test: (n) => n.includes("alloydb"),
     url: "https://console.cloud.google.com/alloydb",
-    describe: () => "AlloyDB server CA certificate for verified TLS connections.",
+    describe: () =>
+      "AlloyDB server CA certificate for verified TLS connections.",
   },
   {
     id: "gotenberg",
@@ -337,7 +361,8 @@ const PROVIDERS: Provider[] = [
     id: "postgres-pw",
     test: (n) => n.includes("postgres") || n.includes("pgadmin"),
     url: "https://console.cloud.google.com/security/secret-manager",
-    describe: (n) => `${n.includes("pgadmin") ? "pgAdmin" : "Postgres"} admin password.`,
+    describe: (n) =>
+      `${n.includes("pgadmin") ? "pgAdmin" : "Postgres"} admin password.`,
   },
 ];
 

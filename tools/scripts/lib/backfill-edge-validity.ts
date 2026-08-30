@@ -6,13 +6,19 @@
  * fake session. See the runner for the prod-run procedure.
  */
 
-// The lexical guard every relationship-type write in the codebase uses, so a
-// --rel-types value can be safely interpolated into the type-filter predicate.
+// The lexical guard every relationship-type write in the codebase uses. The
+// type filter binds $relTypes as a Cypher parameter rather than splicing the
+// value into the query text, so this is a shape check that rejects typos and
+// non-conforming types early — not the thing standing between a caller and an
+// injection.
 export const RELATIONSHIP_TYPE_PATTERN = /^[A-Z][A-Z0-9_]{0,62}$/;
 
 /** Minimal session surface the backfill needs — satisfied by a neo4j Session. */
 export interface BackfillSession {
-  run: (cypher: string, params?: Record<string, unknown>) => Promise<{
+  run: (
+    cypher: string,
+    params?: Record<string, unknown>,
+  ) => Promise<{
     records: Array<{ get: (key: string) => unknown }>;
   }>;
 }
@@ -37,7 +43,9 @@ export function validateRelTypes(relTypes: string[] | null): void {
   if (!relTypes) return;
   for (const t of relTypes) {
     if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
-      throw new Error(`Invalid relationship type "${t}" — must match ${RELATIONSHIP_TYPE_PATTERN}`);
+      throw new Error(
+        `Invalid relationship type "${t}" — must match ${RELATIONSHIP_TYPE_PATTERN}`,
+      );
     }
   }
 }
@@ -45,7 +53,10 @@ export function validateRelTypes(relTypes: string[] | null): void {
 /** Parse a comma-separated --rel-types value to an uppercased list, or null. */
 export function parseRelTypes(raw: string | undefined): string[] | null {
   if (!raw) return null;
-  const list = raw.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  const list = raw
+    .split(",")
+    .map((t) => t.trim().toUpperCase())
+    .filter(Boolean);
   return list.length > 0 ? list : null;
 }
 
@@ -80,13 +91,21 @@ export function buildStampQuery(relTypes: string[] | null): string {
 function toNumber(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value === "bigint") return Number(value);
-  if (value != null && typeof value === "object" && "low" in value && typeof (value as { low: unknown }).low === "number") {
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "low" in value &&
+    typeof (value as { low: unknown }).low === "number"
+  ) {
     return (value as { low: number }).low;
   }
   return 0;
 }
 
-async function count(session: BackfillSession, relTypes: string[] | null): Promise<number> {
+async function count(
+  session: BackfillSession,
+  relTypes: string[] | null,
+): Promise<number> {
   const res = await session.run(buildCountQuery(relTypes), { relTypes });
   return toNumber(res.records[0]?.get("remaining"));
 }

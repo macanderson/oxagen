@@ -16,10 +16,15 @@ async function main(): Promise<void> {
   console.log(kleur.green("[seed] platform defaults applied"));
 }
 
+// closeDatabase() is awaited BEFORE process.exit — a `.finally()` after a
+// `.then(() => process.exit(0))` never runs, because exit is immediate.
 main()
-  .then(() => process.exit(0))
-  .catch((err: unknown) => {
-    console.error(kleur.red(formatError(err)));
-    process.exit(1);
+  .then(async () => {
+    await closeDatabase();
+    process.exit(0);
   })
-  .finally(() => closeDatabase());
+  .catch(async (err: unknown) => {
+    console.error(kleur.red(formatError(err)));
+    await closeDatabase().catch(() => {});
+    process.exit(1);
+  });

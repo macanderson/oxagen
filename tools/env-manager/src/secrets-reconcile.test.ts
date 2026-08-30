@@ -2,7 +2,12 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseEnvFile, parseEnvText, reconcile, STAGE_SUFFIX } from "./secrets-reconcile";
+import {
+  parseEnvFile,
+  parseEnvText,
+  reconcile,
+  STAGE_SUFFIX,
+} from "./secrets-reconcile";
 
 describe("parseEnvFile", () => {
   it("reads and parses a real file from disk", () => {
@@ -29,7 +34,9 @@ describe("parseEnvText", () => {
   });
 
   it("strips markdown bullets used by creds.txt", () => {
-    const m = parseEnvText("- STRIPE_SECRET_KEY=sk_test_123\n  - DATABASE_URL=postgres://x");
+    const m = parseEnvText(
+      "- STRIPE_SECRET_KEY=sk_test_123\n  - DATABASE_URL=postgres://x",
+    );
     expect(m.get("STRIPE_SECRET_KEY")).toBe("sk_test_123");
     expect(m.get("DATABASE_URL")).toBe("postgres://x");
   });
@@ -43,13 +50,13 @@ describe("parseEnvText", () => {
 
   it("unwraps a single surrounding double-quote pair", () => {
     expect(parseEnvText('K="quoted"').get("K")).toBe("quoted");
-    expect(parseEnvText('K=plain').get("K")).toBe("plain");
+    expect(parseEnvText("K=plain").get("K")).toBe("plain");
   });
 
   it("keeps '=' that appear inside the value", () => {
-    expect(parseEnvText("URL=postgres://u:p@h/db?sslmode=require").get("URL")).toBe(
-      "postgres://u:p@h/db?sslmode=require",
-    );
+    expect(
+      parseEnvText("URL=postgres://u:p@h/db?sslmode=require").get("URL"),
+    ).toBe("postgres://u:p@h/db?sslmode=require");
   });
 });
 
@@ -70,22 +77,58 @@ describe("reconcile", () => {
   const envLocal = new Map([["INNGEST_EVENT_KEY", "ev_env"]]);
 
   it("uses the creds.txt value for an unsuffixed secret and flags the duplicate", () => {
-    const r = reconcile("oxagen-stripe-secret", "STRIPE_SECRET_KEY", "sk_gcp", creds, envLocal);
-    expect(r).toEqual({ value: "sk_creds", source: "creds.txt", isDuplicate: true });
+    const r = reconcile(
+      "oxagen-stripe-secret",
+      "STRIPE_SECRET_KEY",
+      "sk_gcp",
+      creds,
+      envLocal,
+    );
+    expect(r).toEqual({
+      value: "sk_creds",
+      source: "creds.txt",
+      isDuplicate: true,
+    });
   });
 
   it("keeps the GCP value for a -production variant even though it's a duplicate", () => {
-    const r = reconcile("oxagen-stripe-secret-production", "STRIPE_SECRET_KEY", "sk_gcp_prod", creds, envLocal);
-    expect(r).toEqual({ value: "sk_gcp_prod", source: "gcp", isDuplicate: true });
+    const r = reconcile(
+      "oxagen-stripe-secret-production",
+      "STRIPE_SECRET_KEY",
+      "sk_gcp_prod",
+      creds,
+      envLocal,
+    );
+    expect(r).toEqual({
+      value: "sk_gcp_prod",
+      source: "gcp",
+      isDuplicate: true,
+    });
   });
 
   it("falls back to .env.local only when GCP has no value", () => {
-    const r = reconcile("oxagen-inngest-event-key", "INNGEST_EVENT_KEY", null, creds, envLocal);
-    expect(r).toEqual({ value: "ev_env", source: ".env.local", isDuplicate: true });
+    const r = reconcile(
+      "oxagen-inngest-event-key",
+      "INNGEST_EVENT_KEY",
+      null,
+      creds,
+      envLocal,
+    );
+    expect(r).toEqual({
+      value: "ev_env",
+      source: ".env.local",
+      isDuplicate: true,
+    });
   });
 
   it("returns the GCP value with no duplicate when nothing local matches", () => {
-    const r = reconcile("oxagen-novel-secret", null, "gcp_only", creds, envLocal);
+    const r = reconcile(
+      "oxagen-novel-secret",
+      null,
+      "gcp_only",
+      creds,
+      envLocal,
+    );
     expect(r).toEqual({ value: "gcp_only", source: "gcp", isDuplicate: false });
   });
 
@@ -97,11 +140,25 @@ describe("reconcile", () => {
   it("matches via the canonicalized GCP name when no env key is supplied", () => {
     const c = new Map([["STRIPE_SECRET", "by_canon"]]);
     const r = reconcile("oxagen-stripe-secret", null, "gcp", c, new Map());
-    expect(r).toEqual({ value: "by_canon", source: "creds.txt", isDuplicate: true });
+    expect(r).toEqual({
+      value: "by_canon",
+      source: "creds.txt",
+      isDuplicate: true,
+    });
   });
 
   it("uses creds even for a stage variant if GCP value is missing", () => {
-    const r = reconcile("oxagen-stripe-secret-staging", "STRIPE_SECRET_KEY", null, creds, envLocal);
-    expect(r).toEqual({ value: "sk_creds", source: "creds.txt", isDuplicate: true });
+    const r = reconcile(
+      "oxagen-stripe-secret-staging",
+      "STRIPE_SECRET_KEY",
+      null,
+      creds,
+      envLocal,
+    );
+    expect(r).toEqual({
+      value: "sk_creds",
+      source: "creds.txt",
+      isDuplicate: true,
+    });
   });
 });

@@ -1,114 +1,118 @@
 ---
 title: MCP tools
-description: The full list of tools exposed by the Oxagen MCP server, their parity with the REST API, and known gaps.
+description: The tools exposed by the Oxagen MCP server, how they are named, and the flows MCP cannot reach.
 ---
 
-## Tool naming convention
+## Tool naming
 
-MCP tool names use double-underscore (`__`) as the namespace separator because the dot (`.`) is not valid in MCP tool names. The capability `agent.memory.recall` is exposed as the tool `agent__memory__recall`.
+An MCP tool is named after the capability behind it, with no translation step. The capability `recall_memory` is the tool `recall_memory`.
+
+Capability names are verb-first snake_case — an imperative verb, then the thing it acts on, joined by underscores. See [Capability naming](/docs/api/capabilities#capability-naming) for the full rule. Because these names contain no dots, they are already legal MCP tool names, so what you call is exactly what the contract registry declares.
 
 ## Available tools
 
-All capabilities declared with `'mcp'` in their `surfaces` array are available. The list below mirrors the [capabilities reference](/docs/api/capabilities) filtered to MCP-surfaced capabilities.
+Every capability that lists `mcp` in its `surfaces` array becomes a tool. The table below covers the common ones; the [capabilities reference](/docs/api/capabilities) is the fuller list, and the governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry.
+
+Your MCP client can also just ask. Call `tools/list` after connecting and the server returns every tool your API key is allowed to use, with its input schema — that answer is always current, and this page is not.
 
 ### Agent
 
-| Tool                              | Capability                     | Description                                          |
-| --------------------------------- | ------------------------------ | ---------------------------------------------------- |
-| `agent__tool__list`               | `agent.tool.list`              | List available tools for the current workspace       |
-| `agent__skill__list`              | `agent.skill.list`             | List available skills                                |
-| `agent__mcp__list`                | `agent.mcp.list`               | List registered external MCP servers                 |
-| `agent__mcp__register`            | `agent.mcp.register`           | Register an external MCP server                      |
-| `agent__plan__approve`            | `agent.plan.approve`           | Approve a pending agent plan                         |
-| `agent__approval__resolve`        | `agent.approval.resolve`       | Approve or deny a pending tool-call approval request |
-| `agent__memory__recall`           | `agent.memory.recall`          | Recall memories from the workspace knowledge graph   |
-| `agent__memory__write`            | `agent.memory.write`           | Write a new memory to the workspace knowledge graph  |
-| `agent__task__background__start`  | `agent.task.background.start`  | Start a long-running background task                 |
-| `agent__task__background__read`   | `agent.task.background.read`   | Read the status of a background task                 |
-| `agent__task__background__cancel` | `agent.task.background.cancel` | Cancel a running background task                     |
+| Tool                     | Description                                          |
+| ------------------------ | ---------------------------------------------------- |
+| `list_agent_tools`       | List available tools for the current workspace       |
+| `list_agent_skills`      | List available skills                                |
+| `list_mcp_servers`       | List registered external MCP servers                 |
+| `register_mcp_server`    | Register an external MCP server                      |
+| `approve_plan`           | Approve a pending agent plan                         |
+| `resolve_approval`       | Approve or deny a pending tool-call approval request |
+| `recall_memory`          | Recall memories from the workspace knowledge graph   |
+| `write_memory`           | Write a new memory to the workspace knowledge graph  |
+| `start_background_task`  | Start a long-running background task                 |
+| `get_background_task`    | Read the status of a background task                 |
+| `cancel_background_task` | Cancel a running background task                     |
 
 ### Chat and conversations
 
-| Tool                    | Capability             | Description                                           |
-| ----------------------- | ---------------------- | ----------------------------------------------------- |
-| `chat__message__send`   | `chat.message.send`    | Send a message to a conversation                      |
-| `conversation__list`    | `conversation.list`    | List conversations in the workspace                   |
-| `conversation__archive` | `conversation.archive` | Archive a conversation                                |
-| `conversation__rename`  | `conversation.rename`  | Rename a conversation                                 |
-| `conversation__delete`  | `conversation.delete`  | Delete a conversation                                 |
-| `conversation__purge`   | `conversation.purge`   | Permanently purge a conversation and all its messages |
+| Tool                   | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `send_message`         | Send a message to a conversation                      |
+| `list_conversations`   | List conversations in the workspace                   |
+| `archive_conversation` | Archive a conversation                                |
+| `rename_conversation`  | Rename a conversation                                 |
+| `delete_conversation`  | Delete a conversation                                 |
+| `purge_conversations`  | Permanently purge a conversation and all its messages |
 
 ### Knowledge and assets
 
-| Tool            | Capability     | Description                                  |
-| --------------- | -------------- | -------------------------------------------- |
-| `asset__upload` | `asset.upload` | Upload a binary asset (image, PDF, document) |
+| Tool           | Description                                  |
+| -------------- | -------------------------------------------- |
+| `upload_asset` | Upload a binary asset (image, PDF, document) |
 
 ### Content generation
 
-| Tool                     | Capability             | Description                                   |
-| ------------------------ | ---------------------- | --------------------------------------------- |
-| `documents__generate`    | `documents.generate`   | Generate a document (Word, Markdown, or HTML) |
-| `documents__pdf__create` | `documents.pdf.create` | Generate a PDF document                       |
-| `image__generate`        | `image.generate`       | Generate an image                             |
-| `svg__generate`          | `svg.generate`         | Generate an SVG graphic                       |
-| `video__generate`        | `video.generate`       | Generate a video (async; returns task ID)     |
-| `form__fill`             | `form.fill`            | Fill a form with structured data              |
+| Tool                | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `generate_document` | Generate a document (Word, Markdown, or HTML) |
+| `create_pdf`        | Generate a PDF document                       |
+| `generate_image`    | Generate an image                             |
+| `generate_svg`      | Generate an SVG graphic                       |
+| `generate_video`    | Generate a video (async; returns task ID)     |
+| `fill_form`         | Fill a form with structured data              |
 
 ### Organization and workspace
 
-| Tool                               | Capability                      | Description                           |
-| ---------------------------------- | ------------------------------- | ------------------------------------- |
-| `organization__create`             | `organization.create`           | Create a new organization             |
-| `org__member__add`                 | `org.member.add`                | Add a member to the organization      |
-| `org__member__remove`              | `org.member.remove`             | Remove a member from the organization |
-| `org__member__role__change`        | `org.member.role.change`        | Change a member's role                |
-| `org__member__invite__accept`      | `org.member.invite.accept`      | Accept a pending invitation           |
-| `org__member__invite__decline`     | `org.member.invite.decline`     | Decline a pending invitation          |
-| `workspace__create`                | `workspace.create`              | Create a new workspace                |
-| `workspace__model__settings__read`  | `workspace.model.settings.read`  | Read workspace model configuration    |
-| `workspace__model__settings__write` | `workspace.model.settings.write` | Write workspace model configuration   |
+| Tool                    | Description                           |
+| ----------------------- | ------------------------------------- |
+| `create_org`            | Create a new organization             |
+| `add_org_member`        | Add a member to the organization      |
+| `remove_org_member`     | Remove a member from the organization |
+| `change_member_role`    | Change a member's role                |
+| `accept_member_invite`  | Accept a pending invitation           |
+| `decline_member_invite` | Decline a pending invitation          |
+| `create_workspace`      | Create a new workspace                |
+| `get_model_settings`    | Read workspace model configuration    |
+| `update_model_settings` | Write workspace model configuration   |
 
 ### Billing
 
-| Tool                          | Capability                  | Description                                  |
-| ----------------------------- | --------------------------- | -------------------------------------------- |
-| `billing__subscription__read` | `billing.subscription.read` | Read current subscription and credit balance |
+| Tool               | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `get_subscription` | Read current subscription and credit balance |
 
 ### Notifications and preferences
 
-| Tool                       | Capability               | Description                |
-| -------------------------- | ------------------------ | -------------------------- |
-| `notifications__list`      | `notifications.list`     | List notifications         |
-| `notifications__mark`      | `notifications.mark`     | Mark notifications as read |
-| `user__preferences__read`  | `user.preferences.read`  | Read user preferences      |
-| `user__preferences__write` | `user.preferences.write` | Update user preferences    |
+| Tool                      | Description                |
+| ------------------------- | -------------------------- |
+| `list_notifications`      | List notifications         |
+| `mark_notification`       | Mark notifications as read |
+| `get_user_preferences`    | Read user preferences      |
+| `update_user_preferences` | Update user preferences    |
 
 ### Plugins
 
-| Tool                      | Capability              | Description                       |
-| ------------------------- | ----------------------- | --------------------------------- |
-| `plugin__catalog__browse` | `plugin.catalog.browse` | Browse the plugin marketplace     |
-| `plugin__catalog__get`    | `plugin.catalog.get`    | Get details for a specific plugin |
-| `plugin__org__list`       | `plugin.org.list`       | List org-installed plugins        |
-| `plugin__registry__list`  | `plugin.registry.list`  | List configured plugin registries |
+| Tool                     | Description                       |
+| ------------------------ | --------------------------------- |
+| `browse_plugin_catalog`  | Browse the plugin marketplace     |
+| `get_catalog_plugin`     | Get details for a specific plugin |
+| `list_plugins`           | List org-installed plugins        |
+| `list_plugin_registries` | List configured plugin registries |
 
 ### System
 
-| Tool                            | Capability                    | Description                                       |
-| ------------------------------- | ----------------------------- | ------------------------------------------------- |
-| `system__install__instructions` | `system.install.instructions` | Get workspace context and connection verification |
+| Tool                       | Description                                       |
+| -------------------------- | ------------------------------------------------- |
+| `get_install_instructions` | Get workspace context and connection verification |
 
 ## Parity model
 
-The MCP tool list is generated from the same contract registry as the REST API. Every capability that declares `'mcp'` in its `surfaces` array is a tool; every capability that does not is excluded. This is not maintained by hand — it is structural.
+The tool list is built from the same contract registry as the REST API. A capability that declares `mcp` in its `surfaces` array becomes a tool; one that does not is left out. Nobody keeps the two surfaces in sync by hand — the registry is the only list.
 
 ## Known gaps
 
-The following capabilities are not available via MCP due to transport or UX constraints:
+These flows are not reachable over MCP:
 
-| Capability                 | Reason                       |
-| -------------------------- | ---------------------------- |
-| OAuth plugin install flows | Browser redirect required    |
+| Flow                       | Reason                    |
+| -------------------------- | ------------------------- |
+| OAuth plugin install flows | Browser redirect required |
 
-The capability parity check reports the current parity gap automatically at build time.
+Run `pnpm check:manifest --json` in the monorepo to see the current route and tool parity table.

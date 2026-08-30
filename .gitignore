@@ -168,3 +168,7 @@ __pycache__/
 # macOS custom-folder-icon marker (the real filename is "Icon\r" — a bare
 # "Icon" pattern never matches it)
 Icon?
+
+# ultraudit harness scratch (audit run state, findings dumps, and a Linear API
+# key) — transient per-run artifacts, one of which holds live credentials
+.ultraudit-*

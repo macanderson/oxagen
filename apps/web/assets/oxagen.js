@@ -10,11 +10,17 @@
     "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  /* ---------- API base. Domain migration = change this one line. ---------- */
+  /* ---------- API base. /read/index.html carries its own copy of this, so a
+     domain migration is these two lines, not one. ---------- */
   var API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
     ? "http://localhost:4000"
     : "https://api.oxagen.sh";
   var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
+
+  /* The API caps trackingCode at 500 characters and rejects the whole lead if
+     it is longer, so a campaign URL with a long utm_content would otherwise
+     lose the lead rather than the attribution. Truncate here instead. */
+  var TRACKING_CODE_MAX = 500;
 
   function buildTrackingCode() {
     var qs = new URLSearchParams(location.search);
@@ -34,7 +40,9 @@
         parts.push(k + "=" + v);
       }
     });
-    return parts.length ? parts.join("&") : undefined;
+    return parts.length
+      ? parts.join("&").slice(0, TRACKING_CODE_MAX)
+      : undefined;
   }
 
   /* ---------- nav: scrolled state ---------- */
@@ -253,7 +261,10 @@
 
   /* ---------- terminal: a multi-line script that types and replays ----------
      <div class="term-body" data-term="#scriptId"></div>
-     <script type="application/json" id="scriptId">[[{cls,text},...],...]</script> */
+     <script type="application/json" id="scriptId">[[{cls,text},...],...]</script>
+     The replay never ends, so — like the typewriters above — it only runs while
+     the terminal is on screen. Otherwise it would keep a timer firing every few
+     tens of milliseconds for the whole life of the tab. */
   function playTerminal(body) {
     var srcSel = body.getAttribute("data-term");
     var src = srcSel && document.querySelector(srcSel);
@@ -295,8 +306,16 @@
       return;
     }
 
-    var si = 0;
-    (function play() {
+    var si = 0,
+      timer = null;
+
+    // Every step of the replay is scheduled through here, so leaving the screen
+    // only has to clear one handle to stop the whole chain.
+    function wait(fn, ms) {
+      timer = setTimeout(fn, ms);
+    }
+
+    function play() {
       body.innerHTML = "";
       var script = SCRIPTS[si];
       si = (si + 1) % SCRIPTS.length;
@@ -313,7 +332,7 @@
         if (ci <= text.length) {
           cmdSpan.textContent = text.slice(0, ci);
           ci += 1;
-          setTimeout(typeTick, 24 + Math.random() * 38);
+          wait(typeTick, 24 + Math.random() * 38);
           return;
         }
         caret.remove();
@@ -328,16 +347,38 @@
               el.style.opacity = "1";
             });
             li += 1;
-            setTimeout(nextLine, li <= 2 ? 600 : 420);
+            wait(nextLine, li <= 2 ? 600 : 420);
             return;
           }
           var done = line("");
           done.innerHTML =
             '<span class="t-prompt">$ </span><span class="caret"></span>';
-          setTimeout(play, 4400);
+          wait(play, 4400);
         })();
       })();
-    })();
+    }
+
+    // Scrolling away stops the chain; scrolling back starts the next script
+    // from the top, so the terminal is never caught mid-line.
+    if ("IntersectionObserver" in window) {
+      var running = false;
+      new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting && !running) {
+              running = true;
+              play();
+            } else if (!e.isIntersecting && running) {
+              running = false;
+              clearTimeout(timer);
+            }
+          });
+        },
+        { threshold: 0 },
+      ).observe(body);
+    } else {
+      play();
+    }
   }
   document.querySelectorAll("[data-term]").forEach(playTerminal);
 
@@ -434,21 +475,50 @@
     select(initial === -1 ? 0 : initial);
   });
 
-  /* ---------- copy buttons ---------- */
+  /* ---------- copy buttons ----------
+     navigator.clipboard only exists on a secure origin, so the execCommand
+     path is the one a plain-http preview takes. Either way the label only says
+     "Copied" once something was actually copied — a button that claims a copy
+     it did not make is worse than one that admits it failed. */
+  function legacyCopy(txt) {
+    var ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (_) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
   document.querySelectorAll(".copy-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var txt = btn.getAttribute("data-copy") || "";
       var label = btn.querySelector("span");
-      var done = function () {
-        label.textContent = "Copied";
+      var settle = function (ok) {
+        label.textContent = ok ? "Copied" : "Copy failed";
         setTimeout(function () {
           label.textContent = "Copy";
         }, 1600);
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(done, done);
+        navigator.clipboard.writeText(txt).then(
+          function () {
+            settle(true);
+          },
+          function () {
+            settle(legacyCopy(txt));
+          },
+        );
       } else {
-        done();
+        settle(legacyCopy(txt));
       }
     });
   });
@@ -521,7 +591,7 @@
         body: JSON.stringify(payload),
       })
         .then(function (res) {
-          if (!res.ok && res.status !== 204) {
+          if (!res.ok) {
             throw new Error("status " + res.status);
           }
           form.reset();

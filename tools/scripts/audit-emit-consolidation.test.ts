@@ -68,7 +68,9 @@ const LEGACY_SINGLETON = /function auditInsert\b/;
 
 // The registry helper's own file documents the deprecated pattern in a comment
 // (explaining what emitSecurityEvent replaced). Exempt it from the scan.
-const EXEMPT = new Set([join(repoRoot, "packages", "database", "src", "security.ts")]);
+const EXEMPT = new Set([
+  join(repoRoot, "packages", "database", "src", "security.ts"),
+]);
 const scanFiles = sourceFiles.filter((f) => !EXEMPT.has(f));
 
 describe("audit emit consolidation (OXA-N1)", () => {
@@ -78,7 +80,9 @@ describe("audit emit consolidation (OXA-N1)", () => {
   });
 
   it("no source file reintroduces the recordSecurityEvent(auditInsert()) boilerplate", () => {
-    const offenders = scanFiles.filter((f) => DEPRECATED_EMIT.test(readFileSync(f, "utf8")));
+    const offenders = scanFiles.filter((f) =>
+      DEPRECATED_EMIT.test(readFileSync(f, "utf8")),
+    );
     expect(
       offenders,
       `These files use the deprecated per-file emit boilerplate; route them ` +
@@ -88,7 +92,9 @@ describe("audit emit consolidation (OXA-N1)", () => {
   });
 
   it("no source file redefines a local auditInsert() singleton", () => {
-    const offenders = scanFiles.filter((f) => LEGACY_SINGLETON.test(readFileSync(f, "utf8")));
+    const offenders = scanFiles.filter((f) =>
+      LEGACY_SINGLETON.test(readFileSync(f, "utf8")),
+    );
     expect(
       offenders,
       `Local auditInsert() singletons should be replaced by the shared ` +
@@ -108,14 +114,21 @@ describe("audit emit consolidation (OXA-N1)", () => {
     ];
     for (const rel of callSites) {
       const src = readFileSync(join(repoRoot, rel), "utf8");
-      expect(src, `${rel} should emit via emitSecurityEvent()`).toMatch(/emitSecurityEvent\(/);
+      expect(src, `${rel} should emit via emitSecurityEvent()`).toMatch(
+        /emitSecurityEvent\(/,
+      );
     }
   });
 
   it("the API and MCP bootstraps still wire the kernel security emitter", () => {
-    for (const rel of ["apps/api/src/bootstrap.ts", "apps/mcp/src/middleware.ts"]) {
+    for (const rel of [
+      "apps/api/src/bootstrap.ts",
+      "apps/mcp/src/middleware.ts",
+    ]) {
       const src = readFileSync(join(repoRoot, rel), "utf8");
-      expect(src, `${rel} should wire the kernel emitter`).toMatch(/setSecurityEventEmitter\(/);
+      expect(src, `${rel} should wire the kernel emitter`).toMatch(
+        /setSecurityEventEmitter\(/,
+      );
       expect(src).toMatch(/makeSecurityEventInserter\(/);
     }
   });

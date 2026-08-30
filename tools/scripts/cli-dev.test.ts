@@ -36,12 +36,18 @@ describe("parsePathEntries", () => {
 
 describe("uniqueDirs", () => {
   it("drops nullish entries and de-duplicates while preserving order", () => {
-    expect(uniqueDirs(["/a", null, "/b", undefined, "/a"])).toEqual(["/a", "/b"]);
+    expect(uniqueDirs(["/a", null, "/b", undefined, "/a"])).toEqual([
+      "/a",
+      "/b",
+    ]);
   });
 });
 
 describe("buildLauncherScript", () => {
-  const script = buildLauncherScript("/repo/node_modules/.bin/tsx", "/repo/apps/cli/src/index.tsx");
+  const script = buildLauncherScript(
+    "/repo/node_modules/.bin/tsx",
+    "/repo/apps/cli/src/index.tsx",
+  );
 
   it("is a /bin/sh script that execs tsx against the source entry, passing args through", () => {
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
@@ -55,7 +61,9 @@ describe("buildLauncherScript", () => {
   });
 
   it("self-checks that the monorepo paths still exist before exec", () => {
-    expect(script).toContain('if [ ! -x "$__OXAGEN_TSX" ] || [ ! -f "$__OXAGEN_ENTRY" ]; then');
+    expect(script).toContain(
+      'if [ ! -x "$__OXAGEN_TSX" ] || [ ! -f "$__OXAGEN_ENTRY" ]; then',
+    );
     expect(script).toContain("exit 127");
   });
 });
@@ -70,13 +78,18 @@ describe("isOurLauncher / classifyBin", () => {
   });
 
   it("treats a launcher for a DIFFERENT checkout as external", () => {
-    const other = buildLauncherScript("/other/node_modules/.bin/tsx", "/other/apps/cli/src/index.tsx");
+    const other = buildLauncherScript(
+      "/other/node_modules/.bin/tsx",
+      "/other/apps/cli/src/index.tsx",
+    );
     expect(isOurLauncher(other, srcEntry)).toBe(false);
     expect(classifyBin(other, srcEntry)).toBe("external");
   });
 
   it("treats a published binary / unreadable file as external", () => {
-    expect(isOurLauncher("#!/usr/bin/env node\nrequire('@oxagen/cli')", srcEntry)).toBe(false);
+    expect(
+      isOurLauncher("#!/usr/bin/env node\nrequire('@oxagen/cli')", srcEntry),
+    ).toBe(false);
     expect(classifyBin(null, srcEntry)).toBe("external");
   });
 });
@@ -85,8 +98,11 @@ describe("firstBinOnPath", () => {
   const pathEntries = ["/first/bin", "/second/bin", "/third/bin"];
 
   it("returns the bin in the earliest PATH dir that has it", () => {
-    const exists = (p: string) => p === join("/second/bin", "oxagen") || p === join("/third/bin", "oxagen");
-    expect(firstBinOnPath(pathEntries, "oxagen", exists)).toBe(join("/second/bin", "oxagen"));
+    const exists = (p: string) =>
+      p === join("/second/bin", "oxagen") || p === join("/third/bin", "oxagen");
+    expect(firstBinOnPath(pathEntries, "oxagen", exists)).toBe(
+      join("/second/bin", "oxagen"),
+    );
   });
 
   it("returns null when no PATH dir has the bin", () => {
@@ -142,7 +158,8 @@ describe("hasGlobalPkg", () => {
   });
 
   it("detects the <root>/node_modules/@oxagen/cli layout (npm)", () => {
-    const exists = (p: string) => p === join("/npm/lib/node_modules", "node_modules/@oxagen/cli");
+    const exists = (p: string) =>
+      p === join("/npm/lib/node_modules", "node_modules/@oxagen/cli");
     expect(hasGlobalPkg("/npm/lib/node_modules", exists)).toBe(true);
   });
 

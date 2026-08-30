@@ -96,18 +96,34 @@ async function main(): Promise<void> {
   const env = requireEnv(["DATABASE_URL"]);
   const { host, database } = sanitizeUrl(env.DATABASE_URL);
 
-  console.log(kleur.cyan("┌─────────────────────────────────────────────────────────────┐"));
-  console.log(kleur.cyan("│    backfill-workspace-capabilities — OXA-1739 backfill      │"));
-  console.log(kleur.cyan("└─────────────────────────────────────────────────────────────┘"));
+  console.log(
+    kleur.cyan(
+      "┌─────────────────────────────────────────────────────────────┐",
+    ),
+  );
+  console.log(
+    kleur.cyan(
+      "│    backfill-workspace-capabilities — OXA-1739 backfill      │",
+    ),
+  );
+  console.log(
+    kleur.cyan(
+      "└─────────────────────────────────────────────────────────────┘",
+    ),
+  );
   console.log();
   console.log(`  Target host  : ${kleur.yellow(host)}`);
   console.log(`  Database     : ${kleur.yellow(database)}`);
-  console.log(`  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`);
+  console.log(
+    `  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`,
+  );
   console.log();
 
   if (!DRY_RUN && !isLocalHost(host)) {
     console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    const ok = await confirm(
+      "  Proceed with write to production database? [y/N] ",
+    );
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       process.exit(0);
@@ -162,7 +178,9 @@ async function main(): Promise<void> {
 
       const durationMs = Date.now() - wsStart;
       console.log(
-        kleur.green(`  [seeded] ${ws.name} (${ws.id}) org=${ws.orgId} [${durationMs}ms]`),
+        kleur.green(
+          `  [seeded] ${ws.name} (${ws.id}) org=${ws.orgId} [${durationMs}ms]`,
+        ),
       );
       results.push({
         orgId: ws.orgId,
@@ -172,7 +190,9 @@ async function main(): Promise<void> {
       });
     } catch (err: unknown) {
       const msg = formatError(err);
-      console.log(kleur.red(`  [fail] ${ws.name} (${ws.id}) org=${ws.orgId} — ${msg}`));
+      console.log(
+        kleur.red(`  [fail] ${ws.name} (${ws.id}) org=${ws.orgId} — ${msg}`),
+      );
       results.push({
         orgId: ws.orgId,
         workspaceId: ws.id,
@@ -191,21 +211,31 @@ async function main(): Promise<void> {
   const totalMs = Date.now() - start;
 
   console.log();
-  console.log(kleur.cyan("─────────────────────────────────────────────────────────────────"));
+  console.log(
+    kleur.cyan(
+      "─────────────────────────────────────────────────────────────────",
+    ),
+  );
   console.log(kleur.cyan(`[backfill-capabilities] Summary (${totalMs}ms)`));
   console.log(`  Workspaces scanned : ${scanned}`);
   if (DRY_RUN) {
     console.log(`  Would seed         : ${kleur.blue(String(dryRun))}`);
   } else {
-    console.log(`  Seeded             : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`);
+    console.log(
+      `  Seeded             : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`,
+    );
   }
-  console.log(`  Failed             : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+  console.log(
+    `  Failed             : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`,
+  );
 
   if (failed > 0) {
     console.log();
     console.log(kleur.red("[backfill-capabilities] Failed workspaces:"));
     for (const r of results.filter((r) => r.status === "failed")) {
-      console.log(kleur.red(`  - ws=${r.workspaceId} org=${r.orgId}: ${r.error}`));
+      console.log(
+        kleur.red(`  - ws=${r.workspaceId} org=${r.orgId}: ${r.error}`),
+      );
     }
   }
 
@@ -228,6 +258,9 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red("[backfill-capabilities] Fatal:"), formatError(err));
+    console.error(
+      kleur.red("[backfill-capabilities] Fatal:"),
+      formatError(err),
+    );
     process.exit(1);
   });

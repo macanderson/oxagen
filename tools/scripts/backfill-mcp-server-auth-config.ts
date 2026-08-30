@@ -53,7 +53,10 @@ import { requireEnv } from "@oxagen/config/env";
 import { db, closeDatabase, schema } from "@oxagen/database";
 import { encryptMcpAuthConfig } from "@oxagen/agent/runtime/mcp-server-auth-crypto";
 import { formatError } from "./lib/format-error";
-import { partitionRows, type McpServerAuthRow } from "./lib/backfill-mcp-server-auth-config";
+import {
+  partitionRows,
+  type McpServerAuthRow,
+} from "./lib/backfill-mcp-server-auth-config";
 
 const args = process.argv.slice(2);
 const DRY_RUN = !args.includes("--apply");
@@ -96,18 +99,28 @@ async function main(): Promise<void> {
   const env = requireEnv(["DATABASE_URL", "AUTH_TOKEN_ENCRYPTION_KEY"]);
   const { host, database } = sanitizeUrl(env.DATABASE_URL);
 
-  console.log(kleur.cyan("┌─────────────────────────────────────────────────────────┐"));
-  console.log(kleur.cyan("│  backfill-mcp-server-auth-config — OXA-1982 encryption   │"));
-  console.log(kleur.cyan("└─────────────────────────────────────────────────────────┘"));
+  console.log(
+    kleur.cyan("┌─────────────────────────────────────────────────────────┐"),
+  );
+  console.log(
+    kleur.cyan("│  backfill-mcp-server-auth-config — OXA-1982 encryption   │"),
+  );
+  console.log(
+    kleur.cyan("└─────────────────────────────────────────────────────────┘"),
+  );
   console.log();
   console.log(`  Target host  : ${kleur.yellow(host)}`);
   console.log(`  Database     : ${kleur.yellow(database)}`);
-  console.log(`  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`);
+  console.log(
+    `  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`,
+  );
   console.log();
 
   if (!DRY_RUN && !isLocalHost(host)) {
     console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    const ok = await confirm(
+      "  Proceed with write to production database? [y/N] ",
+    );
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       process.exit(0);
@@ -138,13 +151,20 @@ async function main(): Promise<void> {
 
   for (const row of toConvert) {
     if (DRY_RUN) {
-      console.log(kleur.blue(`  [dry-run] ${row.publicId} — WOULD encrypt auth_config`));
+      console.log(
+        kleur.blue(`  [dry-run] ${row.publicId} — WOULD encrypt auth_config`),
+      );
       results.push({ publicId: row.publicId, status: "would-convert" });
       continue;
     }
     try {
-      const encrypted = await encryptMcpAuthConfig(row.authConfig as Record<string, string>);
-      await d.update(schema.mcpServers).set({ authConfig: encrypted }).where(eq(schema.mcpServers.id, row.id));
+      const encrypted = await encryptMcpAuthConfig(
+        row.authConfig as Record<string, string>,
+      );
+      await d
+        .update(schema.mcpServers)
+        .set({ authConfig: encrypted })
+        .where(eq(schema.mcpServers.id, row.id));
       console.log(kleur.green(`  [converted] ${row.publicId}`));
       results.push({ publicId: row.publicId, status: "converted" });
     } catch (err: unknown) {
@@ -155,21 +175,31 @@ async function main(): Promise<void> {
   }
 
   const converted = results.filter((r) => r.status === "converted").length;
-  const wouldConvert = results.filter((r) => r.status === "would-convert").length;
+  const wouldConvert = results.filter(
+    (r) => r.status === "would-convert",
+  ).length;
   const failed = results.filter((r) => r.status === "failed").length;
   const totalMs = Date.now() - start;
 
   console.log();
-  console.log(kleur.cyan("─────────────────────────────────────────────────────────"));
+  console.log(
+    kleur.cyan("─────────────────────────────────────────────────────────"),
+  );
   console.log(kleur.cyan(`[backfill-mcp-auth] Summary (${totalMs}ms)`));
   console.log(`  Rows scanned         : ${allRows.length}`);
-  console.log(`  Already encrypted    : ${kleur.dim(String(alreadyOk.length))}`);
+  console.log(
+    `  Already encrypted    : ${kleur.dim(String(alreadyOk.length))}`,
+  );
   if (DRY_RUN) {
     console.log(`  Would convert        : ${kleur.blue(String(wouldConvert))}`);
   } else {
-    console.log(`  Converted            : ${converted > 0 ? kleur.green(String(converted)) : kleur.dim("0")}`);
+    console.log(
+      `  Converted            : ${converted > 0 ? kleur.green(String(converted)) : kleur.dim("0")}`,
+    );
   }
-  console.log(`  Failed               : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+  console.log(
+    `  Failed               : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`,
+  );
 
   if (failed > 0) {
     console.log();
@@ -182,7 +212,9 @@ async function main(): Promise<void> {
   if (DRY_RUN) {
     console.log();
     console.log(
-      kleur.blue("[backfill-mcp-auth] This was a dry-run. Re-run with --apply to write changes."),
+      kleur.blue(
+        "[backfill-mcp-auth] This was a dry-run. Re-run with --apply to write changes.",
+      ),
     );
   }
 

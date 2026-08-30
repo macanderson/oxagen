@@ -1,9 +1,9 @@
 // Root ESLint flat config — used by all non-Next packages and apps.
-// Next.js apps (apps/app, apps/admin, apps/website, apps/docs) have their
-// own eslint.config.mjs that extends eslint-config-next; they do NOT use
-// this root config.  Every other package resolves ESLint from root
-// node_modules and points --config at this file (or lets flat-config
-// discovery walk up to it).
+// The Next.js apps (apps/app, apps/docs) have their own eslint.config.mjs
+// that re-exports the shared eslint.next.mjs stack; they do NOT use this
+// root config.  apps/mcp also has its own eslint.config.mjs, but it re-exports
+// THIS file verbatim.  Every remaining package ships no config of its own and
+// lets flat-config discovery walk up from its directory to this file.
 import tseslint from "typescript-eslint";
 import { tenancySeamRestrictedImports } from "./eslint.tenancy-seams.mjs";
 
@@ -26,8 +26,6 @@ export default tseslint.config(
       // THIS config to their files and errors on disable directives for
       // plugins only registered there (e.g. react-hooks/exhaustive-deps).
       "apps/app/**",
-      "apps/admin/**",
-      "apps/website/**",
       "apps/docs/**",
       // apps/web is the static oxagen.sh site: no build step, no tsconfig,
       // and its one script is browser vanilla JS. The project service has no
@@ -57,10 +55,11 @@ export default tseslint.config(
       // Policy 0: no implicit any.
       "@typescript-eslint/no-explicit-any": "error",
 
-      // These fire legitimately during foundation scaffolding where dynamic
-      // patterns are needed; keep as warnings so they are visible without
-      // blocking the gate.  Tighten to "error" package-by-package as the
-      // code stabilises.
+      // "warn" here is a severity label, NOT an escape hatch: every package's
+      // lint script is `eslint src --max-warnings 0`, so these block the gate
+      // exactly like an error.  The distinction only matters to editors, which
+      // render them yellow.  Promote to "error" once no package needs a
+      // per-file disable for them.
       "@typescript-eslint/no-unsafe-assignment": "warn",
       "@typescript-eslint/no-unsafe-member-access": "warn",
       "@typescript-eslint/no-unsafe-call": "warn",
@@ -77,7 +76,9 @@ export default tseslint.config(
         },
       ],
 
-      // Allow empty catch blocks with a comment.
+      // `{}` as a type means "any non-nullish value", not "empty object" —
+      // almost always a mistake. Use `object`, `Record<string, unknown>`, or
+      // `unknown` instead.
       "@typescript-eslint/no-empty-object-type": "error",
 
       // OXA-1515: forbid raw data-store seam clients outside their owning

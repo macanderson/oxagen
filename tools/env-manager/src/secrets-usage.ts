@@ -34,7 +34,10 @@ function dirs(path: string): string[] {
 
 /** Enumerate the workspace apps/packages (for the usage dropdown). */
 export function listWorkspace(repoRoot: string): Workspace {
-  return { apps: dirs(join(repoRoot, "apps")), packages: dirs(join(repoRoot, "packages")) };
+  return {
+    apps: dirs(join(repoRoot, "apps")),
+    packages: dirs(join(repoRoot, "packages")),
+  };
 }
 
 /** A "usage" label, namespaced so apps and packages never collide in the column. */
@@ -65,7 +68,14 @@ const ENV_REF_RE = new RegExp(ENV_REF_PATTERN, "g");
 /**
  * Node.js-native fallback for `buildEnvRefIndex` — used when ripgrep is not
  * installed (e.g. CI). Walks the given search directories recursively and applies
- * the same regex the rg pass uses, so output is semantically identical.
+ * the same regex the rg pass uses.
+ *
+ * Two known divergences from the rg pass, both of which can only ADD labels:
+ * this walker has no binary-file detection (rg skips binaries; a stray match
+ * inside a bundled asset is attributed here), and it does not honour
+ * `.gitignore` beyond the hard-coded node_modules/dist/build/.next/coverage
+ * skips. Usage is only ever a seed the operator refines, so an over-broad
+ * label is a nuisance rather than a correctness bug.
  */
 function walkRefIndex(
   repoRoot: string,
@@ -109,11 +119,16 @@ function walkRefIndex(
         const parts = relPath.split("/");
         let label: string | null = null;
         if (parts[0] === "apps" && parts[1]) label = appLabel(parts[1]);
-        else if (parts[0] === "packages" && parts[1]) label = pkgLabel(parts[1]);
+        else if (parts[0] === "packages" && parts[1])
+          label = pkgLabel(parts[1]);
         if (!label) continue;
 
         ENV_REF_RE.lastIndex = 0;
-        for (let m = ENV_REF_RE.exec(content); m !== null; m = ENV_REF_RE.exec(content)) {
+        for (
+          let m = ENV_REF_RE.exec(content);
+          m !== null;
+          m = ENV_REF_RE.exec(content)
+        ) {
           const token = m[1];
           if (!token) continue;
           const set = index.get(token) ?? new Set<string>();
@@ -150,7 +165,15 @@ export function buildEnvRefIndex(repoRoot: string): Map<string, Set<string>> {
   try {
     out = execFileSync(
       "rg",
-      ["--no-heading", "--with-filename", "-N", "-o", "-e", pattern, ...searchDirs],
+      [
+        "--no-heading",
+        "--with-filename",
+        "-N",
+        "-o",
+        "-e",
+        pattern,
+        ...searchDirs,
+      ],
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     );
   } catch (e) {
@@ -197,7 +220,10 @@ export function buildEnvRefIndex(repoRoot: string): Map<string, Set<string>> {
  * Seed usage for a secret: registry services (apps) ∪ grep-derived references
  * (apps + packages) for its reconciled env key, plus the NEXT_PUBLIC_ twin.
  */
-export function deriveUsage(envKey: string | null, refIndex: Map<string, Set<string>>): string[] {
+export function deriveUsage(
+  envKey: string | null,
+  refIndex: Map<string, Set<string>>,
+): string[] {
   const out = new Set<string>();
 
   if (envKey) {

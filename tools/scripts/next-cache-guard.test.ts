@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -59,7 +65,8 @@ describe("next-cache-guard", () => {
   });
 
   it("guards every registered app independently", () => {
-    for (const app of NEXT_CACHE_APPS) mkdirSync(nextDir(app), { recursive: true });
+    for (const app of NEXT_CACHE_APPS)
+      mkdirSync(nextDir(app), { recursive: true });
     writeFileSync(cleanShutdownMarker(root, "apps/app"), "x");
 
     const wiped = guardTurbopackCaches(root);

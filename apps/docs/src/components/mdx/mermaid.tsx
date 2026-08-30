@@ -60,8 +60,12 @@ function MermaidContent({ chart }: { chart: string }) {
       ref={(container) => {
         if (container) bindFunctions?.(container);
       }}
-      // Mermaid's own SVG output is trusted (it sanitises its own markup);
-      // the chart source is authored docs content, never raw end-user HTML.
+      // `securityLevel: "loose"` above turns Mermaid's label sanitiser OFF, so
+      // this SVG is NOT sanitised — raw HTML and `click` directives in a chart
+      // reach the DOM verbatim. That is acceptable only because every `chart`
+      // string is authored MDX committed to this repo, never anything a reader
+      // supplies. If a chart ever becomes user-supplied, this must move to
+      // `securityLevel: "strict"` before that lands.
       dangerouslySetInnerHTML={{ __html: svg }}
       className="max-w-full overflow-auto [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
     />

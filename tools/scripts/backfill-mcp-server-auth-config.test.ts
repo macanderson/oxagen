@@ -3,7 +3,10 @@
  * tools/scripts/backfill-mcp-server-auth-config.ts (OXA-1982).
  */
 import { describe, it, expect } from "vitest";
-import { needsBackfill, partitionRows } from "./lib/backfill-mcp-server-auth-config";
+import {
+  needsBackfill,
+  partitionRows,
+} from "./lib/backfill-mcp-server-auth-config";
 
 describe("needsBackfill", () => {
   it("returns false for an empty auth_config ({}, null, undefined)", () => {
@@ -13,7 +16,13 @@ describe("needsBackfill", () => {
   });
 
   it("returns false for an already-encrypted auth_config", () => {
-    expect(needsBackfill({ v: 1, kmsKeyId: "mcp_server_auth_v1", ciphertext: "base64==" })).toBe(false);
+    expect(
+      needsBackfill({
+        v: 1,
+        kmsKeyId: "mcp_server_auth_v1",
+        ciphertext: "base64==",
+      }),
+    ).toBe(false);
   });
 
   it("returns true for a legacy plaintext auth_config", () => {
@@ -32,8 +41,16 @@ describe("partitionRows", () => {
     const rows = [
       { id: "1", publicId: "mcs_1", authConfig: { token: "plaintext-secret" } },
       { id: "2", publicId: "mcs_2", authConfig: {} },
-      { id: "3", publicId: "mcs_3", authConfig: { v: 1, kmsKeyId: "k", ciphertext: "c" } },
-      { id: "4", publicId: "mcs_4", authConfig: { "x-header": "another-plaintext-secret" } },
+      {
+        id: "3",
+        publicId: "mcs_3",
+        authConfig: { v: 1, kmsKeyId: "k", ciphertext: "c" },
+      },
+      {
+        id: "4",
+        publicId: "mcs_4",
+        authConfig: { "x-header": "another-plaintext-secret" },
+      },
     ];
 
     const { toConvert, alreadyOk } = partitionRows(rows);

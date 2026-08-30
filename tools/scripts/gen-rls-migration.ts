@@ -32,7 +32,10 @@
 import { writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { POLICY_MANIFEST, type PolicyClass } from "../../packages/database/src/tenant-policy.manifest.js";
+import {
+  POLICY_MANIFEST,
+  type PolicyClass,
+} from "../../packages/database/src/tenant-policy.manifest.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -123,9 +126,17 @@ ${blocks.join("\n\n")}
 
 const outName = process.argv[2] ?? "20260612140000_restore_rls_policies.sql";
 if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(outName)) {
-  console.error(`refusing to write "${outName}" — Atlas migration names must match <14-digit-timestamp>_<slug>.sql`);
+  console.error(
+    `refusing to write "${outName}" — Atlas migration names must match <14-digit-timestamp>_<slug>.sql`,
+  );
   process.exit(1);
 }
-const outPath = resolve(__dirname, "../../packages/database/atlas/migrations", outName);
+const outPath = resolve(
+  __dirname,
+  "../../packages/database/atlas/migrations",
+  outName,
+);
 writeFileSync(outPath, sqlContent, "utf8");
-console.log(`wrote ${outPath} (${POLICY_MANIFEST.length} tables) — now run: cd packages/database && pnpm exec atlas migrate hash`);
+console.log(
+  `wrote ${outPath} (${POLICY_MANIFEST.length} tables) — now run: cd packages/database && pnpm exec atlas migrate hash`,
+);

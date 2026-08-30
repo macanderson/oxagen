@@ -47,7 +47,7 @@ import kleur from "kleur";
 import { requireEnv } from "@oxagen/config/env";
 import { formatError } from "./lib/format-error";
 import { db, closeDatabase, schema } from "@oxagen/database";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { bootstrapOrgIAM, provisionMemberPrincipal } from "@oxagen/handlers";
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
@@ -106,18 +106,28 @@ async function main(): Promise<void> {
   const env = requireEnv(["DATABASE_URL"]);
   const { host, database } = sanitizeUrl(env.DATABASE_URL);
 
-  console.log(kleur.cyan("┌─────────────────────────────────────────────────────────┐"));
-  console.log(kleur.cyan("│          backfill-org-iam — OXA IAM backfill            │"));
-  console.log(kleur.cyan("└─────────────────────────────────────────────────────────┘"));
+  console.log(
+    kleur.cyan("┌─────────────────────────────────────────────────────────┐"),
+  );
+  console.log(
+    kleur.cyan("│          backfill-org-iam — OXA IAM backfill            │"),
+  );
+  console.log(
+    kleur.cyan("└─────────────────────────────────────────────────────────┘"),
+  );
   console.log();
   console.log(`  Target host  : ${kleur.yellow(host)}`);
   console.log(`  Database     : ${kleur.yellow(database)}`);
-  console.log(`  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`);
+  console.log(
+    `  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`,
+  );
   console.log();
 
   if (!DRY_RUN && !isLocalHost(host)) {
     console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
-    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    const ok = await confirm(
+      "  Proceed with write to production database? [y/N] ",
+    );
     if (!ok) {
       console.log(kleur.yellow("  Aborted."));
       process.exit(0);
@@ -137,7 +147,11 @@ async function main(): Promise<void> {
     .from(schema.organizations)
     .orderBy(schema.organizations.createdAt);
 
-  console.log(kleur.cyan(`[backfill-iam] ${allOrgs.length} org(s) found — checking IAM state…`));
+  console.log(
+    kleur.cyan(
+      `[backfill-iam] ${allOrgs.length} org(s) found — checking IAM state…`,
+    ),
+  );
   console.log();
 
   const results: OrgResult[] = [];
@@ -160,7 +174,9 @@ async function main(): Promise<void> {
         status: "skipped",
         durationMs: Date.now() - orgStart,
       });
-      console.log(kleur.dim(`  [skip] ${org.name} (${org.publicId}) — already seeded`));
+      console.log(
+        kleur.dim(`  [skip] ${org.name} (${org.publicId}) — already seeded`),
+      );
       continue;
     }
 
@@ -270,16 +286,22 @@ async function main(): Promise<void> {
   const totalMs = Date.now() - start;
 
   console.log();
-  console.log(kleur.cyan("─────────────────────────────────────────────────────────"));
+  console.log(
+    kleur.cyan("─────────────────────────────────────────────────────────"),
+  );
   console.log(kleur.cyan(`[backfill-iam] Summary (${totalMs}ms)`));
   console.log(`  Orgs scanned         : ${scanned}`);
   if (DRY_RUN) {
     console.log(`  Would seed           : ${kleur.blue(String(dryRun))}`);
   } else {
-    console.log(`  Seeded               : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`);
+    console.log(
+      `  Seeded               : ${seeded > 0 ? kleur.green(String(seeded)) : kleur.dim("0")}`,
+    );
   }
   console.log(`  Skipped (already ok) : ${kleur.dim(String(skipped))}`);
-  console.log(`  Failed               : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+  console.log(
+    `  Failed               : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`,
+  );
 
   if (failed > 0) {
     console.log();
