@@ -71,7 +71,8 @@ function installTx(total: number, rows: unknown[]) {
             then: <T1 = unknown, T2 = never>(
               onfulfilled?: ((value: unknown) => T1 | PromiseLike<T1>) | null,
               onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
-            ): PromiseLike<T1 | T2> => Promise.resolve(result).then(onfulfilled, onrejected),
+            ): PromiseLike<T1 | T2> =>
+              Promise.resolve(result).then(onfulfilled, onrejected),
             from: vi.fn(() => chain),
             where: vi.fn(() => chain),
             orderBy: vi.fn(() => chain),
@@ -115,14 +116,25 @@ describe("schemaVersionListHandler", () => {
   });
 
   it("marks the pinned version as isPinned=true", async () => {
-    const pinned = makeVersion({ id: "pinned-ver-internal-id", publicId: "scv_pinned" });
-    const draft = makeVersion({ id: "draft-ver-internal-id", publicId: "scv_draft", status: "draft" });
+    const pinned = makeVersion({
+      id: "pinned-ver-internal-id",
+      publicId: "scv_pinned",
+    });
+    const draft = makeVersion({
+      id: "draft-ver-internal-id",
+      publicId: "scv_draft",
+      status: "draft",
+    });
     installTx(2, [pinned, draft]);
 
     const result = await schemaVersionListHandler({}, CTX);
 
-    const pinnedResult = result.versions.find((v) => v.versionId === "scv_pinned");
-    const draftResult = result.versions.find((v) => v.versionId === "scv_draft");
+    const pinnedResult = result.versions.find(
+      (v) => v.versionId === "scv_pinned",
+    );
+    const draftResult = result.versions.find(
+      (v) => v.versionId === "scv_draft",
+    );
     expect(pinnedResult?.isPinned).toBe(true);
     expect(draftResult?.isPinned).toBe(false);
   });
@@ -179,7 +191,10 @@ describe("schemaVersionListHandler", () => {
 
   it("accepts explicit limit and offset", async () => {
     installTx(50, [makeVersion()]);
-    const result = await schemaVersionListHandler({ limit: 5, offset: 10 }, CTX);
+    const result = await schemaVersionListHandler(
+      { limit: 5, offset: 10 },
+      CTX,
+    );
     expect(result.total).toBe(50);
     expect(result.versions).toHaveLength(1);
   });
@@ -198,7 +213,8 @@ describe("schemaVersionListHandler", () => {
               then: <T1 = unknown, T2 = never>(
                 onfulfilled?: ((value: unknown) => T1 | PromiseLike<T1>) | null,
                 onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
-              ): PromiseLike<T1 | T2> => Promise.resolve(result).then(onfulfilled, onrejected),
+              ): PromiseLike<T1 | T2> =>
+                Promise.resolve(result).then(onfulfilled, onrejected),
               from: vi.fn(() => chain),
               where: vi.fn(() => chain),
               orderBy: vi.fn(() => chain),

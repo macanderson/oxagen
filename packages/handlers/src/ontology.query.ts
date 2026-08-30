@@ -134,6 +134,10 @@ export const ontologyQueryHandler: CapabilityHandler<
   let startNode: TraversedNode | null = null;
   const nodesById = new Map<string, TraversedNode>();
   const edges: TraversedEdge[] = [];
+  // "from|to|type" keys of everything already in `edges`. Paths overlap heavily,
+  // so the same edge is re-seen once per path that crosses it; an O(1) key
+  // lookup keeps de-duplication linear instead of scanning `edges` each time.
+  const seenEdgeKeys = new Set<string>();
   let truncated = false;
 
   await runInTenantScope({ orgId, workspaceId }, async () => {
@@ -171,7 +175,11 @@ export const ontologyQueryHandler: CapabilityHandler<
 
     // 2) Walk the graph. Every reached node and every relationship along the
     //    path is constrained to the same org + workspace. We fetch one extra
-    //    row beyond `limit` to detect truncation.
+    //    ROW beyond `limit`, but `truncated` below is raised on the first
+    //    DISTINCT node past the cap — and one row is one path, so several rows
+    //    can resolve to the same node. A result set the Cypher LIMIT cut short
+    //    whose surplus rows all repeat already-kept nodes therefore reports
+    //    truncated=false.
     // Bi-temporal read filter applied to EVERY relationship on the path, so a
     // traversal only crosses edges that are valid + known at the requested
     // instants. Defaults to now/now; null lower bounds keep unstamped legacy
@@ -200,9 +208,7 @@ export const ontologyQueryHandler: CapabilityHandler<
     // `LIMIT $x` because it cannot clamp it to maxNodes. Humans keep the
     // parameterized `$fetchLimit` (BigInt forces INTEGER on the Bolt wire).
     const fetchLimit = BigInt(input.limit + 1);
-    const limitLine = scoped
-      ? `LIMIT ${input.limit + 1}`
-      : "LIMIT $fetchLimit";
+    const limitLine = scoped ? `LIMIT ${input.limit + 1}` : "LIMIT $fetchLimit";
 
     const session = scopedSession(scope);
     try {
@@ -280,14 +286,9 @@ export const ontologyQueryHandler: CapabilityHandler<
           const edgeType = relTypesAlong[i] as string;
           if (a == null || b == null) continue;
           const [from, to] = input.direction === "in" ? [b, a] : [a, b];
-          if (
-            !edges.some(
-              (e) =>
-                e.fromNodeId === from &&
-                e.toNodeId === to &&
-                e.edgeType === edgeType,
-            )
-          ) {
+          const edgeKey = `${from}|${to}|${edgeType}`;
+          if (!seenEdgeKeys.has(edgeKey)) {
+            seenEdgeKeys.add(edgeKey);
             edges.push({
               fromNodeId: from,
               toNodeId: to,

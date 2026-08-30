@@ -34,7 +34,8 @@ type OrgRow = {
 // columns are typed `text`, so coerce defensively and fall back safely.
 export function mapOrgSettingsRow(row: OrgRow): OrgSettingsReadOutput {
   const employeeSize =
-    row.employeeSize && (ORG_EMPLOYEE_SIZES as readonly string[]).includes(row.employeeSize)
+    row.employeeSize &&
+    (ORG_EMPLOYEE_SIZES as readonly string[]).includes(row.employeeSize)
       ? (row.employeeSize as (typeof ORG_EMPLOYEE_SIZES)[number])
       : null;
   return {
@@ -50,10 +51,9 @@ export function mapOrgSettingsRow(row: OrgRow): OrgSettingsReadOutput {
 
 // Reads org.organizations for the active org (org-scoped; RLS limits the row to
 // ctx.orgId). Kernel handles metering + IAM via invoke().
-export const orgSettingsReadHandler: CapabilityHandler<typeof orgSettingsRead> = async (
-  _input,
-  ctx,
-) => {
+export const orgSettingsReadHandler: CapabilityHandler<
+  typeof orgSettingsRead
+> = async (_input, ctx) => {
   const row = await withTenantDb((tx) =>
     tx.query.organizations.findFirst({
       where: eq(schema.organizations.id, ctx.orgId),
@@ -62,10 +62,16 @@ export const orgSettingsReadHandler: CapabilityHandler<typeof orgSettingsRead> =
   );
 
   if (!row) {
-    logger.warn({ orgId: ctx.orgId }, "org.settings.read: organization not found");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "org.settings.read: organization not found",
+    );
     throw new Error("Organization not found");
   }
 
-  logger.info({ orgId: ctx.orgId, surface: ctx.surface }, "org.settings.read: returned org settings");
+  logger.info(
+    { orgId: ctx.orgId, surface: ctx.surface },
+    "org.settings.read: returned org settings",
+  );
   return mapOrgSettingsRow(row);
 };

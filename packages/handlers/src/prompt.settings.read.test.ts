@@ -21,7 +21,10 @@ beforeEach(() => mocks.loadWorkspacePromptConfig.mockReset());
 describe("promptSettingsReadHandler", () => {
   it("throws without a workspace context", async () => {
     await expect(
-      promptSettingsReadHandler({}, { ...CTX, workspaceId: null as unknown as string }),
+      promptSettingsReadHandler(
+        {},
+        { ...CTX, workspaceId: null as unknown as string },
+      ),
     ).rejects.toThrow(/workspace context/);
   });
 

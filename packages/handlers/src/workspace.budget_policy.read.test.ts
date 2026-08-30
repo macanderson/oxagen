@@ -9,7 +9,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ query: { workspaceBudgetPolicy: { findFirst: mocks.tenantDbFindFirst } } }),
+      fn({
+        query: {
+          workspaceBudgetPolicy: { findFirst: mocks.tenantDbFindFirst },
+        },
+      }),
   };
 });
 

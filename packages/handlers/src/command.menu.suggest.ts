@@ -70,7 +70,13 @@ const suggestionSchema = z.object({
     .array(
       z.object({
         text: z.string().min(3).max(200),
-        category: z.enum(["create", "investigate", "configure", "communicate", "analyze"]),
+        category: z.enum([
+          "create",
+          "investigate",
+          "configure",
+          "communicate",
+          "analyze",
+        ]),
         confidence: z.number().min(0).max(1),
       }),
     )
@@ -80,10 +86,9 @@ const suggestionSchema = z.object({
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const commandMenuSuggestHandler: CapabilityHandler<typeof commandMenuSuggest> = async (
-  input,
-  ctx,
-) => {
+export const commandMenuSuggestHandler: CapabilityHandler<
+  typeof commandMenuSuggest
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   // Org opt-out gate — short-circuit before any LLM call.
@@ -101,7 +106,8 @@ export const commandMenuSuggestHandler: CapabilityHandler<typeof commandMenuSugg
   }
   if (input.pageEntity) {
     lines.push(`Page entity kind: ${input.pageEntity.kind}`);
-    if (input.pageEntity.label) lines.push(`Page entity label: ${input.pageEntity.label}`);
+    if (input.pageEntity.label)
+      lines.push(`Page entity label: ${input.pageEntity.label}`);
     // summary is the only payload-derived content we expose.
     if (input.pageEntity.summary) {
       lines.push(`Page entity summary: ${input.pageEntity.summary}`);
@@ -139,7 +145,10 @@ export const commandMenuSuggestHandler: CapabilityHandler<typeof commandMenuSugg
   } catch (err) {
     // Spec §7: if the LLM call fails, silently return [] so the menu still
     // renders without the Suggested section.
-    logger.warn({ err, orgId, route: input.route }, "command.menu.suggest: LLM call failed");
+    logger.warn(
+      { err, orgId, route: input.route },
+      "command.menu.suggest: LLM call failed",
+    );
     return { suggestions: [] };
   }
 

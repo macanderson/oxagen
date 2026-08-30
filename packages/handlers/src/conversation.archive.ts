@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const conversationArchiveHandler: CapabilityHandler<typeof conversationArchive> = async (
-  input,
-  ctx,
-) => {
+export const conversationArchiveHandler: CapabilityHandler<
+  typeof conversationArchive
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "conversation.archive: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "conversation.archive: rejected — no authenticated user",
+    );
     throw new Error("conversation.archive requires an authenticated user");
   }
 

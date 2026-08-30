@@ -8,11 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 mocks.generateObjectFor.mockResolvedValue({
   object: {
-    queries: [
-      "search query 1",
-      "search query 2",
-      "search query 3",
-    ],
+    queries: ["search query 1", "search query 2", "search query 3"],
   },
   usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
 });
@@ -41,11 +37,7 @@ describe("researchSwarmStartHandler", () => {
     vi.clearAllMocks();
     mocks.generateObjectFor.mockResolvedValue({
       object: {
-        queries: [
-          "search query 1",
-          "search query 2",
-          "search query 3",
-        ],
+        queries: ["search query 1", "search query 2", "search query 3"],
       },
       usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
     });
@@ -69,9 +61,14 @@ describe("researchSwarmStartHandler", () => {
     );
 
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
-    const genCall = mocks.generateObjectFor.mock.calls[0]?.[0] as Record<string, unknown>;
+    const genCall = mocks.generateObjectFor.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(typeof genCall.prompt).toBe("string");
-    expect(String(genCall.prompt)).toContain("TypeScript monorepo best practices");
+    expect(String(genCall.prompt)).toContain(
+      "TypeScript monorepo best practices",
+    );
     expect(String(genCall.prompt)).toContain("3"); // shallow = 3 queries
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -133,7 +130,10 @@ describe("researchSwarmStartHandler", () => {
       CTX,
     );
 
-    const genCall = mocks.generateObjectFor.mock.calls[0]?.[0] as Record<string, unknown>;
+    const genCall = mocks.generateObjectFor.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(String(genCall.prompt)).toContain("8");
     expect(result.estimatedTasks).toBe(8);
   });

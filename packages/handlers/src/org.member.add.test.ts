@@ -39,12 +39,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    insert: mockInsert,
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({ insert: mockInsert }),
-
+    db: () => ({
+      insert: mockInsert,
+    }),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ insert: mockInsert }),
   };
 });
 
@@ -99,13 +98,17 @@ describe("orgMemberAddHandler", () => {
       caught = err;
     }
     expect(caught).toBeInstanceOf(SeatLimitError);
-    expect((caught as InstanceType<typeof SeatLimitError>).code).toBe("seat_limit_reached");
+    expect((caught as InstanceType<typeof SeatLimitError>).code).toBe(
+      "seat_limit_reached",
+    );
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("duplicate pending invite (Postgres 23505) → friendly error message", async () => {
     mockAssertSeatAvailable.mockResolvedValue(undefined);
-    const pgConflict = Object.assign(new Error("unique violation"), { code: "23505" });
+    const pgConflict = Object.assign(new Error("unique violation"), {
+      code: "23505",
+    });
     // The handler calls db().insert(...).values(...)
     // Simulate the conflict on returning().
     const returningMock = vi.fn().mockRejectedValue(pgConflict);
@@ -130,7 +133,10 @@ describe("orgMemberAddHandler", () => {
     });
 
     const ctx = makeCtx();
-    const result = await orgMemberAddHandler({ email: "alice@example.com", role: "Admin" }, ctx);
+    const result = await orgMemberAddHandler(
+      { email: "alice@example.com", role: "Admin" },
+      ctx,
+    );
 
     expect(result).toMatchObject({
       invitationId: "inv_TEST01",
@@ -151,7 +157,10 @@ describe("orgMemberAddHandler", () => {
     });
 
     const ctx = makeCtx();
-    const result = await orgMemberAddHandler({ email: "bob@example.com", role: "Member" }, ctx);
+    const result = await orgMemberAddHandler(
+      { email: "bob@example.com", role: "Member" },
+      ctx,
+    );
 
     expect(result.expiresAt).toBeNull();
   });

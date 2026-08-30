@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const documentReadHandler: CapabilityHandler<typeof documentRead> = async (
-  input,
-  ctx,
-) => {
+export const documentReadHandler: CapabilityHandler<
+  typeof documentRead
+> = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "document.read: rejected — no workspace scope");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "document.read: rejected — no workspace scope",
+    );
     throw new Error("document.read requires a workspace scope");
   }
 
@@ -35,14 +37,22 @@ export const documentReadHandler: CapabilityHandler<typeof documentRead> = async
   const row = rows[0];
   if (!row) {
     logger.warn(
-      { documentId: input.document_id, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      {
+        documentId: input.document_id,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      },
       "document.read: document not found",
     );
     throw new Error(`document.read: document "${input.document_id}" not found`);
   }
 
   logger.info(
-    { documentId: input.document_id, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    {
+      documentId: input.document_id,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    },
     "document.read: returned document",
   );
 

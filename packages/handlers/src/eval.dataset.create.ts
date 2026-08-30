@@ -30,10 +30,18 @@ export const evalDatasetCreateHandler: CapabilityHandler<
         });
       if (!row) throw new Error("eval_datasets insert failed");
       logger.info(
-        { datasetId: row.publicId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        {
+          datasetId: row.publicId,
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
         "create_dataset",
       );
-      return { datasetId: row.publicId, publicId: row.publicId, slug: row.slug };
+      return {
+        datasetId: row.publicId,
+        publicId: row.publicId,
+        slug: row.slug,
+      };
     });
   } catch (err) {
     // A workspace-unique slug collision is a client error, not a 500.

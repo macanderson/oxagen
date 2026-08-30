@@ -12,20 +12,8 @@ mocks.selectFrom.mockResolvedValue([]);
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
-  ...real,
-  db: () => ({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => ({
-            limit: mocks.selectFrom,
-          }),
-        }),
-      }),
-    }),
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    ...real,
+    db: () => ({
       select: () => ({
         from: () => ({
           where: () => ({
@@ -36,7 +24,18 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: mocks.selectFrom,
+              }),
+            }),
+          }),
+        }),
+      }),
   };
 });
 
@@ -108,7 +107,9 @@ describe("conversationListHandler (@oxagen/handlers)", () => {
     const row = makeRow({ archivedAt: new Date("2024-06-01T12:00:00.000Z") });
     mocks.selectFrom.mockResolvedValueOnce([row]);
     const result = await conversationListHandler(BASE_INPUT, CTX);
-    expect(result.conversations[0]!.archivedAt).toBe("2024-06-01T12:00:00.000Z");
+    expect(result.conversations[0]!.archivedAt).toBe(
+      "2024-06-01T12:00:00.000Z",
+    );
   });
 
   it("coerces null title to null", async () => {
@@ -123,13 +124,25 @@ describe("conversationListHandler (@oxagen/handlers)", () => {
   it("returns nextCursor when rows.length > limit", async () => {
     // With limit=2, we fetch limit+1=3 rows; if 3 rows come back, cursor is rows[1].updatedAt
     const rows = [
-      makeRow({ publicId: "cnv_1", updatedAt: new Date("2024-01-03T00:00:00.000Z") }),
-      makeRow({ publicId: "cnv_2", updatedAt: new Date("2024-01-02T00:00:00.000Z") }),
-      makeRow({ publicId: "cnv_3", updatedAt: new Date("2024-01-01T00:00:00.000Z") }),
+      makeRow({
+        publicId: "cnv_1",
+        updatedAt: new Date("2024-01-03T00:00:00.000Z"),
+      }),
+      makeRow({
+        publicId: "cnv_2",
+        updatedAt: new Date("2024-01-02T00:00:00.000Z"),
+      }),
+      makeRow({
+        publicId: "cnv_3",
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      }),
     ];
     mocks.selectFrom.mockResolvedValueOnce(rows);
 
-    const result = await conversationListHandler({ ...BASE_INPUT, limit: 2 }, CTX);
+    const result = await conversationListHandler(
+      { ...BASE_INPUT, limit: 2 },
+      CTX,
+    );
 
     // Only the first 2 rows are returned, not the extra
     expect(result.conversations).toHaveLength(2);
@@ -143,7 +156,10 @@ describe("conversationListHandler (@oxagen/handlers)", () => {
     const rows = [makeRow({ publicId: "cnv_1" })];
     mocks.selectFrom.mockResolvedValueOnce(rows);
 
-    const result = await conversationListHandler({ ...BASE_INPUT, limit: 2 }, CTX);
+    const result = await conversationListHandler(
+      { ...BASE_INPUT, limit: 2 },
+      CTX,
+    );
     expect(result.conversations).toHaveLength(1);
     expect(result.nextCursor).toBeNull();
   });

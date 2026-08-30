@@ -73,27 +73,31 @@ function setRows(table: keyof typeof H.schema, rows: unknown[]) {
 
 // withTenantDb — runs the handler's tx builder against a chainable stub whose
 // terminal .limit() resolves the rows registered for the captured table.
-const mockWithTenantDb = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
-  let captured: string | undefined;
-  const tx = {
-    select: () => tx,
-    from: (t: { __table: string }) => {
-      captured = t.__table;
-      return tx;
-    },
-    where: () => tx,
-    orderBy: () => tx,
-    limit: () => Promise.resolve(captured ? (H.rowsByTable.get(captured) ?? []) : []),
-  };
-  return fn(tx);
-});
+const mockWithTenantDb = vi.fn(
+  async (fn: (tx: unknown) => Promise<unknown>) => {
+    let captured: string | undefined;
+    const tx = {
+      select: () => tx,
+      from: (t: { __table: string }) => {
+        captured = t.__table;
+        return tx;
+      },
+      where: () => tx,
+      orderBy: () => tx,
+      limit: () =>
+        Promise.resolve(captured ? (H.rowsByTable.get(captured) ?? []) : []),
+    };
+    return fn(tx);
+  },
+);
 
 // invoke + capabilitiesForSurface come from the kernel; the handler only needs
 // those two, so a full replacement is safe (nothing else from the kernel is
 // referenced during module load).
 vi.mock("@oxagen/oxagen/kernel", () => ({
   invoke: (...args: unknown[]) => H.mockInvoke(...args),
-  capabilitiesForSurface: (...args: unknown[]) => H.mockCapabilitiesForSurface(...args),
+  capabilitiesForSurface: (...args: unknown[]) =>
+    H.mockCapabilitiesForSurface(...args),
 }));
 
 // Spread the real registry so the contract's registerCapability(...) still
@@ -101,8 +105,12 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 // listCapabilities. (Full-replacement would drop registerCapability and crash
 // the contract import — see project memory on vi.mock spread.)
 vi.mock("@oxagen/oxagen/registry", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@oxagen/oxagen/registry")>();
-  return { ...actual, listCapabilities: (...args: unknown[]) => H.mockListCapabilities(...args) };
+  const actual =
+    await importOriginal<typeof import("@oxagen/oxagen/registry")>();
+  return {
+    ...actual,
+    listCapabilities: (...args: unknown[]) => H.mockListCapabilities(...args),
+  };
 });
 
 vi.mock("@oxagen/database", () => ({
@@ -119,14 +127,19 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("@oxagen/ontology/tenant", () => ({
-  scopedSession: () => ({ run: (...a: unknown[]) => H.mockRun(...a), close: H.sessionClose }),
+  scopedSession: () => ({
+    run: (...a: unknown[]) => H.mockRun(...a),
+    close: H.sessionClose,
+  }),
 }));
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => Promise<unknown>) => fn(),
 }));
 
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { referenceSearchHandler } from "./reference.search";
 
@@ -173,7 +186,10 @@ describe("referenceSearchHandler", () => {
       {
         publicId: "con_b",
         status: "active",
-        deliveryConfig: { selectedRepos: ["acme/api", "acme/cli"], defaultBranch: "dev" },
+        deliveryConfig: {
+          selectedRepos: ["acme/api", "acme/cli"],
+          defaultBranch: "dev",
+        },
       },
     ]);
 
@@ -215,10 +231,20 @@ describe("referenceSearchHandler", () => {
 
   it("restricts sources to the requested types", async () => {
     setRows("sourceConnections", [
-      { publicId: "con_a", status: "active", deliveryConfig: { owner: "acme", repo: "web" } },
+      {
+        publicId: "con_a",
+        status: "active",
+        deliveryConfig: { owner: "acme", repo: "web" },
+      },
     ]);
     setRows("agents", [
-      { publicId: "agt_1", slug: "cleanup", name: "Cleanup Agent", description: null, status: "active" },
+      {
+        publicId: "agt_1",
+        slug: "cleanup",
+        name: "Cleanup Agent",
+        description: null,
+        status: "active",
+      },
     ]);
 
     const { results } = await referenceSearchHandler(
@@ -234,7 +260,13 @@ describe("referenceSearchHandler", () => {
 
   it("resolves an exact match by slug (agent by publicId)", async () => {
     setRows("agents", [
-      { publicId: "agt_x", slug: "billing", name: "Billing Agent", description: "Handles invoices", status: "active" },
+      {
+        publicId: "agt_x",
+        slug: "billing",
+        name: "Billing Agent",
+        description: "Handles invoices",
+        status: "active",
+      },
     ]);
 
     const { results } = await referenceSearchHandler(
@@ -254,29 +286,76 @@ describe("referenceSearchHandler", () => {
       return { node: null };
     });
     setRows("agents", [
-      { publicId: "agt_1", slug: "cleanup", name: "Cleanup Agent", description: null, status: "active" },
+      {
+        publicId: "agt_1",
+        slug: "cleanup",
+        name: "Cleanup Agent",
+        description: null,
+        status: "active",
+      },
     ]);
 
-    const { results } = await referenceSearchHandler({ query: "cleanup", limit: 25 }, ctx);
+    const { results } = await referenceSearchHandler(
+      { query: "cleanup", limit: 25 },
+      ctx,
+    );
 
     // Postgres agent row survives the graph failure.
-    expect(results.some((r) => r.type === "agent" && r.slug === "agt_1")).toBe(true);
-    // File / directory / node arms degraded to empty.
-    expect(results.some((r) => r.type === "file" || r.type === "directory" || r.type === "node")).toBe(
-      false,
+    expect(results.some((r) => r.type === "agent" && r.slug === "agt_1")).toBe(
+      true,
     );
+    // File / directory / node arms degraded to empty.
+    expect(
+      results.some(
+        (r) => r.type === "file" || r.type === "directory" || r.type === "node",
+      ),
+    ).toBe(false);
   });
 
   it("dedupes merged rows and slices to the limit", async () => {
     setRows("agents", [
-      { publicId: "agt_1", slug: "a", name: "Agent One", description: null, status: "active" },
+      {
+        publicId: "agt_1",
+        slug: "a",
+        name: "Agent One",
+        description: null,
+        status: "active",
+      },
       // Exact duplicate — same type+slug+location collapses to one.
-      { publicId: "agt_1", slug: "a", name: "Agent One", description: null, status: "active" },
-      { publicId: "agt_2", slug: "b", name: "Agent Two", description: null, status: "active" },
+      {
+        publicId: "agt_1",
+        slug: "a",
+        name: "Agent One",
+        description: null,
+        status: "active",
+      },
+      {
+        publicId: "agt_2",
+        slug: "b",
+        name: "Agent Two",
+        description: null,
+        status: "active",
+      },
     ]);
     setRows("skills", [
-      { publicId: "skl_1", slug: "s1", name: "Skill One", description: null, source: "builtin", enabled: true, usageCount: 0 },
-      { publicId: "skl_2", slug: "s2", name: "Skill Two", description: null, source: "builtin", enabled: true, usageCount: 0 },
+      {
+        publicId: "skl_1",
+        slug: "s1",
+        name: "Skill One",
+        description: null,
+        source: "builtin",
+        enabled: true,
+        usageCount: 0,
+      },
+      {
+        publicId: "skl_2",
+        slug: "s2",
+        name: "Skill Two",
+        description: null,
+        source: "builtin",
+        enabled: true,
+        usageCount: 0,
+      },
     ]);
 
     const { results } = await referenceSearchHandler(
@@ -303,7 +382,10 @@ describe("referenceSearchHandler", () => {
       { name: "github", publicId: "mcp_1", discoveredTools: ["create_issue"] },
     ]);
 
-    const { results } = await referenceSearchHandler({ query: "", types: ["tool"], limit: 25 }, ctx);
+    const { results } = await referenceSearchHandler(
+      { query: "", types: ["tool"], limit: 25 },
+      ctx,
+    );
 
     expect(H.mockCapabilitiesForSurface).toHaveBeenCalledWith("agent");
     const builtin = results.find((r) => r.slug === "read_file");
@@ -321,7 +403,8 @@ describe("referenceSearchHandler", () => {
       {
         name: "search_references",
         domain: "reference",
-        description: "Tenant-scoped autocomplete search across referenceable objects",
+        description:
+          "Tenant-scoped autocomplete search across referenceable objects",
         mode: "sync",
         agent: { riskLevel: "low", category: "read" },
       },

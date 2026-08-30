@@ -9,8 +9,15 @@ const toSurface = (s: string): CapabilitySurface =>
     ? (s as CapabilitySurface)
     : "api";
 
-export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (input, ctx) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
+  input,
+  ctx,
+) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   // Step 1: Get a recommendation
   const recommendation = (await invoke(
@@ -134,7 +141,11 @@ export const schemaSetupHandler: CapabilityHandler<typeof schemaSetup> = async (
   }
 
   // Re-read registry to get the new pinnedVersionId
-  const updatedRegistry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+  const updatedRegistry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   logger.info(
     {

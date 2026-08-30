@@ -4,7 +4,10 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { loadBuiltInSchema } from "@oxagen/ingestion/connector-schema-loader";
-import { resolveConnectorVersion, toContractStatus } from "./lib/connection-status";
+import {
+  resolveConnectorVersion,
+  toContractStatus,
+} from "./lib/connection-status";
 import { logger } from "./logger";
 
 /**
@@ -18,10 +21,9 @@ import { logger } from "./logger";
  * null for connectors with no bundled schema. `version` is the connector's real
  * bundled schema version when available, else the platform version.
  */
-export const integrationGetHandler: CapabilityHandler<typeof integrationGet> = async (
-  input,
-  ctx,
-) => {
+export const integrationGetHandler: CapabilityHandler<
+  typeof integrationGet
+> = async (input, ctx) => {
   const [row] = await withTenantDb((tx) =>
     tx
       .select({
@@ -49,14 +51,21 @@ export const integrationGetHandler: CapabilityHandler<typeof integrationGet> = a
   );
 
   if (!row) {
-    logger.warn({ integrationId: input.integrationId, orgId: ctx.orgId }, "integration.get: not found");
+    logger.warn(
+      { integrationId: input.integrationId, orgId: ctx.orgId },
+      "integration.get: not found",
+    );
     throw new HTTPException(404, { message: "Integration not found" });
   }
 
   const connectorSchema = loadBuiltInSchema(row.connectorId);
 
   logger.info(
-    { integrationId: input.integrationId, connectorId: row.connectorId, orgId: ctx.orgId },
+    {
+      integrationId: input.integrationId,
+      connectorId: row.connectorId,
+      orgId: ctx.orgId,
+    },
     "integration.get: fetched",
   );
 

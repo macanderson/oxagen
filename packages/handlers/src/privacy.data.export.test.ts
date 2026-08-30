@@ -32,8 +32,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   });
   return {
     ...real,
-    withSystemDb: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
-      fn(makeTx()),
+    withSystemDb: async (
+      fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>,
+    ) => fn(makeTx()),
   };
 });
 
@@ -96,14 +97,20 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
 
   it("allows org-scope export for an Owner of the target org", async () => {
     queueSelects([{ role: "owner" }]);
-    const result = await privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX);
+    const result = await privacyDataExportHandler(
+      { scope: "org", orgId: "org_B" },
+      CTX,
+    );
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
   });
 
   it("allows org-scope export for an Admin of the target org", async () => {
     queueSelects([{ role: "admin" }]);
-    const result = await privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX);
+    const result = await privacyDataExportHandler(
+      { scope: "org", orgId: "org_B" },
+      CTX,
+    );
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
   });
 

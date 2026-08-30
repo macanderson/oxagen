@@ -13,7 +13,9 @@ import {
 // policy shape live in @oxagen/agent-engine (resolveEffectiveRoutingPolicy).
 
 /** Normalize a free-text stored mode to a canonical value, defaulting to "off". */
-export function normalizeRoutingMode(raw: string | null | undefined): RoutingMode {
+export function normalizeRoutingMode(
+  raw: string | null | undefined,
+): RoutingMode {
   return raw === "shadow" || raw === "enforce" ? raw : "off";
 }
 

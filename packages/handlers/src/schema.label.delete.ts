@@ -5,11 +5,14 @@ import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
-export const schemaLabelDeleteHandler: CapabilityHandler<typeof schemaLabelDelete> = async (
-  input,
-  ctx,
-) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+export const schemaLabelDeleteHandler: CapabilityHandler<
+  typeof schemaLabelDelete
+> = async (input, ctx) => {
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     return { deleted: false, labelName: input.name };
@@ -70,7 +73,12 @@ export const schemaLabelDeleteHandler: CapabilityHandler<typeof schemaLabelDelet
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, label: input.name, deleted },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      label: input.name,
+      deleted,
+    },
     "schema.label.delete: soft-deleted label",
   );
 

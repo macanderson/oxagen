@@ -5,7 +5,10 @@
 // ≥ 11 without any import.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { markdownGenerate, type MarkdownGenerateInput } from "@oxagen/oxagen/contracts/markdown.generate";
+import {
+  markdownGenerate,
+  type MarkdownGenerateInput,
+} from "@oxagen/oxagen/contracts/markdown.generate";
 import { logger } from "./logger";
 import { persistGeneratedAsset } from "./generated-asset.persist";
 import { assetDisplayName } from "./lib/asset-filename";
@@ -43,14 +46,15 @@ function encodeMarkdown(source: string): Uint8Array {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const markdownGenerateHandler: CapabilityHandler<typeof markdownGenerate> = async (
-  input,
-  ctx,
-) => {
+export const markdownGenerateHandler: CapabilityHandler<
+  typeof markdownGenerate
+> = async (input, ctx) => {
   // Markdown persistence requires a real user identity for the asset's
   // ownership row (same guard as documents.generate).
   if (!ctx.userId) {
-    throw new Error("markdown.generate: userId is required — no user identity in context");
+    throw new Error(
+      "markdown.generate: userId is required — no user identity in context",
+    );
   }
 
   const { title, markdown, sections } = input;

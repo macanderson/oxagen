@@ -10,9 +10,13 @@ import {
 // plain literals (the same pattern the suite uses for DraftSchema), so a thin
 // alias keeps the calls type-clean without exporting internal types.
 type ChatResponse = Parameters<typeof buildProposedMutations>[0];
-const resp = (o: Record<string, unknown>): ChatResponse => o as unknown as ChatResponse;
+const resp = (o: Record<string, unknown>): ChatResponse =>
+  o as unknown as ChatResponse;
 type Mutation = { capability: string; input: Record<string, unknown> };
-const mut = (capability: string, input: Record<string, unknown>): Mutation => ({ capability, input });
+const mut = (capability: string, input: Record<string, unknown>): Mutation => ({
+  capability,
+  input,
+});
 
 const SCHEMAS = [
   { name: "support", labels: ["SupportTicket", "Bug"], rels: [] },
@@ -22,7 +26,11 @@ const SCHEMAS = [
 
 describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
   it("drops a schema (drop/delete/remove + name, plural-tolerant)", () => {
-    for (const msg of ["drop the support schema entirely", "delete the support schema", "remove the supports schema"]) {
+    for (const msg of [
+      "drop the support schema entirely",
+      "delete the support schema",
+      "remove the supports schema",
+    ]) {
       expect(detectSimpleIntents(msg, SCHEMAS)).toEqual([
         { capability: "delete_schema", input: { schemaName: "support" } },
       ]);
@@ -31,16 +39,28 @@ describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
 
   it("disables / enables a schema", () => {
     expect(detectSimpleIntents("disable the billing schema", SCHEMAS)).toEqual([
-      { capability: "toggle_schema", input: { schemaName: "billing", enabled: false } },
+      {
+        capability: "toggle_schema",
+        input: { schemaName: "billing", enabled: false },
+      },
     ]);
     expect(detectSimpleIntents("deactivate subscription", SCHEMAS)).toEqual([
-      { capability: "toggle_schema", input: { schemaName: "subscription", enabled: false } },
+      {
+        capability: "toggle_schema",
+        input: { schemaName: "subscription", enabled: false },
+      },
     ]);
     expect(detectSimpleIntents("enable the billing schema", SCHEMAS)).toEqual([
-      { capability: "toggle_schema", input: { schemaName: "billing", enabled: true } },
+      {
+        capability: "toggle_schema",
+        input: { schemaName: "billing", enabled: true },
+      },
     ]);
     expect(detectSimpleIntents("turn on subscription", SCHEMAS)).toEqual([
-      { capability: "toggle_schema", input: { schemaName: "subscription", enabled: true } },
+      {
+        capability: "toggle_schema",
+        input: { schemaName: "subscription", enabled: true },
+      },
     ]);
   });
 
@@ -52,22 +72,43 @@ describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
     expect(out).toEqual([
       {
         capability: "upsert_schema_property",
-        input: { schemaName: "subscription", ownerKind: "node", ownerName: "Subscription", key: "number_of_licenses", dataType: "integer", required: false },
+        input: {
+          schemaName: "subscription",
+          ownerKind: "node",
+          ownerName: "Subscription",
+          key: "number_of_licenses",
+          dataType: "integer",
+          required: false,
+        },
       },
       {
         capability: "upsert_schema_property",
-        input: { schemaName: "subscription", ownerKind: "node", ownerName: "Subscription", key: "customer_since", dataType: "date", required: false },
+        input: {
+          schemaName: "subscription",
+          ownerKind: "node",
+          ownerName: "Subscription",
+          key: "customer_since",
+          dataType: "date",
+          required: false,
+        },
       },
     ]);
   });
 
   it("returns [] for create/open-ended asks (LLM path handles those)", () => {
-    expect(detectSimpleIntents("generate the schemas for a b2b saas company", SCHEMAS)).toEqual([]);
+    expect(
+      detectSimpleIntents(
+        "generate the schemas for a b2b saas company",
+        SCHEMAS,
+      ),
+    ).toEqual([]);
     expect(detectSimpleIntents("what schemas do I have?", SCHEMAS)).toEqual([]);
   });
 
   it("returns [] when no real schema name is referenced (no false positives)", () => {
-    expect(detectSimpleIntents("drop the marketing schema", SCHEMAS)).toEqual([]);
+    expect(detectSimpleIntents("drop the marketing schema", SCHEMAS)).toEqual(
+      [],
+    );
     expect(detectSimpleIntents("disable everything", SCHEMAS)).toEqual([]);
   });
 
@@ -80,7 +121,9 @@ describe("detectSimpleIntents — deterministic schema-edit parsing", () => {
       "add is_active, signed_at, created_time, total_amount, contact_email, profile_url, plan_name fields to the support schema",
       SCHEMAS,
     );
-    const byKey = Object.fromEntries(out.map((m) => [m.input.key, m.input.dataType]));
+    const byKey = Object.fromEntries(
+      out.map((m) => [m.input.key, m.input.dataType]),
+    );
     expect(byKey.is_active).toBe("boolean");
     expect(byKey.signed_at).toBe("date");
     expect(byKey.created_time).toBe("datetime");
@@ -106,17 +149,23 @@ describe("describeMutations — assistant reply summary", () => {
   });
 
   it("summarizes delete / toggle / label-delete and falls back when empty", () => {
-    expect(describeMutations([mut("delete_schema", { schemaName: "support" })])).toContain(
-      "Dropped the support schema.",
-    );
-    expect(describeMutations([mut("toggle_schema", { schemaName: "billing", enabled: true })])).toContain(
-      "Activated the billing schema.",
-    );
-    expect(describeMutations([mut("toggle_schema", { schemaName: "billing", enabled: false })])).toContain(
-      "Deactivated the billing schema.",
-    );
     expect(
-      describeMutations([mut("delete_schema_label", { schemaName: "billing", name: "Invoice" })]),
+      describeMutations([mut("delete_schema", { schemaName: "support" })]),
+    ).toContain("Dropped the support schema.");
+    expect(
+      describeMutations([
+        mut("toggle_schema", { schemaName: "billing", enabled: true }),
+      ]),
+    ).toContain("Activated the billing schema.");
+    expect(
+      describeMutations([
+        mut("toggle_schema", { schemaName: "billing", enabled: false }),
+      ]),
+    ).toContain("Deactivated the billing schema.");
+    expect(
+      describeMutations([
+        mut("delete_schema_label", { schemaName: "billing", name: "Invoice" }),
+      ]),
     ).toContain("Removed the Invoice label from billing.");
     expect(describeMutations([])).toBe("Applied the requested change.");
   });
@@ -127,12 +176,27 @@ describe("dedupeMutations — keep the first of each logical mutation", () => {
     const out = dedupeMutations([
       mut("delete_schema", { schemaName: "support" }),
       mut("delete_schema", { schemaName: "support" }),
-      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
-      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "tax_id" }),
-      mut("upsert_schema_property", { schemaName: "billing", ownerName: "Invoice", key: "total" }),
+      mut("upsert_schema_property", {
+        schemaName: "billing",
+        ownerName: "Invoice",
+        key: "tax_id",
+      }),
+      mut("upsert_schema_property", {
+        schemaName: "billing",
+        ownerName: "Invoice",
+        key: "tax_id",
+      }),
+      mut("upsert_schema_property", {
+        schemaName: "billing",
+        ownerName: "Invoice",
+        key: "total",
+      }),
     ]);
     expect(out).toHaveLength(3);
-    expect(out.map((m) => m.input.key).filter(Boolean)).toEqual(["tax_id", "total"]);
+    expect(out.map((m) => m.input.key).filter(Boolean)).toEqual([
+      "tax_id",
+      "total",
+    ]);
   });
 });
 
@@ -147,11 +211,19 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
             labels: [
               {
                 name: "Customer",
-                properties: [{ key: "lifetime_value", dataType: "decimal" }, { key: "name" }],
+                properties: [
+                  { key: "lifetime_value", dataType: "decimal" },
+                  { key: "name" },
+                ],
               },
             ],
             relationshipTypes: [
-              { name: "places order", startLabel: "Customer", endLabel: "Order", cardinality: "many_to_one" },
+              {
+                name: "places order",
+                startLabel: "Customer",
+                endLabel: "Order",
+                cardinality: "many_to_one",
+              },
             ],
           },
         ],
@@ -176,10 +248,26 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
       resp({
         assistantMessage: "ok",
         mutations: [
-          { capability: "delete_schema_label", input: { schemaName: "billing", name: "Invoice" } },
-          { capability: "delete_schema_label", input: { schemaName: "billing" } }, // no name → dropped
-          { capability: "upsert_schema_property", input: { schemaName: "billing", ownerName: "Invoice", key: "tax_id" } },
-          { capability: "toggle_schema", input: { schemaName: "billing", enabled: true } },
+          {
+            capability: "delete_schema_label",
+            input: { schemaName: "billing", name: "Invoice" },
+          },
+          {
+            capability: "delete_schema_label",
+            input: { schemaName: "billing" },
+          }, // no name → dropped
+          {
+            capability: "upsert_schema_property",
+            input: {
+              schemaName: "billing",
+              ownerName: "Invoice",
+              key: "tax_id",
+            },
+          },
+          {
+            capability: "toggle_schema",
+            input: { schemaName: "billing", enabled: true },
+          },
           { capability: "toggle_schema", input: { schemaName: "billing" } }, // no enabled → dropped
         ],
       }),
@@ -197,6 +285,8 @@ describe("buildProposedMutations — LLM structured output → normalized mutati
   });
 
   it("returns [] for an empty response object", () => {
-    expect(buildProposedMutations(resp({ assistantMessage: "nothing to do" }))).toEqual([]);
+    expect(
+      buildProposedMutations(resp({ assistantMessage: "nothing to do" })),
+    ).toEqual([]);
   });
 });

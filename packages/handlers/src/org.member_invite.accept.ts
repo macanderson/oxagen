@@ -112,6 +112,10 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<
 
   const result = await withSystemDb(async (tx) => {
     // (a) Mark invitation accepted.
+    // NOTE: the pending/expiry checks above ran in an EARLIER transaction and
+    // this UPDATE does not re-assert `status = 'pending'`, so it is not a
+    // compare-and-swap. An invitation revoked (or accepted a second time)
+    // between the check and here is still accepted.
     await tx
       .update(schema.invitations)
       .set({

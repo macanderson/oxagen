@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./schema.versioning", () => ({
-  getOrCreateRegistry: (...args: unknown[]) => mocks.getOrCreateRegistry(...args),
+  getOrCreateRegistry: (...args: unknown[]) =>
+    mocks.getOrCreateRegistry(...args),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -71,7 +72,9 @@ function makeExportTx(opts: {
           where: () => {
             if (num === 1) {
               // schemaVersions lookup
-              return { limit: () => Promise.resolve(versionRow ? [versionRow] : []) };
+              return {
+                limit: () => Promise.resolve(versionRow ? [versionRow] : []),
+              };
             }
             if (num === 2) {
               // schemas select
@@ -141,7 +144,10 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
       return fn(makeExportTx({}) as unknown as Parameters<typeof fn>[0]);
     });
 
-    const result = await schemaExportHandler({ versionId: "scv_explicit" }, CTX);
+    const result = await schemaExportHandler(
+      { versionId: "scv_explicit" },
+      CTX,
+    );
 
     expect(result.versionId).toBe("scv_explicit");
   });
@@ -222,12 +228,16 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
 
     const { withTenantDb } = await import("@oxagen/database");
     vi.mocked(withTenantDb).mockImplementationOnce(async (fn) => {
-      return fn(makeExportTx({ versionRow: null }) as unknown as Parameters<typeof fn>[0]);
+      return fn(
+        makeExportTx({ versionRow: null }) as unknown as Parameters<
+          typeof fn
+        >[0],
+      );
     });
 
-    await expect(schemaExportHandler({ versionId: "scv_nonexistent" }, CTX)).rejects.toThrow(
-      "Version scv_nonexistent not found",
-    );
+    await expect(
+      schemaExportHandler({ versionId: "scv_nonexistent" }, CTX),
+    ).rejects.toThrow("Version scv_nonexistent not found");
   });
 
   // ── happy path with schemas, labels, rels, props ─────────────────────────
@@ -290,23 +300,51 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
           return {
             from: () => ({
               where: () => {
-                if (n === 1) return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
-                if (n === 2) return Promise.resolve([
-                  { id: "schema_1", name: "Person", displayName: "Person" },
-                ]);
-                if (n === 3) return Promise.resolve([
-                  { id: "label_1", schemaId: "schema_1", name: "Human", displayName: "Human",
-                    description: "A human", naturalKeyProps: ["email"] },
-                ]);
-                if (n === 4) return Promise.resolve([
-                  { id: "rel_1", schemaId: "schema_1", name: "KNOWS", displayName: "Knows",
-                    description: null, startLabel: "Human", endLabel: "Human", cardinality: "many-to-many" },
-                ]);
-                if (n === 5) return Promise.resolve([
-                  { id: "prop_1", nodeLabelId: "label_1", relationshipTypeId: null,
-                    key: "email", dataType: "string", required: true, description: null,
-                    enumValues: null, itemType: null, example: null },
-                ]);
+                if (n === 1)
+                  return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
+                if (n === 2)
+                  return Promise.resolve([
+                    { id: "schema_1", name: "Person", displayName: "Person" },
+                  ]);
+                if (n === 3)
+                  return Promise.resolve([
+                    {
+                      id: "label_1",
+                      schemaId: "schema_1",
+                      name: "Human",
+                      displayName: "Human",
+                      description: "A human",
+                      naturalKeyProps: ["email"],
+                    },
+                  ]);
+                if (n === 4)
+                  return Promise.resolve([
+                    {
+                      id: "rel_1",
+                      schemaId: "schema_1",
+                      name: "KNOWS",
+                      displayName: "Knows",
+                      description: null,
+                      startLabel: "Human",
+                      endLabel: "Human",
+                      cardinality: "many-to-many",
+                    },
+                  ]);
+                if (n === 5)
+                  return Promise.resolve([
+                    {
+                      id: "prop_1",
+                      nodeLabelId: "label_1",
+                      relationshipTypeId: null,
+                      key: "email",
+                      dataType: "string",
+                      required: true,
+                      description: null,
+                      enumValues: null,
+                      itemType: null,
+                      example: null,
+                    },
+                  ]);
                 return Promise.resolve([]);
               },
             }),
@@ -342,11 +380,13 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
           return {
             from: () => ({
               where: () => {
-                if (n === 1) return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
-                if (n === 2) return Promise.resolve([
-                  { id: "s1", name: "Person", displayName: "Person" },
-                  { id: "s2", name: "Company", displayName: "Company" },
-                ]);
+                if (n === 1)
+                  return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
+                if (n === 2)
+                  return Promise.resolve([
+                    { id: "s1", name: "Person", displayName: "Person" },
+                    { id: "s2", name: "Company", displayName: "Company" },
+                  ]);
                 // labels, rels, props all empty
                 return Promise.resolve([]);
               },
@@ -392,17 +432,38 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
           return {
             from: () => ({
               where: () => {
-                if (n === 1) return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
-                if (n === 2) return Promise.resolve([{ id: "schema_1", name: "Core", displayName: "Core" }]);
+                if (n === 1)
+                  return { limit: () => Promise.resolve([MOCK_VERSION_ROW]) };
+                if (n === 2)
+                  return Promise.resolve([
+                    { id: "schema_1", name: "Core", displayName: "Core" },
+                  ]);
                 if (n === 3) return Promise.resolve([]); // no labels
-                if (n === 4) return Promise.resolve([
-                  { id: "rel_1", schemaId: "schema_1", name: "RELATES_TO", displayName: "Relates To",
-                    description: "A relationship", startLabel: "A", endLabel: "B", cardinality: "one-to-many" },
-                ]);
-                if (n === 5) return Promise.resolve([
-                  { id: "p1", nodeLabelId: null, relationshipTypeId: "rel_1",
-                    key: "weight", dataType: "float", required: false, description: "edge weight" },
-                ]);
+                if (n === 4)
+                  return Promise.resolve([
+                    {
+                      id: "rel_1",
+                      schemaId: "schema_1",
+                      name: "RELATES_TO",
+                      displayName: "Relates To",
+                      description: "A relationship",
+                      startLabel: "A",
+                      endLabel: "B",
+                      cardinality: "one-to-many",
+                    },
+                  ]);
+                if (n === 5)
+                  return Promise.resolve([
+                    {
+                      id: "p1",
+                      nodeLabelId: null,
+                      relationshipTypeId: "rel_1",
+                      key: "weight",
+                      dataType: "float",
+                      required: false,
+                      description: "edge weight",
+                    },
+                  ]);
                 return Promise.resolve([]);
               },
             }),
@@ -415,7 +476,9 @@ describe("schemaExportHandler (@oxagen/handlers)", () => {
     await schemaExportHandler({ versionId: "scv_pub_1" }, CTX);
 
     const entries = firstInvokeEntries();
-    const relEntry = entries.find((e) => e.name === "schemas/Core/relationships/RELATES_TO.json");
+    const relEntry = entries.find(
+      (e) => e.name === "schemas/Core/relationships/RELATES_TO.json",
+    );
     expect(relEntry).toBeDefined();
 
     const relDoc = JSON.parse(relEntry!.text) as {

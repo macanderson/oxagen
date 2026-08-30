@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { insertToolInvocation, type ToolInvocationRow } from "@oxagen/telemetry";
+import {
+  insertToolInvocation,
+  type ToolInvocationRow,
+} from "@oxagen/telemetry";
 import { logger } from "./logger";
 
 /**
@@ -51,6 +54,9 @@ export function emitGraphDeletionTelemetry(
     created_at: new Date().toISOString(),
   };
   void insertToolInvocation(row).catch((err: unknown) => {
-    logger.warn({ capability, err }, "graph delete: telemetry insert failed (non-fatal)");
+    logger.warn(
+      { capability, err },
+      "graph delete: telemetry insert failed (non-fatal)",
+    );
   });
 }

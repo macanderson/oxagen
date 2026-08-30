@@ -48,8 +48,8 @@ describe("eval.dataset.item.add handler", () => {
 
   it("bulk-inserts items and bumps the dataset item count", async () => {
     const DATASET = { id: "uuid-1", publicId: "eds_ABC", itemCount: 2 };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx(DATASET, 5)),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx(DATASET, 5)),
     );
     const out = await evalDatasetItemAddHandler(
       {
@@ -67,8 +67,8 @@ describe("eval.dataset.item.add handler", () => {
 
   it("falls back to a computed item count when the update returns no row", async () => {
     const DATASET = { id: "uuid-1", publicId: "eds_ABC", itemCount: 2 };
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx(DATASET, null)),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx(DATASET, null)),
     );
     const out = await evalDatasetItemAddHandler(
       { datasetPublicId: "eds_ABC", items: [{ input: "q1", metadata: {} }] },
@@ -78,12 +78,15 @@ describe("eval.dataset.item.add handler", () => {
   });
 
   it("throws a 404 when the dataset does not exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx(null, null)),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx(null, null)),
     );
     await expect(
       evalDatasetItemAddHandler(
-        { datasetPublicId: "eds_missing", items: [{ input: "q1", metadata: {} }] },
+        {
+          datasetPublicId: "eds_missing",
+          items: [{ input: "q1", metadata: {} }],
+        },
         CTX,
       ),
     ).rejects.toMatchObject({ status: 404 });

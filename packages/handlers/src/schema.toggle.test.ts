@@ -64,14 +64,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 vi.mock("./schema.versioning", () => ({
-  getOrCreateRegistry: (...args: unknown[]) => mocks.getOrCreateRegistry(...args),
+  getOrCreateRegistry: (...args: unknown[]) =>
+    mocks.getOrCreateRegistry(...args),
   isDraftDirty: (...args: unknown[]) => mocks.isDraftDirty(...args),
   publishDraft: (...args: unknown[]) => mocks.publishDraft(...args),
   pinVersion: (...args: unknown[]) => mocks.pinVersion(...args),
 }));
 
 vi.mock("./schema.pinned", () => ({
-  invalidatePinnedSchemaCache: (...args: unknown[]) => mocks.invalidatePinnedSchemaCache(...args),
+  invalidatePinnedSchemaCache: (...args: unknown[]) =>
+    mocks.invalidatePinnedSchemaCache(...args),
 }));
 
 vi.mock("./logger", () => ({
@@ -140,12 +142,17 @@ describe("schemaToggleHandler (@oxagen/handlers)", () => {
     expect(result.isDowngrade).toBe(false);
     // Since enabled=true and no publish, reconcileRecommended should be false
     expect(result.reconcileRecommended).toBe(false);
-    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(CTX.workspaceId);
+    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(
+      CTX.workspaceId,
+    );
   });
 
   it("sets reconcileRecommended=true when enabled=false and no draft publish", async () => {
     mocks.isDraftDirty.mockResolvedValue(false);
-    const result = await schemaToggleHandler({ schemaName: "Person", enabled: false }, CTX);
+    const result = await schemaToggleHandler(
+      { schemaName: "Person", enabled: false },
+      CTX,
+    );
 
     expect(result.enabled).toBe(false);
     expect(result.reconcileRecommended).toBe(true);
@@ -175,7 +182,9 @@ describe("schemaToggleHandler (@oxagen/handlers)", () => {
     expect(result.publishedVersionId).toBe("scv_pub_new");
     expect(result.pinnedVersionId).toBe("scv_pub_new");
     expect(result.isDowngrade).toBe(false);
-    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(CTX.workspaceId);
+    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(
+      CTX.workspaceId,
+    );
   });
 
   it("sets reconcileRecommended=true when publish results in downgrade", async () => {
@@ -214,7 +223,10 @@ describe("schemaToggleHandler (@oxagen/handlers)", () => {
       reconcileRecommended: false,
     });
 
-    const result = await schemaToggleHandler({ schemaName: "Person", enabled: false }, CTX);
+    const result = await schemaToggleHandler(
+      { schemaName: "Person", enabled: false },
+      CTX,
+    );
 
     // !enabled → reconcileRecommended = true (even if not a downgrade)
     expect(result.reconcileRecommended).toBe(true);
@@ -267,6 +279,8 @@ describe("schemaToggleHandler (@oxagen/handlers)", () => {
 
   it("always invalidates the pinned schema cache", async () => {
     await schemaToggleHandler(BASE_INPUT, CTX);
-    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(CTX.workspaceId);
+    expect(mocks.invalidatePinnedSchemaCache).toHaveBeenCalledWith(
+      CTX.workspaceId,
+    );
   });
 });

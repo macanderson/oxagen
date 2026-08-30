@@ -63,16 +63,19 @@ beforeEach(() => {
 describe("plugin.credential.revoke", () => {
   it("throws when workspaceId is missing (scoped capability)", async () => {
     await expect(
-      handler({ orgListingId: "porg-1" }, { ...ctx, workspaceId: null } as never),
+      handler({ orgListingId: "porg-1" }, {
+        ...ctx,
+        workspaceId: null,
+      } as never),
     ).rejects.toThrow("workspaceId is required");
     expect(mocks.deleteWorkspaceSecret).not.toHaveBeenCalled();
   });
 
   it("throws when the org listing does not exist for this org — never deletes", async () => {
     state.listingRows = [];
-    await expect(handler({ orgListingId: "porg-missing" }, ctx as never)).rejects.toThrow(
-      "Installed plugin not found or deleted: porg-missing",
-    );
+    await expect(
+      handler({ orgListingId: "porg-missing" }, ctx as never),
+    ).rejects.toThrow("Installed plugin not found or deleted: porg-missing");
     expect(mocks.deleteWorkspaceSecret).not.toHaveBeenCalled();
   });
 
@@ -99,8 +102,8 @@ describe("plugin.credential.revoke", () => {
   it("propagates delete failures", async () => {
     mocks.deleteWorkspaceSecret.mockRejectedValue(new Error("db unavailable"));
 
-    await expect(handler({ orgListingId: "porg-1" }, ctx as never)).rejects.toThrow(
-      "db unavailable",
-    );
+    await expect(
+      handler({ orgListingId: "porg-1" }, ctx as never),
+    ).rejects.toThrow("db unavailable");
   });
 });

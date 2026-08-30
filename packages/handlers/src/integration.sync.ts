@@ -11,26 +11,22 @@ import { logger } from "./logger";
  *
  * 1. Reads the source connection from Postgres to resolve the connection UUID
  *    from the public integrationId.
- * 2. Reads deliveryConfig to determine the sync method:
- *    - "polling"  → queues an Inngest sync job at the configured interval
- *    - "webhook"  → confirms the webhook subscription is active (no new job)
- *    - "manual"   → queues an on-demand Inngest sync job
- * 3. Returns the job ID and queued status.
+ * 2. Reads deliveryConfig for the connection's sync method and interval.
+ * 3. Sends one "ingestion/sync.requested" Inngest event carrying that context.
+ * 4. Returns the job ID and queued status.
  *
- * Scheduling for polling connections:
- *   The cron-style scheduling is owned by Inngest (via scheduled functions).
- *   This handler sends a one-off "integration/sync.requested" event which the
- *   Inngest function picks up. The polling cadence itself is enforced by a
- *   separate Inngest cron function (registered in @oxagen/inngest-functions)
- *   that fires at `syncIntervalSeconds` intervals for active polling connections.
+ * The handler does NOT branch on sync method — polling, webhook and manual all
+ * produce the same one-off event, and the receiving Inngest function decides
+ * what to do with `syncMethod`/`syncIntervalSeconds`. The recurring polling
+ * cadence is owned separately by an Inngest cron function (registered in
+ * @oxagen/inngest-functions); this capability is the on-demand trigger.
  *
- * For webhook connections, calling integration.sync manually triggers a
- * re-sync of any events that arrived since the last cursor position.
+ * The handler also does not gate on `sourceConnections.status`, so a paused or
+ * errored connection can still be asked to sync.
  */
-export const integrationSyncHandler: CapabilityHandler<typeof integrationSync> = async (
-  input,
-  ctx,
-) => {
+export const integrationSyncHandler: CapabilityHandler<
+  typeof integrationSync
+> = async (input, ctx) => {
   // Resolve source connection by public ID
   const [row] = await withTenantDb((tx) =>
     tx
@@ -53,11 +49,14 @@ export const integrationSyncHandler: CapabilityHandler<typeof integrationSync> =
   );
 
   if (!row) {
-    throw new Error(`integration.sync: integration not found: ${input.integrationId}`);
+    throw new Error(
+      `integration.sync: integration not found: ${input.integrationId}`,
+    );
   }
 
   const deliveryConfig = (row.deliveryConfig ?? {}) as DeliveryConfig;
-  const syncMethod = deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
+  const syncMethod =
+    deliveryConfig.syncMethod ?? row.deliveryMethod ?? "manual";
   const syncIntervalSeconds = deliveryConfig.syncIntervalSeconds ?? 300;
 
   const jobId = "job_" + crypto.randomUUID();
@@ -86,7 +85,8 @@ export const integrationSyncHandler: CapabilityHandler<typeof integrationSync> =
       connectionId: row.id,
       mode: input.mode,
       syncMethod,
-      syncIntervalSeconds: syncMethod === "polling" ? syncIntervalSeconds : undefined,
+      syncIntervalSeconds:
+        syncMethod === "polling" ? syncIntervalSeconds : undefined,
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     },

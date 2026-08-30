@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { formFill, type FormFillInput } from "@oxagen/oxagen/contracts/form.fill";
+import {
+  formFill,
+  type FormFillInput,
+} from "@oxagen/oxagen/contracts/form.fill";
 import { logger } from "./logger";
 
 // Derive the field shape from the contract input so this file never drifts.
@@ -17,7 +20,9 @@ type FieldSpec = FormFillInput["fields"][number];
  * We also include a per-field `reason` key (nullable string) so the model
  * can provide a rationale for each change in one pass.
  */
-function buildModelSchema(fields: FieldSpec[]): z.ZodObject<
+function buildModelSchema(
+  fields: FieldSpec[],
+): z.ZodObject<
   Record<
     string,
     | z.ZodString
@@ -128,7 +133,10 @@ function buildSystemPrompt(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const formFillHandler: CapabilityHandler<typeof formFill> = async (input, ctx) => {
+export const formFillHandler: CapabilityHandler<typeof formFill> = async (
+  input,
+  ctx,
+) => {
   const fields = input.fields;
 
   // Build a schema the model must conform to.
@@ -180,7 +188,8 @@ export const formFillHandler: CapabilityHandler<typeof formFill> = async (input,
   // Compute per-field diffs from the model's response.
   const diffs = fields.map((f) => {
     const proposed = modelObject![f.name as keyof typeof modelObject];
-    const reason = modelObject![`${f.name}__reason` as keyof typeof modelObject];
+    const reason =
+      modelObject![`${f.name}__reason` as keyof typeof modelObject];
 
     // Strict equality check. null === null is intentionally fine here.
     const changed = proposed !== f.current;

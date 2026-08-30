@@ -279,25 +279,40 @@ const noComments: GitHubPrComments = { issue: [], review: [] };
 
 describe("repo.pr.get handler", () => {
   it("maps merged=true to state 'merged'", async () => {
-    mocks.getPullRequest.mockResolvedValueOnce(pr({ merged: true, state: "closed" }));
+    mocks.getPullRequest.mockResolvedValueOnce(
+      pr({ merged: true, state: "closed" }),
+    );
     mocks.listPullRequestComments.mockResolvedValueOnce(noComments);
     mocks.listCiChecks.mockResolvedValueOnce(checks({}));
 
-    const out = await repoPrGetHandler({ owner: "a", repo: "b", number: 42 }, ctx);
+    const out = await repoPrGetHandler(
+      { owner: "a", repo: "b", number: 42 },
+      ctx,
+    );
     expect(out.state).toBe("merged");
   });
 
   it("maps closed-not-merged to 'closed' and open to 'open'", async () => {
-    mocks.getPullRequest.mockResolvedValueOnce(pr({ merged: false, state: "closed" }));
+    mocks.getPullRequest.mockResolvedValueOnce(
+      pr({ merged: false, state: "closed" }),
+    );
     mocks.listPullRequestComments.mockResolvedValueOnce(noComments);
     mocks.listCiChecks.mockResolvedValueOnce(checks({}));
-    const closed = await repoPrGetHandler({ owner: "a", repo: "b", number: 1 }, ctx);
+    const closed = await repoPrGetHandler(
+      { owner: "a", repo: "b", number: 1 },
+      ctx,
+    );
     expect(closed.state).toBe("closed");
 
-    mocks.getPullRequest.mockResolvedValueOnce(pr({ merged: false, state: "open" }));
+    mocks.getPullRequest.mockResolvedValueOnce(
+      pr({ merged: false, state: "open" }),
+    );
     mocks.listPullRequestComments.mockResolvedValueOnce(noComments);
     mocks.listCiChecks.mockResolvedValueOnce(checks({}));
-    const open = await repoPrGetHandler({ owner: "a", repo: "b", number: 2 }, ctx);
+    const open = await repoPrGetHandler(
+      { owner: "a", repo: "b", number: 2 },
+      ctx,
+    );
     expect(open.state).toBe("open");
   });
 
@@ -325,14 +340,19 @@ describe("repo.pr.get handler", () => {
     mocks.listPullRequestComments.mockResolvedValueOnce({ issue, review });
     mocks.listCiChecks.mockResolvedValueOnce(checks({}));
 
-    const out = await repoPrGetHandler({ owner: "a", repo: "b", number: 42 }, ctx);
+    const out = await repoPrGetHandler(
+      { owner: "a", repo: "b", number: 42 },
+      ctx,
+    );
 
     expect(out.comments).toHaveLength(50);
     // True totals come from the PR object, not the fetched array length.
     expect(out.commentCount).toBe(99);
     expect(out.reviewCommentCount).toBe(7);
     // Newest first: the last review comment (Jan 2) sorts ahead of issues (Jan 1).
-    expect(out.comments[0]?.createdAt).toBe(new Date(2026, 0, 2, 0, 39).toISOString());
+    expect(out.comments[0]?.createdAt).toBe(
+      new Date(2026, 0, 2, 0, 39).toISOString(),
+    );
     expect(out.comments[0]?.kind).toBe("review");
     expect(out.comments[0]?.path).toBe("src/x.ts");
   });
@@ -341,7 +361,10 @@ describe("repo.pr.get handler", () => {
     mocks.getPullRequest.mockResolvedValueOnce(pr({ headSha: null }));
     mocks.listPullRequestComments.mockResolvedValueOnce(noComments);
 
-    const out = await repoPrGetHandler({ owner: "a", repo: "b", number: 42 }, ctx);
+    const out = await repoPrGetHandler(
+      { owner: "a", repo: "b", number: 42 },
+      ctx,
+    );
     expect(mocks.listCiChecks).not.toHaveBeenCalled();
     expect(out.ci.overall).toBe("unknown");
     expect(out.headSha).toBeNull();
@@ -366,12 +389,36 @@ function file(over: Partial<GitHubPrFile>): GitHubPrFile {
 describe("repo.pr.diff handler", () => {
   it("flags a binary file (null patch, nonzero changes) and sums totals", async () => {
     mocks.listPullRequestFiles.mockResolvedValueOnce([
-      file({ path: "src/a.ts", status: "added", additions: 40, deletions: 0, changes: 40, patch: "@@" }),
-      file({ path: "logo.png", status: "modified", additions: 0, deletions: 0, changes: 12, patch: null }),
-      file({ path: "src/b.ts", status: "modified", additions: 2, deletions: 5, changes: 7, patch: "@@" }),
+      file({
+        path: "src/a.ts",
+        status: "added",
+        additions: 40,
+        deletions: 0,
+        changes: 40,
+        patch: "@@",
+      }),
+      file({
+        path: "logo.png",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        changes: 12,
+        patch: null,
+      }),
+      file({
+        path: "src/b.ts",
+        status: "modified",
+        additions: 2,
+        deletions: 5,
+        changes: 7,
+        patch: "@@",
+      }),
     ]);
 
-    const out = await repoPrDiffHandler({ owner: "a", repo: "b", number: 3 }, ctx);
+    const out = await repoPrDiffHandler(
+      { owner: "a", repo: "b", number: 3 },
+      ctx,
+    );
 
     expect(out.additions).toBe(42);
     expect(out.deletions).toBe(5);
@@ -385,9 +432,19 @@ describe("repo.pr.diff handler", () => {
 
   it("does not flag an empty patch-less file with zero changes as binary", async () => {
     mocks.listPullRequestFiles.mockResolvedValueOnce([
-      file({ path: "empty.txt", status: "added", additions: 0, deletions: 0, changes: 0, patch: null }),
+      file({
+        path: "empty.txt",
+        status: "added",
+        additions: 0,
+        deletions: 0,
+        changes: 0,
+        patch: null,
+      }),
     ]);
-    const out = await repoPrDiffHandler({ owner: "a", repo: "b", number: 4 }, ctx);
+    const out = await repoPrDiffHandler(
+      { owner: "a", repo: "b", number: 4 },
+      ctx,
+    );
     expect(out.files[0]?.binary).toBe(false);
     expect(out.summary).toBe("1 file, +0 -0");
   });
@@ -407,10 +464,19 @@ describe("repo.branch.list handler", () => {
       defaultBranch: "main",
     });
 
-    const out = await repoBranchListHandler({ owner: "acme", repo: "repo" }, ctx);
+    const out = await repoBranchListHandler(
+      { owner: "acme", repo: "repo" },
+      ctx,
+    );
 
-    expect(mocks.listBranches).toHaveBeenCalledWith({ owner: "acme", repo: "repo" });
-    expect(mocks.getRepoInfo).toHaveBeenCalledWith({ owner: "acme", repo: "repo" });
+    expect(mocks.listBranches).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "repo",
+    });
+    expect(mocks.getRepoInfo).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "repo",
+    });
     expect(out.defaultBranch).toBe("main");
     expect(out.branches).toEqual([
       { name: "main", sha: "sha-main", isDefault: true, protected: true },
@@ -426,7 +492,10 @@ describe("repo.branch.list handler", () => {
       defaultBranch: "main",
     });
 
-    const out = await repoBranchListHandler({ owner: "acme", repo: "empty" }, ctx);
+    const out = await repoBranchListHandler(
+      { owner: "acme", repo: "empty" },
+      ctx,
+    );
 
     expect(out.branches).toEqual([]);
     expect(out.defaultBranch).toBe("main");
@@ -438,7 +507,10 @@ describe("repo.branch.list handler", () => {
     ]);
     mocks.getRepoInfo.mockRejectedValueOnce(new Error("boom"));
 
-    const out = await repoBranchListHandler({ owner: "acme", repo: "repo" }, ctx);
+    const out = await repoBranchListHandler(
+      { owner: "acme", repo: "repo" },
+      ctx,
+    );
 
     expect(out.defaultBranch).toBeNull();
     expect(out.branches).toEqual([

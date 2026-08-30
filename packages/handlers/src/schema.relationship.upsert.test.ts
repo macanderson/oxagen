@@ -103,9 +103,9 @@ describe("schemaRelationshipUpsertHandler", () => {
   describe("no draft version", () => {
     it("throws when draftVersionId is null", async () => {
       mocks.getOrCreateRegistry.mockResolvedValue({ draftVersionId: null });
-      await expect(schemaRelationshipUpsertHandler(BASE_INPUT, CTX)).rejects.toThrow(
-        "No draft version found for registry",
-      );
+      await expect(
+        schemaRelationshipUpsertHandler(BASE_INPUT, CTX),
+      ).rejects.toThrow("No draft version found for registry");
     });
   });
 
@@ -114,7 +114,9 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
       mocks.selectExistingRel.mockResolvedValue([]);
-      mocks.insertRel.mockResolvedValue([{ publicId: "rel_new_1", id: "rel-internal-1" }]);
+      mocks.insertRel.mockResolvedValue([
+        { publicId: "rel_new_1", id: "rel-internal-1" },
+      ]);
 
       const result = await schemaRelationshipUpsertHandler(BASE_INPUT, CTX);
       expect(result.created).toBe(true);
@@ -125,7 +127,9 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
       mocks.selectExistingRel.mockResolvedValue([]);
-      mocks.insertRel.mockResolvedValue([{ publicId: "rel_new_1", id: "rel-internal-1" }]);
+      mocks.insertRel.mockResolvedValue([
+        { publicId: "rel_new_1", id: "rel-internal-1" },
+      ]);
 
       await schemaRelationshipUpsertHandler(BASE_INPUT, CTX);
       expect(mocks.getOrCreateDraftSchema).toHaveBeenCalledWith(
@@ -144,7 +148,9 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.selectExistingRel.mockResolvedValue([]);
       mocks.insertRel.mockResolvedValue([]);
 
-      await expect(schemaRelationshipUpsertHandler(BASE_INPUT, CTX)).rejects.toThrow(
+      await expect(
+        schemaRelationshipUpsertHandler(BASE_INPUT, CTX),
+      ).rejects.toThrow(
         `Failed to insert relationship type ${BASE_INPUT.name}`,
       );
     });
@@ -155,7 +161,14 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
       mocks.selectExistingRel.mockResolvedValue([
-        { id: "rel-internal-1", publicId: "rel_existing", description: null, startLabel: null, endLabel: null, cardinality: null },
+        {
+          id: "rel-internal-1",
+          publicId: "rel_existing",
+          description: null,
+          startLabel: null,
+          endLabel: null,
+          cardinality: null,
+        },
       ]);
       mocks.updateRel.mockResolvedValue([{ publicId: "rel_existing" }]);
 
@@ -168,7 +181,14 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
       mocks.selectExistingRel.mockResolvedValue([
-        { id: "rel-internal-1", publicId: "rel_fallback", description: null, startLabel: null, endLabel: null, cardinality: null },
+        {
+          id: "rel-internal-1",
+          publicId: "rel_fallback",
+          description: null,
+          startLabel: null,
+          endLabel: null,
+          cardinality: null,
+        },
       ]);
       mocks.updateRel.mockResolvedValue([]);
 
@@ -182,12 +202,19 @@ describe("schemaRelationshipUpsertHandler", () => {
       mocks.getOrCreateRegistry.mockResolvedValue(REGISTRY);
       mocks.getOrCreateDraftSchema.mockResolvedValue({ schema: SCHEMA_ROW });
       mocks.selectExistingRel.mockResolvedValue([]);
-      mocks.insertRel.mockResolvedValue([{ publicId: "rel_new_1", id: "rel-internal-1" }]);
+      mocks.insertRel.mockResolvedValue([
+        { publicId: "rel_new_1", id: "rel-internal-1" },
+      ]);
       mocks.selectExistingProp.mockResolvedValue([]);
       mocks.insertProp.mockResolvedValue([{ publicId: "prop_1" }]);
 
       const result = await schemaRelationshipUpsertHandler(
-        { ...BASE_INPUT, properties: [{ key: "since", dataType: "string" as const, required: false }] },
+        {
+          ...BASE_INPUT,
+          properties: [
+            { key: "since", dataType: "string" as const, required: false },
+          ],
+        },
         CTX,
       );
       expect(result.created).toBe(true);

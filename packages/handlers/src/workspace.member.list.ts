@@ -4,10 +4,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const workspaceMemberListHandler: CapabilityHandler<typeof workspaceMemberList> = async (
-  _input,
-  ctx,
-) => {
+export const workspaceMemberListHandler: CapabilityHandler<
+  typeof workspaceMemberList
+> = async (_input, ctx) => {
   const rows = await withTenantDb((tx) =>
     tx
       .select({
@@ -17,7 +16,10 @@ export const workspaceMemberListHandler: CapabilityHandler<typeof workspaceMembe
         joinedAt: schema.workspaceUsers.joinedAt,
       })
       .from(schema.workspaceUsers)
-      .innerJoin(schema.users, eq(schema.workspaceUsers.userId, schema.users.id))
+      .innerJoin(
+        schema.users,
+        eq(schema.workspaceUsers.userId, schema.users.id),
+      )
       .where(eq(schema.workspaceUsers.workspaceId, ctx.workspaceId)),
   );
 

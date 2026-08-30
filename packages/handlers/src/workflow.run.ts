@@ -6,9 +6,15 @@ import { logger } from "./logger";
 
 const MAX_TASKS_PER_WORKFLOW = 500;
 
-export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (input, ctx) => {
+export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (
+  input,
+  ctx,
+) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "workflow.run: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workflow.run: rejected — no authenticated user",
+    );
     throw new Error("workflow.run requires an authenticated user");
   }
 

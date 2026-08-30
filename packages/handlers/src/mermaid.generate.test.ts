@@ -80,13 +80,19 @@ describe("mermaidGenerateHandler", () => {
 
   it("accepts a diagram of exactly 50,000 characters", async () => {
     const longDiagram = "A".repeat(50_000);
-    const result = await mermaidGenerateHandler({ title: "T", diagram: longDiagram }, CTX);
+    const result = await mermaidGenerateHandler(
+      { title: "T", diagram: longDiagram },
+      CTX,
+    );
     expect(result.source).toBe(longDiagram);
   });
 
   it("passes source through unchanged", async () => {
     const source = "sequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi";
-    const result = await mermaidGenerateHandler({ title: "Seq", diagram: source }, CTX);
+    const result = await mermaidGenerateHandler(
+      { title: "Seq", diagram: source },
+      CTX,
+    );
     expect(result.source).toBe(source);
   });
 
@@ -99,7 +105,10 @@ describe("mermaidGenerateHandler", () => {
     );
 
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
-    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(args["orgId"]).toBe("org_1");
     expect(args["workspaceId"]).toBe("ws_1");
     expect(args["userId"]).toBe("u_1");
@@ -110,7 +119,9 @@ describe("mermaidGenerateHandler", () => {
     expect(args["model"]).toBe("local");
     expect(args["messageId"]).toBe("msg_9");
     // Bytes are the raw diagram source, UTF-8 encoded.
-    expect(new TextDecoder().decode(args["bytes"] as Uint8Array)).toBe(VALID_DIAGRAM);
+    expect(new TextDecoder().decode(args["bytes"] as Uint8Array)).toBe(
+      VALID_DIAGRAM,
+    );
 
     // Output + render directive carry the persisted asset reference.
     expect(result.assetPublicId).toBe("gen_mmd1");

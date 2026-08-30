@@ -148,9 +148,17 @@ describe("ontologyQueryHandler", () => {
   });
 
   it("builds the relationship pattern from allow-listed edge types only", async () => {
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
-      { startNodeId: "start-1", edgeTypes: ["DEPENDS_ON"], direction: "out", maxDepth: 3, limit: 50 },
+      {
+        startNodeId: "start-1",
+        edgeTypes: ["DEPENDS_ON"],
+        direction: "out",
+        maxDepth: 3,
+        limit: 50,
+      },
       CTX,
     );
     const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
@@ -159,28 +167,30 @@ describe("ontologyQueryHandler", () => {
   });
 
   it("flags truncation when more nodes are reachable than the limit", async () => {
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(
-      makeRows([
-        {
-          nodeId: "n-2",
-          label: "Topic",
-          displayName: "A",
-          description: null,
-          depth: 1,
-          relTypes: ["RELATED_TO"],
-          pathNodeIds: ["start-1", "n-2"],
-        },
-        {
-          nodeId: "n-3",
-          label: "Topic",
-          displayName: "B",
-          description: null,
-          depth: 1,
-          relTypes: ["RELATED_TO"],
-          pathNodeIds: ["start-1", "n-3"],
-        },
-      ]),
-    );
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(
+        makeRows([
+          {
+            nodeId: "n-2",
+            label: "Topic",
+            displayName: "A",
+            description: null,
+            depth: 1,
+            relTypes: ["RELATED_TO"],
+            pathNodeIds: ["start-1", "n-2"],
+          },
+          {
+            nodeId: "n-3",
+            label: "Topic",
+            displayName: "B",
+            description: null,
+            depth: 1,
+            relTypes: ["RELATED_TO"],
+            pathNodeIds: ["start-1", "n-3"],
+          },
+        ]),
+      );
 
     const result = await ontologyQueryHandler(
       { startNodeId: "start-1", direction: "out", maxDepth: 1, limit: 1 },
@@ -209,7 +219,13 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
     // pattern, so the lexical guard here is load-bearing for injection safety.
     await expect(
       ontologyQueryHandler(
-        { startNodeId: "start-1", edgeTypes: ["`]->()-[:x"], direction: "out", maxDepth: 2, limit: 100 },
+        {
+          startNodeId: "start-1",
+          edgeTypes: ["`]->()-[:x"],
+          direction: "out",
+          maxDepth: 2,
+          limit: 100,
+        },
         CTX,
       ),
     ).rejects.toThrow(/lexical guard/);
@@ -220,7 +236,13 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
     mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS"]));
     await expect(
       ontologyQueryHandler(
-        { startNodeId: "start-1", edgeTypes: ["KNOWS"], direction: "out", maxDepth: 2, limit: 100 },
+        {
+          startNodeId: "start-1",
+          edgeTypes: ["KNOWS"],
+          direction: "out",
+          maxDepth: 2,
+          limit: 100,
+        },
         CTX,
       ),
     ).rejects.toThrow(/active vocabulary/);
@@ -229,9 +251,17 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
 
   it("interpolates ONLY guard-passing, active-vocabulary types into the pattern", async () => {
     mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS"]));
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
-      { startNodeId: "start-1", edgeTypes: ["EMPLOYS"], direction: "out", maxDepth: 3, limit: 50 },
+      {
+        startNodeId: "start-1",
+        edgeTypes: ["EMPLOYS"],
+        direction: "out",
+        maxDepth: 3,
+        limit: 50,
+      },
       CTX,
     );
     const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
@@ -240,8 +270,12 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
   });
 
   it("defaults the omitted filter to the pinned active vocabulary, not a static list", async () => {
-    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.getPinnedSchema.mockResolvedValue(
+      pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]),
+    );
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
       { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
       CTX,
@@ -251,7 +285,9 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
   });
 
   it("traverses unconstrained ([r*1..n], no type selector) when nothing pinned and no filter", async () => {
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
       { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
       CTX,
@@ -266,7 +302,9 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
 
 describe("ontologyQueryHandler — asOf / asKnownAt validity filter", () => {
   it("filters every relationship on the path by validity and projects per-edge validity", async () => {
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
       { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
       CTX,
@@ -274,42 +312,54 @@ describe("ontologyQueryHandler — asOf / asKnownAt validity filter", () => {
     const cypher = mocks.run.mock.calls[1]?.[0] as string;
     // Applied per-relationship across the whole path.
     expect(cypher).toContain("ALL(rel IN relationships(path) WHERE");
-    expect(cypher).toContain("rel.validFrom IS NULL OR rel.validFrom <= datetime($asOf)");
-    expect(cypher).toContain("rel.invalidatedAt IS NULL OR rel.invalidatedAt > datetime($asKnownAt)");
+    expect(cypher).toContain(
+      "rel.validFrom IS NULL OR rel.validFrom <= datetime($asOf)",
+    );
+    expect(cypher).toContain(
+      "rel.invalidatedAt IS NULL OR rel.invalidatedAt > datetime($asKnownAt)",
+    );
     // Per-edge validity arrays projected for citation.
     expect(cypher).toContain("[rel IN rels | toString(rel.validFrom)]");
   });
 
   it("defaults asOf / asKnownAt to ~now when omitted (behaviour-preserving)", async () => {
     const before = Date.now();
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(makeRows([]));
     await ontologyQueryHandler(
       { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
       CTX,
     );
     const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
-    expect(new Date(String(params.asOf)).getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(new Date(String(params.asKnownAt)).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(String(params.asOf)).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
+    expect(new Date(String(params.asKnownAt)).getTime()).toBeGreaterThanOrEqual(
+      before - 1000,
+    );
   });
 
   it("threads explicit asOf / asKnownAt through as params and carries per-edge validity to output", async () => {
-    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(
-      makeRows([
-        {
-          nodeId: "n-2",
-          label: "Topic",
-          displayName: "Auth",
-          description: null,
-          depth: 1,
-          relTypes: ["RELATED_TO"],
-          relValidFrom: ["2020-01-01T00:00:00.000Z"],
-          relValidTo: [null],
-          relRecordedAt: ["2020-01-02T00:00:00.000Z"],
-          relInvalidatedAt: [null],
-          pathNodeIds: ["start-1", "n-2"],
-        },
-      ]),
-    );
+    mocks.run
+      .mockResolvedValueOnce(makeRows([START_ROW]))
+      .mockResolvedValueOnce(
+        makeRows([
+          {
+            nodeId: "n-2",
+            label: "Topic",
+            displayName: "Auth",
+            description: null,
+            depth: 1,
+            relTypes: ["RELATED_TO"],
+            relValidFrom: ["2020-01-01T00:00:00.000Z"],
+            relValidTo: [null],
+            relRecordedAt: ["2020-01-02T00:00:00.000Z"],
+            relInvalidatedAt: [null],
+            pathNodeIds: ["start-1", "n-2"],
+          },
+        ]),
+      );
     const result = await ontologyQueryHandler(
       {
         startNodeId: "start-1",

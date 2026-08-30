@@ -11,12 +11,20 @@ export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
   // must be scoped to a specific org. Upgrade is a mutating billing action —
   // it must never proceed on behalf of an anonymous or unscoped caller.
   if (!ctx.userId && !ctx.apiKeyId) {
-    logger.warn({ orgId: ctx.orgId }, "billing.subscription.upgrade.start: rejected — no authenticated principal");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "billing.subscription.upgrade.start: rejected — no authenticated principal",
+    );
     throw new Error("Unauthorized: no authenticated principal");
   }
   if (!ctx.orgId) {
-    logger.warn({}, "billing.subscription.upgrade.start: rejected — missing orgId");
-    throw new Error("Forbidden: orgId is required to start a subscription upgrade");
+    logger.warn(
+      {},
+      "billing.subscription.upgrade.start: rejected — missing orgId",
+    );
+    throw new Error(
+      "Forbidden: orgId is required to start a subscription upgrade",
+    );
   }
 
   try {
@@ -41,12 +49,24 @@ export const billingSubscriptionUpgradeStartHandler: CapabilityHandler<
     });
 
     logger.info(
-      { orgId: ctx.orgId, planSlug: input.planSlug, interval: input.interval, surface: ctx.surface },
+      {
+        orgId: ctx.orgId,
+        planSlug: input.planSlug,
+        interval: input.interval,
+        surface: ctx.surface,
+      },
       "billing.subscription.upgrade.start: checkout session created successfully",
     );
-    return { checkoutUrl: url, planSlug: input.planSlug, interval: input.interval };
+    return {
+      checkoutUrl: url,
+      planSlug: input.planSlug,
+      interval: input.interval,
+    };
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, planSlug: input.planSlug }, "billing.subscription.upgrade.start: createCheckoutSession failed");
+    logger.error(
+      { err, orgId: ctx.orgId, planSlug: input.planSlug },
+      "billing.subscription.upgrade.start: createCheckoutSession failed",
+    );
     throw err;
   }
 };

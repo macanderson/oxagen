@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 mocks.insertOnConflict.mockResolvedValue([]);
-mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.insertOnConflict });
+mocks.insertValues.mockReturnValue({
+  onConflictDoUpdate: mocks.insertOnConflict,
+});
 
 const ROW = {
   perTurnBudgetEnabled: true,
@@ -41,7 +43,9 @@ describe("budgetPolicyWriteHandler (@oxagen/handlers)", () => {
     mocks.insertOnConflict.mockClear();
     mocks.prefsFindFirst.mockClear();
     mocks.insertOnConflict.mockResolvedValue([]);
-    mocks.insertValues.mockReturnValue({ onConflictDoUpdate: mocks.insertOnConflict });
+    mocks.insertValues.mockReturnValue({
+      onConflictDoUpdate: mocks.insertOnConflict,
+    });
     mocks.prefsFindFirst.mockResolvedValue(ROW);
   });
 
@@ -78,7 +82,10 @@ describe("budgetPolicyWriteHandler (@oxagen/handlers)", () => {
   });
 
   it("clears the limit when limitUsd is explicitly null", async () => {
-    mocks.prefsFindFirst.mockResolvedValueOnce({ ...ROW, perTurnBudgetUsd: null });
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...ROW,
+      perTurnBudgetUsd: null,
+    });
     const result = await budgetPolicyWriteHandler({ limitUsd: null }, CTX);
     const onConflictArg = mocks.insertOnConflict.mock.calls[0]?.[0] as {
       set: Record<string, unknown>;
@@ -88,16 +95,19 @@ describe("budgetPolicyWriteHandler (@oxagen/handlers)", () => {
   });
 
   it("normalizes an unexpected stored mode to 'prompt'", async () => {
-    mocks.prefsFindFirst.mockResolvedValueOnce({ ...ROW, perTurnBudgetMode: "garbage" });
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...ROW,
+      perTurnBudgetMode: "garbage",
+    });
     const result = await budgetPolicyWriteHandler({ mode: "enforce" }, CTX);
     expect(result.mode).toBe("prompt");
   });
 
   it("throws if re-read returns no row (defensive guard)", async () => {
     mocks.prefsFindFirst.mockResolvedValueOnce(null);
-    await expect(budgetPolicyWriteHandler({ enabled: false }, CTX)).rejects.toThrow(
-      "upserted row not found on re-read",
-    );
+    await expect(
+      budgetPolicyWriteHandler({ enabled: false }, CTX),
+    ).rejects.toThrow("upserted row not found on re-read");
   });
 
   it("first-insert defaults budget off with mode prompt and 0.25 grace", async () => {

@@ -5,23 +5,16 @@ const mocks = vi.hoisted(() => ({
   updateReturning: vi.fn(),
 }));
 
-mocks.updateReturning.mockResolvedValue([{ publicId: "cnv_1" }, { publicId: "cnv_2" }]);
+mocks.updateReturning.mockResolvedValue([
+  { publicId: "cnv_1" },
+  { publicId: "cnv_2" },
+]);
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    update: (_table: unknown) => ({
-      set: (_vals: unknown) => ({
-        where: (_cond: unknown) => ({
-          returning: mocks.updateReturning,
-        }),
-      }),
-    }),
-  }),
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       update: (_table: unknown) => ({
         set: (_vals: unknown) => ({
           where: (_cond: unknown) => ({
@@ -30,7 +23,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
     }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        update: (_table: unknown) => ({
+          set: (_vals: unknown) => ({
+            where: (_cond: unknown) => ({
+              returning: mocks.updateReturning,
+            }),
+          }),
+        }),
+      }),
   };
 });
 
@@ -44,7 +46,10 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 describe("conversationArchiveHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.updateReturning.mockResolvedValue([{ publicId: "cnv_1" }, { publicId: "cnv_2" }]);
+    mocks.updateReturning.mockResolvedValue([
+      { publicId: "cnv_1" },
+      { publicId: "cnv_2" },
+    ]);
   });
 
   // ── auth guard ────────────────────────────────────────────────────────────
@@ -52,7 +57,10 @@ describe("conversationArchiveHandler (@oxagen/handlers)", () => {
   it("throws when userId is null", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      conversationArchiveHandler({ conversationIds: ["cnv_1"], archived: true }, anonCtx),
+      conversationArchiveHandler(
+        { conversationIds: ["cnv_1"], archived: true },
+        anonCtx,
+      ),
     ).rejects.toThrow("conversation.archive requires an authenticated user");
   });
 
@@ -89,7 +97,10 @@ describe("conversationArchiveHandler (@oxagen/handlers)", () => {
   // ── DB is called ──────────────────────────────────────────────────────────
 
   it("invokes the update returning exactly once per call", async () => {
-    await conversationArchiveHandler({ conversationIds: ["cnv_1"], archived: true }, CTX);
+    await conversationArchiveHandler(
+      { conversationIds: ["cnv_1"], archived: true },
+      CTX,
+    );
     expect(mocks.updateReturning).toHaveBeenCalledTimes(1);
   });
 });

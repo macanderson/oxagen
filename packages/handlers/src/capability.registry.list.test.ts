@@ -19,7 +19,10 @@ vi.mock("@oxagen/oxagen", async (importOriginal) => {
 });
 
 import { registerCapability, clearRegistryForTests } from "@oxagen/oxagen";
-import { capabilityRegistryListHandler, projectCapabilitySummary } from "./capability.registry.list";
+import {
+  capabilityRegistryListHandler,
+  projectCapabilitySummary,
+} from "./capability.registry.list";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 function registerFixture(
@@ -73,7 +76,10 @@ describe("capabilityRegistryListHandler", () => {
   it("filters by domain, surface, sensitivity, and q substring", async () => {
     registerFixture("audit_read", { domain: "audit", sensitivity: "high" });
     registerFixture("billing_read", { domain: "billing", surfaces: ["api"] });
-    registerFixture("agent_run", { domain: "agent", description: "runs an agent loop" });
+    registerFixture("agent_run", {
+      domain: "agent",
+      description: "runs an agent loop",
+    });
 
     const byDomain = await capabilityRegistryListHandler(
       { domain: "audit", limit: 500, offset: 0 },
@@ -96,7 +102,9 @@ describe("capabilityRegistryListHandler", () => {
       { sensitivity: "high", limit: 500, offset: 0 },
       CTX,
     );
-    expect(bySensitivity.capabilities.map((c) => c.name)).toEqual(["audit_read"]);
+    expect(bySensitivity.capabilities.map((c) => c.name)).toEqual([
+      "audit_read",
+    ]);
 
     const byQ = await capabilityRegistryListHandler(
       { q: "AGENT LOOP", limit: 500, offset: 0 },

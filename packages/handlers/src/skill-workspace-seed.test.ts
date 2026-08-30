@@ -56,13 +56,17 @@ const mocks = vi.hoisted(() => ({
 mocks.registryList.mockResolvedValue(FAKE_TEMPLATES);
 mocks.txSelect.mockResolvedValue([]); // no existing skill
 mocks.txInsertSkill.mockImplementation((_val: unknown) =>
-  Promise.resolve([{ id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" }]),
+  Promise.resolve([
+    { id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" },
+  ]),
 );
 mocks.txInsertVersion.mockImplementation((_val: unknown) =>
   Promise.resolve([{ id: "uuid-ver-stub", versionNumber: 1 }]),
 );
 mocks.txInsertSkillReturning.mockImplementation((_val: unknown) =>
-  Promise.resolve([{ id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" }]),
+  Promise.resolve([
+    { id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" },
+  ]),
 );
 mocks.txInsertVersionReturning.mockImplementation((_val: unknown) =>
   Promise.resolve([{ id: "uuid-ver-stub", versionNumber: 1 }]),
@@ -126,10 +130,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withTenantDb: async (fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>) =>
-      fn(buildFakeTx()),
-    withSystemDb: async (fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>) =>
-      fn(buildFakeTx()),
+    withTenantDb: async (
+      fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>,
+    ) => fn(buildFakeTx()),
+    withSystemDb: async (
+      fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>,
+    ) => fn(buildFakeTx()),
   };
 });
 
@@ -138,7 +144,10 @@ vi.mock("./logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { seedWorkspaceDefaultSkills, seedWorkspaceDefaultSkillsSystem } from "./skill-workspace-seed";
+import {
+  seedWorkspaceDefaultSkills,
+  seedWorkspaceDefaultSkillsSystem,
+} from "./skill-workspace-seed";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -152,7 +161,9 @@ describe("seedWorkspaceDefaultSkills", () => {
     mocks.registryList.mockResolvedValue(FAKE_TEMPLATES);
     mocks.txSelect.mockResolvedValue([]);
     mocks.txInsertSkillReturning.mockImplementation((_val: unknown) =>
-      Promise.resolve([{ id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" }]),
+      Promise.resolve([
+        { id: "uuid-skill-stub", publicId: "skl_STUB", slug: "summarization" },
+      ]),
     );
     mocks.txInsertVersionReturning.mockImplementation((_val: unknown) =>
       Promise.resolve([{ id: "uuid-ver-stub", versionNumber: 1 }]),
@@ -176,12 +187,16 @@ describe("seedWorkspaceDefaultSkills", () => {
 
   it("calls txInsertSkill once per template", async () => {
     await seedWorkspaceDefaultSkills({ orgId, workspaceId });
-    expect(mocks.txInsertSkillReturning).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
+    expect(mocks.txInsertSkillReturning).toHaveBeenCalledTimes(
+      FAKE_TEMPLATES.length,
+    );
   });
 
   it("calls txInsertVersion once per template", async () => {
     await seedWorkspaceDefaultSkills({ orgId, workspaceId });
-    expect(mocks.txInsertVersionReturning).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
+    expect(mocks.txInsertVersionReturning).toHaveBeenCalledTimes(
+      FAKE_TEMPLATES.length,
+    );
   });
 
   it("back-fills active_version_id via update after each version insert", async () => {
@@ -189,7 +204,10 @@ describe("seedWorkspaceDefaultSkills", () => {
     // One update call per template.
     expect(mocks.txUpdate).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
     // The update must include activeVersionId.
-    const firstCall = mocks.txUpdate.mock.calls[0]![0] as Record<string, unknown>;
+    const firstCall = mocks.txUpdate.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(firstCall).toHaveProperty("activeVersionId", "uuid-ver-stub");
   });
 
@@ -210,7 +228,7 @@ describe("seedWorkspaceDefaultSkills", () => {
     // First template already exists; second does not.
     mocks.txSelect
       .mockResolvedValueOnce([{ id: "existing-uuid" }]) // summarization: exists
-      .mockResolvedValue([]);                            // coding: missing
+      .mockResolvedValue([]); // coding: missing
 
     const result = await seedWorkspaceDefaultSkills({ orgId, workspaceId });
 
@@ -242,7 +260,11 @@ describe("seedWorkspaceDefaultSkills", () => {
     const fakeTx = buildFakeTx();
     const selectSpy = vi.spyOn(fakeTx, "select");
 
-    await seedWorkspaceDefaultSkills({ orgId, workspaceId, tx: fakeTx as never });
+    await seedWorkspaceDefaultSkills({
+      orgId,
+      workspaceId,
+      tx: fakeTx as never,
+    });
 
     // The fakeTx.select should have been called directly (one per template).
     expect(selectSpy).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
@@ -254,15 +276,23 @@ describe("seedWorkspaceDefaultSkills", () => {
     await seedWorkspaceDefaultSkills({ orgId, workspaceId });
 
     // Capture the values argument of the first insert call.
-    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<string, unknown>;
+    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(insertArg).toMatchObject({ source: "tenant" });
   });
 
   it("passes installed_from_slug equal to the template slug", async () => {
     await seedWorkspaceDefaultSkills({ orgId, workspaceId });
 
-    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<string, unknown>;
-    expect(insertArg).toMatchObject({ installedFromSlug: FAKE_TEMPLATES[0]?.slug });
+    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(insertArg).toMatchObject({
+      installedFromSlug: FAKE_TEMPLATES[0]?.slug,
+    });
   });
 
   it("passes orgId and workspaceId to every skill insert", async () => {
@@ -297,7 +327,9 @@ describe("seedWorkspaceDefaultSkills", () => {
     // First template conflicts (empty return); second installs successfully.
     mocks.txInsertSkillReturning
       .mockResolvedValueOnce([]) // summarization: concurrent conflict
-      .mockResolvedValueOnce([{ id: "uuid-skill-2", publicId: "skl_CODING", slug: "coding" }]);
+      .mockResolvedValueOnce([
+        { id: "uuid-skill-2", publicId: "skl_CODING", slug: "coding" },
+      ]);
 
     const result = await seedWorkspaceDefaultSkills({ orgId, workspaceId });
 
@@ -319,7 +351,9 @@ describe("seedWorkspaceDefaultSkillsSystem", () => {
     mocks.registryList.mockResolvedValue(FAKE_TEMPLATES);
     mocks.txSelect.mockResolvedValue([]);
     mocks.txInsertSkillReturning.mockImplementation((_val: unknown) =>
-      Promise.resolve([{ id: "uuid-skill-sys", publicId: "skl_SYS", slug: "summarization" }]),
+      Promise.resolve([
+        { id: "uuid-skill-sys", publicId: "skl_SYS", slug: "summarization" },
+      ]),
     );
     mocks.txInsertVersionReturning.mockImplementation((_val: unknown) =>
       Promise.resolve([{ id: "uuid-ver-sys", versionNumber: 1 }]),
@@ -328,17 +362,26 @@ describe("seedWorkspaceDefaultSkillsSystem", () => {
   });
 
   it("returns { scanned, inserted } with correct scanned count (System variant)", async () => {
-    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    const result = await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
     expect(result.scanned).toBe(FAKE_TEMPLATES.length);
   });
 
   it("returns inserted equal to the number of new skill rows on first run (System variant)", async () => {
-    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    const result = await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
     expect(result.inserted).toBe(FAKE_TEMPLATES.length);
   });
 
   it("passes orgId and workspaceId to every skill insert (System variant)", async () => {
-    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
     for (const call of mocks.txInsertSkillReturning.mock.calls) {
       const arg = call[0] as Record<string, unknown>;
       expect(arg.orgId).toBe(sysOrgId);
@@ -348,22 +391,37 @@ describe("seedWorkspaceDefaultSkillsSystem", () => {
 
   it("is idempotent — skips existing skills (System variant)", async () => {
     mocks.txSelect.mockResolvedValue([{ id: "existing-sys-uuid" }]);
-    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    const result = await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
     expect(result.inserted).toBe(0);
     expect(mocks.txInsertSkillReturning).not.toHaveBeenCalled();
     expect(mocks.txInsertVersionReturning).not.toHaveBeenCalled();
   });
 
   it("passes source='tenant' to the skill insert (System variant)", async () => {
-    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
-    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<string, unknown>;
+    await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
+    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(insertArg).toMatchObject({ source: "tenant" });
   });
 
   it("back-fills active_version_id via update after each version insert (System variant)", async () => {
-    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    await seedWorkspaceDefaultSkillsSystem({
+      orgId: sysOrgId,
+      workspaceId: sysWorkspaceId,
+    });
     expect(mocks.txUpdate).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
-    const firstCall = mocks.txUpdate.mock.calls[0]![0] as Record<string, unknown>;
+    const firstCall = mocks.txUpdate.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(firstCall).toHaveProperty("activeVersionId", "uuid-ver-sys");
   });
 });

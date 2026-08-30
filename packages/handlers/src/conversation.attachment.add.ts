@@ -24,7 +24,9 @@ export const conversationAttachmentAddHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "conversation.attachment.add: rejected — no authenticated user",
     );
-    throw new Error("conversation.attachment.add requires an authenticated user");
+    throw new Error(
+      "conversation.attachment.add requires an authenticated user",
+    );
   }
 
   // Resolve the conversation — must belong to the caller's org + workspace.
@@ -96,7 +98,11 @@ export const conversationAttachmentAddHandler: CapabilityHandler<
   // A `user`-private asset can only be attached by its owner.
   if (asset.accessPolicy === "user" && asset.userId !== ctx.userId) {
     logger.warn(
-      { orgId: ctx.orgId, assetPublicId: input.assetPublicId, userId: ctx.userId },
+      {
+        orgId: ctx.orgId,
+        assetPublicId: input.assetPublicId,
+        userId: ctx.userId,
+      },
       "conversation.attachment.add: asset not owned by caller",
     );
     throw new Error("conversation.attachment.add: asset not found");

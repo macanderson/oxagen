@@ -9,18 +9,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => ({
-    query: {
-      userPreferences: { findFirst: mocks.prefsFindFirst },
-    },
-  }),
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
+    db: () => ({
       query: {
         userPreferences: { findFirst: mocks.prefsFindFirst },
       },
     }),
-
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        query: {
+          userPreferences: { findFirst: mocks.prefsFindFirst },
+        },
+      }),
   };
 });
 

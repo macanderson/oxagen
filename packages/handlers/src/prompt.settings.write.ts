@@ -17,12 +17,14 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 //     TierDeniedError otherwise — the kernel maps it to a denied result).
 // Merged ATOMICALLY via jsonb `||` in a single UPDATE (no read-modify-write), so
 // concurrent writers cannot lose each other's subkeys.
-export const promptSettingsWriteHandler: CapabilityHandler<typeof promptSettingsWrite> = async (
-  input,
-  ctx,
-) => {
+export const promptSettingsWriteHandler: CapabilityHandler<
+  typeof promptSettingsWrite
+> = async (input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "prompt.settings.write: rejected — no workspace context");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "prompt.settings.write: rejected — no workspace context",
+    );
     throw new Error("prompt.settings.write requires a workspace context");
   }
 
@@ -79,6 +81,8 @@ export const promptSettingsWriteHandler: CapabilityHandler<typeof promptSettings
         : null,
     overrides,
     autoImprovePrompts:
-      typeof newConfig.autoImprovePrompts === "boolean" ? newConfig.autoImprovePrompts : true,
+      typeof newConfig.autoImprovePrompts === "boolean"
+        ? newConfig.autoImprovePrompts
+        : true,
   };
 };

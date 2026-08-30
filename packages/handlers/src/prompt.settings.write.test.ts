@@ -21,12 +21,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      query: { workspaces: { findFirst: mocks.findFirst } },
-      update: () => ({ set: mocks.set }),
-    }),
-
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        query: { workspaces: { findFirst: mocks.findFirst } },
+        update: () => ({ set: mocks.set }),
+      }),
   };
 });
 
@@ -56,13 +55,21 @@ beforeEach(() => {
 describe("promptSettingsWriteHandler", () => {
   it("throws without a workspace context", async () => {
     await expect(
-      promptSettingsWriteHandler({}, { ...CTX, workspaceId: null as unknown as string }),
+      promptSettingsWriteHandler(
+        {},
+        { ...CTX, workspaceId: null as unknown as string },
+      ),
     ).rejects.toThrow(/workspace context/);
   });
 
   it("writes additionalInstructions + autoImprovePrompts on any tier (no tier check)", async () => {
     mocks.returning.mockResolvedValue([
-      { promptConfig: { additionalInstructions: "Be formal.", autoImprovePrompts: false } },
+      {
+        promptConfig: {
+          additionalInstructions: "Be formal.",
+          autoImprovePrompts: false,
+        },
+      },
     ]);
     const out = await promptSettingsWriteHandler(
       { additionalInstructions: "Be formal.", autoImprovePrompts: false },
@@ -84,7 +91,11 @@ describe("promptSettingsWriteHandler", () => {
       CTX,
     );
     expect(mocks.resolveOrgTier).toHaveBeenCalledWith("org_1");
-    expect(mocks.requireTier).toHaveBeenCalledWith("enterprise", "enterprise", "prompt-overrides");
+    expect(mocks.requireTier).toHaveBeenCalledWith(
+      "enterprise",
+      "enterprise",
+      "prompt-overrides",
+    );
   });
 
   it("rejects overrides below enterprise (requireTier throws)", async () => {
@@ -103,9 +114,17 @@ describe("promptSettingsWriteHandler", () => {
     // value, so autoImprovePrompts=true survives even though we only sent
     // additionalInstructions.
     mocks.returning.mockResolvedValue([
-      { promptConfig: { additionalInstructions: "new", autoImprovePrompts: true } },
+      {
+        promptConfig: {
+          additionalInstructions: "new",
+          autoImprovePrompts: true,
+        },
+      },
     ]);
-    const out = await promptSettingsWriteHandler({ additionalInstructions: "new" }, CTX);
+    const out = await promptSettingsWriteHandler(
+      { additionalInstructions: "new" },
+      CTX,
+    );
     expect(mocks.set).toHaveBeenCalledTimes(1);
     // No prior SELECT — the merge is a single atomic statement, so a concurrent
     // writer cannot clobber a subkey.

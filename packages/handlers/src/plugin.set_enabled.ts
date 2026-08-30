@@ -22,7 +22,9 @@ type Input = {
 const setOrgEnabled: CapabilityHandlerFn = async (input, ctx) => {
   const { orgListingId, enabled } = input as Input;
   if (!ctx.workspaceId) {
-    throw new Error("[set_plugin_enabled] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[set_plugin_enabled] workspaceId is required (scoped capability)",
+    );
   }
 
   try {
@@ -40,7 +42,13 @@ const setOrgEnabled: CapabilityHandlerFn = async (input, ctx) => {
     });
   } catch (err) {
     logger.error(
-      { err, orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, enabled },
+      {
+        err,
+        orgListingId,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        enabled,
+      },
       "set_plugin_enabled(org): failed",
     );
     throw err;
@@ -71,7 +79,9 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
   const { orgListingId, enabled } = input as Input;
 
   if (!ctx.workspaceId) {
-    throw new Error("[set_plugin_enabled] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[set_plugin_enabled] workspaceId is required (scoped capability)",
+    );
   }
 
   // Load the installed plugin row — must belong to this org + workspace.
@@ -138,7 +148,10 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
           discoveredTools: [],
         })
         .onConflictDoUpdate({
-          target: [schema.mcpServers.workspaceId, schema.mcpServers.orgListingId],
+          target: [
+            schema.mcpServers.workspaceId,
+            schema.mcpServers.orgListingId,
+          ],
           // mcp_servers_ws_listing_uniq is a PARTIAL unique index; ON CONFLICT
           // only matches it when the inference clause carries the same predicate.
           targetWhere: sql`org_listing_id IS NOT NULL`,
@@ -222,5 +235,7 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { scope } = input as Input;
-  return scope === "org" ? setOrgEnabled(input, ctx) : setWorkspaceEnabled(input, ctx);
+  return scope === "org"
+    ? setOrgEnabled(input, ctx)
+    : setWorkspaceEnabled(input, ctx);
 };

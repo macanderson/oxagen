@@ -1,5 +1,9 @@
 import type { CapabilityDeclaration, CapabilityHandler } from "@oxagen/oxagen";
-import { getSurfaces, listCapabilities, pluginForContract } from "@oxagen/oxagen";
+import {
+  getSurfaces,
+  listCapabilities,
+  pluginForContract,
+} from "@oxagen/oxagen";
 import {
   capabilityRegistryList,
   type CapabilityRegistrySummary,
@@ -16,7 +20,15 @@ import { logger } from "./logger";
  * pagination is applied after filtering.
  */
 
-const KNOWN_LAYERS = new Set(["schema", "api", "mcp", "unit", "e2e", "docs", "app"]);
+const KNOWN_LAYERS = new Set([
+  "schema",
+  "api",
+  "mcp",
+  "unit",
+  "e2e",
+  "docs",
+  "app",
+]);
 
 /** Project one registered declaration to the catalog summary shape. */
 export function projectCapabilitySummary(
@@ -31,8 +43,9 @@ export function projectCapabilitySummary(
     surfaces: [...getSurfaces(cap)],
     // Defensive filter: the registry is typed, but layers[] flows into a
     // z.enum on the output schema — drop anything unknown rather than throw.
-    layers: cap.layers.filter((l): l is CapabilityRegistrySummary["layers"][number] =>
-      KNOWN_LAYERS.has(l),
+    layers: cap.layers.filter(
+      (l): l is CapabilityRegistrySummary["layers"][number] =>
+        KNOWN_LAYERS.has(l),
     ),
     sensitivity: cap.sensitivity,
     defaultEffect: cap.defaultEffect,
@@ -68,9 +81,12 @@ export const capabilityRegistryListHandler: CapabilityHandler<
   const q = input.q?.toLowerCase();
   const filtered = all.filter((cap) => {
     if (input.domain && cap.domain !== input.domain) return false;
-    if (input.surface && !getSurfaces(cap).includes(input.surface)) return false;
-    if (input.missingLayer && cap.layers.includes(input.missingLayer)) return false;
-    if (input.sensitivity && cap.sensitivity !== input.sensitivity) return false;
+    if (input.surface && !getSurfaces(cap).includes(input.surface))
+      return false;
+    if (input.missingLayer && cap.layers.includes(input.missingLayer))
+      return false;
+    if (input.sensitivity && cap.sensitivity !== input.sensitivity)
+      return false;
     if (
       q &&
       !cap.name.toLowerCase().includes(q) &&

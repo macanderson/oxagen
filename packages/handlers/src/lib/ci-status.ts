@@ -58,7 +58,10 @@ const FAILING_CONCLUSIONS = new Set<CiRunConclusion>([
   "action_required",
 ]);
 
-function durationMs(startedAt: string | null, completedAt: string | null): number | null {
+function durationMs(
+  startedAt: string | null,
+  completedAt: string | null,
+): number | null {
   if (!startedAt || !completedAt) return null;
   const start = Date.parse(startedAt);
   const end = Date.parse(completedAt);
@@ -135,9 +138,7 @@ export function buildCiSummary(checks: GitHubCiChecks): CiSummary {
 
 function deriveOverall(runs: CiRun[]): CiOverall {
   if (runs.length === 0) return "unknown";
-  if (
-    runs.some((r) => r.conclusion && FAILING_CONCLUSIONS.has(r.conclusion))
-  ) {
+  if (runs.some((r) => r.conclusion && FAILING_CONCLUSIONS.has(r.conclusion))) {
     return "failing";
   }
   if (runs.some((r) => r.status === "queued" || r.status === "in_progress")) {

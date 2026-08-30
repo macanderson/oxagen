@@ -11,7 +11,10 @@ import {
   listServers,
 } from "@oxagen/plugins/registry";
 import type { AuthKind } from "@oxagen/plugins/registry";
-import { detectOAuthProtected, installTemplatesFromPack } from "@oxagen/plugins";
+import {
+  detectOAuthProtected,
+  installTemplatesFromPack,
+} from "@oxagen/plugins";
 import { upsertCapabilityInstall } from "./capability-install";
 import { logger } from "./logger";
 
@@ -105,7 +108,11 @@ export async function installOne(
     if (manifest.sandboxTemplates && manifest.sandboxTemplates.length > 0) {
       try {
         const result = await installTemplatesFromPack(
-          { orgId: ctx.orgId, workspaceId: ctx.workspaceId!, userId: ctx.userId },
+          {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId!,
+            userId: ctx.userId,
+          },
           { packId: pluginId, templates: manifest.sandboxTemplates },
         );
         logger.info(
@@ -319,7 +326,10 @@ export async function installOne(
   }
   // Report the PERSISTED authKind (the upgrade-only conflict clause may keep a
   // pre-existing "oauth" that this call's probe missed).
-  return { id: inserted.id, authKind: inserted.authKind as InstallOneResult["authKind"] };
+  return {
+    id: inserted.id,
+    authKind: inserted.authKind as InstallOneResult["authKind"],
+  };
 }
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {

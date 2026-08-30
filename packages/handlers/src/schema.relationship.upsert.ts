@@ -2,13 +2,20 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaRelationshipUpsert } from "@oxagen/oxagen/contracts/schema.relationship.upsert";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { getOrCreateRegistry, getOrCreateDraftSchema } from "./schema.versioning";
+import {
+  getOrCreateRegistry,
+  getOrCreateDraftSchema,
+} from "./schema.versioning";
 import { logger } from "./logger";
 
 export const schemaRelationshipUpsertHandler: CapabilityHandler<
   typeof schemaRelationshipUpsert
 > = async (input, ctx) => {
-  const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
+  const registry = await getOrCreateRegistry(
+    ctx.orgId,
+    ctx.workspaceId,
+    ctx.userId,
+  );
 
   if (!registry.draftVersionId) {
     throw new Error("No draft version found for registry");
@@ -76,7 +83,8 @@ export const schemaRelationshipUpsertHandler: CapabilityHandler<
           updatedByUserId: ctx.userId,
         })
         .returning();
-      if (!inserted) throw new Error(`Failed to insert relationship type ${input.name}`);
+      if (!inserted)
+        throw new Error(`Failed to insert relationship type ${input.name}`);
       relationshipTypeId = inserted.publicId;
       internalRelId = inserted.id;
       created = true;

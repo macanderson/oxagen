@@ -3,9 +3,14 @@ import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import type { SandboxTemplateUpdateInput } from "@oxagen/oxagen/contracts/sandbox.template.update";
 import { logger } from "./logger";
 
-export const sandboxTemplateUpdateHandler: CapabilityHandlerFn = async (input, ctx) => {
+export const sandboxTemplateUpdateHandler: CapabilityHandlerFn = async (
+  input,
+  ctx,
+) => {
   if (!ctx.workspaceId)
-    throw new Error("[sandbox.template.update] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[update_sandbox_template] workspaceId is required (scoped capability)",
+    );
   const args = input as SandboxTemplateUpdateInput;
   const template = await updateTemplate(
     { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: ctx.userId },

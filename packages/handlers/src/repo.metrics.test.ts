@@ -6,7 +6,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mocks.withTenantDb };
 });
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { repoMetricsHandler } from "./repo.metrics";
 
@@ -25,12 +27,15 @@ type Row = {
 } | null;
 
 function setup(row: Row) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }),
+          }),
+        }),
       }),
-    }),
   );
 }
 
@@ -63,7 +68,9 @@ describe("repo.metrics handler", () => {
     expect(out.lastSyncAt).toBe(SYNCED_AT.toISOString());
     expect(out.lastSyncDurationMs).toBeNull();
     expect(out.syncIntervalSeconds).toBe(600);
-    expect(out.estimatedNextSyncAt).toBe(new Date(SYNCED_AT.getTime() + 600 * 1000).toISOString());
+    expect(out.estimatedNextSyncAt).toBe(
+      new Date(SYNCED_AT.getTime() + 600 * 1000).toISOString(),
+    );
     expect(out.lastErrorAt).toBeNull();
   });
 
@@ -124,8 +131,8 @@ describe("repo.metrics handler", () => {
 
   it("throws 404 when the connection does not exist", async () => {
     setup(null);
-    await expect(repoMetricsHandler({ repoId: "con_missing" }, CTX)).rejects.toThrow(
-      "Repository connection not found",
-    );
+    await expect(
+      repoMetricsHandler({ repoId: "con_missing" }, CTX),
+    ).rejects.toThrow("Repository connection not found");
   });
 });

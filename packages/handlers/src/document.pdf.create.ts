@@ -4,7 +4,10 @@
 // paragraphs. Bytes are uploaded via persistGeneratedAsset().
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { documentsPdfCreate, type DocumentsPdfCreateInput } from "@oxagen/oxagen/contracts/document.pdf.create";
+import {
+  documentsPdfCreate,
+  type DocumentsPdfCreateInput,
+} from "@oxagen/oxagen/contracts/document.pdf.create";
 import { logger } from "./logger";
 import { persistGeneratedAsset } from "./generated-asset.persist";
 
@@ -102,7 +105,13 @@ async function buildPdf(
   for (const section of sections) {
     if (section.heading) {
       y -= HEADING_GAP;
-      drawLine(section.heading, FONT_SIZE_HEADING, LINE_SPACING_HEADING, true, [0.2, 0.2, 0.8]);
+      drawLine(
+        section.heading,
+        FONT_SIZE_HEADING,
+        LINE_SPACING_HEADING,
+        true,
+        [0.2, 0.2, 0.8],
+      );
       y -= 4;
     }
     for (const para of section.paragraphs) {
@@ -117,12 +126,13 @@ async function buildPdf(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const documentsPdfCreateHandler: CapabilityHandler<typeof documentsPdfCreate> = async (
-  input,
-  ctx,
-) => {
+export const documentsPdfCreateHandler: CapabilityHandler<
+  typeof documentsPdfCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new Error("documents.pdf.create: userId is required — no user identity in context");
+    throw new Error(
+      "documents.pdf.create: userId is required — no user identity in context",
+    );
   }
 
   const { title, content } = input;

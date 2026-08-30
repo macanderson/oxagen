@@ -35,8 +35,8 @@ function makeTx() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.settingsRows = [];
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn(makeTx()),
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   );
 });
 
@@ -44,7 +44,11 @@ describe("pluginSettingsGetAuthAlertsHandler", () => {
   it("returns the documented default when the org never set the value", async () => {
     mocks.settingsRows = [{ settings: {} }];
     const out = await pluginSettingsGetAuthAlertsHandler({}, CTX);
-    expect(out).toEqual({ sendEmail: true, roles: ["Owner", "Admin"], isDefault: true });
+    expect(out).toEqual({
+      sendEmail: true,
+      roles: ["Owner", "Admin"],
+      isDefault: true,
+    });
   });
 
   it("returns the default when the org row is missing entirely", async () => {
@@ -57,7 +61,10 @@ describe("pluginSettingsGetAuthAlertsHandler", () => {
     mocks.settingsRows = [
       {
         settings: {
-          mcp_auth_alerts: { send_email: false, roles: ["Owner", "Compliance"] },
+          mcp_auth_alerts: {
+            send_email: false,
+            roles: ["Owner", "Compliance"],
+          },
         },
       },
     ];
@@ -78,7 +85,11 @@ describe("pluginSettingsGetAuthAlertsHandler", () => {
       },
     ];
     const out = await pluginSettingsGetAuthAlertsHandler({}, CTX);
-    expect(out).toEqual({ sendEmail: true, roles: ["Owner", "Admin"], isDefault: true });
+    expect(out).toEqual({
+      sendEmail: true,
+      roles: ["Owner", "Admin"],
+      isDefault: true,
+    });
   });
 
   it("falls back to default on a malformed send_email", async () => {

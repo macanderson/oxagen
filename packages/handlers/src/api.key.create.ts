@@ -130,7 +130,9 @@ export const apiKeyCreateHandler: CapabilityHandler<
     eventType: "api_key.created",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    // The workspace guard above already proved ctx.workspaceId is present, and
+    // the key is bound to it — the audit row must carry the same scope.
+    workspaceId: ctx.workspaceId,
     capability: "create_api_key",
     outcome: "success",
     ip: null,

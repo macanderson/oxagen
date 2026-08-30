@@ -101,7 +101,10 @@ describe("workflow.status handler", () => {
   });
 
   it("returns workflow row with correct fields", async () => {
-    const result = await workflowStatusHandler({ workflowId: "wfr_ABCDEF" }, CTX);
+    const result = await workflowStatusHandler(
+      { workflowId: "wfr_ABCDEF" },
+      CTX,
+    );
     expect(result.workflow.id).toBe(MOCK_EXECUTION.id);
     expect(result.workflow.publicId).toBe(MOCK_EXECUTION.publicId);
     expect(result.workflow.status).toBe("running");
@@ -111,7 +114,10 @@ describe("workflow.status handler", () => {
   });
 
   it("returns tasks array with ISO timestamps", async () => {
-    const result = await workflowStatusHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    const result = await workflowStatusHandler(
+      { workflowId: "wfr-uuid-1" },
+      CTX,
+    );
     expect(result.tasks).toHaveLength(1);
     const task = result.tasks[0];
     expect(task?.taskIndex).toBe(0);
@@ -120,13 +126,19 @@ describe("workflow.status handler", () => {
   });
 
   it("returns null timestamps for null date fields", async () => {
-    const result = await workflowStatusHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    const result = await workflowStatusHandler(
+      { workflowId: "wfr-uuid-1" },
+      CTX,
+    );
     expect(result.workflow.completedAt).toBeNull();
     expect(result.workflow.resultUrl).toBeNull();
   });
 
   it("serializes createdAt as ISO string", async () => {
-    const result = await workflowStatusHandler({ workflowId: "wfr-uuid-1" }, CTX);
+    const result = await workflowStatusHandler(
+      { workflowId: "wfr-uuid-1" },
+      CTX,
+    );
     expect(result.workflow.createdAt).toBe("2026-06-07T00:00:00.000Z");
   });
 });

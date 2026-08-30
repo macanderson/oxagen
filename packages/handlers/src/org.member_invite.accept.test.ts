@@ -62,16 +62,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => mockDb,
-  // withSystemDb passthrough: the handler uses withSystemDb for all DB access
-  // (invitation lookup, user lookup, expiry update, and the main tx). We
-  // forward each call to the same mockDb so existing mock chains apply.
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
-
+    db: () => mockDb,
+    // withSystemDb passthrough: the handler uses withSystemDb for all DB access
+    // (invitation lookup, user lookup, expiry update, and the main tx). We
+    // forward each call to the same mockDb so existing mock chains apply.
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
   };
 });
 
-const { orgMemberInviteAcceptHandler } = await import("./org.member_invite.accept");
+const { orgMemberInviteAcceptHandler } = await import(
+  "./org.member_invite.accept"
+);
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -87,10 +88,17 @@ function makeCtx(overrides: Record<string, unknown> = {}): CapabilityContext {
   } as CapabilityContext;
 }
 
-function makeInvitation(overrides: Partial<{
-  id: string; publicId: string; orgId: string; email: string; role: string;
-  status: string; expiresAt: Date | null;
-}> = {}) {
+function makeInvitation(
+  overrides: Partial<{
+    id: string;
+    publicId: string;
+    orgId: string;
+    email: string;
+    role: string;
+    status: string;
+    expiresAt: Date | null;
+  }> = {},
+) {
   return {
     id: "inv-uuid-001",
     publicId: "inv_TESTACCEPT01",
@@ -217,7 +225,9 @@ describe("orgMemberInviteAcceptHandler", () => {
         return {
           from: () => ({
             where: () => ({
-              limit: vi.fn().mockResolvedValue([{ email: "alice@example.com" }]),
+              limit: vi
+                .fn()
+                .mockResolvedValue([{ email: "alice@example.com" }]),
             }),
           }),
         };
@@ -246,7 +256,10 @@ describe("orgMemberInviteAcceptHandler", () => {
     });
 
     const ctx = makeCtx();
-    const result = await orgMemberInviteAcceptHandler({ invitationPublicId: "inv_TESTACCEPT01" }, ctx);
+    const result = await orgMemberInviteAcceptHandler(
+      { invitationPublicId: "inv_TESTACCEPT01" },
+      ctx,
+    );
 
     expect(result).toMatchObject({
       orgId: "org-abc",
@@ -268,7 +281,9 @@ describe("orgMemberInviteAcceptHandler", () => {
         return {
           from: () => ({
             where: () => ({
-              limit: vi.fn().mockResolvedValue([{ email: "alice@example.com" }]),
+              limit: vi
+                .fn()
+                .mockResolvedValue([{ email: "alice@example.com" }]),
             }),
           }),
         };
@@ -288,7 +303,10 @@ describe("orgMemberInviteAcceptHandler", () => {
     mockInsert.mockReturnValue(orgUserInsert);
 
     const ctx = makeCtx();
-    const result = await orgMemberInviteAcceptHandler({ invitationPublicId: "inv_TESTACCEPT01" }, ctx);
+    const result = await orgMemberInviteAcceptHandler(
+      { invitationPublicId: "inv_TESTACCEPT01" },
+      ctx,
+    );
     expect(result.orgId).toBe("org-abc");
   });
 });

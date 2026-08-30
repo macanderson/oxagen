@@ -1,6 +1,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { schema, withTenantDb, isUniqueViolation, deriveNamespace } from "@oxagen/database";
+import {
+  schema,
+  withTenantDb,
+  isUniqueViolation,
+  deriveNamespace,
+} from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -10,12 +15,14 @@ import { seedWorkspaceDefaultCapabilities } from "./workspace-capability-seed";
 import { seedWorkspaceDefaultSkills } from "./skill-workspace-seed";
 import { seedWorkspaceDefaultEnvironment } from "./workspace-environment-seed";
 
-export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> = async (
-  input,
-  ctx,
-) => {
+export const workspaceCreateHandler: CapabilityHandler<
+  typeof workspaceCreate
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "workspace.create: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workspace.create: rejected — no authenticated user",
+    );
     throw new Error("workspace.create requires an authenticated user");
   }
 
@@ -42,7 +49,10 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     }),
   );
   if (existing) {
-    logger.warn({ orgId: ctx.orgId, slug: input.slug }, "workspace.create: slug already in use (pre-check)");
+    logger.warn(
+      { orgId: ctx.orgId, slug: input.slug },
+      "workspace.create: slug already in use (pre-check)",
+    );
     throw new Error(`slug "${input.slug}" already in use for this tenant`);
   }
 
@@ -106,7 +116,12 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
         createdAt: ws.createdAt.toISOString(),
       };
       logger.info(
-        { workspaceId: ws.id, orgId: ctx.orgId, slug: ws.slug, surface: ctx.surface },
+        {
+          workspaceId: ws.id,
+          orgId: ctx.orgId,
+          slug: ws.slug,
+          surface: ctx.surface,
+        },
         "workspace.create: workspace created successfully",
       );
       workspaceId = ws.id;
@@ -139,16 +154,25 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
       userAgent: null,
       requestId: ctx.requestId,
     }).catch((err: unknown) => {
-      logger.error({ err, orgId: ctx.orgId, workspaceId }, "workspace.create: failed to record security event");
+      logger.error(
+        { err, orgId: ctx.orgId, workspaceId },
+        "workspace.create: failed to record security event",
+      );
     });
 
     return result;
   } catch (err) {
     if (isUniqueViolation(err)) {
-      logger.warn({ orgId: ctx.orgId, slug: input.slug }, "workspace.create: slug conflict (race)");
+      logger.warn(
+        { orgId: ctx.orgId, slug: input.slug },
+        "workspace.create: slug conflict (race)",
+      );
       throw new Error(`slug "${input.slug}" already in use for this tenant`);
     }
-    logger.error({ err, orgId: ctx.orgId }, "workspace.create: transaction failed");
+    logger.error(
+      { err, orgId: ctx.orgId },
+      "workspace.create: transaction failed",
+    );
     throw err;
   }
 };

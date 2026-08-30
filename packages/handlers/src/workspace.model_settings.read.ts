@@ -8,8 +8,13 @@ export const workspaceModelSettingsReadHandler: CapabilityHandler<
   typeof workspaceModelSettingsRead
 > = async (_input, ctx) => {
   if (!ctx.workspaceId || ctx.workspaceId === "") {
-    logger.warn({ orgId: ctx.orgId }, "workspace.model.settings.read: rejected — no workspaceId");
-    throw new Error("workspace.model.settings.read requires a workspace context");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "workspace.model.settings.read: rejected — no workspaceId",
+    );
+    throw new Error(
+      "workspace.model.settings.read requires a workspace context",
+    );
   }
 
   const row = await withTenantDb((tx) =>

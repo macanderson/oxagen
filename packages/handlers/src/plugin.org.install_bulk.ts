@@ -23,7 +23,12 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           requestId: ctx.requestId ?? null,
         });
         logger.info(
-          { orgListingId, orgId: ctx.orgId, pluginType: item.pluginType, pluginId: item.pluginId ?? null },
+          {
+            orgListingId,
+            orgId: ctx.orgId,
+            pluginType: item.pluginType,
+            pluginId: item.pluginId ?? null,
+          },
           "plugin.org.install_bulk: item installed",
         );
         return {
@@ -34,7 +39,12 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         };
       } catch (err) {
         logger.error(
-          { err, orgId: ctx.orgId, pluginType: item.pluginType, pluginId: item.pluginId ?? null },
+          {
+            err,
+            orgId: ctx.orgId,
+            pluginType: item.pluginType,
+            pluginId: item.pluginId ?? null,
+          },
           "plugin.org.install_bulk: item failed",
         );
         return {
@@ -48,6 +58,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   );
 
   const failCount = installed.filter((r) => r.error !== null).length;
-  logger.info({ orgId: ctx.orgId, total: items.length, failCount }, "plugin.org.install_bulk: complete");
+  logger.info(
+    { orgId: ctx.orgId, total: items.length, failCount },
+    "plugin.org.install_bulk: complete",
+  );
   return { installed };
 };

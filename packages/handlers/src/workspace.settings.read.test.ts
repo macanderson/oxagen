@@ -21,7 +21,7 @@ describe("workspace.settings.read handler", () => {
     mocks.findFirst.mockResolvedValue({
       name: "Research",
       slug: "research",
-      avatarUrl: "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}",
+      avatarUrl: 'avatar:v1:{"emoji":"🔬","bg":"#2563eb","mode":"full"}',
       description: "R&D workspace",
     });
     const out = await workspaceSettingsReadHandler({}, CTX);
@@ -29,12 +29,17 @@ describe("workspace.settings.read handler", () => {
       name: "Research",
       slug: "research",
       description: "R&D workspace",
-      avatarUrl: "avatar:v1:{\"emoji\":\"🔬\",\"bg\":\"#2563eb\",\"mode\":\"full\"}",
+      avatarUrl: 'avatar:v1:{"emoji":"🔬","bg":"#2563eb","mode":"full"}',
     });
   });
 
   it("returns null description and avatarUrl when unset", async () => {
-    mocks.findFirst.mockResolvedValue({ name: "W", slug: "w", avatarUrl: null, description: null });
+    mocks.findFirst.mockResolvedValue({
+      name: "W",
+      slug: "w",
+      avatarUrl: null,
+      description: null,
+    });
     const out = await workspaceSettingsReadHandler({}, CTX);
     expect(out.description).toBeNull();
     expect(out.avatarUrl).toBeNull();
@@ -42,6 +47,8 @@ describe("workspace.settings.read handler", () => {
 
   it("throws when the workspace is not found", async () => {
     mocks.findFirst.mockResolvedValue(undefined);
-    await expect(workspaceSettingsReadHandler({}, CTX)).rejects.toThrow("Workspace not found");
+    await expect(workspaceSettingsReadHandler({}, CTX)).rejects.toThrow(
+      "Workspace not found",
+    );
   });
 });

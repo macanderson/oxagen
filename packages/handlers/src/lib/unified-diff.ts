@@ -22,8 +22,19 @@ export interface FileDiff {
  * CapabilityHandler-shaped (bound to `(input, ctx)`) and this needs a plain
  * value function callable mid-handler, once per changed file.
  */
-export function diffFileContents(path: string, before: string, after: string): FileDiff {
-  const patch = createTwoFilesPatch(`a/${path}`, `b/${path}`, before, after, "", "");
+export function diffFileContents(
+  path: string,
+  before: string,
+  after: string,
+): FileDiff {
+  const patch = createTwoFilesPatch(
+    `a/${path}`,
+    `b/${path}`,
+    before,
+    after,
+    "",
+    "",
+  );
   let additions = 0;
   let deletions = 0;
   for (const part of diffLines(before, after)) {

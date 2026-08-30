@@ -25,7 +25,9 @@ export const workspaceBudgetPolicyReadHandler: CapabilityHandler<
       { orgId: ctx.orgId },
       "workspace.budget.policy.read: rejected — no workspace context",
     );
-    throw new Error("workspace.budget.policy.read requires a workspace context");
+    throw new Error(
+      "workspace.budget.policy.read requires a workspace context",
+    );
   }
 
   const row = await withTenantDb((tx) =>

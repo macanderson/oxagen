@@ -5,7 +5,9 @@ import { z } from "zod";
 // parts. The executor runs against the REAL kernel + registered fake caps so
 // output→input threading is genuinely exercised.
 const generateObjectFor = vi.fn();
-vi.mock("@oxagen/ai", () => ({ generateObjectFor: (...a: unknown[]) => generateObjectFor(...a) }));
+vi.mock("@oxagen/ai", () => ({
+  generateObjectFor: (...a: unknown[]) => generateObjectFor(...a),
+}));
 
 import { clearRegistryForTests, registerCapability } from "@oxagen/oxagen";
 import { clearHandlersForTests, registerHandler } from "@oxagen/oxagen/kernel";
@@ -45,15 +47,22 @@ describe("resolveBindings", () => {
     expect(resolveBindings("$steps.step1.nodeId", outputs)).toBe("n_1");
   });
   it("string-interpolates an embedded token", () => {
-    expect(resolveBindings("node is $steps.step1.nodeId!", outputs)).toBe("node is n_1!");
+    expect(resolveBindings("node is $steps.step1.nodeId!", outputs)).toBe(
+      "node is n_1!",
+    );
   });
   it("recurses into objects and arrays", () => {
     expect(
-      resolveBindings({ ref: "$steps.step1.nodeId", list: ["$steps.step1.nodeId"] }, outputs),
+      resolveBindings(
+        { ref: "$steps.step1.nodeId", list: ["$steps.step1.nodeId"] },
+        outputs,
+      ),
     ).toEqual({ ref: "n_1", list: ["n_1"] });
   });
   it("leaves an unresolved token's exact-match string intact", () => {
-    expect(resolveBindings("$steps.stepX.nope", outputs)).toBe("$steps.stepX.nope");
+    expect(resolveBindings("$steps.stepX.nope", outputs)).toBe(
+      "$steps.stepX.nope",
+    );
   });
 });
 
@@ -79,7 +88,12 @@ describe("isSafeToAutoExecute", () => {
   it("blocks destructive and approval-required capabilities", () => {
     expect(isSafeToAutoExecute({ sensitivity: "low" })).toBe(true);
     expect(isSafeToAutoExecute({ sensitivity: "destructive" })).toBe(false);
-    expect(isSafeToAutoExecute({ sensitivity: "low", agent: { requiresApproval: true } })).toBe(false);
+    expect(
+      isSafeToAutoExecute({
+        sensitivity: "low",
+        agent: { requiresApproval: true },
+      }),
+    ).toBe(false);
     expect(isSafeToAutoExecute(undefined)).toBe(false);
   });
 });
@@ -107,11 +121,18 @@ function registerFakes(): void {
     input: z.object({ workspace_id: z.string().optional() }),
     output: z.object({
       skills: z.array(
-        z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          description: z.string(),
+          enabled: z.boolean(),
+        }),
       ),
     }),
   });
-  registerHandler("list_workspace_skills", async () => async () => ({ skills: [] }));
+  registerHandler("list_workspace_skills", async () => async () => ({
+    skills: [],
+  }));
 
   // prompt.settings.read — required so readWorkspacePrompt has a handler.
   // Returns empty additional instructions by default.
@@ -130,9 +151,13 @@ function registerFakes(): void {
       workspace: { Owner: "allow", Admin: "allow", Member: "allow" },
     },
     input: z.object({}),
-    output: z.object({ additionalInstructions: z.string().nullable().optional() }),
+    output: z.object({
+      additionalInstructions: z.string().nullable().optional(),
+    }),
   });
-  registerHandler("get_prompt_settings", async () => async () => ({ additionalInstructions: null }));
+  registerHandler("get_prompt_settings", async () => async () => ({
+    additionalInstructions: null,
+  }));
 
   registerCapability({
     name: "test.compose.search",
@@ -148,10 +173,10 @@ function registerFakes(): void {
     input: z.object({ query: z.string() }),
     output: z.object({ nodeId: z.string(), title: z.string() }),
   });
-  registerHandler(
-    "test.compose.search",
-    async () => async () => ({ nodeId: "n_1", title: "USS Nautilus" }),
-  );
+  registerHandler("test.compose.search", async () => async () => ({
+    nodeId: "n_1",
+    title: "USS Nautilus",
+  }));
 
   registerCapability({
     name: "test.compose.link",
@@ -167,10 +192,10 @@ function registerFakes(): void {
     input: z.object({ ref: z.string() }),
     output: z.object({ ok: z.boolean(), echoed: z.string() }),
   });
-  registerHandler(
-    "test.compose.link",
-    async () => async (input: unknown) => ({ ok: true, echoed: (input as { ref: string }).ref }),
-  );
+  registerHandler("test.compose.link", async () => async (input: unknown) => ({
+    ok: true,
+    echoed: (input as { ref: string }).ref,
+  }));
 
   registerCapability({
     name: "test.compose.danger",
@@ -186,7 +211,9 @@ function registerFakes(): void {
     input: z.object({}),
     output: z.object({ done: z.boolean() }),
   });
-  registerHandler("test.compose.danger", async () => async () => ({ done: true }));
+  registerHandler("test.compose.danger", async () => async () => ({
+    done: true,
+  }));
 }
 
 const PLAN = {
@@ -231,9 +258,14 @@ describe("agentComposeHandler", () => {
   });
 
   it("plans, executes, threads output→input, and skips destructive steps", async () => {
-    generateObjectFor.mockResolvedValueOnce(PLAN).mockResolvedValueOnce(SUMMARY);
+    generateObjectFor
+      .mockResolvedValueOnce(PLAN)
+      .mockResolvedValueOnce(SUMMARY);
 
-    const result = await agentComposeHandler({ goal: "research", maxSteps: 6, autoExecute: true }, ctx);
+    const result = await agentComposeHandler(
+      { goal: "research", maxSteps: 6, autoExecute: true },
+      ctx,
+    );
 
     expect(result.executed).toBe(true);
     expect(result.summary).toBe("Found the node and linked it.");
@@ -252,7 +284,9 @@ describe("agentComposeHandler", () => {
   });
 
   it("returns all steps skipped on a dry run (autoExecute=false) without invoking them", async () => {
-    generateObjectFor.mockResolvedValueOnce(PLAN).mockResolvedValueOnce(SUMMARY);
+    generateObjectFor
+      .mockResolvedValueOnce(PLAN)
+      .mockResolvedValueOnce(SUMMARY);
 
     const result = await agentComposeHandler(
       { goal: "research", maxSteps: 6, autoExecute: false },
@@ -261,7 +295,9 @@ describe("agentComposeHandler", () => {
 
     expect(result.executed).toBe(false);
     expect(result.steps.every((s) => s.status === "skipped")).toBe(true);
-    expect(result.steps.every((s) => s.error === "Dry run — not executed.")).toBe(true);
+    expect(
+      result.steps.every((s) => s.error === "Dry run — not executed."),
+    ).toBe(true);
   });
 
   it("marks a step error when a dependency failed (binding unmet)", async () => {
@@ -269,14 +305,31 @@ describe("agentComposeHandler", () => {
     const badPlan = {
       object: {
         steps: [
-          { id: "step1", capability: "test.compose.search", rationale: "x", inputJson: "{}", dependsOn: [] },
-          { id: "step2", capability: "test.compose.link", rationale: "y", inputJson: '{"ref":"$steps.step1.nodeId"}', dependsOn: ["step1"] },
+          {
+            id: "step1",
+            capability: "test.compose.search",
+            rationale: "x",
+            inputJson: "{}",
+            dependsOn: [],
+          },
+          {
+            id: "step2",
+            capability: "test.compose.link",
+            rationale: "y",
+            inputJson: '{"ref":"$steps.step1.nodeId"}',
+            dependsOn: ["step1"],
+          },
         ],
       },
     };
-    generateObjectFor.mockResolvedValueOnce(badPlan).mockResolvedValueOnce(SUMMARY);
+    generateObjectFor
+      .mockResolvedValueOnce(badPlan)
+      .mockResolvedValueOnce(SUMMARY);
 
-    const result = await agentComposeHandler({ goal: "g", maxSteps: 6, autoExecute: true }, ctx);
+    const result = await agentComposeHandler(
+      { goal: "g", maxSteps: 6, autoExecute: true },
+      ctx,
+    );
     const byId = Object.fromEntries(result.steps.map((s) => [s.id, s]));
     expect(byId.step1?.status).toBe("error"); // invalid_input from the kernel
     expect(byId.step2?.status).toBe("skipped"); // prerequisite did not succeed
@@ -316,17 +369,24 @@ describe("agentComposeHandler", () => {
       input: z.object({ workspace_id: z.string().optional() }),
       output: z.object({
         skills: z.array(
-          z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            description: z.string(),
+            enabled: z.boolean(),
+          }),
         ),
       }),
     });
-    registerHandler(
-      "list_workspace_skills",
-      async () => async () => { throw new Error("skill listing DB timeout"); },
-    );
+    registerHandler("list_workspace_skills", async () => async () => {
+      throw new Error("skill listing DB timeout");
+    });
 
     await expect(
-      agentComposeHandler({ goal: "research", maxSteps: 6, autoExecute: true }, ctx),
+      agentComposeHandler(
+        { goal: "research", maxSteps: 6, autoExecute: true },
+        ctx,
+      ),
     ).rejects.toThrow("skill listing DB timeout");
 
     // generateObjectFor (planner) must NOT have been called — the error should
@@ -352,9 +412,13 @@ describe("agentComposeHandler", () => {
       defaultEffect: "deny",
       defaultRoles: { org: {}, workspace: {} },
       input: z.object({}),
-      output: z.object({ additionalInstructions: z.string().nullable().optional() }),
+      output: z.object({
+        additionalInstructions: z.string().nullable().optional(),
+      }),
     });
-    registerHandler("get_prompt_settings", async () => async () => ({ additionalInstructions: null }));
+    registerHandler("get_prompt_settings", async () => async () => ({
+      additionalInstructions: null,
+    }));
 
     registerCapability({
       name: "list_workspace_skills",
@@ -370,17 +434,24 @@ describe("agentComposeHandler", () => {
       input: z.object({ workspace_id: z.string().optional() }),
       output: z.object({
         skills: z.array(
-          z.object({ id: z.string(), name: z.string(), description: z.string(), enabled: z.boolean() }),
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            description: z.string(),
+            enabled: z.boolean(),
+          }),
         ),
       }),
     });
-    registerHandler(
-      "list_workspace_skills",
-      async () => async () => { throw new Error("skills IAM denied"); },
-    );
+    registerHandler("list_workspace_skills", async () => async () => {
+      throw new Error("skills IAM denied");
+    });
 
     await expect(
-      agentComposeHandler({ goal: "test", maxSteps: 3, autoExecute: false }, ctx),
+      agentComposeHandler(
+        { goal: "test", maxSteps: 3, autoExecute: false },
+        ctx,
+      ),
     ).rejects.toThrow("skills IAM denied");
   });
 });

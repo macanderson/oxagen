@@ -36,7 +36,10 @@ describe("conversationChatHandler (@oxagen/handlers)", () => {
   it("throws when userId is null", async () => {
     const anonCtx: CapabilityContext = { ...CTX, userId: null };
     await expect(
-      conversationChatHandler({ conversation_id: "conv_123", message: "hello" }, anonCtx),
+      conversationChatHandler(
+        { conversation_id: "conv_123", message: "hello" },
+        anonCtx,
+      ),
     ).rejects.toThrow("conversation.chat requires an authenticated user");
   });
 
@@ -95,7 +98,10 @@ describe("conversationChatHandler (@oxagen/handlers)", () => {
   it("propagates errors from chatMessageSendHandler", async () => {
     mocks.chatMessageSend.mockRejectedValueOnce(new Error("DB error"));
     await expect(
-      conversationChatHandler({ conversation_id: "conv_123", message: "hello" }, CTX),
+      conversationChatHandler(
+        { conversation_id: "conv_123", message: "hello" },
+        CTX,
+      ),
     ).rejects.toThrow("DB error");
   });
 });

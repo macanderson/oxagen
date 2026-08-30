@@ -12,7 +12,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/ingestion/connector-schema-loader", () => ({
   loadBuiltInSchema: mocks.loadBuiltInSchema,
 }));
-vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 
 import { integrationGetHandler } from "./integration.get";
 
@@ -32,12 +34,15 @@ type Row = {
 } | null;
 
 function setup(row: Row) {
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
-    fn({
-      select: () => ({
-        from: () => ({ where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }) }),
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => Promise.resolve(row ? [row] : []) }),
+          }),
+        }),
       }),
-    }),
   );
 }
 
@@ -72,7 +77,10 @@ describe("integration.get handler", () => {
     expect(out.status).toBe("active");
     expect(out.version).toBe("2.1.0");
     expect(out.config).toEqual({ owner: "acme" });
-    expect(out.schema).toEqual({ metadata: { version: "2.1.0" }, config: { fields: [] } });
+    expect(out.schema).toEqual({
+      metadata: { version: "2.1.0" },
+      config: { fields: [] },
+    });
     expect(out.entityCount).toBe(42);
     expect(out.createdAt).toBe(CREATED.toISOString());
     expect(out.updatedAt).toBe(UPDATED.toISOString());
@@ -121,8 +129,8 @@ describe("integration.get handler", () => {
   it("throws 404 when the integration does not exist", async () => {
     mocks.loadBuiltInSchema.mockReturnValue(null);
     setup(null);
-    await expect(integrationGetHandler({ integrationId: "con_missing" }, CTX)).rejects.toThrow(
-      "Integration not found",
-    );
+    await expect(
+      integrationGetHandler({ integrationId: "con_missing" }, CTX),
+    ).rejects.toThrow("Integration not found");
   });
 });

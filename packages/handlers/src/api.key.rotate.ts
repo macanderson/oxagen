@@ -135,7 +135,12 @@ export const apiKeyRotateHandler: CapabilityHandler<
       })
       .where(eq(schema.apiKeys.id, oldKey.id));
 
-    return { inserted, rawKey, revokedPublicId: oldKey.publicId };
+    return {
+      inserted,
+      rawKey,
+      revokedPublicId: oldKey.publicId,
+      workspaceId: oldKey.workspaceId,
+    };
   });
 
   // ── Emit audit events (fire-and-forget) ────────────────────────────────────
@@ -143,7 +148,11 @@ export const apiKeyRotateHandler: CapabilityHandler<
     eventType: "api_key.created",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    // The replacement key inherits the rotated key's workspace, so the audit
+    // row must carry that same scope — a workspace-filtered compliance feed
+    // (audit.log.query narrows security_events by workspaceId) would otherwise
+    // show api_key.created without its matching api_key.revoked.
+    workspaceId: result.workspaceId,
     capability: "rotate_api_key",
     outcome: "success",
     ip: null,
@@ -154,7 +163,7 @@ export const apiKeyRotateHandler: CapabilityHandler<
     eventType: "api_key.revoked",
     actorUserId: ctx.userId ?? null,
     orgId: ctx.orgId,
-    workspaceId: null,
+    workspaceId: result.workspaceId,
     capability: "rotate_api_key",
     outcome: "success",
     ip: null,

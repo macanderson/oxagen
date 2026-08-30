@@ -6,12 +6,14 @@ import { logger } from "./logger";
 // Reads the workspace prompt config from the workspace.workspaces.prompt_config
 // column (via the shared loader, which normalizes the untrusted JSONB). autoImprovePrompts
 // defaults to ON — the beta prompt-enhancement judge is on unless turned off.
-export const promptSettingsReadHandler: CapabilityHandler<typeof promptSettingsRead> = async (
-  _input,
-  ctx,
-) => {
+export const promptSettingsReadHandler: CapabilityHandler<
+  typeof promptSettingsRead
+> = async (_input, ctx) => {
   if (!ctx.workspaceId) {
-    logger.warn({ orgId: ctx.orgId }, "prompt.settings.read: rejected — no workspace context");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "prompt.settings.read: rejected — no workspace context",
+    );
     throw new Error("prompt.settings.read requires a workspace context");
   }
 

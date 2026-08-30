@@ -4,12 +4,14 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const automationListHandler: CapabilityHandler<typeof automationList> = async (
-  _input,
-  ctx,
-) => {
+export const automationListHandler: CapabilityHandler<
+  typeof automationList
+> = async (_input, ctx) => {
   if (!ctx.userId) {
-    logger.warn({ orgId: ctx.orgId }, "automation.list: rejected — no authenticated user");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "automation.list: rejected — no authenticated user",
+    );
     throw new Error("automation.list requires an authenticated user");
   }
 

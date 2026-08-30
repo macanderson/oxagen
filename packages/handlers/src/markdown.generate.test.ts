@@ -58,7 +58,10 @@ describe("markdownGenerateHandler — raw markdown source", () => {
     await markdownGenerateHandler({ title: "Hello", markdown: source }, CTX);
 
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     // Markdown is stored under the DB `document` kind (the kind CHECK constraint
     // has no dedicated "markdown" kind); the render directive still tags it markdown.
     expect(arg.kind).toBe("document");
@@ -105,7 +108,10 @@ describe("markdownGenerateHandler — raw markdown source", () => {
       { title: "USS Nautilus: Polar Crossing", markdown: "# x" },
       CTX,
     );
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.displayName).toBe("USS Nautilus: Polar Crossing");
   });
 });
@@ -116,14 +122,20 @@ describe("markdownGenerateHandler — sections fallback", () => {
       {
         title: "My Doc",
         sections: [
-          { heading: "Introduction", paragraphs: ["First para.", "Second para."] },
+          {
+            heading: "Introduction",
+            paragraphs: ["First para.", "Second para."],
+          },
           { paragraphs: ["No heading."] },
         ],
       },
       CTX,
     );
 
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     const decoded = new TextDecoder().decode(arg.bytes as Uint8Array);
 
     expect(decoded).toContain("# My Doc");
@@ -142,7 +154,10 @@ describe("markdownGenerateHandler — sections fallback", () => {
       CTX,
     );
 
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.kind).toBe("document");
     expect(arg.mimeType).toBe("text/markdown");
   });
@@ -152,7 +167,10 @@ describe("markdownGenerateHandler — title-only fallback", () => {
   it("generates an H1-only document when markdown and sections are both absent", async () => {
     await markdownGenerateHandler({ title: "Minimal" }, CTX);
 
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     const decoded = new TextDecoder().decode(arg.bytes as Uint8Array);
 
     expect(decoded).toBe("# Minimal");
@@ -161,16 +179,24 @@ describe("markdownGenerateHandler — title-only fallback", () => {
 
 describe("markdownGenerateHandler — access policy", () => {
   it("persists with accessPolicy=org so teammates can view the file", async () => {
-    await markdownGenerateHandler({ title: "Shared", markdown: "# Shared" }, CTX);
+    await markdownGenerateHandler(
+      { title: "Shared", markdown: "# Shared" },
+      CTX,
+    );
 
-    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.accessPolicy).toBe("org");
   });
 });
 
 describe("markdownGenerateHandler — error paths", () => {
   it("throws when persistGeneratedAsset rejects", async () => {
-    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("Upload failed"));
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(
+      new Error("Upload failed"),
+    );
 
     await expect(
       markdownGenerateHandler({ title: "Fail", markdown: "# Fail" }, CTX),
@@ -181,7 +207,10 @@ describe("markdownGenerateHandler — error paths", () => {
     const ctxNoUser = makeCTX({ userId: null });
 
     await expect(
-      markdownGenerateHandler({ title: "No user", markdown: "# Hi" }, ctxNoUser),
+      markdownGenerateHandler(
+        { title: "No user", markdown: "# Hi" },
+        ctxNoUser,
+      ),
     ).rejects.toThrow("userId is required");
   });
 });

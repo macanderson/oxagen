@@ -4,10 +4,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const connectionMappingsGetHandler: CapabilityHandler<typeof connectionMappingsGet> = async (
-  input,
-  ctx,
-) => {
+export const connectionMappingsGetHandler: CapabilityHandler<
+  typeof connectionMappingsGet
+> = async (input, ctx) => {
   const mappings = await withTenantDb((tx) =>
     tx
       .select({
@@ -35,7 +34,11 @@ export const connectionMappingsGetHandler: CapabilityHandler<typeof connectionMa
   );
 
   logger.info(
-    { connectionId: input.connectionId, count: mappings.length, orgId: ctx.orgId },
+    {
+      connectionId: input.connectionId,
+      count: mappings.length,
+      orgId: ctx.orgId,
+    },
     "connection.mappings.get: fetched mappings",
   );
 

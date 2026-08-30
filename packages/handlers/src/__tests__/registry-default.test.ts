@@ -57,7 +57,9 @@ mocks.insertValuesReturning.mockResolvedValue([{ id: "mreg_new" }]);
 mocks.insertValues.mockReturnValue({ returning: mocks.insertValuesReturning });
 mocks.insert.mockReturnValue({ values: mocks.insertValues });
 
-mocks.deleteWhereReturning.mockResolvedValue([{ id: "mreg_del", isDefault: false }]);
+mocks.deleteWhereReturning.mockResolvedValue([
+  { id: "mreg_del", isDefault: false },
+]);
 mocks.deleteWhere.mockReturnValue({ returning: mocks.deleteWhereReturning });
 mocks.delete.mockReturnValue({ where: mocks.deleteWhere });
 
@@ -104,7 +106,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx() as unknown as Tx),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(makeTx() as unknown as Tx),
     schema: real.schema,
   };
 });
@@ -136,10 +139,14 @@ function resetMocks() {
   mocks.update.mockReturnValue({ set: mocks.updateSet });
 
   mocks.insertValuesReturning.mockResolvedValue([{ id: "mreg_new" }]);
-  mocks.insertValues.mockReturnValue({ returning: mocks.insertValuesReturning });
+  mocks.insertValues.mockReturnValue({
+    returning: mocks.insertValuesReturning,
+  });
   mocks.insert.mockReturnValue({ values: mocks.insertValues });
 
-  mocks.deleteWhereReturning.mockResolvedValue([{ id: "mreg_del", isDefault: false }]);
+  mocks.deleteWhereReturning.mockResolvedValue([
+    { id: "mreg_del", isDefault: false },
+  ]);
   mocks.deleteWhere.mockReturnValue({ returning: mocks.deleteWhereReturning });
   mocks.delete.mockReturnValue({ where: mocks.deleteWhere });
 
@@ -203,7 +210,12 @@ describe("addRegistry", () => {
 
     const tx = makeTx() as unknown as Tx;
     await expect(
-      addRegistry(tx, { orgId: ORG, workspaceId: WS, name: "Test", baseUrl: "https://t.com" }),
+      addRegistry(tx, {
+        orgId: ORG,
+        workspaceId: WS,
+        name: "Test",
+        baseUrl: "https://t.com",
+      }),
     ).rejects.toThrow("registry insert returned no row");
   });
 });
@@ -215,7 +227,9 @@ describe("removeRegistry", () => {
 
   it("remove-non-default: deletes row, no promotion, promotedId=null", async () => {
     // deleted row is NOT the default
-    mocks.deleteWhereReturning.mockResolvedValue([{ id: "mreg_del", isDefault: false }]);
+    mocks.deleteWhereReturning.mockResolvedValue([
+      { id: "mreg_del", isDefault: false },
+    ]);
 
     const tx = makeTx() as unknown as Tx;
     const result = await removeRegistry(tx, {
@@ -232,7 +246,9 @@ describe("removeRegistry", () => {
 
   it("remove-default-alone: deletes default, no remaining rows → promotedId=null", async () => {
     // deleted row WAS the default
-    mocks.deleteWhereReturning.mockResolvedValue([{ id: "mreg_default", isDefault: true }]);
+    mocks.deleteWhereReturning.mockResolvedValue([
+      { id: "mreg_default", isDefault: true },
+    ]);
     // No remaining registries (findResult default is [])
 
     const tx = makeTx() as unknown as Tx;
@@ -249,7 +265,9 @@ describe("removeRegistry", () => {
 
   it("remove-default-with-others: deletes default + promotes most-recently-created remaining row", async () => {
     // deleted row WAS the default
-    mocks.deleteWhereReturning.mockResolvedValue([{ id: "mreg_default", isDefault: true }]);
+    mocks.deleteWhereReturning.mockResolvedValue([
+      { id: "mreg_default", isDefault: true },
+    ]);
     // One remaining row to promote
     mocks.findResult.mockResolvedValue([{ id: "mreg_most_recent" }]);
 

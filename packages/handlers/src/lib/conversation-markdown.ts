@@ -61,6 +61,12 @@ export interface ConversationExportModel {
  * set (or the leaf is missing from the rows), fall back to the first root
  * message so legacy/linear conversations still export fully — for a linear
  * chain the newest message is the leaf, so the walk covers every row.
+ *
+ * Nothing in the schema stops `parent_message_id` from forming a cycle (a row
+ * pointing at itself is enough), and an unguarded walk of one would loop
+ * forever while `path` grows without bound. Stop at the first repeat instead:
+ * the branch we return is still the longest acyclic prefix, so a corrupt
+ * conversation exports partially rather than hanging the handler.
  */
 export function walkActiveBranch(
   rows: ExportMessageRow[],
@@ -69,12 +75,15 @@ export function walkActiveBranch(
   if (rows.length === 0) return [];
   const byId = new Map(rows.map((r) => [r.id, r]));
   const path: ExportMessageRow[] = [];
+  const visited = new Set<string>();
   let cursor: ExportMessageRow | undefined =
-    (leafId ? byId.get(leafId) : undefined) ??
-    fallbackLeaf(rows);
-  while (cursor) {
+    (leafId ? byId.get(leafId) : undefined) ?? fallbackLeaf(rows);
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
     path.unshift(cursor);
-    cursor = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : undefined;
+    cursor = cursor.parentMessageId
+      ? byId.get(cursor.parentMessageId)
+      : undefined;
   }
   return path;
 }
@@ -108,7 +117,8 @@ interface RawAttachment {
 
 /** Validated `metadata.attachments` entries (persisted on user turns). */
 function attachmentsFromMetadata(metadata: unknown): RawAttachment[] {
-  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata)) return [];
+  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata))
+    return [];
   const raw = (metadata as { attachments?: unknown }).attachments;
   if (!Array.isArray(raw)) return [];
   return raw.filter(
@@ -132,7 +142,11 @@ export function messageToBlocks(row: ExportMessageRow): ExportBlock[] {
 
   if (blocks && blocks.length > 0) {
     for (const raw of blocks) {
-      if (!raw || typeof raw !== "object" || typeof (raw as { type?: unknown }).type !== "string") {
+      if (
+        !raw ||
+        typeof raw !== "object" ||
+        typeof (raw as { type?: unknown }).type !== "string"
+      ) {
         continue;
       }
       const block = raw as Record<string, unknown> & { type: string };
@@ -148,19 +162,27 @@ export function messageToBlocks(row: ExportMessageRow): ExportBlock[] {
             out.push({
               kind: "reasoning",
               text: block.text,
-              durationMs: typeof block.durationMs === "number" ? block.durationMs : undefined,
+              durationMs:
+                typeof block.durationMs === "number"
+                  ? block.durationMs
+                  : undefined,
             });
           }
           break;
         }
         case "tool-call": {
-          const capability = typeof block.capability === "string" ? block.capability : "unknown";
-          const status = typeof block.status === "string" ? block.status : "unknown";
+          const capability =
+            typeof block.capability === "string" ? block.capability : "unknown";
+          const status =
+            typeof block.status === "string" ? block.status : "unknown";
           const tool: ExportBlock = {
             kind: "tool",
             capability,
             status,
-            durationMs: typeof block.durationMs === "number" ? block.durationMs : undefined,
+            durationMs:
+              typeof block.durationMs === "number"
+                ? block.durationMs
+                : undefined,
           };
           if (block.resultPreview !== undefined && tool.kind === "tool") {
             const preview = safeCompactJson(block.resultPreview);
@@ -175,7 +197,8 @@ export function messageToBlocks(row: ExportMessageRow): ExportBlock[] {
           if (typeof block.code === "string") {
             out.push({
               kind: "code",
-              language: typeof block.language === "string" ? block.language : "",
+              language:
+                typeof block.language === "string" ? block.language : "",
               code: block.code,
             });
           }
@@ -209,9 +232,15 @@ function safeCompactJson(value: unknown): string | null {
 }
 
 /** Build ExportMessages (role + normalized blocks) from the active branch rows. */
-export function branchToExportMessages(rows: ExportMessageRow[]): ExportMessage[] {
+export function branchToExportMessages(
+  rows: ExportMessageRow[],
+): ExportMessage[] {
   return rows
-    .map((r) => ({ role: r.role, createdAt: r.createdAt, blocks: messageToBlocks(r) }))
+    .map((r) => ({
+      role: r.role,
+      createdAt: r.createdAt,
+      blocks: messageToBlocks(r),
+    }))
     .filter((m) => m.blocks.length > 0);
 }
 
@@ -264,7 +293,10 @@ function formatDate(d: Date): string {
  */
 export function conversationToMarkdown(model: ConversationExportModel): string {
   const header: string[] = [`# ${model.title}`, ""];
-  header.push(`_Exported from Oxagen on ${model.exportedAt.toISOString()}_`, "");
+  header.push(
+    `_Exported from Oxagen on ${model.exportedAt.toISOString()}_`,
+    "",
+  );
   const meta: string[] = [];
   if (model.orgName) meta.push(`- **Organization:** ${model.orgName}`);
   if (model.workspaceName) meta.push(`- **Workspace:** ${model.workspaceName}`);
@@ -290,7 +322,11 @@ export function conversationToMarkdown(model: ConversationExportModel): string {
 // ── Filename derivation ───────────────────────────────────────────────────────
 
 /** "Quarterly Planning!" + 2026-07-07 → "quarterly-planning-2026-07-07.md". */
-export function exportFilename(title: string, exportedAt: Date, ext: "md" | "pdf"): string {
+export function exportFilename(
+  title: string,
+  exportedAt: Date,
+  ext: "md" | "pdf",
+): string {
   const slug = title
     .toLowerCase()
     .normalize("NFKD")

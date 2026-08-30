@@ -57,10 +57,9 @@ const proposalSchema = z.object({
   ),
 });
 
-export const schemaRecommendHandler: CapabilityHandler<typeof schemaRecommend> = async (
-  input,
-  ctx,
-) => {
+export const schemaRecommendHandler: CapabilityHandler<
+  typeof schemaRecommend
+> = async (input, ctx) => {
   const sampleLimit = input.sampleLimit ?? 200;
 
   // Read graph stats for context. graph.stats's contract only exposes the
@@ -72,12 +71,20 @@ export const schemaRecommendHandler: CapabilityHandler<typeof schemaRecommend> =
   // tenant scope rides on `ctx`, independent of this surface gate.
   let graphStats: Record<string, unknown> = {};
   try {
-    graphStats = (await invoke("get_graph_stats", { includeByType: true }, ctx, {
-      surface: "api",
-    })) as Record<string, unknown>;
+    graphStats = (await invoke(
+      "get_graph_stats",
+      { includeByType: true },
+      ctx,
+      {
+        surface: "api",
+      },
+    )) as Record<string, unknown>;
   } catch (err) {
     logger.warn(
-      { workspaceId: ctx.workspaceId, err: err instanceof Error ? err.message : String(err) },
+      {
+        workspaceId: ctx.workspaceId,
+        err: err instanceof Error ? err.message : String(err),
+      },
       "schema.recommend: graph.stats unavailable",
     );
   }
@@ -117,7 +124,11 @@ Please propose 1-3 schemas with appropriate node labels, relationship types, and
   });
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, schemaCount: object.schemas.length },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      schemaCount: object.schemas.length,
+    },
     "schema.recommend: generated proposal",
   );
 

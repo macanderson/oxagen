@@ -107,9 +107,9 @@ describe("automationEnableHandler (@oxagen/handlers)", () => {
 
   it("passes different automation_id through to the error message", async () => {
     mocks.triggerFindFirst.mockResolvedValueOnce(undefined);
-    await expect(automationEnableHandler({ automation_id: "plt_xyz" }, CTX)).rejects.toThrow(
-      "automation.enable: trigger not found: plt_xyz",
-    );
+    await expect(
+      automationEnableHandler({ automation_id: "plt_xyz" }, CTX),
+    ).rejects.toThrow("automation.enable: trigger not found: plt_xyz");
   });
 
   it("works with app surface (also human-origin context)", async () => {

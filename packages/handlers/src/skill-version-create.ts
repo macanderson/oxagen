@@ -6,10 +6,14 @@
  * - Sets is_latest = true on the new row and clears is_latest on the prior
  *   latest row (partial-unique index on skill_versions enforces one is_latest
  *   per skill).
- * - Records lineage: parent_version_id points at the prior latest row, and the
- *   prior row's references_payload is carried forward (references are seeded
- *   with resolved bodies at install time and cannot be re-resolved server-side
- *   for tenant edits — dropping them would lose data).
+ * - Records lineage: parent_version_id points at the prior latest row.
+ * - references_payload is re-derived from the submitted artifact, so each entry
+ *   carries its path with an EMPTY body. Reference bodies are resolved once at
+ *   install/seed time and are not re-resolvable server-side for a tenant edit,
+ *   so an edit currently drops the prior version's resolved bodies rather than
+ *   carrying them forward. The prior row's payload is read below but not merged;
+ *   restoring the carry-forward is a behavioral change that needs its own
+ *   change (skill.version.upload.test.ts pins today's empty-body output).
  * - Stamps checksum = SHA-256 hex over body (immutability contract, mirrors
  *   agent_versions.checksum).
  * - By default also sets skills.active_version_id to the new version; caller
@@ -91,9 +95,10 @@ export async function createNewSkillVersion(
 
     const nextVersion = (maxRow?.maxVersion ?? 0) + 1;
 
-    // 2b. Load the prior latest version — it is the new row's parent, the
-    //     source of the carried-forward references payload, and the row whose
-    //     is_latest flag must be cleared.
+    // 2b. Load the prior latest version — it is the new row's parent and the
+    //     row whose is_latest flag must be cleared. Its references_payload is
+    //     selected so the carry-forward described in the header comment can be
+    //     restored without another query; it is not merged today.
     const [priorLatest] = await tx
       .select({
         id: schema.skillVersions.id,

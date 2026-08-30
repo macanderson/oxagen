@@ -2,10 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock the kernel invoke (the handler delegates to agent.subagent.aggregate).
 const invoke = vi.fn();
-vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
+vi.mock("@oxagen/oxagen/kernel", () => ({
+  invoke: (...a: unknown[]) => invoke(...a),
+}));
 
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { researchSwarmStatusHandler, mapChildrenToResults } from "./research.swarm.status";
+import {
+  researchSwarmStatusHandler,
+  mapChildrenToResults,
+} from "./research.swarm.status";
 
 const ctx: CapabilityContext = {
   orgId: "org-1",
@@ -17,7 +22,10 @@ const ctx: CapabilityContext = {
   messageId: null,
 };
 
-function webSearchChild(query: string, hits: Array<{ title: string; url: string; content: string; score?: number }>) {
+function webSearchChild(
+  query: string,
+  hits: Array<{ title: string; url: string; content: string; score?: number }>,
+) {
   return {
     runId: `run_${query}`,
     capabilityName: "search_web",
@@ -34,31 +42,67 @@ describe("mapChildrenToResults", () => {
   it("maps web.search children to per-query hits", () => {
     const results = mapChildrenToResults([
       webSearchChild("USS Nautilus crew", [
-        { title: "Crew roster", url: "https://x/crew", content: "The crew of the Nautilus…", score: 0.9 },
+        {
+          title: "Crew roster",
+          url: "https://x/crew",
+          content: "The crew of the Nautilus…",
+          score: 0.9,
+        },
       ]),
       webSearchChild("Nautilus Arctic voyage", [
-        { title: "Under the ice", url: "https://x/arctic", content: "In 1958 the Nautilus…" },
+        {
+          title: "Under the ice",
+          url: "https://x/arctic",
+          content: "In 1958 the Nautilus…",
+        },
       ]),
     ]);
     expect(results).toHaveLength(2);
     expect(results[0]).toMatchObject({
       query: "USS Nautilus crew",
       resultCount: 1,
-      hits: [{ title: "Crew roster", url: "https://x/crew", snippet: "The crew of the Nautilus…", score: 0.9 }],
+      hits: [
+        {
+          title: "Crew roster",
+          url: "https://x/crew",
+          snippet: "The crew of the Nautilus…",
+          score: 0.9,
+        },
+      ],
     });
     expect(results[1]?.hits[0]?.url).toBe("https://x/arctic");
   });
 
   it("truncates long snippets to 500 chars", () => {
     const long = "a".repeat(900);
-    const [r] = mapChildrenToResults([webSearchChild("q", [{ title: "t", url: "https://u", content: long }])]);
+    const [r] = mapChildrenToResults([
+      webSearchChild("q", [{ title: "t", url: "https://u", content: long }]),
+    ]);
     expect(r?.hits[0]?.snippet.length).toBe(500);
   });
 
   it("skips malformed hits and empty children", () => {
     const results = mapChildrenToResults([
-      { runId: "r1", capabilityName: "search_web", status: "completed", summary: "1 result", input: { query: "q" }, output: { results: [{ nope: true }] }, outputBytes: 16, errorReason: null },
-      { runId: "r2", capabilityName: "search_web", status: "failed", summary: "failed", input: {}, output: null, outputBytes: 0, errorReason: "boom" },
+      {
+        runId: "r1",
+        capabilityName: "search_web",
+        status: "completed",
+        summary: "1 result",
+        input: { query: "q" },
+        output: { results: [{ nope: true }] },
+        outputBytes: 16,
+        errorReason: null,
+      },
+      {
+        runId: "r2",
+        capabilityName: "search_web",
+        status: "failed",
+        summary: "failed",
+        input: {},
+        output: null,
+        outputBytes: 0,
+        errorReason: "boom",
+      },
     ]);
     // First child keeps the query but yields no hits; second is fully empty → dropped.
     expect(results).toHaveLength(1);
@@ -69,10 +113,14 @@ describe("mapChildrenToResults", () => {
     // A malformed/older aggregate payload could omit `children`. Iterating
     // undefined throws "children is not iterable" and fails the whole poll.
     expect(() =>
-      mapChildrenToResults(undefined as unknown as Parameters<typeof mapChildrenToResults>[0]),
+      mapChildrenToResults(
+        undefined as unknown as Parameters<typeof mapChildrenToResults>[0],
+      ),
     ).not.toThrow();
     expect(
-      mapChildrenToResults(undefined as unknown as Parameters<typeof mapChildrenToResults>[0]),
+      mapChildrenToResults(
+        undefined as unknown as Parameters<typeof mapChildrenToResults>[0],
+      ),
     ).toEqual([]);
   });
 });
@@ -93,7 +141,12 @@ describe("researchSwarmStatusHandler", () => {
       timeline: [],
       children: [
         webSearchChild("USS Nautilus", [
-          { title: "Nautilus", url: "https://x", content: "first nuclear sub", score: 1 },
+          {
+            title: "Nautilus",
+            url: "https://x",
+            content: "first nuclear sub",
+            score: 1,
+          },
         ]),
       ],
       firstError: null,
@@ -155,7 +208,11 @@ describe("researchSwarmStatusHandler", () => {
       expect.objectContaining({ fanoutId: "fan_3" }),
       ctx,
     );
-    const [, aggregateInput] = invoke.mock.calls[0] as [string, Record<string, unknown>, unknown];
+    const [, aggregateInput] = invoke.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+      unknown,
+    ];
     expect(aggregateInput.timeoutMs).toBeUndefined();
   });
 
@@ -166,7 +223,9 @@ describe("researchSwarmStatusHandler", () => {
     // maps it to HTTP 404 — the handler itself must not swallow it (the route
     // needs the message to decide the right status code).
     invoke.mockRejectedValue(new Error("Fanout nope not found"));
-    await expect(researchSwarmStatusHandler({ swarmId: "nope" }, ctx)).rejects.toThrow(/not found/);
+    await expect(
+      researchSwarmStatusHandler({ swarmId: "nope" }, ctx),
+    ).rejects.toThrow(/not found/);
   });
 
   it("returns terminal 'failed' for an orphaned/timed-out swarm (never 500)", async () => {
@@ -211,7 +270,10 @@ describe("researchSwarmStatusHandler", () => {
       firstError: "one child failed",
     });
 
-    const out = await researchSwarmStatusHandler({ swarmId: "fan_partial" }, ctx);
+    const out = await researchSwarmStatusHandler(
+      { swarmId: "fan_partial" },
+      ctx,
+    );
     expect(out.status).toBe("complete");
     expect(out.completedTasks).toBe(2);
     expect(out.results).toBeDefined();

@@ -31,8 +31,16 @@ const ctx = {
   messageId: null as string | null,
 };
 
-const ITEM_A = { pluginType: "capability" as const, pluginId: "cap-a", catalogServerId: undefined };
-const ITEM_B = { pluginType: "mcp_server" as const, pluginId: "mcp-b", catalogServerId: undefined };
+const ITEM_A = {
+  pluginType: "capability" as const,
+  pluginId: "cap-a",
+  catalogServerId: undefined,
+};
+const ITEM_B = {
+  pluginType: "mcp_server" as const,
+  pluginId: "mcp-b",
+  catalogServerId: undefined,
+};
 
 // installOne resolves {id, authKind}; the bulk handler surfaces authKind on
 // each row so callers can prompt for OAuth right after a bulk install.
@@ -56,9 +64,11 @@ describe("plugin.org.install_bulk handler", () => {
   // ── happy path ────────────────────────────────────────────────────────────
 
   it("returns all items as successful when every installOne succeeds", async () => {
-    mocks.installOne.mockResolvedValueOnce(RESULT_A).mockResolvedValueOnce(RESULT_B);
+    mocks.installOne
+      .mockResolvedValueOnce(RESULT_A)
+      .mockResolvedValueOnce(RESULT_B);
 
-    const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
+    const result = (await handler({ items: [ITEM_A, ITEM_B] }, ctx)) as {
       installed: InstalledRow[];
     };
 
@@ -79,7 +89,9 @@ describe("plugin.org.install_bulk handler", () => {
   });
 
   it("emits a security event for each successfully installed item", async () => {
-    mocks.installOne.mockResolvedValueOnce(RESULT_A).mockResolvedValueOnce(RESULT_B);
+    mocks.installOne
+      .mockResolvedValueOnce(RESULT_A)
+      .mockResolvedValueOnce(RESULT_B);
 
     await handler({ items: [ITEM_A, ITEM_B] }, ctx);
 
@@ -104,7 +116,7 @@ describe("plugin.org.install_bulk handler", () => {
       .mockResolvedValueOnce(RESULT_A)
       .mockRejectedValueOnce(new Error("plugin not found in catalog"));
 
-    const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
+    const result = (await handler({ items: [ITEM_A, ITEM_B] }, ctx)) as {
       installed: InstalledRow[];
     };
 
@@ -132,7 +144,7 @@ describe("plugin.org.install_bulk handler", () => {
       .mockRejectedValueOnce(new Error("DB timeout"))
       .mockRejectedValueOnce(new Error("auth denied"));
 
-    const result = await handler({ items: [ITEM_A, ITEM_B] }, ctx) as {
+    const result = (await handler({ items: [ITEM_A, ITEM_B] }, ctx)) as {
       installed: InstalledRow[];
     };
 
@@ -151,9 +163,12 @@ describe("plugin.org.install_bulk handler", () => {
   });
 
   it("handles a single item successfully", async () => {
-    mocks.installOne.mockResolvedValueOnce({ id: "listing-solo", authKind: "secret" });
+    mocks.installOne.mockResolvedValueOnce({
+      id: "listing-solo",
+      authKind: "secret",
+    });
 
-    const result = await handler({ items: [ITEM_A] }, ctx) as {
+    const result = (await handler({ items: [ITEM_A] }, ctx)) as {
       installed: InstalledRow[];
     };
 
@@ -169,7 +184,7 @@ describe("plugin.org.install_bulk handler", () => {
   it("stores non-Error rejection as a string in the error field", async () => {
     mocks.installOne.mockRejectedValueOnce("raw string rejection");
 
-    const result = await handler({ items: [ITEM_A] }, ctx) as {
+    const result = (await handler({ items: [ITEM_A] }, ctx)) as {
       installed: InstalledRow[];
     };
 

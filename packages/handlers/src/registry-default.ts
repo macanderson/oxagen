@@ -113,10 +113,16 @@ export async function removeRegistry(
         eq(schema.mcpRegistries.workspaceId, workspaceId),
       ),
     )
-    .returning({ id: schema.mcpRegistries.id, isDefault: schema.mcpRegistries.isDefault });
+    .returning({
+      id: schema.mcpRegistries.id,
+      isDefault: schema.mcpRegistries.isDefault,
+    });
 
   if (deleted.length === 0) {
-    logger.warn({ registryId, orgId, workspaceId }, "removeRegistry: no row matched");
+    logger.warn(
+      { registryId, orgId, workspaceId },
+      "removeRegistry: no row matched",
+    );
     return { removed: false, promotedId: null };
   }
 

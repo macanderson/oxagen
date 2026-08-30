@@ -20,17 +20,17 @@ const READ_COLUMNS = {
 // optional: omit = unchanged, value = set, null = clear (nullable fields only).
 // Kernel handles metering + IAM via invoke(); slug collisions surface as a
 // clean error instead of a raw constraint violation.
-export const orgSettingsWriteHandler: CapabilityHandler<typeof orgSettingsWrite> = async (
-  input,
-  ctx,
-) => {
+export const orgSettingsWriteHandler: CapabilityHandler<
+  typeof orgSettingsWrite
+> = async (input, ctx) => {
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name;
   if (input.slug !== undefined) updates.slug = input.slug;
   if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
   if (input.website !== undefined) updates.website = input.website;
   if (input.industry !== undefined) updates.industry = input.industry;
-  if (input.employeeSize !== undefined) updates.employeeSize = input.employeeSize;
+  if (input.employeeSize !== undefined)
+    updates.employeeSize = input.employeeSize;
 
   const row = await withTenantDb(async (tx) => {
     if (Object.keys(updates).length > 0) {
@@ -41,7 +41,9 @@ export const orgSettingsWriteHandler: CapabilityHandler<typeof orgSettingsWrite>
           .where(eq(schema.organizations.id, ctx.orgId));
       } catch (err) {
         if (isUniqueViolation(err)) {
-          throw new Error(`Slug "${input.slug}" is already in use by another organization`);
+          throw new Error(
+            `Slug "${input.slug}" is already in use by another organization`,
+          );
         }
         throw err;
       }
@@ -53,7 +55,10 @@ export const orgSettingsWriteHandler: CapabilityHandler<typeof orgSettingsWrite>
   });
 
   if (!row) {
-    logger.warn({ orgId: ctx.orgId }, "org.settings.write: organization not found");
+    logger.warn(
+      { orgId: ctx.orgId },
+      "org.settings.write: organization not found",
+    );
     throw new Error("Organization not found");
   }
 

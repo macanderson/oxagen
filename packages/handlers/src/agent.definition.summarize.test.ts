@@ -31,7 +31,8 @@ vi.mock("@oxagen/database", () => ({
       version: "agentVersions.version",
     },
   },
-  withTenantDb: (fn: (tx: unknown) => Promise<unknown>) => mocks.withTenantDb(fn),
+  withTenantDb: (fn: (tx: unknown) => Promise<unknown>) =>
+    mocks.withTenantDb(fn),
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -91,7 +92,10 @@ function agentRow(overrides: Record<string, unknown> = {}) {
 /** Wire withTenantDb: first call = read (returns { agent, config }), second =
  *  write (captures the .set() args). resolveAgent + the version query resolve
  *  through the fake tx. */
-function wireDb(opts: { agent: ReturnType<typeof agentRow> | null; versionRows?: unknown[] }) {
+function wireDb(opts: {
+  agent: ReturnType<typeof agentRow> | null;
+  versionRows?: unknown[];
+}) {
   const captured = { set: undefined as Record<string, unknown> | undefined };
   mocks.resolveAgent.mockResolvedValue(opts.agent);
 
@@ -113,7 +117,9 @@ function wireDb(opts: { agent: ReturnType<typeof agentRow> | null; versionRows?:
     select: () => selectChain,
     update: () => updateChain,
   };
-  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(tx));
+  mocks.withTenantDb.mockImplementation(
+    (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+  );
   return captured;
 }
 
@@ -128,12 +134,18 @@ describe("agentDefinitionSummarizeHandler", () => {
   // ── fresh generation ────────────────────────────────────────────────────────
   it("generates, persists, and returns a fresh summary when none exists", async () => {
     const captured = wireDb({ agent: agentRow() });
-    mocks.generateObjectFor.mockResolvedValue({ object: { summary: "Scans new deals and flags the risky ones for review." } });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: {
+        summary: "Scans new deals and flags the risky ones for review.",
+      },
+    });
 
     const out = await agentDefinitionSummarizeHandler(INPUT, TEST_CTX);
 
     expect(out.agentId).toBe("agt_1");
-    expect(out.summary).toBe("Scans new deals and flags the risky ones for review.");
+    expect(out.summary).toBe(
+      "Scans new deals and flags the risky ones for review.",
+    );
     expect(out.checksum).toBe(CHECKSUM);
     // The model call happened, on the fast tier, with tenant telemetry.
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
@@ -160,7 +172,12 @@ describe("agentDefinitionSummarizeHandler", () => {
 
   // ── cache short-circuit ───────────────────────────────────────────────────────
   it("returns the cached summary without an LLM call when the checksum still matches", async () => {
-    wireDb({ agent: agentRow({ summary: "A cached summary.", summaryChecksum: CHECKSUM }) });
+    wireDb({
+      agent: agentRow({
+        summary: "A cached summary.",
+        summaryChecksum: CHECKSUM,
+      }),
+    });
 
     const out = await agentDefinitionSummarizeHandler(INPUT, TEST_CTX);
 
@@ -170,10 +187,17 @@ describe("agentDefinitionSummarizeHandler", () => {
   });
 
   it("regenerates despite a checksum match when force is set", async () => {
-    const captured = wireDb({ agent: agentRow({ summary: "Stale.", summaryChecksum: CHECKSUM }) });
-    mocks.generateObjectFor.mockResolvedValue({ object: { summary: "A freshly regenerated summary." } });
+    const captured = wireDb({
+      agent: agentRow({ summary: "Stale.", summaryChecksum: CHECKSUM }),
+    });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { summary: "A freshly regenerated summary." },
+    });
 
-    const out = await agentDefinitionSummarizeHandler({ agentId: "agt_1", force: true }, TEST_CTX);
+    const out = await agentDefinitionSummarizeHandler(
+      { agentId: "agt_1", force: true },
+      TEST_CTX,
+    );
 
     expect(mocks.generateObjectFor).toHaveBeenCalledTimes(1);
     expect(out.summary).toBe("A freshly regenerated summary.");
@@ -181,8 +205,15 @@ describe("agentDefinitionSummarizeHandler", () => {
   });
 
   it("regenerates when a summary exists but the config checksum has changed", async () => {
-    wireDb({ agent: agentRow({ summary: "Old summary.", summaryChecksum: "stale-checksum-does-not-match" }) });
-    mocks.generateObjectFor.mockResolvedValue({ object: { summary: "New summary for the changed config." } });
+    wireDb({
+      agent: agentRow({
+        summary: "Old summary.",
+        summaryChecksum: "stale-checksum-does-not-match",
+      }),
+    });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { summary: "New summary for the changed config." },
+    });
 
     const out = await agentDefinitionSummarizeHandler(INPUT, TEST_CTX);
 
@@ -196,7 +227,9 @@ describe("agentDefinitionSummarizeHandler", () => {
     const captured = wireDb({ agent: agentRow() });
     // 400 chars with runs of whitespace to prove normalization + slice.
     const long = "word ".repeat(80) + "   tail";
-    mocks.generateObjectFor.mockResolvedValue({ object: { summary: `   ${long}   ` } });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { summary: `   ${long}   ` },
+    });
 
     const out = await agentDefinitionSummarizeHandler(INPUT, TEST_CTX);
 
@@ -212,47 +245,55 @@ describe("agentDefinitionSummarizeHandler", () => {
     wireDb({ agent: agentRow() });
     mocks.generateObjectFor.mockRejectedValue(new Error("gateway down"));
 
-    await expect(agentDefinitionSummarizeHandler(INPUT, TEST_CTX)).rejects.toBeInstanceOf(
-      AgentSummarizeError,
-    );
-    await expect(agentDefinitionSummarizeHandler(INPUT, TEST_CTX)).rejects.toThrow(/gateway down/);
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, TEST_CTX),
+    ).rejects.toBeInstanceOf(AgentSummarizeError);
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, TEST_CTX),
+    ).rejects.toThrow(/gateway down/);
   });
 
   it("throws AgentSummarizeError when the model returns an empty summary", async () => {
     wireDb({ agent: agentRow() });
     mocks.generateObjectFor.mockResolvedValue({ object: { summary: "   " } });
 
-    await expect(agentDefinitionSummarizeHandler(INPUT, TEST_CTX)).rejects.toThrow(/empty summary/);
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, TEST_CTX),
+    ).rejects.toThrow(/empty summary/);
   });
 
   it("throws AgentSummarizeError when the agent is not found", async () => {
     wireDb({ agent: null });
 
-    await expect(agentDefinitionSummarizeHandler(INPUT, TEST_CTX)).rejects.toThrow(/not found/);
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, TEST_CTX),
+    ).rejects.toThrow(/not found/);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
   });
 
   it("throws AgentSummarizeError when the agent has no version config", async () => {
     wireDb({ agent: agentRow(), versionRows: [] });
 
-    await expect(agentDefinitionSummarizeHandler(INPUT, TEST_CTX)).rejects.toThrow(
-      /no version config/,
-    );
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, TEST_CTX),
+    ).rejects.toThrow(/no version config/);
     expect(mocks.generateObjectFor).not.toHaveBeenCalled();
   });
 
   it("throws when workspaceId is missing from context", async () => {
     const noWsCtx = makeCTX({ workspaceId: undefined as unknown as string });
 
-    await expect(agentDefinitionSummarizeHandler(INPUT, noWsCtx)).rejects.toThrow(
-      /workspaceId is required/,
-    );
+    await expect(
+      agentDefinitionSummarizeHandler(INPUT, noWsCtx),
+    ).rejects.toThrow(/workspaceId is required/);
   });
 
   // ── contract shape ───────────────────────────────────────────────────────────
   it("rejects input without an agentId at the contract boundary", () => {
     expect(() => agentDefinitionSummarize.input.parse({})).toThrow();
-    expect(() => agentDefinitionSummarize.input.parse({ agentId: "agt_1" })).not.toThrow();
+    expect(() =>
+      agentDefinitionSummarize.input.parse({ agentId: "agt_1" }),
+    ).not.toThrow();
     expect(() =>
       agentDefinitionSummarize.input.parse({ agentId: "agt_1", force: true }),
     ).not.toThrow();

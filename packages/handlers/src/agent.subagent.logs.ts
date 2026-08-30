@@ -107,12 +107,13 @@ export function buildLogMarkdown(args: {
   return lines.join("\n");
 }
 
-export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLogs> = async (
-  input,
-  ctx,
-) => {
+export const agentSubagentLogsHandler: CapabilityHandler<
+  typeof agentSubagentLogs
+> = async (input, ctx) => {
   if (!ctx.userId) {
-    throw new Error("agent.subagent.logs: userId is required — no user identity in context");
+    throw new Error(
+      "agent.subagent.logs: userId is required — no user identity in context",
+    );
   }
   const userId = ctx.userId;
 
@@ -150,7 +151,11 @@ export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLog
   const filename = `${slugify(title).slice(0, 60) || "subagent-log"}.md`;
 
   logger.info(
-    { fanoutId: input.fanoutId, childCount: aggregate.children.length, publicId: asset.publicId },
+    {
+      fanoutId: input.fanoutId,
+      childCount: aggregate.children.length,
+      publicId: asset.publicId,
+    },
     "agent.subagent.logs: complete",
   );
 
@@ -174,4 +179,3 @@ export const agentSubagentLogsHandler: CapabilityHandler<typeof agentSubagentLog
     },
   };
 };
-

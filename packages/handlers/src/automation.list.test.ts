@@ -86,7 +86,12 @@ describe("automationListHandler (@oxagen/handlers)", () => {
   it("maps multiple rows correctly", async () => {
     const rows = [
       makeRow({ publicId: "plt_1", name: "First" }),
-      makeRow({ publicId: "plt_2", name: "Second", isEnabled: false, triggerType: "event" }),
+      makeRow({
+        publicId: "plt_2",
+        name: "Second",
+        isEnabled: false,
+        triggerType: "event",
+      }),
     ];
     mocks.selectOrderBy.mockResolvedValueOnce(rows);
     const result = await automationListHandler({}, CTX);

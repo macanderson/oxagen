@@ -82,10 +82,13 @@ describe("eval.run.get handler", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns the run summary and maps snake_case item results to camelCase booleans", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([RUN_ROW])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([RUN_ROW])),
     );
-    mocks.selectEvalItemResults.mockResolvedValue([ITEM_ROW_PASSED, ITEM_ROW_FAILED]);
+    mocks.selectEvalItemResults.mockResolvedValue([
+      ITEM_ROW_PASSED,
+      ITEM_ROW_FAILED,
+    ]);
 
     const out = await evalRunGetHandler({ runPublicId: "evr_ABC" }, CTX);
 
@@ -147,8 +150,9 @@ describe("eval.run.get handler", () => {
   });
 
   it("defaults a null scoreBreakdown and avgScore to {} / null", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([{ ...RUN_ROW, avgScore: null, scoreBreakdown: null }])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx([{ ...RUN_ROW, avgScore: null, scoreBreakdown: null }])),
     );
     mocks.selectEvalItemResults.mockResolvedValue([]);
 
@@ -159,22 +163,27 @@ describe("eval.run.get handler", () => {
   });
 
   it("throws a 404 when the run does not exist", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) => fn(makeTx([])),
     );
 
-    await expect(evalRunGetHandler({ runPublicId: "evr_missing" }, CTX)).rejects.toMatchObject({
+    await expect(
+      evalRunGetHandler({ runPublicId: "evr_missing" }, CTX),
+    ).rejects.toMatchObject({
       status: 404,
     });
     expect(mocks.selectEvalItemResults).not.toHaveBeenCalled();
   });
 
   it("throws a 404 when the run belongs to a different workspace", async () => {
-    mocks.withTenantDb.mockImplementation((fn: (tx: TxLike) => Promise<unknown>) =>
-      fn(makeTx([{ ...RUN_ROW, workspaceId: "ws_other" }])),
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: TxLike) => Promise<unknown>) =>
+        fn(makeTx([{ ...RUN_ROW, workspaceId: "ws_other" }])),
     );
 
-    await expect(evalRunGetHandler({ runPublicId: "evr_ABC" }, CTX)).rejects.toMatchObject({
+    await expect(
+      evalRunGetHandler({ runPublicId: "evr_ABC" }, CTX),
+    ).rejects.toMatchObject({
       status: 404,
     });
   });

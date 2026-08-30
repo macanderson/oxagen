@@ -53,7 +53,8 @@ vi.mock("@oxagen/github", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -131,7 +132,10 @@ describe("resolveGitHubToken", () => {
 
   it("returns installation token when installationId + App keys are present", async () => {
     vi.stubEnv("GITHUB_APP_ID", "12345");
-    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----");
+    vi.stubEnv(
+      "GITHUB_APP_PRIVATE_KEY",
+      "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----",
+    );
 
     mockDbCalls([
       {
@@ -183,7 +187,10 @@ describe("resolveGitHubToken", () => {
     vi.stubEnv("GITHUB_APP_ID", "777");
     vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pk");
 
-    const encryptedPayload = { keyId: "ingestion:env:v1", ciphertext: "Y2lwaGVydGV4dA==" };
+    const encryptedPayload = {
+      keyId: "ingestion:env:v1",
+      ciphertext: "Y2lwaGVydGV4dA==",
+    };
     mockDbCalls(
       // connection row — no installationId
       [{ oauthAccountId: "oauth-uuid", deliveryConfig: { owner: "acme" } }],
@@ -192,7 +199,9 @@ describe("resolveGitHubToken", () => {
     );
 
     const fakeAdapter = {};
-    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: fakeAdapter });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({
+      adapter: fakeAdapter,
+    });
     mocks.decrypt.mockResolvedValueOnce(Buffer.from("ghp_oauth_token", "utf8"));
 
     const token = await resolveGitHubToken(makeCtx());
@@ -210,13 +219,22 @@ describe("resolveGitHubToken", () => {
     };
 
     mockDbCalls(
-      [{ oauthAccountId: "acc-uuid-123", deliveryConfig: { installationId: 55 } }],
+      [
+        {
+          oauthAccountId: "acc-uuid-123",
+          deliveryConfig: { installationId: 55 },
+        },
+      ],
       [{ accessTokenEnc: encryptedPayload }],
     );
 
     const fakeAdapter = { decryptDataKey: vi.fn() };
-    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: fakeAdapter });
-    mocks.decrypt.mockResolvedValueOnce(Buffer.from("ghp_decrypted_oauth", "utf8"));
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({
+      adapter: fakeAdapter,
+    });
+    mocks.decrypt.mockResolvedValueOnce(
+      Buffer.from("ghp_decrypted_oauth", "utf8"),
+    );
 
     const token = await resolveGitHubToken(makeCtx());
 
@@ -274,7 +292,9 @@ describe("resolveGitHubToken", () => {
     expect(token).toBe("ghp_prod_leak");
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("GITHUB_PERSONAL_ACCESS_TOKEN is set in production"),
+      expect.stringContaining(
+        "GITHUB_PERSONAL_ACCESS_TOKEN is set in production",
+      ),
     );
 
     warnSpy.mockRestore();

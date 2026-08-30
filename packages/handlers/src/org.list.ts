@@ -20,7 +20,10 @@ import { logger } from "./logger";
  * to that one user's memberships; the caller can never cross-read another
  * user's org list.
  */
-export const orgListHandler: CapabilityHandler<typeof orgList> = async (_input, ctx) => {
+export const orgListHandler: CapabilityHandler<typeof orgList> = async (
+  _input,
+  ctx,
+) => {
   // ── Resolve acting user ───────────────────────────────────────────────────
   // Session auth:  ctx.userId is the real user; use directly.
   // API-key auth:  ctx.userId is null; resolve from the key's createdByUserId.

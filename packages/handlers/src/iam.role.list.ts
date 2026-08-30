@@ -1,5 +1,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { iamRoleList, type IamRoleRow } from "@oxagen/oxagen/contracts/iam.role.list";
+import {
+  iamRoleList,
+  type IamRoleRow,
+} from "@oxagen/oxagen/contracts/iam.role.list";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, inArray, isNull, or, gt, sql } from "drizzle-orm";
 import { logger } from "./logger";
@@ -24,7 +27,8 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
 
   const result = await withSystemDb(async (tx) => {
     const roleConds = [eq(schema.roles.orgId, orgId)];
-    if (input.scopeKind) roleConds.push(eq(schema.roles.scopeKind, input.scopeKind));
+    if (input.scopeKind)
+      roleConds.push(eq(schema.roles.scopeKind, input.scopeKind));
 
     const allRoles = await tx
       .select({
@@ -41,7 +45,8 @@ export const iamRoleListHandler: CapabilityHandler<typeof iamRoleList> = async (
 
     // Stable catalog order: system defaults first, then alphabetical.
     allRoles.sort((a, b) => {
-      if (a.isSystemDefault !== b.isSystemDefault) return a.isSystemDefault ? -1 : 1;
+      if (a.isSystemDefault !== b.isSystemDefault)
+        return a.isSystemDefault ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
 

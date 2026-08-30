@@ -148,10 +148,15 @@ function buildMetadata(
  * Callers pass `conversationId` in one of two shapes: the internal UUID (the
  * chat stream route, which already holds the row) or the client-facing public
  * id ("cnv_…" — the composer upload path forwards it straight from the form).
- * The `conversation_id` uuid column rejects a public id outright (every
- * composer upload into an active conversation 500'd), so the public shape is
- * resolved here — org-scoped, so a forged id can never link an asset into
- * another org's conversation.
+ * The `conversation_id` uuid column rejects a public id outright, so the public
+ * shape is resolved here, filtered on `orgId` — a forged "cnv_…" can never link
+ * an asset into another org's conversation.
+ *
+ * Two lookups here are NOT org-filtered and rely on the caller for scoping: an
+ * internal-UUID `conversationId` is trusted verbatim, and the `messageId` →
+ * conversation lookup matches on message id alone. Both ids are kernel-supplied
+ * (ctx.messageId / a row the route already read in scope) rather than raw user
+ * input, but neither is verified against `orgId` in this function.
  */
 async function resolveConversationId(
   tx: Tx,

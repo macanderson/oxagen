@@ -50,7 +50,8 @@ function buildSelectTx(results: unknown[][]): Record<string, unknown> {
         then: <T1 = unknown, T2 = never>(
           onfulfilled?: ((value: unknown) => T1 | PromiseLike<T1>) | null,
           onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null,
-        ): PromiseLike<T1 | T2> => Promise.resolve(result).then(onfulfilled, onrejected),
+        ): PromiseLike<T1 | T2> =>
+          Promise.resolve(result).then(onfulfilled, onrejected),
         from: vi.fn(() => chain),
         where: vi.fn(() => chain),
         limit: vi.fn(() => Promise.resolve(result)),
@@ -76,8 +77,7 @@ describe("schemaRegistryGetHandler", () => {
     // withTenantDb called once for the schema query, then once each for
     // resolvePublicId (pinnedVersionId=null and draftVersionId=null → skipped)
     mocks.withTenantDbFn.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) =>
-        fn(buildSelectTx([[]])),
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(buildSelectTx([[]])),
     );
 
     const result = await schemaRegistryGetHandler({}, CTX);
@@ -109,16 +109,19 @@ describe("schemaRegistryGetHandler", () => {
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn(
           buildSelectTx([
-            [{ id: "ver-internal-id" }],  // resolve version row by publicId
-            [schemaRow],                   // schemas
-            [],                            // activations (none → enabled default)
-            [],                            // labels
-            [],                            // rels
+            [{ id: "ver-internal-id" }], // resolve version row by publicId
+            [schemaRow], // schemas
+            [], // activations (none → enabled default)
+            [], // labels
+            [], // rels
           ]),
         ),
     );
 
-    const result = await schemaRegistryGetHandler({ versionId: "scv_xyz" }, CTX);
+    const result = await schemaRegistryGetHandler(
+      { versionId: "scv_xyz" },
+      CTX,
+    );
 
     expect(result.schemas).toHaveLength(1);
     const [schema] = result.schemas;
@@ -134,14 +137,20 @@ describe("schemaRegistryGetHandler", () => {
   it("marks schema as disabled when activation row says enabled=false", async () => {
     mocks.getOrCreateRegistry.mockResolvedValue(BASE_REGISTRY);
 
-    const schemaRow = { id: "s1", name: "experimental", displayName: "Exp", source: "user", connectorId: null };
+    const schemaRow = {
+      id: "s1",
+      name: "experimental",
+      displayName: "Exp",
+      source: "user",
+      connectorId: null,
+    };
     const activationRow = { schemaName: "experimental", enabled: false };
 
     mocks.withTenantDbFn.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn(
           buildSelectTx([
-            [],                    // no version row match for publicId (passthrough)
+            [], // no version row match for publicId (passthrough)
             [schemaRow],
             [activationRow],
             [],
@@ -150,7 +159,10 @@ describe("schemaRegistryGetHandler", () => {
         ),
     );
 
-    const result = await schemaRegistryGetHandler({ versionId: "scv_xyz" }, CTX);
+    const result = await schemaRegistryGetHandler(
+      { versionId: "scv_xyz" },
+      CTX,
+    );
     expect(result.schemas[0]!.enabled).toBe(false);
   });
 
@@ -170,17 +182,13 @@ describe("schemaRegistryGetHandler", () => {
           // schemas tx: no version row match → versionId = pinnedVersionId string
           return fn(
             buildSelectTx([
-              [],    // no publicId match → resolvedVersionId stays as pinnedVersionId
-              [],    // schemas
+              [], // no publicId match → resolvedVersionId stays as pinnedVersionId
+              [], // schemas
             ]),
           );
         }
         // resolvePublicId tx
-        return fn(
-          buildSelectTx([
-            [{ publicId: "scv_pinned_public" }],
-          ]),
-        );
+        return fn(buildSelectTx([[{ publicId: "scv_pinned_public" }]]));
       },
     );
 
@@ -213,24 +221,44 @@ describe("schemaRegistryGetHandler", () => {
   it("maps labels and relationship types under the correct schema", async () => {
     mocks.getOrCreateRegistry.mockResolvedValue(BASE_REGISTRY);
 
-    const schema1 = { id: "s1", name: "core", displayName: "Core", source: "connector", connectorId: "conn-1" };
-    const label1 = { schemaId: "s1", name: "Person", displayName: "Person", description: "A person" };
-    const rel1 = { schemaId: "s1", name: "KNOWS", displayName: "Knows", startLabel: "Person", endLabel: "Person" };
+    const schema1 = {
+      id: "s1",
+      name: "core",
+      displayName: "Core",
+      source: "connector",
+      connectorId: "conn-1",
+    };
+    const label1 = {
+      schemaId: "s1",
+      name: "Person",
+      displayName: "Person",
+      description: "A person",
+    };
+    const rel1 = {
+      schemaId: "s1",
+      name: "KNOWS",
+      displayName: "Knows",
+      startLabel: "Person",
+      endLabel: "Person",
+    };
 
     mocks.withTenantDbFn.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn(
           buildSelectTx([
-            [],              // version publicId lookup → no match
+            [], // version publicId lookup → no match
             [schema1],
-            [],              // activations
+            [], // activations
             [label1],
             [rel1],
           ]),
         ),
     );
 
-    const result = await schemaRegistryGetHandler({ versionId: "scv_test" }, CTX);
+    const result = await schemaRegistryGetHandler(
+      { versionId: "scv_test" },
+      CTX,
+    );
     const [schema] = result.schemas;
     expect(schema!.labels).toHaveLength(1);
     expect(schema!.labels[0]!.name).toBe("Person");

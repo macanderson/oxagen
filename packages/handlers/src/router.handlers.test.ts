@@ -67,7 +67,11 @@ describe("get_routing_policy", () => {
   it("resolves the workspace row over the org-default row", async () => {
     const rows = [
       policyRow({ workspaceId: null, mode: "shadow" }),
-      policyRow({ workspaceId: CTX.workspaceId, mode: "enforce", escalateOnRejection: false }),
+      policyRow({
+        workspaceId: CTX.workspaceId,
+        mode: "enforce",
+        escalateOnRejection: false,
+      }),
     ];
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
       fn(findManyTx(rows)),
@@ -79,7 +83,9 @@ describe("get_routing_policy", () => {
   });
 
   it("uses the org-default row when the workspace has none", async () => {
-    const rows = [policyRow({ workspaceId: null, mode: "shadow", minSamples: 15 })];
+    const rows = [
+      policyRow({ workspaceId: null, mode: "shadow", minSamples: 15 }),
+    ];
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
       fn(findManyTx(rows)),
     );
@@ -98,7 +104,9 @@ describe("set_routing_policy", () => {
     const set = vi.fn().mockReturnValue({ where });
     const update = vi.fn().mockReturnValue({ set });
     return {
-      query: { routingPolicy: { findFirst: vi.fn().mockResolvedValue(existing) } },
+      query: {
+        routingPolicy: { findFirst: vi.fn().mockResolvedValue(existing) },
+      },
       insert,
       update,
       _captured: { values, insert, update, set },
@@ -107,8 +115,13 @@ describe("set_routing_policy", () => {
 
   it("inserts a new workspace policy when none exists", async () => {
     const tx = upsertTx(undefined);
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
-    const out = await routerPolicySetHandler({ scope: "workspace", mode: "enforce" }, CTX);
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(tx),
+    );
+    const out = await routerPolicySetHandler(
+      { scope: "workspace", mode: "enforce" },
+      CTX,
+    );
     expect(out).toMatchObject({
       scope: "workspace",
       mode: "enforce",
@@ -119,14 +132,25 @@ describe("set_routing_policy", () => {
     });
     expect(tx._captured.insert).toHaveBeenCalledTimes(1);
     expect(tx._captured.values).toHaveBeenCalledWith(
-      expect.objectContaining({ orgId: CTX.orgId, workspaceId: CTX.workspaceId, mode: "enforce" }),
+      expect.objectContaining({
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+        mode: "enforce",
+      }),
     );
   });
 
   it("merges partial fields over an existing row and updates", async () => {
-    const existing = policyRow({ id: "rp_1", mode: "shadow", successThreshold: 0.9, minSamples: 10 });
+    const existing = policyRow({
+      id: "rp_1",
+      mode: "shadow",
+      successThreshold: 0.9,
+      minSamples: 10,
+    });
     const tx = upsertTx(existing);
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(tx),
+    );
     // scope omitted ⇒ defaults to "workspace"; only mode changes.
     const out = await routerPolicySetHandler({ mode: "enforce" }, CTX);
     expect(out.mode).toBe("enforce");
@@ -137,8 +161,13 @@ describe("set_routing_policy", () => {
 
   it("writes the org-level row (workspace_id null) for scope=org", async () => {
     const tx = upsertTx(undefined);
-    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
-    const out = await routerPolicySetHandler({ scope: "org", mode: "shadow" }, CTX);
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(tx),
+    );
+    const out = await routerPolicySetHandler(
+      { scope: "org", mode: "shadow" },
+      CTX,
+    );
     expect(out.scope).toBe("org");
     expect(tx._captured.values).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: null, mode: "shadow" }),
@@ -150,11 +179,35 @@ describe("list_routing_stats", () => {
   it("reads stats with the effective window/minSamples and derives the per-class summary", async () => {
     // Effective policy: enforce, 95% bar, 20 samples, 30d window.
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-      fn(findManyTx([policyRow({ workspaceId: CTX.workspaceId, mode: "enforce" })])),
+      fn(
+        findManyTx([
+          policyRow({ workspaceId: CTX.workspaceId, mode: "enforce" }),
+        ]),
+      ),
     );
     mocks.readRoutingStats.mockResolvedValue([
-      { taskClass: "auth/single", model: "haiku", tier: "fast", samples: 100, verifiedCount: 60, verifiedRate: 0.6, avgCostUsdMicros: 500, avgLatencyMs: 1000, lastSeen: "x" },
-      { taskClass: "auth/single", model: "sonnet", tier: "balanced", samples: 100, verifiedCount: 97, verifiedRate: 0.97, avgCostUsdMicros: 3000, avgLatencyMs: 2000, lastSeen: "x" },
+      {
+        taskClass: "auth/single",
+        model: "haiku",
+        tier: "fast",
+        samples: 100,
+        verifiedCount: 60,
+        verifiedRate: 0.6,
+        avgCostUsdMicros: 500,
+        avgLatencyMs: 1000,
+        lastSeen: "x",
+      },
+      {
+        taskClass: "auth/single",
+        model: "sonnet",
+        tier: "balanced",
+        samples: 100,
+        verifiedCount: 97,
+        verifiedRate: 0.97,
+        avgCostUsdMicros: 3000,
+        avgLatencyMs: 2000,
+        lastSeen: "x",
+      },
     ]);
     const out = await routerStatsListHandler({}, CTX);
     expect(mocks.readRoutingStats).toHaveBeenCalledWith({
@@ -163,7 +216,11 @@ describe("list_routing_stats", () => {
       minSamples: 20,
     });
     expect(out.rows).toHaveLength(2);
-    expect(out.window).toEqual({ windowDays: 30, minSamples: 20, successThreshold: 0.95 });
+    expect(out.window).toEqual({
+      windowDays: 30,
+      minSamples: 20,
+      successThreshold: 0.95,
+    });
     const auth = out.summary.find((s) => s.taskClass === "auth/single")!;
     expect(auth.cheapestEligibleModel).toBe("sonnet"); // haiku fails the 95% bar
     expect(auth.eligibleCount).toBe(1);
@@ -174,7 +231,10 @@ describe("list_routing_stats", () => {
       fn(findManyTx([])),
     );
     mocks.readRoutingStats.mockResolvedValue([]);
-    await routerStatsListHandler({ taskClass: "billing/multi", windowDays: 7, minSamples: 5 }, CTX);
+    await routerStatsListHandler(
+      { taskClass: "billing/multi", windowDays: 7, minSamples: 5 },
+      CTX,
+    );
     expect(mocks.readRoutingStats).toHaveBeenCalledWith({
       taskClass: "billing/multi",
       windowDays: 7,
@@ -186,12 +246,29 @@ describe("list_routing_stats", () => {
 describe("preview_routing_decision", () => {
   it("derives the task class, reads stats, and returns the market decision", async () => {
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
-      fn(findManyTx([policyRow({ workspaceId: CTX.workspaceId, mode: "enforce" })])),
+      fn(
+        findManyTx([
+          policyRow({ workspaceId: CTX.workspaceId, mode: "enforce" }),
+        ]),
+      ),
     );
     mocks.readRoutingStats.mockResolvedValue([
-      { taskClass: "design/single", model: "haiku", tier: "fast", samples: 100, verifiedCount: 96, verifiedRate: 0.96, avgCostUsdMicros: 500, avgLatencyMs: 1000, lastSeen: "x" },
+      {
+        taskClass: "design/single",
+        model: "haiku",
+        tier: "fast",
+        samples: 100,
+        verifiedCount: 96,
+        verifiedRate: 0.96,
+        avgCostUsdMicros: 500,
+        avgLatencyMs: 1000,
+        lastSeen: "x",
+      },
     ]);
-    const out = await routerDecisionPreviewHandler({ prompt: "debug the sort" }, CTX);
+    const out = await routerDecisionPreviewHandler(
+      { prompt: "debug the sort" },
+      CTX,
+    );
     expect(out.taskClass).toBe("design/single");
     expect(out.source).toBe("market");
     expect(out.model).toBe("haiku");

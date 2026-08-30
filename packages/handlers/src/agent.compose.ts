@@ -21,7 +21,8 @@ const GLOBAL_TOKEN = new RegExp(TOKEN_SRC, "g");
 export function readPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const part of path.split(".")) {
-    if (cur === null || cur === undefined || typeof cur !== "object") return undefined;
+    if (cur === null || cur === undefined || typeof cur !== "object")
+      return undefined;
     cur = (cur as Record<string, unknown>)[part];
   }
   return cur;
@@ -38,7 +39,10 @@ export function resolveBindings(
   if (typeof value === "string") {
     const exact = EXACT_TOKEN.exec(value);
     if (exact) {
-      const resolved = readPath(outputs[exact[1] as string], exact[2] as string);
+      const resolved = readPath(
+        outputs[exact[1] as string],
+        exact[2] as string,
+      );
       return resolved === undefined ? value : resolved;
     }
     if (ANY_TOKEN.test(value)) {
@@ -50,10 +54,12 @@ export function resolveBindings(
     }
     return value;
   }
-  if (Array.isArray(value)) return value.map((v) => resolveBindings(v, outputs));
+  if (Array.isArray(value))
+    return value.map((v) => resolveBindings(v, outputs));
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = resolveBindings(v, outputs);
+    for (const [k, v] of Object.entries(value))
+      out[k] = resolveBindings(v, outputs);
     return out;
   }
   return value;
@@ -61,10 +67,13 @@ export function resolveBindings(
 
 /**
  * Topologically order steps by their dependsOn edges. Throws on a cycle.
- * Unknown dependency ids are ignored (the dependent step still runs but its
- * dependency-failed guard in the executor will catch a genuinely missing dep).
+ * An unknown dependency id contributes no ordering edge here, so the dependent
+ * step still appears in the returned order; the executor then finds no success
+ * status for that id and skips the step as dependency-blocked.
  */
-export function topoSort(steps: ReadonlyArray<{ id: string; dependsOn: string[] }>): string[] {
+export function topoSort(
+  steps: ReadonlyArray<{ id: string; dependsOn: string[] }>,
+): string[] {
   const byId = new Map(steps.map((s) => [s.id, s]));
   const state = new Map<string, 1 | 2>(); // 1 = visiting, 2 = done
   const order: string[] = [];
@@ -89,7 +98,9 @@ export function topoSort(steps: ReadonlyArray<{ id: string; dependsOn: string[] 
  * automatically — a human must invoke them deliberately.
  */
 export function isSafeToAutoExecute(
-  cap: { sensitivity?: string; agent?: { requiresApproval?: boolean } } | undefined,
+  cap:
+    | { sensitivity?: string; agent?: { requiresApproval?: boolean } }
+    | undefined,
 ): boolean {
   if (!cap) return false;
   if (cap.sensitivity === "destructive") return false;
@@ -144,7 +155,8 @@ function formatCatalog(catalog: CatalogEntry[]): string {
       const tags: string[] = [];
       if (c.produces.length) tags.push(`produces: ${c.produces.join(", ")}`);
       if (c.consumes.length) tags.push(`consumes: ${c.consumes.join(", ")}`);
-      if (c.chainHints.length) tags.push(`commonly followed by: ${c.chainHints.join(", ")}`);
+      if (c.chainHints.length)
+        tags.push(`commonly followed by: ${c.chainHints.join(", ")}`);
       const meta = tags.length ? ` [${tags.join(" | ")}]` : "";
       return `- ${c.name}: ${c.description}${meta}`;
     })
@@ -188,15 +200,20 @@ async function planChain(args: {
   catalog: CatalogEntry[];
   ctx: CapabilityContext;
 }): Promise<PlannedStep[]> {
-  const { goal, maxSteps, context, workspacePrompt, skills, catalog, ctx } = args;
+  const { goal, maxSteps, context, workspacePrompt, skills, catalog, ctx } =
+    args;
 
   const prompt = [
     `You are a planner that composes a chain of platform capabilities to accomplish a goal.`,
     ``,
     `GOAL: ${goal}`,
     context ? `\nADDITIONAL CONTEXT: ${context}` : "",
-    workspacePrompt ? `\nWORKSPACE INSTRUCTIONS (honor these): ${workspacePrompt}` : "",
-    skills ? `\nENABLED SKILLS (use as guidance for what to extract / how to act):\n${skills}` : "",
+    workspacePrompt
+      ? `\nWORKSPACE INSTRUCTIONS (honor these): ${workspacePrompt}`
+      : "",
+    skills
+      ? `\nENABLED SKILLS (use as guidance for what to extract / how to act):\n${skills}`
+      : "",
     ``,
     `AVAILABLE CAPABILITIES (choose only from these names):`,
     formatCatalog(catalog),
@@ -273,7 +290,9 @@ async function executePlan(
     };
 
     // A failed/skipped dependency blocks this step.
-    const depBlocked = step.dependsOn.some((d) => statusById.get(d) !== "success");
+    const depBlocked = step.dependsOn.some(
+      (d) => statusById.get(d) !== "success",
+    );
     if (depBlocked) {
       statusById.set(id, "skipped");
       results.push({
@@ -304,7 +323,9 @@ async function executePlan(
 
     const resolvedInput = resolveBindings(parsedInput, outputs);
     const inputRecord =
-      resolvedInput && typeof resolvedInput === "object" && !Array.isArray(resolvedInput)
+      resolvedInput &&
+      typeof resolvedInput === "object" &&
+      !Array.isArray(resolvedInput)
         ? (resolvedInput as Record<string, unknown>)
         : { value: resolvedInput };
 
@@ -327,7 +348,8 @@ async function executePlan(
         ...base,
         status: "skipped",
         input: inputRecord,
-        error: "Capability is destructive or requires approval — not auto-executed.",
+        error:
+          "Capability is destructive or requires approval — not auto-executed.",
         durationMs: Date.now() - startedAt,
       });
       continue;
@@ -335,7 +357,9 @@ async function executePlan(
 
     // Execute through the kernel (IAM / billing / entitlement gates all apply).
     try {
-      const output = await invoke(step.capability, resolvedInput, ctx, { surface: "agent" });
+      const output = await invoke(step.capability, resolvedInput, ctx, {
+        surface: "agent",
+      });
       outputs[id] = output;
       statusById.set(id, "success");
       results.push({
@@ -417,10 +441,9 @@ function truncateForPrompt(s: string, max = 600): string {
 
 // ── Handler ──────────────────────────────────────────────────────────────────
 
-export const agentComposeHandler: CapabilityHandler<typeof agentCompose> = async (
-  input,
-  ctx,
-) => {
+export const agentComposeHandler: CapabilityHandler<
+  typeof agentCompose
+> = async (input, ctx) => {
   const [workspacePrompt, skills] = await Promise.all([
     readWorkspacePrompt(ctx),
     readEnabledSkills(ctx),

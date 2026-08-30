@@ -66,7 +66,10 @@ describe("imageCreateHandler", () => {
   });
 
   it("returns image_id, url, and created_at on success", async () => {
-    const result = await imageCreateHandler({ prompt: "A sunset", model: "gpt-image-1" }, CTX);
+    const result = await imageCreateHandler(
+      { prompt: "A sunset", model: "gpt-image-1" },
+      CTX,
+    );
 
     expect(result.image_id).toBe("gen_abc123");
     expect(result.url).toBe("/api/v1/assets/gen_abc123");
@@ -74,9 +77,14 @@ describe("imageCreateHandler", () => {
   });
 
   it("calls generateImageFor with the correct prompt and model", async () => {
-    await imageCreateHandler({ prompt: "A blue circle", model: "gpt-image-1" }, CTX);
+    await imageCreateHandler(
+      { prompt: "A blue circle", model: "gpt-image-1" },
+      CTX,
+    );
 
-    expect(mocks.selectImageModel).toHaveBeenCalledWith({ model: "openai/gpt-image-1" });
+    expect(mocks.selectImageModel).toHaveBeenCalledWith({
+      model: "openai/gpt-image-1",
+    });
     expect(mocks.generateImageFor).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: "A blue circle",
@@ -88,11 +96,16 @@ describe("imageCreateHandler", () => {
   it("resolves flux-2-max to the correct gateway id", async () => {
     await imageCreateHandler({ prompt: "test", model: "flux-2-max" }, CTX);
 
-    expect(mocks.selectImageModel).toHaveBeenCalledWith({ model: "bfl/flux-2-max" });
+    expect(mocks.selectImageModel).toHaveBeenCalledWith({
+      model: "bfl/flux-2-max",
+    });
   });
 
   it("persists the asset with org access policy and correct fields", async () => {
-    await imageCreateHandler({ prompt: "test prompt", model: "gpt-image-1" }, CTX);
+    await imageCreateHandler(
+      { prompt: "test prompt", model: "gpt-image-1" },
+      CTX,
+    );
 
     expect(mocks.persistGeneratedAsset).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,7 +142,9 @@ describe("imageCreateHandler", () => {
 
     await expect(
       imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX),
-    ).rejects.toThrow(/AI_GATEWAY_API_KEY.*not configured|image generation is unavailable/i);
+    ).rejects.toThrow(
+      /AI_GATEWAY_API_KEY.*not configured|image generation is unavailable/i,
+    );
 
     // The caller must receive a real error — not a fake placeholder ID.
     expect(mocks.generateImageFor).not.toHaveBeenCalled();
@@ -137,7 +152,11 @@ describe("imageCreateHandler", () => {
   });
 
   it("throws when generateImageFor returns no images instead of returning a placeholder", async () => {
-    mocks.generateImageFor.mockResolvedValue({ images: [], imageCount: 0, durationMs: 500 });
+    mocks.generateImageFor.mockResolvedValue({
+      images: [],
+      imageCount: 0,
+      durationMs: 500,
+    });
 
     await expect(
       imageCreateHandler({ prompt: "test", model: "gpt-image-1" }, CTX),
@@ -148,7 +167,10 @@ describe("imageCreateHandler", () => {
   });
 
   it("forwards the custom size to generateImageFor", async () => {
-    await imageCreateHandler({ prompt: "test", model: "gpt-image-1", size: "512x512" }, CTX);
+    await imageCreateHandler(
+      { prompt: "test", model: "gpt-image-1", size: "512x512" },
+      CTX,
+    );
 
     expect(mocks.generateImageFor).toHaveBeenCalledWith(
       expect.objectContaining({ size: "512x512" }),

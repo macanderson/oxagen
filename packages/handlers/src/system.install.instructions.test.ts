@@ -41,7 +41,9 @@ describe("systemInstallInstructionsHandler", () => {
   it("at least one step per client includes a command", async () => {
     for (const client of CLIENTS) {
       const result = await systemInstallInstructionsHandler({ client }, CTX);
-      const hasCommand = result.steps.some((s) => typeof s.command === "string" && s.command.length > 0);
+      const hasCommand = result.steps.some(
+        (s) => typeof s.command === "string" && s.command.length > 0,
+      );
       expect(hasCommand).toBe(true);
     }
   });
@@ -68,7 +70,8 @@ describe("systemInstallInstructionsHandler", () => {
     // The MCP server is API-key scoped; the `claude mcp add` command must carry
     // the bearer token or every connection 401s.
     const connectStep = result.steps.find(
-      (s) => typeof s.command === "string" && s.command.includes("claude mcp add"),
+      (s) =>
+        typeof s.command === "string" && s.command.includes("claude mcp add"),
     );
     expect(connectStep?.command).toContain(
       '--header "Authorization: Bearer $OXAGEN_API_KEY"',

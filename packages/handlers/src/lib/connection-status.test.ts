@@ -55,7 +55,9 @@ describe("connection-status helpers", () => {
       expect(CONTRACT_STATUS_TO_DB_STATUS["active"]).toBe("connected");
       expect(CONTRACT_STATUS_TO_DB_STATUS["failed"]).toBe("error");
       expect(CONTRACT_STATUS_TO_DB_STATUS["paused"]).toBe("paused");
-      expect(CONTRACT_STATUS_TO_DB_STATUS["pending_setup"]).toBe("pending_setup");
+      expect(CONTRACT_STATUS_TO_DB_STATUS["pending_setup"]).toBe(
+        "pending_setup",
+      );
     });
   });
 
@@ -83,7 +85,10 @@ describe("connection-status helpers", () => {
       const uuid = "6efa8e26-48b6-4506-9bc1-3e7820887b37";
       sourceConnectionRefCondition(uuid);
       expect(dz.or).toHaveBeenCalledTimes(1);
-      expect(dz.eq).toHaveBeenCalledWith(schema.sourceConnections.publicId, uuid);
+      expect(dz.eq).toHaveBeenCalledWith(
+        schema.sourceConnections.publicId,
+        uuid,
+      );
       expect(dz.eq).toHaveBeenCalledWith(schema.sourceConnections.id, uuid);
       expect(dz.eq).toHaveBeenCalledTimes(2);
     });
@@ -92,7 +97,10 @@ describe("connection-status helpers", () => {
       sourceConnectionRefCondition("con_abc123");
       expect(dz.or).not.toHaveBeenCalled();
       expect(dz.eq).toHaveBeenCalledTimes(1);
-      expect(dz.eq).toHaveBeenCalledWith(schema.sourceConnections.publicId, "con_abc123");
+      expect(dz.eq).toHaveBeenCalledWith(
+        schema.sourceConnections.publicId,
+        "con_abc123",
+      );
     });
   });
 });

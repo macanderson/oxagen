@@ -3,10 +3,9 @@ import { repoBranchList } from "@oxagen/oxagen/contracts/repo.branch.list";
 import { createGitHubClient } from "@oxagen/github";
 import { resolveGitHubToken } from "./lib/github-token";
 
-export const repoBranchListHandler: CapabilityHandler<typeof repoBranchList> = async (
-  input,
-  ctx,
-) => {
+export const repoBranchListHandler: CapabilityHandler<
+  typeof repoBranchList
+> = async (input, ctx) => {
   const token = await resolveGitHubToken(ctx);
   const gh = createGitHubClient({ token });
 
