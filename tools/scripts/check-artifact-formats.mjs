@@ -70,6 +70,11 @@ export const ALLOWLIST = [
     reason:
       "one-way converter for pre-cutover managed skill rows; the only server-side legacy reader",
   },
+  {
+    path: "apps/cli/src/skills/loader.ts",
+    reason:
+      "doc comment names the foreign SKILL.md format only to say discovery does NOT read it — contrastive, not a live reference",
+  },
 
   // --- Documentation *of* the importer: must name what it converts from. ---
   {
