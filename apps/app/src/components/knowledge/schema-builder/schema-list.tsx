@@ -12,17 +12,35 @@ import type { SchemaToggleOutput } from "./schema-service";
 
 interface SchemaListProps {
   schemas: SchemaItem[];
-  onToggle: (schemaName: string, enabled: boolean) => Promise<SchemaToggleOutput>;
+  onToggle: (
+    schemaName: string,
+    enabled: boolean,
+  ) => Promise<SchemaToggleOutput>;
   onSelect: (schemaName: string) => void;
   onReconcile: (schemaName: string) => void;
   selectedSchemaName: string | null;
   isAdmin: boolean;
 }
 
-const SOURCE_BADGE: Record<SchemaItem["source"], { label: string; className: string }> = {
-  connector: { label: "Connector", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
-  user: { label: "User", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
-  recommended: { label: "Recommended", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
+const SOURCE_BADGE: Record<
+  SchemaItem["source"],
+  { label: string; className: string }
+> = {
+  connector: {
+    label: "Connector",
+    className:
+      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  },
+  user: {
+    label: "User",
+    className:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  },
+  recommended: {
+    label: "Recommended",
+    className:
+      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  },
 };
 
 export function SchemaList({
@@ -33,8 +51,12 @@ export function SchemaList({
   selectedSchemaName,
   isAdmin,
 }: SchemaListProps) {
-  const [togglingSchema, setTogglingSchema] = React.useState<string | null>(null);
-  const [reconcileSchema, setReconcileSchema] = React.useState<string | null>(null);
+  const [togglingSchema, setTogglingSchema] = React.useState<string | null>(
+    null,
+  );
+  const [reconcileSchema, setReconcileSchema] = React.useState<string | null>(
+    null,
+  );
 
   const handleToggle = async (schemaName: string, enabled: boolean) => {
     setTogglingSchema(schemaName);
@@ -63,7 +85,8 @@ export function SchemaList({
           <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertDescription className="flex items-center justify-between">
             <span className="text-amber-800 dark:text-amber-300 text-sm">
-              Schema changes detected. Consider running reconciliation to re-label existing nodes.
+              Schema changes detected. Consider running reconciliation to
+              re-label existing nodes.
             </span>
             <Button
               variant="outline"
@@ -99,7 +122,9 @@ export function SchemaList({
               <div className="flex items-center gap-3 min-w-0">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{schema.displayName}</span>
+                    <span className="font-medium text-sm">
+                      {schema.displayName}
+                    </span>
                     <span
                       className={cn(
                         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
@@ -110,7 +135,8 @@ export function SchemaList({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {schema.labels.length} label{schema.labels.length !== 1 ? "s" : ""}
+                    {schema.labels.length} label
+                    {schema.labels.length !== 1 ? "s" : ""}
                     {" · "}
                     {schema.relationshipTypes.length} relationship type
                     {schema.relationshipTypes.length !== 1 ? "s" : ""}
@@ -137,9 +163,13 @@ export function SchemaList({
                 >
                   <Switch
                     checked={schema.enabled}
-                    onCheckedChange={(checked) => void handleToggle(schema.schemaName, checked)}
+                    onCheckedChange={(checked) =>
+                      void handleToggle(schema.schemaName, checked)
+                    }
                     disabled={!canToggle}
-                    aria-label={schema.enabled ? "Deactivate schema" : "Activate schema"}
+                    aria-label={
+                      schema.enabled ? "Deactivate schema" : "Activate schema"
+                    }
                   />
                 </div>
               </div>

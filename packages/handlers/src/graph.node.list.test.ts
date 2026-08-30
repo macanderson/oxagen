@@ -119,20 +119,18 @@ describe("graphNodeListHandler", () => {
   });
 
   it("omits sourceId/createdAt when absent and defaults properties to {}", async () => {
-    mocks.run
-      .mockResolvedValueOnce(countResult(1))
-      .mockResolvedValueOnce(
-        pageResult([
-          {
-            id: "n-2",
-            label: "Topic",
-            displayName: "Neo4j",
-            properties: null,
-            sourceId: null,
-            createdAt: null,
-          },
-        ]),
-      );
+    mocks.run.mockResolvedValueOnce(countResult(1)).mockResolvedValueOnce(
+      pageResult([
+        {
+          id: "n-2",
+          label: "Topic",
+          displayName: "Neo4j",
+          properties: null,
+          sourceId: null,
+          createdAt: null,
+        },
+      ]),
+    );
 
     const result = await graphNodeListHandler({ limit: 50, offset: 0 }, CTX);
     const node = result.nodes[0];
