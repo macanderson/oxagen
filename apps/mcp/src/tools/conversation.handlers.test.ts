@@ -28,7 +28,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -68,7 +67,10 @@ describe("conversation.archive handler", () => {
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("not found"));
     await expect(
-      handler_conversationArchive({ conversationIds: ["cnv_x"], archived: false }),
+      handler_conversationArchive({
+        conversationIds: ["cnv_x"],
+        archived: false,
+      }),
     ).rejects.toThrow("not found");
   });
 });
@@ -221,11 +223,8 @@ describe("chat.message.send handler", () => {
     };
     await handler_chatMessageSend(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "send_message",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("send_message", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });

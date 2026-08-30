@@ -22,6 +22,8 @@ export default async function agentEnvironmentBindTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentEnvironmentBind.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentEnvironmentBind.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentEnvironmentBind.output.parse(output);
 }

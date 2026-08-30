@@ -15,7 +15,9 @@ export const schema = {
   limit: integrationList.input.shape.limit.describe(
     "Maximum number of integrations to return (1–250, default 50)",
   ),
-  offset: integrationList.input.shape.offset.describe("Zero-based pagination offset"),
+  offset: integrationList.input.shape.offset.describe(
+    "Zero-based pagination offset",
+  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -28,8 +30,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function integrationListTool(args: InferSchema<typeof schema>) {
+export default async function integrationListTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(integrationList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(integrationList.name, args, ctx, {
+    surface: "mcp",
+  });
   return integrationList.output.parse(output);
 }

@@ -6,9 +6,10 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...orgMemberInviteAccept.input.shape,
-  invitationPublicId: orgMemberInviteAccept.input.shape.invitationPublicId.describe(
-    "Public ID of the invitation to accept",
-  ),
+  invitationPublicId:
+    orgMemberInviteAccept.input.shape.invitationPublicId.describe(
+      "Public ID of the invitation to accept",
+    ),
 };
 
 export const metadata: ToolMetadata = {
@@ -21,8 +22,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function orgMemberInviteAcceptTool(args: InferSchema<typeof schema>) {
+export default async function orgMemberInviteAcceptTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(orgMemberInviteAccept.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(orgMemberInviteAccept.name, args, ctx, {
+    surface: "mcp",
+  });
   return orgMemberInviteAccept.output.parse(output);
 }

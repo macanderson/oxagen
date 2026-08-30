@@ -19,8 +19,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function billingUsageBreakdownTool(args: InferSchema<typeof schema>) {
+export default async function billingUsageBreakdownTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(billingUsageBreakdown.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(billingUsageBreakdown.name, args, ctx, {
+    surface: "mcp",
+  });
   return billingUsageBreakdown.output.parse(output);
 }

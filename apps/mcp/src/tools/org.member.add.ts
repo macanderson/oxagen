@@ -24,7 +24,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function orgMemberAddTool(args: InferSchema<typeof schema>) {
+export default async function orgMemberAddTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(orgMemberAdd.name, args, ctx, { surface: "mcp" });
   return orgMemberAdd.output.parse(output);

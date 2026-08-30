@@ -24,8 +24,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function automationTriggerTool(args: InferSchema<typeof schema>) {
+export default async function automationTriggerTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(automationTrigger.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(automationTrigger.name, args, ctx, {
+    surface: "mcp",
+  });
   return automationTrigger.output.parse(output);
 }

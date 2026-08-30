@@ -34,6 +34,8 @@ export default async function budgetPolicyWriteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(budgetPolicyWrite.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(budgetPolicyWrite.name, args, ctx, {
+    surface: "mcp",
+  });
   return budgetPolicyWrite.output.parse(output);
 }

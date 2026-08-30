@@ -35,6 +35,8 @@ export default async function agentMemoryRecallTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryRecall.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryRecall.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryRecall.output.parse(output);
 }

@@ -22,6 +22,8 @@ export default async function pluginRegistryRemoveTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginRegistryRemove.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginRegistryRemove.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginRegistryRemove.output.parse(output);
 }

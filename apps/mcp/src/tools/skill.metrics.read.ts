@@ -20,8 +20,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillMetricsReadTool(args: InferSchema<typeof schema>) {
+export default async function skillMetricsReadTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(skillMetricsRead.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(skillMetricsRead.name, args, ctx, {
+    surface: "mcp",
+  });
   return skillMetricsRead.output.parse(output);
 }

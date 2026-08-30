@@ -22,6 +22,8 @@ export default async function browserScreenshotTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(browserScreenshot.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(browserScreenshot.name, args, ctx, {
+    surface: "mcp",
+  });
   return browserScreenshot.output.parse(output);
 }

@@ -30,8 +30,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function referenceSearchTool(args: InferSchema<typeof schema>) {
+export default async function referenceSearchTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(referenceSearch.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(referenceSearch.name, args, ctx, {
+    surface: "mcp",
+  });
   return referenceSearch.output.parse(output);
 }

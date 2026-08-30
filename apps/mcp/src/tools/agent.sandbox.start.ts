@@ -28,6 +28,8 @@ export default async function agentSandboxStartTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSandboxStart.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSandboxStart.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSandboxStart.output.parse(output);
 }

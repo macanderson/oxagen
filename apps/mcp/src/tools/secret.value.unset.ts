@@ -22,6 +22,8 @@ export default async function secretValueUnsetTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(secretValueUnset.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(secretValueUnset.name, args, ctx, {
+    surface: "mcp",
+  });
   return secretValueUnset.output.parse(output);
 }

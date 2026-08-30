@@ -28,6 +28,8 @@ export default async function agentMemoryCiteTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryCite.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryCite.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryCite.output.parse(output);
 }

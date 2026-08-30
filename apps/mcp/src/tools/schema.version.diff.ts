@@ -11,11 +11,19 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaVersionDiff.name,
   description: schemaVersionDiff.description,
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
-export default async function schemaVersionDiffTool(args: InferSchema<typeof schema>) {
+export default async function schemaVersionDiffTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(schemaVersionDiff.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(schemaVersionDiff.name, args, ctx, {
+    surface: "mcp",
+  });
   return schemaVersionDiff.output.parse(output);
 }

@@ -28,6 +28,8 @@ export default async function agentMcpSetEnabledTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMcpSetEnabled.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMcpSetEnabled.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMcpSetEnabled.output.parse(output);
 }

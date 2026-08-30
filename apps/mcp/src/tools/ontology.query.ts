@@ -10,7 +10,7 @@ export const schema = {
     "publicId of the node to start the typed traversal from",
   ),
   edgeTypes: ontologyQuery.input.shape.edgeTypes.describe(
-    "Relationship type(s) to follow (e.g. [\"RELATED_TO\", \"DEPENDS_ON\"]); omit to follow all types",
+    'Relationship type(s) to follow (e.g. ["RELATED_TO", "DEPENDS_ON"]); omit to follow all types',
   ),
   direction: ontologyQuery.input.shape.direction.describe(
     "Direction to traverse: 'out', 'in', or 'both'",
@@ -36,8 +36,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function ontologyQueryTool(args: InferSchema<typeof schema>) {
+export default async function ontologyQueryTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(ontologyQuery.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(ontologyQuery.name, args, ctx, {
+    surface: "mcp",
+  });
   return ontologyQuery.output.parse(output);
 }

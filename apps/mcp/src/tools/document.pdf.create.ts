@@ -30,8 +30,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function documentsPdfCreateTool(args: InferSchema<typeof schema>) {
+export default async function documentsPdfCreateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(documentsPdfCreate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(documentsPdfCreate.name, args, ctx, {
+    surface: "mcp",
+  });
   return documentsPdfCreate.output.parse(output);
 }

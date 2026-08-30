@@ -22,6 +22,8 @@ export default async function pluginCredentialSetSecretTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCredentialSetSecret.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCredentialSetSecret.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCredentialSetSecret.output.parse(output);
 }

@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...agentSkillList.input.shape,
-  filter: agentSkillList.input.shape.filter.describe("Optional name/slug filter"),
+  filter: agentSkillList.input.shape.filter.describe(
+    "Optional name/slug filter",
+  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -23,6 +25,8 @@ export default async function agentSkillListTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSkillList.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSkillList.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSkillList.output.parse(output);
 }

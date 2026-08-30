@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...automationDisable.input.shape,
   automation_id: automationDisable.input.shape.automation_id.describe(
-    "Trigger public ID returned by automation.create / automation.list",
+    "Trigger public ID returned by create_automation / list_automations",
   ),
 };
 
@@ -21,8 +21,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function automationDisableTool(args: InferSchema<typeof schema>) {
+export default async function automationDisableTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(automationDisable.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(automationDisable.name, args, ctx, {
+    surface: "mcp",
+  });
   return automationDisable.output.parse(output);
 }

@@ -9,9 +9,10 @@ export const schema = {
   planSlug: billingSubscriptionUpgradeStart.input.shape.planSlug.describe(
     "Target plan slug (e.g. 'pro', 'team')",
   ),
-  interval: billingSubscriptionUpgradeStart.input.shape.interval.describe(
-    "Billing interval",
-  ),
+  interval:
+    billingSubscriptionUpgradeStart.input.shape.interval.describe(
+      "Billing interval",
+    ),
   successUrl: billingSubscriptionUpgradeStart.input.shape.successUrl.describe(
     "URL to redirect to after successful checkout",
   ),
@@ -34,6 +35,8 @@ export default async function billingSubscriptionUpgradeStartTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(billingSubscriptionUpgradeStart.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(billingSubscriptionUpgradeStart.name, args, ctx, {
+    surface: "mcp",
+  });
   return billingSubscriptionUpgradeStart.output.parse(output);
 }

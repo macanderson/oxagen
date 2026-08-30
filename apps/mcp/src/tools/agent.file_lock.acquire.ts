@@ -22,6 +22,8 @@ export default async function agentFileLockAcquireTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentFileLockAcquire.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentFileLockAcquire.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentFileLockAcquire.output.parse(output);
 }

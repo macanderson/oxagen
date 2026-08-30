@@ -20,13 +20,18 @@ describe("conversation.archive schema", () => {
   });
 
   it("accepts a restore request (archived: false)", () => {
-    const result = Schema.parse({ conversationIds: ["cnv_abc"], archived: false });
+    const result = Schema.parse({
+      conversationIds: ["cnv_abc"],
+      archived: false,
+    });
     expect(result.archived).toBe(false);
   });
 
   it("accepts exactly 100 conversation ids (upper boundary)", () => {
     const ids = Array.from({ length: 100 }, (_, i) => `cnv_${i}`);
-    expect(() => Schema.parse({ conversationIds: ids, archived: true })).not.toThrow();
+    expect(() =>
+      Schema.parse({ conversationIds: ids, archived: true }),
+    ).not.toThrow();
   });
 
   it("rejects an empty conversationIds array (min 1)", () => {
@@ -49,9 +54,7 @@ describe("conversation.archive schema", () => {
   });
 
   it("rejects missing archived field", () => {
-    expect(() =>
-      Schema.parse({ conversationIds: ["cnv_abc"] }),
-    ).toThrow();
+    expect(() => Schema.parse({ conversationIds: ["cnv_abc"] })).toThrow();
   });
 
   it("rejects non-boolean archived (e.g. string 'true')", () => {
@@ -83,7 +86,10 @@ describe("conversation.rename schema", () => {
   const Schema = obj(conversationRenameSchema);
 
   it("accepts a valid rename request", () => {
-    const result = Schema.parse({ conversationId: "cnv_abc", title: "My convo" });
+    const result = Schema.parse({
+      conversationId: "cnv_abc",
+      title: "My convo",
+    });
     expect(result.title).toBe("My convo");
   });
 

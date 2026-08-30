@@ -33,8 +33,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function integrationInstallTool(args: InferSchema<typeof schema>) {
+export default async function integrationInstallTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(integrationInstall.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(integrationInstall.name, args, ctx, {
+    surface: "mcp",
+  });
   return integrationInstall.output.parse(output);
 }

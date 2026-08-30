@@ -21,7 +21,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function documentReadTool(args: InferSchema<typeof schema>) {
+export default async function documentReadTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(documentRead.name, args, ctx, { surface: "mcp" });
   return documentRead.output.parse(output);

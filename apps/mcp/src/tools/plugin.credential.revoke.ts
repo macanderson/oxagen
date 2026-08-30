@@ -22,6 +22,8 @@ export default async function pluginCredentialRevokeTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCredentialRevoke.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCredentialRevoke.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCredentialRevoke.output.parse(output);
 }

@@ -18,8 +18,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function agentExecutionRecordTool(args: InferSchema<typeof schema>) {
+export default async function agentExecutionRecordTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentExecutionRecord.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentExecutionRecord.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentExecutionRecord.output.parse(output);
 }

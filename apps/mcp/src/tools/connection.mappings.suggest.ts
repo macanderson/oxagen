@@ -9,10 +9,16 @@ export const schema = { ...connectionMappingsSuggest.input.shape };
 export const metadata: ToolMetadata = {
   name: connectionMappingsSuggest.name,
   description: connectionMappingsSuggest.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
-export default async function connectionMappingsSuggestTool(args: InferSchema<typeof schema>) {
+export default async function connectionMappingsSuggestTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   return invoke(connectionMappingsSuggest.name, args, ctx, { surface: "mcp" });
 }

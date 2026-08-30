@@ -22,6 +22,8 @@ export default async function environmentGetTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(environmentGet.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(environmentGet.name, args, ctx, {
+    surface: "mcp",
+  });
   return environmentGet.output.parse(output);
 }

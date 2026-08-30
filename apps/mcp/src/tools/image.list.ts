@@ -7,7 +7,9 @@ import { buildContext } from "../context";
 export const schema = {
   ...imageList.input.shape,
   workspace_id: imageList.input.shape.workspace_id.describe(
-    "Workspace ID (defaults to current workspace)",
+    "Ignored on this surface. Images are always listed for the workspace the " +
+      "calling API key is scoped to; the handler reads scope from the request " +
+      "context, never from this field.",
   ),
 };
 

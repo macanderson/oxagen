@@ -10,7 +10,9 @@ export const schema = {
     "GitHub organisation slug to create the repository in. Omit to create the repository in the connected user's personal account.",
   ),
   name: repoCreate.input.shape.name.describe("Repository name"),
-  description: repoCreate.input.shape.description.describe("Short repository description"),
+  description: repoCreate.input.shape.description.describe(
+    "Short repository description",
+  ),
   private: repoCreate.input.shape.private.describe(
     "Whether the repository is private (default: false)",
   ),
@@ -22,7 +24,7 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: repoCreate.name,
   description:
-    "Creates a new GitHub repository in the connected user's account or an organisation. Prefer over repo.fork when a fresh, empty repository is needed rather than a copy of an existing one. Do not use to copy an existing repo's history — use repo.fork instead.",
+    "Creates a new GitHub repository in the connected user's account or an organisation. Prefer over fork_repo when a fresh, empty repository is needed rather than a copy of an existing one. Do not use to copy an existing repo's history — use fork_repo instead.",
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,

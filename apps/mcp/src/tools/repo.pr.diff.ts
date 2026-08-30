@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...repoPrDiff.input.shape,
-  owner: repoPrDiff.input.shape.owner.describe("Repository owner (user or organisation)"),
+  owner: repoPrDiff.input.shape.owner.describe(
+    "Repository owner (user or organisation)",
+  ),
   repo: repoPrDiff.input.shape.repo.describe("Repository name"),
   number: repoPrDiff.input.shape.number.describe("Pull request number"),
 };

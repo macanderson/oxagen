@@ -245,12 +245,9 @@ describe("documents.pdf.create handler", () => {
     };
     await handler_documentsPdfCreate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_pdf",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("create_pdf", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 

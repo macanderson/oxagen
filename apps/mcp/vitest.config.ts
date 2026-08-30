@@ -9,11 +9,24 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      // All tool files that have handler-invocation tests (*.handlers.test.ts)
-      // or schema tests (*.schema.test.ts / schemas.test.ts / conversations.schema.test.ts).
-      // middleware.ts has module-level side effects (bootstrapIAMRuntime,
-      // setSecurityEventEmitter, db()) that require the full infra stack —
-      // excluded here; integration-level coverage is tracked separately.
+      // WARNING: this is a hand-maintained allowlist, not a glob. Only the
+      // files named below are measured against the thresholds; every other
+      // file under src/tools/ is invisible to the coverage gate, so a new
+      // tool added without tests does NOT fail this gate. Add each new tool
+      // file here when you add its tests.
+      //
+      // Read the 85% thresholds below with that in mind: as of this writing
+      // the list names 61 of the 326 tool files on disk, so "85% covered"
+      // describes under a fifth of the tool surface, not the app. Two
+      // auto-discovering guards cover the rest at a shallower depth —
+      // src/tools/tool-registry.test.ts (a tool file exists per mcp-surfaced
+      // contract, names do not collide) and src/tools.auth-gate.test.ts
+      // (every tool file resolves a principal via buildContext).
+      //
+      // middleware.ts is deliberately absent: its module-level side effects
+      // (assertRlsConnectionSafe, bootstrapIAMRuntime, setSecurityEventEmitter)
+      // need the full infra stack to import. src/middleware.bootstrap.test.ts
+      // guards its required startup calls by source inspection instead.
       include: [
         "src/context.ts",
         // agent tools

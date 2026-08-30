@@ -11,10 +11,16 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaExport.name,
   description: schemaExport.description,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
-export default async function schemaExportTool(args: InferSchema<typeof schema>) {
+export default async function schemaExportTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(schemaExport.name, args, ctx, { surface: "mcp" });
   return schemaExport.output.parse(output);

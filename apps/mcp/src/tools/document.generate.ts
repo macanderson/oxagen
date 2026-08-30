@@ -33,8 +33,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function documentsGenerateTool(args: InferSchema<typeof schema>) {
+export default async function documentsGenerateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(documentsGenerate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(documentsGenerate.name, args, ctx, {
+    surface: "mcp",
+  });
   return documentsGenerate.output.parse(output);
 }

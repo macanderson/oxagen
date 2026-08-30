@@ -6,7 +6,9 @@ import { buildContext } from "../context";
 
 export const schema = {
   ...repoResume.input.shape,
-  repoId: repoResume.input.shape.repoId.describe("Repository connection ID to resume"),
+  repoId: repoResume.input.shape.repoId.describe(
+    "Repository connection ID to resume",
+  ),
 };
 
 export const metadata: ToolMetadata = {

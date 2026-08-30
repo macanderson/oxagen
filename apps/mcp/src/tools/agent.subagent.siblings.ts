@@ -24,6 +24,8 @@ export default async function agentSubagentSiblingsTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSubagentSiblings.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSubagentSiblings.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSubagentSiblings.output.parse(output);
 }

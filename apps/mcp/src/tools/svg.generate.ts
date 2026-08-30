@@ -33,7 +33,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function svgGenerateTool(args: InferSchema<typeof schema>) {
+export default async function svgGenerateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(svgGenerate.name, args, ctx, { surface: "mcp" });
   return svgGenerate.output.parse(output);

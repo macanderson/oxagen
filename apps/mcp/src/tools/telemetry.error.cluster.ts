@@ -26,8 +26,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function telemetryErrorClusterTool(args: InferSchema<typeof schema>) {
+export default async function telemetryErrorClusterTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(telemetryErrorCluster.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(telemetryErrorCluster.name, args, ctx, {
+    surface: "mcp",
+  });
   return telemetryErrorCluster.output.parse(output);
 }

@@ -11,7 +11,11 @@ export const schema = {
 export const metadata: ToolMetadata = {
   name: schemaList.name,
   description: schemaList.description,
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
 export default async function schemaListTool(args: InferSchema<typeof schema>) {

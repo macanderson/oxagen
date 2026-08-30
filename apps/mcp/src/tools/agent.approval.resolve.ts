@@ -31,6 +31,8 @@ export default async function agentApprovalResolveTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentApprovalResolve.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentApprovalResolve.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentApprovalResolve.output.parse(output);
 }

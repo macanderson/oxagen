@@ -20,8 +20,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function workflowStatusTool(args: InferSchema<typeof schema>) {
+export default async function workflowStatusTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(workflowStatus.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(workflowStatus.name, args, ctx, {
+    surface: "mcp",
+  });
   return workflowStatus.output.parse(output);
 }

@@ -25,6 +25,8 @@ export default async function agentMemoryImportCommitTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentMemoryImportCommit.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentMemoryImportCommit.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentMemoryImportCommit.output.parse(output);
 }

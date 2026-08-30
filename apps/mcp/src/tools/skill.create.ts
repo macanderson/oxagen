@@ -12,7 +12,8 @@ export const schema = {
     "Set the initial version as active immediately (default: true)",
   ),
   workspace_id: skillCreate.input.shape.workspace_id.describe(
-    "Workspace ID (defaults to current workspace)",
+    "Ignored on this surface. The handler resolves the workspace from the " +
+      "calling API key's request context, never from this field.",
   ),
 };
 

@@ -20,6 +20,8 @@ export default async function userPreferencesReadTool(
   _args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(userPreferencesRead.name, {}, ctx, { surface: "mcp" });
+  const output = await invoke(userPreferencesRead.name, {}, ctx, {
+    surface: "mcp",
+  });
   return userPreferencesRead.output.parse(output);
 }

@@ -23,7 +23,9 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function skillExportTool(args: InferSchema<typeof schema>) {
+export default async function skillExportTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
   const output = await invoke(skillExport.name, args, ctx, { surface: "mcp" });
   return skillExport.output.parse(output);

@@ -22,6 +22,8 @@ export default async function pluginOrgInstallTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginOrgInstall.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginOrgInstall.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginOrgInstall.output.parse(output);
 }

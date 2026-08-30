@@ -22,6 +22,8 @@ export default async function pluginCredentialReauthTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(pluginCredentialReauth.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(pluginCredentialReauth.name, args, ctx, {
+    surface: "mcp",
+  });
   return pluginCredentialReauth.output.parse(output);
 }

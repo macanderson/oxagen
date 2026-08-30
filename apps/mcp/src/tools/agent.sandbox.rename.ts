@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...agentSandboxRename.input.shape,
   sessionId: agentSandboxRename.input.shape.sessionId.describe(
-    "Durable-session id (sbx_…) returned by agent.sandbox.start; the session to relabel",
+    "Durable-session id (sbx_…) returned by start_sandbox; the session to relabel",
   ),
   label: agentSandboxRename.input.shape.label.describe(
     "New human-friendly display name for the sandbox (1-80 chars, shown in the sandbox list)",

@@ -12,7 +12,7 @@ export const schema = {
     "Snapshot staleness window in ms (default 5 min, max 30 min) — non-blocking, never sleeps",
   ),
   includeOutputs: agentSubagentAggregate.input.shape.includeOutputs.describe(
-    "DEPRECATED: relay full child payloads (capped). Prefer the default compact summaries + agent.subagent.result.get for the one child you need",
+    "DEPRECATED: relay full child payloads (capped). Prefer the default compact summaries + get_subagent_result for the one child you need",
   ),
   includeMerged: agentSubagentAggregate.input.shape.includeMerged.describe(
     "Include deep-merged aggregatedData (capped; conflicts are always returned)",
@@ -33,6 +33,8 @@ export default async function agentSubagentAggregateTool(
   args: InferSchema<typeof schema>,
 ) {
   const ctx = await buildContext(headers());
-  const output = await invoke(agentSubagentAggregate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(agentSubagentAggregate.name, args, ctx, {
+    surface: "mcp",
+  });
   return agentSubagentAggregate.output.parse(output);
 }
