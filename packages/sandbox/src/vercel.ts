@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 // Maximum characters allowed in stdout or stderr from a single run().
-// Mirrors the Docker driver's 8 MB cap (docker.ts:29).
+// Mirrors the Docker driver's MAX_OUTPUT_BYTES cap in docker.ts.
 const MAX_OUTPUT_CHARS = 8_388_608; // 8 MB
 
 // @vercel/sandbox supports node24 and python3.13 runtimes only
@@ -82,6 +82,12 @@ function assertNoCustomImage(req: SandboxRequest): void {
 }
 
 // A template's vcpu maps to @vercel/sandbox `resources.vcpus`; default 1.
+//
+// NOTE: `req.memoryMb` has no equivalent knob here. @vercel/sandbox derives the
+// microVM's RAM from `vcpus` and exposes no independent memory setting, so the
+// policy's memory ceiling is NOT enforced on this driver — it is enforced on
+// docker (HostConfig.Memory) and modal (memory_mb on the runner) only. A
+// template that needs a hard RAM bound must pick one of those providers.
 function vcpusFor(req: SandboxRequest): number {
   if (req.vcpu && req.vcpu > 0) return Math.min(req.vcpu, MAX_VCPU);
   return 1;
@@ -267,8 +273,17 @@ export function createVercelSandbox(
         detached: true,
       });
       let streamedBytes = 0;
+      // Tracks whether any chunk was cut short, so the notice is emitted even
+      // when the truncating chunk is the LAST one the command produces — the
+      // loop would otherwise exit before reaching the notice branch and the
+      // consumer would never learn the output was incomplete.
+      let truncated = false;
+      let noticeSent = false;
+      let lastChannel: SandboxStreamChunk["channel"] = "stdout";
       for await (const log of command.logs()) {
+        lastChannel = log.stream;
         if (streamedBytes >= MAX_OUTPUT_CHARS) {
+          noticeSent = true;
           yield {
             channel: log.stream,
             data: "\n[output truncated: exceeded 8 MB limit]",
@@ -280,10 +295,18 @@ export function createVercelSandbox(
           log.data.length > MAX_OUTPUT_CHARS - streamedBytes
             ? log.data.slice(0, MAX_OUTPUT_CHARS - streamedBytes)
             : log.data;
+        if (chunk.length < log.data.length) truncated = true;
         streamedBytes += chunk.length;
         yield {
           channel: log.stream,
           data: chunk,
+          at: Date.now(),
+        };
+      }
+      if (truncated && !noticeSent) {
+        yield {
+          channel: lastChannel,
+          data: "\n[output truncated: exceeded 8 MB limit]",
           at: Date.now(),
         };
       }

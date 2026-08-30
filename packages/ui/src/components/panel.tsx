@@ -20,8 +20,8 @@ import { cn } from "../lib/utils";
  *
  * Optional treatments (default off, mirroring `Card`):
  * - `inset`        — removes body padding for flush content (tables).
- * - `glow`         — adds an `ox-glow-violet` class with no matching style; has no visual effect.
- * - `gradientRing` — adds a `gradient-ring` class with no matching style; has no visual effect.
+ * - `glow`         — accepted and ignored; this flat design has no glow treatment.
+ * - `gradientRing` — accepted and ignored; the border always stays neutral.
  */
 export interface PanelProps
   extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
@@ -35,9 +35,9 @@ export interface PanelProps
   footer?: React.ReactNode;
   /** Remove body padding for flush content like tables. */
   inset?: boolean;
-  /** Adds an `ox-glow-violet` class; no style targets it, so this has no visual effect. */
+  /** Accepted for API parity with `Card`; ignored — no glow in this design. */
   glow?: boolean;
-  /** Adds a `gradient-ring` class; no style targets it, so this has no visual effect. */
+  /** Accepted for API parity with `Card`; ignored — the border stays neutral. */
   gradientRing?: boolean;
 }
 

@@ -152,7 +152,10 @@ describe("detectOAuthProtected", () => {
     const { fetchFn } = makeFetch(async (_url, init) =>
       init?.method === "POST"
         ? new Response("ok", { status: 200 })
-        : jsonResponse(200, { resource: "https://x.com/mcp", authorization_servers: [] }),
+        : jsonResponse(200, {
+            resource: "https://x.com/mcp",
+            authorization_servers: [],
+          }),
     );
 
     await expect(
@@ -218,7 +221,9 @@ describe("detectOAuthProtected", () => {
       throw new Error("must not be called");
     });
 
-    await expect(detectOAuthProtected("stdio://x", { fetchFn })).resolves.toBe(false);
+    await expect(detectOAuthProtected("stdio://x", { fetchFn })).resolves.toBe(
+      false,
+    );
     expect(mock).not.toHaveBeenCalled();
   });
 
@@ -227,7 +232,9 @@ describe("detectOAuthProtected", () => {
       throw new Error("must not be called");
     });
 
-    await expect(detectOAuthProtected("not a url", { fetchFn })).resolves.toBe(false);
+    await expect(detectOAuthProtected("not a url", { fetchFn })).resolves.toBe(
+      false,
+    );
     expect(mock).not.toHaveBeenCalled();
   });
 });

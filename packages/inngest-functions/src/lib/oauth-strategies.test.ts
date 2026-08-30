@@ -7,8 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ requireEnv: vi.fn(), fetchMock: vi.fn() }));
 vi.mock("@oxagen/config", () => ({ requireEnv: mocks.requireEnv }));
 
-const { refreshOAuthToken, refreshProviderKeyFor, isRefreshError, PERMANENT_ERRORS } =
-  await import("./oauth-strategies");
+const {
+  refreshOAuthToken,
+  refreshProviderKeyFor,
+  isRefreshError,
+  PERMANENT_ERRORS,
+} = await import("./oauth-strategies");
 
 function jsonResponse(body: unknown) {
   return { json: () => Promise.resolve(body) } as unknown as Response;
@@ -41,7 +45,16 @@ describe("refreshProviderKeyFor", () => {
   });
 
   it("passes non-google providers through unchanged", () => {
-    for (const p of ["github", "google", "slack", "zoom", "linear", "salesforce", "microsoft", "nope"]) {
+    for (const p of [
+      "github",
+      "google",
+      "slack",
+      "zoom",
+      "linear",
+      "salesforce",
+      "microsoft",
+      "nope",
+    ]) {
       expect(refreshProviderKeyFor(p)).toBe(p);
     }
   });
@@ -53,7 +66,9 @@ describe("refreshOAuthToken", () => {
       GOOGLE_DATA_CLIENT_ID: "gid",
       GOOGLE_DATA_CLIENT_SECRET: "gsecret",
     });
-    mocks.fetchMock.mockResolvedValue(jsonResponse({ access_token: "new", expires_in: 3599 }));
+    mocks.fetchMock.mockResolvedValue(
+      jsonResponse({ access_token: "new", expires_in: 3599 }),
+    );
     const r = await refreshOAuthToken("google-drive", "tok");
     expect(isRefreshError(r)).toBe(false);
     expect(mocks.fetchMock).toHaveBeenCalledWith(
@@ -84,14 +99,22 @@ describe("refreshOAuthToken", () => {
 
   it("POSTs to the provider token endpoint and returns the parsed token", async () => {
     mocks.fetchMock.mockResolvedValue(
-      jsonResponse({ access_token: "new", refresh_token: "rot", expires_in: 3600 }),
+      jsonResponse({
+        access_token: "new",
+        refresh_token: "rot",
+        expires_in: 3600,
+      }),
     );
     const r = await refreshOAuthToken("github", "old-refresh");
     expect(mocks.fetchMock).toHaveBeenCalledWith(
       "https://github.com/login/oauth/access_token",
       expect.objectContaining({ method: "POST" }),
     );
-    expect(r).toEqual({ accessToken: "new", refreshToken: "rot", expiresInSec: 3600 });
+    expect(r).toEqual({
+      accessToken: "new",
+      refreshToken: "rot",
+      expiresInSec: 3600,
+    });
   });
 
   it("surfaces a provider error object without throwing", async () => {

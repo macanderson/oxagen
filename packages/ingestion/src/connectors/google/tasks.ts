@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 
 const connectionConfigSchema = z.object({
   taskListIds: z.array(z.string()).optional(),
@@ -10,7 +15,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -47,7 +54,9 @@ const googleTasks: ConnectorDefinition<Config> = {
             completed: asString(r["completed"]),
             deleted: r["deleted"],
             hidden: r["hidden"],
-            taskListId: asString(r["selfLink"])?.match(/tasks\/([^/]+)\/tasks/)?.[1],
+            taskListId: asString(r["selfLink"])?.match(
+              /tasks\/([^/]+)\/tasks/,
+            )?.[1],
             updatedAt: asString(r["updated"]),
           },
         };
@@ -65,7 +74,9 @@ const googleTasks: ConnectorDefinition<Config> = {
       }
 
       default:
-        throw new Error(`google-tasks.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`);
+        throw new Error(
+          `google-tasks.normalizeRecord: unknown sourceRecordType "${sourceRecordType}"`,
+        );
     }
   },
 };

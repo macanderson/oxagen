@@ -234,7 +234,9 @@ describe("Button — render", () => {
 
   it("merges extra className", () => {
     const { getByRole } = render(<Button className="extra-cls">Btn</Button>);
-    expect(getByRole("button", { name: "Btn" }).className).toContain("extra-cls");
+    expect(getByRole("button", { name: "Btn" }).className).toContain(
+      "extra-cls",
+    );
   });
 
   it("fires onClick when clicked", async () => {
@@ -251,7 +253,7 @@ describe("Button — render", () => {
 
   it("render-prop forwards children through an anchor element", () => {
     const { getByRole } = render(
-      <Button render={<a href="/test" />}>Link Button</Button>
+      <Button render={<a href="/test" />}>Link Button</Button>,
     );
     const anchor = getByRole("link", { name: "Link Button" });
     expect(anchor).toBeInTheDocument();
@@ -262,7 +264,10 @@ describe("Button — render", () => {
 
   it("type defaults to button (not submit) to prevent accidental form submission", () => {
     const { getByRole } = render(<Button>Safe</Button>);
-    expect(getByRole("button", { name: "Safe" })).toHaveAttribute("type", "button");
+    expect(getByRole("button", { name: "Safe" })).toHaveAttribute(
+      "type",
+      "button",
+    );
   });
 
   it("wraps a disabled button in a focusable tooltip anchor when disabledTooltip is set", () => {
@@ -314,7 +319,9 @@ describe("Button — loading state", () => {
     const { getByRole, rerender } = render(
       <Button startIcon={<svg data-testid="start" />}>Go</Button>,
     );
-    expect(getByRole("button").querySelector("[data-testid=start]")).not.toBeNull();
+    expect(
+      getByRole("button").querySelector("[data-testid=start]"),
+    ).not.toBeNull();
     rerender(
       <Button loading startIcon={<svg data-testid="start" />}>
         Go

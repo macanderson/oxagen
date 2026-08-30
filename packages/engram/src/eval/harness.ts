@@ -35,13 +35,15 @@ export interface EvalSuiteResult {
  */
 export async function runEvalSuite(
   traces: GoldenTrace[],
-  compileFn: (taskFrame: GoldenTrace["turns"][0]["taskFrame"], budget: GoldenTrace["turns"][0]["budget"]) => Promise<string[]>,
+  compileFn: (
+    taskFrame: GoldenTrace["turns"][0]["taskFrame"],
+    budget: GoldenTrace["turns"][0]["budget"],
+  ) => Promise<string[]>,
 ): Promise<EvalSuiteResult> {
   const results: EvalRunResult[] = [];
 
   for (const trace of traces) {
     const turnResults: TurnValidation[] = [];
-    const totalTokens = 0;
     let totalCompileMs = 0;
     let hitCount = 0;
     let totalRetrieval = 0;
@@ -59,15 +61,29 @@ export async function runEvalSuite(
       if (validation.missingRequired.length === 0) hitCount++;
     }
 
-    // Compute metrics for this trace
+    // Compute metrics for this trace.
+    //
+    // Only the three retrieval-quality metrics are measured. `tokensToSuccess`,
+    // `cacheHitRate` and `costPerTask` are reported as 0 because compileFn
+    // returns record ids only — it carries no token, cache, or cost signal —
+    // and `detectRegressions` skips any metric whose baseline is 0, so those
+    // three are NOT gated. `turnLatency` is a coarse wall-clock summary, not
+    // true percentiles: with one sample per turn there is nothing to rank, so
+    // p50 is the mean and p95/p99 repeat the trace total.
+    const measuredTurns = Math.max(1, turnResults.length);
     const metrics: EvalMetrics = {
-      contextPrecision: turnResults.reduce((s, t) => s + t.precision, 0) / turnResults.length,
+      contextPrecision:
+        turnResults.reduce((s, t) => s + t.precision, 0) / measuredTurns,
       contextRecall: hitCount / Math.max(1, totalRetrieval),
-      tokensToSuccess: totalTokens,
+      tokensToSuccess: 0,
       retrievalHitRate: hitCount / Math.max(1, totalRetrieval),
-      cacheHitRate: 0, // Would need actual cache data
-      turnLatency: { p50: totalCompileMs / trace.turns.length, p95: totalCompileMs, p99: totalCompileMs },
-      costPerTask: 0, // Would need actual cost data
+      cacheHitRate: 0,
+      turnLatency: {
+        p50: totalCompileMs / measuredTurns,
+        p95: totalCompileMs,
+        p99: totalCompileMs,
+      },
+      costPerTask: 0,
     };
 
     const regressions = detectRegressions(metrics, trace.baseline);

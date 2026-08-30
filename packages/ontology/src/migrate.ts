@@ -76,7 +76,9 @@ export async function dedupeLegacyKnowledgeNodes(s: Session): Promise<void> {
       level: "info",
       msg: "Neo4j migrate: collapsing duplicate-publicId legacy KnowledgeNode nodes before relabel",
       groups,
-      removed: removable,
+      // Pre-merge estimate: how many nodes the collapse below can remove. It is
+      // logged before the merge runs, so it is not a completion count.
+      removable,
     }) + "\n",
   );
 

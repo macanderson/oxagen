@@ -13,10 +13,21 @@
  *
  * Never throws — a probe failure (offline server, timeout, bad JSON) returns
  * false and the install proceeds with the registry-derived authKind.
+ *
+ * SSRF: `endpointUrl` is user-supplied (a custom MCP server URL, or a registry
+ * record), and this function issues a server-side GET (redirects followed) plus
+ * a POST to it. `http:` is accepted, so nothing here stops a probe of a private
+ * or link-local address. Every caller that can be reached by an untrusted URL
+ * MUST pass a `fetchFn` that blocks private ranges — the app's
+ * `@/lib/mcp-oauth/safe-fetch` is the one to use.
  */
 
 export interface DetectOAuthOptions {
-  /** Injection seam for tests. Defaults to global fetch. */
+  /**
+   * Fetch implementation. Defaults to global fetch, which applies NO
+   * private-address filtering — see the SSRF note above before relying on the
+   * default with an untrusted endpoint.
+   */
   fetchFn?: typeof fetch;
   /** Per-request timeout in milliseconds. Default 3000. */
   timeoutMs?: number;
@@ -46,7 +57,10 @@ function isProtectedResourceMetadata(value: unknown): boolean {
   const meta = value as ProtectedResourceMetadata;
   // authorization_servers present and non-empty is the definitive signal; a
   // bare `resource` echo without any AS entries cannot start an OAuth flow.
-  return Array.isArray(meta.authorization_servers) && meta.authorization_servers.length > 0;
+  return (
+    Array.isArray(meta.authorization_servers) &&
+    meta.authorization_servers.length > 0
+  );
 }
 
 async function fetchWithTimeout(
@@ -73,7 +87,8 @@ export async function detectOAuthProtected(
   let candidates: string[];
   try {
     const parsed = new URL(endpointUrl);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
+      return false;
     candidates = wellKnownCandidates(endpointUrl);
   } catch {
     return false;
@@ -85,7 +100,11 @@ export async function detectOAuthProtected(
       const resp = await fetchWithTimeout(
         fetchFn,
         wellKnown,
-        { method: "GET", headers: { accept: "application/json" }, redirect: "follow" },
+        {
+          method: "GET",
+          headers: { accept: "application/json" },
+          redirect: "follow",
+        },
         timeoutMs,
       );
       if (resp.ok) {

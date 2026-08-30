@@ -34,10 +34,38 @@ providers is an environment change with **zero code change**. To add an HTTP
 driver later, implement `EmailTransport` and branch on an `EMAIL_DRIVER` flag in
 `transport.ts` — call sites stay on `sendEmail`.
 
-Every send is instrumented through the package's pino logger (driver,
-recipients, subject, accepted/rejected counts, latency, outcome) and never logs
-the message body or other PII. Capability-level metering (org/workspace usage)
-belongs at the handler that calls `sendEmail`, which holds that context.
+Every send is logged through the package's pino logger: driver, recipient
+count, subject, accepted/rejected counts, latency, and outcome. The message
+body is never logged. The transport does not log recipient addresses either —
+but two failure paths do, so that a lost email can be traced to a person:
+`sendEmailFireAndForget` and `notifyOrgManagers` both include the recipient
+address in their error log. Treat these logs as containing personal data.
+
+Per-org and per-workspace usage metering is not done here. It belongs in the
+handler that calls `sendEmail`, because that is the code that knows which org
+and workspace the send belongs to.
+
+## What happens when a send fails
+
+There is no retry and no queue in this package. One `sendEmail` call is one
+attempt against the SMTP server. If that attempt fails, the error is logged and
+then handed to the caller, and the email is gone — nothing will try again
+later.
+
+That means the caller owns the retry decision:
+
+- `sendEmail` throws. The caller chooses whether the failure is fatal to its
+  flow (block the signup) or not (log and carry on).
+- `sendEmailFireAndForget` never throws. It logs the failure and returns. Use
+  it only where the caller must return immediately and a lost email is
+  acceptable.
+- `notifyOrgManagers` writes the in-app notification first, then tries the
+  email. A failed email leaves the in-app notification in place with its
+  `emailed_at` column still null.
+
+A durable outbox — retries with backoff, and a record of messages that ran out
+of attempts — would have to be built on top of this package, most likely as an
+Inngest job.
 
 ## Configuration
 

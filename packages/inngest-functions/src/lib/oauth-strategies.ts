@@ -20,9 +20,13 @@ export interface TokenResponse {
   expiresInSec?: number;
 }
 
-export type RefreshResult = TokenResponse | { error: string; description?: string };
+export type RefreshResult =
+  | TokenResponse
+  | { error: string; description?: string };
 
-export function isRefreshError(r: RefreshResult): r is { error: string; description?: string } {
+export function isRefreshError(
+  r: RefreshResult,
+): r is { error: string; description?: string } {
   return "error" in r;
 }
 
@@ -49,7 +53,9 @@ export interface ProviderRefreshStrategy {
    * Extra request headers beyond Content-Type + Accept JSON (e.g. Authorization
    * for Basic-auth providers like Zoom).
    */
-  extraHeaders?(env: Record<string, string | undefined>): Record<string, string>;
+  extraHeaders?(
+    env: Record<string, string | undefined>,
+  ): Record<string, string>;
   /**
    * Parse the JSON response into a normalized shape.
    * Returns { error } if the provider signals failure.
@@ -113,7 +119,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return {
         accessToken: j.access_token,
@@ -146,7 +155,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return { accessToken: j.access_token, expiresInSec: j.expires_in };
     },
@@ -204,7 +216,9 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
       // Zoom requires HTTP Basic auth with client_id:client_secret (base64).
       const clientId = env["ZOOM_DATA_CLIENT_ID"] ?? "";
       const clientSecret = env["ZOOM_DATA_CLIENT_SECRET"] ?? "";
-      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+      const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
+        "base64",
+      );
       return { Authorization: `Basic ${credentials}` };
     },
     parseResponse(json) {
@@ -263,7 +277,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return { accessToken: j.access_token, expiresInSec: j.expires_in };
     },
@@ -296,7 +313,10 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
         error_description?: string;
       };
       if (j.error || !j.access_token) {
-        return { error: j.error ?? "missing_access_token", description: j.error_description };
+        return {
+          error: j.error ?? "missing_access_token",
+          description: j.error_description,
+        };
       }
       return {
         accessToken: j.access_token,
@@ -337,7 +357,8 @@ export async function refreshOAuthToken(
 ): Promise<RefreshResult> {
   const strategy = REFRESH_PROVIDERS[refreshProviderKeyFor(provider)];
   if (!strategy) return { error: "unsupported_provider" };
-  if (strategy.supportsRefresh === false) return { error: "no_refresh_endpoint" };
+  if (strategy.supportsRefresh === false)
+    return { error: "no_refresh_endpoint" };
 
   let env: Record<string, string | undefined> = {};
   if (strategy.requiredEnv.length > 0) {
@@ -355,7 +376,9 @@ export async function refreshOAuthToken(
 
   let responseJson: Record<string, unknown>;
   try {
-    const extraHeaders = strategy.extraHeaders ? strategy.extraHeaders(env) : {};
+    const extraHeaders = strategy.extraHeaders
+      ? strategy.extraHeaders(env)
+      : {};
     const response = await fetch(strategy.tokenUrl, {
       method: "POST",
       headers: {
@@ -367,7 +390,10 @@ export async function refreshOAuthToken(
     });
     responseJson = (await response.json()) as Record<string, unknown>;
   } catch (err) {
-    return { error: "http_error", description: err instanceof Error ? err.message : String(err) };
+    return {
+      error: "http_error",
+      description: err instanceof Error ? err.message : String(err),
+    };
   }
 
   return strategy.parseResponse(responseJson);

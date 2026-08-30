@@ -18,7 +18,7 @@ describe("RadioGroup — render", () => {
     const { getByRole } = render(
       <RadioGroup>
         <Radio value="a" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     expect(getByRole("radiogroup")).toBeInTheDocument();
   });
@@ -28,7 +28,7 @@ describe("RadioGroup — render", () => {
       <RadioGroup>
         <Radio value="a" />
         <Radio value="b" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     expect(getAllByRole("radio")).toHaveLength(2);
   });
@@ -37,7 +37,7 @@ describe("RadioGroup — render", () => {
     const { getByRole } = render(
       <RadioGroup>
         <Radio value="a" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     expect(getByRole("radio")).toHaveAttribute("aria-checked", "false");
   });
@@ -48,10 +48,11 @@ describe("RadioGroup — render", () => {
       <RadioGroup onValueChange={onChange}>
         <Radio value="a" />
         <Radio value="b" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     const radiosForClick = getAllByRole("radio");
-    if (!radiosForClick[1]) throw new Error("Expected at least 2 radio buttons");
+    if (!radiosForClick[1])
+      throw new Error("Expected at least 2 radio buttons");
     await userEvent.click(radiosForClick[1]);
     expect(onChange).toHaveBeenCalled();
     // First arg should be the value string
@@ -65,7 +66,7 @@ describe("RadioGroup — render", () => {
       <RadioGroup defaultValue="b">
         <Radio value="a" />
         <Radio value="b" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     const radios = getAllByRole("radio");
     expect(radios[1]).toHaveAttribute("aria-checked", "true");
@@ -75,7 +76,7 @@ describe("RadioGroup — render", () => {
     const { getByRole } = render(
       <RadioGroup>
         <Radio value="a" disabled />
-      </RadioGroup>
+      </RadioGroup>,
     );
     // Base UI Radio uses aria-disabled not the native disabled attribute
     expect(getByRole("radio")).toHaveAttribute("aria-disabled", "true");
@@ -85,7 +86,7 @@ describe("RadioGroup — render", () => {
     const { getByRole } = render(
       <RadioGroup>
         <Radio value="a" disabled />
-      </RadioGroup>
+      </RadioGroup>,
     );
     expect(getByRole("radio")).toHaveAttribute("data-disabled");
   });
@@ -94,7 +95,7 @@ describe("RadioGroup — render", () => {
     const { container } = render(
       <RadioGroup className="custom-rg">
         <Radio value="x" />
-      </RadioGroup>
+      </RadioGroup>,
     );
     expect(container.firstChild as HTMLElement).toHaveClass("custom-rg");
   });

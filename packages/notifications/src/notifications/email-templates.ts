@@ -4,27 +4,7 @@
  * injecting unescaped user content into HTML.
  */
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/**
- * Escapes a URL for use inside an `href="..."` attribute, additionally
- * rejecting any non-http(s) scheme. HTML escaping alone does not neutralize
- * dangerous URI schemes (e.g. `javascript:alert(1)` contains no HTML-special
- * characters), so a plain `esc()` on an href is an XSS vector in email clients
- * that execute JavaScript in anchor hrefs. This guard fails closed.
- */
-function safeHref(url: string): string {
-  if (!/^https?:\/\//i.test(url)) {
-    throw new Error(`Unsafe URL scheme in email template: ${url}`);
-  }
-  return esc(url);
-}
+import { esc, safeHref } from "./html-escape";
 
 export interface ReauthEmailTemplateInput {
   /** Short server name, e.g. "GitHub". */

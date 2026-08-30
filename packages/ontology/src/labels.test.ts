@@ -45,14 +45,18 @@ describe("assertValidLabel", () => {
   });
 
   it("throws on injection attempts", () => {
-    expect(() => assertValidLabel("Foo`) DETACH DELETE n //")).toThrow(/Invalid Neo4j label/);
+    expect(() => assertValidLabel("Foo`) DETACH DELETE n //")).toThrow(
+      /Invalid Neo4j label/,
+    );
     expect(() => assertValidLabel("")).toThrow(/Invalid Neo4j label/);
   });
 });
 
 describe("sanitizeLabel", () => {
   it("coerces free text into a PascalCase label", () => {
-    expect(sanitizeLabel("Nuclear-powered submarine")).toBe("NuclearPoweredSubmarine");
+    expect(sanitizeLabel("Nuclear-powered submarine")).toBe(
+      "NuclearPoweredSubmarine",
+    );
     expect(sanitizeLabel("pull_request")).toBe("PullRequest");
     expect(sanitizeLabel("  Person  ")).toBe("Person");
     expect(sanitizeLabel("issue")).toBe("Issue");
@@ -68,7 +72,13 @@ describe("sanitizeLabel", () => {
   });
 
   it("is idempotent on already-PascalCase system labels", () => {
-    for (const label of ["GraphNode", "EntityNode", "User", "AgentVersion", "SourceConnection"]) {
+    for (const label of [
+      "GraphNode",
+      "EntityNode",
+      "User",
+      "AgentVersion",
+      "SourceConnection",
+    ]) {
       expect(sanitizeLabel(label)).toBe(label);
     }
   });
@@ -85,7 +95,13 @@ describe("sanitizeLabel", () => {
   });
 
   it("always returns a label that passes isValidLabel", () => {
-    for (const raw of ["a b c", "ALLCAPS", "trailing___", "___leading", "x".repeat(140)]) {
+    for (const raw of [
+      "a b c",
+      "ALLCAPS",
+      "trailing___",
+      "___leading",
+      "x".repeat(140),
+    ]) {
       const out = sanitizeLabel(raw);
       if (out !== null) expect(isValidLabel(out)).toBe(true);
     }
@@ -113,7 +129,9 @@ describe("sanitizeRelationshipType", () => {
     expect(sanitizeRelationshipType("implements")).toBe("IMPLEMENTS");
     expect(sanitizeRelationshipType("PART_OF")).toBe("PART_OF");
     expect(sanitizeRelationshipType("  belongs to  ")).toBe("BELONGS_TO");
-    expect(sanitizeRelationshipType("depends on (heavily)")).toBe("DEPENDS_ON_HEAVILY");
+    expect(sanitizeRelationshipType("depends on (heavily)")).toBe(
+      "DEPENDS_ON_HEAVILY",
+    );
   });
 
   it("prefixes leading-digit results so they start with a letter", () => {

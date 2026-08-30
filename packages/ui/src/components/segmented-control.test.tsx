@@ -17,7 +17,7 @@ describe("SegmentedControl — render", () => {
         <SegmentedControlItem value="small">Small</SegmentedControlItem>
         <SegmentedControlItem value="medium">Medium</SegmentedControlItem>
         <SegmentedControlItem value="large">Large</SegmentedControlItem>
-      </SegmentedControl>
+      </SegmentedControl>,
     );
     expect(getByRole("button", { name: "Small" })).toBeInTheDocument();
     expect(getByRole("button", { name: "Medium" })).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("SegmentedControl — render", () => {
       <SegmentedControl onValueChange={onChange}>
         <SegmentedControlItem value="small">Small</SegmentedControlItem>
         <SegmentedControlItem value="medium">Medium</SegmentedControlItem>
-      </SegmentedControl>
+      </SegmentedControl>,
     );
     await userEvent.click(getByRole("button", { name: "Medium" }));
     expect(onChange).toHaveBeenCalledWith("medium");
@@ -41,7 +41,7 @@ describe("SegmentedControl — render", () => {
       <SegmentedControl value="large">
         <SegmentedControlItem value="small">Small</SegmentedControlItem>
         <SegmentedControlItem value="large">Large</SegmentedControlItem>
-      </SegmentedControl>
+      </SegmentedControl>,
     );
     const largeBtn = getByRole("button", { name: "Large" });
     expect(largeBtn.dataset.pressed).toBeDefined();
@@ -51,9 +51,11 @@ describe("SegmentedControl — render", () => {
     const { container } = render(
       <SegmentedControl className="custom-sc">
         <SegmentedControlItem value="x">X</SegmentedControlItem>
-      </SegmentedControl>
+      </SegmentedControl>,
     );
-    expect((container.firstChild as HTMLElement).className).toContain("custom-sc");
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "custom-sc",
+    );
   });
 
   it("disabled item cannot be clicked", async () => {
@@ -61,8 +63,10 @@ describe("SegmentedControl — render", () => {
     const { getByRole } = render(
       <SegmentedControl onValueChange={onChange}>
         <SegmentedControlItem value="a">A</SegmentedControlItem>
-        <SegmentedControlItem value="b" disabled>B</SegmentedControlItem>
-      </SegmentedControl>
+        <SegmentedControlItem value="b" disabled>
+          B
+        </SegmentedControlItem>
+      </SegmentedControl>,
     );
     await userEvent.click(getByRole("button", { name: "B" }));
     expect(onChange).not.toHaveBeenCalled();

@@ -467,6 +467,15 @@ function clamp01(n: number): number {
   return n;
 }
 
+/**
+ * "Safe" here means only that a syntactically invalid pattern cannot throw —
+ * an unparseable pattern in the registry passes rather than crashing
+ * validation. It is NOT safe against a catastrophically backtracking pattern:
+ * both the pattern (author-supplied schema) and the value (connector-supplied
+ * payload) are untrusted, and a runaway match blocks the event loop of
+ * whichever worker is validating. Bounding that needs a timeout-capable regex
+ * engine or a pattern linter at schema-publish time.
+ */
 function safeTest(pattern: string, value: string): boolean {
   try {
     return new RegExp(pattern).test(value);

@@ -39,7 +39,9 @@ describe("Input — render", () => {
   });
 
   it("renders with placeholder", () => {
-    const { getByPlaceholderText } = render(<Input placeholder="Enter email" />);
+    const { getByPlaceholderText } = render(
+      <Input placeholder="Enter email" />,
+    );
     expect(getByPlaceholderText("Enter email")).toBeInTheDocument();
   });
 
@@ -60,7 +62,9 @@ describe("Input — render", () => {
 
   it("merges custom className", () => {
     const { container } = render(<Input className="custom-input" />);
-    expect(container.querySelector("input")?.className).toContain("custom-input");
+    expect(container.querySelector("input")?.className).toContain(
+      "custom-input",
+    );
   });
 
   it("accepts user input", async () => {

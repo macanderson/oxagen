@@ -8,20 +8,71 @@ import { createRecord } from "../record";
 import type { Namespace, Provenance } from "../types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
-const PROV: Provenance = { author: "test", derivedFrom: [], timestamp: Date.now() };
+const PROV: Provenance = {
+  author: "test",
+  derivedFrom: [],
+  timestamp: Date.now(),
+};
 
-function makeRecord(kind: "episodic" | "semantic" | "procedural" | "entity" | "edge", salience: number) {
+function makeRecord(
+  kind: "episodic" | "semantic" | "procedural" | "entity" | "edge",
+  salience: number,
+) {
   switch (kind) {
     case "episodic":
-      return createRecord({ kind, namespace: NS, body: { event: `event-${Math.random()}`, payload: {} }, salience, confidence: 1, provenance: PROV });
+      return createRecord({
+        kind,
+        namespace: NS,
+        body: { event: `event-${Math.random()}`, payload: {} },
+        salience,
+        confidence: 1,
+        provenance: PROV,
+      });
     case "semantic":
-      return createRecord({ kind, namespace: NS, body: { fact: `fact-${Math.random()}`, domain: "test" }, salience, confidence: 1, provenance: PROV });
+      return createRecord({
+        kind,
+        namespace: NS,
+        body: { fact: `fact-${Math.random()}`, domain: "test" },
+        salience,
+        confidence: 1,
+        provenance: PROV,
+      });
     case "procedural":
-      return createRecord({ kind, namespace: NS, body: { rule: `rule-${Math.random()}`, appliesTo: [], successCount: 0, failureCount: 0 }, salience, confidence: 1, provenance: PROV });
+      return createRecord({
+        kind,
+        namespace: NS,
+        body: {
+          rule: `rule-${Math.random()}`,
+          appliesTo: [],
+          successCount: 0,
+          failureCount: 0,
+        },
+        salience,
+        confidence: 1,
+        provenance: PROV,
+      });
     case "entity":
-      return createRecord({ kind, namespace: NS, body: { entityType: "file", name: `file-${Math.random()}`, properties: {} }, salience, confidence: 1, provenance: PROV });
+      return createRecord({
+        kind,
+        namespace: NS,
+        body: {
+          entityType: "file",
+          name: `file-${Math.random()}`,
+          properties: {},
+        },
+        salience,
+        confidence: 1,
+        provenance: PROV,
+      });
     case "edge":
-      return createRecord({ kind, namespace: NS, body: { sourceId: "a", targetId: "b", edgeType: "DEPENDS_ON" }, salience, confidence: 1, provenance: PROV });
+      return createRecord({
+        kind,
+        namespace: NS,
+        body: { sourceId: "a", targetId: "b", edgeType: "DEPENDS_ON" },
+        salience,
+        confidence: 1,
+        provenance: PROV,
+      });
   }
 }
 
@@ -50,7 +101,9 @@ describe("batchByPriority", () => {
   });
 
   it("default batch size is 100", () => {
-    const records = Array.from({ length: 150 }, () => makeRecord("episodic", 0.5));
+    const records = Array.from({ length: 150 }, () =>
+      makeRecord("episodic", 0.5),
+    );
     const batches = batchByPriority(records);
     expect(batches).toHaveLength(2);
     expect(batches[0]).toHaveLength(100);
@@ -69,12 +122,14 @@ describe("batchByPriority", () => {
 
   it("sorts within each batch by priority", () => {
     const records = [
-      makeRecord("edge", 0.9),      // low kind priority but high salience
-      makeRecord("semantic", 0.5),  // high kind priority but lower salience
+      makeRecord("edge", 0.9), // low kind priority but high salience
+      makeRecord("semantic", 0.5), // high kind priority but lower salience
     ];
     const batches = batchByPriority(records, 10);
     // edge with salience 0.9 should come first (salience is primary sort)
-    expect(batches[0]![0]!.salience).toBeGreaterThanOrEqual(batches[0]![1]!.salience);
+    expect(batches[0]![0]!.salience).toBeGreaterThanOrEqual(
+      batches[0]![1]!.salience,
+    );
   });
 
   it("preserves all records across all batches", () => {

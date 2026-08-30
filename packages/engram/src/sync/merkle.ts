@@ -122,8 +122,15 @@ function buildNode(
 ): MerkleNode {
   // Leaf: small enough, or we've exhausted the ID's hex characters.
   if (versions.length <= LEAF_MAX || prefix.length >= 64) {
-    const leaves = [...versions].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const node: MerkleNode = { hash: hashLeaf(leaves), prefix, leaf: true, leaves };
+    const leaves = [...versions].sort((a, b) =>
+      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+    );
+    const node: MerkleNode = {
+      hash: hashLeaf(leaves),
+      prefix,
+      leaf: true,
+      leaves,
+    };
     byPrefix.set(prefix, node);
     return node;
   }
@@ -143,7 +150,12 @@ function buildNode(
     children.push({ key, prefix: child.prefix, hash: child.hash });
   }
 
-  const node: MerkleNode = { hash: hashChildren(children), prefix, leaf: false, children };
+  const node: MerkleNode = {
+    hash: hashChildren(children),
+    prefix,
+    leaf: false,
+    children,
+  };
   byPrefix.set(prefix, node);
   return node;
 }
@@ -174,7 +186,10 @@ export function buildMerkleTree(versions: RecordVersion[]): MerkleTree {
  * hashes differ. Returns record IDs grouped by which side must act. Identical
  * tries return empty groups after inspecting only the root.
  */
-export function diffMerkleTrees(local: MerkleTree, remote: MerkleTree): MerkleDiff {
+export function diffMerkleTrees(
+  local: MerkleTree,
+  remote: MerkleTree,
+): MerkleDiff {
   const diff: MerkleDiff = { remoteOnly: [], localOnly: [], divergent: [] };
   walk("");
   return diff;
@@ -194,7 +209,11 @@ export function diffMerkleTrees(local: MerkleTree, remote: MerkleTree): MerkleDi
     }
     // Both present, hashes differ.
     if (l.leaf || r.leaf) {
-      compareVersions(local.versionsUnder(prefix), remote.versionsUnder(prefix), diff);
+      compareVersions(
+        local.versionsUnder(prefix),
+        remote.versionsUnder(prefix),
+        diff,
+      );
       return;
     }
     // Both internal: recurse only into children whose keys exist on either side.

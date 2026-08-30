@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RecordTypeSample,
+} from "../types";
 
 const connectionConfigSchema = z.object({
   projectId: z.string().min(1),
@@ -15,7 +20,9 @@ const connectionConfigSchema = z.object({
 type Config = typeof connectionConfigSchema;
 
 function asRecord(raw: unknown): Record<string, unknown> {
-  return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return raw !== null && typeof raw === "object"
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function asString(v: unknown): string | undefined {
@@ -25,7 +32,8 @@ function asString(v: unknown): string | undefined {
 const googleBigQuery: ConnectorDefinition<Config> = {
   connectorId: "google-bigquery",
   displayName: "Google BigQuery",
-  description: "Query rows from BigQuery datasets and sync them into the context graph.",
+  description:
+    "Query rows from BigQuery datasets and sync them into the context graph.",
   icon: "bigquery",
   supportedAuthSchemes: ["oauth2_authorization_code", "service_account_json"],
   deliveryMethod: "sql_query",
@@ -41,10 +49,12 @@ const googleBigQuery: ConnectorDefinition<Config> = {
     const r = asRecord(raw);
     // BigQuery rows are free-form — pass all columns through as properties.
     // The customer's property mapping config handles field renaming.
-    const id = asString(r["id"]) ?? asString(r["_id"]) ?? JSON.stringify(r).slice(0, 64);
+    const id =
+      asString(r["id"]) ?? asString(r["_id"]) ?? JSON.stringify(r).slice(0, 64);
     return {
       externalId: id,
-      displayName: asString(r["name"]) ?? asString(r["title"]) ?? asString(r["label"]),
+      displayName:
+        asString(r["name"]) ?? asString(r["title"]) ?? asString(r["label"]),
       properties: Object.fromEntries(
         Object.entries(r).filter(([, v]) => v !== null && v !== undefined),
       ),

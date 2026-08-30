@@ -37,32 +37,63 @@ describe("effectiveSalience", () => {
   });
 
   it("returns 0 (evictable) for a NaN createdAt instead of NaN", () => {
-    const s = effectiveSalience(record({ createdAt: NaN as unknown as number }), NOW, 0, 0);
+    const s = effectiveSalience(
+      record({ createdAt: NaN as unknown as number }),
+      NOW,
+      0,
+      0,
+    );
     expect(s).toBe(0);
   });
 
   it("returns 0 for a non-finite salience", () => {
-    const s = effectiveSalience(record({ salience: NaN as unknown as number }), NOW, 0, 0);
+    const s = effectiveSalience(
+      record({ salience: NaN as unknown as number }),
+      NOW,
+      0,
+      0,
+    );
     expect(s).toBe(0);
   });
 
   it("clamps future createdAt so salience isn't inflated above base", () => {
-    const s = effectiveSalience(record({ createdAt: NOW + 1_000_000, salience: 0.5 }), NOW, 0, 0);
+    const s = effectiveSalience(
+      record({ createdAt: NOW + 1_000_000, salience: 0.5 }),
+      NOW,
+      0,
+      0,
+    );
     expect(s).toBeLessThanOrEqual(0.5);
     expect(Number.isFinite(s)).toBe(true);
   });
 
   it("caps at 1.0 with heavy boosts", () => {
-    const s = effectiveSalience(record({ createdAt: NOW, salience: 1 }), NOW, 10, 5);
+    const s = effectiveSalience(
+      record({ createdAt: NOW, salience: 1 }),
+      NOW,
+      10,
+      5,
+    );
     expect(s).toBe(1);
   });
 });
 
 describe("identifyEvictionCandidates", () => {
   it("evicts a poisoned (NaN createdAt) record", () => {
-    const poisoned = record({ id: "b".repeat(64), createdAt: NaN as unknown as number });
-    const healthy = record({ id: "c".repeat(64), createdAt: NOW, salience: 0.9 });
-    const evicted = identifyEvictionCandidates([poisoned, healthy], NOW, new Map());
+    const poisoned = record({
+      id: "b".repeat(64),
+      createdAt: NaN as unknown as number,
+    });
+    const healthy = record({
+      id: "c".repeat(64),
+      createdAt: NOW,
+      salience: 0.9,
+    });
+    const evicted = identifyEvictionCandidates(
+      [poisoned, healthy],
+      NOW,
+      new Map(),
+    );
     expect(evicted.map((r) => r.id)).toContain("b".repeat(64));
     expect(evicted.map((r) => r.id)).not.toContain("c".repeat(64));
   });

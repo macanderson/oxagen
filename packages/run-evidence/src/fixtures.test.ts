@@ -156,7 +156,7 @@ describe("Context Graph fixture drift lock", () => {
     }
   });
 
-  it("requires exactly the six regular fixture files", () => {
+  it("requires exactly the manifest and the five fixture payloads", () => {
     const entries = readdirSync(fixtureDirectory, { withFileTypes: true });
 
     expect(entries.every((entry) => entry.isFile())).toBe(true);

@@ -1,11 +1,16 @@
 /**
- * Lexical retrieval engine — BM25 full-text search over record bodies.
+ * Lexical retrieval engine — exact-term search over record bodies.
  *
  * Critical for exact matches that vector similarity misses: error messages,
  * function names, file paths, stack traces, identifiers.
  *
- * Uses DuckDB's built-in FTS extension (zero new dependencies).
- * For ClickHouse, uses tokenbf_v1 indexing.
+ * The engine itself is backend-agnostic: it takes an injected
+ * {@link LexicalSearchFn} and only re-orders and hydrates whatever that
+ * function returns. The one shipped implementation is
+ * `DuckDBEpisodicStore.searchLexical`, which scores each record by the
+ * fraction of query terms it contains (see `store/lexical-tokenize.ts`).
+ * It is term-frequency recall, not BM25 — there is no length normalization
+ * and no inverse-document-frequency weighting.
  */
 import type { EpisodicStore } from "../store/episodic";
 import type {
@@ -16,8 +21,8 @@ import type {
 import { estimateTokens } from "./types";
 
 /**
- * Full-text search function — injected so this engine works with both
- * DuckDB FTS and ClickHouse tokenbf adapters.
+ * Full-text search function — injected so this engine is not bound to any one
+ * store adapter. Returns record IDs with a 0.0–1.0 relevance score, best first.
  */
 export interface LexicalSearchFn {
   (
@@ -49,7 +54,7 @@ export class LexicalRetrievalEngine implements RetrievalEngine {
 
     if (searchResults.length === 0) return [];
 
-    // Look up full records. getByIds returns storage order, not BM25 rank order,
+    // Look up full records. getByIds returns storage order, not relevance order,
     // so re-emit in the searchResults order (fusion reads array index as rank).
     const recordIds = searchResults.map((r) => r.recordId);
     const records = await this.store.getByIds(recordIds);

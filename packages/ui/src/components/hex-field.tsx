@@ -4,14 +4,11 @@ import type { CSSProperties } from "react";
  * HexField — an ambient background of hexagon cells abstracted from the Oxagen
  * logomark (the ember hex-cluster). Cells come in exactly two forms: faint
  * outlines ("faint"), and cells lit with the ember gradient that breathe slowly
- * ("lit"). There is deliberately no third, differently-hued variant. The field
- * used to carry a "cool" cell filled with --ox-indigo-bright (#9CA3E8), and
- * because the breathing pulse holds it between 22% and 70% opacity it
- * composited over the near-black canvas as a muted slate-purple — a second
- * brand colour nobody chose, in the largest graphic on the product. The
- * backdrop now speaks one accent. Used as a pointer-events-none backdrop
- * behind hero / auth / shell surfaces so every section reads as part of the
- * same lattice without competing with the foreground content.
+ * ("lit"). There is deliberately no third, differently-hued variant — the
+ * backdrop speaks one accent, and it is the largest graphic on the product.
+ * Used as a pointer-events-none backdrop behind hero / auth / shell surfaces so
+ * every section reads as part of the same lattice without competing with the
+ * foreground content.
  *
  * Pure presentational + deterministic (a fixed cell table, no randomness) so it
  * renders in a Server Component with zero hydration drift. Lit cells carry the

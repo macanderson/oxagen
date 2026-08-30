@@ -2,9 +2,15 @@ import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { insertEvalItemResults, type EvalItemResultRow } from "@oxagen/telemetry";
+import {
+  insertEvalItemResults,
+  type EvalItemResultRow,
+} from "@oxagen/telemetry";
 import { providerCostUsdMicros } from "@oxagen/billing";
-import { evalTargetSchema, type EvalTarget } from "@oxagen/oxagen/contracts/eval-schema";
+import {
+  evalTargetSchema,
+  type EvalTarget,
+} from "@oxagen/oxagen/contracts/eval-schema";
 import "@oxagen/oxagen";
 import { logger } from "../logger";
 import { runTarget } from "./eval/target";
@@ -158,9 +164,9 @@ export const [evalRunExecute] = createFunction(
               input: item.input,
               systemPrompt:
                 target.kind === "model"
-                  ? target.systemPrompt ?? null
+                  ? (target.systemPrompt ?? null)
                   : agentSystemPrompt,
-              modelId: target.kind === "model" ? target.model ?? null : null,
+              modelId: target.kind === "model" ? (target.model ?? null) : null,
               telemetry,
             });
             const judgeRes = await scoreWithJudge({
@@ -174,7 +180,8 @@ export const [evalRunExecute] = createFunction(
             const inputTokens =
               targetRes.usage.promptTokens + judgeRes.usage.promptTokens;
             const outputTokens =
-              targetRes.usage.completionTokens + judgeRes.usage.completionTokens;
+              targetRes.usage.completionTokens +
+              judgeRes.usage.completionTokens;
             const costUsdMicros =
               providerCostUsdMicros({
                 model: targetRes.modelId,
@@ -226,7 +233,7 @@ export const [evalRunExecute] = createFunction(
               dataset_id: datasetId,
               item_id: item.publicId,
               target_kind: target.kind,
-              model: target.kind === "model" ? target.model ?? "" : "",
+              model: target.kind === "model" ? (target.model ?? "") : "",
               judge_model: judgeModelId,
               score: 0,
               correctness: 0,
@@ -242,7 +249,10 @@ export const [evalRunExecute] = createFunction(
               rationale: err instanceof Error ? err.message : String(err),
             };
             await insertEvalItemResults([failedRow]);
-            logger.warn({ runId: runPublicId, itemId: item.publicId, err }, "eval item failed");
+            logger.warn(
+              { runId: runPublicId, itemId: item.publicId, err },
+              "eval item failed",
+            );
             return {
               status: "failed",
               score: 0,
@@ -261,7 +271,8 @@ export const [evalRunExecute] = createFunction(
     const failedCount = outcomes.length - completed.length;
     const mean = (nums: number[]) =>
       nums.length === 0 ? 0 : nums.reduce((a, b) => a + b, 0) / nums.length;
-    const avgScore = completed.length > 0 ? mean(completed.map((o) => o.score)) : null;
+    const avgScore =
+      completed.length > 0 ? mean(completed.map((o) => o.score)) : null;
     const scoreBreakdown = {
       correctness: mean(completed.map((o) => o.correctness)),
       faithfulness: mean(completed.map((o) => o.faithfulness)),
@@ -290,7 +301,12 @@ export const [evalRunExecute] = createFunction(
     );
 
     logger.info(
-      { runId: runPublicId, completed: completed.length, failed: failedCount, avgScore },
+      {
+        runId: runPublicId,
+        completed: completed.length,
+        failed: failedCount,
+        avgScore,
+      },
       "eval.run.execute completed",
     );
     return { runId: runPublicId, status: "completed" as const };

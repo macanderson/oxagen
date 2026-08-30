@@ -26,7 +26,9 @@ export const Right: Story = {
       <SheetPopup side="right">
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
-          <SheetDescription>Adjust your workspace preferences.</SheetDescription>
+          <SheetDescription>
+            Adjust your workspace preferences.
+          </SheetDescription>
         </SheetHeader>
         <SheetPanel>
           <p className="text-sm text-muted-foreground">Sheet body content.</p>

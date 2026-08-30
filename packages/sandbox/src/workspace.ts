@@ -93,7 +93,9 @@ export function validateWorkspaceFiles(
   for (const [path, content] of entries) {
     assertSafeWorkspacePath(path);
     if (typeof content !== "string") {
-      throw new SandboxWorkspaceError(`workspace file "${path}" content must be a string`);
+      throw new SandboxWorkspaceError(
+        `workspace file "${path}" content must be a string`,
+      );
     }
     totalBytes += enc.encode(content).length;
     if (totalBytes > maxTotalBytes) {

@@ -72,9 +72,7 @@ describe("emailVerificationTemplate", () => {
 
     it("escapes & in verificationUrl (href) as &amp;", () => {
       const { html } = emailVerificationTemplate(dangerous);
-      expect(html).toContain(
-        'href="https://example.com/verify?a=1&amp;b=2"'
-      );
+      expect(html).toContain('href="https://example.com/verify?a=1&amp;b=2"');
     });
 
     it("escapes < in email as &lt;", () => {

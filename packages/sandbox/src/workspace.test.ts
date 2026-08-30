@@ -54,7 +54,9 @@ describe("isSafeWorkspacePath", () => {
   });
 
   it("rejects an over-long path", () => {
-    expect(isSafeWorkspacePath("a".repeat(MAX_WORKSPACE_PATH_LENGTH + 1))).toBe(false);
+    expect(isSafeWorkspacePath("a".repeat(MAX_WORKSPACE_PATH_LENGTH + 1))).toBe(
+      false,
+    );
   });
 
   it("exposes the workspace root constant", () => {
@@ -68,7 +70,9 @@ describe("assertSafeWorkspacePath", () => {
   });
 
   it("throws SandboxWorkspaceError on traversal", () => {
-    expect(() => assertSafeWorkspacePath("../x")).toThrow(SandboxWorkspaceError);
+    expect(() => assertSafeWorkspacePath("../x")).toThrow(
+      SandboxWorkspaceError,
+    );
   });
 });
 
@@ -83,13 +87,17 @@ describe("validateWorkspaceFiles", () => {
   });
 
   it("throws on an unsafe path", () => {
-    expect(() => validateWorkspaceFiles({ "../x": "v" })).toThrow(SandboxWorkspaceError);
+    expect(() => validateWorkspaceFiles({ "../x": "v" })).toThrow(
+      SandboxWorkspaceError,
+    );
   });
 
   it("throws when the file count exceeds the cap", () => {
     const files: Record<string, string> = {};
     for (let i = 0; i <= MAX_WORKSPACE_FILES; i++) files[`f${i}.txt`] = "x";
-    expect(() => validateWorkspaceFiles(files)).toThrow(/too many workspace files/);
+    expect(() => validateWorkspaceFiles(files)).toThrow(
+      /too many workspace files/,
+    );
   });
 
   it("respects a custom maxFiles option", () => {

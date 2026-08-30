@@ -9,9 +9,7 @@ import "@oxagen/oxagen";
  * agent.aggregate-fanout — durable, event-driven completion for a subagent
  * fanout.
  *
- * This replaces the old in-handler busy-wait (a 2s poll for up to 30 minutes
- * inside agent.subagent.aggregate, which exhausted the serverless function
- * timeout). Instead of blocking a function, an orchestrator emits
+ * Nothing blocks a function here. An orchestrator emits
  * `agent/subagent.aggregate.requested` and this Inngest function parks on
  * `step.waitForEvent` until agent.execute-subagent emits
  * `agent/subagent.fanout.completed` for the same fanoutId — durable waiting

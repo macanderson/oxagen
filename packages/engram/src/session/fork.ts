@@ -13,10 +13,13 @@ import { createSession } from "./event-log";
  * Creates a new session that:
  * - Has parentId pointing to the source session
  * - Records the fork point (event index)
- * - Copies events 0..forkPoint into the new session's prefix
- * - Marks the new session as active for continued execution
+ * - Starts with only its own `session_start` event
+ * - Is active and ready for continued execution
  *
- * The parent session continues independently.
+ * The parent's events 0..forkPoint are NOT copied. The parent reference plus
+ * the fork point is enough to reconstruct the full history on demand, via
+ * {@link getFullHistory}. The parent session continues independently and is
+ * not modified.
  */
 export function forkSession(
   parent: Session,
@@ -36,11 +39,6 @@ export function forkSession(
     parent.id,
     forkPoint,
   );
-
-  // Copy the prefix events (everything up to and including forkPoint)
-  // We don't duplicate them in the event array — the fork reference
-  // is enough to reconstruct the full history via getFullHistory().
-  // The forked session starts with just its session_start event.
 
   return forked;
 }

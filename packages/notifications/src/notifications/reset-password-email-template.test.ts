@@ -71,7 +71,7 @@ describe("resetPasswordEmailTemplate", () => {
 
     it("escapes & in resetUrl (href) as &amp;", () => {
       const { html } = resetPasswordEmailTemplate(dangerous);
-      expect(html).toContain("href=\"https://example.com/reset?a=1&amp;b=2\"");
+      expect(html).toContain('href="https://example.com/reset?a=1&amp;b=2"');
     });
 
     it("escapes < in email as &lt;", () => {

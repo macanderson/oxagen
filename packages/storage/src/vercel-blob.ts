@@ -96,10 +96,11 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
     async get(key: string): Promise<GetObjectResult> {
       const start = Date.now();
 
-      // Try the authenticated SDK get() first (works for private blobs when
-      // we have the read-write token). If the store doesn't support private
-      // access, fall back to public access. For public-only stores, both
-      // approaches work but private first ensures compatibility.
+      // Try the authenticated SDK get() first — it is the only path that can
+      // read a private blob, and it also reads public blobs on a store that
+      // has private access enabled. A store provisioned public-only rejects
+      // `access: "private"` outright, so that one error is caught below and
+      // retried as public.
       const result = await blobGet(key, { token, access: "private" }).catch(
         async (err: unknown) => {
           // If private access fails on a public-only store, try with public access.

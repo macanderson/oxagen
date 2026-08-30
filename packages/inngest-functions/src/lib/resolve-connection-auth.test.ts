@@ -16,16 +16,21 @@ const mocks = vi.hoisted(() => ({
   loggerWarn: vi.fn(),
 }));
 
-vi.mock("@oxagen/database", () => ({ withSystemDb: mocks.withSystemDb, schema: {} }));
+vi.mock("@oxagen/database", () => ({
+  withSystemDb: mocks.withSystemDb,
+  schema: {},
+}));
 vi.mock("@oxagen/crypto", () => ({
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
-  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
+  resolveIngestionCryptoAdapterForKeyId:
+    mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
   encrypt: mocks.encrypt,
 }));
 vi.mock("./oauth-strategies", () => ({
   refreshOAuthToken: mocks.refreshOAuthToken,
-  isRefreshError: (r: unknown) => typeof r === "object" && r !== null && "error" in r,
+  isRefreshError: (r: unknown) =>
+    typeof r === "object" && r !== null && "error" in r,
   PERMANENT_ERRORS: new Set(["invalid_grant", "revoked_token"]),
 }));
 vi.mock("../logger", () => ({
@@ -39,15 +44,22 @@ const ENV = { keyId: "k", ciphertext: Buffer.from("x").toString("base64") };
 /** Return each queued rows-array for successive withSystemDb calls. */
 function queueDb(...results: unknown[][]) {
   const q = [...results];
-  mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-    fn({ execute: () => Promise.resolve(q.shift() ?? []) }),
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ execute: () => Promise.resolve(q.shift() ?? []) }),
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ adapter: {}, keyId: "k" });
-  mocks.createIngestionCryptoAdapter.mockReturnValue({ adapter: {}, keyId: "k" });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
+    adapter: {},
+    keyId: "k",
+  });
+  mocks.createIngestionCryptoAdapter.mockReturnValue({
+    adapter: {},
+    keyId: "k",
+  });
   mocks.encrypt.mockResolvedValue(Buffer.from("enc"));
 });
 
@@ -56,7 +68,14 @@ describe("resolveConnectionAuth — oauth_accounts path", () => {
     const future = new Date(Date.now() + 3_600_000).toISOString();
     queueDb(
       [{ delivery_config: { instanceUrl: "u" }, oauth_account_id: "acc1" }],
-      [{ access_token_enc: ENV, refresh_token_enc: null, expires_at: future, provider: "github" }],
+      [
+        {
+          access_token_enc: ENV,
+          refresh_token_enc: null,
+          expires_at: future,
+          provider: "github",
+        },
+      ],
     );
     mocks.decrypt.mockResolvedValue("valid-access-token");
 
@@ -72,15 +91,31 @@ describe("resolveConnectionAuth — oauth_accounts path", () => {
     const past = new Date(Date.now() - 1000).toISOString();
     queueDb(
       [{ delivery_config: {}, oauth_account_id: "acc1" }],
-      [{ access_token_enc: ENV, refresh_token_enc: ENV, expires_at: past, provider: "github" }],
+      [
+        {
+          access_token_enc: ENV,
+          refresh_token_enc: ENV,
+          expires_at: past,
+          provider: "github",
+        },
+      ],
       [], // persist UPDATE
     );
     mocks.decrypt.mockResolvedValue("stored-refresh-token");
-    mocks.refreshOAuthToken.mockResolvedValue({ accessToken: "fresh-access", expiresInSec: 3600 });
+    mocks.refreshOAuthToken.mockResolvedValue({
+      accessToken: "fresh-access",
+      expiresInSec: 3600,
+    });
 
     const out = await resolveConnectionAuth("conn", "org");
-    expect(mocks.refreshOAuthToken).toHaveBeenCalledWith("github", "stored-refresh-token");
-    expect(out?.auth).toEqual({ scheme: "bearer_token", token: "fresh-access" });
+    expect(mocks.refreshOAuthToken).toHaveBeenCalledWith(
+      "github",
+      "stored-refresh-token",
+    );
+    expect(out?.auth).toEqual({
+      scheme: "bearer_token",
+      token: "fresh-access",
+    });
     // The rotated token was persisted (encrypt called for the new access token).
     expect(mocks.encrypt).toHaveBeenCalled();
   });
@@ -89,7 +124,14 @@ describe("resolveConnectionAuth — oauth_accounts path", () => {
     const past = new Date(Date.now() - 1000).toISOString();
     queueDb(
       [{ delivery_config: {}, oauth_account_id: "acc1" }],
-      [{ access_token_enc: ENV, refresh_token_enc: ENV, expires_at: past, provider: "github" }],
+      [
+        {
+          access_token_enc: ENV,
+          refresh_token_enc: ENV,
+          expires_at: past,
+          provider: "github",
+        },
+      ],
     );
     mocks.decrypt.mockResolvedValue("stored-refresh-token");
     mocks.refreshOAuthToken.mockResolvedValue({ error: "invalid_grant" });
@@ -102,14 +144,28 @@ describe("resolveConnectionAuth — oauth_accounts path", () => {
     const past = new Date(Date.now() - 1000).toISOString();
     queueDb(
       [{ delivery_config: {}, oauth_account_id: "acc1" }],
-      [{ access_token_enc: ENV, refresh_token_enc: ENV, expires_at: past, provider: "github" }],
+      [
+        {
+          access_token_enc: ENV,
+          refresh_token_enc: ENV,
+          expires_at: past,
+          provider: "github",
+        },
+      ],
     );
     // First decrypt = refresh token; second decrypt = the stale access token.
-    mocks.decrypt.mockResolvedValueOnce("refresh-tok").mockResolvedValueOnce("stale-access");
-    mocks.refreshOAuthToken.mockResolvedValue({ error: "temporarily_unavailable" });
+    mocks.decrypt
+      .mockResolvedValueOnce("refresh-tok")
+      .mockResolvedValueOnce("stale-access");
+    mocks.refreshOAuthToken.mockResolvedValue({
+      error: "temporarily_unavailable",
+    });
 
     const out = await resolveConnectionAuth("conn", "org");
-    expect(out?.auth).toEqual({ scheme: "bearer_token", token: "stale-access" });
+    expect(out?.auth).toEqual({
+      scheme: "bearer_token",
+      token: "stale-access",
+    });
   });
 });
 
@@ -120,7 +176,9 @@ describe("resolveConnectionAuth — auth_credentials path", () => {
       [], // oauth_tokens empty
       [{ encrypted_payload: ENV }],
     );
-    mocks.decrypt.mockResolvedValue(JSON.stringify({ scheme: "api_key", apiKey: "secret" }));
+    mocks.decrypt.mockResolvedValue(
+      JSON.stringify({ scheme: "api_key", apiKey: "secret" }),
+    );
 
     const out = await resolveConnectionAuth("conn", "org");
     expect(out).toEqual({

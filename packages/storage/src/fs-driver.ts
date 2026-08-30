@@ -40,9 +40,9 @@ function resolveRoot(root: string | undefined): string {
  * `root`, rejecting any key that would escape the root via traversal
  * (`..`), an absolute path, or a null byte.
  *
- * The returned path is guaranteed to be strictly inside `root` (or `root`
- * itself is never returned — a key must name a file). This is the sole guard
- * against a caller-supplied key writing or reading outside the storage sandbox.
+ * The returned path is always strictly inside `root` — `root` itself is never
+ * returned, since a key must name a file. This is the sole guard against a
+ * caller-supplied key writing or reading outside the storage sandbox.
  *
  * @throws {Error} When the key is empty or resolves outside `root`.
  */
@@ -165,7 +165,12 @@ export function createFsAdapter(rootDir: string | undefined): StorageAdapter {
 
     async delete(urlOrKey: string): Promise<void> {
       const start = Date.now();
-      // put() returns `url === key`, so urlOrKey is always the logical key here.
+      // This driver's put() returns `url === key`, so anything it wrote is
+      // addressed by its logical key. A caller that hands back a URL written by
+      // a DIFFERENT driver (a stored `https://…` Vercel Blob URL, after
+      // STORAGE_DRIVER flipped) resolves to a path that does not exist and the
+      // ENOENT branch below silently no-ops — deletion across a driver switch
+      // is not supported.
       const target = keyToPath(root, urlOrKey);
       try {
         await unlink(target);

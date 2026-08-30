@@ -11,6 +11,12 @@
  *
  * Never throws: any network error, redirect loop, or unsafe target returns
  * the last known-good URL so the caller proceeds exactly as before.
+ *
+ * SSRF: `isSafeTarget` only checks the SCHEME (https, or http on a literal
+ * localhost/127.0.0.1). It does not resolve DNS or reject private ranges, so an
+ * `https://` redirect into 10.0.0.0/8 or 169.254.169.254 is followed. Callers
+ * reachable by an untrusted URL must pass a `fetchFn` that blocks private
+ * addresses — the app's `@/lib/mcp-oauth/safe-fetch` is the one to use.
  */
 
 export interface ResolveEndpointOptions {

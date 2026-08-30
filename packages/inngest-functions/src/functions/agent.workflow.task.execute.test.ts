@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   // selectCallCount tracks how many times the count-steps query runs.
   selectCallCount: { value: 0 },
   // countOverride: the single aggregating count query returns this scenario.
-  countOverride: { total: 2, completed: 1, failed: 0 } as { total: number; completed: number; failed: number },
+  countOverride: { total: 2, completed: 1, failed: 0 } as {
+    total: number;
+    completed: number;
+    failed: number;
+  },
   generateObjectFor: vi.fn(),
   insertToolInvocation: vi.fn(),
   inngestCreateFunction: vi.fn(),
@@ -17,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   startLeaseRenewal: vi.fn(),
 }));
 
-const MOCK_OUTPUT = { summary: "Tim Cook is the CEO of Apple", data: { ceo: "Tim Cook" } };
+const MOCK_OUTPUT = {
+  summary: "Tim Cook is the CEO of Apple",
+  data: { ceo: "Tim Cook" },
+};
 
 mocks.dbUpdateWhere.mockResolvedValue(undefined);
 mocks.dbUpdateSet.mockReturnValue({ where: mocks.dbUpdateWhere });
@@ -84,10 +91,14 @@ vi.mock("../logger", () => ({
 }));
 
 // Capture handler.
-let capturedHandler: ((ctx: {
-  event: { data: Record<string, unknown> };
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
-}) => Promise<unknown>) | null = null;
+let capturedHandler:
+  | ((ctx: {
+      event: { data: Record<string, unknown> };
+      step: {
+        run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+      };
+    }) => Promise<unknown>)
+  | null = null;
 
 mocks.inngestCreateFunction.mockImplementation(
   (_opts: unknown, _trigger: unknown, handler: typeof capturedHandler) => {
@@ -146,7 +157,10 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
     mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
     mocks.insertToolInvocation.mockResolvedValue(undefined);
-    mocks.claimExecutionStep.mockResolvedValue({ id: "step-uuid-1", attempts: 1 });
+    mocks.claimExecutionStep.mockResolvedValue({
+      id: "step-uuid-1",
+      attempts: 1,
+    });
     mocks.renewExecutionStepLease.mockResolvedValue(undefined);
     mocks.startLeaseRenewal.mockReturnValue(() => {});
   });
@@ -182,8 +196,12 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
 
   it("clears the lease on the terminal completed write", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
-    const completedCall = setCalls.find(([arg]) => arg.status === "completed" && "outputPayload" in arg);
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
+    const completedCall = setCalls.find(
+      ([arg]) => arg.status === "completed" && "outputPayload" in arg,
+    );
     expect(completedCall).toBeTruthy();
     expect(completedCall![0]).toHaveProperty("leaseExpiresAt", null);
   });
@@ -201,18 +219,25 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
 
   it("passes goal to generateObjectFor prompt", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<string, unknown>;
+    const args = mocks.generateObjectFor.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(args.prompt).toContain("Find CEO of Apple");
   });
 
   it("saves outputPayload on the step row when completed", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const completedCall = setCalls.find(
       ([arg]) => (arg as Record<string, unknown>).status === "completed",
     );
     expect(completedCall).toBeTruthy();
-    expect((completedCall![0] as Record<string, unknown>).outputPayload).toEqual(MOCK_OUTPUT);
+    expect(
+      (completedCall![0] as Record<string, unknown>).outputPayload,
+    ).toEqual(MOCK_OUTPUT);
   });
 
   it("marks step failed and stores failureReason when generateObjectFor throws", async () => {
@@ -221,18 +246,25 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
     ).rejects.toThrow("LLM error");
 
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     const failedCall = setCalls.find(
       ([arg]) => (arg as Record<string, unknown>).status === "failed",
     );
     expect(failedCall).toBeTruthy();
-    expect((failedCall![0] as Record<string, unknown>).failureReason).toBe("LLM error");
+    expect((failedCall![0] as Record<string, unknown>).failureReason).toBe(
+      "LLM error",
+    );
   });
 
   it("writes a completed tool invocation row to telemetry", async () => {
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
     expect(mocks.insertToolInvocation).toHaveBeenCalled();
-    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(telArgs.capability_name).toBe("workflow.task.execute");
     expect(telArgs.status).toBe("completed");
     expect(telArgs.org_id).toBe("org-1");
@@ -243,7 +275,10 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     await expect(
       capturedHandler!({ event: BASE_EVENT, step: makeStep() }),
     ).rejects.toThrow();
-    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(telArgs.status).toBe("failed");
   });
 
@@ -270,10 +305,15 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     // Exactly one completed tool_invocations row for the single logical
     // task execution — not doubled by the replay.
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
-    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(telArgs.status).toBe("completed");
     // Deterministic invocation_id — not a fresh crypto.randomUUID() per replay.
-    expect(telArgs.invocation_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
+    expect(telArgs.invocation_id).toEqual(
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
+    );
   });
 
   it("finalizes execution when all steps are terminal (completed + failed >= total)", async () => {
@@ -281,7 +321,9 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     mocks.countOverride = { total: 2, completed: 2, failed: 0 };
 
     await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
-    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
     // The finalize-execution step sets status on agentExecutions; completedAt will be set too
     const finalUpdate = setCalls.find(
       ([arg]) =>

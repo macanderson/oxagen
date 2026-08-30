@@ -257,7 +257,7 @@ export interface GitHubClientOptions {
   baseUrl?: string;
   /**
    * Milliseconds to sleep between fork-polling attempts.
-   * Defaults to 2000. Set to 0 in tests via the injectable `sleep` below.
+   * Defaults to 1500. Set to 0 in tests via the injectable `sleep` below.
    */
   sleepMs?: number;
   /**

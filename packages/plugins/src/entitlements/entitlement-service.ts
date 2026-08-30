@@ -45,7 +45,16 @@ export function clearEntitlementCacheForTests(): void {
  * Return the set of capability plugin ids (e.g. "oxagen/media-svg") that are
  * installed AND enabled for the given (orgId, workspaceId).
  *
- * Results are cached for 30 seconds per (orgId, workspaceId).
+ * Results are cached for 30 seconds per (orgId, workspaceId). Two consequences
+ * callers must know about:
+ *
+ * - The cache is not invalidated on install/uninstall/disable, so a REVOKED
+ *   entitlement keeps passing the gate for up to CACHE_TTL_MS. That is a
+ *   deliberate fail-open window traded for one DB round-trip per invocation;
+ *   it is not suitable as the sole control for an urgent revocation.
+ * - The returned Set is the CACHED instance, not a copy. Mutating it (`.add`,
+ *   `.delete`) rewrites the entitlements every later gate check in this process
+ *   sees. Treat it as read-only.
  */
 export async function listEntitledCapabilityPluginIds(
   orgId: string,

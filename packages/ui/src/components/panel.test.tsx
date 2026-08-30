@@ -65,9 +65,9 @@ describe("Panel", () => {
   });
 
   it("accepts the back-compat brand treatments without emitting any class", () => {
-    // The flat reskin retired both treatments (Card ignores them too). Panel
-    // used to stamp `ox-glow-violet` — a class no stylesheet defined, naming a
-    // colour the palette does not have — so the props are now inert by design.
+    // Both treatments are inert by design in this flat skin (Card ignores them
+    // too). The props stay on the type for back-compat, but Panel must emit no
+    // class for them — a class no stylesheet defines is dead weight.
     const html = renderToStaticMarkup(
       <Panel glow gradientRing title="Brand">
         body

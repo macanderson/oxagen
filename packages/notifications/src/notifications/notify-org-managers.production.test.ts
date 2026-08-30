@@ -113,7 +113,11 @@ describe("notifyOrgManagers — production DB-resolution path", () => {
 
     expect(mockCreateNotification).toHaveBeenCalledTimes(2);
     expect(mockCreateNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "u1", orgId: "org-1", kind: "security" }),
+      expect.objectContaining({
+        userId: "u1",
+        orgId: "org-1",
+        kind: "security",
+      }),
     );
     expect(mockSendEmail).toHaveBeenCalledTimes(2);
     expect(mockSendEmail).toHaveBeenCalledWith(
@@ -139,7 +143,10 @@ describe("notifyOrgManagers — production DB-resolution path", () => {
     });
 
     expect(mockSendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: "No-body alert", text: "No-body alert" }),
+      expect.objectContaining({
+        subject: "No-body alert",
+        text: "No-body alert",
+      }),
     );
   });
 

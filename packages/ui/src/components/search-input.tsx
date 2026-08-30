@@ -31,7 +31,11 @@ const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
           ref={ref}
           type="search"
           value={value}
-          className={cn("pl-8 [&::-webkit-search-cancel-button]:appearance-none", showClear && "pr-8", className)}
+          className={cn(
+            "pl-8 [&::-webkit-search-cancel-button]:appearance-none",
+            showClear && "pr-8",
+            className,
+          )}
           {...props}
         />
         {showClear && (

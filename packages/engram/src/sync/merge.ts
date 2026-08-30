@@ -123,7 +123,9 @@ export function mergeRecordMetadata(
   const confidence = Math.max(local.confidence, remote.confidence);
 
   // Causality: grow-only set — union of DAG edges (deterministically ordered).
-  const causality = [...new Set([...local.causality, ...remote.causality])].sort();
+  const causality = [
+    ...new Set([...local.causality, ...remote.causality]),
+  ].sort();
 
   // If salience differs significantly, note a conflict for observability.
   if (Math.abs(local.salience - remote.salience) > 0.2) {

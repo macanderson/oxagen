@@ -8,8 +8,15 @@ let _driver: Driver | null = null;
 
 export function driver(): Driver {
   if (_driver) return _driver;
-  const env = requireEnv(["NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD"] as const);
-  _driver = neo4j.driver(env.NEO4J_URI, neo4j.auth.basic(env.NEO4J_USERNAME, env.NEO4J_PASSWORD));
+  const env = requireEnv([
+    "NEO4J_URI",
+    "NEO4J_USERNAME",
+    "NEO4J_PASSWORD",
+  ] as const);
+  _driver = neo4j.driver(
+    env.NEO4J_URI,
+    neo4j.auth.basic(env.NEO4J_USERNAME, env.NEO4J_PASSWORD),
+  );
   return _driver;
 }
 

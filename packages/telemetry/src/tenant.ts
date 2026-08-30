@@ -29,11 +29,16 @@ export async function chInsert(
  * the active tenant scope as named query params alongside any caller-supplied
  * params. Throws `TenantScopeError` when:
  *  - No scope is active (fail-closed).
- *  - The query string does not reference `org_id` (guard against cross-tenant
- *    reads that forget to filter — e.g. `SELECT * FROM events` with no WHERE).
+ *  - The query string does not mention `org_id` anywhere.
  *
- * The guard uses a simple substring match; it is intentionally conservative
- * so that `org_id` in a comment still passes (cheap and correct in practice).
+ * The second check is a word-boundary regex over the query text, so it catches
+ * only the blunt mistake (`SELECT * FROM events` with no WHERE at all). It is
+ * NOT proof of tenant isolation: `org_id` appearing in a SELECT list, a
+ * comment, a GROUP BY, or an OR'd predicate all satisfy it. Binding orgId /
+ * workspaceId as params does not filter either — the query author still has to
+ * write the `WHERE org_id = {orgId:UUID}` clause. Review every new chSelect
+ * query for a real equality filter; the regex will not catch it for you.
+ *
  * A query that genuinely must run unscoped must use the raw `clickhouse()`
  * client directly inside `packages/telemetry` — not this helper.
  *

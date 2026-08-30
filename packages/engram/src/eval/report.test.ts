@@ -28,17 +28,41 @@ function makeResult(overrides: Partial<EvalSuiteResult> = {}): EvalSuiteResult {
         traceName: "Auth flow test",
         metrics,
         regressions: [],
-        turnResults: [{ pass: true, precision: 1.0, missingRequired: [], includedForbidden: [] }],
+        turnResults: [
+          {
+            pass: true,
+            precision: 1.0,
+            missingRequired: [],
+            includedForbidden: [],
+          },
+        ],
         passed: true,
       },
       {
         traceId: "trace-002",
         traceName: "DB query test",
         metrics,
-        regressions: [{ metric: "contextPrecision", baseline: 0.9, current: 0.7, degradation: 0.22 }],
+        regressions: [
+          {
+            metric: "contextPrecision",
+            baseline: 0.9,
+            current: 0.7,
+            degradation: 0.22,
+          },
+        ],
         turnResults: [
-          { pass: true, precision: 0.8, missingRequired: [], includedForbidden: [] },
-          { pass: false, precision: 0.5, missingRequired: ["rec-1"], includedForbidden: [] },
+          {
+            pass: true,
+            precision: 0.8,
+            missingRequired: [],
+            includedForbidden: [],
+          },
+          {
+            pass: false,
+            precision: 0.5,
+            missingRequired: ["rec-1"],
+            includedForbidden: [],
+          },
         ],
         passed: false,
       },
@@ -66,7 +90,11 @@ describe("generateTextReport", () => {
   });
 
   it("shows PASS for passed suite", () => {
-    const passed: EvalSuiteResult = makeResult({ overallPassed: true, failed: 0, passed: 2 });
+    const passed: EvalSuiteResult = makeResult({
+      overallPassed: true,
+      failed: 0,
+      passed: 2,
+    });
     const report = generateTextReport(passed);
     expect(report).toContain("✓ PASS");
   });

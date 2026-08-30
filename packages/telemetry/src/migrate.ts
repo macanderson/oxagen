@@ -77,9 +77,19 @@ export function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-// ClickHouse migrations are idempotent (CREATE IF NOT EXISTS / ADD COLUMN
-// IF NOT EXISTS). schema.sql is the canonical desired state; migrations/
-// holds versioned ALTERs for existing deployments. Both apply on every run.
+// Applies schema.sql, then every file in migrations/ in filename order.
+//
+// There is no applied-migrations ledger: EVERY statement replays on EVERY run.
+// That makes each statement's own idempotency the only thing keeping a re-run
+// safe (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS), and it is not
+// checked by anything — a non-idempotent statement in migrations/ re-executes
+// on every deploy. `DROP TABLE IF EXISTS` is idempotent as a statement but NOT
+// safe under replay: it destroys the table's data every run.
+//
+// schema.sql holds most, but not all, table definitions — audit_events,
+// error_events, usage_events, memory_changes, schema_conformance_events,
+// stella_operational_events and the claude_* tables are defined only in
+// migrations/. Treat schema.sql plus migrations/ together as the desired state.
 export async function migrate(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   await ensureDatabase();
@@ -112,12 +122,21 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrate()
     .then(() => closeClickhouse())
     .then(() => {
-      process.stdout.write(JSON.stringify({ level: "info", msg: "ClickHouse migration complete" }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          level: "info",
+          msg: "ClickHouse migration complete",
+        }) + "\n",
+      );
       process.exit(0);
     })
     .catch((err: unknown) => {
       process.stderr.write(
-        JSON.stringify({ level: "error", msg: "ClickHouse migration failed", err: String(err) }) + "\n",
+        JSON.stringify({
+          level: "error",
+          msg: "ClickHouse migration failed",
+          err: String(err),
+        }) + "\n",
       );
       process.exit(1);
     });

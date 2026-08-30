@@ -452,6 +452,18 @@ export async function upsertEmbedding(
   }
 }
 
+/**
+ * Meta-node describing a source connection in the graph.
+ *
+ * BOUNDARY NOTE: `cursor`, `lastSyncAt`, `healthStatus`, and `entityCount` are
+ * operational state whose ACID source of truth is
+ * `ingestion.source_connections` in Postgres — this node is a denormalized
+ * graph-side copy for traversal, never the authority. `entityCountDelta` is
+ * also a read-modify-write counter applied from an at-least-once Inngest step,
+ * so a retried step double-counts; and on a node created before `entityCount`
+ * existed the `sc.entityCount + $delta` below evaluates to null (Cypher null
+ * arithmetic) and the count is lost for good.
+ */
 export interface SourceConnectionMeta {
   connectionId: string;
   workspaceId: string;

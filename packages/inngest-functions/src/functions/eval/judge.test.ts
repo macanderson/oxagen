@@ -55,7 +55,12 @@ describe("scoreWithJudge", () => {
 
   it("calls generateObjectFor with the rubric system prompt and the item's input/expected/actual answer", async () => {
     mocks.generateObjectFor.mockResolvedValue({
-      object: { correctness: 1, faithfulness: 1, score: 1, rationale: "Perfect." },
+      object: {
+        correctness: 1,
+        faithfulness: 1,
+        score: 1,
+        rationale: "Perfect.",
+      },
       usage: { promptTokens: 10, completionTokens: 5 },
     });
 
@@ -90,14 +95,21 @@ describe("scoreWithJudge", () => {
     expect(content).toContain("4");
 
     // Resolves the model via selectModel(judgeModelId) and forwards telemetry.
-    expect(mocks.selectModel).toHaveBeenCalledWith({ model: "anthropic/claude-sonnet" });
+    expect(mocks.selectModel).toHaveBeenCalledWith({
+      model: "anthropic/claude-sonnet",
+    });
     expect(call.model).toBe(SELECTED_MODEL);
     expect(call.telemetry).toEqual(TELEMETRY);
   });
 
   it("tells the judge to score on soundness when no expected answer is provided", async () => {
     mocks.generateObjectFor.mockResolvedValue({
-      object: { correctness: 0.5, faithfulness: 1, score: 0.5, rationale: "Plausible." },
+      object: {
+        correctness: 0.5,
+        faithfulness: 1,
+        score: 0.5,
+        rationale: "Plausible.",
+      },
       usage: { promptTokens: 10, completionTokens: 5 },
     });
 

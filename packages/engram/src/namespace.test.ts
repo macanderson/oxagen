@@ -59,7 +59,9 @@ describe("namespaceKey", () => {
   });
 
   it("includes session when present", () => {
-    expect(namespaceKey({ org: "o", workspace: "w", session: "s" })).toBe("o:w:s");
+    expect(namespaceKey({ org: "o", workspace: "w", session: "s" })).toBe(
+      "o:w:s",
+    );
   });
 
   it("includes agent when session and agent are present", () => {

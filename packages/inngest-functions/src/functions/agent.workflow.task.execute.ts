@@ -4,7 +4,11 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertToolInvocation, deterministicEventId } from "@oxagen/telemetry";
-import { claimExecutionStep, renewExecutionStepLease, startLeaseRenewal } from "../lease";
+import {
+  claimExecutionStep,
+  renewExecutionStepLease,
+  startLeaseRenewal,
+} from "../lease";
 import { logger } from "../logger";
 import { z } from "zod";
 
@@ -28,16 +32,23 @@ export const [agentWorkflowTaskExecute] = createFunction(
   },
   { event: "agent/workflow.task.execute" },
   async ({ event, step, runId }) => {
-    const { orgId, workspaceId, executionId, stepId, taskIndex, goal, outputFormat } =
-      event.data as {
-        orgId: string;
-        workspaceId: string;
-        executionId: string;
-        stepId: string;
-        taskIndex: number;
-        goal: string;
-        outputFormat: string;
-      };
+    const {
+      orgId,
+      workspaceId,
+      executionId,
+      stepId,
+      taskIndex,
+      goal,
+      outputFormat,
+    } = event.data as {
+      orgId: string;
+      workspaceId: string;
+      executionId: string;
+      stepId: string;
+      taskIndex: number;
+      goal: string;
+      outputFormat: string;
+    };
 
     // Deterministic — not crypto.randomUUID() — so a replayed/retried
     // invocation of this function derives the same tool_invocations row id
@@ -45,9 +56,15 @@ export const [agentWorkflowTaskExecute] = createFunction(
     // actual double-insert guard is the step.run wrapper around each
     // insertToolInvocation call below (see OXA reliability fix: retried
     // Inngest steps double-counting ClickHouse telemetry).
-    const invocationId = deterministicEventId("agent.workflow.task.execute", stepId);
+    const invocationId = deterministicEventId(
+      "agent.workflow.task.execute",
+      stepId,
+    );
     const startedAt = Date.now();
-    const workerId = typeof runId === "string" && runId.length > 0 ? runId : `worker:${stepId}`;
+    const workerId =
+      typeof runId === "string" && runId.length > 0
+        ? runId
+        : `worker:${stepId}`;
 
     // Claim the step (mark-running as a claim — spec §1): atomic UPDATE that
     // takes ownership + a lease and bumps attempts. Null means the step is
@@ -71,8 +88,15 @@ export const [agentWorkflowTaskExecute] = createFunction(
         // Keep the lease alive across the LLM call so a slow generation never
         // triggers a false reclaim (spec §Risks).
         const stopRenewal = startLeaseRenewal(
-          () => renewExecutionStepLease({ orgId, workspaceId, stepId, workerId }),
-          { onError: (err) => logger.warn({ err, stepId }, "lease renewal failed — sweeper may reclaim") },
+          () =>
+            renewExecutionStepLease({ orgId, workspaceId, stepId, workerId }),
+          {
+            onError: (err) =>
+              logger.warn(
+                { err, stepId },
+                "lease renewal failed — sweeper may reclaim",
+              ),
+          },
         );
         try {
           return await generateObjectFor({
@@ -94,7 +118,10 @@ Provide a summary, any relevant structured data, and source references if applic
       output = result.object;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      logger.error({ stepId, executionId, orgId, err }, "agent.workflow.task.execute: failed");
+      logger.error(
+        { stepId, executionId, orgId, err },
+        "agent.workflow.task.execute: failed",
+      );
 
       await step.run("mark-failed", () =>
         runInTenantScope({ orgId, workspaceId }, () =>
@@ -145,7 +172,10 @@ Provide a summary, any relevant structured data, and source references if applic
             created_at: new Date().toISOString(),
           });
         } catch (telErr) {
-          logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
+          logger.warn(
+            { err: telErr },
+            "insertToolInvocation failed — telemetry loss",
+          );
         }
       });
 
@@ -207,7 +237,11 @@ Provide a summary, any relevant structured data, and source references if applic
       ),
     );
 
-    const { total, completed, failed } = stepCounts ?? { total: 0, completed: 0, failed: 0 };
+    const { total, completed, failed } = stepCounts ?? {
+      total: 0,
+      completed: 0,
+      failed: 0,
+    };
 
     // If all steps are terminal, finalize the execution.
     if (completed + failed >= total) {
@@ -254,11 +288,17 @@ Provide a summary, any relevant structured data, and source references if applic
           created_at: new Date().toISOString(),
         });
       } catch (telErr) {
-        logger.warn({ err: telErr }, "insertToolInvocation failed — telemetry loss");
+        logger.warn(
+          { err: telErr },
+          "insertToolInvocation failed — telemetry loss",
+        );
       }
     });
 
-    logger.info({ stepId, taskIndex, executionId, orgId }, "agent.workflow.task.execute: completed");
+    logger.info(
+      { stepId, taskIndex, executionId, orgId },
+      "agent.workflow.task.execute: completed",
+    );
     return { stepId, taskIndex, status: "completed" };
   },
 );

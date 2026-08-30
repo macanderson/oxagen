@@ -38,7 +38,9 @@ export const [authSessionExpiryAudit] = createFunction(
     // ── Step 1: find expired sessions without a TTL sign_out event ──────────
     const sessions = await step.run("find-expired-sessions", async () => {
       const now = new Date();
-      const windowStart = new Date(now.getTime() - WINDOW_HOURS * 60 * 60 * 1000);
+      const windowStart = new Date(
+        now.getTime() - WINDOW_HOURS * 60 * 60 * 1000,
+      );
 
       return withSystemDb((tx) =>
         // LEFT JOIN on security_events using the 'ttl:<sessionId>' dedup key.
@@ -87,7 +89,10 @@ export const [authSessionExpiryAudit] = createFunction(
 
       await withSystemDb(async (tx) => {
         const rows = await tx
-          .select({ userId: schema.orgUsers.userId, orgId: schema.orgUsers.orgId })
+          .select({
+            userId: schema.orgUsers.userId,
+            orgId: schema.orgUsers.orgId,
+          })
           .from(schema.orgUsers)
           .where(inArray(schema.orgUsers.userId, userIds))
           .orderBy(schema.orgUsers.joinedAt);
@@ -110,7 +115,8 @@ export const [authSessionExpiryAudit] = createFunction(
         // expiresAt arrives as a Date from the DB query but as an ISO string
         // after Inngest serializes and deserializes step output via JSON.
         const raw = session.expiresAt as unknown;
-        const occurredAt = typeof raw === "string" ? new Date(raw) : (raw as Date);
+        const occurredAt =
+          typeof raw === "string" ? new Date(raw) : (raw as Date);
 
         await emitSecurityEventAsync({
           eventType: "auth.sign_out",

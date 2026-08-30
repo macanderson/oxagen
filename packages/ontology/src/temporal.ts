@@ -17,9 +17,11 @@
  * *closed* by stamping `validTo` / `invalidatedAt`, preserving full history.
  *
  * The Cypher here is composed as string fragments interpolated into the existing
- * MERGE / MATCH statements in the write and read handlers. Only fixed relationship
- * *variable names* (already lexically constrained by the caller) are interpolated;
- * every time value is passed as a bound `$param`, never concatenated.
+ * MERGE / MATCH statements in the write and read handlers. The only interpolated
+ * text is identifiers — a relationship *variable name* and a column-alias
+ * *prefix* — and both are checked against a plain-identifier grammar before they
+ * reach a query string. Every time value is passed as a bound `$param`, never
+ * concatenated.
  */
 
 /** The four bi-temporal validity properties as read back from Neo4j (ISO-8601). */
@@ -100,12 +102,16 @@ export function edgeOpenPredicate(relVar = "old"): string {
  * valid time of the fact; pass the source timestamp when known, otherwise omit
  * (null) and the Cypher falls back to `datetime()` (now).
  */
-export function edgeValidityParams(observedAt?: string | Date | null): { validFrom: string | null } {
+export function edgeValidityParams(observedAt?: string | Date | null): {
+  validFrom: string | null;
+} {
   return { validFrom: toIso(observedAt) };
 }
 
 /** Build the `$closedAt` param for a supersession close write (defaults to now). */
-export function edgeCloseParams(closedAt?: string | Date | null): { closedAt: string } {
+export function edgeCloseParams(closedAt?: string | Date | null): {
+  closedAt: string;
+} {
   return { closedAt: toIso(closedAt) ?? new Date().toISOString() };
 }
 
@@ -169,6 +175,7 @@ export function readEdgeValidity(
  */
 export function edgeValidityReturn(relVar = "r", prefix = ""): string {
   assertVar(relVar);
+  assertPrefix(prefix);
   return (
     `toString(${relVar}.validFrom) AS ${prefix}validFrom, ` +
     `toString(${relVar}.validTo) AS ${prefix}validTo, ` +
@@ -191,5 +198,15 @@ const VAR_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 function assertVar(relVar: string): void {
   if (!VAR_PATTERN.test(relVar)) {
     throw new Error(`temporal: unsafe Cypher variable name "${relVar}"`);
+  }
+}
+
+// A column-alias prefix is interpolated into the RETURN aliases, so it is the
+// same injection surface as the relationship variable. Empty (the default, no
+// prefixing) is allowed; anything else must be a plain identifier fragment.
+const PREFIX_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+function assertPrefix(prefix: string): void {
+  if (prefix !== "" && !PREFIX_PATTERN.test(prefix)) {
+    throw new Error(`temporal: unsafe Cypher column-alias prefix "${prefix}"`);
   }
 }

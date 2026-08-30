@@ -15,9 +15,18 @@ import { breakerEnvConfig } from "./breaker-config";
  *
  * Unlike the Neo4j/Stripe breakers (breaker-clients.ts), this one CANNOT record
  * its own transitions in ClickHouse — that is the very dependency that is down —
- * so it logs trips to stderr only. Writes here are overwhelmingly fire-and-forget
- * telemetry, so a `CircuitOpenError` just means "drop this row while ClickHouse
- * recovers", which callers already tolerate.
+ * so it logs trips to stderr only.
+ *
+ * Degradation semantics, stated plainly: on an open breaker every guarded write
+ * rejects with `CircuitOpenError`, and every insert caller in this repo swallows
+ * that rejection. There is no queue, dead-letter, or retry behind this boundary,
+ * so the row is lost permanently. For log/trace/event streams that is the right
+ * trade. It is NOT free for `token_usage` — those rows are the metering ledger
+ * `sumTokenUsage` bills from, so a ClickHouse outage silently drops billable
+ * usage with no counter recording how much. Read paths degrade correctly:
+ * callers on a critical path (see `getSpendBudgetStatuses` in
+ * packages/billing/src/spend-budget-gate.ts) catch the rejection and fail OPEN,
+ * so a down telemetry store never blocks an invocation.
  */
 function clickhouseBreaker(): CircuitBreaker {
   return getBreaker("clickhouse", {

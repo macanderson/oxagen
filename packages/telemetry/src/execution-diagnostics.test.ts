@@ -72,16 +72,27 @@ describe("fetchErrorEventsForExecution", () => {
 
   it("clamps limit to the 500 ceiling and floors sub-1 values to the default", async () => {
     mockRows([]);
-    await fetchErrorEventsForExecution({ orgId: ORG, executionId: EXEC, limit: 100000 });
+    await fetchErrorEventsForExecution({
+      orgId: ORG,
+      executionId: EXEC,
+      limit: 100000,
+    });
     expect(lastCall().query_params.limit).toBe(500);
 
-    await fetchErrorEventsForExecution({ orgId: ORG, executionId: EXEC, limit: 0 });
+    await fetchErrorEventsForExecution({
+      orgId: ORG,
+      executionId: EXEC,
+      limit: 0,
+    });
     expect(lastCall().query_params.limit).toBe(100);
   });
 
   it("short-circuits to [] for the nil-UUID sentinel without querying", async () => {
     mockRows([{ error_id: "x" }]);
-    const out = await fetchErrorEventsForExecution({ orgId: ORG, executionId: NIL });
+    const out = await fetchErrorEventsForExecution({
+      orgId: ORG,
+      executionId: NIL,
+    });
     expect(out).toEqual([]);
     expect(queryMock).not.toHaveBeenCalled();
   });
@@ -115,8 +126,15 @@ describe("fetchErrorEventsForExecution", () => {
         created_at: "2026-07-06 00:00:01.000",
       },
     ]);
-    const out = await fetchErrorEventsForExecution({ orgId: ORG, executionId: EXEC });
-    expect(out[0]).toMatchObject({ errorId: "e1", errorClass: "TypeError", stepId: null });
+    const out = await fetchErrorEventsForExecution({
+      orgId: ORG,
+      executionId: EXEC,
+    });
+    expect(out[0]).toMatchObject({
+      errorId: "e1",
+      errorClass: "TypeError",
+      stepId: null,
+    });
     expect(out[1]).toMatchObject({
       errorId: "e2",
       severity: "fatal",

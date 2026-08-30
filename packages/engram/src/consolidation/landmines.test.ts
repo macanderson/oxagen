@@ -5,7 +5,12 @@
  */
 import { describe, it, expect } from "vitest";
 import { createRecord } from "../record";
-import type { MemoryRecord, Namespace, Provenance, SemanticBody } from "../types";
+import type {
+  MemoryRecord,
+  Namespace,
+  Provenance,
+  SemanticBody,
+} from "../types";
 import { deduplicateSemanticRecords } from "./dedupe";
 import { resolveConflict } from "./resolve";
 import { extractToolSequences, detectPatterns } from "./patterns";
@@ -13,9 +18,17 @@ import { promotePatterns, type PromotionConfig } from "./promote";
 import { distill, extractFactHeuristic } from "./distill";
 
 const NS: Namespace = { org: "o", workspace: "w" };
-const PROV: Provenance = { author: "t", derivedFrom: [], timestamp: 1_700_000_000_000 };
+const PROV: Provenance = {
+  author: "t",
+  derivedFrom: [],
+  timestamp: 1_700_000_000_000,
+};
 
-function semantic(fact: string, domain: string, confidence = 0.8): MemoryRecord {
+function semantic(
+  fact: string,
+  domain: string,
+  confidence = 0.8,
+): MemoryRecord {
   return createRecord({
     kind: "semantic",
     namespace: NS,
@@ -27,7 +40,12 @@ function semantic(fact: string, domain: string, confidence = 0.8): MemoryRecord 
   });
 }
 
-function toolCall(tool: string, outcome: "success" | "failure", turnId?: string, at = 1_700_000_000_000) {
+function toolCall(
+  tool: string,
+  outcome: "success" | "failure",
+  turnId?: string,
+  at = 1_700_000_000_000,
+) {
   return createRecord({
     kind: "episodic",
     namespace: NS,
@@ -84,10 +102,24 @@ describe("C-1 deduplicateSemanticRecords", () => {
 
 describe("C-2 resolveConflict ordering", () => {
   it("escalates two high-confidence facts to human_review even with strong evidence", () => {
-    const existing = semantic("The service stores tokens encrypted", "security", 0.95);
-    const newFact: SemanticBody = { fact: "The service stores tokens in plaintext", domain: "security" };
+    const existing = semantic(
+      "The service stores tokens encrypted",
+      "security",
+      0.95,
+    );
+    const newFact: SemanticBody = {
+      fact: "The service stores tokens in plaintext",
+      domain: "security",
+    };
     // 6 pieces of evidence would have auto-resolved to keep_new before the fix.
-    const result = resolveConflict(existing, newFact, 0.93, ["e1", "e2", "e3", "e4", "e5", "e6"]);
+    const result = resolveConflict(existing, newFact, 0.93, [
+      "e1",
+      "e2",
+      "e3",
+      "e4",
+      "e5",
+      "e6",
+    ]);
     expect(result.resolution).toBe("human_review");
   });
 });
@@ -197,7 +229,11 @@ describe("#9 distill findExistingFact", () => {
   ];
 
   it("inserts a genuinely different same-domain fact instead of always matching", async () => {
-    const unrelated = semantic("The database uses PostgreSQL with pgvector", "general", 0.7);
+    const unrelated = semantic(
+      "The database uses PostgreSQL with pgvector",
+      "general",
+      0.7,
+    );
     const result = await distill(cluster, [unrelated]);
     // The old includes("") bug matched the first same-domain fact every time,
     // so nothing was ever inserted. The distinct fact must be inserted.

@@ -14,7 +14,8 @@ describe("slack connector – normalizeRecord", () => {
         reply_count: 3,
         reactions: [{ name: "thumbsup" }, { name: "heart" }],
         files: [],
-        permalink: "https://workspace.slack.com/archives/C12345678/p1706800000000001",
+        permalink:
+          "https://workspace.slack.com/archives/C12345678/p1706800000000001",
       };
       const result = slack.normalizeRecord("message", raw);
       expect(result.externalId).toBe("C12345678:1706800000.000001");
@@ -97,7 +98,9 @@ describe("slack connector – verifyWebhook", () => {
 
   function buildSlackSig(body: string, ts: number, secret: string) {
     const baseString = `v0:${ts}:${body}`;
-    return "v0=" + createHmac("sha256", secret).update(baseString).digest("hex");
+    return (
+      "v0=" + createHmac("sha256", secret).update(baseString).digest("hex")
+    );
   }
 
   it("accepts a valid slack signature", () => {
@@ -146,6 +149,8 @@ describe("slack connector – verifyWebhook", () => {
       "x-slack-request-timestamp": String(ts),
       "x-slack-signature": "v0=anything",
     };
-    expect(slack.verifyWebhook!(Buffer.from("body"), headers, null)).toBe(false);
+    expect(slack.verifyWebhook!(Buffer.from("body"), headers, null)).toBe(
+      false,
+    );
   });
 });

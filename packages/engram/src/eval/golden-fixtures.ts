@@ -40,7 +40,12 @@ export function hex64(seed: string): string {
   return out.slice(0, 64);
 }
 
-function semantic(seed: string, fact: string, domain: string, salience = 0.7): MemoryRecord {
+function semantic(
+  seed: string,
+  fact: string,
+  domain: string,
+  salience = 0.7,
+): MemoryRecord {
   return {
     id: hex64(seed),
     kind: "semantic",

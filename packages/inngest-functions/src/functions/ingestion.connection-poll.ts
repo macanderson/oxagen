@@ -98,7 +98,9 @@ export const [ingestionConnectionPoll] = createFunction(
             consecutive_failure_count: number;
             status: string;
           }>,
-          mappings: Array.from(mappings) as Array<{ source_record_type: string }>,
+          mappings: Array.from(mappings) as Array<{
+            source_record_type: string;
+          }>,
         };
       });
       const conn = rows.conn[0];
@@ -121,80 +123,95 @@ export const [ingestionConnectionPoll] = createFunction(
     // ── Step 2: Resolve auth + poll every mapped record type ─────────────────
     // Everything that touches the decrypted token happens INSIDE this step and
     // only public source records / cursor strings are returned.
-    const outcome = await step.run("poll-records", async (): Promise<PollOutcome> => {
-      const connector = getConnector(connectorId);
-      if (typeof connector.poll !== "function") {
-        // Scheduler shouldn't enqueue these, but guard anyway.
-        return { ok: true, batches: [], cursorMap: loaded.cursorMap, totalRecords: 0 };
-      }
-
-      const resolved = await resolveConnectionAuth(connectionId, orgId);
-      if (!resolved) {
-        return {
-          ok: false,
-          batches: [],
-          cursorMap: loaded.cursorMap,
-          totalRecords: 0,
-          error: "no_usable_credential",
-        };
-      }
-
-      // Validate the connection config against the connector's schema; a bad
-      // stored config is a permanent poll failure, not a transient one.
-      const parsedConfig = connector.connectionConfigSchema.safeParse(resolved.deliveryConfig);
-      if (!parsedConfig.success) {
-        return {
-          ok: false,
-          batches: [],
-          cursorMap: loaded.cursorMap,
-          totalRecords: 0,
-          error: `invalid_config: ${parsedConfig.error.issues.map((i) => i.path.join(".")).join(",")}`,
-        };
-      }
-
-      let cursorMap = loaded.cursorMap;
-      const batches: PollBatch[] = [];
-      let totalRecords = 0;
-
-      try {
-        for (const recordType of loaded.recordTypes) {
-          const priorCursor = readCursor(cursorMap, recordType);
-          const collected: RawRecord[] = [];
-          for await (const rec of connector.poll(
-            resolved.auth,
-            parsedConfig.data,
-            recordType,
-            priorCursor,
-          )) {
-            collected.push(rec);
-            if (collected.length >= MAX_RECORDS_PER_TYPE) break;
-          }
-          if (collected.length === 0) continue;
-
-          const newCursor = advanceCursor(connector, recordType, collected, priorCursor);
-          cursorMap = mergeCursor(cursorMap, recordType, newCursor);
-          totalRecords += collected.length;
-          batches.push({
-            recordType,
-            records: collected.map((r) => ({
-              sourceRecordType: r.sourceRecordType,
-              payload: r.raw,
-            })),
-            newCursor,
-          });
+    const outcome = await step.run(
+      "poll-records",
+      async (): Promise<PollOutcome> => {
+        const connector = getConnector(connectorId);
+        if (typeof connector.poll !== "function") {
+          // Scheduler shouldn't enqueue these, but guard anyway.
+          return {
+            ok: true,
+            batches: [],
+            cursorMap: loaded.cursorMap,
+            totalRecords: 0,
+          };
         }
-      } catch (err) {
-        return {
-          ok: false,
-          batches,
-          cursorMap,
-          totalRecords,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
 
-      return { ok: true, batches, cursorMap, totalRecords };
-    });
+        const resolved = await resolveConnectionAuth(connectionId, orgId);
+        if (!resolved) {
+          return {
+            ok: false,
+            batches: [],
+            cursorMap: loaded.cursorMap,
+            totalRecords: 0,
+            error: "no_usable_credential",
+          };
+        }
+
+        // Validate the connection config against the connector's schema; a bad
+        // stored config is a permanent poll failure, not a transient one.
+        const parsedConfig = connector.connectionConfigSchema.safeParse(
+          resolved.deliveryConfig,
+        );
+        if (!parsedConfig.success) {
+          return {
+            ok: false,
+            batches: [],
+            cursorMap: loaded.cursorMap,
+            totalRecords: 0,
+            error: `invalid_config: ${parsedConfig.error.issues.map((i) => i.path.join(".")).join(",")}`,
+          };
+        }
+
+        let cursorMap = loaded.cursorMap;
+        const batches: PollBatch[] = [];
+        let totalRecords = 0;
+
+        try {
+          for (const recordType of loaded.recordTypes) {
+            const priorCursor = readCursor(cursorMap, recordType);
+            const collected: RawRecord[] = [];
+            for await (const rec of connector.poll(
+              resolved.auth,
+              parsedConfig.data,
+              recordType,
+              priorCursor,
+            )) {
+              collected.push(rec);
+              if (collected.length >= MAX_RECORDS_PER_TYPE) break;
+            }
+            if (collected.length === 0) continue;
+
+            const newCursor = advanceCursor(
+              connector,
+              recordType,
+              collected,
+              priorCursor,
+            );
+            cursorMap = mergeCursor(cursorMap, recordType, newCursor);
+            totalRecords += collected.length;
+            batches.push({
+              recordType,
+              records: collected.map((r) => ({
+                sourceRecordType: r.sourceRecordType,
+                payload: r.raw,
+              })),
+              newCursor,
+            });
+          }
+        } catch (err) {
+          return {
+            ok: false,
+            batches,
+            cursorMap,
+            totalRecords,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+
+        return { ok: true, batches, cursorMap, totalRecords };
+      },
+    );
 
     // ── Step 3: Dispatch entity.received into the ingestion pipeline ─────────
     // Top-level step.sendEvent so the fan-out is durably checkpointed. Records
@@ -224,8 +241,13 @@ export const [ingestionConnectionPoll] = createFunction(
     await step.run("finalize", async () => {
       const now = new Date();
       if (outcome.ok) {
-        const intervalSeconds = getConnector(connectorId).defaultPollIntervalSeconds ?? 900;
-        const next = nextPollAt({ now, intervalSeconds, consecutiveFailures: 0 });
+        const intervalSeconds =
+          getConnector(connectorId).defaultPollIntervalSeconds ?? 900;
+        const next = nextPollAt({
+          now,
+          intervalSeconds,
+          consecutiveFailures: 0,
+        });
         await withSystemDb((tx) =>
           tx.execute(sql`
             UPDATE ingestion.source_connections
@@ -244,8 +266,13 @@ export const [ingestionConnectionPoll] = createFunction(
       } else {
         const failures = loaded.consecutiveFailureCount + 1;
         const health = healthForFailureCount(failures);
-        const intervalSeconds = getConnector(connectorId).defaultPollIntervalSeconds ?? 900;
-        const next = nextPollAt({ now, intervalSeconds, consecutiveFailures: failures });
+        const intervalSeconds =
+          getConnector(connectorId).defaultPollIntervalSeconds ?? 900;
+        const next = nextPollAt({
+          now,
+          intervalSeconds,
+          consecutiveFailures: failures,
+        });
         await withSystemDb((tx) =>
           tx.execute(sql`
             UPDATE ingestion.source_connections
@@ -272,7 +299,9 @@ export const [ingestionConnectionPoll] = createFunction(
             event_id: randomUUID(),
             org_id: orgId,
             workspace_id: workspaceId,
-            event_type: outcome.ok ? "connector.poll.completed" : "connector.poll.failed",
+            event_type: outcome.ok
+              ? "connector.poll.completed"
+              : "connector.poll.failed",
             source_system: "connector-sync",
             stream_offset: null,
             payload: JSON.stringify({
@@ -286,12 +315,21 @@ export const [ingestionConnectionPoll] = createFunction(
           },
         ]);
       } catch (telErr) {
-        logger.warn({ connectionId, err: telErr }, "connector.poll telemetry write failed");
+        logger.warn(
+          { connectionId, err: telErr },
+          "connector.poll telemetry write failed",
+        );
       }
     });
 
     logger.info(
-      { connectionId, orgId, connectorId, ok: outcome.ok, records: outcome.totalRecords },
+      {
+        connectionId,
+        orgId,
+        connectorId,
+        ok: outcome.ok,
+        records: outcome.totalRecords,
+      },
       "ingestion-connection-poll: completed",
     );
 

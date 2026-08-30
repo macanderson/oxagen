@@ -15,10 +15,13 @@ const HEAD = "1234567890abcdef1234567890abcdef12345678";
 
 /** A fake git: HEAD sha + one dirty file. */
 const fakeExec: ExecPort = async (cmd, args) => {
-  if (cmd === "git" && args[0] === "rev-parse")
+  if (cmd === "git" && args.includes("rev-parse"))
     return { stdout: `${HEAD}\n`, code: 0 };
-  if (cmd === "git" && args[0] === "status")
+  if (cmd === "git" && args.includes("status")) {
+    // The recorder must ask for unquoted paths, or non-ASCII files are lost.
+    expect(args).toContain("core.quotePath=false");
     return { stdout: " M dirty.ts\n?? new.ts\n", code: 0 };
+  }
   return { stdout: "", code: 1 };
 };
 
@@ -174,6 +177,32 @@ describe("wrapTools", () => {
         error: "command exploded",
       });
     }
+  });
+
+  it("flush awaits captures still in flight when the session finalizes", async () => {
+    const recorder = makeRecorder();
+    await recorder.start({ prompt: "go" });
+    recorder.turnStart(1, "go");
+
+    const tools: ToolSet = {
+      write_file: tool({
+        description: "write",
+        inputSchema: z.object({ path: z.string() }),
+        execute: async () => ({ written: true }),
+      }),
+    };
+    const wrapped = recorder.wrapTools(tools);
+    await (
+      wrapped["write_file"] as {
+        execute: (i: unknown, o: unknown) => Promise<unknown>;
+      }
+    ).execute({ path: "last.ts" }, { toolCallId: "call_last" });
+
+    // No vi.waitFor: flush alone must be enough, or the final turn's tool
+    // calls are dropped from the record.
+    await recorder.flush();
+    const io = (await store.readRecords()).find((r) => r.t === "tool.io");
+    expect(io).toMatchObject({ name: "write_file", callId: "call_last" });
   });
 
   it("passes through tools without execute untouched", () => {

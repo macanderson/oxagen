@@ -58,6 +58,11 @@ export interface StoredCredential {
 /**
  * Read the stored credential for a named server.
  * Returns null if no credential file exists or it's unreadable.
+ *
+ * Note the asymmetry with resolve.ts / managed.ts, which warn to stderr on a
+ * malformed file: a corrupted credential here is silently indistinguishable
+ * from "never logged in", so the user sees an auth failure with no hint that
+ * the fix is to delete and re-create the file.
  */
 export function readCredential(serverName: string): StoredCredential | null {
   const filePath = getCredentialFilePath(serverName);
@@ -73,6 +78,12 @@ export function readCredential(serverName: string): StoredCredential | null {
 /**
  * Write (or overwrite) the credential file for a named server.
  * Creates the credentials directory if it doesn't exist.
+ *
+ * Two limits of the 0600 promise in this module's header: `mode` on
+ * writeFileSync only applies when the file is CREATED, so a pre-existing
+ * world-readable file keeps its mode and the token lands in it; and the write
+ * truncates in place rather than writing a temp file and renaming, so a crash
+ * mid-write leaves a truncated, unparseable credential.
  */
 export function writeCredential(
   serverName: string,
@@ -166,6 +177,15 @@ export async function resolveCredential(
     // envToken holds an env var name, not a token value. Look up the named
     // var; if nothing is set, fall back to treating the field itself as the
     // literal token (lets a config skip the indirection and inline a value).
+    //
+    // CAVEAT: the two cases are indistinguishable here. `envToken: "GH_TOKEN"`
+    // with GH_TOKEN unset yields the token "GH_TOKEN" — a non-empty value, so
+    // this returns early and the credential file in step 2 is never consulted,
+    // even when a completed OAuth flow left a valid token there. The
+    // `startsWith("$")` guard does not catch it either: resolve.ts has already
+    // expanded any `${VAR}` form to its value (or to "") before this runs, so a
+    // string still beginning with "$" only reaches here via a config that
+    // bypassed resolveSettings.
     const envValue = config.envToken;
     const tokenFromEnv =
       process.env[envValue] ??

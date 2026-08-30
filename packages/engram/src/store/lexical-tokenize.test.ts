@@ -27,7 +27,10 @@ describe("tokenizeLexicalQuery", () => {
   });
 
   it("caps the number of tokens at MAX_LEXICAL_TOKENS", () => {
-    const words = Array.from({ length: MAX_LEXICAL_TOKENS + 10 }, (_, i) => `token${i}`);
+    const words = Array.from(
+      { length: MAX_LEXICAL_TOKENS + 10 },
+      (_, i) => `token${i}`,
+    );
     const tokens = tokenizeLexicalQuery(words.join(" "));
     expect(tokens.length).toBeLessThanOrEqual(MAX_LEXICAL_TOKENS);
   });

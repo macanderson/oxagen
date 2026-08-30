@@ -32,9 +32,9 @@ describe("Checkbox", () => {
     const { container, getByRole } = render(
       <Checkbox defaultChecked aria-label="c" />,
     );
-    expect(getByRole("checkbox", { name: "c" }).getAttribute("aria-checked")).toBe(
-      "true",
-    );
+    expect(
+      getByRole("checkbox", { name: "c" }).getAttribute("aria-checked"),
+    ).toBe("true");
     const indicator = container.querySelector(".text-control-indicator");
     expect(indicator).not.toBeNull();
     // The check glyph is present (not the indeterminate minus).

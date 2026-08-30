@@ -93,9 +93,9 @@
     /* Brand anchors — Stella's paper ground, its canvas near-black (which is
        both the light-mode ink and the dark-mode page), and its warm paper-text
        off-white as the dark-mode ink. */
-    --_paper: oklch(0.968 0.010 87.5);     /* #F7F4ED — st-paper-ground, the light page */
-    --_ink: oklch(0.146 0.004 285.9);      /* #0A0A0C — st-bg, light-mode ink / dark page */
-    --_ink-white: oklch(0.959 0.010 87.5); /* #F4F1EA — st-paper-text, dark-mode ink */
+    --_paper: oklch(0.968 0.01 87.5); /* #F7F4ED — st-paper-ground, the light page */
+    --_ink: oklch(0.146 0.004 285.9); /* #0A0A0C — st-bg, light-mode ink / dark page */
+    --_ink-white: oklch(0.959 0.01 87.5); /* #F4F1EA — st-paper-text, dark-mode ink */
 
     /* Named brand swatches — the three gold stops are Stella's --st-gold-ink /
        --st-gold / --st-gold-bright verbatim. --ox-ember is THE accent knob: it
@@ -103,27 +103,23 @@
        kept rather than renamed to `gold` because ~25 files across apps/docs bind
        to these identifiers; a skin owns the values, not the names. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(0.985 0.010 87.5);       /* #FDFAF3 — st-paper-raised, light card */
+    --ox-surface: oklch(0.985 0.01 87.5); /* #FDFAF3 — st-paper-raised, light card */
     --ox-ink: var(--_ink);
-    --ox-ember-deep: oklch(0.478 0.098 90.6);    /* #725A00 — st-gold-ink, accent TEXT on paper (6.0:1) */
-    --ox-ember: oklch(0.839 0.152 90.8);         /* #EFC53F — st-gold, the brand metal */
+    --ox-ember-deep: oklch(0.478 0.098 90.6); /* #725A00 — st-gold-ink, accent TEXT on paper (6.0:1) */
+    --ox-ember: oklch(0.839 0.152 90.8); /* #EFC53F — st-gold, the brand metal */
     --ox-ember-light: oklch(0.8893 0.1332 94.3); /* #F7D96B — st-gold-bright, live indicators */
-    --ox-ember-soft: oklch(0.215 0.030 90);      /* #1F1908 — tinted gold fill on the dark canvas */
+    --ox-ember-soft: oklch(0.215 0.03 90); /* #1F1908 — tinted gold fill on the dark canvas */
 
-    /* NOTE — there is deliberately NO indigo/violet swatch here. The skin used to
-       carry --ox-indigo (#4C51A8 / #9CA3E8) as a link accent, and after the gold
-       took links over it lingered as chart-2 and as the "cool" hexagon in the
-       hero backdrop — where, at the hex pulse's ~45% opacity over the canvas, it
-       composited to a muted slate-purple that read as a second, unowned brand
-       colour. The whole family is gone: the categorical ramp now spends the
-       palette's own hues (gold · slate · moss · ochre · silver), so no chart,
-       badge, graph node or backdrop can reintroduce a hue the brand never had.
-       Do not add one back — a new chart hue must come from a primitive above. */
+    /* RULE — the skin has exactly ONE accent hue, the gold. There is deliberately
+       no indigo/violet swatch, and no second brand colour anywhere: the
+       categorical ramp spends the palette's own hues (gold · slate · moss ·
+       ochre · silver). A new chart, badge, graph-node or backdrop colour must
+       come from a primitive declared above — never a fresh hue. */
 
     /* Cursor block of the "o + cursor" logomark (docs/brand). Deliberately NOT
        touched by this reskin: the brand asset set ships the cursor in its own
        red-orange and the canonical files in docs/brand/logos/ must keep matching. */
-    --ox-cursor: oklch(0.655 0.233 31.6);        /* #FF3D1F — brand cursor (light) */
+    --ox-cursor: oklch(0.655 0.233 31.6); /* #FF3D1F — brand cursor (light) */
 
     /* Neutral ramp — Stella's elevation ladder, 1:1. The DARK steps are its
        canvas values (950 page → 900 panel → 850 row → 800 edge); the LIGHT steps
@@ -131,55 +127,54 @@
        carry TEXT and use Stella's silver → dim ink ramp. Note that light and
        dark now sit on different hue axes on purpose: Stella's canvas is cool
        and its paper is warm, which is what makes the gold read as metal on both. */
-    --_stone-50: oklch(0.991 0.010 87.5);   /* #FFFCF5 — st-paper, light popover */
-    --_stone-100: oklch(0.974 0.010 87.5);  /* #F9F6EF — st-paper-panel, muted / card-header */
-    --_stone-150: oklch(0.968 0.010 87.5);  /* #F7F4ED — st-paper-ground, surface-alt */
-    --_stone-200: oklch(0.926 0.009 84.6);  /* #E9E6E0 — st-paper-row, secondary / hover (light) */
-    --_stone-300: oklch(0.898 0.009 84.6);  /* #E0DDD7 — st-paper-seam, border / input (light) */
+    --_stone-50: oklch(0.991 0.01 87.5); /* #FFFCF5 — st-paper, light popover */
+    --_stone-100: oklch(0.974 0.01 87.5); /* #F9F6EF — st-paper-panel, muted / card-header */
+    --_stone-150: oklch(0.968 0.01 87.5); /* #F7F4ED — st-paper-ground, surface-alt */
+    --_stone-200: oklch(0.926 0.009 84.6); /* #E9E6E0 — st-paper-row, secondary / hover (light) */
+    --_stone-300: oklch(0.898 0.009 84.6); /* #E0DDD7 — st-paper-seam, border / input (light) */
     --_stone-400: oklch(0.741 0.016 281.9); /* #A9AAB5 — st-silver, muted-foreground (dark) */
     --_stone-500: oklch(0.573 0.017 285.9); /* #777782 — st-muted, tertiary text */
-    --_stone-600: oklch(0.485 0.005 91.5);  /* #605F5C — st-ink-muted, secondary text (light) */
+    --_stone-600: oklch(0.485 0.005 91.5); /* #605F5C — st-ink-muted, secondary text (light) */
     --_stone-700: oklch(0.417 0.018 285.6); /* #4B4B56 — st-dim, hints / line numbers */
     --_stone-800: oklch(0.271 0.011 285.6); /* #26262C — st-border, hairline / accent surface (dark) */
     --_stone-850: oklch(0.206 0.008 285.7); /* #17171B — st-hl, muted fill / popover (dark) */
-    --_stone-900: oklch(0.170 0.006 285.7); /* #0F0F12 — st-panel, card / sidebar (dark) */
+    --_stone-900: oklch(0.17 0.006 285.7); /* #0F0F12 — st-panel, card / sidebar (dark) */
     --_stone-950: oklch(0.146 0.004 285.9); /* #0A0A0C — st-bg, page background (dark) */
 
     /* Gold accent ramp — drives the accent-subtle backgrounds. Anchored on
        #EFC53F at 400 so it matches --ox-ember exactly; 300 and 600 are Stella's
        own --st-gold-bright and --st-gold-ink, so the ramp interpolates through
        real brand stops rather than around them. */
-    --_amber-50: oklch(0.985 0.020 90);
+    --_amber-50: oklch(0.985 0.02 90);
     --_amber-100: oklch(0.962 0.042 90);
     --_amber-200: oklch(0.925 0.085 90.5);
     --_amber-300: oklch(0.8893 0.1332 94.3); /* #F7D96B — st-gold-bright */
-    --_amber-400: oklch(0.839 0.152 90.8);   /* #EFC53F — st-gold (matches --ox-ember) */
-    --_amber-500: oklch(0.700 0.130 90.7);
-    --_amber-600: oklch(0.478 0.098 90.6);   /* #725A00 — st-gold-ink */
-    --_amber-700: oklch(0.400 0.082 90);     /* #594500 — link hover on paper */
-    --_amber-800: oklch(0.310 0.062 89);
+    --_amber-400: oklch(0.839 0.152 90.8); /* #EFC53F — st-gold (matches --ox-ember) */
+    --_amber-500: oklch(0.7 0.13 90.7);
+    --_amber-600: oklch(0.478 0.098 90.6); /* #725A00 — st-gold-ink */
+    --_amber-700: oklch(0.4 0.082 90); /* #594500 — link hover on paper */
+    --_amber-800: oklch(0.31 0.062 89);
     --_amber-900: oklch(0.235 0.045 88);
 
     /* Brand mark primitives — the gold ramp's three stops (a → b → c). */
-    --_ember-a: oklch(0.478 0.098 90.6);     /* #725A00 — gradient start */
-    --_ember-b: oklch(0.839 0.152 90.8);     /* #EFC53F — gradient midpoint, the solid mark */
-    --_ember-c: oklch(0.8893 0.1332 94.3);   /* #F7D96B — gradient end */
+    --_ember-a: oklch(0.478 0.098 90.6); /* #725A00 — gradient start */
+    --_ember-b: oklch(0.839 0.152 90.8); /* #EFC53F — gradient midpoint, the solid mark */
+    --_ember-c: oklch(0.8893 0.1332 94.3); /* #F7D96B — gradient end */
     --_ember-navy: oklch(0.146 0.004 285.9); /* #0A0A0C — st-bg, the canvas black */
 
     /* Status hues. UNCHANGED by this reskin — recolouring state was explicitly
        out of scope, and Stella agrees on the principle anyway: gold is identity
        and action only, never a state, so the state ramp is free to differ. */
-    --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
-    --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
-    --_moss: oklch(0.529 0.106 154.4);         /* #2F7D4F — success (light, 5.0:1 on paper) */
-    --_moss-light: oklch(0.769 0.119 149.1);   /* #7BC98A — site --ok (dark) */
-    /* Warning is pushed to a clearly ORANGE hue. It used to sit at hue ~73–79,
-       which was safely distant from a terracotta primary at hue 40 — but the
-       ember primary now lives at hue 76, so the old ochre would have read as
-       the brand accent rather than as a warning state. */
-    --_ochre: oklch(0.620 0.150 52);           /* warning (light) */
-    --_ochre-light: oklch(0.750 0.140 55);     /* warning (dark) */
-    --_slate: oklch(0.508 0.042 233.7);        /* info */
+    --_clay: oklch(0.579 0.214 27.2); /* error — true red (hsl 0 72% 51%) */
+    --_clay-light: oklch(0.617 0.191 24.7); /* error (dark, hsl 0 72% 58%) */
+    --_moss: oklch(0.529 0.106 154.4); /* #2F7D4F — success (light, 5.0:1 on paper) */
+    --_moss-light: oklch(0.769 0.119 149.1); /* #7BC98A — site --ok (dark) */
+    /* Warning sits at a clearly ORANGE hue (~52), well away from the gold accent
+       at hue ~91. Keep that separation: a warning that drifts toward the gold
+       reads as the brand accent rather than as a state. */
+    --_ochre: oklch(0.62 0.15 52); /* warning (light) */
+    --_ochre-light: oklch(0.75 0.14 55); /* warning (dark) */
+    --_slate: oklch(0.508 0.042 233.7); /* info */
     --_slate-light: oklch(0.618 0.04 233.3);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -204,26 +199,26 @@
      * ════════════════════════════════════════════════════════════════════════ */
     --background: var(--_paper);
     --foreground: var(--_ink);
-    --card: var(--ox-surface);         /* #FDFAF3 — st-paper-raised, raised above the ground */
+    --card: var(--ox-surface); /* #FDFAF3 — st-paper-raised, raised above the ground */
     --card-foreground: var(--_ink);
-    --popover: var(--_stone-50);       /* #FFFCF5 — st-paper, the top of the paper ladder */
+    --popover: var(--_stone-50); /* #FFFCF5 — st-paper, the top of the paper ladder */
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-ember);        /* #EFC53F — st-gold */
+    --primary: var(--ox-ember); /* #EFC53F — st-gold */
     --primary-foreground: var(--ox-ink);
-    --secondary: var(--_stone-200);    /* #E9E6E0 — st-paper-row, quiet fill (buttons, badges) */
+    --secondary: var(--_stone-200); /* #E9E6E0 — st-paper-row, quiet fill (buttons, badges) */
     --secondary-foreground: var(--_ink);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: var(--_stone-200);       /* #E9E6E0 — st-paper-row; Stella's row wash is NEUTRAL, not gold */
-    --accent-foreground: var(--_ink);  /* st-fg — ink stays neutral on the wash */
-    --destructive: var(--_clay);         /* true red */
+    --accent: var(--_stone-200); /* #E9E6E0 — st-paper-row; Stella's row wash is NEUTRAL, not gold */
+    --accent-foreground: var(--_ink); /* st-fg — ink stays neutral on the wash */
+    --destructive: var(--_clay); /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: var(--_stone-300);       /* #E0DDD7 — st-paper-seam, the hairline */
+    --border: var(--_stone-300); /* #E0DDD7 — st-paper-seam, the hairline */
     --input: var(--_stone-300);
     --ring: var(--ox-ember);
-    --link: var(--ox-ember-deep);      /* #725A00 — st-gold-ink. Stella links in GOLD; on paper only
+    --link: var(--ox-ember-deep); /* #725A00 — st-gold-ink. Stella links in GOLD; on paper only
                                           the gold's ink shade is legible (6.0:1 vs 1.6:1). */
-    --link-hover: var(--_amber-700);   /* #594500 */
+    --link-hover: var(--_amber-700); /* #594500 */
 
     /* Status — semantic names (error == destructive). */
     --success: var(--_moss);
@@ -240,23 +235,26 @@
        paper, so accent copy must not use it directly: light mode takes the
        gold's own ink shade (#725A00, 6.0:1) and dark mode the gold itself
        (12.0:1). This is exactly Stella's --stella-accent-text. */
-    --ember-ink: var(--ox-ember-deep);      /* #725A00 — = Stella --stella-accent-text (light) */
+    --ember-ink: var(--ox-ember-deep); /* #725A00 — = Stella --stella-accent-text (light) */
 
     /* Ember mark gradient (theme-independent — never recolor the mark).
        The site's own angle and stops: 92deg, 0% / 46% / 100%. */
-    --brand-gradient: linear-gradient(92deg, var(--_ember-a) 0%, var(--_ember-b) 46%, var(--_ember-c) 100%);
+    --brand-gradient: linear-gradient(
+      92deg,
+      var(--_ember-a) 0%,
+      var(--_ember-b) 46%,
+      var(--_ember-c) 100%
+    );
 
     /* Charts — categorical ramp drawn entirely from palette primitives:
-       ember · slate · moss · ochre · silver. The slate that used to sit at
-       chart-5 moves up to chart-2 (the cool counterpoint the retired indigo
-       held) and the neutral stone silver takes the fifth slot, so five series
-       stay separable — four hues roughly 60° apart plus one achromatic — with
-       no colour outside the skin. */
+       ember · slate · moss · ochre · silver. Four hues roughly 60° apart plus
+       one achromatic, so five series stay separable with no colour from
+       outside the skin. */
     --chart-1: var(--ox-ember);
     --chart-2: var(--_slate);
     --chart-3: var(--_moss);
     --chart-4: var(--_ochre);
-    --chart-5: var(--_stone-500);   /* #777782 — st-muted, the achromatic series */
+    --chart-5: var(--_stone-500); /* #777782 — st-muted, the achromatic series */
 
     --surface: var(--ox-surface);
     --surface-foreground: var(--_ink);
@@ -266,9 +264,9 @@
     --sidebar-foreground: var(--surface-foreground);
     --sidebar-primary: var(--ox-ember);
     --sidebar-primary-foreground: var(--ox-ink);
-    --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
+    --sidebar-accent: var(--_stone-150); /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.898 0.009 84.6 / 0.6);   /* st-paper-seam, softened */
+    --sidebar-border: oklch(0.898 0.009 84.6 / 0.6); /* st-paper-seam, softened */
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -293,9 +291,7 @@
     --app-panel-bg: var(--surface);
     --app-panel-fg: var(--surface-foreground);
     /* Topbar = the page background (off-white in light, near-black in dark), so
-       the header reads as part of the canvas rather than a separate warm bar.
-       (Was var(--surface-background) — a token that never existed, so the bar
-       fell back to transparent/inherited. Fixed to the real --background.) */
+       the header reads as part of the canvas rather than a separate warm bar. */
     --app-topbar-bg: var(--background);
     --app-topbar-fg: var(--foreground);
     --app-topbar-border: var(--border);
@@ -329,14 +325,26 @@
     --button-primary-bg: var(--primary);
     --button-primary-fg: var(--ox-ink);
     --button-primary-border: transparent;
-    --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
-    --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+    --button-primary-hover-bg: color-mix(
+      in oklch,
+      var(--primary) 88%,
+      var(--background)
+    );
+    --button-primary-active-bg: color-mix(
+      in oklch,
+      var(--primary) 78%,
+      var(--background)
+    );
     --button-primary-ring: var(--ring);
     --button-default-bg: transparent;
     --button-default-fg: var(--foreground);
     --button-default-border: var(--border);
     --button-default-hover-bg: var(--accent);
-    --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
+    --button-default-active-bg: color-mix(
+      in oklch,
+      var(--accent) 84%,
+      var(--foreground)
+    );
     --button-default-ring: var(--ring);
     --button-disabled-bg: var(--muted);
     --button-disabled-fg: var(--muted-foreground);
@@ -346,7 +354,11 @@
     --input-fg: var(--foreground);
     --input-placeholder: var(--muted-foreground);
     --input-border: var(--border);
-    --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+    --input-border-hover: color-mix(
+      in oklch,
+      var(--border) 60%,
+      var(--foreground)
+    );
     --input-border-focus: var(--ring);
     --input-ring: var(--ring);
     --input-disabled-bg: var(--muted);
@@ -382,7 +394,7 @@
     --dialog-bg: var(--popover);
     --dialog-fg: var(--popover-foreground);
     --dialog-border: var(--border);
-    --overlay-scrim: oklch(0.150 0.002 286 / 0.5);
+    --overlay-scrim: oklch(0.15 0.002 286 / 0.5);
     --badge-bg: var(--secondary);
     --badge-fg: var(--secondary-foreground);
     --badge-border: var(--border);
@@ -420,22 +432,22 @@
     --popover-foreground: var(--_ink-white);
     --primary: var(--ox-ember);
     --primary-foreground: var(--ox-ink);
-    --secondary: var(--_stone-800);   /* #26262C — st-border, neutral chip fill */
+    --secondary: var(--_stone-800); /* #26262C — st-border, neutral chip fill */
     --secondary-foreground: var(--_ink-white);
     --muted: var(--_stone-850);
     /* Brighter secondary ink in dark for legibility on the charcoal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: var(--_stone-800);   /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
+    --accent: var(--_stone-800); /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: var(--_stone-800);   /* #26262C — st-border, the hairline */
-    --input: oklch(0.296 0.013 285.6);   /* #2C2C33 — st-rule */
+    --border: var(--_stone-800); /* #26262C — st-border, the hairline */
+    --input: oklch(0.296 0.013 285.6); /* #2C2C33 — st-rule */
     --ring: var(--ox-ember);
-    --ember-ink: var(--ox-ember);   /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
-    --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
-    --link: var(--ox-ember);   /* #EFC53F — st-gold, 12.0:1 on the canvas */
-    --link-hover: var(--ox-ember-light);   /* #F7D96B — st-gold-bright */
+    --ember-ink: var(--ox-ember); /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
+    --ox-cursor: oklch(0.667 0.221 32.6); /* #FF4B2A — brand cursor (dark) */
+    --link: var(--ox-ember); /* #EFC53F — st-gold, 12.0:1 on the canvas */
+    --link-hover: var(--ox-ember-light); /* #F7D96B — st-gold-bright */
 
     --success: var(--_moss-light);
     --success-foreground: oklch(0.18 0.03 160);
@@ -450,7 +462,7 @@
     --chart-2: var(--_slate-light);
     --chart-3: var(--_moss-light);
     --chart-4: var(--_ochre-light);
-    --chart-5: var(--_stone-400);   /* #A9AAB5 — st-silver, the achromatic series */
+    --chart-5: var(--_stone-400); /* #A9AAB5 — st-silver, the achromatic series */
 
     --surface: var(--_stone-900);
     --surface-foreground: var(--_ink-white);
@@ -461,7 +473,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-800);
     --sidebar-accent-foreground: var(--_ink-white);
-    --sidebar-border: oklch(0.296 0.013 285.6 / 0.6);   /* #2C2C33 — st-rule, softened */
+    --sidebar-border: oklch(0.296 0.013 285.6 / 0.6); /* #2C2C33 — st-rule, softened */
     --sidebar-ring: var(--ring);
 
     /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -482,9 +494,21 @@
     --button-default-fg: var(--foreground);
     --button-default-border: var(--border);
     --button-default-hover-bg: var(--accent);
-    --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
-    --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
-    --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+    --button-default-active-bg: color-mix(
+      in oklch,
+      var(--accent) 84%,
+      var(--foreground)
+    );
+    --button-primary-hover-bg: color-mix(
+      in oklch,
+      var(--primary) 88%,
+      var(--background)
+    );
+    --button-primary-active-bg: color-mix(
+      in oklch,
+      var(--primary) 78%,
+      var(--background)
+    );
     --button-disabled-bg: var(--muted);
     --button-disabled-fg: var(--muted-foreground);
 
@@ -492,7 +516,11 @@
     --input-fg: var(--foreground);
     --input-placeholder: var(--muted-foreground);
     --input-border: var(--border);
-    --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+    --input-border-hover: color-mix(
+      in oklch,
+      var(--border) 60%,
+      var(--foreground)
+    );
     --input-disabled-bg: var(--muted);
     --input-disabled-fg: var(--muted-foreground);
 
@@ -535,22 +563,22 @@
       --popover-foreground: var(--_ink-white);
       --primary: var(--ox-ember);
       --primary-foreground: var(--ox-ink);
-      --secondary: var(--_stone-800);   /* #26262C — st-border, neutral chip fill */
+      --secondary: var(--_stone-800); /* #26262C — st-border, neutral chip fill */
       --secondary-foreground: var(--_ink-white);
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: var(--_stone-800);   /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
+      --accent: var(--_stone-800); /* #26262C — st-border; Stella keeps the hover/selected wash NEUTRAL */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: var(--_stone-800);   /* #26262C — st-border, the hairline */
-      --input: oklch(0.296 0.013 285.6);   /* #2C2C33 — st-rule */
+      --border: var(--_stone-800); /* #26262C — st-border, the hairline */
+      --input: oklch(0.296 0.013 285.6); /* #2C2C33 — st-rule */
       --ring: var(--ox-ember);
-      --ember-ink: var(--ox-ember);   /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
-      --ox-cursor: oklch(0.667 0.221 32.6);   /* #FF4B2A — brand cursor (dark) */
-      --link: var(--ox-ember);   /* #EFC53F — st-gold, 12.0:1 on the canvas */
-      --link-hover: var(--ox-ember-light);   /* #F7D96B — st-gold-bright */
+      --ember-ink: var(--ox-ember); /* #EFC53F — = Stella --stella-accent-text (dark), 12.0:1 on canvas */
+      --ox-cursor: oklch(0.667 0.221 32.6); /* #FF4B2A — brand cursor (dark) */
+      --link: var(--ox-ember); /* #EFC53F — st-gold, 12.0:1 on the canvas */
+      --link-hover: var(--ox-ember-light); /* #F7D96B — st-gold-bright */
 
       --success: var(--_moss-light);
       --success-foreground: oklch(0.18 0.03 160);
@@ -565,7 +593,7 @@
       --chart-2: var(--_slate-light);
       --chart-3: var(--_moss-light);
       --chart-4: var(--_ochre-light);
-      --chart-5: var(--_stone-400);   /* #A9AAB5 — st-silver, the achromatic series */
+      --chart-5: var(--_stone-400); /* #A9AAB5 — st-silver, the achromatic series */
 
       --surface: var(--_stone-900);
       --surface-foreground: var(--_ink-white);
@@ -576,7 +604,7 @@
       --sidebar-primary-foreground: var(--ox-ink);
       --sidebar-accent: var(--_stone-800);
       --sidebar-accent-foreground: var(--_ink-white);
-      --sidebar-border: oklch(0.296 0.013 285.6 / 0.6);   /* #2C2C33 — st-rule, softened */
+      --sidebar-border: oklch(0.296 0.013 285.6 / 0.6); /* #2C2C33 — st-rule, softened */
       --sidebar-ring: var(--ring);
 
       /* Card header: flat — matches the card surface exactly, no shaded band.
@@ -591,9 +619,21 @@
       --button-default-fg: var(--foreground);
       --button-default-border: var(--border);
       --button-default-hover-bg: var(--accent);
-      --button-default-active-bg: color-mix(in oklch, var(--accent) 84%, var(--foreground));
-      --button-primary-hover-bg: color-mix(in oklch, var(--primary) 88%, var(--background));
-      --button-primary-active-bg: color-mix(in oklch, var(--primary) 78%, var(--background));
+      --button-default-active-bg: color-mix(
+        in oklch,
+        var(--accent) 84%,
+        var(--foreground)
+      );
+      --button-primary-hover-bg: color-mix(
+        in oklch,
+        var(--primary) 88%,
+        var(--background)
+      );
+      --button-primary-active-bg: color-mix(
+        in oklch,
+        var(--primary) 78%,
+        var(--background)
+      );
       --button-disabled-bg: var(--muted);
       --button-disabled-fg: var(--muted-foreground);
 
@@ -601,7 +641,11 @@
       --input-fg: var(--foreground);
       --input-placeholder: var(--muted-foreground);
       --input-border: var(--border);
-      --input-border-hover: color-mix(in oklch, var(--border) 60%, var(--foreground));
+      --input-border-hover: color-mix(
+        in oklch,
+        var(--border) 60%,
+        var(--foreground)
+      );
       --input-disabled-bg: var(--muted);
       --input-disabled-fg: var(--muted-foreground);
 
@@ -845,18 +889,17 @@
     "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   --font-display:
-    "Aeonik Fono", "Aeonik", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    "Aeonik Fono", "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     "Aeonik Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo,
     Consolas, "DejaVu Sans Mono", monospace;
   /* Wordmark face — Aeonik, matching oxagen.sh, whose ".brand" lockup is set in
-     the body face at weight 660 / tracking -0.02em. It used to be Space Grotesk,
-     which put the one element that appears on every surface in a typeface the
-     website does not load. Headings keep --font-display (Aeonik Fono). */
+     the body face at weight 660 / tracking -0.02em. Headings keep
+     --font-display (Aeonik Fono). */
   --font-wordmark:
-    "Aeonik", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    "Aeonik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -881,7 +924,12 @@
    * body. Aeonik Fono (--font-display) is reserved for the "Oxagen" wordmark
    * (.ox-wordmark). Aeonik Mono only for code/identifiers.
    */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-display);
     font-weight: 500;
     letter-spacing: -0.02em;
@@ -889,7 +937,10 @@
     text-wrap: balance;
   }
 
-  code, kbd, samp, pre {
+  code,
+  kbd,
+  samp,
+  pre {
     font-family: var(--font-mono);
   }
 
@@ -955,8 +1006,8 @@
   .hover-lift:hover {
     transform: translateY(-2px);
   }
-  /* .hover-glow — a subtle violet ring on hover (flat, no blur), with
-   * the transition retained. */
+  /* .hover-glow — a subtle ring on hover in the accent (--ring) colour: flat, no
+   * blur, transition retained. */
   .hover-glow {
     transition: box-shadow 0.2s ease;
   }
@@ -993,8 +1044,20 @@
 
   /* Horizontal tab strip edge-fade mask (a mask, not motion). */
   .tabs-edge-fade {
-    -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
-    mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 16px,
+      black calc(100% - 16px),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 16px,
+      black calc(100% - 16px),
+      transparent
+    );
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -1033,9 +1096,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #725A00) 0%,
-      var(--_ember-b, #EFC53F) 46%,
-      var(--_ember-c, #F7D96B) 100%
+      var(--_ember-a, #725a00) 0%,
+      var(--_ember-b, #efc53f) 46%,
+      var(--_ember-c, #f7d96b) 100%
     );
   }
 
@@ -1057,11 +1120,27 @@
      so it dissolves toward the edges. */
   .ox-hero-grid {
     background-image:
-      linear-gradient(to right, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px);
+      linear-gradient(
+        to right,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 1px,
+        transparent 1px
+      );
     background-size: 46px 46px;
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
-    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+    mask-image: radial-gradient(
+      ellipse 80% 60% at 50% 38%,
+      #000 0%,
+      transparent 78%
+    );
+    -webkit-mask-image: radial-gradient(
+      ellipse 80% 60% at 50% 38%,
+      #000 0%,
+      transparent 78%
+    );
   }
 
   /* In-app graph-paper texture — a crisp, very faint line grid painted onto the
@@ -1072,8 +1151,16 @@
      at 4% alpha) so it flips with the theme. Kept deliberately subtle — a touch. */
   .ox-panel-grid {
     background-image:
-      linear-gradient(to right, color-mix(in oklch, var(--foreground) 4%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 4%, transparent) 1px, transparent 1px);
+      linear-gradient(
+        to right,
+        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklch, var(--foreground) 4%, transparent) 1px,
+        transparent 1px
+      );
     background-size: 40px 40px;
     mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
@@ -1088,7 +1175,12 @@
     --code-fg: var(--_ink-white);
     color: var(--code-fg);
     background:
-      linear-gradient(180deg in oklab, oklch(0.26 0.005 78), oklch(0.22 0.004 78)) padding-box,
+      linear-gradient(
+        180deg in oklab,
+        oklch(0.26 0.005 78),
+        oklch(0.22 0.004 78)
+      )
+      padding-box,
       var(--brand-gradient) border-box;
     border: 1px solid transparent;
   }
@@ -1121,16 +1213,35 @@
 /* Ember hero keyframes (paired with the .ox-hero-* / .ox-hex-* helpers above).
    Suppressed by the global prefers-reduced-motion kill-switch below. */
 @keyframes ox-glow {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 0.9; transform: scale(1.08); }
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
 }
 @keyframes ox-hexpulse {
-  0%, 100% { opacity: 0.22; transform: scale(0.97); }
-  50% { opacity: 0.7; transform: scale(1.03); }
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.03);
+  }
 }
 @keyframes ox-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-12px) rotate(1.5deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1.5deg);
+  }
 }
 
 /*
@@ -1140,13 +1251,21 @@
  * places that prefer a keyframed animation.
  */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* a11y: honor the OS reduce-motion setting globally (kill-switch). */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }

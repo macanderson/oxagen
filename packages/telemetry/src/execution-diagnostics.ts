@@ -17,7 +17,7 @@
 //   - UInt/DateTime columns arrive as strings on the JSONEachRow wire; callers
 //     get already-coerced, typed rows.
 
-import { clickhouse } from "./clickhouse";
+import { clickhouse, NIL_UUID } from "./clickhouse";
 
 /** Hard ceiling on rows returned by either helper — bounds the model payload. */
 const MAX_LIMIT = 500;
@@ -62,9 +62,6 @@ function clampLimit(limit: number | undefined): number {
 function chDateTime(ms: number): string {
   return new Date(ms).toISOString().replace("T", " ").replace("Z", "");
 }
-
-/** The nil UUID is the "no execution scope" sentinel — never a real run. */
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * Fetch the errors captured for one agent execution, newest first. Bounded by

@@ -2,9 +2,10 @@
 // Regenerate with: pnpm --filter @oxagen/skills gen:skills
 //
 // Embeds every packages/skills/skills/*/skill.toml as module data so builtin
-// skills are ALWAYS present in any bundle. Serverless bundlers drop non-imported
-// markdown, so a runtime filesystem read would break workspace skill seeding
-// and the create-agent fallback in production. Do not replace this with one.
+// skills are ALWAYS present in any bundle. Serverless bundlers trace the import
+// graph and drop plain data files like these, so a runtime filesystem read would
+// break workspace skill seeding and the create-agent fallback in production.
+// Do not replace this with one.
 
 export interface EmbeddedSkillReference {
   readonly path: string;

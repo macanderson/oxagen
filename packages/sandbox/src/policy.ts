@@ -31,9 +31,14 @@ export class SandboxPolicyError extends Error {
 
 // Clamp request fields to the policy ceiling and reject any request that
 // crosses a hard boundary (language denylist, network when disallowed).
-export function applyPolicy(req: SandboxRequest, p: SandboxPolicy): SandboxRequest {
+export function applyPolicy(
+  req: SandboxRequest,
+  p: SandboxPolicy,
+): SandboxRequest {
   if (!p.allowedLanguages.includes(req.language)) {
-    throw new SandboxPolicyError(`language ${req.language} not allowed by policy`);
+    throw new SandboxPolicyError(
+      `language ${req.language} not allowed by policy`,
+    );
   }
   if (req.network === "allow" && !p.allowNetwork) {
     throw new SandboxPolicyError("network access not allowed by policy");

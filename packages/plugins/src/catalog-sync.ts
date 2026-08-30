@@ -1,6 +1,12 @@
 /**
  * plugin.catalog.sync — Fetches all pages from the upstream MCP registry and
- * upserts into mcp.catalog_servers. Supports incremental sync via cursor.
+ * upserts into mcp.catalog_servers.
+ *
+ * "Incremental" here means RESUME, not delta. The stored cursor is only
+ * non-null when a run stopped at the maxPages cap; a run that reaches the end
+ * of the registry clears it, so the next run re-reads every page from the
+ * start. The client's `updatedSince` filter — the actual delta mechanism — is
+ * not wired up here.
  *
  * Called by:
  *   1. The plugin.catalog-sync Inngest cron (every 6 hours)
@@ -16,6 +22,12 @@
  */
 import { eq, and, sql } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
+// NOTE: this is a package SELF-reference ("@oxagen/plugins" importing its own
+// "./registry" export), not a cross-package import. It works because the export
+// map declares the subpath, but it can resolve to a second copy of the registry
+// module under some bundler/test resolvers. catalog-sync.test.ts currently
+// mocks this exact specifier, so switching to a relative "./registry/index"
+// requires updating that mock in the same change.
 import {
   listServers,
   deriveTransportTypes,
@@ -24,14 +36,17 @@ import {
 import type { ServerResponse } from "@oxagen/plugins/registry";
 import pino from "pino";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "sync_plugin_catalog" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "sync_plugin_catalog" },
+});
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SyncRegistryOptions {
   registryId: string;
   baseUrl: string;
-  /** Resume from this cursor for incremental sync. Null = full sync. */
+  /** Resume from this cursor (set only when a prior run hit maxPages). Null = start from the first page. */
   cursor?: string | null;
   /** Max pages to fetch in one sync run (safety valve). Default: 50 (5000 entries). */
   maxPages?: number;
@@ -64,12 +79,18 @@ function extractMeta(raw: ServerResponse["_meta"]): {
   publishedAt: string | undefined;
   updatedAt: string | undefined;
 } {
-  if (!raw) return { status: "active", isLatest: false, publishedAt: undefined, updatedAt: undefined };
+  if (!raw)
+    return {
+      status: "active",
+      isLatest: false,
+      publishedAt: undefined,
+      updatedAt: undefined,
+    };
 
   // Check for the well-known namespaced key first
-  const namespaced = (raw as Record<string, unknown>)["io.modelcontextprotocol.registry/official"] as
-    | Record<string, unknown>
-    | undefined;
+  const namespaced = (raw as Record<string, unknown>)[
+    "io.modelcontextprotocol.registry/official"
+  ] as Record<string, unknown> | undefined;
 
   if (namespaced) {
     return {
@@ -82,10 +103,15 @@ function extractMeta(raw: ServerResponse["_meta"]): {
 
   // Fall back to flat structure (in case the API changes)
   return {
-    status: (raw as Record<string, unknown>)["status"] as string ?? "active",
-    isLatest: (raw as Record<string, unknown>)["isLatest"] as boolean ?? false,
-    publishedAt: (raw as Record<string, unknown>)["publishedAt"] as string | undefined,
-    updatedAt: (raw as Record<string, unknown>)["updatedAt"] as string | undefined,
+    status: ((raw as Record<string, unknown>)["status"] as string) ?? "active",
+    isLatest:
+      ((raw as Record<string, unknown>)["isLatest"] as boolean) ?? false,
+    publishedAt: (raw as Record<string, unknown>)["publishedAt"] as
+      | string
+      | undefined,
+    updatedAt: (raw as Record<string, unknown>)["updatedAt"] as
+      | string
+      | undefined,
   };
 }
 
@@ -94,7 +120,9 @@ function extractMeta(raw: ServerResponse["_meta"]): {
 /**
  * Sync a single registry: page through all entries and upsert into catalog_servers.
  */
-export async function syncRegistry(opts: SyncRegistryOptions): Promise<SyncResult> {
+export async function syncRegistry(
+  opts: SyncRegistryOptions,
+): Promise<SyncResult> {
   const { registryId, baseUrl, maxPages = 50 } = opts;
   const startedAt = Date.now();
 
@@ -194,7 +222,13 @@ export async function syncRegistry(opts: SyncRegistryOptions): Promise<SyncResul
       "catalog sync complete",
     );
 
-    return { registryId, pagesProcessed, entriesUpserted, finalCursor, durationMs };
+    return {
+      registryId,
+      pagesProcessed,
+      entriesUpserted,
+      finalCursor,
+      durationMs,
+    };
   } catch (err) {
     const durationMs = Date.now() - startedAt;
     logger.error(
@@ -227,10 +261,13 @@ export interface SyncAllResult {
  * Sync all enabled registries (or a specific org/workspace's registries).
  * Each registry is synced independently — a single failure doesn't block others.
  */
-export async function syncAllRegistries(opts: SyncAllOptions = {}): Promise<SyncAllResult> {
+export async function syncAllRegistries(
+  opts: SyncAllOptions = {},
+): Promise<SyncAllResult> {
   const conditions = [eq(schema.mcpRegistries.enabled, true)];
   if (opts.orgId) conditions.push(eq(schema.mcpRegistries.orgId, opts.orgId));
-  if (opts.workspaceId) conditions.push(eq(schema.mcpRegistries.workspaceId, opts.workspaceId));
+  if (opts.workspaceId)
+    conditions.push(eq(schema.mcpRegistries.workspaceId, opts.workspaceId));
 
   const registries = await withSystemDb((tx) =>
     tx

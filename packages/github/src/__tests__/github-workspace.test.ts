@@ -91,7 +91,9 @@ describe("readFile", () => {
     });
     const ws = makeWorkspace(client);
 
-    await expect(ws.readFile("missing.ts")).rejects.toThrow(/ENOENT.*missing\.ts/);
+    await expect(ws.readFile("missing.ts")).rejects.toThrow(
+      /ENOENT.*missing\.ts/,
+    );
   });
 });
 
@@ -139,9 +141,7 @@ describe("editFile", () => {
 
     await ws.editFile("src/a.ts", "const x = 1;", "const x = 42;");
 
-    expect(await ws.readFile("src/a.ts")).toBe(
-      "const x = 42;\nconst y = 2;",
-    );
+    expect(await ws.readFile("src/a.ts")).toBe("const x = 42;\nconst y = 2;");
   });
 
   it("throws when oldString is not found", async () => {
@@ -150,9 +150,9 @@ describe("editFile", () => {
     });
     const ws = makeWorkspace(client);
 
-    await expect(
-      ws.editFile("f.ts", "not-present", "x"),
-    ).rejects.toThrow(/not found/i);
+    await expect(ws.editFile("f.ts", "not-present", "x")).rejects.toThrow(
+      /not found/i,
+    );
   });
 
   it("throws when oldString appears more than once", async () => {
@@ -184,9 +184,7 @@ describe("editFile", () => {
     });
     const ws = makeWorkspace(client);
 
-    await expect(ws.editFile("missing.ts", "x", "y")).rejects.toThrow(
-      /ENOENT/,
-    );
+    await expect(ws.editFile("missing.ts", "x", "y")).rejects.toThrow(/ENOENT/);
   });
 });
 
@@ -267,7 +265,9 @@ describe("glob", () => {
 
   it("matches files in the root with a simple * pattern", async () => {
     const client = makeClient({
-      getTree: vi.fn().mockResolvedValue(["index.ts", "README.md", "package.json"]),
+      getTree: vi
+        .fn()
+        .mockResolvedValue(["index.ts", "README.md", "package.json"]),
     });
     const ws = makeWorkspace(client);
 

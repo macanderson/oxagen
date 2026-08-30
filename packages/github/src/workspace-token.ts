@@ -79,7 +79,10 @@ export async function resolveGitHubToken(
     const privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
 
     // ── Path 1: GitHub App installation token ────────────────────────────
-    if (installationId !== undefined && appId && privateKey) {
+    // `!= null` (not `!== undefined`): deliveryConfig is JSONB, so an absent
+    // installation can arrive as a literal `null`, which would otherwise be
+    // minted as the string "null" and 404 against GitHub.
+    if (installationId != null && appId && privateKey) {
       try {
         const { token } = await getInstallationToken({
           appId,

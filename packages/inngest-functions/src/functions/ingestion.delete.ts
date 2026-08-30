@@ -20,7 +20,7 @@ import { logger } from "../logger";
  * This preserves the unified entity view across the remaining connections.
  *
  * Step 1: mark-deleting        update status → 'deleting'
- * Step 2: delete-neo4j-data    remove :EntityNode nodes + alias promotion (stub)
+ * Step 2: delete-neo4j-data    alias promotion, then remove the connection's nodes
  * Step 3: delete-postgres      wipe mappings, credentials, webhook subs; mark deleted
  * Step 4: audit-log            write deletion event to ClickHouse
  * Step 5: finalize-deletion-job  mark the deletion_jobs row completed (progress + completed_at)
@@ -28,8 +28,7 @@ import { logger } from "../logger";
  * The `deletion_jobs` row is created by connection.delete with status='running'.
  * This function OWNS the terminal transition: the primary handler marks it
  * 'completed' on success (Step 5); the on-failure companion marks it 'failed'
- * (with completed_at + error) once retries are exhausted. Without this, jobs
- * were stuck at 'running' forever (OXA schema audit O-1).
+ * (with completed_at + error) once retries are exhausted.
  */
 export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
   createFunction(
@@ -265,10 +264,8 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               WHERE  connection_id = ${connectionId}::uuid
             `);
               // Soft-delete the connection itself so audit history is preserved.
-              // Column is deleted_by_user_id (NOT deleted_by) — the wrong name made
-              // this UPDATE throw "column deleted_by does not exist", so the job
-              // never set deleted_at and the row was stuck at status='deleting'
-              // forever in the UI (connection.list filters deleted_at IS NULL).
+              // The column is deleted_by_user_id — connection.list filters on
+              // deleted_at IS NULL, so this UPDATE is what retires the row.
               await tx.execute(sql`
               UPDATE ingestion.source_connections
               SET    status             = 'deleted',

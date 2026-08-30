@@ -42,13 +42,20 @@
 --   see 0012's comment on the identical constraint for token_usage). This table
 --   is best-effort telemetry with a 90-day TTL and every insert site already
 --   swallows errors (`// conformance telemetry must never break ingestion`), so
---   a one-time rebuild (losing at most 90 days of non-critical dashboard
---   history) is the same acceptable tradeoff 0010_drop_dead_tables.sql already
---   established for this package, and far cheaper than a live INSERT-SELECT
---   migration for a table with no durable/billing dependents.
+--   a rebuild (losing at most 90 days of non-critical dashboard history) is the
+--   same tradeoff 0010_drop_dead_tables.sql already established for this
+--   package, and far cheaper than a live INSERT-SELECT migration for a table
+--   with no durable/billing dependents.
 --
--- All statements remain idempotent (DROP TABLE IF EXISTS / CREATE TABLE IF NOT
--- EXISTS), consistent with every other file in this directory.
+-- KNOWN DEFECT — THE DROP REPLAYS
+--   migrate() (packages/telemetry/src/migrate.ts) keeps no applied-migrations
+--   ledger: it replays schema.sql and every file in this directory on every
+--   run. So this is NOT a one-time rebuild — each deploy (and each local
+--   `pnpm db:migrate`) drops schema_conformance_events and recreates it empty,
+--   discarding the whole 90-day window. The statements are individually
+--   idempotent, which is what the rest of this directory relies on, but
+--   DROP TABLE is not replay-safe. Fixing this needs either a ledger in
+--   migrate() or a rebuild expressed as a rename to a NEW table name.
 
 DROP TABLE IF EXISTS schema_conformance_events;
 

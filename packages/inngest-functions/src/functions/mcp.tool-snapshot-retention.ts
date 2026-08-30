@@ -53,7 +53,11 @@ export const [mcpToolSnapshotRetention] = createFunction(
       });
 
       logger.info(
-        { purgedSnapshots: purged, cutoffISO: cutoff.toISOString(), durationMs: Date.now() - startMs },
+        {
+          purgedSnapshots: purged,
+          cutoffISO: cutoff.toISOString(),
+          durationMs: Date.now() - startMs,
+        },
         "mcp.tool-snapshot-retention: purged expired snapshots",
       );
       return { purgedSnapshots: purged };

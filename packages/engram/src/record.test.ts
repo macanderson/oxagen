@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { computeRecordId, createRecord, verifyRecordIntegrity } from "./record";
-import type { Namespace, Provenance, EpisodicBody, SemanticBody } from "./types";
+import type {
+  Namespace,
+  Provenance,
+  EpisodicBody,
+  SemanticBody,
+} from "./types";
 
 const namespace: Namespace = { org: "org-1", workspace: "ws-1" };
 const provenance: Provenance = {
@@ -18,15 +23,24 @@ describe("computeRecordId", () => {
   });
 
   it("identical content produces identical ID (dedup property)", () => {
-    const body: EpisodicBody = { event: "tool_call", payload: { name: "grep" } };
+    const body: EpisodicBody = {
+      event: "tool_call",
+      payload: { name: "grep" },
+    };
     const id1 = computeRecordId("episodic", namespace, body);
     const id2 = computeRecordId("episodic", namespace, body);
     expect(id1).toBe(id2);
   });
 
   it("different content produces different ID (collision resistance)", () => {
-    const body1: EpisodicBody = { event: "tool_call", payload: { name: "grep" } };
-    const body2: EpisodicBody = { event: "tool_call", payload: { name: "read" } };
+    const body1: EpisodicBody = {
+      event: "tool_call",
+      payload: { name: "grep" },
+    };
+    const body2: EpisodicBody = {
+      event: "tool_call",
+      payload: { name: "read" },
+    };
     const id1 = computeRecordId("episodic", namespace, body1);
     const id2 = computeRecordId("episodic", namespace, body2);
     expect(id1).not.toBe(id2);

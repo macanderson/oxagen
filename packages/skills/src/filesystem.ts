@@ -3,9 +3,16 @@ import { join } from "node:path";
 import { loadSkillFile } from "./loader";
 import type { Skill } from "./types";
 
-// Recursive scan for `skill.toml` bundles so authors can organise built-in skills
-// into category subdirectories without touching the loader. The depth is
-// bounded by the filesystem; we do not follow symlinks.
+// Recursive scan for `skill.toml` bundles, reached only through the registry's
+// opt-in `fsRoot` option — platform runtimes use the embedded builtins instead
+// (see builtin.ts). Recursion is unbounded in depth but terminates: a symlink
+// reports neither `isDirectory()` nor `isFile()` from `readdir(withFileTypes)`,
+// so symlinked directories are never descended into and symlinked manifests are
+// never read, which also rules out a symlink cycle.
+//
+// Bundles nested more than one directory below the root are found here but NOT
+// by the CLI, whose discovery is deliberately one level deep
+// (apps/cli/src/skills/loader.ts). Keep shipped bundles flat.
 export async function scanSkillsDir(root: string): Promise<Skill[]> {
   const results: Skill[] = [];
   await walk(root, results);

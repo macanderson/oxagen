@@ -19,8 +19,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const rows = [
-  { name: "ontology.query", calls: "18,204", status: "success", cost: "$42.10" },
-  { name: "agent.code.execute", calls: "9,876", status: "warning", cost: "$120.44" },
+  {
+    name: "ontology.query",
+    calls: "18,204",
+    status: "success",
+    cost: "$42.10",
+  },
+  {
+    name: "agent.code.execute",
+    calls: "9,876",
+    status: "warning",
+    cost: "$120.44",
+  },
   { name: "workflow.run", calls: "3,412", status: "success", cost: "$18.02" },
 ];
 
@@ -41,7 +51,12 @@ export const Default: Story = {
             <TableCell className="font-medium">{r.name}</TableCell>
             <TableCell className="text-right tabular-nums">{r.calls}</TableCell>
             <TableCell>
-              <Badge variant={r.status === "success" ? "success-soft" : "warning-soft"} dot>
+              <Badge
+                variant={
+                  r.status === "success" ? "success-soft" : "warning-soft"
+                }
+                dot
+              >
                 {r.status}
               </Badge>
             </TableCell>
@@ -61,7 +76,10 @@ export const Default: Story = {
 
 export const Compact: Story = {
   render: () => (
-    <Table density="compact" containerClassName="rounded-xl border border-border">
+    <Table
+      density="compact"
+      containerClassName="rounded-xl border border-border"
+    >
       <TableHeader>
         <TableRow>
           <TableHead>Capability</TableHead>

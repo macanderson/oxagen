@@ -124,7 +124,10 @@ describe("migrate() — happy path", () => {
     await migrate();
 
     expect(createClientMock).toHaveBeenCalledTimes(1);
-    const config = createClientMock.mock.calls[0]![0] as Record<string, unknown>;
+    const config = createClientMock.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(config.url).toBe("https://cloud.ch:9440");
     expect(config.username).toBe("my_user");
     expect(config.password).toBe("my_pass");
@@ -187,8 +190,10 @@ describe("migrate() — happy path", () => {
     readdirSyncMock.mockReturnValue(["0002_b.sql", "0001_a.sql"]); // unsorted
     readFileSyncMock.mockImplementation((p: unknown) => {
       const path = String(p);
-      if (path.endsWith("0001_a.sql")) return "ALTER TABLE t ADD COLUMN a String;";
-      if (path.endsWith("0002_b.sql")) return "ALTER TABLE t ADD COLUMN b String;";
+      if (path.endsWith("0001_a.sql"))
+        return "ALTER TABLE t ADD COLUMN a String;";
+      if (path.endsWith("0002_b.sql"))
+        return "ALTER TABLE t ADD COLUMN b String;";
       return SCHEMA_SQL;
     });
 
@@ -260,7 +265,10 @@ describe("migrate() — happy path", () => {
   it("uses a 60 s request_timeout on the bootstrap client for cloud cold-start tolerance", async () => {
     await migrate();
 
-    const config = createClientMock.mock.calls[0]![0] as Record<string, unknown>;
+    const config = createClientMock.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
     expect(config.request_timeout).toBe(60_000);
   });
 
@@ -290,7 +298,10 @@ describe("migrate() — happy path", () => {
       // The String(err) branch ran: the log's err field is the raw string.
       expect(stderrSpy).toHaveBeenCalledTimes(1);
       const written = stderrSpy.mock.calls[0]![0] as string;
-      const parsed = JSON.parse(written.trim()) as { level: string; err: string };
+      const parsed = JSON.parse(written.trim()) as {
+        level: string;
+        err: string;
+      };
       expect(parsed.level).toBe("warn");
       expect(parsed.err).toBe("non-error string transient");
       // Succeeded on attempt 2 → only one CREATE DATABASE call logged as warning,
@@ -448,7 +459,9 @@ describe("isDirectRun block", () => {
       .mockImplementation(() => true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: string | number | null) => undefined as never);
+      .mockImplementation(
+        (_code?: string | number | null) => undefined as never,
+      );
     const savedArgv1 = process.argv[1] as string;
 
     try {
@@ -497,7 +510,9 @@ describe("isDirectRun block", () => {
       .mockImplementation(() => true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: string | number | null) => undefined as never);
+      .mockImplementation(
+        (_code?: string | number | null) => undefined as never,
+      );
     const savedArgv1 = process.argv[1] as string;
 
     try {
@@ -541,7 +556,9 @@ describe("isDirectRun block", () => {
   it("does NOT execute the block when process.argv[1] differs from the module path", async () => {
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: string | number | null) => undefined as never);
+      .mockImplementation(
+        (_code?: string | number | null) => undefined as never,
+      );
     const savedArgv1 = process.argv[1] as string;
 
     try {

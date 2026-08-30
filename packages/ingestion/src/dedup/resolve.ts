@@ -295,6 +295,12 @@ export function scoreCandidate(
  * Lowercases and strips punctuation before comparing.
  * Used as one signal in scoreCandidate — never the sole basis for aliasing.
  *
+ * COST WARNING: `levenshtein` below allocates a full (m+1)×(n+1) matrix, and
+ * both operands are source-controlled display names (a PR title, a Slack
+ * message, an email subject) with no length cap anywhere upstream. Two 100k-char
+ * names are ~10^10 cells — enough to stall or OOM the ingestion worker. Cap the
+ * inputs before this is exposed to untrusted-length names.
+ *
  * Example: "Thomas Mac Anderson" vs "Mac Anderson" → ~0.72
  *          "Mac Anderson" vs "Mac Anderson" → 1.0
  *          "Mac Anderson" vs "John Smith" → ~0.15

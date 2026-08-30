@@ -8,13 +8,21 @@ import type { PutObjectInput, PutObjectResult } from "./types";
 
 describe("isIngestibleImageUrl", () => {
   it("accepts https Google and GitHub avatar hosts", () => {
-    expect(isIngestibleImageUrl("https://lh3.googleusercontent.com/a/abc")).toBe(true);
-    expect(isIngestibleImageUrl("https://avatars.githubusercontent.com/u/1?v=4")).toBe(true);
+    expect(
+      isIngestibleImageUrl("https://lh3.googleusercontent.com/a/abc"),
+    ).toBe(true);
+    expect(
+      isIngestibleImageUrl("https://avatars.githubusercontent.com/u/1?v=4"),
+    ).toBe(true);
   });
   it("rejects non-https, untrusted hosts, and garbage", () => {
-    expect(isIngestibleImageUrl("http://lh3.googleusercontent.com/a")).toBe(false);
+    expect(isIngestibleImageUrl("http://lh3.googleusercontent.com/a")).toBe(
+      false,
+    );
     expect(isIngestibleImageUrl("https://evil.example.com/x.png")).toBe(false);
-    expect(isIngestibleImageUrl("https://googleusercontent.com.evil.com/x")).toBe(false);
+    expect(
+      isIngestibleImageUrl("https://googleusercontent.com.evil.com/x"),
+    ).toBe(false);
     expect(isIngestibleImageUrl("not a url")).toBe(false);
     expect(isIngestibleImageUrl("")).toBe(false);
     expect(isIngestibleImageUrl(null)).toBe(false);
@@ -43,7 +51,11 @@ describe("ingestImageFromUrl", () => {
     const putImpl = vi.fn(async (_i: PutObjectInput) => OK_PUT);
 
     const result = await ingestImageFromUrl(
-      { url: "https://avatars.githubusercontent.com/u/1?v=4", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://avatars.githubusercontent.com/u/1?v=4",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
 
@@ -61,7 +73,11 @@ describe("ingestImageFromUrl", () => {
     const putImpl = vi.fn(async () => OK_PUT);
 
     const result = await ingestImageFromUrl(
-      { url: "https://169.254.169.254/latest/meta-data", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://169.254.169.254/latest/meta-data",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
 
@@ -73,25 +89,71 @@ describe("ingestImageFromUrl", () => {
   it("returns null on a non-image content type", async () => {
     const fetchImpl = vi.fn(
       async () =>
-        new Response("<html>", { status: 200, headers: { "content-type": "text/html" } }),
+        new Response("<html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
     );
     const putImpl = vi.fn(async () => OK_PUT);
     const result = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
     expect(result).toBeNull();
     expect(putImpl).not.toHaveBeenCalled();
   });
 
+  // Regression: a bare `ASSET_ALLOWED_TYPES[kind][contentType]` index resolves
+  // inherited Object.prototype keys to truthy values, so a remote host serving
+  // `Content-Type: constructor` would bypass the MIME allowlist entirely.
+  it("returns null when the remote content type is an Object.prototype key", async () => {
+    const putImpl = vi.fn(async () => OK_PUT);
+    for (const mime of ["constructor", "__proto__", "toString"]) {
+      const result = await ingestImageFromUrl(
+        {
+          url: "https://lh3.googleusercontent.com/a/x",
+          kind: "avatar",
+          ownerId: "u",
+        },
+        {
+          fetchImpl: vi.fn(
+            async () =>
+              new Response(new Uint8Array(10), {
+                status: 200,
+                headers: { "content-type": mime },
+              }),
+          ),
+          putImpl,
+        },
+      );
+      expect(result).toBeNull();
+    }
+    expect(putImpl).not.toHaveBeenCalled();
+  });
+
   it("returns null on an oversize or empty body", async () => {
     const putImpl = vi.fn(async () => OK_PUT);
     const oversize = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
-      { fetchImpl: vi.fn(async () => jpegResponse(ASSET_LIMITS.avatar + 1)), putImpl },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
+      {
+        fetchImpl: vi.fn(async () => jpegResponse(ASSET_LIMITS.avatar + 1)),
+        putImpl,
+      },
     );
     const empty = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl: vi.fn(async () => jpegResponse(0)), putImpl },
     );
     expect(oversize).toBeNull();
@@ -101,7 +163,11 @@ describe("ingestImageFromUrl", () => {
 
   it("returns null (never throws) when fetch or storage fails", async () => {
     const fetchThrows = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       {
         fetchImpl: vi.fn(async () => {
           throw new Error("network down");
@@ -109,7 +175,11 @@ describe("ingestImageFromUrl", () => {
       },
     );
     const putThrows = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       {
         fetchImpl: vi.fn(async () => jpegResponse(10)),
         putImpl: vi.fn(async () => {
@@ -123,7 +193,11 @@ describe("ingestImageFromUrl", () => {
 
   it("returns null on a non-OK HTTP status", async () => {
     const result = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl: vi.fn(async () => new Response("nope", { status: 404 })) },
     );
     expect(result).toBeNull();
@@ -133,12 +207,19 @@ describe("ingestImageFromUrl", () => {
     const fetchImpl = vi.fn(async () => jpegResponse(10));
     const putImpl = vi.fn(async () => OK_PUT);
     await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
-    expect(fetchImpl).toHaveBeenCalledWith("https://lh3.googleusercontent.com/a/x", {
-      redirect: "manual",
-    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://lh3.googleusercontent.com/a/x",
+      {
+        redirect: "manual",
+      },
+    );
   });
 
   it("SSRF: refuses to follow a redirect to an untrusted/internal host", async () => {
@@ -156,7 +237,11 @@ describe("ingestImageFromUrl", () => {
     const putImpl = vi.fn(async () => OK_PUT);
 
     const result = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
 
@@ -179,7 +264,11 @@ describe("ingestImageFromUrl", () => {
     const putImpl = vi.fn(async () => OK_PUT);
 
     const result = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/x",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
 
@@ -199,7 +288,11 @@ describe("ingestImageFromUrl", () => {
     const putImpl = vi.fn(async () => OK_PUT);
 
     const result = await ingestImageFromUrl(
-      { url: "https://lh3.googleusercontent.com/a/start", kind: "avatar", ownerId: "u" },
+      {
+        url: "https://lh3.googleusercontent.com/a/start",
+        kind: "avatar",
+        ownerId: "u",
+      },
       { fetchImpl, putImpl },
     );
 

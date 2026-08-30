@@ -1,7 +1,12 @@
 // fetch-authz.ts — fetch IAM authorization data from Postgres.
 //
-// Reads the IAM tables (principals, grants, role_grants, roles, policies) for
-// a given principal/scope, so the pure resolver can decide without any I/O.
+// Reads the IAM tables (principals, roles, role_grants,
+// principal_role_assignments) for a given principal/scope, so the pure
+// resolver can decide without any I/O. It returns EMPTY `grants` and
+// `policies` collections: those two tables no longer exist (see the note above
+// the Promise.all in _fetchAuthz), so resolver rules 1–6 never fire on this
+// path and the decision is always made by rule 7, 7.5, or 8. The one exception
+// is denyAuthz() below, which SYNTHESIZES a policy to trip rule 2 on purpose.
 //
 // FAIL-CLOSED ON MISSING MIGRATION: if the IAM tables do not exist yet
 // (Postgres error 42P01 — "relation does not exist"), this is "IAM
@@ -245,36 +250,30 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       workspaceId: principalRow.workspaceId,
     };
 
-    // Queries 2 (grants), 3 (roles), and 5 (policies) are all independent of each
-    // other — they only need principalRow.id / orgId / capability, all of which
-    // are already known. Run them in parallel, then run query 4 (roleGrants) once
-    // roleIds from query 3 is available. This collapses 4 serial round-trips into
-    // 2 parallel batches, yielding ~3–4x latency reduction on the hot IAM path.
+    // Batch 1 — all roles in this org. The direct-grant and policy tables were
+    // dropped in migration 0027 (both replaced by role-based IAM), so there is
+    // nothing else to read here and `grants` / `policies` are handed to the
+    // resolver empty. That makes rules 1–6 unreachable on this path by
+    // construction; rule 7 (role grant), 7.5 (system org Owner), or 8 (contract
+    // defaultEffect) decides every request. Keep both collections in the
+    // returned AuthzData: the resolver's signature still takes them, and
+    // denyAuthz() populates `policies` deliberately to trip rule 2.
+    const roleRows = await tx
+      .select()
+      .from(schema.roles)
+      .where(eq(schema.roles.orgId, orgId));
 
-    // Batch 1: roles fire; grants + policies tables were dropped in migration
-    // 0027 (grants/policies replaced by role-based IAM). Return empty arrays so
-    // the resolver falls through to role-based evaluation (rules 4–6).
-    const [grantRows, roleRows, policyRows] = await Promise.all([
-      Promise.resolve([] as Grant[]),
-      // Query 3 — all roles in this org (roleGrants depends on these ids).
-      tx
-        .select()
-        .from(schema.roles)
-        .where(eq(schema.roles.orgId, orgId)),
-      Promise.resolve([] as Policy[]),
-    ]);
+    const grants: Grant[] = [];
+    const policies: Policy[] = [];
 
-    const grants: Grant[] = grantRows;
-
-    // Batch 2: roleGrants depends on roleIds from the roles query above.
-    // Also load principal_role_assignments for this principal to determine
-    // which roles they are actually a member of.
+    // Batch 2 — two independent queries, run in parallel, both keyed off the
+    // roleIds the query above produced.
     const roleIds = roleRows.map((r) => r.id);
 
-    // Query 4a — role_grants for these roles and this capability.
-    // Query 4b — role assignments for this principal in this org/workspace.
-    //   Include org-wide (workspaceId IS NULL) and workspace-scoped
-    //   (workspaceId = ctx workspaceId) assignments. Non-deleted only.
+    //   a) role_grants for these roles and this capability.
+    //   b) role assignments for this principal in this org/workspace. Includes
+    //      org-wide (workspaceId IS NULL) and workspace-scoped
+    //      (workspaceId = ctx workspaceId) assignments. Non-deleted only.
     const [roleGrantRows, praRows] = await Promise.all([
       roleIds.length > 0
         ? tx
@@ -340,8 +339,6 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       capabilityId: rg.capabilityId,
       effect: rg.effect as "allow" | "deny" | "require_approval",
     }));
-
-    const policies: Policy[] = policyRows;
 
     return { principal, grants, roles, roleGrants, policies };
   });

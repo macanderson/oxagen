@@ -8,8 +8,9 @@
  * boundary; the CLI wrapper in `scripts/` only adds file-writing + argv handling.
  */
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve as resolvePath } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveContainedPath } from "@oxagen/agent-artifacts";
 import { parseSkill } from "./loader";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -41,23 +42,30 @@ async function collectSkillPaths(dir: string): Promise<string[]> {
   return out;
 }
 
-/** Read a skill file + resolve its `## References` sibling bodies. */
+/** Read a skill file + resolve its declared reference bodies. */
 async function readEmbeddedFile(path: string): Promise<EmbeddedFile> {
   const raw = await readFile(path, "utf8");
   // Reuse the real parser so slug + reference-path extraction never drifts.
   const skill = parseSkill(raw);
-  const baseDir = dirname(path);
   const references: EmbeddedReference[] = await Promise.all(
     skill.references.map(async (ref) => ({
       path: ref.path,
-      // Mirror loadSkillFile: a missing reference degrades to an empty body
-      // rather than aborting the whole codegen.
-      body: await readFile(resolvePath(baseDir, ref.path), "utf8").catch(
-        (err: unknown) => {
+      // Same containment proof loadSkillFile applies, so a reference that
+      // symlinks out of the bundle cannot get its contents baked into the
+      // committed module.
+      body: await readFile(await resolveContainedPath(path, ref.path), "utf8")
+        // A missing reference degrades to an empty body rather than aborting
+        // the whole codegen — but say so, or the generated module silently
+        // ships an empty reference nobody notices until an agent reads it.
+        // Any other read failure is a build fault and stops the run, which is
+        // stricter than loadSkillFile's runtime degrade-and-warn.
+        .catch((err: unknown) => {
           if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+          console.warn(
+            `[embed-skills] reference missing, embedding an empty body: ${ref.path} (declared by ${path})`,
+          );
           return "";
-        },
-      ),
+        }),
     })),
   );
   return { slug: skill.slug, raw, references };
@@ -101,9 +109,10 @@ export function renderGeneratedModule(files: EmbeddedFile[]): string {
 // Regenerate with: pnpm --filter @oxagen/skills gen:skills
 //
 // Embeds every packages/skills/skills/*/skill.toml as module data so builtin
-// skills are ALWAYS present in any bundle. Serverless bundlers drop non-imported
-// markdown, so a runtime filesystem read would break workspace skill seeding
-// and the create-agent fallback in production. Do not replace this with one.
+// skills are ALWAYS present in any bundle. Serverless bundlers trace the import
+// graph and drop plain data files like these, so a runtime filesystem read would
+// break workspace skill seeding and the create-agent fallback in production.
+// Do not replace this with one.
 
 export interface EmbeddedSkillReference {
   readonly path: string;

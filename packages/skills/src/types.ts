@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// SkillMetadata is the validated metadata projection from canonical TOML. It
-// remains an open bag so
-// callers can read arbitrary keys without changing the parser contract.
+// The validated projection of a canonical TOML skill artifact: the fields this
+// package depends on, checked. `metadata` stays an open bag (`.passthrough()`)
+// so callers can read keys the parser has never heard of.
 export const skillMetadataProjectionSchema = z.object({
   name: z
     .string()

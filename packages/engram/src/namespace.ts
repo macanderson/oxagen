@@ -34,6 +34,13 @@ export function validateNamespace(ns: unknown): Namespace {
 /**
  * Convert a namespace to a canonical string key for indexing/partitioning.
  * Format: `org:workspace[:session[:agent]]`
+ *
+ * The nesting is strict: `agent` is only appended when `session` is also set.
+ * A namespace with an agent but no session therefore keys as plain
+ * `org:workspace`, and two such namespaces with DIFFERENT agents collide on
+ * one key. Do not use this key as a partition or cache identity for
+ * agent-scoped, session-less namespaces — the record's own `namespace` object
+ * is the authority; this is only a display/index convenience.
  */
 export function namespaceKey(ns: Namespace): string {
   let key = `${ns.org}:${ns.workspace}`;
@@ -51,7 +58,10 @@ export function namespaceKey(ns: Namespace): string {
  * A namespace is "within" another if it shares the same org and workspace,
  * and optionally narrows session/agent.
  */
-export function isWithinNamespace(child: Namespace, parent: Namespace): boolean {
+export function isWithinNamespace(
+  child: Namespace,
+  parent: Namespace,
+): boolean {
   if (child.org !== parent.org) return false;
   if (child.workspace !== parent.workspace) return false;
   // If parent specifies a session, child must match it.

@@ -54,7 +54,10 @@ function StatusDot({
 }: StatusDotProps) {
   const dotSize = statusDotVariants({ status, size });
   return (
-    <span className={cn("inline-flex items-center gap-1.5", className)} {...props}>
+    <span
+      className={cn("inline-flex items-center gap-1.5", className)}
+      {...props}
+    >
       <span className={cn("relative inline-flex shrink-0", dotSize)}>
         {pulse && (
           <span
@@ -65,7 +68,12 @@ function StatusDot({
             )}
           />
         )}
-        <span className={cn("relative inline-flex rounded-full bg-current", dotSize)} />
+        <span
+          className={cn(
+            "relative inline-flex rounded-full bg-current",
+            dotSize,
+          )}
+        />
       </span>
       {label != null ? (
         <span className="text-xs font-medium text-foreground">{label}</span>

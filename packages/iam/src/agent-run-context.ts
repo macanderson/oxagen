@@ -117,10 +117,10 @@ export async function resolveAgentRunAuthzContext(
       .where(eq(schema.principals.id, agentRow.principalId))
       .limit(1);
 
-    // The agent's own principal must be live. A suspended or soft-deleted
-    // agent principal can never anchor a fresh run's AuthzContext — and unlike
-    // the old check, a SUSPENSION counts: suspending an agent that then keeps
-    // starting runs would make the control decorative.
+    // The agent's own principal must be live. Neither a suspended nor a
+    // soft-deleted agent principal can anchor a fresh run's AuthzContext.
+    // Suspension counts as much as deletion: an agent that kept starting runs
+    // after being suspended would make the suspension control decorative.
     if (
       !agentPrincipalRow ||
       agentPrincipalRow.status === "deleted" ||

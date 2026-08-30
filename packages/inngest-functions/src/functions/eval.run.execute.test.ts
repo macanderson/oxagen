@@ -4,7 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   createFunction: vi.fn(),
   withTenantDb: vi.fn(),
-  runInTenantScope: vi.fn().mockImplementation((_scope: unknown, fn: () => unknown) => fn()),
+  runInTenantScope: vi
+    .fn()
+    .mockImplementation((_scope: unknown, fn: () => unknown) => fn()),
   insertEvalItemResults: vi.fn().mockResolvedValue(undefined),
   providerCostUsdMicros: vi.fn().mockReturnValue(0),
   runTarget: vi.fn(),
@@ -39,7 +41,10 @@ mocks.createFunction.mockImplementation(
 );
 
 vi.mock("../inngest", () => ({
-  inngest: { createFunction: mocks.createFunction, send: vi.fn().mockResolvedValue(undefined) },
+  inngest: {
+    createFunction: mocks.createFunction,
+    send: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -111,7 +116,11 @@ const BASE_EVENT = {
 };
 
 const MODEL_RUN_ROW = {
-  target: { kind: "model", model: "anthropic/claude-haiku", systemPrompt: "Be terse." },
+  target: {
+    kind: "model",
+    model: "anthropic/claude-haiku",
+    systemPrompt: "Be terse.",
+  },
   judgeModel: "anthropic/claude-sonnet",
   passThreshold: "0.7",
   itemCount: 10,
@@ -124,8 +133,16 @@ const AGENT_RUN_ROW = {
   itemCount: 10,
 };
 
-const ITEM_A = { publicId: "item-a", input: "What is 2+2?", expectedOutput: "4" };
-const ITEM_B = { publicId: "item-b", input: "What is the capital of France?", expectedOutput: "Paris" };
+const ITEM_A = {
+  publicId: "item-a",
+  input: "What is 2+2?",
+  expectedOutput: "4",
+};
+const ITEM_B = {
+  publicId: "item-b",
+  input: "What is the capital of France?",
+  expectedOutput: "Paris",
+};
 
 function makeStep(): HandlerCtx["step"] {
   return {
@@ -182,7 +199,8 @@ function makeTx(opts: {
             innerJoin: () => ({
               where: () => ({
                 orderBy: () => ({
-                  limit: () => Promise.resolve(opts.agentRow ? [opts.agentRow] : []),
+                  limit: () =>
+                    Promise.resolve(opts.agentRow ? [opts.agentRow] : []),
                 }),
               }),
             }),
@@ -203,24 +221,34 @@ function makeTx(opts: {
 describe("eval.run.execute Inngest function", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => fn(),
+    );
     mocks.insertEvalItemResults.mockResolvedValue(undefined);
     mocks.providerCostUsdMicros.mockReturnValue(1000);
   });
 
   it("registers with id=eval.run.execute, retries=0, and the eval/run.start trigger", () => {
     expect(capturedFnArgs).not.toBeNull();
-    const [opts, trigger] = capturedFnArgs as [Record<string, unknown>, Record<string, unknown>];
+    const [opts, trigger] = capturedFnArgs as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
     expect(opts).toMatchObject({ id: "eval.run.execute", retries: 0 });
     expect(trigger).toMatchObject({ event: "eval/run.start" });
   });
 
   it("returns failed and does not update the run when the run row is not found", async () => {
     const updates: UpdateCall[] = [];
-    mocks.withTenantDb.mockImplementation(makeWithTenantDbMock(makeTx({ runRow: null, updates })));
+    mocks.withTenantDb.mockImplementation(
+      makeWithTenantDbMock(makeTx({ runRow: null, updates })),
+    );
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toEqual({ runId: RUN_PUBLIC_ID, status: "failed" });
     expect(updates).toHaveLength(0);
@@ -233,7 +261,9 @@ describe("eval.run.execute Inngest function", () => {
   it("marks the run running then completed, and rolls up the average score across all items", async () => {
     const updates: UpdateCall[] = [];
     mocks.withTenantDb.mockImplementation(
-      makeWithTenantDbMock(makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A, ITEM_B], updates })),
+      makeWithTenantDbMock(
+        makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A, ITEM_B], updates }),
+      ),
     );
 
     mocks.runTarget
@@ -249,16 +279,29 @@ describe("eval.run.execute Inngest function", () => {
       });
     mocks.scoreWithJudge
       .mockResolvedValueOnce({
-        score: { correctness: 1, faithfulness: 1, score: 1, rationale: "Correct." },
+        score: {
+          correctness: 1,
+          faithfulness: 1,
+          score: 1,
+          rationale: "Correct.",
+        },
         usage: { promptTokens: 20, completionTokens: 8 },
       })
       .mockResolvedValueOnce({
-        score: { correctness: 0.5, faithfulness: 1, score: 0.5, rationale: "Partially correct." },
+        score: {
+          correctness: 0.5,
+          faithfulness: 1,
+          score: 0.5,
+          rationale: "Partially correct.",
+        },
         usage: { promptTokens: 22, completionTokens: 9 },
       });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toEqual({ runId: RUN_PUBLIC_ID, status: "completed" });
 
@@ -287,10 +330,9 @@ describe("eval.run.execute Inngest function", () => {
 
     // One result row inserted per item.
     expect(mocks.insertEvalItemResults).toHaveBeenCalledTimes(2);
-    const rowA = (mocks.insertEvalItemResults.mock.calls[0]?.[0] as unknown[])[0] as Record<
-      string,
-      unknown
-    >;
+    const rowA = (
+      mocks.insertEvalItemResults.mock.calls[0]?.[0] as unknown[]
+    )[0] as Record<string, unknown>;
     expect(rowA).toMatchObject({
       run_id: RUN_PUBLIC_ID,
       dataset_id: DATASET_ID,
@@ -325,7 +367,12 @@ describe("eval.run.execute Inngest function", () => {
       usage: { promptTokens: 5, completionTokens: 1 },
     });
     mocks.scoreWithJudge.mockResolvedValue({
-      score: { correctness: 1, faithfulness: 1, score: 1, rationale: "Correct." },
+      score: {
+        correctness: 1,
+        faithfulness: 1,
+        score: 1,
+        rationale: "Correct.",
+      },
       usage: { promptTokens: 5, completionTokens: 1 },
     });
 
@@ -343,7 +390,9 @@ describe("eval.run.execute Inngest function", () => {
   it("per-item failure isolation: a failing item writes a failed result row, the run still completes, and the rollup excludes the failure", async () => {
     const updates: UpdateCall[] = [];
     mocks.withTenantDb.mockImplementation(
-      makeWithTenantDbMock(makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A, ITEM_B], updates })),
+      makeWithTenantDbMock(
+        makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A, ITEM_B], updates }),
+      ),
     );
 
     // First item's target call throws; second item succeeds.
@@ -355,21 +404,28 @@ describe("eval.run.execute Inngest function", () => {
         usage: { promptTokens: 12, completionTokens: 3 },
       });
     mocks.scoreWithJudge.mockResolvedValue({
-      score: { correctness: 1, faithfulness: 1, score: 1, rationale: "Correct." },
+      score: {
+        correctness: 1,
+        faithfulness: 1,
+        score: 1,
+        rationale: "Correct.",
+      },
       usage: { promptTokens: 22, completionTokens: 9 },
     });
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     // The run completes despite the per-item failure — it does not abort.
     expect(result).toEqual({ runId: RUN_PUBLIC_ID, status: "completed" });
 
     expect(mocks.insertEvalItemResults).toHaveBeenCalledTimes(2);
-    const failedRow = (mocks.insertEvalItemResults.mock.calls[0]?.[0] as unknown[])[0] as Record<
-      string,
-      unknown
-    >;
+    const failedRow = (
+      mocks.insertEvalItemResults.mock.calls[0]?.[0] as unknown[]
+    )[0] as Record<string, unknown>;
     expect(failedRow).toMatchObject({
       item_id: "item-a",
       status: "failed",
@@ -407,12 +463,17 @@ describe("eval.run.execute Inngest function", () => {
   it("records a null avgScore and empty scoreBreakdown means when every item fails", async () => {
     const updates: UpdateCall[] = [];
     mocks.withTenantDb.mockImplementation(
-      makeWithTenantDbMock(makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A], updates })),
+      makeWithTenantDbMock(
+        makeTx({ runRow: MODEL_RUN_ROW, items: [ITEM_A], updates }),
+      ),
     );
     mocks.runTarget.mockRejectedValue(new Error("boom"));
 
     const step = makeStep();
-    const result = await capturedHandler!({ event: { data: BASE_EVENT }, step });
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT },
+      step,
+    });
 
     expect(result).toEqual({ runId: RUN_PUBLIC_ID, status: "completed" });
     const finalUpdate = updates[updates.length - 1]!;
@@ -427,7 +488,11 @@ describe("eval.run.execute Inngest function", () => {
   it("caps the loaded items at min(maxItems, run.itemCount) when maxItems is set", async () => {
     const updates: UpdateCall[] = [];
     let capturedLimit: number | null = null;
-    const tx = makeTx({ runRow: { ...MODEL_RUN_ROW, itemCount: 10 }, items: [ITEM_A], updates });
+    const tx = makeTx({
+      runRow: { ...MODEL_RUN_ROW, itemCount: 10 },
+      items: [ITEM_A],
+      updates,
+    });
     const originalFrom = tx.select({}).from;
     // Wrap select().from() to capture the limit() argument for evalDatasetItems.
     tx.select = ((_cols: unknown) => ({
@@ -459,7 +524,10 @@ describe("eval.run.execute Inngest function", () => {
     });
 
     const step = makeStep();
-    await capturedHandler!({ event: { data: { ...BASE_EVENT, maxItems: 3 } }, step });
+    await capturedHandler!({
+      event: { data: { ...BASE_EVENT, maxItems: 3 } },
+      step,
+    });
 
     expect(capturedLimit).toBe(3);
   });

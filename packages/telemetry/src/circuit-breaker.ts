@@ -128,10 +128,19 @@ export class CircuitBreaker {
   /**
    * Run `fn` under the breaker.
    *  - closed: run; reset on success, count failures and trip at threshold.
-   *  - open: if the reset window has elapsed, allow ONE half-open probe;
-   *    otherwise fail fast with `CircuitOpenError`.
-   *  - half-open: run the probe; a success closes the breaker (after
+   *  - open: if the reset window has elapsed, move to half-open and let this
+   *    call through; otherwise fail fast with `CircuitOpenError`.
+   *  - half-open: run the call; a success closes the breaker (after
    *    successThreshold), a failure reopens it immediately.
+   *
+   * Half-open admits every concurrent caller, not a single probe. Once the
+   * reset window elapses the state flips to `half-open` synchronously and any
+   * further call sees `half-open` and runs straight through — there is no
+   * in-flight-probe counter. On a still-down dependency that means one burst of
+   * traffic reaches it per `resetTimeoutMs` before the first failure reopens the
+   * breaker. That is bounded and acceptable for the telemetry/Neo4j/Stripe paths
+   * this guards; a dependency that cannot absorb such a burst needs a real
+   * single-flight probe here.
    */
   async exec<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === "open") {
@@ -139,7 +148,7 @@ export class CircuitBreaker {
       if (elapsed < this.resetTimeoutMs) {
         throw new CircuitOpenError(this.key, this.resetTimeoutMs - elapsed);
       }
-      // Reset window elapsed — move to half-open and let this call probe.
+      // Reset window elapsed — move to half-open and let calls through again.
       this.transition("half-open", this.failures);
     }
 

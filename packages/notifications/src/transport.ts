@@ -63,13 +63,7 @@ export function emailTransport(): EmailTransport {
  * that gates production sign-in — and surface it loudly instead.
  */
 export function isEmailTransportConfigured(): boolean {
-  const env = requireEnv([
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_USERNAME",
-    "SMTP_PASSWORD",
-    "SMTP_FROM_EMAIL",
-  ] as const);
+  const env = requireEnv(REQUIRED_KEYS);
   return REQUIRED_KEYS.every((key) => env[key] !== undefined);
 }
 

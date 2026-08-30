@@ -2,7 +2,12 @@
  * Tests for sync/merkle.ts — stable hex-trie bucketing and metadata-aware diff.
  */
 import { describe, it, expect } from "vitest";
-import { buildMerkleTree, diffMerkleTrees, MerkleTree, type RecordVersion } from "./merkle";
+import {
+  buildMerkleTree,
+  diffMerkleTrees,
+  MerkleTree,
+  type RecordVersion,
+} from "./merkle";
 
 /** Deterministic, well-spread 64-hex id from a seed (LCG-filled). */
 function seededHexId(seed: number): string {
@@ -16,7 +21,10 @@ function seededHexId(seed: number): string {
 }
 
 function versions(n: number, digest = "v1", seedBase = 0): RecordVersion[] {
-  return Array.from({ length: n }, (_, i) => ({ id: seededHexId(seedBase + i), versionDigest: digest }));
+  return Array.from({ length: n }, (_, i) => ({
+    id: seededHexId(seedBase + i),
+    versionDigest: digest,
+  }));
 }
 
 /** Every (prefix → hash) pair in the trie, for locality assertions. */
@@ -43,7 +51,10 @@ describe("MerkleTree bucketing", () => {
     const base = versions(60);
     const before = allNodeHashes(buildMerkleTree(base));
 
-    const newRec: RecordVersion = { id: seededHexId(9999), versionDigest: "v1" };
+    const newRec: RecordVersion = {
+      id: seededHexId(9999),
+      versionDigest: "v1",
+    };
     const after = allNodeHashes(buildMerkleTree([...base, newRec]));
 
     const changed: string[] = [];
@@ -82,7 +93,9 @@ describe("diffMerkleTrees", () => {
     const base = versions(50);
     const local = buildMerkleTree(base);
     const changedId = base[13]!.id;
-    const remote = buildMerkleTree(base.map((v) => (v.id === changedId ? { ...v, versionDigest: "v2" } : v)));
+    const remote = buildMerkleTree(
+      base.map((v) => (v.id === changedId ? { ...v, versionDigest: "v2" } : v)),
+    );
 
     // Same ID set → old ID-only Merkle tree would have had equal roots and never converged.
     expect(local.rootHash).not.toBe(remote.rootHash);
@@ -94,7 +107,11 @@ describe("diffMerkleTrees", () => {
 
   it("identical trees diff to empty groups", () => {
     const tree = buildMerkleTree(versions(50));
-    expect(diffMerkleTrees(tree, tree)).toEqual({ remoteOnly: [], localOnly: [], divergent: [] });
+    expect(diffMerkleTrees(tree, tree)).toEqual({
+      remoteOnly: [],
+      localOnly: [],
+      divergent: [],
+    });
   });
 
   it("classifies remote-only, local-only, and divergent across a multi-level tree", () => {
@@ -104,17 +121,25 @@ describe("diffMerkleTrees", () => {
     const remoteExtra = versions(4, "v1", 200_000); // remote-only
 
     const local = buildMerkleTree([
-      ...base.map((v) => (v.id === divergentId ? { ...v, versionDigest: "L" } : v)),
+      ...base.map((v) =>
+        v.id === divergentId ? { ...v, versionDigest: "L" } : v,
+      ),
       ...localExtra,
     ]);
     const remote = buildMerkleTree([
-      ...base.map((v) => (v.id === divergentId ? { ...v, versionDigest: "R" } : v)),
+      ...base.map((v) =>
+        v.id === divergentId ? { ...v, versionDigest: "R" } : v,
+      ),
       ...remoteExtra,
     ]);
 
     const diff = diffMerkleTrees(local, remote);
     expect(diff.divergent).toEqual([divergentId]);
-    expect(new Set(diff.remoteOnly)).toEqual(new Set(remoteExtra.map((v) => v.id)));
-    expect(new Set(diff.localOnly)).toEqual(new Set(localExtra.map((v) => v.id)));
+    expect(new Set(diff.remoteOnly)).toEqual(
+      new Set(remoteExtra.map((v) => v.id)),
+    );
+    expect(new Set(diff.localOnly)).toEqual(
+      new Set(localExtra.map((v) => v.id)),
+    );
   });
 });

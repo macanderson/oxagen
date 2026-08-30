@@ -15,8 +15,11 @@ const SUPPORTED_DRIVERS = ["vercel-blob", "fs"] as const;
  *
  * To add a new driver:
  *  1. Implement the StorageAdapter interface.
- *  2. Add the driver name to STORAGE_DRIVER enum in packages/config/src/env.ts.
- *  3. Add a case here that reads the driver's env vars and returns the adapter.
+ *  2. Add the driver name to the STORAGE_DRIVER enum in
+ *     packages/config/src/env.ts and describe it in packages/config/src/registry.ts.
+ *  3. Add the driver name to SUPPORTED_DRIVERS above, so the unknown-driver
+ *     error lists it.
+ *  4. Add a case here that reads the driver's env vars and returns the adapter.
  */
 function resolveAdapter(): StorageAdapter {
   const { STORAGE_DRIVER } = requireEnv(["STORAGE_DRIVER"] as const);

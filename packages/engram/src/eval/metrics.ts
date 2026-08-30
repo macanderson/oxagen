@@ -27,9 +27,9 @@ export interface MetricThresholds {
 export const DEFAULT_THRESHOLDS: MetricThresholds = {
   contextPrecision: 0.05,
   contextRecall: 0.05,
-  tokensToSuccess: 0.10, // 10% more tokens is acceptable
+  tokensToSuccess: 0.1, // 10% more tokens is acceptable
   retrievalHitRate: 0.05,
-  cacheHitRate: 0.10,
+  cacheHitRate: 0.1,
   costPerTask: 0.15,
 };
 
@@ -45,14 +45,24 @@ export function detectRegressions(
   const regressions: MetricRegression[] = [];
 
   // Higher is better for these metrics
-  const higherIsBetter = ["contextPrecision", "contextRecall", "retrievalHitRate", "cacheHitRate"] as const;
+  const higherIsBetter = [
+    "contextPrecision",
+    "contextRecall",
+    "retrievalHitRate",
+    "cacheHitRate",
+  ] as const;
   for (const metric of higherIsBetter) {
     const baselineVal = baseline[metric];
     const currentVal = current[metric];
     if (baselineVal > 0) {
       const degradation = (baselineVal - currentVal) / baselineVal;
       if (degradation > (thresholds[metric] ?? 0.05)) {
-        regressions.push({ metric, baseline: baselineVal, current: currentVal, degradation });
+        regressions.push({
+          metric,
+          baseline: baselineVal,
+          current: currentVal,
+          degradation,
+        });
       }
     }
   }
@@ -64,8 +74,13 @@ export function detectRegressions(
     const currentVal = current[metric];
     if (baselineVal > 0) {
       const inflation = (currentVal - baselineVal) / baselineVal;
-      if (inflation > (thresholds[metric] ?? 0.10)) {
-        regressions.push({ metric, baseline: baselineVal, current: currentVal, degradation: inflation });
+      if (inflation > (thresholds[metric] ?? 0.1)) {
+        regressions.push({
+          metric,
+          baseline: baselineVal,
+          current: currentVal,
+          degradation: inflation,
+        });
       }
     }
   }

@@ -40,19 +40,27 @@ const _byProvider = new Map<SandboxProviderName, SandboxDriver>();
 // materializeTools so an unconfigured driver is never advertised to the model.
 
 /**
- * Single source of truth for whether a sandbox driver is usable.
+ * Single source of truth for whether a sandbox driver is CONFIGURED.
+ *
+ * This is a config check, not a health check. It is intentionally
+ * side-effect-free (no singleton creation, no network or socket probe) so
+ * materialize-tools can call it per turn without initialising a driver — which
+ * means a "true" here does not promise the backing runtime is reachable.
  *
  * Returns true only when BOTH of the following hold:
  *   1. SANDBOX_ENABLED=true   — opt-in flag (off by default in prod)
- *   2. A driver is actually configured with its required credentials:
- *        vercel: SANDBOX_DRIVER=vercel (OIDC creds resolved lazily — flag alone
- *                is enough because the token is injected by the Vercel runtime)
- *        modal:  SANDBOX_DRIVER=modal AND MODAL_RUNNER_URL AND MODAL_RUNNER_TOKEN set
+ *   2. The selected driver's required ENV is present:
+ *        vercel: SANDBOX_DRIVER=vercel (OIDC creds resolved lazily — the flag
+ *                alone is enough because the token is injected by the Vercel
+ *                runtime; an unauthenticated call fails at run time)
+ *        modal:  SANDBOX_DRIVER=modal AND MODAL_RUNNER_URL AND MODAL_RUNNER_TOKEN
+ *                set (whether the runner answers is only known at run time)
  *        docker: explicit SANDBOX_DRIVER=docker, OR no explicit driver and no
- *                modal env vars present (docker is the local-dev fallback)
- *
- * This function is intentionally side-effect-free (no singleton creation) so
- * it can be called from materialize-tools without initialising a driver.
+ *                modal env vars present (docker is the local-dev fallback).
+ *                Docker needs no credentials, so there is nothing to verify
+ *                here — a missing daemon or a `dockerode` marked external in a
+ *                serverless bundle surfaces as an error from the first run(),
+ *                not as `false` from this function.
  */
 export function isSandboxAvailable(): boolean {
   if (process.env.SANDBOX_ENABLED !== "true") return false;

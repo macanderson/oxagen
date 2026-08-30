@@ -26,8 +26,10 @@ import { logger } from "../logger";
  *     retry next tick (5-min backoff); the inspector shows "manual recovery needed".
  *
  * System-wide sweep (withSystemDb — a cron has no tenant); per-candidate work runs
- * inside the session's tenant scope. Concurrency 1 so two ticks never race the
- * same session (belt-and-suspenders with FOR UPDATE SKIP LOCKED).
+ * inside the session's tenant scope. Concurrency 1 is what actually stops two
+ * ticks racing the same session: the SELECT's FOR UPDATE SKIP LOCKED only holds
+ * its row locks until that step's transaction commits, which is well before any
+ * reaping happens. reapOne() re-checks candidacy under a fresh read instead.
  */
 
 /** Per-tick candidate budget — each candidate does a Modal round-trip, so keep small. */
@@ -57,7 +59,10 @@ function reaperContext(c: CandidateRow) {
   };
 }
 
-function reapEventRow(c: CandidateRow, payload: Record<string, unknown>): EventRow {
+function reapEventRow(
+  c: CandidateRow,
+  payload: Record<string, unknown>,
+): EventRow {
   return {
     event_id: crypto.randomUUID(),
     org_id: c.org_id,
@@ -103,13 +108,21 @@ export const [agentSandboxReaper] = createFunction(
     );
 
     if (candidates.length === 0) {
-      return { candidates: 0, flushed: 0, recovered: 0, retained: 0, skipped: 0 };
+      return {
+        candidates: 0,
+        flushed: 0,
+        recovered: 0,
+        retained: 0,
+        skipped: 0,
+      };
     }
 
     // ── 2. Per-candidate recover-then-flush ─────────────────────────────────
     const results: { action: string; kind?: string }[] = [];
     for (const c of candidates) {
-      const outcome = await step.run(`reap-${c.public_id}`, async () => reapOne(c));
+      const outcome = await step.run(`reap-${c.public_id}`, async () =>
+        reapOne(c),
+      );
       results.push(outcome);
     }
 
@@ -121,7 +134,10 @@ export const [agentSandboxReaper] = createFunction(
       try {
         await insertEvents(rows);
       } catch (err) {
-        logger.warn({ err }, "insertEvents failed — sandbox reap telemetry loss");
+        logger.warn(
+          { err },
+          "insertEvents failed — sandbox reap telemetry loss",
+        );
       }
     });
 
@@ -141,12 +157,18 @@ export const [agentSandboxReaper] = createFunction(
  * Reap a single session. Re-checks candidacy under a fresh read (race guard for a
  * turn that resumed after selection), then recover-then-flush per the invariant.
  */
-async function reapOne(c: CandidateRow): Promise<{ action: string; kind?: string }> {
+async function reapOne(
+  c: CandidateRow,
+): Promise<{ action: string; kind?: string }> {
   const staleSecs = sandboxStaleRunningSeconds();
 
   // Race guard: a new turn may have touched the session after selection.
   const stillCandidate = await withSystemDb(async (tx) => {
-    const [row] = (await tx.execute<{ status: string; grace_past: boolean; stale: boolean }>(sql`
+    const [row] = (await tx.execute<{
+      status: string;
+      grace_past: boolean;
+      stale: boolean;
+    }>(sql`
       SELECT status,
              (grace_deadline_at IS NOT NULL AND grace_deadline_at < now()) AS grace_past,
              (last_used_at IS NOT NULL AND last_used_at < now() - make_interval(secs => ${staleSecs})) AS stale
@@ -176,7 +198,11 @@ async function reapOne(c: CandidateRow): Promise<{ action: string; kind?: string
       () => recoverSandboxSession(ctx, { sessionId: c.public_id }),
     );
   } catch (err) {
-    outcome = { kind: "failed", dirty: true, error: err instanceof Error ? err.message : String(err) };
+    outcome = {
+      kind: "failed",
+      dirty: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 
   // RETAIN: dirty work could not be saved — never flush; retry next tick.
@@ -209,7 +235,10 @@ async function reapOne(c: CandidateRow): Promise<{ action: string; kind?: string
     );
   } catch (err) {
     // A gone/already-stopped sandbox is fine — we still mark the row flushed.
-    logger.debug({ err, sessionId: c.public_id }, "agent.sandbox-reaper: terminate best-effort");
+    logger.debug(
+      { err, sessionId: c.public_id },
+      "agent.sandbox-reaper: terminate best-effort",
+    );
   }
 
   // Terminal state is written HERE, not left to the best-effort stop above: even
@@ -224,7 +253,12 @@ async function reapOne(c: CandidateRow): Promise<{ action: string; kind?: string
         status: "stopped",
         deletedAt: new Date(),
         flushedAt: new Date(),
-        recoveryStatus: outcome.kind === "recovered" ? "recovered" : outcome.kind === "gone" ? "failed" : "none",
+        recoveryStatus:
+          outcome.kind === "recovered"
+            ? "recovered"
+            : outcome.kind === "gone"
+              ? "failed"
+              : "none",
         recoveryBranch: outcome.branch ?? null,
         recoveryCommit: outcome.commit ?? null,
         recoveryError: outcome.kind === "gone" ? (outcome.error ?? null) : null,

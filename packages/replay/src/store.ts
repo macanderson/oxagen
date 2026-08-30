@@ -9,8 +9,16 @@
  * per writer but never fsync'd; readers tolerate torn tails. Blobs are
  * immutable by construction — a ref either resolves to content that hashes
  * back to the ref, or the store is corrupt and `verify` says so.
+ *
+ * SENSITIVITY: this store is deliberately verbatim — it holds whatever the
+ * agent's tools read and wrote, unredacted, so a replay is faithful. That
+ * includes anything a tool happened to surface: environment dumps, config
+ * files, tokens echoed by a failing command. Blobs and the log inherit the
+ * process umask, so treat a `record/` directory as sensitive as the working
+ * tree it recorded, and never copy one off the machine unreviewed.
  */
 import {
+  access,
   appendFile,
   mkdir,
   readFile,
@@ -31,8 +39,13 @@ import {
 /** The record sidecar's directory name inside a session directory. */
 export const RECORD_DIR_NAME = "record";
 
-/** Head bytes preserved in a truncation marker (enough to eyeball the payload). */
-const TRUNCATION_HEAD_BYTES = 64 * 1024;
+/**
+ * Head characters preserved in a truncation marker (enough to eyeball the
+ * payload). Counted in UTF-16 code units, not bytes — the marker is a preview,
+ * so an exact byte budget buys nothing and would risk splitting a surrogate
+ * pair. The full payload's real byte length rides in the marker's `bytes`.
+ */
+const TRUNCATION_HEAD_CHARS = 64 * 1024;
 
 export interface RecordWriter {
   readonly sid: string;
@@ -87,7 +100,7 @@ export class RecordStore {
         __truncated: true,
         bytes,
         sha256: sha256Hex(content),
-        head: content.slice(0, TRUNCATION_HEAD_BYTES),
+        head: content.slice(0, TRUNCATION_HEAD_CHARS),
       };
       const ref = await this.writeBlob(stableStringify(marker));
       return { ref, isTruncated: true };
@@ -195,7 +208,9 @@ export class RecordStore {
     const ref = sha256Hex(content);
     const file = join(this.blobsDir, ref);
     try {
-      await readFile(file, "utf8");
+      // Presence only — reading the bytes back would re-load up to 8 MB per
+      // unchanged file, per turn, on the recorder's hot path.
+      await access(file);
       return ref; // Content-addressed: already present means already correct.
     } catch {
       // Not present — write via tmp+rename so concurrent writers of the SAME

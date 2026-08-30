@@ -3,7 +3,12 @@
  *
  * Import this module once at application startup (Inngest worker, API route,
  * MCP tool) to register all connectors with the global registry. After this
- * import, getConnector(connectorId) resolves any of the 15 built-in connectors.
+ * import, getConnector(connectorId) resolves every built-in connector imported
+ * below (the count drifts — read the import list, don't trust a number).
+ *
+ * `example-saas` ships a schema.yaml for the plugin-schema docs but has no
+ * connector implementation, so it is deliberately absent here and
+ * getConnector("example-saas") throws.
  *
  * Connector layout:
  *   packages/ingestion/src/connectors/

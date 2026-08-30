@@ -266,10 +266,16 @@ const contextTransformV1Schema = z
   })
   .strict();
 
-// These fields are all optional with no `.default()`. Adding a default would
-// change the normalized bytes of every pinned golden fixture. A frame with
-// no `representation` is a `full` frame — that default is applied by the
-// invariants below, not written into the output.
+// The representation family (`representation`, `content_fidelity`,
+// `content_ref`, `transform`, and the fidelity/tokenizer fields) is optional
+// with no `.default()`: materializing one would change the normalized bytes of
+// every pinned golden fixture. A frame with no `representation` is a `full`
+// frame — that default is applied by the invariants below, not written into
+// the output.
+//
+// `provenance` and `relations` are the deliberate exception. They DO default
+// to `[]`, and the pinned fixtures expect those empty arrays to appear in the
+// normalized output (see `minimal_frame` in `context-frame.valid.json`).
 const contextFrameObjectV1Schema = z
   .object({
     id: z.string(),
@@ -405,9 +411,15 @@ export type ContextQueryV1 = z.infer<typeof contextQueryV1Schema>;
 
 // ─── Compile-time drift checks against the canonical SDK wire types ─────────
 // `@contextgraphprotocol/typescript-sdk` is the canonical source of the CGP
-// wire contract (ADR-036). If the SDK adds a wire field this schema does not
-// model, or a modeled field's type diverges, this package fails to typecheck —
-// schema drift is a build error, not a latent runtime gap.
+// wire contract (ADR-036). These assertions fail the typecheck when the SDK
+// adds a wire field this schema does not model, or when a modeled field's
+// declared type stops being assignable to the SDK's.
+//
+// What they do NOT catch: a union the SDK *widens*. If `FrameKind` gains a
+// variant, the narrower local enum is still assignable to the wider SDK one,
+// both assertions still pass, and this package silently rejects a frame the
+// protocol now allows. Nothing here or in `contextgraph.test.ts` currently
+// compares the enum members themselves against the SDK's.
 type AssertNever<T extends never> = T;
 type AssertAssignable<T extends Target, Target> = T;
 

@@ -40,7 +40,7 @@ describe("Menu — trigger", () => {
         <MenuPopup>
           <MenuItem>Item</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
     expect(getByRole("button", { name: "Open Menu" })).toBeInTheDocument();
   });
@@ -52,9 +52,12 @@ describe("Menu — trigger", () => {
         <MenuPopup>
           <MenuItem>Item</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
-    expect(getByRole("button", { name: "Open" })).toHaveAttribute("aria-haspopup", "menu");
+    expect(getByRole("button", { name: "Open" })).toHaveAttribute(
+      "aria-haspopup",
+      "menu",
+    );
   });
 
   it("trigger starts with aria-expanded=false (closed)", () => {
@@ -64,9 +67,12 @@ describe("Menu — trigger", () => {
         <MenuPopup>
           <MenuItem>Item</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
-    expect(getByRole("button", { name: "Open" })).toHaveAttribute("aria-expanded", "false");
+    expect(getByRole("button", { name: "Open" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
 });
 
@@ -82,9 +88,12 @@ describe("MenuItem — class and aria assertions via trigger context", () => {
         <MenuPopup>
           <MenuItem>Item A</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
-    expect(getByRole("button", { name: "Menu" })).toHaveAttribute("aria-haspopup", "menu");
+    expect(getByRole("button", { name: "Menu" })).toHaveAttribute(
+      "aria-haspopup",
+      "menu",
+    );
   });
 });
 
@@ -121,7 +130,9 @@ describe("MenuShortcut — standalone", () => {
   });
 
   it("merges custom className", () => {
-    const { getByText } = render(<MenuShortcut className="custom-sc">⌘S</MenuShortcut>);
+    const { getByText } = render(
+      <MenuShortcut className="custom-sc">⌘S</MenuShortcut>,
+    );
     expect(getByText("⌘S").className).toContain("custom-sc");
   });
 });
@@ -134,7 +145,7 @@ describe("MenuItem — destructive variant", () => {
         <MenuPopup>
           <MenuItem variant="destructive">Delete</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
     const item = await findByText("Delete");
     expect(item.className).toContain("text-error");
@@ -148,7 +159,7 @@ describe("MenuItem — destructive variant", () => {
         <MenuPopup>
           <MenuItem>Rename</MenuItem>
         </MenuPopup>
-      </Menu>
+      </Menu>,
     );
     const item = await findByText("Rename");
     expect(item.className).not.toContain("text-error");

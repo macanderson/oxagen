@@ -3,6 +3,12 @@
  * Server-side (Node, no DOM) via the unified pipeline. Only GitHub repos are
  * supported for now (raw.githubusercontent.com); other sources return null.
  * Relative image sources are rewritten to the repo raw base so they resolve.
+ *
+ * UNBOUNDED: the three candidate fetches carry no timeout and no size cap, and
+ * the whole response is buffered with res.text() before parsing. The host is
+ * fixed (raw.githubusercontent.com), but the repo path comes from a registry
+ * record, so a large README is read fully into memory on the server. Add an
+ * AbortSignal and a byte cap before exposing this on a request-path route.
  */
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -48,7 +54,11 @@ function rehypeRewriteImages(base: string) {
   // unified's Transformer<Node, Node>; we cast to the hast shape we walk.
   return (tree: unknown) => {
     const visit = (node: HastNode) => {
-      if (node.tagName === "img" && node.properties && typeof node.properties.src === "string") {
+      if (
+        node.tagName === "img" &&
+        node.properties &&
+        typeof node.properties.src === "string"
+      ) {
         const src = node.properties.src;
         if (!/^https?:\/\//i.test(src) && !src.startsWith("data:")) {
           node.properties.src = base + src.replace(/^\.?\//, "");
@@ -67,7 +77,9 @@ export function isReadmeFresh(fetchedAt: Date | null, now: number): boolean {
   return fetchedAt != null && now - fetchedAt.getTime() < TTL_MS;
 }
 
-export async function fetchAndRenderReadme(repository: Repository): Promise<string | null> {
+export async function fetchAndRenderReadme(
+  repository: Repository,
+): Promise<string | null> {
   const ref = parseGithub(repository);
   if (!ref) return null;
 
@@ -75,7 +87,9 @@ export async function fetchAndRenderReadme(repository: Repository): Promise<stri
   const candidates = ["README.md", "readme.md", "README.markdown"];
   let markdown: string | null = null;
   for (const file of candidates) {
-    const res = await fetch(`${base}${file}`, { headers: { accept: "text/plain" } });
+    const res = await fetch(`${base}${file}`, {
+      headers: { accept: "text/plain" },
+    });
     if (res.ok) {
       markdown = await res.text();
       break;

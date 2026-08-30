@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { deterministicEventId } from "./idempotency";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("deterministicEventId", () => {
   it("returns a UUID-formatted string", () => {
@@ -17,8 +18,14 @@ describe("deterministicEventId", () => {
 
   it("differs when any input part changes", () => {
     const base = deterministicEventId("run-1", "emit-step-telemetry-step-1");
-    const differentRun = deterministicEventId("run-2", "emit-step-telemetry-step-1");
-    const differentStep = deterministicEventId("run-1", "emit-step-telemetry-step-2");
+    const differentRun = deterministicEventId(
+      "run-2",
+      "emit-step-telemetry-step-1",
+    );
+    const differentStep = deterministicEventId(
+      "run-1",
+      "emit-step-telemetry-step-2",
+    );
     expect(differentRun).not.toBe(base);
     expect(differentStep).not.toBe(base);
     expect(differentRun).not.toBe(differentStep);

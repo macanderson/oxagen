@@ -73,7 +73,9 @@ describe("connector registry", () => {
   // new webhook connector cannot silently reintroduce the fail-open bypass.
   it("every webhook-delivery connector implements verifyWebhook", () => {
     const connectors = listConnectors();
-    const webhookConnectors = connectors.filter((c) => c.deliveryMethod === "webhook");
+    const webhookConnectors = connectors.filter(
+      (c) => c.deliveryMethod === "webhook",
+    );
     expect(webhookConnectors.length).toBeGreaterThan(0);
     for (const c of webhookConnectors) {
       expect(

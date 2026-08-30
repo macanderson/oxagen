@@ -87,10 +87,18 @@ export class SessionRecorder {
   private readonly cwd: string;
   private readonly exec: ExecPort;
   private readonly onError?: (message: string) => void;
+  /** Injected clock handed to the writer (tests pin it for stable `ts`). */
+  private readonly writerNow?: () => number;
   private writer: RecordWriter | null = null;
   private isDisabled = false;
   private toolIdx = 0;
   private currentTurn = 1;
+  /**
+   * In-flight `tool.io` captures. Their blob writes are deliberately off the
+   * tool's critical path, so `flush` has to await them explicitly — otherwise
+   * the last turn's tool calls are lost when the session finalizes.
+   */
+  private readonly pendingCaptures = new Set<Promise<void>>();
 
   constructor(opts: SessionRecorderOptions) {
     this.store = opts.store;
@@ -100,7 +108,6 @@ export class SessionRecorder {
     this.onError = opts.onError;
     this.writerNow = opts.now;
   }
-  private readonly writerNow?: () => number;
 
   /** True when recording is still live (no error has disabled it). */
   get isRecording(): boolean {
@@ -225,8 +232,15 @@ export class SessionRecorder {
     }
   }
 
-  /** Await queued writes (call at session finalization). */
+  /**
+   * Await every in-flight capture and queued write (call at session
+   * finalization). Captures settle first — each one ends in an `append`, so
+   * draining the writer before them would flush an incomplete log.
+   */
   async flush(): Promise<void> {
+    while (this.pendingCaptures.size > 0) {
+      await Promise.allSettled([...this.pendingCaptures]);
+    }
     await this.writer?.flush().catch(() => {});
   }
 
@@ -253,9 +267,10 @@ export class SessionRecorder {
     this.toolIdx += 1;
     const idx = this.toolIdx;
     const turn = this.currentTurn;
-    // Blob writes are async; chain them so the tool result returns immediately
-    // and a write failure disables the recorder, never the tool.
-    void (async () => {
+    // Blob writes are async; run them off the tool's critical path so the tool
+    // result returns immediately and a write failure disables the recorder,
+    // never the tool. `flush` awaits whatever is still in flight.
+    const capture = (async () => {
       try {
         const inputBlob = await this.store.putBlob(safeStableStringify(input), {
           maxBytes: MAX_TOOL_BLOB_BYTES,
@@ -281,9 +296,19 @@ export class SessionRecorder {
         this.disable(err);
       }
     })();
+    this.pendingCaptures.add(capture);
+    void capture.finally(() => this.pendingCaptures.delete(capture));
   }
 
-  /** Snapshot `paths` (relative to cwd) as layer files; missing → tombstone. */
+  /**
+   * Snapshot `paths` (relative to cwd) as layer files; missing → tombstone.
+   *
+   * Content is decoded as UTF-8, so a changed BINARY file round-trips lossily
+   * (invalid sequences become U+FFFD) while `bytes` still reports the true
+   * on-disk length. Restoring such a file writes the mangled text back. Fixing
+   * that needs a `record-v1` encoding field, so it is a schema decision, not a
+   * local one.
+   */
   private async snapshotFiles(paths: string[]): Promise<LayerFile[]> {
     const files: LayerFile[] = [];
     for (const path of [...new Set(paths)].sort()) {
@@ -317,11 +342,22 @@ export class SessionRecorder {
     return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
   }
 
-  /** Paths dirty at session start (staged, unstaged, and untracked). */
+  /**
+   * Paths dirty at session start (staged, unstaged, and untracked).
+   *
+   * `core.quotePath=false` is not cosmetic: with git's default, a non-ASCII
+   * path comes back C-quoted (`"src/\303\251.ts"`), which then fails to read
+   * and gets recorded as a baseline tombstone — i.e. the file silently loses
+   * its pre-run content and a restore claims it never existed.
+   */
   private async gitDirtyFiles(): Promise<string[]> {
-    const res = await this.exec("git", ["status", "--porcelain"], {
-      cwd: this.cwd,
-    }).catch(() => null);
+    const res = await this.exec(
+      "git",
+      ["-c", "core.quotePath=false", "status", "--porcelain"],
+      {
+        cwd: this.cwd,
+      },
+    ).catch(() => null);
     if (!res || res.code !== 0) return [];
     const paths: string[] = [];
     for (const line of res.stdout.split("\n")) {

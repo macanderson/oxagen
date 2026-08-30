@@ -26,7 +26,9 @@ describe("badgeVariants — class map", () => {
     expect(badgeVariants({ variant: "secondary" })).toContain("bg-secondary");
   });
   it("destructive variant includes bg-destructive", () => {
-    expect(badgeVariants({ variant: "destructive" })).toContain("bg-destructive");
+    expect(badgeVariants({ variant: "destructive" })).toContain(
+      "bg-destructive",
+    );
   });
   it("outline variant aliases the default outlined ink chip", () => {
     const cls = badgeVariants({ variant: "outline" });
@@ -53,7 +55,9 @@ describe("badgeVariants — class map", () => {
     const cls = badgeVariants({ variant: "success-soft" });
     expect(cls).toContain("bg-success/10");
     expect(cls).toContain("text-success");
-    expect(badgeVariants({ variant: "warning-soft" })).toContain("text-warning");
+    expect(badgeVariants({ variant: "warning-soft" })).toContain(
+      "text-warning",
+    );
     expect(badgeVariants({ variant: "error-soft" })).toContain("text-error");
     expect(badgeVariants({ variant: "info-soft" })).toContain("text-info");
   });
@@ -117,9 +121,7 @@ describe("Badge — render", () => {
   });
 
   it("render-prop forwards children through a custom element", () => {
-    render(
-      <Badge render={<button type="button" />}>Action</Badge>
-    );
+    render(<Badge render={<button type="button" />}>Action</Badge>);
     const btn = screen.getByRole("button", { name: "Action" });
     expect(btn).toBeInTheDocument();
     // Variant classes forwarded to the rendered element

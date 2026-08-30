@@ -135,14 +135,22 @@ interface AnthropicTokenizerModule {
 }
 
 /**
- * Choose the tiktoken encoding for an OpenAI model id. GPT-4o / o1 / o3 / GPT-5
- * use `o200k_base`; legacy GPT-3.5 and the original GPT-4 use `cl100k_base`.
+ * Choose the tiktoken encoding for an OpenAI model id.
+ *
+ * `cl100k_base` covers only the original GPT-3.5 / GPT-4 line (`gpt-3.5-turbo`,
+ * `gpt-4`, `gpt-4-turbo`). Everything newer — `gpt-4o`, the dotted `gpt-4.x`
+ * refreshes (`gpt-4.1`, `gpt-4.5`), GPT-5, and the `o1`/`o3`/`o4` reasoning
+ * line — uses `o200k_base`. Matching a bare `gpt-4` prefix without excluding the
+ * dotted refreshes would bill `gpt-4.1` against the wrong vocabulary and skew
+ * every budget number for that model.
  */
+const OPENAI_O200K_GPT4 = /gpt-4(o|\.\d)/;
+
 function openAiEncodingFor(modelId: string): string {
   const lower = modelId.toLowerCase();
   if (
     (lower.includes("gpt-3.5") || lower.includes("gpt-4")) &&
-    !lower.includes("gpt-4o")
+    !OPENAI_O200K_GPT4.test(lower)
   ) {
     return "cl100k_base";
   }
@@ -155,7 +163,9 @@ const defaultTiktokenLoader: TiktokenEncoderLoader = (modelId) => {
 };
 
 const defaultAnthropicLoader: TokenCounterLoader = () => {
-  const mod = nodeRequire("@anthropic-ai/tokenizer") as AnthropicTokenizerModule;
+  const mod = nodeRequire(
+    "@anthropic-ai/tokenizer",
+  ) as AnthropicTokenizerModule;
   return mod.countTokens;
 };
 
@@ -184,7 +194,10 @@ export class TiktokenTokenizer implements Tokenizer {
         // Dep unavailable or WASM init failed — degrade to the estimator for
         // the lifetime of this (cached) tokenizer, but surface it once.
         this.loadFailed = true;
-        recordFallback("openai", err instanceof Error ? err.message : "load failed");
+        recordFallback(
+          "openai",
+          err instanceof Error ? err.message : "load failed",
+        );
       }
     }
     if (this.encoder) {
@@ -194,7 +207,10 @@ export class TiktokenTokenizer implements Tokenizer {
         // A per-call encode failure shouldn't crash budgeting; fall back.
         this.loadFailed = true;
         this.encoder = null;
-        recordFallback("openai", err instanceof Error ? err.message : "encode failed");
+        recordFallback(
+          "openai",
+          err instanceof Error ? err.message : "encode failed",
+        );
       }
     }
     return this.fallback.count(text);
@@ -212,7 +228,9 @@ export class AnthropicTokenizer implements Tokenizer {
   private loadFailed = false;
   private readonly fallback = new CharBasedTokenizer(3.5);
 
-  constructor(private readonly load: TokenCounterLoader = defaultAnthropicLoader) {}
+  constructor(
+    private readonly load: TokenCounterLoader = defaultAnthropicLoader,
+  ) {}
 
   count(text: string): number {
     if (!this.counter && !this.loadFailed) {
@@ -220,7 +238,10 @@ export class AnthropicTokenizer implements Tokenizer {
         this.counter = this.load();
       } catch (err) {
         this.loadFailed = true;
-        recordFallback("anthropic", err instanceof Error ? err.message : "load failed");
+        recordFallback(
+          "anthropic",
+          err instanceof Error ? err.message : "load failed",
+        );
       }
     }
     if (this.counter) {
@@ -229,7 +250,10 @@ export class AnthropicTokenizer implements Tokenizer {
       } catch (err) {
         this.loadFailed = true;
         this.counter = null;
-        recordFallback("anthropic", err instanceof Error ? err.message : "count failed");
+        recordFallback(
+          "anthropic",
+          err instanceof Error ? err.message : "count failed",
+        );
       }
     }
     return this.fallback.count(text);

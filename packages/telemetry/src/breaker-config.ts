@@ -11,7 +11,10 @@ import { requireEnv } from "@oxagen/config/env";
 import type { CircuitBreakerOptions } from "./circuit-breaker";
 
 export type BreakerThresholds = Required<
-  Pick<CircuitBreakerOptions, "failureThreshold" | "resetTimeoutMs" | "successThreshold">
+  Pick<
+    CircuitBreakerOptions,
+    "failureThreshold" | "resetTimeoutMs" | "successThreshold"
+  >
 >;
 
 /**

@@ -116,23 +116,44 @@ describe("custom-webhook connector – verifyWebhook", () => {
   });
 
   it("accepts valid HMAC on x-signature header", () => {
-    const sig = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
-    expect(customWebhook.verifyWebhook!(payload, { "x-signature": sig }, secret)).toBe(true);
+    const sig =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    expect(
+      customWebhook.verifyWebhook!(payload, { "x-signature": sig }, secret),
+    ).toBe(true);
   });
 
   it("accepts valid HMAC on x-webhook-signature header", () => {
-    const sig = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
-    expect(customWebhook.verifyWebhook!(payload, { "x-webhook-signature": sig }, secret)).toBe(true);
+    const sig =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    expect(
+      customWebhook.verifyWebhook!(
+        payload,
+        { "x-webhook-signature": sig },
+        secret,
+      ),
+    ).toBe(true);
   });
 
   it("accepts valid HMAC on x-hub-signature-256 header", () => {
-    const sig = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
-    expect(customWebhook.verifyWebhook!(payload, { "x-hub-signature-256": sig }, secret)).toBe(true);
+    const sig =
+      "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+    expect(
+      customWebhook.verifyWebhook!(
+        payload,
+        { "x-hub-signature-256": sig },
+        secret,
+      ),
+    ).toBe(true);
   });
 
   it("rejects wrong HMAC", () => {
-    const sig = "sha256=" + createHmac("sha256", "wrong-secret").update(payload).digest("hex");
-    expect(customWebhook.verifyWebhook!(payload, { "x-signature": sig }, secret)).toBe(false);
+    const sig =
+      "sha256=" +
+      createHmac("sha256", "wrong-secret").update(payload).digest("hex");
+    expect(
+      customWebhook.verifyWebhook!(payload, { "x-signature": sig }, secret),
+    ).toBe(false);
   });
 
   it("rejects missing signature header when secret is set", () => {

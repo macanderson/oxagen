@@ -32,9 +32,18 @@ export interface SpinnerProps
   label?: string;
 }
 
-function Spinner({ className, size, label = "Loading", ...props }: SpinnerProps) {
+function Spinner({
+  className,
+  size,
+  label = "Loading",
+  ...props
+}: SpinnerProps) {
   return (
-    <span role="status" className={cn("inline-flex shrink-0", className)} {...props}>
+    <span
+      role="status"
+      className={cn("inline-flex shrink-0", className)}
+      {...props}
+    >
       <Loader2 aria-hidden="true" className={spinnerVariants({ size })} />
       <span className="sr-only">{label}</span>
     </span>

@@ -61,21 +61,48 @@ describe("listWorkspaceCredentialStatuses", () => {
   it("returns rows mapped to {orgListingId, authKind, status, expiresAt}", async () => {
     const expiry = new Date("2030-01-01T00:00:00Z");
     selectResult = [
-      { orgListingId: "l1", authKind: "oauth", status: "active", expiresAt: expiry },
-      { orgListingId: "l2", authKind: "secret", status: "needs_reauth", expiresAt: null },
+      {
+        orgListingId: "l1",
+        authKind: "oauth",
+        status: "active",
+        expiresAt: expiry,
+      },
+      {
+        orgListingId: "l2",
+        authKind: "secret",
+        status: "needs_reauth",
+        expiresAt: null,
+      },
     ];
 
-    const { listWorkspaceCredentialStatuses } = await import("./workspace-credential");
-    const out = await listWorkspaceCredentialStatuses({ orgId: "o1", workspaceId: "w1" });
+    const { listWorkspaceCredentialStatuses } = await import(
+      "./workspace-credential"
+    );
+    const out = await listWorkspaceCredentialStatuses({
+      orgId: "o1",
+      workspaceId: "w1",
+    });
 
     expect(out).toEqual([
-      { orgListingId: "l1", authKind: "oauth", status: "active", expiresAt: expiry },
-      { orgListingId: "l2", authKind: "secret", status: "needs_reauth", expiresAt: null },
+      {
+        orgListingId: "l1",
+        authKind: "oauth",
+        status: "active",
+        expiresAt: expiry,
+      },
+      {
+        orgListingId: "l2",
+        authKind: "secret",
+        status: "needs_reauth",
+        expiresAt: null,
+      },
     ]);
   });
 
   it("selects ONLY the status columns — never the encrypted secret columns", async () => {
-    const { listWorkspaceCredentialStatuses } = await import("./workspace-credential");
+    const { listWorkspaceCredentialStatuses } = await import(
+      "./workspace-credential"
+    );
     const { schema } = await import("@oxagen/database");
     await listWorkspaceCredentialStatuses({ orgId: "o1", workspaceId: "w1" });
 
@@ -94,8 +121,13 @@ describe("listWorkspaceCredentialStatuses", () => {
   });
 
   it("scopes the query by BOTH orgId and workspaceId (RLS-bypassing tenant guard)", async () => {
-    const { listWorkspaceCredentialStatuses } = await import("./workspace-credential");
-    await listWorkspaceCredentialStatuses({ orgId: "org-guard", workspaceId: "ws-guard" });
+    const { listWorkspaceCredentialStatuses } = await import(
+      "./workspace-credential"
+    );
+    await listWorkspaceCredentialStatuses({
+      orgId: "org-guard",
+      workspaceId: "ws-guard",
+    });
 
     expect(whereConditions).toHaveLength(1);
     const rendered = new PgDialect().sqlToQuery(whereConditions[0] as SQL);
@@ -107,13 +139,25 @@ describe("listWorkspaceCredentialStatuses", () => {
 
   it("works with AUTH_TOKEN_ENCRYPTION_KEY unset and logs no misconfiguration error", async () => {
     expect(process.env.AUTH_TOKEN_ENCRYPTION_KEY).toBeUndefined();
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     try {
       selectResult = [
-        { orgListingId: "l1", authKind: "oauth", status: "active", expiresAt: null },
+        {
+          orgListingId: "l1",
+          authKind: "oauth",
+          status: "active",
+          expiresAt: null,
+        },
       ];
-      const { listWorkspaceCredentialStatuses } = await import("./workspace-credential");
-      const out = await listWorkspaceCredentialStatuses({ orgId: "o1", workspaceId: "w1" });
+      const { listWorkspaceCredentialStatuses } = await import(
+        "./workspace-credential"
+      );
+      const out = await listWorkspaceCredentialStatuses({
+        orgId: "o1",
+        workspaceId: "w1",
+      });
       expect(out).toHaveLength(1);
       // Unlike getWorkspaceSecret, the status read never touches the KMS, so
       // the missing-key ops alert must NOT fire.
@@ -124,8 +168,13 @@ describe("listWorkspaceCredentialStatuses", () => {
   });
 
   it("returns an empty array when the workspace has no credential rows", async () => {
-    const { listWorkspaceCredentialStatuses } = await import("./workspace-credential");
-    const out = await listWorkspaceCredentialStatuses({ orgId: "o1", workspaceId: "w-empty" });
+    const { listWorkspaceCredentialStatuses } = await import(
+      "./workspace-credential"
+    );
+    const out = await listWorkspaceCredentialStatuses({
+      orgId: "o1",
+      workspaceId: "w-empty",
+    });
     expect(out).toEqual([]);
   });
 });

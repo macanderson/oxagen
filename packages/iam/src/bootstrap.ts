@@ -8,10 +8,12 @@
 // decision }. The adapter flattens ResolveResult into those fields so the two
 // packages remain independently typed.
 //
-// GRACEFUL DEGRADATION IS PRESERVED: fetchAuthz() (inside checkIAM) already
-// catches Postgres 42P01 (relation does not exist) and returns empty AuthzData,
-// so the resolver falls through to each contract's defaultEffect. This file
-// adds NO degradation of its own — it only wires real implementations.
+// THIS FILE ADDS NO DEGRADATION OF ITS OWN — it only wires real
+// implementations. Missing-migration behaviour is decided one layer down and is
+// FAIL-CLOSED, not graceful: fetchAuthz() catches Postgres 42P01 (relation does
+// not exist) and returns a synthetic org-enforced DENY, never empty AuthzData,
+// so an unmigrated database denies rather than falling through to each
+// contract's defaultEffect (see fetch-authz.ts).
 //
 // IDEMPOTENT: calling bootstrapIAMRuntime() more than once (e.g. in tests or
 // hot-reload scenarios) is safe — setKernelIAMRuntime() simply overwrites the ref.

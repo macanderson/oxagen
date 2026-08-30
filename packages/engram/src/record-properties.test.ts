@@ -47,7 +47,13 @@ describe("content addressing properties", () => {
 
   it("kind sensitivity: same body with different kinds → different IDs", () => {
     const body = { event: "test", payload: {} };
-    const kinds = ["episodic", "semantic", "procedural", "entity", "edge"] as const;
+    const kinds = [
+      "episodic",
+      "semantic",
+      "procedural",
+      "entity",
+      "edge",
+    ] as const;
     const ids = kinds.map((k) => computeRecordId(k, ns, body));
     const unique = new Set(ids);
     expect(unique.size).toBe(5);
@@ -68,16 +74,25 @@ describe("content addressing properties", () => {
     expect(verifyRecordIntegrity(record)).toBe(true);
 
     // Tamper body
-    expect(verifyRecordIntegrity({ ...record, body: { event: "tampered", payload: { x: 1 } } })).toBe(false);
+    expect(
+      verifyRecordIntegrity({
+        ...record,
+        body: { event: "tampered", payload: { x: 1 } },
+      }),
+    ).toBe(false);
 
     // Tamper kind
     expect(verifyRecordIntegrity({ ...record, kind: "semantic" })).toBe(false);
 
     // Tamper namespace
-    expect(verifyRecordIntegrity({ ...record, namespace: { ...ns, org: "hacked" } })).toBe(false);
+    expect(
+      verifyRecordIntegrity({ ...record, namespace: { ...ns, org: "hacked" } }),
+    ).toBe(false);
 
     // Tamper ID directly
-    expect(verifyRecordIntegrity({ ...record, id: "0".repeat(64) })).toBe(false);
+    expect(verifyRecordIntegrity({ ...record, id: "0".repeat(64) })).toBe(
+      false,
+    );
   });
 
   it("metadata changes don't affect ID (salience, confidence, provenance)", () => {
@@ -85,8 +100,24 @@ describe("content addressing properties", () => {
     // Pin createdAt so occurrence is held constant — the ONLY difference between
     // the two records is metadata, which must not change the ID.
     const at = 1700000000000;
-    const r1 = createRecord({ kind: "episodic", namespace: ns, body, salience: 0.1, confidence: 0.5, provenance, createdAt: at });
-    const r2 = createRecord({ kind: "episodic", namespace: ns, body, salience: 0.9, confidence: 1.0, provenance: { ...provenance, author: "different" }, createdAt: at });
+    const r1 = createRecord({
+      kind: "episodic",
+      namespace: ns,
+      body,
+      salience: 0.1,
+      confidence: 0.5,
+      provenance,
+      createdAt: at,
+    });
+    const r2 = createRecord({
+      kind: "episodic",
+      namespace: ns,
+      body,
+      salience: 0.9,
+      confidence: 1.0,
+      provenance: { ...provenance, author: "different" },
+      createdAt: at,
+    });
     expect(r1.id).toBe(r2.id);
   });
 
@@ -94,9 +125,26 @@ describe("content addressing properties", () => {
     // Two genuinely-separate occurrences of the same event must not alias to a
     // single record — the process-monotonic occurrence discriminator keeps them
     // distinct even without an explicit createdAt.
-    const body: EpisodicBody = { event: "tool_call", payload: { name: "search" } };
-    const a = createRecord({ kind: "episodic", namespace: ns, body, salience: 0.5, confidence: 1.0, provenance });
-    const b = createRecord({ kind: "episodic", namespace: ns, body, salience: 0.5, confidence: 1.0, provenance });
+    const body: EpisodicBody = {
+      event: "tool_call",
+      payload: { name: "search" },
+    };
+    const a = createRecord({
+      kind: "episodic",
+      namespace: ns,
+      body,
+      salience: 0.5,
+      confidence: 1.0,
+      provenance,
+    });
+    const b = createRecord({
+      kind: "episodic",
+      namespace: ns,
+      body,
+      salience: 0.5,
+      confidence: 1.0,
+      provenance,
+    });
     expect(a.id).not.toBe(b.id);
     expect(a.createdAt).not.toBe(b.createdAt);
   });
@@ -105,16 +153,36 @@ describe("content addressing properties", () => {
     // Semantic/procedural/entity/edge remain content-addressed: identical
     // content collapses to one record regardless of when it's written.
     const semanticBody = { fact: "auth uses better-auth", domain: "auth" };
-    const s1 = createRecord({ kind: "semantic", namespace: ns, body: semanticBody, salience: 0.5, confidence: 1.0, provenance });
-    const s2 = createRecord({ kind: "semantic", namespace: ns, body: semanticBody, salience: 0.5, confidence: 1.0, provenance });
+    const s1 = createRecord({
+      kind: "semantic",
+      namespace: ns,
+      body: semanticBody,
+      salience: 0.5,
+      confidence: 1.0,
+      provenance,
+    });
+    const s2 = createRecord({
+      kind: "semantic",
+      namespace: ns,
+      body: semanticBody,
+      salience: 0.5,
+      confidence: 1.0,
+      provenance,
+    });
     expect(s1.id).toBe(s2.id);
   });
 
   it("P1-6: identical content with different key order hashes the same", () => {
     // Canonical (sorted-key) serialization: key insertion order must not change
     // the ID, or the same fact from two code paths would land as two records.
-    const id1 = computeRecordId("semantic", ns, { fact: "x", domain: "d" } as never);
-    const id2 = computeRecordId("semantic", ns, { domain: "d", fact: "x" } as never);
+    const id1 = computeRecordId("semantic", ns, {
+      fact: "x",
+      domain: "d",
+    } as never);
+    const id2 = computeRecordId("semantic", ns, {
+      domain: "d",
+      fact: "x",
+    } as never);
     expect(id1).toBe(id2);
   });
 

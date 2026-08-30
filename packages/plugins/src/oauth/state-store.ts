@@ -73,6 +73,8 @@ export async function loadOAuthState(
 export async function deleteOAuthState(state: string): Promise<void> {
   const id = PREFIX + state;
   await withSystemDb(async (tx) => {
-    await tx.delete(schema.verifications).where(eq(schema.verifications.id, id));
+    await tx
+      .delete(schema.verifications)
+      .where(eq(schema.verifications.id, id));
   });
 }

@@ -73,7 +73,7 @@ Combobox.displayName = "Combobox";
 
 // Mirrors the Select trigger: a real input surface via the --input-* tokens, so
 // the field reads as a solid (dark-in-dark) field rather than a transparent
-// cut-out. (Was `border-input bg-transparent`, which showed the page through.)
+// cut-out that shows the page through.
 const comboboxTriggerVariants = cva(
   "flex w-full items-center justify-between whitespace-nowrap rounded-md border border-input-border bg-input-bg px-3 py-2 text-sm text-input-fg placeholder:text-input-placeholder hover:border-input-border-hover focus:outline-none focus:border-input-border-focus focus:ring-1 focus:ring-input-ring disabled:cursor-not-allowed disabled:bg-input-disabled-bg disabled:text-input-disabled-fg [&>span]:line-clamp-1",
   {
@@ -89,7 +89,10 @@ const comboboxTriggerVariants = cva(
 );
 
 interface ComboboxTriggerProps
-  extends Omit<React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Trigger>, "size">,
+  extends Omit<
+      React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Trigger>,
+      "size"
+    >,
     VariantProps<typeof comboboxTriggerVariants> {}
 
 const ComboboxTrigger = React.forwardRef<
@@ -126,6 +129,24 @@ interface ComboboxPopupProps {
   portalProps?: React.ComponentPropsWithoutRef<typeof ComboboxPrimitive.Portal>;
 }
 
+/**
+ * Flatten a node tree to its searchable text. Walks nested elements and
+ * fragments so an item whose label is wrapped (an icon plus text, a `<span>`,
+ * an interpolated number) still matches the query — reading only the top level
+ * would yield "" for those and silently drop them from every non-empty search.
+ */
+function nodeText(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (React.isValidElement(node)) {
+    const { children } = node.props as { children?: React.ReactNode };
+    return nodeText(children);
+  }
+  return "";
+}
+
 function ComboboxPopup({
   children,
   className,
@@ -136,22 +157,18 @@ function ComboboxPopup({
   const [searchValue, setSearchValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Filter children based on search value. Each child should be a ComboboxItem
-  // with a label (text content). We filter by doing a case-insensitive substring match.
+  // Filter children on the search value: a case-insensitive substring match
+  // against each ComboboxItem's flattened label text. Non-element children
+  // (raw strings, separators) are always kept.
   const filteredChildren = React.useMemo(() => {
     if (!searchValue.trim()) return children;
 
     const query = searchValue.toLowerCase();
     return React.Children.toArray(children).filter((child) => {
       if (!React.isValidElement(child)) return true;
-      // Get the text content of the child's children (the label).
       // child.props is typed as unknown by React 19 — narrow it safely.
       const childProps = child.props as { children?: React.ReactNode };
-      const label = React.Children.toArray(childProps.children)
-        .map((c) => (typeof c === "string" ? c : ""))
-        .join("")
-        .toLowerCase();
-      return label.includes(query);
+      return nodeText(childProps.children).toLowerCase().includes(query);
     });
   }, [children, searchValue]);
 

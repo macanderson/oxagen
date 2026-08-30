@@ -87,7 +87,8 @@ export function extractToolSequences(events: MemoryRecord[]): ToolSequence[] {
 
     // Explicit turn boundaries flush the in-progress sequence.
     if (eventType === "turn_start" || eventType === "turn_end") {
-      const outcome = (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
+      const outcome =
+        (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
       flush(outcome);
       currentTurn = eventType === "turn_start" ? turnOf(body) : null;
       continue;
@@ -96,18 +97,25 @@ export function extractToolSequences(events: MemoryRecord[]): ToolSequence[] {
     if (eventType === "tool_call") {
       const turn = turnOf(body);
       // A change in turnId ends the previous turn's sequence.
-      if (tools.length > 0 && turn !== null && currentTurn !== null && turn !== currentTurn) {
+      if (
+        tools.length > 0 &&
+        turn !== null &&
+        currentTurn !== null &&
+        turn !== currentTurn
+      ) {
         flush("unknown");
       }
       if (turn !== null) currentTurn = turn;
       const payload = body.payload as Record<string, unknown> | undefined;
-      const toolName = (payload?.tool as string) ?? (payload?.name as string) ?? "unknown";
+      const toolName =
+        (payload?.tool as string) ?? (payload?.name as string) ?? "unknown";
       tools.push(toolName);
       eventIds.push(event.id);
       timestamps.push(Number(event.createdAt));
     } else if (tools.length > 0) {
       // A non-tool event within the turn ends the run and carries its outcome.
-      const outcome = (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
+      const outcome =
+        (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
       flush(outcome);
     }
   }
@@ -118,6 +126,13 @@ export function extractToolSequences(events: MemoryRecord[]): ToolSequence[] {
 
 /**
  * Detect recurring action patterns across multiple sessions.
+ *
+ * Counting caveat: every POSITION at which an n-gram occurs increments its
+ * counter, so one turn that loops `[a, b, a, b, a, b]` registers `a → b` three
+ * times. A single repetitive turn can therefore clear `minOccurrences` on its
+ * own, and `promotePatterns` may mint a procedural rule from what was really
+ * one observation. Counting distinct sequences rather than positions would fix
+ * this, at the cost of re-baselining every existing threshold.
  */
 export function detectPatterns(
   sessionEvents: MemoryRecord[][],
@@ -127,15 +142,27 @@ export function detectPatterns(
   const allSequences = sessionEvents.flatMap(extractToolSequences);
 
   // Count n-gram occurrences
-  const ngramCounts = new Map<string, { success: number; failure: number; examples: string[]; lastSeen: number }>();
+  const ngramCounts = new Map<
+    string,
+    { success: number; failure: number; examples: string[]; lastSeen: number }
+  >();
 
   for (const seq of allSequences) {
     // Generate all n-grams of valid length
-    for (let len = config.minLength; len <= Math.min(config.maxLength, seq.tools.length); len++) {
+    for (
+      let len = config.minLength;
+      len <= Math.min(config.maxLength, seq.tools.length);
+      len++
+    ) {
       for (let start = 0; start <= seq.tools.length - len; start++) {
         const ngram = seq.tools.slice(start, start + len);
         const key = ngram.join(" → ");
-        const existing = ngramCounts.get(key) ?? { success: 0, failure: 0, examples: [], lastSeen: 0 };
+        const existing = ngramCounts.get(key) ?? {
+          success: 0,
+          failure: 0,
+          examples: [],
+          lastSeen: 0,
+        };
 
         if (seq.outcome === "success") existing.success++;
         else if (seq.outcome === "failure") existing.failure++;
@@ -143,7 +170,9 @@ export function detectPatterns(
         // lastSeen is the newest OCCURRENCE time of the pattern (from the event
         // record), not wall-clock Date.now() — otherwise every pattern looks
         // like it was just seen and recency-based decisions are meaningless.
-        const occurredAt = Math.max(...seq.timestamps.slice(start, start + len));
+        const occurredAt = Math.max(
+          ...seq.timestamps.slice(start, start + len),
+        );
         if (occurredAt > existing.lastSeen) existing.lastSeen = occurredAt;
 
         // Examples are the concrete event IDs that formed this occurrence, so a
@@ -176,6 +205,8 @@ export function detectPatterns(
   }
 
   // Sort by value: success rate × occurrence count
-  patterns.sort((a, b) => (b.successRate * b.successCount) - (a.successRate * a.successCount));
+  patterns.sort(
+    (a, b) => b.successRate * b.successCount - a.successRate * a.successCount,
+  );
   return patterns;
 }

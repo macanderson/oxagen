@@ -55,7 +55,11 @@ const ToolCallsJsonSchema = z
       } catch {
         return false;
       }
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
         return false;
       }
       return Object.entries(parsed as Record<string, unknown>).every(
@@ -66,7 +70,10 @@ const ToolCallsJsonSchema = z
           value >= 0,
       );
     },
-    { message: "tool_calls_json must be a JSON object of identifier -> non-negative integer" },
+    {
+      message:
+        "tool_calls_json must be a JSON object of identifier -> non-negative integer",
+    },
   );
 
 /** The four real tiers plus "mixed" (a session that used more than one) and "" (unknown). */
@@ -86,7 +93,10 @@ export const UsageEventPayloadSchema = z
       .string()
       .min(1)
       .max(32)
-      .regex(/^[a-zA-Z0-9_.+-]+$/, "oxagen_version must look like a version string"),
+      .regex(
+        /^[a-zA-Z0-9_.+-]+$/,
+        "oxagen_version must look like a version string",
+      ),
     os: z.string().min(1).max(32).regex(IDENTIFIER_RE),
     arch: z.string().min(1).max(32).regex(IDENTIFIER_RE),
     command: z.string().min(1).max(32).regex(IDENTIFIER_RE),
@@ -129,10 +139,15 @@ export type UsageEventValidationResult =
  * it never echoes the offending value back, so an attacker's payload content
  * is never reflected into a response body or a log line.
  */
-export function parseUsageEventPayload(input: unknown): UsageEventValidationResult {
+export function parseUsageEventPayload(
+  input: unknown,
+): UsageEventValidationResult {
   const result = UsageEventPayloadSchema.safeParse(input);
   if (result.success) return { ok: true, data: result.data };
   const issue = result.error.issues[0];
   const path = issue?.path.join(".") || "(root)";
-  return { ok: false, error: `Invalid usage event at "${path}": ${issue?.code ?? "invalid"}` };
+  return {
+    ok: false,
+    error: `Invalid usage event at "${path}": ${issue?.code ?? "invalid"}`,
+  };
 }
