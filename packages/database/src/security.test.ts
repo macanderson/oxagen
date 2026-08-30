@@ -104,7 +104,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, actorUserId: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.actorUserId).toBeUndefined();
   });
@@ -113,7 +115,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, workspaceId: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.workspaceId).toBeUndefined();
   });
@@ -122,7 +126,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, capability: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.capability).toBeUndefined();
   });
@@ -131,7 +137,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, ip: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.ip).toBeUndefined();
   });
@@ -140,7 +148,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, userAgent: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.userAgent).toBeUndefined();
   });
@@ -149,7 +159,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter({ ...BASE_EVENT, requestId: null });
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.requestId).toBeUndefined();
   });
@@ -158,7 +170,9 @@ describe("makeSecurityEventInserter — null field mapping", () => {
     const inserter = makeSecurityEventInserter();
     await inserter(BASE_EVENT);
 
-    const callArg = (mocks.insertValues.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    const callArg = (
+      mocks.insertValues.mock.calls as unknown[][]
+    )[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();
     expect(callArg.actorUserId).toBe(BASE_EVENT.actorUserId);
     expect(callArg.workspaceId).toBe(BASE_EVENT.workspaceId);

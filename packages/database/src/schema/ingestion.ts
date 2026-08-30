@@ -190,10 +190,10 @@ export const webhookSubscriptions = ingestionSchema.table(
     renewalIdx: index("webhook_subscriptions_renewal_idx")
       .on(t.expiresAt)
       .where(sql`${t.status} = 'active' AND ${t.expiresAt} IS NOT NULL`),
-    // Missing CHECK constraint (2026-07-11 audit §5 item 4). No write path
-    // exists yet (§1.6 — feature intent only); this constrains the column to
-    // the lifecycle vocabulary the read side (apps/api webhook route) and
-    // sibling status columns already use, ahead of provisioning landing.
+    // No write path exists yet — provisioning is still feature intent. The
+    // CHECK pins the column to the lifecycle vocabulary the read side
+    // (apps/api webhook route) and the sibling status columns already use, so
+    // the first writer cannot invent a fourth spelling.
     statusCheck: check(
       "webhook_subscriptions_status_check",
       sql`${t.status} IN ('active', 'paused', 'revoked', 'error')`,
@@ -307,10 +307,9 @@ export const setupSuggestions = ingestionSchema.table(
     connectionIdx: index("setup_suggestions_connection_idx").on(t.connectionId),
     statusIdx: index("setup_suggestions_status_idx").on(t.status),
     orgIdx: index("setup_suggestions_org_idx").on(t.orgId, t.workspaceId),
-    // Missing CHECK constraint (2026-07-11 audit §5 item 4). Only 'pending'
-    // is ever written (connection.mappings.suggest.ts); the "so the user can
-    // accept/reject them" intent plus the dead resolved_at/resolved_by
-    // columns confirm the terminal states.
+    // Only 'pending' is ever written today (connection.mappings.suggest.ts);
+    // 'accepted' / 'rejected' are the terminal states the accept/reject flow
+    // will write.
     statusCheck: check(
       "setup_suggestions_status_check",
       sql`${t.status} IN ('pending', 'accepted', 'rejected')`,

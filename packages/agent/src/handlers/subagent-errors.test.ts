@@ -34,7 +34,9 @@ describe("isFanoutNotFoundError", () => {
     expect(
       isFanoutNotFoundError(new Error('relation "subagent_fanouts" not found')),
     ).toBe(false);
-    expect(isFanoutNotFoundError(new Error("Unknown capability not found"))).toBe(false);
+    expect(
+      isFanoutNotFoundError(new Error("Unknown capability not found")),
+    ).toBe(false);
   });
 
   it("does NOT match an error with a different code", () => {

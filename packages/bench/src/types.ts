@@ -1,6 +1,9 @@
 // Row shapes + shared types for the `bench` ClickHouse database
 // (packages/bench/migrations/0001_bench_schema.sql). See that
 // migration's header comment for how this relates to eval_runs/eval_results.
+//
+// The runs these rows describe are produced outside this repo, by the
+// agent-arena harness (https://github.com/macanderson/agent-arena).
 
 /** Which Harbor harness produced a run. Open string — a new harness never needs a migration. */
 export type BenchType = "swe-bench" | "terminal-bench" | (string & {});
@@ -20,12 +23,10 @@ export type BenchStatus =
  * new harnesses and new oxagen CLI flags should never require a migration.
  * Two key shapes, both understood by `buildReplayEnv` (see `replay-env.ts`):
  *
- * - **Raw env-var names** — how `bench/*\/run.sh` actually writes
- *   `bench-config.json`: every host `OXAGEN_*` var Oxagen forwards into the
- *   trial container verbatim (see `_forwarded_env()` in
- *   `oxagen_terminal_bench/oxagen_agent.py`), plus `DATASET`, `N_CONCURRENT`,
- *   `TASK_IDS`. These need no translation to replay — they're already valid
- *   shell assignments.
+ * - **Raw env-var names** — how the agent-arena runner actually writes
+ *   `bench-config.json`: every host `OXAGEN_*` var it forwards into the trial
+ *   container verbatim, plus `DATASET`, `N_CONCURRENT`, `TASK_IDS`. These need
+ *   no translation to replay — they're already valid shell assignments.
  * - **Conventional lower-camelCase keys** (all optional, all
  *   harness-dependent) for a config assembled by hand: `models`,
  *   `candidates`, `pipeline`, `verifyAuto`, `effort`, `evaluator`, `advisor`,
@@ -44,12 +45,11 @@ export type BenchReplayConfig = Record<string, unknown>;
 export type BenchConditions = Record<string, unknown>;
 
 /**
- * The `bench-config.json` snapshot a run.sh writes into its results dir
- * before invoking `harbor run` (see bench/swe-bench/run.sh,
- * bench/terminal-bench/run.sh). Read by `ingestBenchResultsDir` as the
- * primary config/conditions/gitSha source when present; historical results
- * dirs predating this feature have none, so callers pass those fields via
- * `IngestBenchOptions` instead.
+ * The `bench-config.json` snapshot the agent-arena runner writes into its
+ * results dir before invoking `harbor run`. Read by `ingestBenchResultsDir`
+ * as the primary config/conditions/gitSha source when present; a results dir
+ * without one makes the caller supply those fields via `IngestBenchOptions`
+ * instead.
  */
 export interface BenchConfigSnapshot {
   gitSha?: string;
@@ -135,7 +135,12 @@ export interface BenchmarkCandidateRow {
   steps: number;
   files_changed: number;
   patch: string;
-  /** -1 unknown/not run · 0 fail · 1 pass. */
+  /**
+   * -1 unknown/not run · 0 fail · 1 pass. Ingestion only ever writes -1 or 0
+   * today: best-of-N verifies the winner alone, so a candidate that did not
+   * explicitly fail is unknown, not a proven pass. 1 is reserved for a future
+   * adapter that grades every candidate.
+   */
   tests_passed: -1 | 0 | 1;
   tool_calls_json: string;
   cost_usd: number;
@@ -187,8 +192,8 @@ export interface IngestBenchOptions {
    * Total run cost in USD, when known out-of-band (e.g. from a billing
    * export). When omitted, the run's total_cost_usd is summed from the
    * per-task `agent_result.cost_usd` Harbor records for every agent, oxagen
-   * included (see oxagen_agent.py `_populate_best_of_n_usage`). Supply this
-   * only to override that sum with an authoritative external figure.
+   * included. Supply this only to override that sum with an authoritative
+   * external figure.
    */
   costUsd?: number;
   /** Falls back to a name derived from config.json's agents[0].name. */

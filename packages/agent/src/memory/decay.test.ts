@@ -35,8 +35,11 @@ function calcNewConfidence(
   createdAt: string,
 ): number {
   const anchor = lastEvidenceAt ?? createdAt;
-  const daysSince = (Date.now() - new Date(anchor).getTime()) / (1000 * 60 * 60 * 24);
-  const decayed = decayFloor + (confidenceScore - decayFloor) * Math.pow(0.5, daysSince / halfLifeDays);
+  const daysSince =
+    (Date.now() - new Date(anchor).getTime()) / (1000 * 60 * 60 * 24);
+  const decayed =
+    decayFloor +
+    (confidenceScore - decayFloor) * Math.pow(0.5, daysSince / halfLifeDays);
   return Math.max(decayFloor, decayed);
 }
 

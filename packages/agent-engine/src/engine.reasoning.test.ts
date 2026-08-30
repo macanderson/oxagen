@@ -22,11 +22,18 @@ function aiYielding(
           for (const p of parts) yield p;
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+        usage: Promise.resolve({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        }),
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
-    generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    generateObject: async () => ({
+      object: {} as never,
+      usage: { totalTokens: 0 },
+    }),
   };
 }
 
@@ -52,7 +59,9 @@ describe("runCodingAgent – reasoning stream", () => {
       "let me think… ",
       "the fix is X",
     ]);
-    expect(text.map((e) => (e as { delta: string }).delta)).toEqual(["Done: applied X."]);
+    expect(text.map((e) => (e as { delta: string }).delta)).toEqual([
+      "Done: applied X.",
+    ]);
     // Reasoning is NOT part of the assistant answer text.
     expect(result.text).toBe("Done: applied X.");
   });

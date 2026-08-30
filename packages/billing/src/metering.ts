@@ -93,7 +93,15 @@ export function creditsForCostUsd(
   return creditsExact <= 0 ? 0n : BigInt(Math.ceil(creditsExact));
 }
 
-/** Credits to debit for a token call: ceil(providerCostUsd × markup ÷ creditValue). */
+/**
+ * Credits to debit for a token call: ceil(providerCostUsd × markup ÷ creditValue).
+ *
+ * Pass the SAME `usage` shape the real charge uses. `cachedTokens` and
+ * `cacheWriteTokens` are subsets of `inputTokens` billed at their own rates, so
+ * omitting them prices every cached and cache-write token as fresh input and
+ * returns a number that does not match what {@link chargeUsageCredits} debits.
+ * Callers that show this figure to a user must pass all four fields.
+ */
 export function meterCreditsForUsage(
   usage: TokenUsageInput,
   opts: { markup?: number; rateCard?: RateCard } = {},

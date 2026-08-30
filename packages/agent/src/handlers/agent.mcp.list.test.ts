@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   selectMock: vi.fn(),
 }));
 
-mocks.whereMock.mockImplementation(async (): Promise<unknown> => mocks.selectResult() as unknown);
+mocks.whereMock.mockImplementation(
+  async (): Promise<unknown> => mocks.selectResult() as unknown,
+);
 mocks.fromMock.mockReturnValue({ where: mocks.whereMock });
 mocks.selectMock.mockReturnValue({ from: mocks.fromMock });
 
@@ -16,9 +18,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeMcpListDb,
-  withTenantDb: async (fn: (tx: typeof fakeMcpListDb) => Promise<unknown>) => fn(fakeMcpListDb),
-
+    db: () => fakeMcpListDb,
+    withTenantDb: async (fn: (tx: typeof fakeMcpListDb) => Promise<unknown>) =>
+      fn(fakeMcpListDb),
   };
 });
 

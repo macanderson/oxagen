@@ -236,13 +236,15 @@ export const baseEnvSchema = z.object({
   SMTP_FROM_EMAIL: z.string().email().optional(),
   SMTP_FROM_NAME: z.string().min(1).optional(),
 
-  // Google Maps / Places API. NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is the browser-
-  // exposed API key used by the onboarding address autocomplete component; it
-  // must be HTTP-referrer-restricted in the Google Cloud console. Optional so
-  // builds stay green without it — the address form degrades to plain manual
-  // entry when absent.
-  // GOOGLE_MAPS_URL_SIGNING_SECRET is the server-only URL-signing secret.
-  // It must NEVER be referenced in client bundle code or carry a NEXT_PUBLIC_
+  // Google Maps / Places API. Both fields are ORPHANED: the address form they
+  // were added for does not exist in apps/app, and nothing outside this file
+  // and the registry reads either name. They are validated and optional, so
+  // they cost nothing at boot, but they should be built against or deleted.
+  //
+  // If they are kept: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is the browser-exposed
+  // key and must be HTTP-referrer-restricted in the Google Cloud console.
+  // GOOGLE_MAPS_URL_SIGNING_SECRET is the server-only URL-signing secret and
+  // must NEVER be referenced in client bundle code or carry a NEXT_PUBLIC_
   // prefix — Next.js inlines any NEXT_PUBLIC_ var into the browser bundle,
   // and a signing secret must stay server-side only.
   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
@@ -474,19 +476,11 @@ export function normalizeEnv(
   source: NodeJS.ProcessEnv,
 ): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = {};
-  const stripped: string[] = [];
   for (const [key, value] of Object.entries(source)) {
-    if (KNOWN_ENV_KEYS.has(key) && typeof value === "string") {
-      const stripped_value = stripOneQuotePair(value);
-      if (stripped_value !== value) {
-        out[key] = stripped_value;
-        stripped.push(key);
-      } else {
-        out[key] = value;
-      }
-    } else {
-      out[key] = value;
-    }
+    out[key] =
+      KNOWN_ENV_KEYS.has(key) && typeof value === "string"
+        ? stripOneQuotePair(value)
+        : value;
   }
   return out;
 }
@@ -518,6 +512,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
  * `loadEnv()` and does NOT require any key outside `keys`.
  *
  * Returns `Pick<Env, K>` typed — callers get exactly the vars they asked for.
+ *
+ * Unlike `loadEnv`, this memoizes nothing: every call rebuilds the sub-schema
+ * and re-walks the whole of `source`. A caller that runs per request or per
+ * query (`rlsEnforced()` in @oxagen/database fires once per `withTenantDb`)
+ * should hoist the result to module scope rather than call it in the loop.
  *
  * @example
  *   const env = requireEnv(["DATABASE_URL"] as const);

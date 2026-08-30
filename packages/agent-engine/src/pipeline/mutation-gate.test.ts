@@ -78,8 +78,7 @@ class GateWorkspace implements Workspace {
   }
   async exec(command: string): Promise<CommandResult> {
     const reverted = this.files.get("src/calc.ts") === ORIGINAL;
-    const exitCode =
-      command === WITNESS && reverted ? this.exitWithoutFix : 0;
+    const exitCode = command === WITNESS && reverted ? this.exitWithoutFix : 0;
     return { exitCode, stdout: "", stderr: "", timedOut: false };
   }
   async diff(): Promise<string> {

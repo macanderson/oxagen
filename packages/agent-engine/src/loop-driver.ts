@@ -594,15 +594,20 @@ export function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
   }
   if (ms <= 0) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
+    // The abort listener is removed on BOTH paths. `signal` is the whole turn's
+    // signal and outlives every individual wait, so a listener left behind on
+    // the normal (timed-out) path accumulates once per backoff and once per
+    // file-lock acquire retry — hundreds per turn — retaining each closure and
+    // tripping Node's MaxListenersExceededWarning at 11.
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted during backoff.", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
     (timer as { unref?: () => void }).unref?.();
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(new DOMException("Aborted during backoff.", "AbortError"));
-      },
-      { once: true },
-    );
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }

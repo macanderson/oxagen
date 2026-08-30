@@ -43,7 +43,9 @@ describe("createLocalKmsAdapter", () => {
     const wrongReader = createLocalKmsAdapter(randomBytes(32));
     const ciphertext = await encrypt("secret", KEY_ID, { adapter: writer });
 
-    await expect(decrypt(ciphertext, KEY_ID, { adapter: wrongReader })).rejects.toThrow();
+    await expect(
+      decrypt(ciphertext, KEY_ID, { adapter: wrongReader }),
+    ).rejects.toThrow();
   });
 
   it("fails to decrypt a tampered ciphertext (GCM auth tag)", async () => {

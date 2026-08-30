@@ -56,7 +56,12 @@ const ROW = {
   snapshotId: null as string | null,
   image: "agent",
   status: "running",
-  metadata: { memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+  metadata: {
+    memoryMb: 2048,
+    ttlSeconds: 86_400,
+    idleTimeoutSeconds: 1_200,
+    network: "allow",
+  },
 };
 
 beforeEach(() => {
@@ -88,7 +93,13 @@ describe("agent.sandbox.start handler", () => {
     fake.enqueue([{ publicId: "sbx_new" }]); // insertSession().returning()
 
     const out = await agentSandboxStartHandler(
-      { image: "agent", memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+      {
+        image: "agent",
+        memoryMb: 2048,
+        ttlSeconds: 86_400,
+        idleTimeoutSeconds: 1_200,
+        network: "allow",
+      },
       CTX,
     );
 
@@ -100,7 +111,11 @@ describe("agent.sandbox.start handler", () => {
       reused: false,
     });
     expect(h.driver.createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ image: "agent", orgId: "org_1", workspaceId: "ws_1" }),
+      expect.objectContaining({
+        image: "agent",
+        orgId: "org_1",
+        workspaceId: "ws_1",
+      }),
     );
   });
 
@@ -148,7 +163,10 @@ describe("agent.sandbox.start handler", () => {
     );
 
     expect(out.reused).toBe(true);
-    expect(h.driver.restoreSession).toHaveBeenCalledWith("img-9", expect.objectContaining({ image: "agent" }));
+    expect(h.driver.restoreSession).toHaveBeenCalledWith(
+      "img-9",
+      expect.objectContaining({ image: "agent" }),
+    );
     expect(h.driver.createSession).not.toHaveBeenCalled();
   });
 
@@ -161,7 +179,11 @@ describe("agent.sandbox.start handler", () => {
     });
     // Queue order matches query order: findReusableSession → markSessionStatus
     // (update consumes a slot) → insertSession.returning().
-    fake.enqueue([{ ...ROW, snapshotId: null }], [], [{ publicId: "sbx_fresh" }]);
+    fake.enqueue(
+      [{ ...ROW, snapshotId: null }],
+      [],
+      [{ publicId: "sbx_fresh" }],
+    );
 
     const out = await agentSandboxStartHandler(
       {
@@ -184,7 +206,13 @@ describe("agent.sandbox.start handler", () => {
     h.isDurableSandboxDriver.mockReturnValue(false);
     await expect(
       agentSandboxStartHandler(
-        { image: "agent", memoryMb: 2048, ttlSeconds: 86_400, idleTimeoutSeconds: 1_200, network: "allow" },
+        {
+          image: "agent",
+          memoryMb: 2048,
+          ttlSeconds: 86_400,
+          idleTimeoutSeconds: 1_200,
+          network: "allow",
+        },
         CTX,
       ),
     ).rejects.toThrow(/Durable sandbox sessions are not available/);
@@ -221,15 +249,31 @@ describe("agent.sandbox.exec handler", () => {
       expect.objectContaining({ sandboxId: "sb-aaa", command: "pnpm build" }),
     );
     expect(h.insertEvents).toHaveBeenCalledTimes(1);
-    const rows = h.insertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    const rows = h.insertEvents.mock.calls[0]![0] as Array<
+      Record<string, unknown>
+    >;
     expect(rows[0]!.event_type).toBe("agent.sandbox.exec.ran");
   });
 
   it("restores from snapshot and retries when the sandbox was reaped", async () => {
     fake.enqueue([{ ...ROW, snapshotId: "img-7" }]); // getSessionByPublicId
     h.driver.execInSession
-      .mockResolvedValueOnce({ exitCode: 0, stdout: "", stderr: "", durationMs: 0, timedOut: false, gone: true })
-      .mockResolvedValueOnce({ exitCode: 0, stdout: "ok", stderr: "", durationMs: 50, timedOut: false, gone: false });
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        durationMs: 0,
+        timedOut: false,
+        gone: true,
+      })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        stdout: "ok",
+        stderr: "",
+        durationMs: 50,
+        timedOut: false,
+        gone: false,
+      });
     h.driver.restoreSession.mockResolvedValue({
       sandboxId: "sb-restored",
       status: "running",
@@ -243,18 +287,29 @@ describe("agent.sandbox.exec handler", () => {
 
     expect(out.restored).toBe(true);
     expect(out.stdout).toBe("ok");
-    expect(h.driver.restoreSession).toHaveBeenCalledWith("img-7", expect.any(Object));
+    expect(h.driver.restoreSession).toHaveBeenCalledWith(
+      "img-7",
+      expect.any(Object),
+    );
     expect(h.driver.execInSession).toHaveBeenCalledTimes(2);
   });
 
   it("throws SandboxSessionGoneError when reaped with no snapshot", async () => {
     fake.enqueue([{ ...ROW, snapshotId: null }]); // getSessionByPublicId
     h.driver.execInSession.mockResolvedValue({
-      exitCode: 0, stdout: "", stderr: "", durationMs: 0, timedOut: false, gone: true,
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+      durationMs: 0,
+      timedOut: false,
+      gone: true,
     });
 
     await expect(
-      agentSandboxExecHandler({ sessionId: "sbx_1", command: "ls", timeoutMs: 120_000 }, CTX),
+      agentSandboxExecHandler(
+        { sessionId: "sbx_1", command: "ls", timeoutMs: 120_000 },
+        CTX,
+      ),
     ).rejects.toThrow(/was reaped and has no snapshot/);
   });
 
@@ -262,18 +317,29 @@ describe("agent.sandbox.exec handler", () => {
     fake.enqueue([]); // getSessionByPublicId → empty
 
     await expect(
-      agentSandboxExecHandler({ sessionId: "sbx_missing", command: "ls", timeoutMs: 120_000 }, CTX),
+      agentSandboxExecHandler(
+        { sessionId: "sbx_missing", command: "ls", timeoutMs: 120_000 },
+        CTX,
+      ),
     ).rejects.toThrow(/was not found in this workspace/);
   });
 
   it("never fails a run when telemetry throws", async () => {
     fake.enqueue([{ ...ROW }]);
     h.driver.execInSession.mockResolvedValue({
-      exitCode: 0, stdout: "x", stderr: "", durationMs: 1, timedOut: false, gone: false,
+      exitCode: 0,
+      stdout: "x",
+      stderr: "",
+      durationMs: 1,
+      timedOut: false,
+      gone: false,
     });
     h.insertEvents.mockRejectedValueOnce(new Error("clickhouse down"));
 
-    const out = await agentSandboxExecHandler({ sessionId: "sbx_1", command: "x", timeoutMs: 1_000 }, CTX);
+    const out = await agentSandboxExecHandler(
+      { sessionId: "sbx_1", command: "x", timeoutMs: 1_000 },
+      CTX,
+    );
     expect(out.exitCode).toBe(0);
   });
 });
@@ -291,9 +357,9 @@ describe("agent.sandbox.snapshot handler", () => {
 
   it("throws for an unknown session", async () => {
     fake.enqueue([]);
-    await expect(agentSandboxSnapshotHandler({ sessionId: "sbx_x" }, CTX)).rejects.toThrow(
-      /was not found/,
-    );
+    await expect(
+      agentSandboxSnapshotHandler({ sessionId: "sbx_x" }, CTX),
+    ).rejects.toThrow(/was not found/);
   });
 });
 

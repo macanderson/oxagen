@@ -163,9 +163,15 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
         await onInvoiceRecovered(event.invoice);
         // Email the customer a receipt. Runs last and is best-effort (never
         // throws), so it cannot trigger a re-dispatch of this event nor fail the
-        // webhook. Event-id dedup (stripe_events + stripe_event_processing) means
-        // a successfully-dispatched invoice.paid never re-runs, so the receipt
-        // sends at most once per invoice payment — no extra guard needed.
+        // webhook.
+        //
+        // NOT exactly-once. The event-id dedup above only skips events whose
+        // processing row already carries processed_at, and it is a read, not a
+        // lock — so two concurrent deliveries of the same event both dispatch,
+        // and a dispatch that succeeded but failed to record its processing row
+        // is deliberately re-dispatched on the provider's retry. Both paths send
+        // a second receipt. A per-invoice send guard belongs in receipts.ts if
+        // duplicate receipts ever become a problem.
         await sendPaymentReceipt(event.invoice);
       }
       if (event.type === "invoice.payment_failed") {

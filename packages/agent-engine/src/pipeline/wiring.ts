@@ -38,7 +38,10 @@ export function specGateInstruction(): string {
  * When both conditions hold, return true to signal: skip judgeCompleteness,
  * inject specGateInstruction() as the phase B prompt.
  */
-export function shouldInjectSpecGate(tracker: SpecTestTracker, specGateEnabled: boolean): boolean {
+export function shouldInjectSpecGate(
+  tracker: SpecTestTracker,
+  specGateEnabled: boolean,
+): boolean {
   return specGateEnabled && tracker.state() === "none";
 }
 
@@ -69,7 +72,8 @@ export function buildLadderSignals(opts: {
   // exit code is 0. If no tests have been run, default to false (conservative).
   const outcomes = opts.tracker.lastOutcomes();
   const touchedTestsGreen =
-    outcomes.size > 0 && Array.from(outcomes.values()).every((exitCode) => exitCode === 0);
+    outcomes.size > 0 &&
+    Array.from(outcomes.values()).every((exitCode) => exitCode === 0);
 
   // Diff line count: sum +/- lines, excluding +++/--- headers.
   const diffLines = countDiffLines(opts.diff);
@@ -85,9 +89,12 @@ export function buildLadderSignals(opts: {
 }
 
 /**
- * Count the net +/- line count in a unified diff, excluding file headers
- * and context lines. Returns the raw count (negative ← deletions, positive ← additions,
- * net = additions − deletions).
+ * Count the changed lines in a unified diff: every `+` and every `-` line,
+ * excluding the `+++`/`---` file headers and the unchanged context lines.
+ *
+ * The two directions are SUMMED, not netted — a diff that swaps 40 lines for 40
+ * other lines is 80 changed lines of review surface, not zero. That is the
+ * quantity the diff budget is meant to bound.
  */
 export function countDiffLines(diff: string): number {
   let added = 0;
@@ -101,7 +108,6 @@ export function countDiffLines(diff: string): number {
     }
   }
 
-  // Return net changed lines (absolute value for budgeting purposes).
   return added + removed;
 }
 
@@ -114,7 +120,9 @@ export function countDiffLines(diff: string): number {
  * judge to run every round. Legacy `OXAGEN_LADDER=1` still enables it (now the
  * default). Exported for tests.
  */
-export function resolveJudgeSkipEnabled(env: Record<string, string | undefined>): boolean {
+export function resolveJudgeSkipEnabled(
+  env: Record<string, string | undefined>,
+): boolean {
   const raw = env["OXAGEN_LADDER"];
   if (raw === undefined) return true;
   return !/^(0|false|off|no)$/i.test(raw.trim());
@@ -126,7 +134,10 @@ export function resolveJudgeSkipEnabled(env: Record<string, string | undefined>)
  * gates revision on `!readOnly`), and there is no diff to verify, so running a
  * frontier completeness judge on it is pure waste. Exported for tests.
  */
-export function shouldSkipJudgeReadOnly(opts: { readOnly: boolean; diff: string }): boolean {
+export function shouldSkipJudgeReadOnly(opts: {
+  readOnly: boolean;
+  diff: string;
+}): boolean {
   return opts.readOnly && countDiffLines(opts.diff) === 0;
 }
 
@@ -154,6 +165,10 @@ export function decideLadderPath(opts: {
 
   const config = resolveLadderConfig(process.env);
   // Cap current rung to the max allowed.
-  const cappedRung = Math.min(opts.currentRung, config.maxRung) as 0 | 1 | 2 | 3;
+  const cappedRung = Math.min(opts.currentRung, config.maxRung) as
+    | 0
+    | 1
+    | 2
+    | 3;
   return decide(opts.signals, config, cappedRung);
 }

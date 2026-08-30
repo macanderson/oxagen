@@ -1,11 +1,24 @@
-import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from "@aws-sdk/client-kms";
+import {
+  KMSClient,
+  GenerateDataKeyCommand,
+  DecryptCommand,
+} from "@aws-sdk/client-kms";
 import type { KmsAdapter } from "../types";
 
+/**
+ * Extract the AWS region from a full KMS ARN.
+ *
+ * Only fully-qualified ARNs are accepted — `arn:aws:kms:<region>:<account>:key/<id>`
+ * or `arn:aws:kms:<region>:<account>:alias/<name>`. A bare key id or bare
+ * `alias/<name>` carries no region, so it is rejected rather than silently
+ * falling back to an ambient default region.
+ */
 function regionFromArn(arn: string): string {
-  // arn:aws:kms:<region>:<account>:key/<id>  or  alias/<name>
   const region = arn.split(":")[3];
   if (!region) {
-    throw new Error(`[crypto/kms/aws] Cannot parse AWS region from KMS ARN: "${arn}"`);
+    throw new Error(
+      `[crypto/kms/aws] Cannot parse AWS region from KMS ARN: "${arn}"`,
+    );
   }
   return region;
 }
@@ -38,7 +51,10 @@ export function createAwsKmsAdapter(keyArn: string): KmsAdapter {
           "[crypto/kms/aws] GenerateDataKey returned empty Plaintext or CiphertextBlob",
         );
       }
-      return { plaintext: response.Plaintext, encrypted: response.CiphertextBlob };
+      return {
+        plaintext: response.Plaintext,
+        encrypted: response.CiphertextBlob,
+      };
     },
 
     async decryptDataKey(encrypted: Uint8Array, _keyId: string) {

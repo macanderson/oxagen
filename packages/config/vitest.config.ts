@@ -14,7 +14,13 @@ export default defineConfig({
       // other modules). registry.ts, domain.ts, and geo.ts export validators
       // and option arrays; their tests already exist — this wires them to the
       // gate so a regression is caught.
-      include: ["src/env.ts", "src/index.ts", "src/registry.ts", "src/domain.ts", "src/geo.ts"],
+      include: [
+        "src/env.ts",
+        "src/index.ts",
+        "src/registry.ts",
+        "src/domain.ts",
+        "src/geo.ts",
+      ],
       thresholds: {
         lines: 80,
         branches: 80,

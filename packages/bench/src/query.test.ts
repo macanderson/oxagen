@@ -75,7 +75,10 @@ describe("listBenchResults", () => {
   it("orders by public_id DESC and clamps limit into [1, 500]", async () => {
     queryMock.mockResolvedValue([]);
     await mod.listBenchResults({ limit: 10_000 });
-    const [query, params] = queryMock.mock.calls[0]! as [string, { limit: number }];
+    const [query, params] = queryMock.mock.calls[0]! as [
+      string,
+      { limit: number },
+    ];
     expect(query).toMatch(/ORDER BY public_id DESC/);
     expect(params.limit).toBe(500);
 
@@ -87,7 +90,10 @@ describe("listBenchResults", () => {
   it("filters by bench_type only when provided", async () => {
     queryMock.mockResolvedValue([]);
     await mod.listBenchResults({ benchType: "terminal-bench" });
-    const [query, params] = queryMock.mock.calls[0]! as [string, { benchType: string }];
+    const [query, params] = queryMock.mock.calls[0]! as [
+      string,
+      { benchType: string },
+    ];
     expect(query).toMatch(/WHERE bench_type = /);
     expect(params.benchType).toBe("terminal-bench");
 
@@ -120,7 +126,10 @@ describe("getBenchResultByPublicId", () => {
     const row = await mod.getBenchResultByPublicId(42);
     expect(row?.task_id).toBe("django__django-11099");
     expect(row?.tokens_in).toBe(0);
-    const [, params] = queryMock.mock.calls[0]! as [string, { publicId: number }];
+    const [, params] = queryMock.mock.calls[0]! as [
+      string,
+      { publicId: number },
+    ];
     expect(params.publicId).toBe(42);
   });
 
@@ -136,7 +145,14 @@ describe("getBenchResultByPublicId", () => {
   });
 
   it("normalizes a null/non-numeric field to 0 rather than NaN", async () => {
-    queryMock.mockResolvedValue([{ ...RAW_RESULT_ROW, reward: null, code_graph_calls: undefined, grep_calls: {} }]);
+    queryMock.mockResolvedValue([
+      {
+        ...RAW_RESULT_ROW,
+        reward: null,
+        code_graph_calls: undefined,
+        grep_calls: {},
+      },
+    ]);
     const row = await mod.getBenchResultByPublicId(42);
     expect(row?.reward).toBe(0);
     expect(row?.code_graph_calls).toBe(0);
@@ -144,7 +160,9 @@ describe("getBenchResultByPublicId", () => {
   });
 
   it("normalizes an unparseable numeric string to 0", async () => {
-    queryMock.mockResolvedValue([{ ...RAW_RESULT_ROW, public_id: "not-a-number" }]);
+    queryMock.mockResolvedValue([
+      { ...RAW_RESULT_ROW, public_id: "not-a-number" },
+    ]);
     const row = await mod.getBenchResultByPublicId(42);
     expect(row?.public_id).toBe(0);
   });
@@ -230,7 +248,9 @@ describe("getBenchCandidatesForResult", () => {
     vi.resetModules();
   });
 
-  function rawCandidate(overrides: Record<string, unknown>): Record<string, unknown> {
+  function rawCandidate(
+    overrides: Record<string, unknown>,
+  ): Record<string, unknown> {
     return {
       id: "c1",
       result_id: "r1",
@@ -262,7 +282,10 @@ describe("getBenchCandidatesForResult", () => {
       tests_passed: -1,
       tool_calls_json: "{}",
     });
-    const [, params] = queryMock.mock.calls[0]! as [string, { resultPublicId: number }];
+    const [, params] = queryMock.mock.calls[0]! as [
+      string,
+      { resultPublicId: number },
+    ];
     expect(params.resultPublicId).toBe(42);
   });
 

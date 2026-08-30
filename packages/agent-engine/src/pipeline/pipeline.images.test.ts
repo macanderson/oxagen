@@ -40,14 +40,21 @@ function makeCapturingAi(opts: { judgeIncompleteOnce?: boolean } = {}): {
           yield { type: "text-delta", text: "done" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+        usage: Promise.resolve({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        }),
         response: Promise.resolve({ messages: [] }),
         finishReason: Promise.resolve("stop"),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
     generateObject: vi.fn().mockImplementation((args: { system?: string }) => {
       if (args.system?.includes("evaluation stage")) {
-        return Promise.resolve({ object: DEFAULT_EVAL, usage: { inputTokens: 1, outputTokens: 1 } });
+        return Promise.resolve({
+          object: DEFAULT_EVAL,
+          usage: { inputTokens: 1, outputTokens: 1 },
+        });
       }
       // Judge branch: incomplete on the first call (forces a revise round),
       // complete from then on — only relevant when judgeIncompleteOnce is set.
@@ -92,7 +99,9 @@ describe("runTurn — pasted image attachment threading", () => {
 
   it("full pipeline: attaches the image on round 0 only, not on a revise round", async () => {
     const ws = new MemoryWorkspace({});
-    const { ai, messagesByRound } = makeCapturingAi({ judgeIncompleteOnce: true });
+    const { ai, messagesByRound } = makeCapturingAi({
+      judgeIncompleteOnce: true,
+    });
     const png = Buffer.from("fake-png");
 
     const result = await runTurn({
@@ -107,15 +116,21 @@ describe("runTurn — pasted image attachment threading", () => {
     expect(messagesByRound).toHaveLength(2);
     expect(result.trace.judgeRounds.length).toBeGreaterThanOrEqual(2);
 
-    const round0Instruction = messagesByRound[0]!.at(-1) as { content: unknown };
+    const round0Instruction = messagesByRound[0]!.at(-1) as {
+      content: unknown;
+    };
     expect(Array.isArray(round0Instruction.content)).toBe(true);
-    const round0Parts = round0Instruction.content as Array<Record<string, unknown>>;
+    const round0Parts = round0Instruction.content as Array<
+      Record<string, unknown>
+    >;
     expect(round0Parts.some((p) => p["type"] === "image")).toBe(true);
 
     // Round 1 (the revise round) does NOT resend the image as a NEW content
     // part on its own instruction message — it's plain text (the revision
     // prompt); the image only still exists via round 0's message in `history`.
-    const round1Instruction = messagesByRound[1]!.at(-1) as { content: unknown };
+    const round1Instruction = messagesByRound[1]!.at(-1) as {
+      content: unknown;
+    };
     expect(typeof round1Instruction.content).toBe("string");
   });
 });

@@ -121,6 +121,11 @@ const MAX_SYMBOLS_IN_PROMPT = 150;
  * received a high-confidence (≥ 0.55) assignment. Files without a confident
  * assignment are absent from the map — callers should treat them as "unknown".
  *
+ * Only the first {@link MAX_FILES_IN_PROMPT} entries of `input.files` are shown
+ * to the model, so a checkout larger than that gets domains for that prefix and
+ * nothing else. There is no batching across several calls: pass a pre-filtered
+ * or pre-sampled file list if the whole tree has to be covered.
+ *
  * @example Platform (metered, ingestion surface)
  * ```ts
  * const map = await inferDomains(input, {

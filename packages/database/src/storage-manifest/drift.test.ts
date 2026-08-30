@@ -3,12 +3,18 @@ import { parseClickhouseSchema } from "./sources/clickhouse";
 import { parseCypherSchema } from "./sources/neo4j";
 import { canonicalJson, contentHashOf } from "./canonical-json";
 
-// Drift-detection tests. The CI gate (`pnpm schema:manifest --check`) is a byte
-// comparison of the freshly generated canonical JSON against the committed
-// file, so proving drift detection reduces to proving that a change to ANY
-// input changes the canonical bytes + the content hash. We mutate parsed
-// fixtures (not the real committed schema files) and assert the manifest body
-// they feed changes, which is exactly what --check keys on.
+// Drift-detection tests. `pnpm schema:manifest:check` is a byte comparison of
+// the freshly generated canonical JSON against the committed file, so proving
+// drift detection reduces to proving that a change to ANY input changes the
+// canonical bytes + the content hash. We mutate parsed fixtures (not the real
+// committed schema files) and assert the manifest body they feed changes,
+// which is exactly what --check keys on.
+//
+// NOTE: --check is a script an author can run, not an enforced gate. It is not
+// in `pnpm gate`, `pnpm gate:full`, or any workflow in .github/workflows, so
+// nothing fails when packages/database/storage-manifest.json goes stale. These
+// tests prove the mechanism works; they do not prove the committed file is
+// current.
 
 const CH_BASE = `
   CREATE TABLE IF NOT EXISTS token_usage (

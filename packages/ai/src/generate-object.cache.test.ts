@@ -45,7 +45,8 @@ vi.mock("@oxagen/tenancy", () => ({
 }));
 vi.mock("./models", () => ({
   defaultModel: mocks.defaultModel,
-  modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId),
+  modelIdOf: (m: { modelId: string } | string) =>
+    typeof m === "string" ? m : m.modelId,
 }));
 vi.mock("./cache", () => ({
   readCache: mocks.readCache,
@@ -82,7 +83,13 @@ describe("generateObjectFor cache option", () => {
     mocks.readCache.mockResolvedValue({
       hit: {
         value: { title: "Cached" },
-        usage: { model: "openai/gpt", inputTokens: 3, outputTokens: 2, cachedTokens: 0, costUsdMicros: 9 },
+        usage: {
+          model: "openai/gpt",
+          inputTokens: 3,
+          outputTokens: 2,
+          cachedTokens: 0,
+          costUsdMicros: 9,
+        },
         kind: "object",
         semantic: false,
         similarity: 1,
@@ -98,7 +105,11 @@ describe("generateObjectFor cache option", () => {
     });
 
     expect(res.object).toEqual({ title: "Cached" });
-    expect(res.usage).toEqual({ promptTokens: 3, completionTokens: 2, totalTokens: 5 });
+    expect(res.usage).toEqual({
+      promptTokens: 3,
+      completionTokens: 2,
+      totalTokens: 5,
+    });
     expect(mocks.generateObject).not.toHaveBeenCalled();
     expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
@@ -106,7 +117,10 @@ describe("generateObjectFor cache option", () => {
   });
 
   it("on a miss, calls the model, writes through the cache, and meters normally", async () => {
-    mocks.readCache.mockResolvedValue({ hit: null, queryEmbedding: [0.5, 0.5] });
+    mocks.readCache.mockResolvedValue({
+      hit: null,
+      queryEmbedding: [0.5, 0.5],
+    });
 
     const res = await generateObjectFor({
       schema: SCHEMA,

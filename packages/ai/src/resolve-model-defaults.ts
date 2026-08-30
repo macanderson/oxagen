@@ -4,8 +4,16 @@
 // Precedence per dimension:
 //   workspace value ?? user value ?? null
 //
-// For the text dimension: explicit model takes priority over tier at each level:
-//   workspace.model ?? workspace.tier ?? user.model ?? user.tier ?? null
+// The text dimension resolves `model` and `tier` on two INDEPENDENT chains:
+//   text.model = workspace.model ?? user.model ?? null
+//   text.tier  = workspace.tier  ?? user.tier  ?? null
+//
+// Both are returned. Deciding which one wins is the CALLER's job, and every
+// caller today prefers `text.model` over `text.tier` (see the chat stream
+// routes). That means a user-level `defaultTextModel` beats a workspace-level
+// `defaultTextTier`, even though `overriddenByWorkspace.text` is true — the flag
+// reports that the workspace set something, not that the workspace won. A
+// workspace that wants to force a model must set `defaultTextModel`, not a tier.
 
 /**
  * Model-tier string union — mirrors the auth.model_tier Postgres enum.
@@ -33,7 +41,11 @@ export interface ModelDefaultsInput {
 }
 
 export interface ResolvedModelDefaults {
-  /** Resolved text preferences. `model` wins over `tier` when both are set. */
+  /**
+   * Resolved text preferences. Both fields are resolved independently and both
+   * may be set; callers pick one, and every caller today prefers `model` over
+   * `tier`. See this module's header for what that means for workspace policy.
+   */
   text: {
     tier: ModelTier | null;
     model: string | null;
@@ -58,7 +70,9 @@ export interface ResolvedModelDefaults {
  * This is a pure function with no I/O — safe to call on the client or in tests
  * without any database/provider dependencies.
  */
-export function resolveModelDefaults(input: ModelDefaultsInput): ResolvedModelDefaults {
+export function resolveModelDefaults(
+  input: ModelDefaultsInput,
+): ResolvedModelDefaults {
   const { user, workspace } = input;
 
   // ── Text dimension ─────────────────────────────────────────────────────────
@@ -81,14 +95,18 @@ export function resolveModelDefaults(input: ModelDefaultsInput): ResolvedModelDe
   // at least one of its fields (non-null), regardless of whether the user also
   // has a preference.
   const wsOverridesText =
-    (workspace?.defaultTextModel !== null && workspace?.defaultTextModel !== undefined) ||
-    (workspace?.defaultTextTier !== null && workspace?.defaultTextTier !== undefined);
+    (workspace?.defaultTextModel !== null &&
+      workspace?.defaultTextModel !== undefined) ||
+    (workspace?.defaultTextTier !== null &&
+      workspace?.defaultTextTier !== undefined);
 
   const wsOverridesImage =
-    workspace?.defaultImageModel !== null && workspace?.defaultImageModel !== undefined;
+    workspace?.defaultImageModel !== null &&
+    workspace?.defaultImageModel !== undefined;
 
   const wsOverridesVideo =
-    workspace?.defaultVideoModel !== null && workspace?.defaultVideoModel !== undefined;
+    workspace?.defaultVideoModel !== null &&
+    workspace?.defaultVideoModel !== undefined;
 
   return {
     text: { tier: textTier, model: textModel },

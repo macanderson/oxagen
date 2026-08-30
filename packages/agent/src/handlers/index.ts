@@ -1,7 +1,7 @@
 import type { CapabilityContext } from "../types";
 
-// Lazy handler resolution. Each capability ships a `${name}.handler.ts`
-// next to its declaration; we dynamic-import on first use so the runtime
+// Lazy handler resolution. Every capability in LOADERS below points at the
+// module that implements it; we dynamic-import on first use so the runtime
 // boot doesn't pull in every dependency chain (Docker, MCP SDK, Neo4j)
 // unless the capability is actually invoked.
 
@@ -129,8 +129,28 @@ export const agentHandlerNames: string[] = Object.keys(LOADERS);
 
 const cache = new Map<string, CapabilityHandlerFn>();
 
-// Convert "agent.code.execute" → "agentCodeExecuteHandler", matching the
-// camelCase convention used by the schema subagent's handler exports.
+// Capabilities whose handler module exports MORE than one `*Handler` function,
+// so the unique-export fallback in resolveHandler cannot pick the right one.
+// browser.ts is the only such module today: all seven browser capabilities are
+// thin wrappers over one shared `driveBrowser`, so they live together and each
+// needs its export named here. Without this, every one of them fails to resolve
+// at invoke time.
+const EXPORT_NAME_OVERRIDES: Record<string, string> = {
+  navigate_page: "browserNavigateHandler",
+  screenshot_page: "browserScreenshotHandler",
+  fill_page: "browserFillHandler",
+  submit_page: "browserSubmitHandler",
+  click_page: "browserClickHandler",
+  refresh_page: "browserRefreshHandler",
+  read_page: "browserReadHandler",
+};
+
+// Dot-segment camelCase derivation, e.g. "agent.code.execute" →
+// "agentCodeExecuteHandler". ADR-025 renamed every capability to verb-first
+// snake_case, so for current names this almost never matches a real export and
+// the unique-`*Handler` fallback below is what actually resolves the module.
+// It is kept as the first probe because it is exact when it does match, and it
+// is the name quoted in the failure message.
 function toHandlerExportName(capName: string): string {
   const parts = capName.split(".");
   const camel = parts
@@ -148,21 +168,18 @@ export async function resolveHandler(
   if (!loader)
     throw new Error(`No handler registered for capability ${capName}`);
   const mod = await loader();
-  const exportName = toHandlerExportName(capName);
+  const exportName =
+    EXPORT_NAME_OVERRIDES[capName] ?? toHandlerExportName(capName);
   let handler = (mod[exportName] ?? mod.default) as
     | CapabilityHandlerFn
     | undefined;
   if (typeof handler !== "function") {
-    // ADR-022 snake_case capability names ("agent.sandbox_file.list",
-    // "agent.background_task.start", …) don't camelize to their module's
-    // readable export name via the dot-segment derivation above — e.g.
-    // "agent.sandbox_file.list" derives "agentSandbox_fileListHandler" while
-    // the module exports "agentSandboxFilesListHandler". Those modules were
-    // unresolvable at invoke time (the set_enabled module documents the gap
-    // and worked around it with a default export; the other snake_case
-    // modules had no workaround). Fall back to the module's single `*Handler`
-    // function export — every handler module exports exactly one, so this is
-    // unambiguous; if a module ever exports several, we still fail loudly.
+    // A snake_case capability name does not camelize to its module's readable
+    // export name — "list_sandbox_files" derives "list_sandbox_filesHandler"
+    // while the module exports "agentSandboxFilesListHandler". Fall back to the
+    // module's single `*Handler` function export, which is unambiguous because
+    // a handler module normally exports exactly one. A module with several is
+    // listed in EXPORT_NAME_OVERRIDES above; anything else still fails loudly.
     const named = Object.entries(mod).filter(
       (entry): entry is [string, CapabilityHandlerFn] =>
         entry[0].endsWith("Handler") && typeof entry[1] === "function",

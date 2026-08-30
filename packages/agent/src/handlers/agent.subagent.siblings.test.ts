@@ -68,7 +68,12 @@ describe("agent.subagent.siblings handler", () => {
   it("returns compact sibling rows for the caller's fanout, EXCLUDING the caller", async () => {
     setupMocks([
       // caller row — must be dropped from the result
-      row({ publicId: "sar_1", capabilityName: "search_web", status: "running", summary: null }),
+      row({
+        publicId: "sar_1",
+        capabilityName: "search_web",
+        status: "running",
+        summary: null,
+      }),
       row({
         publicId: "sar_2",
         capabilityName: "code.search",
@@ -126,7 +131,14 @@ describe("agent.subagent.siblings handler", () => {
     expect(sibling).not.toHaveProperty("inputPayload");
     expect(sibling).not.toHaveProperty("outputPayload");
     expect(Object.keys(sibling).sort()).toEqual(
-      ["attempts", "capabilityName", "errorReason", "runId", "status", "summary"].sort(),
+      [
+        "attempts",
+        "capabilityName",
+        "errorReason",
+        "runId",
+        "status",
+        "summary",
+      ].sort(),
     );
   });
 
@@ -146,14 +158,19 @@ describe("agent.subagent.siblings handler", () => {
     // from a nonexistent id, surfaced as a 404, never another org's data.
     setupMocks([]);
 
-    const err = await agentSubagentSiblingsHandler({ runId: "sar_other_org" }, CTX).then(
+    const err = await agentSubagentSiblingsHandler(
+      { runId: "sar_other_org" },
+      CTX,
+    ).then(
       () => {
         throw new Error("expected handler to reject");
       },
       (e: unknown) => e,
     );
     expect(err).toBeInstanceOf(SubagentRunNotFoundError);
-    expect((err as SubagentRunNotFoundError).code).toBe("subagent_run_not_found");
+    expect((err as SubagentRunNotFoundError).code).toBe(
+      "subagent_run_not_found",
+    );
     expect((err as Error).message).toBe("Subagent run sar_other_org not found");
   });
 });

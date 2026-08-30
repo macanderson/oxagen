@@ -78,6 +78,11 @@ class RetrievalTimeoutError extends Error {
  * Race a retrieval against a deadline. Resolves to the engine's result if it
  * settles first; rejects with {@link RetrievalTimeoutError} on timeout. The
  * timer is always cleared so a slow-but-eventual engine can't leak a handle.
+ *
+ * The timeout unblocks the CALLER; it does not cancel the engine. `retrieve()`
+ * takes no AbortSignal, so a hung engine keeps its connection, query, and
+ * result buffer alive until it finishes on its own. A permanently stuck engine
+ * therefore still leaks one in-flight operation per compile.
  */
 function withTimeout<T>(
   work: Promise<T>,
@@ -208,6 +213,14 @@ export async function compile(
   //     unpin must be suppressed (M-3). Fetch recent episodic markers and let
   //     the latest event per rule decide. Fail-open (keep all pinned) if the
   //     marker query rejects, so a store hiccup never silently drops rules.
+  //
+  //     KNOWN LIMIT: the store has no "episodic events of type X" filter, so
+  //     this pulls the 500 most recent episodic records of ANY type and hopes
+  //     the pin/unpin markers are among them. In a workspace with more than 500
+  //     newer episodic events, an unpin marker falls out of the window,
+  //     `resolveActivePins` sees no marker for the rule, and its no-marker
+  //     fail-open branch silently RE-ACTIVATES the unpinned rule. Fixing this
+  //     properly needs an event-type filter on EpisodicQuery.
   let pinned = pinnedRaw;
   if (pinnedRaw.length > 0) {
     const markers = await options.store

@@ -21,17 +21,28 @@ const ENV_VAR_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
  * nest secrets inside arrays today, and scanning them would risk false
  * positives on legitimate string lists like `taskIds`).
  */
-export function assertNoSecretValues(payload: Record<string, unknown>, path = ""): void {
+export function assertNoSecretValues(
+  payload: Record<string, unknown>,
+  path = "",
+): void {
   for (const [key, value] of Object.entries(payload)) {
     const fullPath = path ? `${path}.${key}` : key;
     if (typeof value === "string") {
-      if (SECRET_KEY_PATTERN.test(key) && value.length > 0 && !ENV_VAR_NAME_PATTERN.test(value)) {
+      if (
+        SECRET_KEY_PATTERN.test(key) &&
+        value.length > 0 &&
+        !ENV_VAR_NAME_PATTERN.test(value)
+      ) {
         throw new Error(
           `bench ingest: refusing to store a likely secret value at "${fullPath}" — ` +
             `store the env var NAME (e.g. "AI_GATEWAY_API_KEY"), never its value`,
         );
       }
-    } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    } else if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
       assertNoSecretValues(value as Record<string, unknown>, fullPath);
     }
   }

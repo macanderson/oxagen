@@ -1,7 +1,13 @@
+import pino from "pino";
 import { z } from "zod";
 import type { Surface } from "@oxagen/telemetry";
 import { generateObjectFor } from "../generate-object";
 import { selectModel } from "../models";
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.auto-improve" },
+});
 
 /**
  * "Auto-improve prompts" (Beta) — an LLM judge that decides whether a user's
@@ -17,7 +23,9 @@ import { selectModel } from "../models";
 const judgeSchema = z.object({
   sufficient: z
     .boolean()
-    .describe("True if the prompt is already clear and complete enough for a high-quality result."),
+    .describe(
+      "True if the prompt is already clear and complete enough for a high-quality result.",
+    ),
   enhancedPrompt: z
     .string()
     .optional()
@@ -49,7 +57,12 @@ export interface EnhancePromptArgs {
   // — it flows verbatim into token_usage.execution_step_id (UUID) via
   // generateObjectFor, so it must be a valid UUID or null, never a free-form
   // string like "unknown".
-  telemetry: { orgId: string; workspaceId: string; surface: Surface; messageId: string | null };
+  telemetry: {
+    orgId: string;
+    workspaceId: string;
+    surface: Surface;
+    messageId: string | null;
+  };
 }
 
 export interface EnhancePromptResult {
@@ -79,8 +92,15 @@ export async function enhancePromptIfInsufficient(
       return { prompt: args.prompt, enhanced: false };
     }
     return { prompt: enhanced, enhanced: true };
-  } catch {
+  } catch (err) {
     // Best-effort — a judge failure must never block the generation it precedes.
+    // Logged rather than swallowed silently: a judge that fails on every call
+    // still bills a model turn per generation while doing nothing, and a bare
+    // catch makes that invisible. Same reasoning as loadWorkspacePromptConfigSafe.
+    logger.warn(
+      { err, kind: args.kind, surface: args.telemetry.surface },
+      "auto-improve judge failed — using the original prompt",
+    );
     return { prompt: args.prompt, enhanced: false };
   }
 }

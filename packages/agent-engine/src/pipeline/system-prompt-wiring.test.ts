@@ -29,7 +29,11 @@ function makeCapturingAi(capture: (system: string) => void): AgentAi {
           yield { type: "text-delta", text: "ok" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+        usage: Promise.resolve({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        }),
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
@@ -112,7 +116,10 @@ describe("runTurn — system prompt wiring", () => {
       workspace: new MemoryWorkspace({ "a.ts": "x" }),
       ai: makeCapturingAi((s) => (captured = s)),
       bare: true,
-      projectContext: { text: "SENTINEL_PROJECT_RULE_XYZ", sources: ["CLAUDE.md"] },
+      projectContext: {
+        text: "SENTINEL_PROJECT_RULE_XYZ",
+        sources: ["CLAUDE.md"],
+      },
     });
 
     // Operating rules still present…
@@ -140,7 +147,9 @@ describe("runTurn — system prompt wiring", () => {
       ai: makeCapturingAi((s) => (withGraph = s)),
       codeGraph,
     });
-    expect(withGraph).toContain("Candidate locations were computed from the code graph.");
+    expect(withGraph).toContain(
+      "Candidate locations were computed from the code graph.",
+    );
     expect(withGraph).toContain("do not re-derive them.");
 
     // Negative: the same pipeline without a graph cannot localize, so the

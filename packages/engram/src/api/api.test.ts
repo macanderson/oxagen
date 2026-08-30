@@ -188,7 +188,9 @@ describe("Write API", () => {
       // Should find the unpin event
       const results = await store.query({ namespace, limit: 100 });
       const unpinEvent = results.find(
-        (r) => r.kind === "episodic" && (r.body as { event: string }).event === "rule_unpinned",
+        (r) =>
+          r.kind === "episodic" &&
+          (r.body as { event: string }).event === "rule_unpinned",
       );
       expect(unpinEvent).toBeDefined();
       expect(unpinEvent!.causality).toContain(ruleId);
@@ -210,7 +212,11 @@ describe("Write API", () => {
         minSalience: 1.0,
         limit: 50,
       });
-      const markers = await store.query({ namespace, kinds: ["episodic"], limit: 500 });
+      const markers = await store.query({
+        namespace,
+        kinds: ["episodic"],
+        limit: 500,
+      });
       return resolveActivePins(pinned, markers).map((r) => r.id);
     }
 

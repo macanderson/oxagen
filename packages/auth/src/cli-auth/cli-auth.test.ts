@@ -16,14 +16,17 @@ const deleteReturning = vi.fn(() =>
 
 const mockTx = {
   insert: vi.fn(() => ({ values: insertValues })),
-  delete: vi.fn(() => ({ where: vi.fn(() => ({ returning: deleteReturning })) })),
+  delete: vi.fn(() => ({
+    where: vi.fn(() => ({ returning: deleteReturning })),
+  })),
 };
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-    withSystemDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
+    withSystemDb: async (fn: (tx: typeof mockTx) => Promise<unknown>) =>
+      fn(mockTx),
   };
 });
 
@@ -89,14 +92,18 @@ describe("validators", () => {
   it("isValidCodeVerifier rejects out-of-range lengths and bad chars", () => {
     expect(isValidCodeVerifier("a".repeat(42))).toBe(false);
     expect(isValidCodeVerifier("a".repeat(129))).toBe(false);
-    expect(isValidCodeVerifier("has spaces and !@#".padEnd(43, "x"))).toBe(false);
+    expect(isValidCodeVerifier("has spaces and !@#".padEnd(43, "x"))).toBe(
+      false,
+    );
   });
 
   it("isValidCodeChallenge requires exactly 43 base64url chars", () => {
     expect(isValidCodeChallenge(RFC_CHALLENGE)).toBe(true);
     expect(isValidCodeChallenge("a".repeat(42))).toBe(false);
     expect(isValidCodeChallenge("a".repeat(44))).toBe(false);
-    expect(isValidCodeChallenge("contains+slash/and=pad" + "a".repeat(21))).toBe(false);
+    expect(
+      isValidCodeChallenge("contains+slash/and=pad" + "a".repeat(21)),
+    ).toBe(false);
   });
 });
 
@@ -108,7 +115,9 @@ describe("isLoopbackRedirectUri", () => {
   });
 
   it("rejects non-loopback hosts", () => {
-    expect(isLoopbackRedirectUri("http://evil.example.com:80/callback")).toBe(false);
+    expect(isLoopbackRedirectUri("http://evil.example.com:80/callback")).toBe(
+      false,
+    );
     expect(isLoopbackRedirectUri("http://169.254.1.1:80/callback")).toBe(false);
   });
 
@@ -119,7 +128,9 @@ describe("isLoopbackRedirectUri", () => {
   });
 
   it("rejects URLs carrying credentials, query, or fragment", () => {
-    expect(isLoopbackRedirectUri("http://user:pass@127.0.0.1:80/cb")).toBe(false);
+    expect(isLoopbackRedirectUri("http://user:pass@127.0.0.1:80/cb")).toBe(
+      false,
+    );
     expect(isLoopbackRedirectUri("http://127.0.0.1:80/cb?x=1")).toBe(false);
     expect(isLoopbackRedirectUri("http://127.0.0.1:80/cb#frag")).toBe(false);
   });

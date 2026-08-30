@@ -36,16 +36,33 @@ export function normalizeNamespaceSeed(seed: string): string {
   return seed.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function isTaken(candidate: string, taken: ReadonlySet<string>): boolean {
-  // Namespaces are citext (case-insensitive) in Postgres; candidates are always
-  // lowercase, but lowercase the comparison defensively in case a caller passes
-  // a mixed-case "taken" set straight from a non-citext source.
-  if (taken.has(candidate)) return true;
-  for (const t of taken) {
-    if (t.toLowerCase() === candidate) return true;
-  }
-  return false;
+/**
+ * Lowercase the whole `taken` set ONCE, up front.
+ *
+ * Namespaces are citext (case-insensitive) in Postgres; candidates are always
+ * lowercase, but a caller may hand us a mixed-case set from a non-citext
+ * source, so the comparison has to be case-insensitive. Doing that per lookup
+ * means scanning the entire set on every miss — and the collision walk below
+ * can probe tens of thousands of candidates, so a per-lookup scan turns
+ * `deriveNamespace` quadratic in the number of existing namespaces. The org
+ * path passes EVERY org namespace on the platform (packages/handlers/src/
+ * org.create.ts), which is exactly the set that grows without bound.
+ */
+function lowercasedSet(taken: ReadonlySet<string>): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const t of taken) out.add(t.toLowerCase());
+  return out;
 }
+
+/**
+ * Distinct candidates the collision walk can produce for one base.
+ *
+ * `keep` bottoms out at 1 once the suffix reaches 5 digits, so from n = 100000
+ * onward `(base[0] + suffix).slice(0, 6)` truncates back onto values already
+ * probed and the walk would spin forever on a fully-occupied prefix. The walk
+ * is capped one step below that repeat point and raises instead.
+ */
+const MAX_SUFFIX_ATTEMPTS = 100_000;
 
 /**
  * Derive a namespace from a seed (usually the org/workspace slug), avoiding any
@@ -62,21 +79,38 @@ function isTaken(candidate: string, taken: ReadonlySet<string>): boolean {
  * `taken` MUST hold the namespaces already used in the same uniqueness scope —
  * ALL orgs for `organizations.namespace`, or just the target org's workspaces
  * for `workspaces.namespace`. The caller is responsible for querying that set.
+ *
+ * @throws when every candidate this base can produce is already taken — the
+ *   caller must retry with a different seed rather than get a wrong value or a
+ *   hung process.
  */
-export function deriveNamespace(seed: string, taken: ReadonlySet<string>): string {
+export function deriveNamespace(
+  seed: string,
+  taken: ReadonlySet<string>,
+): string {
   let base = normalizeNamespaceSeed(seed);
   if (base.length < NAMESPACE_MIN_LENGTH) {
     base = (base + "00").slice(0, NAMESPACE_MIN_LENGTH);
   }
 
+  const occupied = lowercasedSet(taken);
   const first = base.slice(0, NAMESPACE_MAX_LENGTH);
-  if (!isTaken(first, taken)) return first;
+  if (!occupied.has(first)) return first;
 
-  for (let n = 1; ; n++) {
+  for (let n = 1; n < MAX_SUFFIX_ATTEMPTS; n++) {
     const suffix = String(n);
     // Reserve room for the suffix; keep at least 1 char of the base.
     const keep = Math.max(1, NAMESPACE_MAX_LENGTH - suffix.length);
-    const candidate = (base.slice(0, keep) + suffix).slice(0, NAMESPACE_MAX_LENGTH);
-    if (!isTaken(candidate, taken)) return candidate;
+    const candidate = (base.slice(0, keep) + suffix).slice(
+      0,
+      NAMESPACE_MAX_LENGTH,
+    );
+    if (!occupied.has(candidate)) return candidate;
   }
+
+  throw new Error(
+    `[namespace] every namespace derivable from seed "${seed}" (base "${base}") ` +
+      `is already taken after ${MAX_SUFFIX_ATTEMPTS} attempts. The 6-character ` +
+      "namespace space for this prefix is exhausted — retry with a different slug.",
+  );
 }

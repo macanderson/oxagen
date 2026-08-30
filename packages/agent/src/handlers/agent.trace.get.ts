@@ -1,6 +1,11 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { createSession, appendEvent, analyzeReplay, extractTurnMetrics } from "@oxagen/engram";
+import {
+  createSession,
+  appendEvent,
+  analyzeReplay,
+  extractTurnMetrics,
+} from "@oxagen/engram";
 import type { CapabilityContext } from "../types";
 import type {
   AgentTraceGetInput,
@@ -119,7 +124,11 @@ export async function agentTraceGetHandler(
     const order: string[] = [root.id];
     let frontier = [root.id];
     let depth = 0;
-    while (frontier.length > 0 && depth < MAX_DEPTH && collected.size < MAX_NODES) {
+    while (
+      frontier.length > 0 &&
+      depth < MAX_DEPTH &&
+      collected.size < MAX_NODES
+    ) {
       const children = (await tx
         .select(execColumns)
         .from(schema.agentExecutions)
@@ -212,14 +221,18 @@ export async function agentTraceGetHandler(
         );
 
   // ── Index tool calls by step, steps by execution ──
-  const toolCallsByStep = new Map<string, AgentTraceGetOutput["steps"][number]["toolCalls"]>();
+  const toolCallsByStep = new Map<
+    string,
+    AgentTraceGetOutput["steps"][number]["toolCalls"]
+  >();
   for (const tc of toolCalls) {
     const list = toolCallsByStep.get(tc.executionStepId) ?? [];
     list.push({
       toolCallId: tc.publicId,
       toolName: tc.toolName,
       toolType: tc.toolType,
-      status: tc.status as AgentTraceGetOutput["steps"][number]["toolCalls"][number]["status"],
+      status:
+        tc.status as AgentTraceGetOutput["steps"][number]["toolCalls"][number]["status"],
       latencyMs: tc.latencyMs,
       inputTokens: tc.inputTokens,
       outputTokens: tc.outputTokens,
@@ -304,8 +317,14 @@ export async function agentTraceGetHandler(
 function deriveTurnMetrics(
   root: TraceExecutionNode,
   ctx: CapabilityContext,
-): { turnMetrics: NonNullable<TraceExecutionNode["turnMetrics"]>; replayDeterministic: boolean } {
-  const session = createSession(root.executionId, { org: ctx.orgId, workspace: ctx.workspaceId });
+): {
+  turnMetrics: NonNullable<TraceExecutionNode["turnMetrics"]>;
+  replayDeterministic: boolean;
+} {
+  const session = createSession(root.executionId, {
+    org: ctx.orgId,
+    workspace: ctx.workspaceId,
+  });
   for (const step of root.steps) {
     const totalTokens = (step.inputTokens ?? 0) + (step.outputTokens ?? 0);
     appendEvent(session, "turn_start", step.stepId, {});
@@ -318,10 +337,18 @@ function deriveTurnMetrics(
       compileMs: step.latencyMs ?? 0,
     });
     for (const tc of step.toolCalls) {
-      appendEvent(session, "tool_call", step.stepId, { tool: tc.toolName, input: null });
+      appendEvent(session, "tool_call", step.stepId, {
+        tool: tc.toolName,
+        input: null,
+      });
     }
     appendEvent(session, "turn_end", step.stepId, {
-      outcome: step.status === "completed" ? "success" : step.status === "failed" ? "failure" : "interrupted",
+      outcome:
+        step.status === "completed"
+          ? "success"
+          : step.status === "failed"
+            ? "failure"
+            : "interrupted",
       totalTokens,
       durationMs: step.latencyMs ?? 0,
     });

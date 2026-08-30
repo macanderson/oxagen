@@ -1,7 +1,11 @@
-// Reconstructs the shell environment for `bench/{swe-bench,terminal-bench}/run.sh`
-// from a stored BenchReplayConfig JSON blob (bench.benchmark_run(_result).config).
-// Pure mapping — no process/env/child_process access here; the caller (the
-// internal bench replay command, commands.ts) decides whether to print or execute it.
+// Reconstructs the shell environment for the agent-arena harness's
+// `bench/<bench-type>/run.sh` from a stored BenchReplayConfig JSON blob
+// (bench.benchmark_run(_result).config). Pure mapping — no
+// process/env/child_process access here; the caller (the internal bench
+// replay command, commands.ts) decides whether to print or execute it.
+//
+// That harness is a separate checkout (https://github.com/macanderson/agent-arena),
+// so the paths built here are relative to ITS root, not this repo's.
 
 import type { BenchReplayConfig, BenchType } from "./types";
 
@@ -15,7 +19,11 @@ function bool(v: unknown): boolean {
   return v === true;
 }
 function strArray(v: unknown): string[] | undefined {
-  return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string") ? (v as string[]) : undefined;
+  return Array.isArray(v) &&
+    v.length > 0 &&
+    v.every((x) => typeof x === "string")
+    ? (v as string[])
+    : undefined;
 }
 
 // "AI_GATEWAY_API_KEY", "N_CONCURRENT", "OXAGEN_EFFORT" — an env var NAME.
@@ -30,16 +38,14 @@ function coerceEnvValue(v: unknown): string | undefined {
 }
 
 /**
- * Map a stored replay config back to the env vars `bench/*\/run.sh` (and the
- * container it launches) read.
+ * Map a stored replay config back to the env vars the harness's run.sh (and
+ * the container it launches) read.
  *
  * Two input shapes, both supported:
  *
  * 1. **Raw env-var-named keys** — how `bench-config.json` is actually
- *    written (see that file's writer in `bench/*\/run.sh`): Oxagen forwards
- *    every host `OXAGEN_*` var verbatim into the trial container rather than
- *    mapping it through a friendlier schema (see `_forwarded_env()` in
- *    `bench/terminal-bench/src/oxagen_terminal_bench/oxagen_agent.py`), so
+ *    written: the runner forwards every host `OXAGEN_*` var verbatim into the
+ *    trial container rather than mapping it through a friendlier schema, so
  *    the snapshot captures exactly that: raw names like
  *    `OXAGEN_BEST_OF_N_MODELS`, `DATASET`, `N_CONCURRENT`, `TASK_IDS`. These
  *    pass straight through unchanged — no translation needed, since they're
@@ -54,7 +60,9 @@ function coerceEnvValue(v: unknown): string | undefined {
  * guessed at, since forwarding an arbitrary key as an env var could change
  * run.sh's behavior in an unintended way.
  */
-export function buildReplayEnv(config: BenchReplayConfig): Record<string, string> {
+export function buildReplayEnv(
+  config: BenchReplayConfig,
+): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(config)) {
@@ -65,32 +73,41 @@ export function buildReplayEnv(config: BenchReplayConfig): Record<string, string
 
   const models = strArray(config.models);
   const candidates = num(config.candidates);
-  if ((models || candidates !== undefined) && !("OXAGEN_BEST_OF_N" in env)) env.OXAGEN_BEST_OF_N = "1";
-  if (models && !("OXAGEN_BEST_OF_N_MODELS" in env)) env.OXAGEN_BEST_OF_N_MODELS = models.join(",");
+  if ((models || candidates !== undefined) && !("OXAGEN_BEST_OF_N" in env))
+    env.OXAGEN_BEST_OF_N = "1";
+  if (models && !("OXAGEN_BEST_OF_N_MODELS" in env))
+    env.OXAGEN_BEST_OF_N_MODELS = models.join(",");
   if (candidates !== undefined && !("OXAGEN_BEST_OF_N_CANDIDATES" in env)) {
     env.OXAGEN_BEST_OF_N_CANDIDATES = String(candidates);
   }
-  if (bool(config.pipeline) && !("OXAGEN_BEST_OF_N_PIPELINE" in env)) env.OXAGEN_BEST_OF_N_PIPELINE = "1";
-  if (bool(config.verifyAuto) && !("OXAGEN_BEST_OF_N_VERIFY" in env)) env.OXAGEN_BEST_OF_N_VERIFY = "1";
+  if (bool(config.pipeline) && !("OXAGEN_BEST_OF_N_PIPELINE" in env))
+    env.OXAGEN_BEST_OF_N_PIPELINE = "1";
+  if (bool(config.verifyAuto) && !("OXAGEN_BEST_OF_N_VERIFY" in env))
+    env.OXAGEN_BEST_OF_N_VERIFY = "1";
   if (bool(config.warm) && !("OXAGEN_WARM" in env)) env.OXAGEN_WARM = "1";
 
   const effort = str(config.effort);
   if (effort && !("OXAGEN_EFFORT" in env)) env.OXAGEN_EFFORT = effort;
   const evaluator = str(config.evaluator);
-  if (evaluator && !("OXAGEN_LLM_EVALUATOR" in env)) env.OXAGEN_LLM_EVALUATOR = evaluator;
+  if (evaluator && !("OXAGEN_LLM_EVALUATOR" in env))
+    env.OXAGEN_LLM_EVALUATOR = evaluator;
   const advisor = str(config.advisor);
-  if (advisor && !("OXAGEN_LLM_ADVISOR" in env)) env.OXAGEN_LLM_ADVISOR = advisor;
+  if (advisor && !("OXAGEN_LLM_ADVISOR" in env))
+    env.OXAGEN_LLM_ADVISOR = advisor;
   const reviseRounds = num(config.reviseRounds);
   if (reviseRounds !== undefined && !("OXAGEN_MAX_REVISE_ROUNDS" in env)) {
     env.OXAGEN_MAX_REVISE_ROUNDS = String(reviseRounds);
   }
 
   const nConcurrent = num(config.nConcurrent);
-  if (nConcurrent !== undefined && !("N_CONCURRENT" in env)) env.N_CONCURRENT = String(nConcurrent);
+  if (nConcurrent !== undefined && !("N_CONCURRENT" in env))
+    env.N_CONCURRENT = String(nConcurrent);
   const dataset = str(config.dataset);
   if (dataset && !("DATASET" in env)) env.DATASET = dataset;
 
-  const taskIds = strArray(config.taskIds) ?? (str(config.taskId) ? [config.taskId as string] : undefined);
+  const taskIds =
+    strArray(config.taskIds) ??
+    (str(config.taskId) ? [config.taskId as string] : undefined);
   if (taskIds && !("TASK_IDS" in env)) env.TASK_IDS = taskIds.join(" ");
 
   const model = str(config.model);
@@ -99,7 +116,7 @@ export function buildReplayEnv(config: BenchReplayConfig): Record<string, string
   return env;
 }
 
-/** Path to the run.sh script for a bench type, relative to the repo root. */
+/** Path to the run.sh script for a bench type, relative to the agent-arena checkout's root. */
 export function runScriptFor(benchType: BenchType): string {
   return `bench/${benchType}/run.sh`;
 }

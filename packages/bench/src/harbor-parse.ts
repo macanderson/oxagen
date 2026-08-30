@@ -3,11 +3,10 @@
 // hands their parsed JSON/text to these functions). Kept separate so the
 // parsing logic is testable with plain fixtures, no fs or ClickHouse mocking.
 //
-// Shapes below mirror three artifact families produced by
-// `bench/{swe-bench,terminal-bench}/run.sh` (via Harbor + the Oxagen adapter,
-// see bench/terminal-bench/src/oxagen_terminal_bench/oxagen_agent.py and
-// .../eval_normalize.py, which this module's derivations are kept
-// consistent with):
+// Shapes below mirror three artifact families produced by the agent-arena
+// harness (https://github.com/macanderson/agent-arena), which runs Harbor
+// with an Oxagen agent adapter. That adapter is the source of every
+// `oxagen_*` field read here; keep these derivations in step with it.
 //   1. Harbor's own run config.json / result.json / per-task result.json.
 //   2. The SWE-bench verifier's report.json (FAIL_TO_PASS/PASS_TO_PASS + resolved).
 //   3. The oxagen best-of-N JSONL trajectory (agent/oxagen.txt) — the
@@ -32,10 +31,10 @@ export interface HarborRunConfig {
 
 /**
  * Derive a short agent name from Harbor's run config, e.g.
- * "oxagen_swe_bench:OxagenAgent" -> "oxagen". Mirrors
- * eval_normalize.py's `_agent_name_from_config` so the two ingestion paths
- * (bench.* tables here, eval_runs/eval_results there) never disagree on
- * what a run's agent is called.
+ * "oxagen_swe_bench:OxagenAgent" -> "oxagen". Mirrors the same derivation in
+ * agent-arena's own eval normalizer, so the two ingestion paths (bench.*
+ * tables here, eval_runs/eval_results there) never disagree on what a run's
+ * agent is called.
  */
 export function agentNameFromHarborConfig(config: HarborRunConfig): string {
   const name = config.agents?.[0]?.name;
@@ -128,7 +127,8 @@ export interface AgentSplitTokens {
  * The input/output/cache split from agent_result. Populated by Harbor's own
  * competitor adapters (claude-code, codex, aider); always 0 for the oxagen
  * adapter, which reports a single undifferentiated total in metadata instead
- * (see `agentTotalTokens`).
+ * (see `agentTotalTokens`). Never sum these as a total — for oxagen runs that
+ * sum is 0.
  */
 export function agentSplitTokens(trial: HarborTaskResult): AgentSplitTokens {
   const ar = trial.agent_result;
@@ -142,10 +142,9 @@ export function agentSplitTokens(trial: HarborTaskResult): AgentSplitTokens {
 /**
  * Authoritative total token count for a trial. The oxagen adapter reports one
  * undifferentiated total in `agent_result.metadata.oxagen_total_tokens` (it
- * does not split input/output/cache — see oxagen_agent.py), while competitor
- * adapters report the split. Prefer the metadata total when present, else fall
- * back to the sum of the split fields. This mirrors the normalization done in
- * bench/swe-bench/summarize.py and terminal-bench eval_normalize.py.
+ * does not split input/output/cache), while competitor adapters report the
+ * split. Prefer the metadata total when present, else fall back to the sum of
+ * the split fields — the same normalization agent-arena's own summarizer does.
  */
 export function agentTotalTokens(trial: HarborTaskResult): number {
   const meta = trial.agent_result?.metadata;
@@ -159,7 +158,7 @@ export function agentTotalTokens(trial: HarborTaskResult): number {
 /**
  * Trial cost in USD from `agent_result.cost_usd`. Harbor DOES record this for
  * the oxagen agent — the adapter sets `context.cost_usd` from the CLI's usage
- * envelope (oxagen_agent.py `_populate_best_of_n_usage`). 0 when absent/malformed.
+ * envelope. 0 when absent/malformed.
  */
 export function agentCostUsd(trial: HarborTaskResult): number {
   return finiteOrZero(trial.agent_result?.cost_usd);
@@ -397,7 +396,7 @@ export function parseTrajectory(text: string): ParsedTrajectory {
   };
 }
 
-/** Total calls across every counted tool — used for `code_graph_calls`/`grep_calls`-style single-tool rollups. */
+/** Calls recorded for ONE tool, 0 when it was never used — the source for the `code_graph_calls`/`grep_calls` columns. */
 export function toolCallCount(
   counts: BenchToolCallCounts,
   tool: BenchToolName,

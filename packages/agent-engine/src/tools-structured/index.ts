@@ -52,7 +52,11 @@ export function buildStructuredTools(
 
 // Re-export the pure parsers/selectors so the unit tests exercise them directly.
 export * from "./parse";
-export { selectTestsForChanges, buildVitestCommand, TEST_FAILURE_CAPS } from "./test-unit-run";
+export {
+  selectTestsForChanges,
+  buildVitestCommand,
+  TEST_FAILURE_CAPS,
+} from "./test-unit-run";
 export {
   buildTraceCommand,
   buildTraceSummarizeCommand,

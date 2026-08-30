@@ -12,7 +12,10 @@
     "metadata": {}
   },
   "verifier_result": { "rewards": { "reward": 0.0 } },
-  "exception_info": { "exception_type": "AgentTimeoutError", "message": "agent exceeded wall-clock budget" },
+  "exception_info": {
+    "exception_type": "AgentTimeoutError",
+    "message": "agent exceeded wall-clock budget"
+  },
   "started_at": "2026-07-03T21:50:00.000000Z",
   "finished_at": "2026-07-03T21:55:00.000000Z"
 }

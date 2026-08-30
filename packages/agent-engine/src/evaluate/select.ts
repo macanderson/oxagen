@@ -107,8 +107,12 @@ function heuristicScore(c: Candidate): number {
 
 /** One-phrase note explaining a candidate's test evidence, for the ranking. */
 function testNote(c: Candidate): string {
-  if (c.testsPassed != null) return c.testsPassed ? "tests verified passing" : "tests verified failing";
-  if (c.testOutput) return looksPassing(c.testOutput) ? "tests appear to pass" : "tests appear to fail";
+  if (c.testsPassed != null)
+    return c.testsPassed ? "tests verified passing" : "tests verified failing";
+  if (c.testOutput)
+    return looksPassing(c.testOutput)
+      ? "tests appear to pass"
+      : "tests appear to fail";
   return "no tests run";
 }
 
@@ -130,14 +134,28 @@ function heuristicSelect(candidates: Candidate[]): SelectionResult {
 }
 
 const selectionSchema = z.object({
-  winnerId: z.string().describe("The id of the single best candidate. Must be one of the given ids."),
-  reasoning: z.string().describe("2–4 sentences: why this candidate wins, citing its diff and test output."),
+  winnerId: z
+    .string()
+    .describe(
+      "The id of the single best candidate. Must be one of the given ids.",
+    ),
+  reasoning: z
+    .string()
+    .describe(
+      "2–4 sentences: why this candidate wins, citing its diff and test output.",
+    ),
   ranking: z
     .array(
       z.object({
         id: z.string(),
-        score: z.number().min(0).max(100).describe("How well this candidate solves the task."),
-        note: z.string().describe("One phrase: the deciding factor for this candidate."),
+        score: z
+          .number()
+          .min(0)
+          .max(100)
+          .describe("How well this candidate solves the task."),
+        note: z
+          .string()
+          .describe("One phrase: the deciding factor for this candidate."),
       }),
     )
     .describe("Every candidate, scored."),
@@ -155,7 +173,9 @@ const SELECT_SYSTEM = [
 ].join("\n");
 
 function candidateBlock(c: Candidate): string {
-  const diff = c.diff.trim() ? "```diff\n" + headTail(c.diff, 6000) + "\n```" : "(empty diff)";
+  const diff = c.diff.trim()
+    ? "```diff\n" + headTail(c.diff, 6000) + "\n```"
+    : "(empty diff)";
   const tests = c.testOutput ? headTail(c.testOutput, 2000) : "(no tests run)";
   // Spell out the verified verdict explicitly rather than leaving the model to
   // infer pass/fail from the raw text — makes rule 1 (test output is decisive)
@@ -191,7 +211,11 @@ export async function selectBestCandidate(opts: {
     return {
       winnerId: null,
       reasoning: "No candidate produced a viable change.",
-      ranking: opts.candidates.map((c) => ({ id: c.id, score: 0, note: c.failed ? "errored" : "no change" })),
+      ranking: opts.candidates.map((c) => ({
+        id: c.id,
+        score: 0,
+        note: c.failed ? "errored" : "no change",
+      })),
       model: "none",
       fallback: true,
       usage: emptyUsage(),
@@ -201,14 +225,19 @@ export async function selectBestCandidate(opts: {
     return {
       winnerId: viable[0]!.id,
       reasoning: `Only one candidate (${viable[0]!.id}) produced a viable change.`,
-      ranking: [{ id: viable[0]!.id, score: 100, note: "sole viable candidate" }],
+      ranking: [
+        { id: viable[0]!.id, score: 100, note: "sole viable candidate" },
+      ],
       model: "none",
       fallback: true,
       usage: emptyUsage(),
     };
   }
 
-  const model = opts.selectorModel ?? process.env["OXAGEN_LLM_SELECTOR"] ?? DEFAULT_SELECTOR_MODEL;
+  const model =
+    opts.selectorModel ??
+    process.env["OXAGEN_LLM_SELECTOR"] ??
+    DEFAULT_SELECTOR_MODEL;
   try {
     const { object, usage } = await opts.ai.generateObject({
       model,
@@ -226,8 +255,9 @@ export async function selectBestCandidate(opts: {
     // highest-ranked viable candidate if it named something invalid.
     const validWinner = viable.some((c) => c.id === object.winnerId)
       ? object.winnerId
-      : [...object.ranking].sort((a, b) => b.score - a.score).find((r) => viable.some((c) => c.id === r.id))?.id ??
-        viable[0]!.id;
+      : ([...object.ranking]
+          .sort((a, b) => b.score - a.score)
+          .find((r) => viable.some((c) => c.id === r.id))?.id ?? viable[0]!.id);
     return {
       winnerId: validWinner,
       reasoning: object.reasoning,

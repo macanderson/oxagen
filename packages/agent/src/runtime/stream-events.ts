@@ -3,8 +3,18 @@
 // prompts, plan proposals, and subagent fanouts inline in the DAG.
 
 export type AgentStreamEvent =
-  | { type: "tool-call-start"; callId: string; capability: string; input: unknown }
-  | { type: "tool-call-output"; callId: string; chunk: string; channel?: "stdout" | "stderr" }
+  | {
+      type: "tool-call-start";
+      callId: string;
+      capability: string;
+      input: unknown;
+    }
+  | {
+      type: "tool-call-output";
+      callId: string;
+      chunk: string;
+      channel?: "stdout" | "stderr";
+    }
   | {
       type: "tool-call-end";
       callId: string;
@@ -26,7 +36,11 @@ export type AgentStreamEvent =
       resolution: "approved" | "denied" | "expired";
     }
   | { type: "plan-proposed"; planId: string; title: string; steps: unknown }
-  | { type: "plan-resolved"; planId: string; status: "approved" | "denied" | "amended" }
+  | {
+      type: "plan-resolved";
+      planId: string;
+      status: "approved" | "denied" | "amended";
+    }
   | {
       type: "subagent-dispatched";
       fanoutId: string;
@@ -38,7 +52,12 @@ export type AgentStreamEvent =
       fanoutId: string;
       status: "pending" | "completed" | "partial" | "timed_out";
     }
-  | { type: "background-task-started"; taskId: string; kind: string; inngestRunId: string };
+  | {
+      type: "background-task-started";
+      taskId: string;
+      kind: string;
+      inngestRunId: string;
+    };
 
 export function isAgentStreamEvent(x: unknown): x is AgentStreamEvent {
   return Boolean(x) && typeof x === "object" && "type" in (x as object);

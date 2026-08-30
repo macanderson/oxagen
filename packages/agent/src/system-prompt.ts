@@ -1,7 +1,7 @@
-// Back-compat shim. The canonical chat system prompt now lives in the prompt
-// registry (./prompts/registry) so it sits alongside every other platform
-// prompt and the customer-override resolution. Existing callers that import
-// `buildChatSystemPrompt` / `SystemPromptContext` keep working unchanged.
+// Thin re-export. The canonical chat system prompt lives in @oxagen/ai's prompt
+// registry, alongside every other platform prompt and the customer-override
+// resolution; this module only keeps the `buildChatSystemPrompt` /
+// `SystemPromptContext` names importable from @oxagen/agent.
 import { chatSystemPrompt, type SystemPromptContext } from "@oxagen/ai";
 
 export type { SystemPromptContext };

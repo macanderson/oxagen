@@ -52,7 +52,9 @@ export interface HypothesisVerdict {
  * @param transcript - The agent transcript to parse
  * @returns Array of HypothesisVerdict, ordered by appearance (last-wins deduped)
  */
-export function parseHypothesisMarkers(transcript: string): HypothesisVerdict[] {
+export function parseHypothesisMarkers(
+  transcript: string,
+): HypothesisVerdict[] {
   if (typeof transcript !== "string") {
     return [];
   }
@@ -82,12 +84,14 @@ export function parseHypothesisMarkers(transcript: string): HypothesisVerdict[] 
     // Verdict keyword comes first, then separator, then evidence.
     // Verdict is case-insensitive.
     const verdictMatch = line.match(
-      /^HYPOTHESIS:\s+(\S+)\s+(survived|falsified)\s+(?:—|-|:)\s*(.*)$/i
+      /^HYPOTHESIS:\s+(\S+)\s+(survived|falsified)\s+(?:—|-|:)\s*(.*)$/i,
     );
 
     if (verdictMatch) {
       const id = verdictMatch[1]!;
-      const verdict = verdictMatch[2]!.toLowerCase() as "survived" | "falsified";
+      const verdict = verdictMatch[2]!.toLowerCase() as
+        | "survived"
+        | "falsified";
       const evidence = verdictMatch[3]!;
 
       // Backfill statement from declarations, else "".
@@ -110,12 +114,17 @@ export function parseHypothesisMarkers(transcript: string): HypothesisVerdict[] 
     const match = line.match(/^HYPOTHESIS:\s+(\S+)\s+(survived|falsified)/i);
     if (match) {
       const id = match[1]!;
-      if (!seen.has(id)) {
+      if (seen.has(id)) continue;
+      // Only claim the id once a PARSED verdict exists for it. This prefix
+      // regex is looser than the verdict regex above (it does not require the
+      // separator), so a malformed line like `HYPOTHESIS: h1 SURVIVED` with no
+      // `—`/`-`/`:` matches here but produced no entry in `verdictMap`. Marking
+      // it seen anyway would suppress a well-formed verdict for the same id
+      // later in the transcript.
+      const verdict = verdictMap.get(id);
+      if (verdict) {
         seen.add(id);
-        const verdict = verdictMap.get(id);
-        if (verdict) {
-          result.push(verdict);
-        }
+        result.push(verdict);
       }
     }
   }
@@ -140,7 +149,7 @@ export function parseHypothesisMarkers(transcript: string): HypothesisVerdict[] 
  */
 export function pairWithProbes(
   verdicts: HypothesisVerdict[],
-  commands: Array<{ command: string; exitCode: number }>
+  commands: Array<{ command: string; exitCode: number }>,
 ): Hypothesis[] {
   return verdicts.map((verdict) => {
     let evidence = verdict.evidence;
@@ -150,7 +159,10 @@ export function pairWithProbes(
       // Search backwards for a command mentioning the hypothesis id.
       for (let i = commands.length - 1; i >= 0; i--) {
         const cmd = commands[i];
-        if (cmd && cmd.command.toLowerCase().includes(verdict.id.toLowerCase())) {
+        if (
+          cmd &&
+          cmd.command.toLowerCase().includes(verdict.id.toLowerCase())
+        ) {
           evidence = cmd.command;
           break;
         }

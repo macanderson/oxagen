@@ -37,7 +37,7 @@ import type {
 } from "@oxagen/oxagen/contracts/browser.read";
 import type { CapabilityContext } from "../types";
 import {
-  requireDurableDriver,
+  requireDurableDriverForRow,
   getSessionByPublicId,
   touchSession,
   SandboxSessionNotFoundError,
@@ -52,7 +52,14 @@ export class BrowserDriveError extends Error {
 }
 
 interface BrowserCommand {
-  op: "navigate" | "screenshot" | "fill" | "submit" | "click" | "refresh" | "read";
+  op:
+    | "navigate"
+    | "screenshot"
+    | "fill"
+    | "submit"
+    | "click"
+    | "refresh"
+    | "read";
   [key: string]: unknown;
 }
 
@@ -67,11 +74,14 @@ async function driveBrowser(
   command: BrowserCommand,
   timeoutMs: number,
 ): Promise<Record<string, unknown>> {
-  const driver = requireDurableDriver();
   const row = await getSessionByPublicId(ctx, sessionId);
   if (!row || row.status === "stopped" || row.status === "gone") {
     throw new SandboxSessionNotFoundError(sessionId);
   }
+  // Resolve the driver from the SESSION's own provider (the row's `driver`
+  // column), not the deployment default — the sandboxId below is only valid on
+  // the provider that created it. Mirrors agent.sandbox.exec / sandbox_file.*.
+  const driver = requireDurableDriverForRow(row.driver);
 
   const result = await driver.execInSession({
     sandboxId: row.sandboxId,
@@ -86,7 +96,11 @@ async function driveBrowser(
     );
   }
 
-  const parsed = parseBrowserStdout(result.stdout, result.stderr, result.exitCode);
+  const parsed = parseBrowserStdout(
+    result.stdout,
+    result.stderr,
+    result.exitCode,
+  );
   await touchSession(ctx, row.id);
   return parsed;
 }
@@ -107,7 +121,9 @@ function parseBrowserStdout(
     );
   }
   if (parsed.ok === false || parsed.error) {
-    throw new BrowserDriveError(String(parsed.error ?? "browser command failed"));
+    throw new BrowserDriveError(
+      String(parsed.error ?? "browser command failed"),
+    );
   }
   return parsed;
 }
@@ -116,7 +132,12 @@ export async function browserNavigateHandler(
   input: BrowserNavigateInput,
   ctx: CapabilityContext,
 ): Promise<BrowserNavigateOutput> {
-  const out = await driveBrowser(ctx, input.sessionId, { op: "navigate", url: input.url }, input.timeoutMs);
+  const out = await driveBrowser(
+    ctx,
+    input.sessionId,
+    { op: "navigate", url: input.url },
+    input.timeoutMs,
+  );
   return { url: String(out.url ?? input.url), title: String(out.title ?? "") };
 }
 
@@ -131,7 +152,8 @@ export async function browserScreenshotHandler(
     input.timeoutMs,
   );
   const base64 = String(out.base64 ?? "");
-  if (!base64) throw new BrowserDriveError("browser.screenshot returned no image data");
+  if (!base64)
+    throw new BrowserDriveError("browser.screenshot returned no image data");
   const bytes = Buffer.from(base64, "base64");
 
   // Store as a PRIVATE workspace asset — screenshots can show sensitive UI, so
@@ -196,7 +218,12 @@ export async function browserRefreshHandler(
   input: BrowserRefreshInput,
   ctx: CapabilityContext,
 ): Promise<BrowserRefreshOutput> {
-  const out = await driveBrowser(ctx, input.sessionId, { op: "refresh" }, input.timeoutMs);
+  const out = await driveBrowser(
+    ctx,
+    input.sessionId,
+    { op: "refresh" },
+    input.timeoutMs,
+  );
   return { ok: true, url: String(out.url ?? "") };
 }
 

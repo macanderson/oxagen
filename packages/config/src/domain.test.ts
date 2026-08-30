@@ -164,14 +164,20 @@ describe("INDUSTRY_VALUES ↔ INDUSTRY_OPTIONS parity", () => {
   it("every INDUSTRY_OPTIONS value is in INDUSTRY_VALUES", () => {
     const valSet = new Set<string>(INDUSTRY_VALUES);
     for (const { value } of INDUSTRY_OPTIONS) {
-      expect(valSet.has(value), `INDUSTRY_OPTIONS value '${value}' missing from INDUSTRY_VALUES`).toBe(true);
+      expect(
+        valSet.has(value),
+        `INDUSTRY_OPTIONS value '${value}' missing from INDUSTRY_VALUES`,
+      ).toBe(true);
     }
   });
 
   it("every INDUSTRY_VALUES entry is in INDUSTRY_OPTIONS", () => {
     const optSet = new Set<string>(INDUSTRY_OPTIONS.map((o) => o.value));
     for (const val of INDUSTRY_VALUES) {
-      expect(optSet.has(val), `INDUSTRY_VALUES entry '${val}' missing from INDUSTRY_OPTIONS`).toBe(true);
+      expect(
+        optSet.has(val),
+        `INDUSTRY_VALUES entry '${val}' missing from INDUSTRY_OPTIONS`,
+      ).toBe(true);
     }
   });
 
@@ -195,14 +201,20 @@ describe("EMPLOYEE_SIZE_VALUES ↔ EMPLOYEE_SIZE_OPTIONS parity", () => {
   it("every EMPLOYEE_SIZE_OPTIONS value is in EMPLOYEE_SIZE_VALUES", () => {
     const valSet = new Set<string>(EMPLOYEE_SIZE_VALUES);
     for (const { value } of EMPLOYEE_SIZE_OPTIONS) {
-      expect(valSet.has(value), `EMPLOYEE_SIZE_OPTIONS value '${value}' missing from EMPLOYEE_SIZE_VALUES`).toBe(true);
+      expect(
+        valSet.has(value),
+        `EMPLOYEE_SIZE_OPTIONS value '${value}' missing from EMPLOYEE_SIZE_VALUES`,
+      ).toBe(true);
     }
   });
 
   it("every EMPLOYEE_SIZE_VALUES entry is in EMPLOYEE_SIZE_OPTIONS", () => {
     const optSet = new Set<string>(EMPLOYEE_SIZE_OPTIONS.map((o) => o.value));
     for (const val of EMPLOYEE_SIZE_VALUES) {
-      expect(optSet.has(val), `EMPLOYEE_SIZE_VALUES entry '${val}' missing from EMPLOYEE_SIZE_OPTIONS`).toBe(true);
+      expect(
+        optSet.has(val),
+        `EMPLOYEE_SIZE_VALUES entry '${val}' missing from EMPLOYEE_SIZE_OPTIONS`,
+      ).toBe(true);
     }
   });
 

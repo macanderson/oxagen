@@ -45,14 +45,18 @@ export async function agentCodeExecuteHandler(
   // Map the template's rich network mode to the driver flag BEFORE any
   // provisioning — a not-yet-implemented mode fails fast here, never silently
   // degrading to public egress.
-  const network = template ? driverNetworkForMode(template.network.mode) : input.network;
+  const network = template
+    ? driverNetworkForMode(template.network.mode)
+    : input.network;
 
   // Sanitize the untrusted caller env and merge, lowest→highest: template
   // literal_env → vault secrets (filtered by the template's selection) → caller.
   // The contract no longer transforms env at parse time so this handler owns the
   // whole boundary — see _environment-env.ts for the trust rationale. Reserved
   // caller keys are reported back as warnings rather than silently dropped.
-  const secretEnvironmentId = template ? resolved!.environment.id : input.environmentId;
+  const secretEnvironmentId = template
+    ? resolved!.environment.id
+    : input.environmentId;
   const { env, strippedKeys, injectedKeys, missingRequiredKeys } =
     await injectEnvironmentSecrets(ctx, secretEnvironmentId, input.env, {
       selection: template?.secretSelection,
@@ -88,7 +92,8 @@ export async function agentCodeExecuteHandler(
   const effectivePolicy: SandboxPolicy | undefined = template
     ? {
         allowedLanguages: DEFAULT_POLICY.allowedLanguages,
-        maxTimeoutMs: template.resources.timeoutMs ?? DEFAULT_POLICY.maxTimeoutMs,
+        maxTimeoutMs:
+          template.resources.timeoutMs ?? DEFAULT_POLICY.maxTimeoutMs,
         maxMemoryMb: template.resources.memoryMb ?? DEFAULT_POLICY.maxMemoryMb,
         allowNetwork: network === "allow",
       }
@@ -110,8 +115,12 @@ export async function agentCodeExecuteHandler(
       memoryMb: template?.resources.memoryMb ?? input.memoryMb,
       network,
       ...(template?.runtime ? { imageRef: template.runtime } : {}),
-      ...(template?.resources.vcpu !== undefined ? { vcpu: template.resources.vcpu } : {}),
-      ...(template?.resources.diskMb !== undefined ? { diskMb: template.resources.diskMb } : {}),
+      ...(template?.resources.vcpu !== undefined
+        ? { vcpu: template.resources.vcpu }
+        : {}),
+      ...(template?.resources.diskMb !== undefined
+        ? { diskMb: template.resources.diskMb }
+        : {}),
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
     });
@@ -127,7 +136,11 @@ export async function agentCodeExecuteHandler(
       err instanceof Error &&
       (err as { code?: unknown }).code === "sandbox_policy_violation"
     ) {
-      throw new CapabilityError(agentCodeExecute.name, "invalid_input", err.message);
+      throw new CapabilityError(
+        agentCodeExecute.name,
+        "invalid_input",
+        err.message,
+      );
     }
     throw err;
   }
@@ -138,7 +151,10 @@ export async function agentCodeExecuteHandler(
   // is unpriced. Distinct event_type from tool_invocations, so it never
   // double-counts the materialize-tools row. Best-effort: a telemetry write
   // must never fail a code run.
-  await emitRunTelemetry(ctx, input, result);
+  // Report the EFFECTIVE network flag, not input.network — a template governs
+  // egress, so recording the caller's request would misattribute every
+  // template-provisioned run in the cost/egress analytics.
+  await emitRunTelemetry(ctx, input, network, result);
 
   const warnings: string[] = [];
   if (strippedKeys.length > 0) {
@@ -164,7 +180,13 @@ export async function agentCodeExecuteHandler(
 async function emitRunTelemetry(
   ctx: CapabilityContext,
   input: AgentCodeExecuteInput,
-  result: { exitCode: number; durationMs: number; timedOut: boolean; oomKilled: boolean },
+  network: AgentCodeExecuteInput["network"],
+  result: {
+    exitCode: number;
+    durationMs: number;
+    timedOut: boolean;
+    oomKilled: boolean;
+  },
 ): Promise<void> {
   try {
     await insertEvents([
@@ -178,7 +200,7 @@ async function emitRunTelemetry(
         payload: JSON.stringify({
           capability: "execute_code",
           language: input.language,
-          network: input.network,
+          network,
           durationMs: result.durationMs,
           exitCode: result.exitCode,
           timedOut: result.timedOut,

@@ -16,10 +16,16 @@
  * Regex matching test/verification commands. Similar to apps/cli/src/agent/best-of-n.ts
  * but excludes linters (eslint, ruff, flake8, pylint, tsc) per F2 spec.
  *
- * Matches (case-insensitive): pytest, vitest, jest, mocha, unittest, nose, tox,
- * "python -m pytest", "python -m unittest", paths ending in runtests.py,
- * "npm test", "pnpm test", "yarn test", "pnpm --filter <pkg> test",
- * "go test", "cargo test", and scripts under .oxagen/scratch/.
+ * Matches (case-insensitive), as whole words anywhere in the command:
+ *  - Python: `pytest`, `py.test`, `unittest`, `nose`/`nose2`, `tox` — which also
+ *    covers `python -m pytest` / `python -m unittest`; plus `runtests.py`.
+ *  - JS/TS: `jest`, `vitest`, `mocha`, `ava`, `karma`, `tap`,
+ *    `npm test` / `npm run test`, `pnpm test` / `pnpm run test` /
+ *    `pnpm --filter <pkg> test…`, `yarn test`.
+ *  - Other ecosystems: `go test`, `cargo test`, `mvn … test`, `gradle`/`gradlew
+ *    test`, `rspec`, `phpunit`, `dotnet test`, `ctest`, `rake test`,
+ *    `make test` / `make check`.
+ *  - Any script path under `.oxagen/scratch/`.
  *
  * Does NOT match plain builds, installs, lints, or greps.
  */
@@ -27,11 +33,8 @@ const TEST_COMMAND_RE =
   /\b(pytest|py\.test|unittest|nose2?|tox|go test|cargo test|mvn(?:\s+-\S+)*\s+test|gradlew?\s+test|rspec|phpunit|dotnet test|jest|vitest|mocha|ava\b|karma|\btap\b|ctest|rake test|npm (?:run )?test|pnpm (?:run |--filter \S+ )?test\S*|yarn test|make (?:test|check))\b|runtests\.py\b|\.oxagen\/scratch\//i;
 
 /**
- * Returns true if the command looks like a test/repro execution.
- * Matches test runners (pytest, vitest, jest, mocha, unittest, nose, tox,
- * "python -m pytest", "python -m unittest"), paths ending in runtests.py,
- * "npm test", "pnpm test", "yarn test", "pnpm --filter <pkg> test",
- * "go test", "cargo test", or scripts under .oxagen/scratch/.
+ * Returns true if the command looks like a test/repro execution — see
+ * {@link TEST_COMMAND_RE} for the full list of runners it recognizes.
  */
 export function isTestLikeCommand(command: string): boolean {
   return TEST_COMMAND_RE.test(command.trim());
@@ -141,7 +144,11 @@ export function createSpecTestTracker(): SpecTestTracker {
         }
       } else if (cmd.exitCode === 0) {
         // Passing command observed.
-        if (currentState === "failing" && previousExitCode !== 0 && previousExitCode !== undefined) {
+        if (
+          currentState === "failing" &&
+          previousExitCode !== 0 &&
+          previousExitCode !== undefined
+        ) {
           // This command previously failed and now passes → flip!
           currentState = "flipped";
           flippedCommand = normalized;

@@ -13,11 +13,18 @@ function capturingAi(capture: { messages: unknown[] }): AgentAi {
           yield { type: "text-delta", text: "ok" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+        usage: Promise.resolve({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        }),
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
-    generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    generateObject: async () => ({
+      object: {} as never,
+      usage: { totalTokens: 0 },
+    }),
   };
 }
 
@@ -35,7 +42,10 @@ describe("runCodingAgent — pasted image attachments", () => {
       model: "anthropic/claude-opus-4-8",
     });
 
-    const instructionMsg = capture.messages.at(-1) as { role: string; content: unknown };
+    const instructionMsg = capture.messages.at(-1) as {
+      role: string;
+      content: unknown;
+    };
     expect(instructionMsg.role).toBe("user");
     expect(Array.isArray(instructionMsg.content)).toBe(true);
     const parts = instructionMsg.content as Array<Record<string, unknown>>;
@@ -62,11 +72,22 @@ describe("runCodingAgent — pasted image attachments", () => {
       model: "anthropic/claude-opus-4-8",
     });
 
-    const instructionMsg = capture.messages.at(-1) as { role: string; content: unknown };
+    const instructionMsg = capture.messages.at(-1) as {
+      role: string;
+      content: unknown;
+    };
     const parts = instructionMsg.content as Array<Record<string, unknown>>;
     expect(parts).toHaveLength(3); // 1 text + 2 images
-    expect(parts[1]).toEqual({ type: "image", image: a, mediaType: "image/png" });
-    expect(parts[2]).toEqual({ type: "image", image: b, mediaType: "image/png" });
+    expect(parts[1]).toEqual({
+      type: "image",
+      image: a,
+      mediaType: "image/png",
+    });
+    expect(parts[2]).toEqual({
+      type: "image",
+      image: b,
+      mediaType: "image/png",
+    });
   });
 
   it("keeps the plain-string content shape when there are no images (unchanged from before)", async () => {
@@ -80,7 +101,10 @@ describe("runCodingAgent — pasted image attachments", () => {
       model: "anthropic/claude-opus-4-8",
     });
 
-    const instructionMsg = capture.messages.at(-1) as { role: string; content: unknown };
+    const instructionMsg = capture.messages.at(-1) as {
+      role: string;
+      content: unknown;
+    };
     expect(instructionMsg.content).toBe("text-only turn");
   });
 
@@ -96,7 +120,10 @@ describe("runCodingAgent — pasted image attachments", () => {
       model: "anthropic/claude-opus-4-8",
     });
 
-    const instructionMsg = capture.messages.at(-1) as { role: string; content: unknown };
+    const instructionMsg = capture.messages.at(-1) as {
+      role: string;
+      content: unknown;
+    };
     expect(instructionMsg.content).toBe("text-only turn");
   });
 });

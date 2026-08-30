@@ -5,7 +5,7 @@
 -- policy never has to be reconciled with the rest of the telemetry estate.
 --
 -- This is the replay-capable companion to the cross-harness `eval_runs` /
--- `eval_results` protocol (schema.sql, docs/cli/eval-results-schema.md).
+-- `eval_results` protocol (packages/telemetry/src/schema.sql).
 -- eval_runs/eval_results track "is the agent improving over time" with a
 -- denormalized metrics/labels map, on purpose light on detail. `bench` keeps
 -- full per-task and per-candidate fidelity — a secret-free config snapshot,
@@ -38,9 +38,13 @@
 -- audit_events.chain_hash in clickhouse.ts — ingestion is expected to run
 -- serially (backfill script / CI job), so this is acceptable.
 --
--- All three tables use ReplacingMergeTree(updated_at) so a later re-ingest of
--- the same logical row (matched by ORDER BY key) can correct it — read with
--- FINAL, or tolerate rare duplicates pre-merge, same as eval_runs.
+-- All three tables use ReplacingMergeTree(updated_at) so a later write of the
+-- same logical row (matched by ORDER BY key) collapses onto the earlier one —
+-- read with FINAL, or tolerate rare duplicates pre-merge, same as eval_runs.
+-- Note this only corrects a row when the rewrite REUSES its ORDER BY key.
+-- Plain re-ingestion does not: ingestBenchResultsDir allocates a fresh
+-- public_id every time, so `force: true` appends a new run rather than
+-- replacing the old one.
 
 CREATE DATABASE IF NOT EXISTS bench;
 
@@ -234,8 +238,9 @@ CREATE TABLE IF NOT EXISTS bench.benchmark_candidate (
   -- {"code_graph": N, "grep": N, ...} for this candidate alone.
   tool_calls_json String,
 
-  -- Best-of-N does not thread per-candidate token/cost telemetry yet (see
-  -- oxagen_agent.py _populate_best_of_n_metadata) — 0 until that lands.
+  -- Best-of-N does not thread per-candidate token/cost telemetry yet — the
+  -- agent-arena adapter reports usage for the trial as a whole, not per
+  -- candidate — so these stay 0 until that lands.
   cost_usd Float64,
   tokens_in UInt64,
   tokens_out UInt64,

@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
-import { auditMixin, citext, idMixin } from "./_mixins";
+import { auditMixin, citext, idMixin, uuidv7Default } from "./_mixins";
 import { modelTierEnum } from "./auth";
 
 export const workspaces = workspaceSchema.table(
@@ -152,12 +152,7 @@ export const workspaceUsers = workspaceSchema.table(
 export const workspaceMemoryPolicy = workspaceSchema.table(
   "workspace_memory_policy",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`COALESCE(
-        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
-        uuid_generate_v4())`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     orgId: uuid("org_id").notNull(),
     workspaceId: uuid("workspace_id").notNull().unique(),
     halfLifeLowDays: integer("half_life_low_days").notNull().default(30),
@@ -197,12 +192,7 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
 export const workspaceBudgetPolicy = workspaceSchema.table(
   "workspace_budget_policy",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`COALESCE(
-        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
-        uuid_generate_v4())`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     orgId: uuid("org_id").notNull(),
     workspaceId: uuid("workspace_id").notNull().unique(),
     // Whether the governed budget is active for this workspace.
@@ -251,12 +241,7 @@ export const workspaceBudgetPolicy = workspaceSchema.table(
 export const routingPolicy = workspaceSchema.table(
   "routing_policy",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`COALESCE(
-        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
-          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
-        uuid_generate_v4())`),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     orgId: uuid("org_id").notNull(),
     // NULL ⇒ this is the ORG-LEVEL default policy for all workspaces in the org.
     // A non-NULL value scopes the policy to that one workspace.

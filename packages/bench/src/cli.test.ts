@@ -2,9 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const handleBenchListMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const handleBenchReplayMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const closeClickhouseMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const handleBenchListMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
+const handleBenchReplayMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
+const closeClickhouseMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
 
 vi.mock("./commands", () => ({
   handleBenchList: handleBenchListMock,
@@ -20,9 +26,22 @@ vi.mock("@oxagen/telemetry", () => ({
 describe("parseFlags", () => {
   it("collects --key value pairs, boolean flags, -n as an alias for --limit, and positionals", async () => {
     const { parseFlags } = await import("./cli");
-    const { positional, flags } = parseFlags(["2984", "--run", "--type", "swe-bench", "-n", "10", "--json"]);
+    const { positional, flags } = parseFlags([
+      "2984",
+      "--run",
+      "--type",
+      "swe-bench",
+      "-n",
+      "10",
+      "--json",
+    ]);
     expect(positional).toEqual(["2984"]);
-    expect(flags).toEqual({ run: true, type: "swe-bench", limit: "10", json: true });
+    expect(flags).toEqual({
+      run: true,
+      type: "swe-bench",
+      limit: "10",
+      json: true,
+    });
   });
 
   it("treats a flag followed by another flag as a boolean (no value to consume)", async () => {
@@ -60,13 +79,20 @@ describe("main", () => {
   it("dispatches 'list' with parsed type/limit/json", async () => {
     const { main } = await import("./cli");
     await main(["list", "--type", "swe-bench", "-n", "5", "--json"]);
-    expect(handleBenchListMock).toHaveBeenCalledWith({ type: "swe-bench", limit: "5", json: true });
+    expect(handleBenchListMock).toHaveBeenCalledWith({
+      type: "swe-bench",
+      limit: "5",
+      json: true,
+    });
   });
 
   it("dispatches 'replay' with the positional public_id and --run/--json", async () => {
     const { main } = await import("./cli");
     await main(["replay", "2984", "--run"]);
-    expect(handleBenchReplayMock).toHaveBeenCalledWith("2984", { run: true, json: false });
+    expect(handleBenchReplayMock).toHaveBeenCalledWith("2984", {
+      run: true,
+      json: false,
+    });
   });
 
   it("prints a usage error and sets exit code 1 for an unrecognised subcommand", async () => {

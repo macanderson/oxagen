@@ -1,12 +1,7 @@
 import { bigint, check, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
-import {
-  auditMixin,
-  idMixin,
-  orgScopeMixin,
-  softDeleteMixin,
-} from "./_mixins";
+import { auditMixin, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
 
 // AI-generated media assets (image / video) produced from the in-app agent.
 // The blob bytes live in file storage (Vercel Blob behind @oxagen/storage); this

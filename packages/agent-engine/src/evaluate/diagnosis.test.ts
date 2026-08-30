@@ -33,7 +33,11 @@ describe("diagnosis", () => {
         problem: "The bug is in the parser",
         expectedBehavior: "Parser should handle null values",
         rootCauseHypotheses: [
-          { id: "h1", statement: "Missing null check", evidence: "Line 42 lacks guard" },
+          {
+            id: "h1",
+            statement: "Missing null check",
+            evidence: "Line 42 lacks guard",
+          },
         ],
         blastRadius: ["parser.ts"],
         diffBudget: 50,
@@ -99,7 +103,7 @@ describe("diagnosis", () => {
       expect(result).toBeNull();
     });
 
-    it("returns null on malformed JSON (e.g., trailing commas are NOT valid)", () => {
+    it("parses JSON with trailing commas (the sanitizer strips them)", () => {
       const transcript = `
         ${DIAGNOSIS_MARKER}
         \`\`\`json
@@ -259,7 +263,11 @@ describe("diagnosis", () => {
       `;
       const result = extractDiagnosis(transcript);
       expect(result).not.toBeNull();
-      expect(result!.rootCauseHypotheses.map((h) => h.id)).toEqual(["h1", "h1-2", "h1-3"]);
+      expect(result!.rootCauseHypotheses.map((h) => h.id)).toEqual([
+        "h1",
+        "h1-2",
+        "h1-3",
+      ]);
     });
 
     it("never throws on any input", () => {
@@ -411,14 +419,18 @@ describe("diagnosis", () => {
       const a: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h1", statement: "Missing null check", evidence: "e1" }],
+        rootCauseHypotheses: [
+          { id: "h1", statement: "Missing null check", evidence: "e1" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
       const b: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h2", statement: "Missing null check", evidence: "e2" }],
+        rootCauseHypotheses: [
+          { id: "h2", statement: "Missing null check", evidence: "e2" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
@@ -431,14 +443,18 @@ describe("diagnosis", () => {
       const a: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h1", statement: "Missing null check in parser", evidence: "" }],
+        rootCauseHypotheses: [
+          { id: "h1", statement: "Missing null check in parser", evidence: "" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
       const b: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h2", statement: "null check", evidence: "" }],
+        rootCauseHypotheses: [
+          { id: "h2", statement: "null check", evidence: "" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
@@ -451,14 +467,18 @@ describe("diagnosis", () => {
       const a: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h1", statement: "Missing   NULL   Check", evidence: "" }],
+        rootCauseHypotheses: [
+          { id: "h1", statement: "Missing   NULL   Check", evidence: "" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
       const b: Diagnosis = {
         problem: "P",
         expectedBehavior: "B",
-        rootCauseHypotheses: [{ id: "h2", statement: "missing null check", evidence: "" }],
+        rootCauseHypotheses: [
+          { id: "h2", statement: "missing null check", evidence: "" },
+        ],
         blastRadius: [],
         diffBudget: 100,
       };
@@ -539,7 +559,11 @@ describe("diagnosis", () => {
         expectedBehavior: "Parser handles null gracefully",
         rootCauseHypotheses: [
           { id: "h1", statement: "Missing null check", evidence: "Line 42" },
-          { id: "h2", statement: "Type guard missing", evidence: "Type is any" },
+          {
+            id: "h2",
+            statement: "Type guard missing",
+            evidence: "Type is any",
+          },
         ],
         blastRadius: ["parser.ts", "validator.ts"],
         diffBudget: 80,
@@ -560,7 +584,9 @@ describe("diagnosis", () => {
       expect(merged.problem).toBe("Parser fails on null");
 
       // expectedBehavior: different, so append disagreement
-      expect(merged.expectedBehavior).toContain("Parser handles null gracefully");
+      expect(merged.expectedBehavior).toContain(
+        "Parser handles null gracefully",
+      );
       expect(merged.expectedBehavior).toContain("[DISAGREEMENT:");
 
       // hypotheses: h1, h2, h3 (h4 dropped due to cap at 3; h3 is different from h1/h2)
@@ -569,7 +595,11 @@ describe("diagnosis", () => {
       expect(merged.rootCauseHypotheses.map((h) => h.id)).toContain("h2");
 
       // blastRadius: union of both
-      expect(merged.blastRadius).toEqual(["parser.ts", "validator.ts", "index.ts"]);
+      expect(merged.blastRadius).toEqual([
+        "parser.ts",
+        "validator.ts",
+        "index.ts",
+      ]);
 
       // diffBudget: max
       expect(merged.diffBudget).toBe(120);

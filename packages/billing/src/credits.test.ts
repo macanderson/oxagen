@@ -53,9 +53,11 @@ function makeTx() {
       if (insertCallCount === 2) {
         // Second insert: credit_ledger → no returning
         return {
-          values: vi.fn().mockImplementation(async (v: Record<string, unknown>) => {
-            state.ledgerInserts.push(v);
-          }),
+          values: vi
+            .fn()
+            .mockImplementation(async (v: Record<string, unknown>) => {
+              state.ledgerInserts.push(v);
+            }),
         };
       }
       // Third insert: credit_balances → .onConflictDoUpdate()
@@ -73,7 +75,8 @@ function makeTx() {
       from: vi.fn(() => ({
         where: vi.fn(() => ({
           // For effectiveBalance / createCreditLot inner SELECT (resolved directly)
-          then: (resolve: (v: typeof state.lots) => unknown) => resolve(state.lots),
+          then: (resolve: (v: typeof state.lots) => unknown) =>
+            resolve(state.lots),
           // For consumeCredits SELECT (chained with .orderBy().for())
           orderBy: vi.fn(() => ({
             for: vi.fn(async () => state.lots),
@@ -90,14 +93,18 @@ function makeTx() {
 }
 
 // Top-level db() mock — exposes __state for cross-test mutation.
-const dbState: { instance: ReturnType<typeof buildDb> | null } = { instance: null };
+const dbState: { instance: ReturnType<typeof buildDb> | null } = {
+  instance: null,
+};
 
 function buildDb() {
   return {
-    transaction: vi.fn(async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => {
-      state.transactionCalled = true;
-      return cb(makeTx());
-    }),
+    transaction: vi.fn(
+      async (cb: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) => {
+        state.transactionCalled = true;
+        return cb(makeTx());
+      },
+    ),
     // effectiveBalance uses db().select()... directly (not via transaction)
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -111,11 +118,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbState.instance,
-  withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
-  withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => dbState.instance?.transaction(fn),
-  __dbState: dbState,
-
+    db: () => dbState.instance,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      dbState.instance?.transaction(fn),
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+      dbState.instance?.transaction(fn),
+    __dbState: dbState,
   };
 });
 
@@ -129,8 +137,10 @@ vi.mock("./credits", async (importOriginal) => {
   return importOriginal<typeof import("./credits")>();
 });
 
-const { createCreditLot, grantCredits, effectiveBalance } = await import("./credits");
-const { __dbState } = await import("@oxagen/database") as unknown as {
+const { createCreditLot, grantCredits, effectiveBalance } = await import(
+  "./credits"
+);
+const { __dbState } = (await import("@oxagen/database")) as unknown as {
   __dbState: typeof dbState;
 };
 
@@ -175,14 +185,26 @@ describe("createCreditLot", () => {
 
   it("rejects amountCents <= 0", async () => {
     await expect(
-      createCreditLot({ orgId: "org-abc", amountCents: 0n, source: "purchase", expiresAt: null, reason: "grant_credit_pack" }),
+      createCreditLot({
+        orgId: "org-abc",
+        amountCents: 0n,
+        source: "purchase",
+        expiresAt: null,
+        reason: "grant_credit_pack",
+      }),
     ).rejects.toThrow("amountCents must be greater than zero");
     expect(state.transactionCalled).toBe(false);
   });
 
   it("rejects invalid reason before touching DB", async () => {
     await expect(
-      createCreditLot({ orgId: "org-abc", amountCents: 10n, source: "purchase", expiresAt: null, reason: "not_valid" }),
+      createCreditLot({
+        orgId: "org-abc",
+        amountCents: 10n,
+        source: "purchase",
+        expiresAt: null,
+        reason: "not_valid",
+      }),
     ).rejects.toThrow("invalid credit reason: not_valid");
     expect(state.transactionCalled).toBe(false);
   });
@@ -214,7 +236,13 @@ describe("createCreditLot", () => {
   ] as const)("accepts allowed grant reason: %s", async (reason) => {
     state.lots = [{ remaining: 1n }];
     await expect(
-      createCreditLot({ orgId: "org-abc", amountCents: 1n, source: "free_grant", expiresAt: null, reason }),
+      createCreditLot({
+        orgId: "org-abc",
+        amountCents: 1n,
+        source: "free_grant",
+        expiresAt: null,
+        reason,
+      }),
     ).resolves.toBeDefined();
   });
 });
@@ -258,7 +286,11 @@ describe("grantCredits shim", () => {
   it("positive delta — delegates to createCreditLot and returns effective balance", async () => {
     state.lots = [{ remaining: 1000n }];
 
-    const result = await grantCredits({ orgId: "org-abc", deltaCents: 1000n, reason: "grant_signup" });
+    const result = await grantCredits({
+      orgId: "org-abc",
+      deltaCents: 1000n,
+      reason: "grant_signup",
+    });
 
     expect(result.balanceCents).toBe(1000n);
     expect(state.transactionCalled).toBe(true);
@@ -266,7 +298,11 @@ describe("grantCredits shim", () => {
 
   it("invalid reason — throws before any DB interaction", async () => {
     await expect(
-      grantCredits({ orgId: "org-abc", deltaCents: 100n, reason: "not_a_real_reason" }),
+      grantCredits({
+        orgId: "org-abc",
+        deltaCents: 100n,
+        reason: "not_a_real_reason",
+      }),
     ).rejects.toThrow("invalid credit reason: not_a_real_reason");
 
     expect(state.transactionCalled).toBe(false);
@@ -287,7 +323,10 @@ describe("grantCredits shim", () => {
     // scan returns 0n available — charge = 0, no overdraft, resolves fine.
     // For grant reasons, state.lots drives the effective-balance SELECT.
     state.lots = [];
-    const isConsume = reason.startsWith("consume") || reason === "refund" || reason === "adjustment";
+    const isConsume =
+      reason.startsWith("consume") ||
+      reason === "refund" ||
+      reason === "adjustment";
     if (!isConsume) {
       // Positive grant: effective-balance SELECT returns 0n after the lot insert.
       await expect(

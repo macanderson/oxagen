@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
   insertMemoryChangeMock: vi.fn(),
 }));
 
-mocks.embedTextMock.mockImplementation(async (q: string) => new Array(1536).fill(q.length) as number[]);
+mocks.embedTextMock.mockImplementation(
+  async (q: string) => new Array(1536).fill(q.length) as number[],
+);
 mocks.recallMemoriesMock.mockImplementation(async () => [
   {
     id: "m_1",
@@ -71,7 +73,10 @@ describe("agent.memory.recall handler", () => {
       },
     });
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
-    const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     // orgId/workspaceId are no longer passed directly — scopedSession reads them from the ALS scope
     expect(arg.orgId).toBeUndefined();
     expect(arg.workspaceId).toBeUndefined();

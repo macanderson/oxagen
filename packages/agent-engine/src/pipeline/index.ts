@@ -13,8 +13,12 @@
  *      heuristic — see evaluate/evaluator.ts); a one-way deterministic safety
  *      floor only prevents under-spending on high-stakes domains.
  *   4. EXECUTE  — the coding agent runs the local tool loop.
- *   5. JUDGE    — a DIFFERENT model (default: the flagship Anthropic model)
- *      checks whether the work is actually complete.
+ *   5. JUDGE    — a DIFFERENT model checks whether the work is actually
+ *      complete. The default is the balanced tier (see `pickAdvisorModel`),
+ *      dropped to the fast tier for a low-complexity, small-diff turn (see
+ *      {@link pickTieredAdvisor}); `OXAGEN_LLM_ADVISOR` or a `judgeModels`
+ *      panel overrides both. The one invariant is that the judge is never the
+ *      model that did the work.
  *   6. REVISE   — if it isn't, the agent is sent back with the judge's findings,
  *      then re-judged, up to a bounded number of rounds.
  *
@@ -217,7 +221,8 @@ export interface RunTurnOptions {
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
   /**
-   * Transactional file lock (ADR-021) — the
+   * Transactional file lock (ADR-021 §5, "Lock authority and file-level state
+   * stay in Postgres") — the
    * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which
    * `runCodingAgent` (via `engine.ts`) threads this straight through to.
    * `runTurn` generates one stable lock identity per turn (`lockContext`,
@@ -229,7 +234,7 @@ export interface RunTurnOptions {
    * CLI: omit or pass null (single-process, no shared lease store — unlocked).
    * Platform: inject the adapter from `@oxagen/agent/adapters`, used by both
    * the chat surface and `agent.repo.edit` (fleet dispatch) since both funnel
-   * through this same shared engine (docs/adr/ADR-017-unified-agent-engine.md).
+   * through this same shared engine (docs/adr/ADR-019-unified-agent-engine.md).
    */
   fileLock?: FileLockProvider | null;
   /**
@@ -746,9 +751,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // completed escalated round's premium accumulates in `budgetEscalationPremium`
   // (the reset-from-`usage` baseline below is raw tokens and would otherwise lose
   // it). When nothing escalates (routed.model === initialWorkerModel) the factor
-  // is exactly 1, so a non-escalated turn is byte-identical to before this
-  // feature. Exact when the guard's reference model equals the initial worker
-  // (the common/pinned case); a conservative premium approximation otherwise.
+  // is exactly 1, so a non-escalated turn passes raw tokens straight through.
+  // Exact when the guard's reference model equals the initial worker (the
+  // common/pinned case); a conservative premium approximation otherwise.
   const budgetEscalationPremium = {
     inputTokens: 0,
     outputTokens: 0,
@@ -1349,9 +1354,18 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // complete — revising it doubles turn cost for marginal expected gain.
     // Confident-incomplete verdicts still revise. Tune/disable via
     // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
-    const reviseMinConfidence = Number(
-      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40,
+    // An unparsable value falls back to the default rather than becoming NaN —
+    // a NaN floor would fail every `confidence >= floor` comparison and silently
+    // switch auto-revision OFF, the opposite of the safe default.
+    const reviseMinConfidenceEnv = Number(
+      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"],
     );
+    const reviseMinConfidence =
+      process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] !== undefined &&
+      Number.isFinite(reviseMinConfidenceEnv) &&
+      reviseMinConfidenceEnv >= 0
+        ? reviseMinConfidenceEnv
+        : 40;
     const canRevise =
       !verdict.complete &&
       round < maxRounds &&

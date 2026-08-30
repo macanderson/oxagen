@@ -87,9 +87,17 @@ async function classifyMemory(
         messageId: ctx.messageId,
       },
     });
-    return { memoryClass: object.memoryClass, memoryKind: object.memoryKind, viaModel: true };
+    return {
+      memoryClass: object.memoryClass,
+      memoryKind: object.memoryKind,
+      viaModel: true,
+    };
   } catch {
-    return { memoryClass: DEFAULT_MEMORY_CLASS, memoryKind: DEFAULT_MEMORY_KIND, viaModel: false };
+    return {
+      memoryClass: DEFAULT_MEMORY_CLASS,
+      memoryKind: DEFAULT_MEMORY_KIND,
+      viaModel: false,
+    };
   }
 }
 
@@ -171,7 +179,11 @@ export async function agentMemoryRememberHandler(
   if (!isKnowledgeGraphEnabled()) {
     return {
       memory: buildFallbackRecord("", ""),
-      inferred: { memoryClass: finalMemoryClass, memoryKind: finalMemoryKind, classified },
+      inferred: {
+        memoryClass: finalMemoryClass,
+        memoryKind: finalMemoryKind,
+        classified,
+      },
     };
   }
 
@@ -205,6 +217,10 @@ export async function agentMemoryRememberHandler(
   const record = await getMemoryById(memoryId);
   return {
     memory: record ?? buildFallbackRecord(memoryId, memoryId),
-    inferred: { memoryClass: finalMemoryClass, memoryKind: finalMemoryKind, classified },
+    inferred: {
+      memoryClass: finalMemoryClass,
+      memoryKind: finalMemoryKind,
+      classified,
+    },
   };
 }

@@ -4,7 +4,7 @@ Every LLM call in the platform — streaming completions, structured object gene
 
 ## What this is
 
-`@oxagen/ai` wraps the Vercel AI SDK (`streamText`, `generateObject`, `generateText`), embeddings, image generation, and video generation behind a typed facade. Callers receive the same streaming and structured-output ergonomics as the raw SDK, but the boundary layer automatically:
+`@oxagen/ai` wraps the Vercel AI SDK calls the platform makes — `streamText`, `generateObject`, `embed`, `generateImage`, and `experimental_generateVideo` — behind a typed facade. Callers receive the same streaming and structured-output ergonomics as the raw SDK, but the boundary layer automatically:
 
 - Records token usage and latency to `@oxagen/telemetry`
 - Writes usage to `@oxagen/billing` for credit metering
@@ -24,7 +24,7 @@ Workspace-internal package. Add `"@oxagen/ai": "workspace:*"` to the consuming p
 
 | Subpath | Provides |
 |---|---|
-| `.` | Root barrel — `streamAgentReply`, `generateObjectFor`, `generateImageFor`, `generateVideoFor`, `embedText` |
+| `.` | Root barrel — `streamAgentReply`, `generateObjectFor`, `generateImageFor`, `generateVideoFor`, `embedText`, `submitBatch` / `pollBatch`, the prompt registry, and the model selectors |
 | `./catalog` | Typed model catalog — `gatewayModels`, tier helpers, capability flags |
 | `./posture` | Provider capability posture matrix — cache/reasoning/structured-output/attachment support per vendor |
 | `./slash-commands` | Chat slash-command registry, client-safe |
@@ -82,12 +82,19 @@ Model IDs are maintained in `src/catalog.ts`. The catalog is the single source o
 
 **Why does the chokepoint exist?**
 
-Without a single boundary, metering becomes scattered: one caller bills correctly, another forgets to record tokens, a third calls the provider with no IAM check. Billing parity across all three surfaces (app, API, MCP) requires that every call flows through the same accounting path. The `invoke()` boundary makes compliance structural — adding a new surface inherits metering automatically.
+With no single boundary, metering drifts apart. One caller bills correctly, the next forgets to record tokens, a third calls a provider with no IAM check at all. Every surface — app, API, MCP, CLI — has to bill the same way, and the only reliable way to get that is to make every call go down the same path. Add a new surface and it inherits metering for free.
 
 **Can I call the Vercel AI SDK directly in a handler?**
 
-No. Direct calls to `streamText`, `generateObject`, or any provider SDK outside this package are a policy violation. The engineering policy mandates a single AI chokepoint to prevent bypassed metering. All LLM work must route through the helpers exported from this package.
+No. Calling `streamText`, `generateObject`, `generateText`, or `embed` straight from `ai` — or reaching for a provider SDK — skips metering, so the org is never billed for that call. Use the helpers this package exports instead.
 
-**AI Gateway only.**
+Importing the SDK for its *types* (`ModelMessage`, `ToolSet`, `Tool`) is fine, and so is `tool` / `jsonSchema` / `stepCountIs`; this package re-exports those three from its root barrel so tool-building code does not need its own `ai` import.
 
-All provider calls route through the Vercel AI Gateway (`@ai-sdk/gateway`). `AI_GATEWAY_API_KEY` is the only credential required. There is no direct-provider fallback.
+This rule is a convention, not a gate: nothing in ESLint or CI fails a build that imports the call functions directly. Check by hand in review.
+
+**Which credentials reach a provider.**
+
+The Vercel AI Gateway (`@ai-sdk/gateway`) is the default path for every call type, and `AI_GATEWAY_API_KEY` is the only credential it needs. Two paths deliberately leave it:
+
+- Set `OXAGEN_MODEL_PROVIDER=openrouter` and *language* calls go straight to OpenRouter with `OPENROUTER_API_KEY`. This is an explicit operator opt-out for a deployment that cannot reach the gateway — never an automatic failover, because a silent failover would move spend onto another vendor's bill and skip the metering the gateway exists to provide. Image, video, and embedding calls stay on the gateway and therefore still fail on such a deployment, visibly.
+- `submitBatch` / `pollBatch` go straight to Anthropic with `ANTHROPIC_API_KEY`, because the gateway does not proxy the Message Batches endpoint. These calls are metered here, in `src/batch.ts`, the same way the synchronous helpers are.

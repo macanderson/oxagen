@@ -39,7 +39,9 @@ vi.mock("./customers", () => ({
   ensureStripeCustomer: ensureStripeCustomerMock,
 }));
 
-const resolveOrgTierMock = vi.fn<() => Promise<PlanTier>>().mockResolvedValue("build");
+const resolveOrgTierMock = vi
+  .fn<() => Promise<PlanTier>>()
+  .mockResolvedValue("build");
 vi.mock("./tier", () => ({
   resolveOrgTier: resolveOrgTierMock,
 }));
@@ -52,14 +54,18 @@ vi.mock("./client", () => ({
 }));
 
 // Import after mocks.
-const { createUsageCreditCheckout, MIN_GRANT_CENTS } = await import("./credits-purchase");
+const { createUsageCreditCheckout, MIN_GRANT_CENTS } = await import(
+  "./credits-purchase"
+);
 const { TierDeniedError } = await import("./entitlements");
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeCheckoutResult(overrides: Partial<{ url: string; sessionId: string }> = {}) {
+function makeCheckoutResult(
+  overrides: Partial<{ url: string; sessionId: string }> = {},
+) {
   return {
     url: "https://checkout.stripe.com/pay/cs_dynamic_001",
     sessionId: "cs_dynamic_001",
@@ -81,7 +87,10 @@ describe("createUsageCreditCheckout", () => {
 
   it("throws RangeError when grantCents is below the minimum", async () => {
     await expect(
-      createUsageCreditCheckout({ orgId: "org-abc", grantCents: MIN_GRANT_CENTS - 1 }),
+      createUsageCreditCheckout({
+        orgId: "org-abc",
+        grantCents: MIN_GRANT_CENTS - 1,
+      }),
     ).rejects.toThrow(RangeError);
 
     expect(createDynamicCreditCheckoutMock).not.toHaveBeenCalled();
@@ -119,7 +128,10 @@ describe("createUsageCreditCheckout", () => {
     // $250 grant = 25000 cents; 15% off = $37.50 saved; pays $212.50 = 21250 cents
     const grantCents = 25_000;
 
-    const result = await createUsageCreditCheckout({ orgId: "org-abc", grantCents });
+    const result = await createUsageCreditCheckout({
+      orgId: "org-abc",
+      grantCents,
+    });
 
     expect(result.grantCents).toBe(grantCents);
     expect(result.percent).toBe(15);
@@ -143,7 +155,10 @@ describe("createUsageCreditCheckout", () => {
     // $50 grant = 5000 cents; 3% off = $1.50 saved; pays $48.50 = 4850 cents
     const grantCents = 5_000;
 
-    const result = await createUsageCreditCheckout({ orgId: "org-abc", grantCents });
+    const result = await createUsageCreditCheckout({
+      orgId: "org-abc",
+      grantCents,
+    });
 
     expect(result.grantCents).toBe(grantCents);
     expect(result.percent).toBe(3);
@@ -154,7 +169,10 @@ describe("createUsageCreditCheckout", () => {
     // $5 = 500 cents; below the $50 increment threshold; 0% discount
     const grantCents = 500;
 
-    const result = await createUsageCreditCheckout({ orgId: "org-abc", grantCents });
+    const result = await createUsageCreditCheckout({
+      orgId: "org-abc",
+      grantCents,
+    });
 
     expect(result.grantCents).toBe(500);
     expect(result.percent).toBe(0);
@@ -188,7 +206,10 @@ describe("createUsageCreditCheckout", () => {
   it("accepts scale-tier org (tier gate allows build+)", async () => {
     resolveOrgTierMock.mockResolvedValue("scale");
 
-    const result = await createUsageCreditCheckout({ orgId: "org-scale", grantCents: 5000 });
+    const result = await createUsageCreditCheckout({
+      orgId: "org-scale",
+      grantCents: 5000,
+    });
 
     expect(result.url).toBeDefined();
     expect(createDynamicCreditCheckoutMock).toHaveBeenCalledOnce();

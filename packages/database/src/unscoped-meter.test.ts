@@ -14,7 +14,9 @@ describe("unscoped meter", () => {
 
   it("does not count a call inside a scope", () => {
     const before = __unscopedCountForTests();
-    runInTenantScope({ orgId: ORG, workspaceId: WS }, () => recordIfUnscoped("db.read"));
+    runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      recordIfUnscoped("db.read"),
+    );
     expect(__unscopedCountForTests()).toBe(before);
   });
 });

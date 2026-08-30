@@ -84,10 +84,14 @@ const verdictSchema = z.object({
     ),
   remainingWork: z
     .array(z.string())
-    .describe("Concrete next actions that would make the work complete. Empty when complete."),
+    .describe(
+      "Concrete next actions that would make the work complete. Empty when complete.",
+    ),
   reasoning: z
     .string()
-    .describe("2–4 sentences explaining the verdict, citing the evidence you used."),
+    .describe(
+      "2–4 sentences explaining the verdict, citing the evidence you used.",
+    ),
 });
 
 export interface JudgeOptions {
@@ -166,14 +170,19 @@ function evidenceBlock(opts: JudgeOptions): string {
       ? opts.commandOutputs
           .map(
             (c) =>
-              `  $ ${c.command}  → ${c.ok ? "exit 0" : "FAILED"}\n${headTail(c.output || "(no output)", 3000)
+              `  $ ${c.command}  → ${c.ok ? "exit 0" : "FAILED"}\n${headTail(
+                c.output || "(no output)",
+                3000,
+              )
                 .split("\n")
                 .map((l) => `    ${l}`)
                 .join("\n")}`,
           )
           .join("\n\n")
       : opts.commandsRun.length > 0
-        ? opts.commandsRun.map((c) => `  - ${c} (output not captured)`).join("\n")
+        ? opts.commandsRun
+            .map((c) => `  - ${c} (output not captured)`)
+            .join("\n")
         : "  (none)";
   return [
     `## User's request\n${opts.request}`,
@@ -195,14 +204,18 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
     /\b(added|created|updated|edited|implemented|fixed|wrote|changed|refactored|removed|deleted)\b/i.test(
       opts.response,
     );
-  const touchedNothing = opts.filesTouched.length === 0 && opts.commandsRun.length === 0;
+  const touchedNothing =
+    opts.filesTouched.length === 0 && opts.commandsRun.length === 0;
   if (claimsChange && touchedNothing) {
     return {
       complete: false,
       confidence: 60,
       findings: ["The agent described changes but wrote or edited no files."],
-      remainingWork: ["Actually apply the described changes to the relevant files."],
-      reasoning: "Heuristic check (advisor unavailable): claimed edits with no file activity.",
+      remainingWork: [
+        "Actually apply the described changes to the relevant files.",
+      ],
+      reasoning:
+        "Heuristic check (advisor unavailable): claimed edits with no file activity.",
       model,
       fallback: true,
       usage: emptyUsage(),
@@ -243,7 +256,10 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
  * @param ai    - Injected AI port. The platform wires in a metered implementation;
  *                the CLI wires in a BYOK one.
  */
-export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promise<JudgeVerdict> {
+export async function judgeCompleteness(
+  opts: JudgeOptions,
+  ai: AgentAi,
+): Promise<JudgeVerdict> {
   const model = opts.advisorModel ?? pickAdvisorModel(opts.executorModel);
   try {
     // ADR-021 §1 rung 4: this is the completeness judgment — a single narrow,
@@ -283,14 +299,22 @@ export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promis
  * `OXAGEN_JUDGE_PANEL` (comma-separated) or a sensible cross-vendor default.
  * Exported for tests.
  */
-export function pickJudgePanel(executorModel: string, override?: string): string[] {
+export function pickJudgePanel(
+  executorModel: string,
+  override?: string,
+): string[] {
   const raw = override ?? process.env["OXAGEN_JUDGE_PANEL"];
   const explicit = raw
-    ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+    ? raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : [DEFAULT_ADVISOR_MODEL, "google/gemini-2.5-pro", modelForTier("precise")];
   // Distinct, and never the executor (self-grading defeats the point).
   const seen = new Set<string>();
-  const panel = explicit.filter((m) => m !== executorModel && !seen.has(m) && seen.add(m));
+  const panel = explicit.filter(
+    (m) => m !== executorModel && !seen.has(m) && seen.add(m),
+  );
   // Guarantee at least one judge distinct from the executor.
   if (panel.length === 0) panel.push(pickAdvisorModel(executorModel));
   return panel;
@@ -329,7 +353,10 @@ export async function judgePanel(
   const confidence = Math.round(
     verdicts.reduce((s, v) => s + v.confidence, 0) / verdicts.length,
   );
-  const usage = verdicts.reduce((acc, v) => accumulateUsage(acc, v.model, v.usage), emptyUsage());
+  const usage = verdicts.reduce(
+    (acc, v) => accumulateUsage(acc, v.model, v.usage),
+    emptyUsage(),
+  );
   return {
     complete,
     confidence,
@@ -338,7 +365,9 @@ export async function judgePanel(
     reasoning:
       `Panel of ${verdicts.length} (${models.map((m) => m.split("/").pop()).join(", ")}): ` +
       `${completes}/${verdicts.length} judged complete. ` +
-      dissenting.map((v) => `${v.model.split("/").pop()}: ${v.reasoning}`).join(" | "),
+      dissenting
+        .map((v) => `${v.model.split("/").pop()}: ${v.reasoning}`)
+        .join(" | "),
     model: `panel(${models.join(",")})`,
     fallback: verdicts.every((v) => v.fallback),
     usage,

@@ -38,13 +38,23 @@ vi.mock("@oxagen/telemetry", () => ({
   insertEvents: mockInsertEvents,
 }));
 
-const { mockResolveEnvSecrets, mockResolveTemplate, mockListSecretKeys } = vi.hoisted(() => ({
-  mockResolveEnvSecrets: vi.fn(async (): Promise<Record<string, string>> => ({})),
-  mockResolveTemplate: vi.fn(),
-  mockListSecretKeys: vi.fn(async (): Promise<
-    Array<{ id: string; key: string; sensitive: boolean; memo: string | null }>
-  > => []),
-}));
+const { mockResolveEnvSecrets, mockResolveTemplate, mockListSecretKeys } =
+  vi.hoisted(() => ({
+    mockResolveEnvSecrets: vi.fn(
+      async (): Promise<Record<string, string>> => ({}),
+    ),
+    mockResolveTemplate: vi.fn(),
+    mockListSecretKeys: vi.fn(
+      async (): Promise<
+        Array<{
+          id: string;
+          key: string;
+          sensitive: boolean;
+          memo: string | null;
+        }>
+      > => [],
+    ),
+  }));
 vi.mock("@oxagen/plugins", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/plugins")>();
   return {
@@ -58,11 +68,16 @@ vi.mock("@oxagen/plugins", async (importOriginal) => {
 import { agentCodeExecuteHandler } from "./agent.code.execute";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
-import type { ResolvedSandboxTemplate, SandboxTemplateSummary } from "@oxagen/plugins";
+import type {
+  ResolvedSandboxTemplate,
+  SandboxTemplateSummary,
+} from "@oxagen/plugins";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
-function makeTemplate(overrides: Partial<SandboxTemplateSummary> = {}): SandboxTemplateSummary {
+function makeTemplate(
+  overrides: Partial<SandboxTemplateSummary> = {},
+): SandboxTemplateSummary {
   return {
     id: "sbx_1",
     environmentId: "env_tpl",
@@ -82,7 +97,9 @@ function makeTemplate(overrides: Partial<SandboxTemplateSummary> = {}): SandboxT
   } as SandboxTemplateSummary;
 }
 
-function makeResolved(template: SandboxTemplateSummary): ResolvedSandboxTemplate {
+function makeResolved(
+  template: SandboxTemplateSummary,
+): ResolvedSandboxTemplate {
   return {
     environment: { id: template.environmentId, name: "Env", slug: "env" },
     template,
@@ -242,18 +259,29 @@ describe("agent.code.execute handler", () => {
     });
 
     await agentCodeExecuteHandler(
-      { language: "python", code: "print(1)", timeoutMs: 5_000, memoryMb: 128, network: "deny" },
+      {
+        language: "python",
+        code: "print(1)",
+        timeoutMs: 5_000,
+        memoryMb: 128,
+        network: "deny",
+      },
       CTX,
     );
 
     expect(mockInsertEvents).toHaveBeenCalledTimes(1);
-    const rows = mockInsertEvents.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    const rows = mockInsertEvents.mock.calls[0]![0] as Array<
+      Record<string, unknown>
+    >;
     expect(rows).toHaveLength(1);
     const row = rows[0]!;
     expect(row.event_type).toBe("agent.code.execute.ran");
     expect(row.org_id).toBe("org_1");
     expect(row.workspace_id).toBe("ws_1");
-    const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
+    const payload = JSON.parse(row.payload as string) as Record<
+      string,
+      unknown
+    >;
     expect(payload.language).toBe("python");
     expect(payload.durationMs).toBe(4242);
     expect(payload.exitCode).toBe(0);
@@ -262,7 +290,13 @@ describe("agent.code.execute handler", () => {
   it("never fails the run when telemetry throws", async () => {
     mockInsertEvents.mockRejectedValueOnce(new Error("clickhouse down"));
     const result = await agentCodeExecuteHandler(
-      { language: "node", code: "x", timeoutMs: 5_000, memoryMb: 64, network: "deny" },
+      {
+        language: "node",
+        code: "x",
+        timeoutMs: 5_000,
+        memoryMb: 64,
+        network: "deny",
+      },
       CTX,
     );
     expect(result.exitCode).toBe(0);
@@ -341,8 +375,12 @@ describe("agent.code.execute handler", () => {
       },
       CTX,
     );
-    expect(result.warnings).toEqual(["reserved env key stripped: DATABASE_URL, PATH"]);
-    expect(mockRun).toHaveBeenCalledWith(expect.objectContaining({ env: { SAFE: "keep" } }));
+    expect(result.warnings).toEqual([
+      "reserved env key stripped: DATABASE_URL, PATH",
+    ]);
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({ env: { SAFE: "keep" } }),
+    );
   });
 
   it("omits warnings when the caller env is clean", async () => {
@@ -400,7 +438,12 @@ describe("agent.code.execute handler — sandbox template", () => {
     const template = makeTemplate({
       provider: "docker",
       runtime: "ghcr.io/acme/swe-bench@sha256:abc",
-      resources: { vcpu: 2, memoryMb: 4096, timeoutMs: 120_000, diskMb: 10_240 },
+      resources: {
+        vcpu: 2,
+        memoryMb: 4096,
+        timeoutMs: 120_000,
+        diskMb: 10_240,
+      },
       network: { mode: "public" },
     });
     mockResolveTemplate.mockResolvedValue(makeResolved(template));

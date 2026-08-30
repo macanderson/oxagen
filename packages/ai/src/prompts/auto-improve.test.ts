@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mocks = vi.hoisted(() => ({ generateObjectFor: vi.fn(), selectModel: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  generateObjectFor: vi.fn(),
+  selectModel: vi.fn(),
+}));
 
-vi.mock("../generate-object", () => ({ generateObjectFor: mocks.generateObjectFor }));
+vi.mock("../generate-object", () => ({
+  generateObjectFor: mocks.generateObjectFor,
+}));
 vi.mock("../models", () => ({ selectModel: mocks.selectModel }));
 
 import { enhancePromptIfInsufficient } from "./auto-improve";
 
-const TEL = { orgId: "o", workspaceId: "w", surface: "api" as const, messageId: "m" };
+const TEL = {
+  orgId: "o",
+  workspaceId: "w",
+  surface: "api" as const,
+  messageId: "m",
+};
 
 beforeEach(() => {
   mocks.generateObjectFor.mockReset();
@@ -53,7 +63,10 @@ describe("enhancePromptIfInsufficient", () => {
 
   it("returns the enhanced prompt when the judge deems it insufficient", async () => {
     mocks.generateObjectFor.mockResolvedValue({
-      object: { sufficient: false, enhancedPrompt: "a fox, watercolor, autumn, soft morning light" },
+      object: {
+        sufficient: false,
+        enhancedPrompt: "a fox, watercolor, autumn, soft morning light",
+      },
     });
     const out = await enhancePromptIfInsufficient({
       prompt: "fox",
@@ -68,7 +81,9 @@ describe("enhancePromptIfInsufficient", () => {
   });
 
   it("falls back to the original when insufficient but no enhancedPrompt returned", async () => {
-    mocks.generateObjectFor.mockResolvedValue({ object: { sufficient: false } });
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { sufficient: false },
+    });
     const out = await enhancePromptIfInsufficient({
       prompt: "fox",
       kind: "image",

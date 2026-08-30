@@ -286,7 +286,9 @@ function findPlaceholder(text: string, placeholder: string): number {
     if (i === -1) return -1;
     const before = i === 0 ? "" : text[i - 1]!;
     const after =
-      i + placeholder.length >= text.length ? "" : text[i + placeholder.length]!;
+      i + placeholder.length >= text.length
+        ? ""
+        : text[i + placeholder.length]!;
     // A placeholder the user edited into a longer word no longer refers to the
     // mention — require non-word boundaries on both sides.
     const beforeOk = before === "" || !/[\w@]/.test(before);
@@ -310,7 +312,9 @@ export function applyMentionPlaceholders(
     const idx = findPlaceholder(out, placeholder);
     if (idx === -1) continue;
     out =
-      out.slice(0, idx) + serializeMention(mention) + out.slice(idx + placeholder.length);
+      out.slice(0, idx) +
+      serializeMention(mention) +
+      out.slice(idx + placeholder.length);
   }
   return out;
 }
@@ -354,7 +358,9 @@ export function textWithMentionLinks(text: string): string {
   return splitTextByMentions(text)
     .map((segment) => {
       if (segment.kind === "text") return segment.text;
-      const label = segment.mention.label.replaceAll("[", "\\[").replaceAll("]", "\\]");
+      const label = segment.mention.label
+        .replaceAll("[", "\\[")
+        .replaceAll("]", "\\]");
       return `[${label}](${mentionToHref(segment.mention)})`;
     })
     .join("");

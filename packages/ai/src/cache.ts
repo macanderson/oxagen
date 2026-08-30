@@ -27,6 +27,16 @@ export interface CacheOptions {
    * cached entries for the same tenant/model/surface. Costs one embedding call
    * per miss, so enable it only where the LLM call it may save is much pricier
    * than an embedding (the usual case).
+   *
+   * SHAPE IS NOT SCOPED ON THIS LAYER. The exact layer folds `shapeHash`
+   * (schema + system + temperature) into the key, but rows do not store the
+   * shape hash, so the candidate scan below can only filter on
+   * org/workspace/model/surface. A semantic hit can therefore return a value
+   * written by a DIFFERENT call site with a different output schema, and
+   * `generateObjectFor` returns it to the caller cast to `T` without
+   * re-validating it against the schema. Enable `semantic` only where the
+   * (org, workspace, model, surface) tuple has exactly ONE structured-output
+   * call site.
    */
   semantic?: boolean;
   /**

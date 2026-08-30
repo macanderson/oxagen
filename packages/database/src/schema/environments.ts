@@ -18,8 +18,13 @@
  *
  * Conventions mirror schema-registry.ts:
  *   - No cross-schema FK .references() (app-enforced FKs avoid circular deps).
- *   - Partial-unique indexes (WHERE …) are declared canonically in the Atlas
- *     migration; the Drizzle `unique().nullsNotDistinct()` here is a placeholder.
+ *   - Partial-unique indexes are declared here as
+ *     `uniqueIndex(...).where(...)`, spelling the SAME predicate the Atlas
+ *     migration created. The Drizzle schema is what `drizzle-kit export` feeds
+ *     Atlas (atlas.hcl), so a bare `unique()` standing in for a partial index
+ *     declares a STRICTER constraint than the database actually has and makes
+ *     the next `atlas migrate diff` want to replace the partial index with a
+ *     full one. Keep the two spellings identical.
  *   - Sensitive values are envelope-encrypted by the service layer into the
  *     *_enc bytea columns; non-sensitive config lives in *_text (§7.2).
  */
@@ -33,6 +38,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { environmentsSchema } from "./_schemas";
@@ -43,6 +49,7 @@ import {
   idMixin,
   orgScopeMixin,
   softDeleteMixin,
+  uuidv7Default,
 } from "./_mixins";
 
 // ── §5.1 environments.environments ───────────────────────────────────────────
@@ -67,15 +74,15 @@ export const environments = environmentsSchema.table(
     isActive: boolean("is_active").notNull().default(true),
   },
   (t) => ({
-    // One live environment per (workspace, slug). Canonical WHERE in migration.
-    workspaceSlugUniq: unique("environments_workspace_slug_uniq")
+    // One LIVE environment per (workspace, slug) — a soft-deleted row frees the
+    // slug for reuse.
+    workspaceSlugUniq: uniqueIndex("environments_workspace_slug_uniq")
       .on(t.workspaceId, t.slug)
-      .nullsNotDistinct(),
-    // Exactly one default per workspace. Placeholder — canonical partial-unique
-    // `(workspace_id) WHERE is_default` lives in the Atlas migration.
-    workspaceDefaultUniq: unique("environments_workspace_default_uniq")
+      .where(sql`deleted_at IS NULL`),
+    // Exactly one default per workspace (the only-one-default invariant).
+    workspaceDefaultUniq: uniqueIndex("environments_workspace_default_uniq")
       .on(t.workspaceId)
-      .nullsNotDistinct(),
+      .where(sql`is_default AND deleted_at IS NULL`),
     orgWorkspaceIdx: index("environments_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
@@ -107,10 +114,10 @@ export const secretKeys = environmentsSchema.table(
     defaultValueKmsKeyId: text("default_value_kms_key_id"),
   },
   (t) => ({
-    // One live key per (workspace, key). Canonical WHERE in migration.
-    workspaceKeyUniq: unique("secret_keys_workspace_key_uniq")
+    // One LIVE key per (workspace, key) — a soft-deleted row frees the name.
+    workspaceKeyUniq: uniqueIndex("secret_keys_workspace_key_uniq")
       .on(t.workspaceId, t.key)
-      .nullsNotDistinct(),
+      .where(sql`deleted_at IS NULL`),
     orgWorkspaceIdx: index("secret_keys_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
@@ -170,11 +177,7 @@ export const secretValues = environmentsSchema.table(
 export const secretAccessLog = environmentsSchema.table(
   "secret_access_log",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(
-        sql`COALESCE(CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL THEN uuid_generate_v7() ELSE uuid_generate_v4() END, uuid_generate_v4())`,
-      ),
+    id: uuid("id").primaryKey().default(uuidv7Default),
     ...orgScopeMixin(),
     actorUserId: uuid("actor_user_id"),
     // 'reveal' = single value; 'export' = a decrypted set (§7.3).
@@ -247,17 +250,16 @@ export const sandboxTemplates = environmentsSchema.table(
     packages: jsonb("packages").notNull().default(sql`'[]'::jsonb`),
   },
   (t) => ({
-    // One live template per (workspace, slug). Canonical WHERE in migration.
-    workspaceSlugUniq: unique("sandbox_templates_workspace_slug_uniq")
+    // One LIVE template per (workspace, slug) — a soft-deleted row frees the slug.
+    workspaceSlugUniq: uniqueIndex("sandbox_templates_workspace_slug_uniq")
       .on(t.workspaceId, t.slug)
-      .nullsNotDistinct(),
-    // Exactly one default per (workspace, environment). Placeholder — canonical
-    // partial-unique `(workspace_id, environment_id) WHERE is_default` in the migration.
-    workspaceEnvDefaultUniq: unique(
+      .where(sql`deleted_at IS NULL`),
+    // Exactly one default per (workspace, environment).
+    workspaceEnvDefaultUniq: uniqueIndex(
       "sandbox_templates_workspace_env_default_uniq",
     )
       .on(t.workspaceId, t.environmentId)
-      .nullsNotDistinct(),
+      .where(sql`is_default AND deleted_at IS NULL`),
     orgWorkspaceIdx: index("sandbox_templates_org_workspace_idx").on(
       t.orgId,
       t.workspaceId,
@@ -333,11 +335,12 @@ export const agentEnvironmentBindings = environmentsSchema.table(
       t.agentId,
       t.environmentId,
     ),
-    // Exactly one primary per agent. Placeholder — canonical partial-unique
-    // `(agent_id) WHERE is_primary` lives in the Atlas migration.
-    agentPrimaryUniq: unique("agent_environment_bindings_agent_primary_uniq")
+    // Exactly one primary binding per agent.
+    agentPrimaryUniq: uniqueIndex(
+      "agent_environment_bindings_agent_primary_uniq",
+    )
       .on(t.agentId)
-      .nullsNotDistinct(),
+      .where(sql`is_primary`),
     agentIdx: index("agent_environment_bindings_agent_idx").on(t.agentId),
     orgWorkspaceIdx: index("agent_environment_bindings_org_workspace_idx").on(
       t.orgId,

@@ -1,5 +1,9 @@
 import type { CapabilityContext } from "../types";
-import { getMemoryById, recordCitation, recordExecution } from "../memory/neo4j";
+import {
+  getMemoryById,
+  recordCitation,
+  recordExecution,
+} from "../memory/neo4j";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
 import { deriveCompliance } from "@oxagen/oxagen/contracts/agent.memory.model";
 import type {
@@ -62,7 +66,8 @@ export async function agentMemoryCiteHandler(
 
     // Only a RULE carries an enforcement score to weigh deviation against;
     // OBSERVATION/FACT citations are always NA per deriveCompliance.
-    const enforcement = memory.memoryClass === "RULE" ? memory.enforcementScore : null;
+    const enforcement =
+      memory.memoryClass === "RULE" ? memory.enforcementScore : null;
     const compliance = deriveCompliance({
       enforcement,
       deviated: citation.deviated,
@@ -89,7 +94,8 @@ export async function agentMemoryCiteHandler(
         error: created ? null : "recordCitation returned no citation id",
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to record citation";
+      const message =
+        err instanceof Error ? err.message : "Failed to record citation";
       results.push({
         memoryId: citation.memoryId,
         ok: false,

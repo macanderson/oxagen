@@ -282,7 +282,9 @@ describe("write_file — anchoring + syntax gate", () => {
 
     const before = hashContent("const x = 1;");
     const after = hashContent("const x = 2;");
-    expect(result).toBe(`Wrote 12 bytes to /repo/a.ts [anchor ${before} → ${after}]`);
+    expect(result).toBe(
+      `Wrote 12 bytes to /repo/a.ts [anchor ${before} → ${after}]`,
+    );
     const [edit] = fileEdits(events);
     expect(edit?.kind).toBe("update");
     expect(edit?.beforeHash).toBe(before);
@@ -381,7 +383,9 @@ describe("write_file — overwrite without a preceding read + create audit", () 
 
     const before = hashContent("const x = 1;");
     const after = hashContent("const x = 2;");
-    expect(result).toBe(`Wrote 12 bytes to /repo/a.ts [anchor ${before} → ${after}]`);
+    expect(result).toBe(
+      `Wrote 12 bytes to /repo/a.ts [anchor ${before} → ${after}]`,
+    );
     expect(await ws.readFile("a.ts")).toBe("const x = 2;");
 
     const [edit] = fileEdits(events);

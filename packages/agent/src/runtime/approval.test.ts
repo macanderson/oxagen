@@ -35,9 +35,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeDb,
-  withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-
+    db: () => fakeDb,
+    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) =>
+      fn(fakeDb),
   };
 });
 
@@ -47,9 +47,11 @@ vi.mock("@oxagen/config/env", () => ({
 
 // Postgres listen client: capture the handler so we can fire synthetic NOTIFY.
 const listenHandlers: Array<(payload: string) => void> = [];
-const listenMock = vi.fn(async (_channel: string, handler: (p: string) => void) => {
-  listenHandlers.push(handler);
-});
+const listenMock = vi.fn(
+  async (_channel: string, handler: (p: string) => void) => {
+    listenHandlers.push(handler);
+  },
+);
 vi.mock("postgres", () => ({
   default: vi.fn(() => ({ listen: listenMock })),
 }));
@@ -107,9 +109,15 @@ describe("approval runtime", () => {
   });
 
   it("notifyResolution issues pg_notify on the approval channel", async () => {
-    await notifyResolution({ approvalId: "appr_1", resolution: "approved", note: null });
+    await notifyResolution({
+      approvalId: "appr_1",
+      resolution: "approved",
+      note: null,
+    });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const sqlObj = (executeSpy.mock.calls[0] as unknown as [{ queryChunks: unknown[] }])?.[0];
+    const sqlObj = (
+      executeSpy.mock.calls[0] as unknown as [{ queryChunks: unknown[] }]
+    )?.[0];
     // The drizzle sql tagged-template produces an object with queryChunks, not a raw string.
     expect(sqlObj).toBeTruthy();
     expect(sqlObj).toHaveProperty("queryChunks");
@@ -118,16 +126,23 @@ describe("approval runtime", () => {
     const chunks = sqlObj!.queryChunks as Array<{ value?: string[] } | string>;
     // Static SQL text (from literal parts) must contain pg_notify.
     const staticText = chunks
-      .flatMap((c) => (typeof c === "object" && Array.isArray(c.value) ? c.value : []))
+      .flatMap((c) =>
+        typeof c === "object" && Array.isArray(c.value) ? c.value : [],
+      )
       .join("");
     expect(staticText).toContain("pg_notify");
     // Bound params are plain strings — channel name must appear as a param.
-    const boundParams = chunks.filter((c): c is string => typeof c === "string");
+    const boundParams = chunks.filter(
+      (c): c is string => typeof c === "string",
+    );
     expect(boundParams).toContain("agent_approval_resolved");
     // Payload param must contain the approval id and round-trip as JSON.
     const payloadParam = boundParams.find((v) => v.includes("appr_1"));
     expect(payloadParam).toBeTruthy();
-    const parsed = JSON.parse(payloadParam!) as { approvalId: string; resolution: string };
+    const parsed = JSON.parse(payloadParam!) as {
+      approvalId: string;
+      resolution: string;
+    };
     expect(parsed.approvalId).toBe("appr_1");
     expect(parsed.resolution).toBe("approved");
   });
@@ -140,17 +155,23 @@ describe("approval runtime", () => {
       note: hostileNote,
     });
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const sqlObj = (executeSpy.mock.calls[0] as unknown as [{ queryChunks: unknown[] }])?.[0];
+    const sqlObj = (
+      executeSpy.mock.calls[0] as unknown as [{ queryChunks: unknown[] }]
+    )?.[0];
     expect(sqlObj).toHaveProperty("queryChunks");
     const chunks = sqlObj!.queryChunks as Array<{ value?: string[] } | string>;
     // Static SQL text (literal parts) must NOT contain any hostile content.
     const staticText = chunks
-      .flatMap((c) => (typeof c === "object" && Array.isArray(c.value) ? c.value : []))
+      .flatMap((c) =>
+        typeof c === "object" && Array.isArray(c.value) ? c.value : [],
+      )
       .join("");
     expect(staticText).not.toContain(hostileNote);
     expect(staticText).not.toContain("DROP TABLE");
     // Payload is a plain-string bound parameter — find it and verify it round-trips.
-    const boundParams = chunks.filter((c): c is string => typeof c === "string");
+    const boundParams = chunks.filter(
+      (c): c is string => typeof c === "string",
+    );
     const payloadParam = boundParams.find((v) => v.includes("appr_hostile"));
     expect(payloadParam).toBeTruthy();
     const parsed = JSON.parse(payloadParam!) as {
@@ -170,7 +191,11 @@ describe("approval runtime", () => {
     await new Promise((r) => setTimeout(r, 0));
     const handler = listenHandlers[listenHandlers.length - 1]!;
     handler(
-      JSON.stringify({ approvalId: "appr_wait_1", resolution: "approved", note: null }),
+      JSON.stringify({
+        approvalId: "appr_wait_1",
+        resolution: "approved",
+        note: null,
+      }),
     );
     const res = await promise;
     expect(res.approvalId).toBe("appr_wait_1");
@@ -204,7 +229,10 @@ describe("approval runtime", () => {
 
     // The warn logger must have been called with the corrupt payload.
     expect(pinoWarnSpy).toHaveBeenCalledTimes(1);
-    const [meta, msg] = pinoWarnSpy.mock.calls[0] as [Record<string, unknown>, string];
+    const [meta, msg] = pinoWarnSpy.mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
     expect(msg).toContain("malformed NOTIFY payload");
     expect(meta).toHaveProperty("payload", "this is not json {{{");
     expect(meta).toHaveProperty("err");
@@ -222,7 +250,11 @@ describe("approval runtime", () => {
     // — that mismatch would hang the test.) The lingering real TTL timer is a
     // harmless no-op once the waiter has been deleted by this resolution.
     handler(
-      JSON.stringify({ approvalId: "appr_malformed", resolution: "denied", note: null }),
+      JSON.stringify({
+        approvalId: "appr_malformed",
+        resolution: "denied",
+        note: null,
+      }),
     );
     const res = await promise;
     expect(res.resolution).toBe("denied");

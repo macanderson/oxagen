@@ -7,6 +7,12 @@
  * Reuses @oxagen/telemetry's ClickHouse client and statement splitter —
  * the only pieces of the product's migration machinery that apply here.
  *
+ * There is no applied-migrations ledger, matching telemetry's own migrate.ts:
+ * EVERY statement in EVERY *.sql replays on EVERY run. That puts the burden on
+ * each migration to be idempotent (CREATE ... IF NOT EXISTS, ADD COLUMN IF NOT
+ * EXISTS). Nothing enforces it — a new migration that is not idempotent will
+ * fail the second time this runs.
+ *
  * Usage:
  *   pnpm --filter @oxagen/bench migrate
  */
@@ -30,10 +36,14 @@ async function applyWithRetry(stmt: string, attempts = 3): Promise<void> {
       return;
     } catch (err) {
       if (attempt === attempts) throw err;
+      // Every failure is retried, not just a cold start — a genuine SQL error
+      // therefore costs two 15s waits before it surfaces. Worth it: a cold
+      // start is the far more common failure here, and this script is not on
+      // anyone's inner loop.
       process.stderr.write(
         JSON.stringify({
           level: "warn",
-          msg: `ClickHouse not ready (attempt ${attempt}/${attempts}) — likely a Cloud cold-start; retrying`,
+          msg: `bench migration statement failed (attempt ${attempt}/${attempts}) — usually a ClickHouse Cloud cold start; retrying`,
           err: err instanceof Error ? err.message : String(err),
         }) + "\n",
       );
@@ -61,12 +71,21 @@ if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrateBench()
     .then(() => closeClickhouse())
     .then(() => {
-      process.stdout.write(JSON.stringify({ level: "info", msg: "bench ClickHouse migration complete" }) + "\n");
+      process.stdout.write(
+        JSON.stringify({
+          level: "info",
+          msg: "bench ClickHouse migration complete",
+        }) + "\n",
+      );
       process.exit(0);
     })
     .catch((err: unknown) => {
       process.stderr.write(
-        JSON.stringify({ level: "error", msg: "bench ClickHouse migration failed", err: String(err) }) + "\n",
+        JSON.stringify({
+          level: "error",
+          msg: "bench ClickHouse migration failed",
+          err: String(err),
+        }) + "\n",
       );
       process.exit(1);
     });

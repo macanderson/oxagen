@@ -1,6 +1,6 @@
 // cms.ts — public marketing/content surface for oxagen.sh.
 //
-// Two responsibilities, one Postgres schema:
+// Three responsibilities, one Postgres schema:
 //   1. cms.leads          — website lead capture (the ebook gate + demo forms).
 //   2. cms.book_editions  — the gated ebook content (self-contained HTML), served
 //                           ONLY through a valid one-time access code.

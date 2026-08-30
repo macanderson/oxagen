@@ -6,8 +6,10 @@
  * boundaries so a chunk rarely cuts mid-statement, and consecutive chunks overlap
  * by a few hundred characters so a match that straddles a boundary is still found.
  *
- * Counts are bounded: at most MAX_CHUNKS per file. When a file exceeds that, the
- * caller is told via the returned `truncated` flag so the cap is never silent.
+ * Counts are bounded: at most `maxChunks` per file. When a file exceeds that,
+ * the returned `truncated` flag says so — a caller that ignores the flag drops
+ * the tail of a large file silently, which is what `renderMarkdownFileText`
+ * does today (it caps on characters instead).
  *
  * Module: @oxagen/code-graph/chunk
  * Chunk text remains checkout-local and is never a workspace-graph payload.

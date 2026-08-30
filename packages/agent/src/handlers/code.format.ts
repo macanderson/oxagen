@@ -123,7 +123,9 @@ export async function codeFormatHandler(
     );
   }
   if (!parsed.ok || typeof parsed.formatted !== "string") {
-    throw new Error(`code.format: ${parsed.error ?? "could not format source"}`);
+    throw new Error(
+      `code.format: ${parsed.error ?? "could not format source"}`,
+    );
   }
 
   return {

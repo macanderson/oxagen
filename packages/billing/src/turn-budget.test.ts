@@ -63,8 +63,12 @@ describe("parseTurnBudgetMode", () => {
 
 describe("evaluateTurnBudget", () => {
   it("is unbounded when disabled or limit <= 0", () => {
-    expect(evaluateTurnBudget(policy({ enabled: false }), 999).action).toBe("continue");
-    expect(evaluateTurnBudget(policy({ limitUsd: 0 }), 999).action).toBe("continue");
+    expect(evaluateTurnBudget(policy({ enabled: false }), 999).action).toBe(
+      "continue",
+    );
+    expect(evaluateTurnBudget(policy({ limitUsd: 0 }), 999).action).toBe(
+      "continue",
+    );
     expect(evaluateTurnBudget(policy({ enabled: false }), 999).ceilingUsd).toBe(
       Number.POSITIVE_INFINITY,
     );
@@ -72,25 +76,49 @@ describe("evaluateTurnBudget", () => {
 
   it("enforce: continue under the limit, stop at/over it", () => {
     const p = policy({ mode: "enforce", limitUsd: 1 });
-    expect(evaluateTurnBudget(p, 0.99)).toMatchObject({ state: "ok", action: "continue" });
-    expect(evaluateTurnBudget(p, 1)).toMatchObject({ state: "exceeded", action: "stop" });
-    expect(evaluateTurnBudget(p, 1.5)).toMatchObject({ state: "exceeded", action: "stop" });
+    expect(evaluateTurnBudget(p, 0.99)).toMatchObject({
+      state: "ok",
+      action: "continue",
+    });
+    expect(evaluateTurnBudget(p, 1)).toMatchObject({
+      state: "exceeded",
+      action: "stop",
+    });
+    expect(evaluateTurnBudget(p, 1.5)).toMatchObject({
+      state: "exceeded",
+      action: "stop",
+    });
     expect(evaluateTurnBudget(p, 1).ceilingUsd).toBe(1);
   });
 
   it("prompt: continue under the limit, pause at/over it", () => {
     const p = policy({ mode: "prompt", limitUsd: 2 });
-    expect(evaluateTurnBudget(p, 1.9)).toMatchObject({ state: "ok", action: "continue" });
-    expect(evaluateTurnBudget(p, 2)).toMatchObject({ state: "at_limit", action: "pause" });
+    expect(evaluateTurnBudget(p, 1.9)).toMatchObject({
+      state: "ok",
+      action: "continue",
+    });
+    expect(evaluateTurnBudget(p, 2)).toMatchObject({
+      state: "at_limit",
+      action: "pause",
+    });
   });
 
   it("grace: continue within cushion, stop past the hard ceiling", () => {
     const p = policy({ mode: "grace", limitUsd: 1, graceOveragePct: 0.25 });
-    expect(evaluateTurnBudget(p, 0.9)).toMatchObject({ state: "ok", action: "continue" });
+    expect(evaluateTurnBudget(p, 0.9)).toMatchObject({
+      state: "ok",
+      action: "continue",
+    });
     // between limit (1.00) and ceiling (1.25) → keep going, flagged within_grace
-    expect(evaluateTurnBudget(p, 1.1)).toMatchObject({ state: "within_grace", action: "continue" });
+    expect(evaluateTurnBudget(p, 1.1)).toMatchObject({
+      state: "within_grace",
+      action: "continue",
+    });
     // at/over the 1.25 hard ceiling → stop
-    expect(evaluateTurnBudget(p, 1.25)).toMatchObject({ state: "exceeded", action: "stop" });
+    expect(evaluateTurnBudget(p, 1.25)).toMatchObject({
+      state: "exceeded",
+      action: "stop",
+    });
     expect(evaluateTurnBudget(p, 1.1).ceilingUsd).toBeCloseTo(1.25);
   });
 });
@@ -107,8 +135,12 @@ describe("createTurnBudgetGuard", () => {
   const million = { outputTokens: 1_000_000 }; // $75 on opus
 
   it("returns undefined when the budget is off", () => {
-    expect(createTurnBudgetGuard(policy({ enabled: false }), "claude-opus-4-8")).toBeUndefined();
-    expect(createTurnBudgetGuard(policy({ limitUsd: 0 }), "claude-opus-4-8")).toBeUndefined();
+    expect(
+      createTurnBudgetGuard(policy({ enabled: false }), "claude-opus-4-8"),
+    ).toBeUndefined();
+    expect(
+      createTurnBudgetGuard(policy({ limitUsd: 0 }), "claude-opus-4-8"),
+    ).toBeUndefined();
   });
 
   it("enforce: stops the turn and reports the reason once over budget", async () => {
@@ -121,7 +153,10 @@ describe("createTurnBudgetGuard", () => {
     expect(await guard({ outputTokens: 100_000 })).toBe("continue"); // $7.5 < $10
     expect(await guard(million)).toBe("stop"); // $75 > $10
     expect(onStop).toHaveBeenCalledOnce();
-    expect(onStop.mock.calls[0]?.[0]).toMatchObject({ mode: "enforce", action: "stop" });
+    expect(onStop.mock.calls[0]?.[0]).toMatchObject({
+      mode: "enforce",
+      action: "stop",
+    });
   });
 
   it("prompt: approving extends the ceiling so the turn continues", async () => {
@@ -272,11 +307,21 @@ describe("resolveEffectiveTurnBudget", () => {
 
   // Edge cases.
   it("a disabled or $0 ceiling never forces a turn-killing $0 budget", () => {
-    expect(resolveEffectiveTurnBudget(TURN_BUDGET_OFF, null, gov(p({ enabled: false }), "ceiling"))).toMatchObject({
+    expect(
+      resolveEffectiveTurnBudget(
+        TURN_BUDGET_OFF,
+        null,
+        gov(p({ enabled: false }), "ceiling"),
+      ),
+    ).toMatchObject({
       enabled: false,
     });
     expect(
-      resolveEffectiveTurnBudget(TURN_BUDGET_OFF, null, gov(p({ limitUsd: 0 }), "ceiling")),
+      resolveEffectiveTurnBudget(
+        TURN_BUDGET_OFF,
+        null,
+        gov(p({ limitUsd: 0 }), "ceiling"),
+      ),
     ).toMatchObject({ enabled: false });
   });
 
@@ -292,6 +337,9 @@ describe("resolveEffectiveTurnBudget", () => {
 
   it("no governance → returns the user policy unchanged", () => {
     const u = p({ limitUsd: 7, mode: "prompt" });
-    expect(resolveEffectiveTurnBudget(u, null, null)).toMatchObject({ limitUsd: 7, mode: "prompt" });
+    expect(resolveEffectiveTurnBudget(u, null, null)).toMatchObject({
+      limitUsd: 7,
+      mode: "prompt",
+    });
   });
 });

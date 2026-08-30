@@ -20,7 +20,11 @@
  *      local adapter until they are re-encrypted (lazy migration on next write).
  */
 
-import { createLocalKmsAdapter, loadMasterKey, createAwsKmsAdapter } from "./kms/index";
+import {
+  createLocalKmsAdapter,
+  loadMasterKey,
+  createAwsKmsAdapter,
+} from "./kms/index";
 import type { KmsAdapter } from "./types";
 
 export const INGESTION_KEY_ID_ENV = "ingestion:env:v1";
@@ -45,7 +49,9 @@ export interface IngestionCryptoAdapter {
  * row's stored keyId, not the current global env var. Use
  * {@link resolveIngestionCryptoAdapterForKeyId} on every decrypt path instead.
  *
- * Called once at app startup and cached by the caller.
+ * Cheap for the env provider (a base64 decode). For the KMS provider it builds
+ * a fresh `KMSClient`, so callers on a hot path should build it once and reuse
+ * it rather than calling per request or per row.
  */
 export function createIngestionCryptoAdapter(): IngestionCryptoAdapter {
   const provider = process.env["INGESTION_CRYPTO_PROVIDER"] ?? "env";
@@ -76,6 +82,10 @@ export function createIngestionCryptoAdapter(): IngestionCryptoAdapter {
  * key material is configured) or an actionable "this provider's key is not
  * configured" error that names the missing env var.
  *
+ * Cost note: a `"ingestion:kms:v1"` row builds a fresh `KMSClient` on every
+ * call. Callers that decrypt many rows in one pass should hoist the resolved
+ * adapter out of the loop, keyed by the stored keyId.
+ *
  * @param storedKeyId  The `keyId` field read back from the stored envelope.
  * @throws if `storedKeyId` is unrecognized, or the provider it names is not
  *         configured in this runtime (the message names the missing env var).
@@ -85,15 +95,13 @@ export function resolveIngestionCryptoAdapterForKeyId(
 ): IngestionCryptoAdapter {
   if (storedKeyId === INGESTION_KEY_ID_KMS) {
     return buildKmsAdapter({
-      context:
-        `credential was encrypted with the AWS KMS provider (keyId="${storedKeyId}")`,
+      context: `credential was encrypted with the AWS KMS provider (keyId="${storedKeyId}")`,
     });
   }
 
   if (storedKeyId === INGESTION_KEY_ID_ENV) {
     return buildEnvAdapter({
-      context:
-        `credential was encrypted with the local (env) provider (keyId="${storedKeyId}")`,
+      context: `credential was encrypted with the local (env) provider (keyId="${storedKeyId}")`,
     });
   }
 

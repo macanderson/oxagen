@@ -124,6 +124,16 @@ export interface ConsentRequiredEvent {
 }
 
 export interface MaterializeOptions {
+  /**
+   * Capability names to materialize, to the exclusion of all others.
+   *
+   * SCOPE — this and `riskCeiling` below bind REGISTERED CAPABILITIES ONLY.
+   * Neither is consulted in the plugin-type contributor loop, so external
+   * plugin/MCP tools are unaffected by an allowlist: a run that allowlists two
+   * capabilities still receives every tool the workspace's enabled MCP servers
+   * contribute. `serverAllowlist` is the only per-turn narrowing that reaches
+   * external tools, and it filters whole SERVERS, not individual tools.
+   */
   allowlist?: Set<string>;
   /**
    * Capability names to withhold from the model for THIS turn. Used by the
@@ -136,6 +146,7 @@ export interface MaterializeOptions {
   excludeCapabilities?: Set<string>;
   // Workspace risk policy: when set to "low" or "medium", any capability
   // with a strictly-higher riskLevel is filtered out of the tool set.
+  // Registered capabilities only — see the scope note on `allowlist`.
   riskCeiling?: "low" | "medium" | "high";
   /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
   serverAllowlist?: Set<string>;
@@ -228,10 +239,13 @@ const WORKBENCH_ONLY_SANDBOX_CAPS = new Set<string>([
 ]);
 
 // Model-facing output caps for the sandbox-exec capabilities (P0 token flood).
-// execute_code / run_sandbox_command return RAW stdout/stderr; a `cat bigfile`,
-// verbose pytest, or `npm install` would otherwise stream megabytes straight
-// into the model's context window. Mirrors the engine tools' 30k budget, with a
-// tighter cap on the (usually noisier, less load-bearing) stderr stream.
+// These capabilities return RAW stdout/stderr; a `cat bigfile`, verbose pytest,
+// or `npm install` would otherwise stream megabytes straight into the model's
+// context window. Mirrors the engine tools' 30k budget, with a tighter cap on
+// the (usually noisier, less load-bearing) stderr stream.
+// Today `execute_code` is the only family member a model can reach — every
+// other one is withheld by WORKBENCH_ONLY_SANDBOX_CAPS — but the clip gates on
+// the whole family so re-materializing one can never reopen the flood.
 const EXEC_STDOUT_MAX = 30_000; // chars
 const EXEC_STDERR_MAX = 10_000; // chars
 
@@ -324,6 +338,15 @@ function toExternalToolInputSchema(
 // Parse a synthetic external-MCP capability id `mcp.<serverId>.<tool>` into its
 // parts. serverId is a UUID (no dots); the tool name may itself contain dots,
 // so split on the first two dots only.
+//
+// Returns null for any other key shape — notably the file-based contributor's
+// `file-mcp.<serverName>.<tool>` (plugin-types/file-mcp.ts), whose servers have
+// no mcp_servers row and therefore no durable consent identity. The two gates
+// below treat that null differently ON PURPOSE: the agent-RBAC "ask" path fails
+// CLOSED (an ask it cannot record must not run), while the user first-use
+// consent gate is simply SKIPPED — a file-based server is declared in local
+// project/user config, which is already a trust decision by whoever runs the
+// process, not something a chat user can be meaningfully asked about.
 function parseMcpSyntheticId(
   cap: string,
 ): { serverId: string; toolName: string } | null {
@@ -1062,6 +1085,10 @@ export async function materializeTools(
                 kind: SpanKind.CLIENT,
                 attributes: {
                   "tool.name": capturedKey,
+                  // External tools declare no risk level — nothing in the MCP
+                  // descriptor carries one. "low" here is the SCHEMA DEFAULT
+                  // (matching the tool_invocations row written below), not an
+                  // assessment of the tool. Do not read it as one.
                   "tool.risk_level": "low",
                 },
               });

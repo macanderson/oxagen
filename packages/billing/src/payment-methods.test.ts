@@ -59,7 +59,9 @@ let _findFirstResult: Record<string, unknown> | undefined = undefined;
 
 const insertValuesMock = vi.fn();
 const onConflictDoUpdateMock = vi.fn().mockResolvedValue(undefined);
-insertValuesMock.mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+insertValuesMock.mockReturnValue({
+  onConflictDoUpdate: onConflictDoUpdateMock,
+});
 const insertMock = vi.fn().mockReturnValue({ values: insertValuesMock });
 
 const updateSetMock = vi.fn();
@@ -69,7 +71,9 @@ const updateMock = vi.fn().mockReturnValue({ set: updateSetMock });
 
 // Transaction runs the callback with the same mock surface (insert/update),
 // so default-flag flips inside db().transaction(...) exercise updateMock.
-const transactionMock = vi.fn(async (cb: (tx: typeof dbMocks) => Promise<unknown>) => cb(dbMocks));
+const transactionMock = vi.fn(
+  async (cb: (tx: typeof dbMocks) => Promise<unknown>) => cb(dbMocks),
+);
 
 const dbMocks = {
   insert: insertMock,
@@ -90,10 +94,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-
+    db: () => dbMocks,
+    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
 });
 
@@ -154,7 +157,12 @@ describe("listOrgPaymentMethods", () => {
   it("returns mapped views from the DB", async () => {
     _findManyResult = [
       makeDbPm({ stripePaymentMethodId: "pm_001", isDefault: true }),
-      makeDbPm({ stripePaymentMethodId: "pm_002", brand: "mastercard", last4: "1234", isDefault: false }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_002",
+        brand: "mastercard",
+        last4: "1234",
+        isDefault: false,
+      }),
     ];
 
     const result = await listOrgPaymentMethods("org-001");
@@ -217,7 +225,9 @@ describe("syncPaymentMethodsFromStripe", () => {
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
       stripeCustomerId: "cus_001",
     });
-    insertValuesMock.mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+    insertValuesMock.mockReturnValue({
+      onConflictDoUpdate: onConflictDoUpdateMock,
+    });
     insertMock.mockReturnValue({ values: insertValuesMock });
     updateSetMock.mockReturnValue({ where: updateWhereMock });
     updateMock.mockReturnValue({ set: updateSetMock });
@@ -246,7 +256,9 @@ describe("syncPaymentMethodsFromStripe", () => {
   });
 
   it("soft-deletes DB rows for cards no longer in Stripe", async () => {
-    listPaymentMethodsMock.mockResolvedValue([makeProviderPm({ id: "pm_001" })]);
+    listPaymentMethodsMock.mockResolvedValue([
+      makeProviderPm({ id: "pm_001" }),
+    ]);
     getDefaultPaymentMethodIdMock.mockResolvedValue("pm_001");
     // DB has two rows; Stripe only returns one.
     _findManyResult = [
@@ -308,8 +320,16 @@ describe("removeOrgPaymentMethod", () => {
 
   it("detaches and soft-deletes a non-default card", async () => {
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_001", isDefault: false, id: "uuid-001" }),
-      makeDbPm({ stripePaymentMethodId: "pm_002", isDefault: true, id: "uuid-002" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_001",
+        isDefault: false,
+        id: "uuid-001",
+      }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_002",
+        isDefault: true,
+        id: "uuid-002",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
 
@@ -325,8 +345,16 @@ describe("removeOrgPaymentMethod", () => {
 
   it("promotes another card to default when removed card was default", async () => {
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_default", isDefault: true, id: "uuid-001" }),
-      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-002" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_default",
+        isDefault: true,
+        id: "uuid-001",
+      }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_other",
+        isDefault: false,
+        id: "uuid-002",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
@@ -346,13 +374,18 @@ describe("removeOrgPaymentMethod", () => {
 
   it("throws LastPaymentMethodError when removing last card on active subscription", async () => {
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_only", isDefault: true, id: "uuid-001" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_only",
+        isDefault: true,
+        id: "uuid-001",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
 
     // Simulate an active subscription.
-    dbMocks.query.subscriptions.findFirst
-      .mockResolvedValueOnce({ id: "uuid-sub" }); // active subscription check
+    dbMocks.query.subscriptions.findFirst.mockResolvedValueOnce({
+      id: "uuid-sub",
+    }); // active subscription check
 
     await expect(removeOrgPaymentMethod("org-001", "pm_only")).rejects.toThrow(
       LastPaymentMethodError,
@@ -364,13 +397,17 @@ describe("removeOrgPaymentMethod", () => {
 
   it("throws when the card does not belong to the org", async () => {
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-001" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_other",
+        isDefault: false,
+        id: "uuid-001",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
 
-    await expect(removeOrgPaymentMethod("org-001", "pm_unknown")).rejects.toThrow(
-      "pm_unknown",
-    );
+    await expect(
+      removeOrgPaymentMethod("org-001", "pm_unknown"),
+    ).rejects.toThrow("pm_unknown");
     expect(detachPaymentMethodMock).not.toHaveBeenCalled();
   });
 
@@ -380,8 +417,16 @@ describe("removeOrgPaymentMethod", () => {
     // If the Stripe call to promote the next card fails, the error must NOT be
     // swallowed — callers need to know so they can trigger a re-sync.
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_default", isDefault: true, id: "uuid-001" }),
-      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-002" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_default",
+        isDefault: true,
+        id: "uuid-001",
+      }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_other",
+        isDefault: false,
+        id: "uuid-002",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
@@ -389,23 +434,36 @@ describe("removeOrgPaymentMethod", () => {
     });
 
     // Simulate Stripe failing to update the default.
-    setDefaultPaymentMethodMock.mockRejectedValueOnce(new Error("stripe_error: network timeout"));
-
-    await expect(removeOrgPaymentMethod("org-001", "pm_default")).rejects.toThrow(
-      "stripe_error: network timeout",
+    setDefaultPaymentMethodMock.mockRejectedValueOnce(
+      new Error("stripe_error: network timeout"),
     );
+
+    await expect(
+      removeOrgPaymentMethod("org-001", "pm_default"),
+    ).rejects.toThrow("stripe_error: network timeout");
 
     // The removed card was still detached (that already succeeded before promotion).
     expect(detachPaymentMethodMock).toHaveBeenCalledWith("pm_default");
     // Promotion was attempted.
-    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith("cus_001", "pm_other");
+    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith(
+      "cus_001",
+      "pm_other",
+    );
   });
 
   it("propagates error when default-promotion DB update fails (no silent swallow)", async () => {
     // Same bug class but the Stripe call succeeds and the DB update fails.
     _findManyResult = [
-      makeDbPm({ stripePaymentMethodId: "pm_default", isDefault: true, id: "uuid-001" }),
-      makeDbPm({ stripePaymentMethodId: "pm_other", isDefault: false, id: "uuid-002" }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_default",
+        isDefault: true,
+        id: "uuid-001",
+      }),
+      makeDbPm({
+        stripePaymentMethodId: "pm_other",
+        isDefault: false,
+        id: "uuid-002",
+      }),
     ];
     dbMocks.query.paymentMethods.findMany.mockResolvedValue(_findManyResult);
     dbMocks.query.subscriptions.findFirst.mockResolvedValue({
@@ -418,12 +476,15 @@ describe("removeOrgPaymentMethod", () => {
     updateWhereMock.mockResolvedValueOnce(undefined); // soft-delete OK
     updateWhereMock.mockRejectedValueOnce(new Error("db: connection lost")); // promote fails
 
-    await expect(removeOrgPaymentMethod("org-001", "pm_default")).rejects.toThrow(
-      "db: connection lost",
-    );
+    await expect(
+      removeOrgPaymentMethod("org-001", "pm_default"),
+    ).rejects.toThrow("db: connection lost");
 
     expect(detachPaymentMethodMock).toHaveBeenCalledWith("pm_default");
-    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith("cus_001", "pm_other");
+    expect(setDefaultPaymentMethodMock).toHaveBeenCalledWith(
+      "cus_001",
+      "pm_other",
+    );
   });
 });
 

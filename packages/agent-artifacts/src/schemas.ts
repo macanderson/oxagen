@@ -1,19 +1,27 @@
 import { z } from "zod";
 import { agentDriverSchema } from "./lifecycle";
+import { CAPABILITY_SLUG_PATTERN, KEBAB_SLUG_PATTERN } from "./slugs";
 
 const artifactNameSchema = z
   .string()
   .min(1)
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "must be a kebab-case artifact slug");
+  .regex(KEBAB_SLUG_PATTERN, "must be a kebab-case artifact slug");
 
+/** Name of an Oxagen capability or core tool an agent is allowed to call. */
 export const capabilitySlugSchema = z
   .string()
   .min(1)
   .regex(
-    /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/,
+    CAPABILITY_SLUG_PATTERN,
     "must be an Oxagen capability or core-tool slug",
   );
 
+/**
+ * A sidecar file path relative to the artifact that names it. Rejects absolute
+ * paths, `..` traversal, and empty segments. This is a *lexical* check only —
+ * `resolveContainedPath` in `paths.ts` is what resolves symlinks and proves
+ * the file really lands inside the bundle.
+ */
 const containedRelativePathSchema = z
   .string()
   .min(1)
@@ -33,6 +41,12 @@ const schemaReferenceSchema = z
   .object({ schema: containedRelativePathSchema })
   .strict();
 
+/**
+ * An agent: instructions, the tools it may call, and an optional lifecycle
+ * driver. `unresolved_tools` holds tool names an import could not map onto an
+ * Oxagen capability; a non-empty list is what marks the artifact
+ * `needs_review`, so it is preserved rather than dropped.
+ */
 export const agentArtifactSchema = z
   .object({
     schema_version: z.literal(1),
@@ -50,6 +64,7 @@ export const agentArtifactSchema = z
   })
   .strict();
 
+/** A skill: reusable instructions plus contained reference files to inline. */
 export const skillArtifactSchema = z
   .object({
     schema_version: z.literal(1),
@@ -62,6 +77,7 @@ export const skillArtifactSchema = z
   })
   .strict();
 
+/** A slash command: a prompt template, optionally bound to a named agent. */
 export const commandArtifactSchema = z
   .object({
     schema_version: z.literal(1),
@@ -75,6 +91,12 @@ export const commandArtifactSchema = z
   })
   .strict();
 
+/**
+ * Every artifact this package understands, discriminated on `kind`. This is the
+ * single validation gate for artifact TOML — `codec.ts` parses through it and
+ * `hash.ts` re-validates before hashing, so nothing unvalidated ever gets a
+ * content hash.
+ */
 export const artifactSchema = z.discriminatedUnion("kind", [
   agentArtifactSchema,
   skillArtifactSchema,

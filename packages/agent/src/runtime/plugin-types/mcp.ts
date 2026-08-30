@@ -125,10 +125,8 @@ async function contributeMcpTools(
       .where(and(...baseConds, allowlistCond));
   });
 
-  const visible = servers;
-
   const out: ContributedRawTool[] = [];
-  for (const server of visible) {
+  for (const server of servers) {
     try {
       let client;
 

@@ -15,7 +15,11 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { buildReplayEnv, formatEnvPrefix, runScriptFor } from "./replay-env";
-import { getBenchResultByPublicId, getBenchRunByPublicId, listBenchResults } from "./query";
+import {
+  getBenchResultByPublicId,
+  getBenchRunByPublicId,
+  listBenchResults,
+} from "./query";
 import type { BenchmarkRunResultRow, BenchType } from "./types";
 
 export interface BenchListOptions {
@@ -52,7 +56,9 @@ export async function handleBenchList(opts: BenchListOptions): Promise<void> {
   }
 
   if (rows.length === 0) {
-    out(`No bench results found${opts.type ? ` (bench_type=${opts.type})` : ""}.`);
+    out(
+      `No bench results found${opts.type ? ` (bench_type=${opts.type})` : ""}.`,
+    );
     return;
   }
 
@@ -83,8 +89,16 @@ function formatResultRow(r: BenchmarkRunResultRow): string {
   );
 }
 
-/** Walk upward from `startDir` for `bench/<benchType>/run.sh` — the marker for an oxagen-platform checkout. */
-function findRunScript(benchType: BenchType, startDir: string = process.cwd()): string | null {
+/**
+ * Walk upward from `startDir` for `bench/<benchType>/run.sh` — the marker for
+ * an agent-arena checkout. That harness is NOT in this repo, so `--run` only
+ * works when the command is invoked from somewhere inside (or below) a
+ * checkout of https://github.com/macanderson/agent-arena.
+ */
+function findRunScript(
+  benchType: BenchType,
+  startDir: string = process.cwd(),
+): string | null {
   let dir = startDir;
   for (;;) {
     const candidate = join(dir, "bench", benchType, "run.sh");
@@ -96,7 +110,10 @@ function findRunScript(benchType: BenchType, startDir: string = process.cwd()): 
 }
 
 /** `replay <public_id> [--run] [--json]` */
-export async function handleBenchReplay(idArg: string | undefined, opts: BenchReplayOptions): Promise<void> {
+export async function handleBenchReplay(
+  idArg: string | undefined,
+  opts: BenchReplayOptions,
+): Promise<void> {
   const publicId = parsePublicId(idArg);
   if (publicId === null) {
     errOut("Usage: pnpm --filter @oxagen/bench replay -- <public_id> [--run]");
@@ -129,11 +146,15 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
 
   const run = await getBenchRunByPublicId(result.run_public_id);
   out(`#${result.public_id} — ${result.task_id} (${result.bench_type})`);
-  out(`  reward: ${result.reward}   resolved: ${result.resolved === 1 ? "yes" : "no"}   status: ${result.status}`);
+  out(
+    `  reward: ${result.reward}   resolved: ${result.resolved === 1 ? "yes" : "no"}   status: ${result.status}`,
+  );
   out(
     `  tokens: ${formatTokens(result.tokens_total)}   cost: $${result.cost_usd.toFixed(2)}   duration: ${result.duration_s}s`,
   );
-  out(`  run: #${result.run_public_id}${run ? ` (${run.dataset}, git ${run.git_sha || "unknown"})` : ""}`);
+  out(
+    `  run: #${result.run_public_id}${run ? ` (${run.dataset}, git ${run.git_sha || "unknown"})` : ""}`,
+  );
   out("");
   out("Reproducing command:");
   out(`  ${command}`);
@@ -148,15 +169,19 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
   if (!scriptPath) {
     errOut("");
     errOut(
-      `Could not find ${script} above ${process.cwd()} — run this from inside an ` +
-        "oxagen-platform checkout to use --run.",
+      `Could not find ${script} above ${process.cwd()} — the harness lives in a ` +
+        "separate checkout (https://github.com/macanderson/agent-arena). Run this " +
+        "from inside that checkout to use --run, or copy the command above and run " +
+        "it there yourself.",
     );
     process.exitCode = 1;
     return;
   }
 
   out("");
-  out(`==> --run: executing ${scriptPath} (inherits this terminal — output streams live)…`);
+  out(
+    `==> --run: executing ${scriptPath} (inherits this terminal — output streams live)…`,
+  );
   const exitCode = await runReplay(scriptPath, env);
   process.exitCode = exitCode;
 }
@@ -167,7 +192,10 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
  * legitimately take hours and the operator wants to watch it directly, the
  * same as if they'd typed `./run.sh` themselves.
  */
-function runReplay(scriptPath: string, env: Record<string, string>): Promise<number> {
+function runReplay(
+  scriptPath: string,
+  env: Record<string, string>,
+): Promise<number> {
   return new Promise((resolve) => {
     const child = spawn(scriptPath, [], {
       cwd: dirname(scriptPath),

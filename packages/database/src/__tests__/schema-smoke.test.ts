@@ -119,11 +119,17 @@ describe("environments.environments", () => {
     "workspace_id",
   ]);
 
-  it("has workspace_slug_uniq unique constraint", () => {
-    const uc = cfg.uniqueConstraints.find(
-      (u) => u.name === "environments_workspace_slug_uniq",
+  // Declared as a PARTIAL unique index (`uniqueIndex(...).where(deleted_at IS
+  // NULL)`), matching the Atlas migration — so Drizzle reports it under
+  // .indexes, not .uniqueConstraints. Assert the partiality too: a plain
+  // unique() here would be a stricter constraint than the database has.
+  it("has workspace_slug_uniq as a partial unique index", () => {
+    const idx = cfg.indexes.find(
+      (i) => i.config.name === "environments_workspace_slug_uniq",
     );
-    expect(uc).toBeDefined();
+    expect(idx).toBeDefined();
+    expect(idx?.config.unique).toBe(true);
+    expect(idx?.config.where).toBeDefined();
   });
 
   it("has org_workspace index", () => {

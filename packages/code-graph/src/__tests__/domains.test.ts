@@ -51,8 +51,16 @@ describe("inferDomains", () => {
     ];
 
     const ai = makeMockAI([
-      { name: "payments", filePaths: ["src/payments/charge.ts", "src/payments/refund.ts"], confidence: 0.9 },
-      { name: "auth", filePaths: ["src/auth/login.ts", "src/auth/session.ts"], confidence: 0.85 },
+      {
+        name: "payments",
+        filePaths: ["src/payments/charge.ts", "src/payments/refund.ts"],
+        confidence: 0.9,
+      },
+      {
+        name: "auth",
+        filePaths: ["src/auth/login.ts", "src/auth/session.ts"],
+        confidence: 0.85,
+      },
     ]);
 
     const result: DomainMap = await inferDomains({ files }, ai);
@@ -81,9 +89,17 @@ describe("inferDomains", () => {
     const files = ["src/payments/invoice.ts", "src/notifications/email.ts"];
 
     const ai = makeMockAI([
-      { name: "payments", filePaths: ["src/payments/invoice.ts"], confidence: 0.8 },
+      {
+        name: "payments",
+        filePaths: ["src/payments/invoice.ts"],
+        confidence: 0.8,
+      },
       // Just below threshold — should be excluded
-      { name: "notifications", filePaths: ["src/notifications/email.ts"], confidence: 0.5 },
+      {
+        name: "notifications",
+        filePaths: ["src/notifications/email.ts"],
+        confidence: 0.5,
+      },
     ]);
 
     const result = await inferDomains({ files }, ai);
@@ -97,7 +113,11 @@ describe("inferDomains", () => {
     const files = ["src/billing/invoice.ts"];
 
     const ai = makeMockAI([
-      { name: "billing", filePaths: ["src/billing/invoice.ts"], confidence: 0.55 },
+      {
+        name: "billing",
+        filePaths: ["src/billing/invoice.ts"],
+        confidence: 0.55,
+      },
     ]);
 
     const result = await inferDomains({ files }, ai);
@@ -134,12 +154,15 @@ describe("inferDomains", () => {
       "packages/shared/utils.ts",
     ];
 
-    const ai: DomainAI = { generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }) };
+    const ai: DomainAI = {
+      generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }),
+    };
 
     await inferDomains({ files }, ai);
 
     expect(ai.generateObject).toHaveBeenCalledOnce();
-    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as {
       prompt: string;
       system: string;
     };
@@ -152,11 +175,14 @@ describe("inferDomains", () => {
     const files = ["src/billing/plan.ts"];
     const dirs = ["custom-dir-a", "custom-dir-b"];
 
-    const ai: DomainAI = { generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }) };
+    const ai: DomainAI = {
+      generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }),
+    };
 
     await inferDomains({ files, dirs }, ai);
 
-    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as {
       prompt: string;
     };
     expect(callArgs.prompt).toContain("custom-dir-a");
@@ -167,13 +193,18 @@ describe("inferDomains", () => {
 
   it("includes symbol context in the prompt when symbols are provided", async () => {
     const files = ["src/payments/stripe.ts"];
-    const symbols = [{ name: "chargeCard", path: "src/payments/stripe.ts", kind: "function" }];
+    const symbols = [
+      { name: "chargeCard", path: "src/payments/stripe.ts", kind: "function" },
+    ];
 
-    const ai: DomainAI = { generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }) };
+    const ai: DomainAI = {
+      generateObject: vi.fn().mockResolvedValue({ object: { domains: [] } }),
+    };
 
     await inferDomains({ files, symbols }, ai);
 
-    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+    const callArgs = (ai.generateObject as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as {
       prompt: string;
     };
     expect(callArgs.prompt).toContain("chargeCard");
@@ -185,7 +216,11 @@ describe("inferDomains", () => {
     const files = ["src/a.ts", "src/b.ts", "src/c.ts"];
 
     const ai = makeMockAI([
-      { name: "core", filePaths: ["src/a.ts", "src/b.ts", "src/c.ts"], confidence: 0.75 },
+      {
+        name: "core",
+        filePaths: ["src/a.ts", "src/b.ts", "src/c.ts"],
+        confidence: 0.75,
+      },
     ]);
 
     const result = await inferDomains({ files }, ai);

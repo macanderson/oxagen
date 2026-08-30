@@ -2,7 +2,10 @@ import { insertExecutionLogs } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import pino from "pino";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.hooks" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.hooks" },
+});
 
 export interface HookContext {
   ctx: CapabilityContext;
@@ -14,7 +17,11 @@ export interface HookContext {
   stepId?: string;
 }
 
-async function emit(level: "info" | "error", h: HookContext, message: string): Promise<void> {
+async function emit(
+  level: "info" | "error",
+  h: HookContext,
+  message: string,
+): Promise<void> {
   logger[level]({ capability: h.capability }, message);
   try {
     await insertExecutionLogs([
@@ -42,7 +49,13 @@ async function emit(level: "info" | "error", h: HookContext, message: string): P
   }
 }
 
-export const beforeTool = (h: HookContext) => emit("info", h, `tool.before ${h.capability}`);
-export const afterTool = (h: HookContext) => emit("info", h, `tool.after ${h.capability}`);
+export const beforeTool = (h: HookContext) =>
+  emit("info", h, `tool.before ${h.capability}`);
+export const afterTool = (h: HookContext) =>
+  emit("info", h, `tool.after ${h.capability}`);
 export const onError = (h: HookContext) =>
-  emit("error", h, `tool.error ${h.capability}: ${h.error?.message ?? "unknown"}`);
+  emit(
+    "error",
+    h,
+    `tool.error ${h.capability}: ${h.error?.message ?? "unknown"}`,
+  );

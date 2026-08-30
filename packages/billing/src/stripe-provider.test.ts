@@ -87,14 +87,16 @@ function makeStripeSub(overrides: Record<string, unknown> = {}): unknown {
     metadata: { org_id: "org-1" },
     status: "active",
     items: {
-      data: [{
-        id: "si_001",
-        quantity: 3,
-        price: {
-          recurring: { interval: "month" },
-          product: "prod_test_001",
+      data: [
+        {
+          id: "si_001",
+          quantity: 3,
+          price: {
+            recurring: { interval: "month" },
+            product: "prod_test_001",
+          },
         },
-      }],
+      ],
     },
     current_period_start: 1748736000,
     current_period_end: 1751414400,
@@ -124,19 +126,23 @@ function makeStripeInvoice(overrides: Record<string, unknown> = {}): unknown {
     metadata: { org_id: "org-1" },
     billing_reason: "subscription_cycle",
     lines: {
-      data: [{
-        description: "Scale plan",
-        quantity: 1,
-        price: { unit_amount: 2000 },
-        amount: 2000,
-        metadata: { metric: "seats" },
-      }],
+      data: [
+        {
+          description: "Scale plan",
+          quantity: 1,
+          price: { unit_amount: 2000 },
+          amount: 2000,
+          metadata: { metric: "seats" },
+        },
+      ],
     },
     ...overrides,
   };
 }
 
-function makeStripePaymentMethod(overrides: Record<string, unknown> = {}): unknown {
+function makeStripePaymentMethod(
+  overrides: Record<string, unknown> = {},
+): unknown {
   return {
     id: "pm_test_001",
     customer: "cus_test_001",
@@ -146,7 +152,9 @@ function makeStripePaymentMethod(overrides: Record<string, unknown> = {}): unkno
   };
 }
 
-function makeStripeCheckoutSession(overrides: Record<string, unknown> = {}): unknown {
+function makeStripeCheckoutSession(
+  overrides: Record<string, unknown> = {},
+): unknown {
   return {
     id: "cs_test_001",
     url: "https://checkout.stripe.com/pay/test_001",
@@ -218,7 +226,17 @@ describe("StripeProvider", () => {
 
     it("sets billingInterval to year when subscription is yearly", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(
-        makeStripeSub({ items: { data: [{ id: "si_002", quantity: 1, price: { recurring: { interval: "year" }, product: null } }] } }),
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_002",
+                quantity: 1,
+                price: { recurring: { interval: "year" }, product: null },
+              },
+            ],
+          },
+        }),
       );
       const sub = await provider.getSubscription("sub_test_year");
       expect(sub.billingInterval).toBe("year");
@@ -236,7 +254,9 @@ describe("StripeProvider", () => {
   describe("updateSubscription", () => {
     it("calls stripe subscriptions.update with cancelAtPeriodEnd", async () => {
       stripeMethods.subscriptions.update.mockResolvedValue({});
-      await provider.updateSubscription("sub_test_001", { cancelAtPeriodEnd: true });
+      await provider.updateSubscription("sub_test_001", {
+        cancelAtPeriodEnd: true,
+      });
       expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith(
         "sub_test_001",
         { cancel_at_period_end: true },
@@ -246,7 +266,10 @@ describe("StripeProvider", () => {
     it("sends empty params when no fields provided", async () => {
       stripeMethods.subscriptions.update.mockResolvedValue({});
       await provider.updateSubscription("sub_test_001", {});
-      expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith("sub_test_001", {});
+      expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith(
+        "sub_test_001",
+        {},
+      );
     });
   });
 
@@ -254,7 +277,9 @@ describe("StripeProvider", () => {
     it("calls stripe subscriptions.cancel", async () => {
       stripeMethods.subscriptions.cancel.mockResolvedValue({});
       await provider.cancelSubscription("sub_test_001");
-      expect(stripeMethods.subscriptions.cancel).toHaveBeenCalledWith("sub_test_001");
+      expect(stripeMethods.subscriptions.cancel).toHaveBeenCalledWith(
+        "sub_test_001",
+      );
     });
   });
 
@@ -293,7 +318,9 @@ describe("StripeProvider", () => {
       await provider.setSubscriptionSeats("sub_test_001", { seats: 5 });
       expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith(
         "sub_test_001",
-        expect.objectContaining({ items: [expect.objectContaining({ quantity: 5 })] }),
+        expect.objectContaining({
+          items: [expect.objectContaining({ quantity: 5 })],
+        }),
         undefined,
       );
     });
@@ -320,7 +347,9 @@ describe("StripeProvider", () => {
           ],
         },
       });
-      const preview = await provider.previewSeatChange("sub_test_001", { seats: 5 });
+      const preview = await provider.previewSeatChange("sub_test_001", {
+        seats: 5,
+      });
       expect(preview.amountCents).toBe(300);
       expect(preview.isCharge).toBe(true);
       expect(preview.currency).toBe("usd");
@@ -342,7 +371,11 @@ describe("StripeProvider", () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
       stripeMethods.invoices.createPreview.mockResolvedValue({
         currency: "usd",
-        lines: { data: [{ proration: true, description: "Plan upgrade", amount: 1200 }] },
+        lines: {
+          data: [
+            { proration: true, description: "Plan upgrade", amount: 1200 },
+          ],
+        },
       });
       const preview = await provider.previewPlanChange("sub_test_001", {
         newPriceId: "price_scale_monthly",
@@ -355,7 +388,11 @@ describe("StripeProvider", () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
       stripeMethods.invoices.createPreview.mockResolvedValue({
         currency: "usd",
-        lines: { data: [{ proration: true, description: "Downgrade credit", amount: -900 }] },
+        lines: {
+          data: [
+            { proration: true, description: "Downgrade credit", amount: -900 },
+          ],
+        },
       });
       const preview = await provider.previewPlanChange("sub_test_001", {
         newPriceId: "price_build_monthly",
@@ -422,9 +459,12 @@ describe("StripeProvider", () => {
     it("calls customers.update with the payment method", async () => {
       stripeMethods.customers.update.mockResolvedValue({});
       await provider.setDefaultPaymentMethod("cus_test_001", "pm_new_001");
-      expect(stripeMethods.customers.update).toHaveBeenCalledWith("cus_test_001", {
-        invoice_settings: { default_payment_method: "pm_new_001" },
-      });
+      expect(stripeMethods.customers.update).toHaveBeenCalledWith(
+        "cus_test_001",
+        {
+          invoice_settings: { default_payment_method: "pm_new_001" },
+        },
+      );
     });
   });
 
@@ -432,7 +472,9 @@ describe("StripeProvider", () => {
     it("calls paymentMethods.detach", async () => {
       stripeMethods.paymentMethods.detach.mockResolvedValue({});
       await provider.detachPaymentMethod("pm_test_001");
-      expect(stripeMethods.paymentMethods.detach).toHaveBeenCalledWith("pm_test_001");
+      expect(stripeMethods.paymentMethods.detach).toHaveBeenCalledWith(
+        "pm_test_001",
+      );
     });
   });
 
@@ -448,7 +490,10 @@ describe("StripeProvider", () => {
     });
 
     it("throws when Stripe does not return a client secret", async () => {
-      stripeMethods.setupIntents.create.mockResolvedValue({ id: "seti_no_secret", client_secret: null });
+      stripeMethods.setupIntents.create.mockResolvedValue({
+        id: "seti_no_secret",
+        client_secret: null,
+      });
       await expect(provider.createSetupIntent("cus_test_001")).rejects.toThrow(
         "Stripe did not return a SetupIntent client secret",
       );
@@ -567,7 +612,9 @@ describe("StripeProvider", () => {
 
   describe("createSubscriptionCheckout", () => {
     it("returns session id and url", async () => {
-      stripeMethods.checkout.sessions.create.mockResolvedValue(makeStripeCheckoutSession());
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
       const result = await provider.createSubscriptionCheckout({
         customerId: "cus_test_001",
         priceId: "price_scale_monthly",
@@ -581,7 +628,10 @@ describe("StripeProvider", () => {
     });
 
     it("throws when Stripe does not return a URL", async () => {
-      stripeMethods.checkout.sessions.create.mockResolvedValue({ id: "cs_no_url", url: null });
+      stripeMethods.checkout.sessions.create.mockResolvedValue({
+        id: "cs_no_url",
+        url: null,
+      });
       await expect(
         provider.createSubscriptionCheckout({
           customerId: "cus_test_001",
@@ -596,7 +646,9 @@ describe("StripeProvider", () => {
 
   describe("createPaymentCheckout", () => {
     it("returns session id and url", async () => {
-      stripeMethods.checkout.sessions.create.mockResolvedValue(makeStripeCheckoutSession());
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
       const result = await provider.createPaymentCheckout({
         customerId: "cus_test_001",
         priceId: "price_credits_500",
@@ -609,7 +661,10 @@ describe("StripeProvider", () => {
     });
 
     it("throws when Stripe does not return a URL", async () => {
-      stripeMethods.checkout.sessions.create.mockResolvedValue({ id: "cs_no_url", url: null });
+      stripeMethods.checkout.sessions.create.mockResolvedValue({
+        id: "cs_no_url",
+        url: null,
+      });
       await expect(
         provider.createPaymentCheckout({
           customerId: "cus_test_001",
@@ -625,7 +680,9 @@ describe("StripeProvider", () => {
 
   describe("createDynamicCreditCheckout", () => {
     it("returns session id and url for dynamic credit purchase", async () => {
-      stripeMethods.checkout.sessions.create.mockResolvedValue(makeStripeCheckoutSession());
+      stripeMethods.checkout.sessions.create.mockResolvedValue(
+        makeStripeCheckoutSession(),
+      );
       const result = await provider.createDynamicCreditCheckout({
         customerId: "cus_test_001",
         orgId: "org-1",
@@ -777,7 +834,10 @@ describe("StripeProvider", () => {
 
     it("parses payment_method.automatically_updated as payment_method.updated", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("payment_method.automatically_updated", makeStripePaymentMethod()),
+        makeStripeEvent(
+          "payment_method.automatically_updated",
+          makeStripePaymentMethod(),
+        ),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_009");
       expect(event.type).toBe("payment_method.updated");
@@ -794,7 +854,10 @@ describe("StripeProvider", () => {
 
     it("parses invoice.voided event", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("invoice.voided", makeStripeInvoice({ status: "void" })),
+        makeStripeEvent(
+          "invoice.voided",
+          makeStripeInvoice({ status: "void" }),
+        ),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_011");
       expect(event.type).toBe("invoice.voided");
@@ -810,7 +873,10 @@ describe("StripeProvider", () => {
 
     it("parses invoice.marked_uncollectible event", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("invoice.marked_uncollectible", makeStripeInvoice({ status: "uncollectible" })),
+        makeStripeEvent(
+          "invoice.marked_uncollectible",
+          makeStripeInvoice({ status: "uncollectible" }),
+        ),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_013");
       expect(event.type).toBe("invoice.marked_uncollectible");
@@ -852,7 +918,9 @@ describe("StripeProvider", () => {
 
     it("parses subscription.trial_will_end event", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("customer.subscription.trial_will_end", { id: "sub_trial_001" }),
+        makeStripeEvent("customer.subscription.trial_will_end", {
+          id: "sub_trial_001",
+        }),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_017");
       expect(event.type).toBe("subscription.trial_will_end");
@@ -860,7 +928,10 @@ describe("StripeProvider", () => {
 
     it("parses invoice.created event", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("invoice.created", makeStripeInvoice({ status: "draft" })),
+        makeStripeEvent(
+          "invoice.created",
+          makeStripeInvoice({ status: "draft" }),
+        ),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_018");
       expect(event.type).toBe("invoice.created");
@@ -868,7 +939,10 @@ describe("StripeProvider", () => {
 
     it("parses invoice.payment_failed event", () => {
       stripeMethods.webhooks.constructEvent.mockReturnValue(
-        makeStripeEvent("invoice.payment_failed", makeStripeInvoice({ status: "open" })),
+        makeStripeEvent(
+          "invoice.payment_failed",
+          makeStripeInvoice({ status: "open" }),
+        ),
       );
       const event = provider.parseWebhookEvent("raw_body", "sig_019");
       expect(event.type).toBe("invoice.payment_failed");

@@ -31,7 +31,9 @@ mocks.chargeVideoCredits.mockResolvedValue({
   creditsCharged: 1n,
   shortfallCredits: 0n,
 });
-mocks.gatewayVideo.mockReturnValue({ modelId: "google/veo-3.0-fast-generate-001" });
+mocks.gatewayVideo.mockReturnValue({
+  modelId: "google/veo-3.0-fast-generate-001",
+});
 
 vi.mock("ai", () => ({
   experimental_generateVideo: mocks.experimentalGenerateVideo,
@@ -69,9 +71,9 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FAKE_MODEL = { modelId: "google/veo-3.0-fast-generate-001" } as Parameters<
-  typeof generateVideoFor
->[0]["model"];
+const FAKE_MODEL = {
+  modelId: "google/veo-3.0-fast-generate-001",
+} as Parameters<typeof generateVideoFor>[0]["model"];
 
 const TELEMETRY = {
   orgId: "00000000-0000-4000-8000-000000000001",
@@ -129,7 +131,10 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     });
 
     expect(mocks.experimentalGenerateVideo).toHaveBeenCalledTimes(1);
-    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.prompt).toBe("Waves crashing on a beach");
     expect(arg.duration).toBe(6);
     expect(arg.aspectRatio).toBe("16:9");
@@ -144,7 +149,10 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.duration).toBe(8);
     expect(result.effectiveDurationSeconds).toBe(8);
     // Billing must charge the effective duration, never the requested one.
@@ -152,7 +160,10 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       "google/veo-3.0-fast-generate-001",
       8,
     );
-    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(chargeArg.durationSeconds).toBe(8);
   });
 
@@ -163,7 +174,10 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.duration).toBe(4);
     expect(result.effectiveDurationSeconds).toBe(4);
   });
@@ -176,12 +190,19 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(arg.duration).toBe(30);
   });
 
   it("writes a token_usage row with the correct telemetry fields", async () => {
-    await generateVideoFor({ model: FAKE_MODEL, prompt: "test", telemetry: TELEMETRY });
+    await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "test",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
@@ -207,7 +228,10 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     });
 
     expect(mocks.chargeVideoCredits).toHaveBeenCalledTimes(1);
-    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(chargeArg.orgId).toBe("00000000-0000-4000-8000-000000000001");
     expect(chargeArg.referenceId).toBe("asset_abc");
     expect(chargeArg.model).toBe("google/veo-3.0-fast-generate-001");
@@ -229,11 +253,20 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       // TenantScopeError when no scope is active.
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 1_750_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 1_750_000,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     // Invoked with NO surrounding runInTenantScope — mirrors an Inngest worker.
-    await generateVideoFor({ model: FAKE_MODEL, prompt: "inngest render", telemetry: TELEMETRY });
+    await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "inngest render",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.chargeVideoCredits).toHaveBeenCalledTimes(1);
     expect(chargeSucceeded).toBe(true);
@@ -244,13 +277,22 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     mocks.chargeVideoCredits.mockImplementation(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 1_750_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 1_750_000,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     await runInTenantScope(
       { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
       async () => {
-        await generateVideoFor({ model: FAKE_MODEL, prompt: "request render", telemetry: TELEMETRY });
+        await generateVideoFor({
+          model: FAKE_MODEL,
+          prompt: "request render",
+          telemetry: TELEMETRY,
+        });
       },
     );
 
@@ -282,10 +324,16 @@ describe("generateVideoFor (@oxagen/ai)", () => {
   });
 
   it("propagates errors from experimental_generateVideo (not swallowed)", async () => {
-    mocks.experimentalGenerateVideo.mockRejectedValueOnce(new Error("provider error"));
+    mocks.experimentalGenerateVideo.mockRejectedValueOnce(
+      new Error("provider error"),
+    );
 
     await expect(
-      generateVideoFor({ model: FAKE_MODEL, prompt: "fail", telemetry: TELEMETRY }),
+      generateVideoFor({
+        model: FAKE_MODEL,
+        prompt: "fail",
+        telemetry: TELEMETRY,
+      }),
     ).rejects.toThrow("provider error");
   });
 
@@ -308,10 +356,16 @@ describe("generateVideoFor (@oxagen/ai)", () => {
   });
 
   it("calls providerFromModelId with the resolved model id", async () => {
-    await generateVideoFor({ model: FAKE_MODEL, prompt: "test", telemetry: TELEMETRY });
+    await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "test",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.providerFromModelId).toHaveBeenCalledTimes(1);
-    expect(mocks.providerFromModelId).toHaveBeenCalledWith("google/veo-3.0-fast-generate-001");
+    expect(mocks.providerFromModelId).toHaveBeenCalledWith(
+      "google/veo-3.0-fast-generate-001",
+    );
   });
 
   it("resolves model id from a string model arg", async () => {
@@ -321,13 +375,17 @@ describe("generateVideoFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    expect(mocks.providerFromModelId).toHaveBeenCalledWith("google/veo-3.0-generate-001");
+    expect(mocks.providerFromModelId).toHaveBeenCalledWith(
+      "google/veo-3.0-generate-001",
+    );
   });
 });
 
 describe("supportedVideoDurations", () => {
   it("resolves Veo variants by prefix", () => {
-    expect(supportedVideoDurations("google/veo-3.0-fast-generate-001")).toEqual([4, 6, 8]);
+    expect(supportedVideoDurations("google/veo-3.0-fast-generate-001")).toEqual(
+      [4, 6, 8],
+    );
     expect(supportedVideoDurations("google/veo-3.1")).toEqual([4, 6, 8]);
   });
 
@@ -352,13 +410,21 @@ describe("resolveVideoDurationSeconds", () => {
   });
 
   it("snaps an unsupported duration to the nearest supported", () => {
-    expect(resolveVideoDurationSeconds("google/veo-3.0", 30).effectiveSeconds).toBe(8);
-    expect(resolveVideoDurationSeconds("google/veo-3.0", 30).adjusted).toBe(true);
-    expect(resolveVideoDurationSeconds("openai/sora-2", 30).effectiveSeconds).toBe(12);
+    expect(
+      resolveVideoDurationSeconds("google/veo-3.0", 30).effectiveSeconds,
+    ).toBe(8);
+    expect(resolveVideoDurationSeconds("google/veo-3.0", 30).adjusted).toBe(
+      true,
+    );
+    expect(
+      resolveVideoDurationSeconds("openai/sora-2", 30).effectiveSeconds,
+    ).toBe(12);
   });
 
   it("resolves ties toward the longer clip (Veo 5 → 6)", () => {
-    expect(resolveVideoDurationSeconds("google/veo-3.0", 5).effectiveSeconds).toBe(6);
+    expect(
+      resolveVideoDurationSeconds("google/veo-3.0", 5).effectiveSeconds,
+    ).toBe(6);
   });
 
   it("selects the shortest supported duration when none is requested", () => {
@@ -373,13 +439,18 @@ describe("resolveVideoDurationSeconds", () => {
       requestedSeconds: 30,
       adjusted: false,
     });
-    expect(resolveVideoDurationSeconds("acme/video-x").effectiveSeconds).toBeUndefined();
+    expect(
+      resolveVideoDurationSeconds("acme/video-x").effectiveSeconds,
+    ).toBeUndefined();
   });
 });
 
 describe("videoDurationAlternatives", () => {
   it("ranks other models by closeness to the requested duration", () => {
-    const alts = videoDurationAlternatives(30, "google/veo-3.0-fast-generate-001");
+    const alts = videoDurationAlternatives(
+      30,
+      "google/veo-3.0-fast-generate-001",
+    );
     expect(alts[0]?.model).toBe("openai/sora-2");
     expect(alts[0]?.closestSeconds).toBe(12);
     expect(alts.some((a) => a.model === "google/veo")).toBe(false);

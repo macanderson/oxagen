@@ -29,9 +29,18 @@ describe("parseStackFrames", () => {
       internal: false,
     });
     // "async " qualifier is stripped.
-    expect(frames[1]).toMatchObject({ functionName: "run", file: "/repo/apps/api/src/app.ts", line: 5 });
+    expect(frames[1]).toMatchObject({
+      functionName: "run",
+      file: "/repo/apps/api/src/app.ts",
+      line: 5,
+    });
     // Bare location, no function name.
-    expect(frames[2]).toMatchObject({ functionName: null, file: "/repo/lib/bare.ts", line: 1, column: 2 });
+    expect(frames[2]).toMatchObject({
+      functionName: null,
+      file: "/repo/lib/bare.ts",
+      line: 1,
+      column: 2,
+    });
   });
 
   it("flags node-internal and native frames", () => {
@@ -49,7 +58,8 @@ describe("parseStackFrames", () => {
 
   it("respects the frame limit and skips the header line", () => {
     const lines = ["Error: many"];
-    for (let i = 0; i < 30; i++) lines.push(`    at fn${i} (/a/f${i}.ts:${i}:1)`);
+    for (let i = 0; i < 30; i++)
+      lines.push(`    at fn${i} (/a/f${i}.ts:${i}:1)`);
     expect(parseStackFrames(lines.join("\n"), 5)).toHaveLength(5);
   });
 
@@ -63,7 +73,8 @@ describe("parseStackFrames", () => {
 
 describe("extractFilePaths", () => {
   it("extracts only allowlisted-extension file tokens, deduped", () => {
-    const text = 'edit {"path":"src/foo.ts"} then read src/foo.ts and version 1.2.3 and bar.py';
+    const text =
+      'edit {"path":"src/foo.ts"} then read src/foo.ts and version 1.2.3 and bar.py';
     expect(extractFilePaths(text)).toEqual(["src/foo.ts", "bar.py"]);
   });
   it("ignores dotted non-file tokens", () => {
@@ -84,16 +95,41 @@ describe("rankSuspectFiles", () => {
       { path: "c.ts", weight: 8, reason: "stack-frame" },
     ]);
     expect(ranked.map((r) => r.path)).toEqual(["a.ts", "c.ts", "b.ts"]);
-    expect(ranked[0]).toMatchObject({ path: "a.ts", score: 8, reasons: ["stack-frame ×2"] });
+    expect(ranked[0]).toMatchObject({
+      path: "a.ts",
+      score: 8,
+      reasons: ["stack-frame ×2"],
+    });
   });
 });
 
 describe("suspectFilesFrom", () => {
   it("weights project stack frames above node_modules and merges signals", () => {
     const stackFrames: StackFrame[] = [
-      { functionName: "f", file: "/repo/src/target.ts", line: 1, column: 1, internal: false, raw: "" },
-      { functionName: "g", file: "/repo/node_modules/dep/index.js", line: 2, column: 2, internal: false, raw: "" },
-      { functionName: "h", file: "node:internal/x", line: 3, column: 3, internal: true, raw: "" },
+      {
+        functionName: "f",
+        file: "/repo/src/target.ts",
+        line: 1,
+        column: 1,
+        internal: false,
+        raw: "",
+      },
+      {
+        functionName: "g",
+        file: "/repo/node_modules/dep/index.js",
+        line: 2,
+        column: 2,
+        internal: false,
+        raw: "",
+      },
+      {
+        functionName: "h",
+        file: "node:internal/x",
+        line: 3,
+        column: 3,
+        internal: true,
+        raw: "",
+      },
     ];
     const out = suspectFilesFrom({
       stackFrames,
@@ -109,7 +145,9 @@ describe("suspectFilesFrom", () => {
 });
 
 // ── Span-tree fixtures ────────────────────────────────────────────────────────
-function node(partial: Partial<TraceExecutionNode> & { executionId: string }): TraceExecutionNode {
+function node(
+  partial: Partial<TraceExecutionNode> & { executionId: string },
+): TraceExecutionNode {
   return {
     executionId: partial.executionId,
     status: partial.status ?? "completed",
@@ -193,7 +231,9 @@ describe("flattenSpans + findFailingStep", () => {
   it("flattens failed spans first, then the rest", () => {
     const spans = flattenSpans(tree);
     // Failed root execution + failed step + failed tool call sort ahead.
-    const failedKinds = spans.filter((s) => s.status === "failed").map((s) => s.id);
+    const failedKinds = spans
+      .filter((s) => s.status === "failed")
+      .map((s) => s.id);
     expect(failedKinds).toEqual(["aex_root", "aes_2", "atc_2"]);
     expect(spans[0]!.status).toBe("failed");
     // Labels are human, never bare ids.

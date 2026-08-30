@@ -57,8 +57,11 @@ export {
 
 function detectLanguage(filePath: string): ParsedLanguage {
   const ext = extname(filePath).toLowerCase();
-  // The TypeScript grammar handles JS/JSX/MJS/CJS as well as TS/TSX.
-  if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext))
+  // The TypeScript grammar handles JS/JSX/MJS/CJS and the ESM/CJS-explicit
+  // .mts/.cts variants as well as TS/TSX.
+  if (
+    [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)
+  )
     return "typescript";
   if (ext === ".py") return "python";
   if (ext === ".md" || ext === ".mdx" || ext === ".markdown") return "markdown";
@@ -437,7 +440,11 @@ function extractDocComment(
       t.startsWith("//") ||
       t.startsWith("/*") ||
       t.startsWith("*") ||
-      t.endsWith("*/") ||
+      // A block-comment continuation line that closes the block without the
+      // conventional leading `*` (e.g. `   still commentary */`). It must not
+      // open its own block part-way through the line — `foo(); /* note */` is
+      // a code line with a trailing comment, not documentation.
+      (t.endsWith("*/") && !t.includes("/*")) ||
       t.startsWith("#")
     ) {
       collected.unshift(

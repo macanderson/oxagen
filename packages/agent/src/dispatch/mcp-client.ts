@@ -233,10 +233,13 @@ export async function healthcheck(args: McpConnectArgs): Promise<{
   // caller can snapshot them without a second connection.
   descriptors: McpToolDescriptor[];
 }> {
+  // Declared outside the try so a listTools failure still closes the transport
+  // we opened — otherwise every probe of a server that connects but errors on
+  // listing leaks a live HTTP connection for the life of the process.
+  let client: Client | undefined;
   try {
-    const client = await connectMcp(args);
+    client = await connectMcp(args);
     const descriptors = await listMcpToolDescriptors(client);
-    await client.close();
     return {
       status: "healthy",
       discoveredTools: descriptors.map((d) => d.name),
@@ -248,5 +251,7 @@ export async function healthcheck(args: McpConnectArgs): Promise<{
       "MCP healthcheck failed; marking unreachable",
     );
     return { status: "unreachable", discoveredTools: [], descriptors: [] };
+  } finally {
+    await client?.close().catch(() => {});
   }
 }

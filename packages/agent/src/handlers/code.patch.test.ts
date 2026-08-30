@@ -14,7 +14,11 @@ describe("code.patch handler", () => {
     );
     expect(r.applied).toBe(true);
     expect(r.changedCount).toBe(1);
-    expect(r.files[0]).toEqual({ path: "x.txt", status: "modified", content: "world\n" });
+    expect(r.files[0]).toEqual({
+      path: "x.txt",
+      status: "modified",
+      content: "world\n",
+    });
   });
 
   it("applies an add hunk against an empty workspace", async () => {

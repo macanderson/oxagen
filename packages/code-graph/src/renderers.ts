@@ -55,9 +55,14 @@ const MARKDOWN_MAX_CHARS = 6000;
  * of a file (imports, exports, signatures) is its most information-dense part —
  * but a doc's important content can live anywhere: front-matter or a table of
  * contents at the top would otherwise crowd out the actual prose. This instead
- * samples sequential `chunkText()` windows (line-aligned, overlap-stitched)
- * until `maxChars` is spent, so a several-thousand-word doc contributes more
- * than its first paragraph without embedding the whole file unbounded.
+ * samples sequential `chunkText()` windows (line-aligned) until `maxChars` is
+ * spent, so a several-thousand-word doc contributes more than its first
+ * paragraph without embedding the whole file unbounded.
+ *
+ * The windows are joined verbatim, so each one repeats `chunkText`'s default
+ * overlap (~200 chars) of its predecessor. That costs a slice of the budget to
+ * duplicated prose; it is left in place because the exact rendered string is
+ * pinned by consumer tests.
  */
 export function renderMarkdownFileText(args: {
   path: string;

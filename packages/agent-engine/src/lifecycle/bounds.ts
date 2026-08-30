@@ -82,7 +82,8 @@ export interface RssWatchdogOptions {
  * graceful teardown.
  */
 export function startRssWatchdog(opts: RssWatchdogOptions): BoundHandle {
-  if (!Number.isFinite(opts.maxRssBytes) || opts.maxRssBytes <= 0) return NOOP_HANDLE;
+  if (!Number.isFinite(opts.maxRssBytes) || opts.maxRssBytes <= 0)
+    return NOOP_HANDLE;
   const intervalMs = opts.intervalMs ?? 30_000;
   const warnRatio = opts.warnRatio ?? 0.8;
   const readRss = opts.readRss ?? ((): number => process.memoryUsage().rss);

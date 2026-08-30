@@ -134,12 +134,8 @@ describe("mention type registry", () => {
 
   it("matches types by prefix against type, label, and plural", () => {
     expect(matchMentionTypes("")).toHaveLength(MENTION_TYPES.length);
-    expect(matchMentionTypes("rep").map((t) => t.type)).toContain(
-      "repository",
-    );
-    expect(matchMentionTypes("mcp").map((t) => t.type)).toEqual([
-      "mcp_server",
-    ]);
+    expect(matchMentionTypes("rep").map((t) => t.type)).toContain("repository");
+    expect(matchMentionTypes("mcp").map((t) => t.type)).toEqual(["mcp_server"]);
     expect(matchMentionTypes("graph").map((t) => t.type)).toEqual([
       "node",
       "edge",
@@ -182,7 +178,9 @@ describe("applyMentionPlaceholders", () => {
       pending("a", "first"),
       pending("a", "second"),
     ]);
-    expect(out).toBe("[:file|:first|:first|:a] then [:file|:second|:second|:a]");
+    expect(out).toBe(
+      "[:file|:first|:first|:a] then [:file|:second|:second|:a]",
+    );
   });
 });
 
@@ -209,7 +207,9 @@ describe("mention href bridge", () => {
   it("converts tokens to markdown links", () => {
     const token = serializeMention(fileMention);
     const out = textWithMentionLinks(`fix ${token} now`);
-    expect(out).toMatch(/^fix \[proxy\.ts\]\(oxagen-mention:\/\/file\?.*\) now$/);
+    expect(out).toMatch(
+      /^fix \[proxy\.ts\]\(oxagen-mention:\/\/file\?.*\) now$/,
+    );
   });
 });
 

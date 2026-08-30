@@ -313,9 +313,13 @@ export async function setSubscriptionSeats(
 /**
  * Change an org's plan to any other plan (any tier → any tier).
  *
- * Upgrade path  (target tier higher): swap price immediately, prorate now.
- * Downgrade path (target tier lower): swap price, prorate at period end (no
- *   immediate invoice — customer keeps access until cycle renews).
+ * Upgrade path  (target tier higher, or the SAME tier — meetsMinimumTier treats
+ *   a lateral move as an upgrade): swap price immediately and invoice the
+ *   proration now.
+ * Downgrade path (target tier lower): swap price with proration_behavior
+ *   'none' — the new, lower price applies from the next cycle and NO proration
+ *   line is written, so the customer is not credited for the unused remainder
+ *   of the tier they are leaving.
  *
  * If the org has NO active subscription (free tier), returns a Checkout
  * session URL for the new plan; the caller must redirect the user.

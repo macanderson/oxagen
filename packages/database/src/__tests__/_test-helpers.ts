@@ -67,7 +67,9 @@ function flattenChunks(chunks: QueryChunk[]): string {
 // Helper: collect SQL column names from a table via getTableConfig.
 // ---------------------------------------------------------------------------
 
-export function sqlColumnNames(table: Parameters<typeof getTableConfig>[0]): string[] {
+export function sqlColumnNames(
+  table: Parameters<typeof getTableConfig>[0],
+): string[] {
   return getTableConfig(table).columns.map((col) => col.name);
 }
 
@@ -75,6 +77,8 @@ export function sqlColumnNames(table: Parameters<typeof getTableConfig>[0]): str
 // Helper: collect CHECK constraints from a table via getTableConfig.
 // ---------------------------------------------------------------------------
 
-export function getChecks(table: Parameters<typeof getTableConfig>[0]): DrizzleCheck[] {
+export function getChecks(
+  table: Parameters<typeof getTableConfig>[0],
+): DrizzleCheck[] {
   return getTableConfig(table).checks as DrizzleCheck[];
 }

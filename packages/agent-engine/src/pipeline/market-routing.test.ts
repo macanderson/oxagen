@@ -9,7 +9,10 @@ import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn, selectMarketModel, type RouteOutcome } from "./index";
 import type { RunTurnOptions } from "./index";
 import { modelForTier } from "../router/model-router";
-import type { MarketRoutingPolicy, RoutingStatRow } from "../router/market-router";
+import type {
+  MarketRoutingPolicy,
+  RoutingStatRow,
+} from "../router/market-router";
 import { emptyUsage } from "../types";
 import type { PromptEvaluation } from "../trace/types";
 import type { AgentAi, ModelRunArgs } from "../ports";
@@ -59,7 +62,10 @@ const DESIGN_STATS: RoutingStatRow[] = [
 
 describe("selectMarketModel seam", () => {
   it("off / absent policy ⇒ today's deterministic routing (static)", () => {
-    const out = selectMarketModel({ prompt: "x" } as RunTurnOptions, evaluation());
+    const out = selectMarketModel(
+      { prompt: "x" } as RunTurnOptions,
+      evaluation(),
+    );
     expect(out.routingMode).toBe("static");
     expect(out.model).toBe(SONNET); // recommendedTier balanced
     expect(out.taskClass).toBe("design/single");
@@ -67,7 +73,11 @@ describe("selectMarketModel seam", () => {
 
   it("enforce ⇒ routes to the cheapest eligible market model", () => {
     const out = selectMarketModel(
-      { prompt: "x", routingPolicy: ENFORCE, routingStats: DESIGN_STATS } as RunTurnOptions,
+      {
+        prompt: "x",
+        routingPolicy: ENFORCE,
+        routingStats: DESIGN_STATS,
+      } as RunTurnOptions,
       evaluation(),
     );
     expect(out.routingMode).toBe("enforce");
@@ -77,7 +87,12 @@ describe("selectMarketModel seam", () => {
 
   it("enforce with a manual pin ⇒ pin wins", () => {
     const out = selectMarketModel(
-      { prompt: "x", model: "vendor/pinned", routingPolicy: ENFORCE, routingStats: DESIGN_STATS } as RunTurnOptions,
+      {
+        prompt: "x",
+        model: "vendor/pinned",
+        routingPolicy: ENFORCE,
+        routingStats: DESIGN_STATS,
+      } as RunTurnOptions,
       evaluation(),
     );
     expect(out.model).toBe("vendor/pinned");
@@ -85,7 +100,11 @@ describe("selectMarketModel seam", () => {
 
   it("shadow ⇒ keeps today's routing but annotates the market decision", () => {
     const out = selectMarketModel(
-      { prompt: "x", routingPolicy: { ...ENFORCE, mode: "shadow" }, routingStats: DESIGN_STATS } as RunTurnOptions,
+      {
+        prompt: "x",
+        routingPolicy: { ...ENFORCE, mode: "shadow" },
+        routingStats: DESIGN_STATS,
+      } as RunTurnOptions,
       evaluation(),
     );
     expect(out.routingMode).toBe("shadow");
@@ -112,7 +131,11 @@ function makeAi(editFile: string, judgeComplete = true): AgentAi {
           yield { type: "text-delta", text: "done" };
         })(),
         steps: Promise.resolve([{}]),
-        usage: Promise.resolve({ inputTokens: 100, outputTokens: 50, totalTokens: 150 }),
+        usage: Promise.resolve({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        }),
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },

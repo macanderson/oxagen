@@ -118,7 +118,9 @@ describe("parseTraceback — Python CPython format", () => {
   });
 
   it("returns an empty array for text with no traceback", () => {
-    const frames = parseTraceback("This is just a plain bug description with no stack trace.");
+    const frames = parseTraceback(
+      "This is just a plain bug description with no stack trace.",
+    );
     expect(frames).toHaveLength(0);
   });
 });
@@ -272,7 +274,9 @@ describe("localize — symbol path (extractCandidates)", () => {
       graph,
     );
 
-    expect(result.files.some((f) => f.path.includes("my_validator"))).toBe(true);
+    expect(result.files.some((f) => f.path.includes("my_validator"))).toBe(
+      true,
+    );
     const hit = result.files.find((f) => f.path.includes("my_validator"))!;
     expect(hit.score).toBeGreaterThan(0);
     expect(hit.reason).toContain("MyValidator");
@@ -348,10 +352,14 @@ Some other text mentioning HelperClass.
 
     const graph = makeStubGraph({
       "search:run": "function run — app/core/engine.py:100  def run(self):",
-      "search:process": "function process — app/core/engine.py:50  def process(self):",
-      "file_symbols:/app/core/engine.py": "function run — app/core/engine.py:100  def run(self):",
-      "search:SomeHelper": "class SomeHelper — app/helpers/helper.py:5  class SomeHelper:",
-      "search:HelperClass": "class HelperClass — app/helpers/other.py:3  class HelperClass:",
+      "search:process":
+        "function process — app/core/engine.py:50  def process(self):",
+      "file_symbols:/app/core/engine.py":
+        "function run — app/core/engine.py:100  def run(self):",
+      "search:SomeHelper":
+        "class SomeHelper — app/helpers/helper.py:5  class SomeHelper:",
+      "search:HelperClass":
+        "class HelperClass — app/helpers/other.py:3  class HelperClass:",
     });
 
     const result = await localize(tracebackIssue, graph);
@@ -377,20 +385,34 @@ describe("localize — semantic fallback", () => {
     });
 
     const graph: CodeGraphProvider = { query: querySpy };
-    const result = await localize("Login fails intermittently on mobile devices.", graph);
+    const result = await localize(
+      "Login fails intermittently on mobile devices.",
+      graph,
+    );
 
-    expect(querySpy).toHaveBeenCalledWith("semantic_search", expect.any(String), 5);
+    expect(querySpy).toHaveBeenCalledWith(
+      "semantic_search",
+      expect.any(String),
+      5,
+    );
     // Semantic results should appear in files
-    expect(result.files.some((f) => f.path.includes("login.py") || f.path.includes("session.py"))).toBe(true);
+    expect(
+      result.files.some(
+        (f) => f.path.includes("login.py") || f.path.includes("session.py"),
+      ),
+    ).toBe(true);
   });
 
   it("does NOT trigger semantic_search when 3 or more distinct files are already found", async () => {
     // Return 3 different files from symbol queries
     const querySpy = vi.fn(async (op: string, q: string, _l?: number) => {
       if (op === "search") {
-        if (q === "FooClass") return "class FooClass — src/foo.py:1  class FooClass:";
-        if (q === "BarClass") return "class BarClass — src/bar.py:1  class BarClass:";
-        if (q === "BazClass") return "class BazClass — src/baz.py:1  class BazClass:";
+        if (q === "FooClass")
+          return "class FooClass — src/foo.py:1  class FooClass:";
+        if (q === "BarClass")
+          return "class BarClass — src/bar.py:1  class BarClass:";
+        if (q === "BazClass")
+          return "class BazClass — src/baz.py:1  class BazClass:";
       }
       return "";
     });
@@ -398,9 +420,9 @@ describe("localize — semantic fallback", () => {
     const graph: CodeGraphProvider = { query: querySpy };
     await localize("FooClass, BarClass, and BazClass all have bugs.", graph);
 
-    const semanticCalls = (querySpy.mock.calls as Array<[string, string, number?]>).filter(
-      ([op]) => op === "semantic_search",
-    );
+    const semanticCalls = (
+      querySpy.mock.calls as Array<[string, string, number?]>
+    ).filter(([op]) => op === "semantic_search");
     expect(semanticCalls).toHaveLength(0);
   });
 });
@@ -478,10 +500,15 @@ Traceback (most recent call last):
       return "";
     });
     const graph: CodeGraphProvider = { query: querySpy };
-    const result = await localize("`alpha_func` and `beta_func` are broken.", graph);
+    const result = await localize(
+      "`alpha_func` and `beta_func` are broken.",
+      graph,
+    );
 
     for (let i = 1; i < result.files.length; i++) {
-      expect(result.files[i - 1]!.score).toBeGreaterThanOrEqual(result.files[i]!.score);
+      expect(result.files[i - 1]!.score).toBeGreaterThanOrEqual(
+        result.files[i]!.score,
+      );
     }
   });
 
@@ -515,7 +542,9 @@ describe("localize — renderedBlock", () => {
     });
     const result = await localize("`MyClass` is broken.", graph);
     if (result.files.length > 0) {
-      expect(result.renderedBlock).toContain("## Candidate locations (deterministic)");
+      expect(result.renderedBlock).toContain(
+        "## Candidate locations (deterministic)",
+      );
     }
   });
 
@@ -535,8 +564,10 @@ describe("localize — renderedBlock", () => {
       if (op === "search") {
         // Return a very long result
         const longPath = `packages/very/long/path/to/some/deeply/nested/${q}.py`;
-        return Array.from({ length: 20 }, (_, i) =>
-          `function ${q}_method_${i} — ${longPath}:${i + 1}  def ${q}_method_${i}(self, arg1, arg2, arg3):`,
+        return Array.from(
+          { length: 20 },
+          (_, i) =>
+            `function ${q}_method_${i} — ${longPath}:${i + 1}  def ${q}_method_${i}(self, arg1, arg2, arg3):`,
         ).join("\n");
       }
       return "";
@@ -555,7 +586,8 @@ describe("localize — renderedBlock", () => {
 
   it("renderedBlock includes test hint information", async () => {
     const graph = makeStubGraph({
-      "search:MyClass": "class MyClass — packages/mylib/src/my_class.py:1  class MyClass:",
+      "search:MyClass":
+        "class MyClass — packages/mylib/src/my_class.py:1  class MyClass:",
     });
     const result = await localize("`MyClass` is broken.", graph);
     if (result.files.length > 0) {
@@ -582,7 +614,8 @@ describe("localize — LocalizationMap shape", () => {
 
   it("testHints are derived from the top-ranked file paths", async () => {
     const graph = makeStubGraph({
-      "search:MyClass": "class MyClass — packages/mylib/src/my_class.py:1  class MyClass:",
+      "search:MyClass":
+        "class MyClass — packages/mylib/src/my_class.py:1  class MyClass:",
     });
     const result = await localize("`MyClass` is broken.", graph);
     if (result.files.length > 0) {
@@ -619,7 +652,9 @@ Traceback (most recent call last):
     const graph: CodeGraphProvider = { query: querySpy };
     const result = await localize(issue, graph);
 
-    const consumerEntry = result.files.find((f) => f.path === "app/core/consumer.py");
+    const consumerEntry = result.files.find(
+      (f) => f.path === "app/core/consumer.py",
+    );
     expect(consumerEntry).toBeDefined();
     if (consumerEntry) {
       expect(consumerEntry.score).toBeGreaterThan(0);
@@ -632,10 +667,14 @@ Traceback (most recent call last):
 describe("localize — timeout budget (ENHANCE races the stage budget)", () => {
   it("returns within the budget when the graph hangs, instead of blocking the caller", async () => {
     // A provider whose queries never resolve — the cold-store worst case.
-    const hung: CodeGraphProvider = { query: () => new Promise<string>(() => {}) };
+    const hung: CodeGraphProvider = {
+      query: () => new Promise<string>(() => {}),
+    };
 
     const started = Date.now();
-    const result = await localize("fix `alpha` in the parser", hung, { timeoutMs: 30 });
+    const result = await localize("fix `alpha` in the parser", hung, {
+      timeoutMs: 30,
+    });
     const elapsed = Date.now() - started;
 
     // Bounded: one 30 ms race, not an indefinite hang (generous CI cushion).
@@ -651,7 +690,9 @@ describe("localize — timeout budget (ENHANCE races the stage budget)", () => {
     // Four backticked symbols → four symbol-path lookups. Queries run
     // sequentially, so the first one consumes the whole 25 ms budget and the
     // remaining three must be skipped before ever reaching the provider.
-    await localize("wire `alpha` `beta` `gamma` `delta`", graph, { timeoutMs: 25 });
+    await localize("wire `alpha` `beta` `gamma` `delta`", graph, {
+      timeoutMs: 25,
+    });
 
     expect(querySpy).toHaveBeenCalledTimes(1);
   });
@@ -679,13 +720,17 @@ describe("localize — timeout budget (ENHANCE races the stage budget)", () => {
         call += 1;
         // First query resolves fast with a hit; second hangs past the deadline.
         if (call === 1) {
-          return Promise.resolve("function beta — src/beta.ts:7  export function beta()");
+          return Promise.resolve(
+            "function beta — src/beta.ts:7  export function beta()",
+          );
         }
         return new Promise<string>(() => {});
       },
     };
 
-    const result = await localize("fix `beta` and `gamma`", graph, { timeoutMs: 40 });
+    const result = await localize("fix `beta` and `gamma`", graph, {
+      timeoutMs: 40,
+    });
 
     // The pre-deadline hit is kept — partial results beat an empty map.
     expect(result.files.map((f) => f.path)).toContain("src/beta.ts");

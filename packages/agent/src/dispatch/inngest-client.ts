@@ -9,6 +9,9 @@ let _inngest: Inngest | null = null;
 export function getInngestClient(): Inngest {
   if (_inngest) return _inngest;
   const env = requireEnv(["INNGEST_EVENT_KEY"] as const);
-  _inngest = new Inngest({ id: "oxagen-runner", eventKey: env.INNGEST_EVENT_KEY });
+  _inngest = new Inngest({
+    id: "oxagen-runner",
+    eventKey: env.INNGEST_EVENT_KEY,
+  });
   return _inngest;
 }

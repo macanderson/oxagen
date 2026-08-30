@@ -188,15 +188,45 @@ export function evaluateTurnBudget(
     case "grace": {
       const ceilingUsd = limitUsd * (1 + Math.max(0, policy.graceOveragePct));
       if (costUsd < limitUsd)
-        return { state: "ok", action: "continue", costUsd, limitUsd, ceilingUsd, mode: "grace" };
+        return {
+          state: "ok",
+          action: "continue",
+          costUsd,
+          limitUsd,
+          ceilingUsd,
+          mode: "grace",
+        };
       if (costUsd < ceilingUsd)
-        return { state: "within_grace", action: "continue", costUsd, limitUsd, ceilingUsd, mode: "grace" };
-      return { state: "exceeded", action: "stop", costUsd, limitUsd, ceilingUsd, mode: "grace" };
+        return {
+          state: "within_grace",
+          action: "continue",
+          costUsd,
+          limitUsd,
+          ceilingUsd,
+          mode: "grace",
+        };
+      return {
+        state: "exceeded",
+        action: "stop",
+        costUsd,
+        limitUsd,
+        ceilingUsd,
+        mode: "grace",
+      };
     }
   }
 }
 
-/** Shape of the engine's cumulative usage accumulator (a subset of RunCodingAgentResult["usage"]). */
+/**
+ * Shape of the engine's cumulative usage accumulator (a subset of
+ * RunCodingAgentResult["usage"]).
+ *
+ * Note the missing cache-WRITE count: the engine does not accumulate one, so
+ * {@link turnCostUsd} prices cache-creation tokens at the fresh-input rate. On
+ * Anthropic models (cache writes bill at 1.25x input) that makes a budget
+ * estimate slightly LOWER than what the gate actually debits via
+ * chargeUsageCredits, which does receive cacheWriteTokens.
+ */
 export interface TurnUsageSnapshot {
   inputTokens?: number;
   outputTokens?: number;
@@ -256,10 +286,12 @@ export interface TurnBudgetGuardHooks {
  *
  * This is the SINGLE enforcement implementation every surface shares: the CLI,
  * the app chat route, and any future runner wire the SAME guard and differ only
- * in the {@link TurnBudgetGuardHooks} they supply. The guard is resilient —
- * `onPause` rejecting or `hooks` throwing must never wedge a turn, so callers
- * should keep hooks side-effect-only; a throw here would be misclassified by the
- * engine as a model error.
+ * in the {@link TurnBudgetGuardHooks} they supply.
+ *
+ * The guard does NOT catch hook failures: a rejecting `onPause` or a throwing
+ * `onTick`/`onStop`/`onWithinGrace` propagates out of the guard, and the engine
+ * misclassifies it as a model error. Callers must keep hooks side-effect-only
+ * and swallow their own failures.
  */
 export function createTurnBudgetGuard(
   policy: TurnBudgetPolicy,
@@ -331,22 +363,36 @@ const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
 };
 
 /** The stricter of two modes (enforce > prompt > grace). */
-export function strictestMode(a: TurnBudgetMode, b: TurnBudgetMode): TurnBudgetMode {
+export function strictestMode(
+  a: TurnBudgetMode,
+  b: TurnBudgetMode,
+): TurnBudgetMode {
   return MODE_STRICTNESS[a] >= MODE_STRICTNESS[b] ? a : b;
 }
 
 /** Apply one enabled ceiling to a base policy: clamp limit down, tighten mode, force on. */
-function applyCeiling(base: TurnBudgetPolicy, ceiling: TurnBudgetPolicy): TurnBudgetPolicy {
+function applyCeiling(
+  base: TurnBudgetPolicy,
+  ceiling: TurnBudgetPolicy,
+): TurnBudgetPolicy {
   // A ceiling with no positive limit can't constrain a dollar amount — treat it
   // as "no ceiling" rather than forcing a $0 (turn-killing) budget.
   if (!ceiling.enabled || ceiling.limitUsd <= 0) return base;
-  const baseLimit = base.enabled && base.limitUsd > 0 ? base.limitUsd : Number.POSITIVE_INFINITY;
+  const baseLimit =
+    base.enabled && base.limitUsd > 0
+      ? base.limitUsd
+      : Number.POSITIVE_INFINITY;
   const limitUsd = Math.min(baseLimit, ceiling.limitUsd);
-  const mode = strictestMode(base.enabled ? base.mode : ceiling.mode, ceiling.mode);
+  const mode = strictestMode(
+    base.enabled ? base.mode : ceiling.mode,
+    ceiling.mode,
+  );
   // Only the grace cushion is meaningful when the resulting mode is grace; take
   // the tighter (smaller) cushion so a ceiling never loosens the overage window.
   const graceOveragePct =
-    mode === "grace" ? Math.min(base.graceOveragePct, ceiling.graceOveragePct) : base.graceOveragePct;
+    mode === "grace"
+      ? Math.min(base.graceOveragePct, ceiling.graceOveragePct)
+      : base.graceOveragePct;
   return { enabled: true, limitUsd, mode, graceOveragePct };
 }
 
@@ -370,14 +416,17 @@ export function resolveEffectiveTurnBudget(
 
   // 2. Defaults — only seed a member who hasn't set their own budget.
   if (!effective.enabled) {
-    if (org?.enforcement === "default" && org.policy.enabled) effective = { ...org.policy };
+    if (org?.enforcement === "default" && org.policy.enabled)
+      effective = { ...org.policy };
     if (workspace?.enforcement === "default" && workspace.policy.enabled)
       effective = { ...workspace.policy };
   }
 
   // 3. Ceilings — always clamp, strictest wins. Org then workspace.
-  if (org?.enforcement === "ceiling") effective = applyCeiling(effective, org.policy);
-  if (workspace?.enforcement === "ceiling") effective = applyCeiling(effective, workspace.policy);
+  if (org?.enforcement === "ceiling")
+    effective = applyCeiling(effective, org.policy);
+  if (workspace?.enforcement === "ceiling")
+    effective = applyCeiling(effective, workspace.policy);
 
   return effective;
 }

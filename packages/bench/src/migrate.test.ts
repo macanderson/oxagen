@@ -5,7 +5,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const commandMock = vi.hoisted(() => vi.fn());
-const closeClickhouseMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const closeClickhouseMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
 const splitStatementsMock = vi.hoisted(() =>
   vi.fn((sql: string) =>
     sql
@@ -15,9 +17,14 @@ const splitStatementsMock = vi.hoisted(() =>
   ),
 );
 const readFileSyncMock = vi.hoisted(() =>
-  vi.fn((_path: string) => "CREATE DATABASE IF NOT EXISTS bench;\nCREATE TABLE foo (id Int32)"),
+  vi.fn(
+    (_path: string) =>
+      "CREATE DATABASE IF NOT EXISTS bench;\nCREATE TABLE foo (id Int32)",
+  ),
 );
-const readdirSyncMock = vi.hoisted(() => vi.fn(() => ["0001_bench_schema.sql", "README.md"]));
+const readdirSyncMock = vi.hoisted(() =>
+  vi.fn(() => ["0001_bench_schema.sql", "README.md"]),
+);
 
 vi.mock("@oxagen/telemetry", () => ({
   closeClickhouse: closeClickhouseMock,
@@ -25,9 +32,16 @@ vi.mock("@oxagen/telemetry", () => ({
   // directly; under vitest it must be a no-op guard (never the direct entry).
   isDirectRunEntry: () => false,
 }));
-vi.mock("@oxagen/telemetry/bench-client", () => ({ chBenchCommand: commandMock }));
-vi.mock("@oxagen/telemetry/migrate", () => ({ splitStatements: splitStatementsMock }));
-vi.mock("node:fs", () => ({ readFileSync: readFileSyncMock, readdirSync: readdirSyncMock }));
+vi.mock("@oxagen/telemetry/bench-client", () => ({
+  chBenchCommand: commandMock,
+}));
+vi.mock("@oxagen/telemetry/migrate", () => ({
+  splitStatements: splitStatementsMock,
+}));
+vi.mock("node:fs", () => ({
+  readFileSync: readFileSyncMock,
+  readdirSync: readdirSyncMock,
+}));
 
 describe("migrateBench", () => {
   beforeEach(() => {
@@ -47,20 +61,26 @@ describe("migrateBench", () => {
     expect(readdirSyncMock).toHaveBeenCalledTimes(1);
     // README.md is filtered out — readFileSync is only called for the one .sql file.
     expect(readFileSyncMock).toHaveBeenCalledTimes(1);
-    expect(readFileSyncMock.mock.calls[0]![0]).toMatch(/0001_bench_schema\.sql$/);
+    expect(readFileSyncMock.mock.calls[0]![0]).toMatch(
+      /0001_bench_schema\.sql$/,
+    );
   });
 
   it("splits each migration file into statements and applies every one", async () => {
     const { migrateBench } = await import("./migrate");
     await migrateBench();
     expect(commandMock).toHaveBeenCalledTimes(2);
-    expect(commandMock).toHaveBeenCalledWith("CREATE DATABASE IF NOT EXISTS bench");
+    expect(commandMock).toHaveBeenCalledWith(
+      "CREATE DATABASE IF NOT EXISTS bench",
+    );
     expect(commandMock).toHaveBeenCalledWith("CREATE TABLE foo (id Int32)");
   });
 
   it("retries a transiently-failing statement and succeeds on a later attempt", async () => {
     vi.useFakeTimers();
-    commandMock.mockRejectedValueOnce(new Error("ECONNRESET")).mockResolvedValue(undefined);
+    commandMock
+      .mockRejectedValueOnce(new Error("ECONNRESET"))
+      .mockResolvedValue(undefined);
     const { migrateBench } = await import("./migrate");
     const donePromise = migrateBench();
     await vi.runAllTimersAsync();

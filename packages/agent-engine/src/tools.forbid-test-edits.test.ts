@@ -7,10 +7,16 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
-import { buildWorkspaceTools, isTestPath, TEST_EDIT_DENIED_MESSAGE } from "./tools";
+import {
+  buildWorkspaceTools,
+  isTestPath,
+  TEST_EDIT_DENIED_MESSAGE,
+} from "./tools";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
-  return (tool as { execute: (i: unknown, o: unknown) => Promise<string> }).execute(input, {});
+  return (
+    tool as { execute: (i: unknown, o: unknown) => Promise<string> }
+  ).execute(input, {});
 }
 
 describe("isTestPath", () => {
@@ -69,7 +75,9 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
 
   it("denies edit_file on a test path when the flag is set", async () => {
     process.env["OXAGEN_FORBID_TEST_EDITS"] = "1";
-    const ws = new MemoryWorkspace({ "tests/foo.test.ts": "export const x = 1;" });
+    const ws = new MemoryWorkspace({
+      "tests/foo.test.ts": "export const x = 1;",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.edit_file, {
       path: "tests/foo.test.ts",
@@ -98,7 +106,9 @@ describe("buildWorkspaceTools – OXAGEN_FORBID_TEST_EDITS", () => {
   });
 
   it("allows edit_file on a test path when the flag is unset", async () => {
-    const ws = new MemoryWorkspace({ "tests/foo.test.ts": "export const x = 1;" });
+    const ws = new MemoryWorkspace({
+      "tests/foo.test.ts": "export const x = 1;",
+    });
     const tools = buildWorkspaceTools(ws);
     const result = await run(tools.edit_file, {
       path: "tests/foo.test.ts",

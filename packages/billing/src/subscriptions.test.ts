@@ -66,10 +66,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-
+    db: () => dbMocks,
+    withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+    withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
   };
 });
 
@@ -102,7 +101,9 @@ vi.mock("./checkout", () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock("./customers", () => ({
-  ensureStripeCustomer: vi.fn().mockRejectedValue(new Error("no customer in test")),
+  ensureStripeCustomer: vi
+    .fn()
+    .mockRejectedValue(new Error("no customer in test")),
 }));
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,9 @@ vi.mock("./seats", () => ({
       this.used = used;
     }
   },
-  isSeatLimitError: (e: unknown) => e instanceof Error && (e as { code?: string }).code === "seat_limit_reached",
+  isSeatLimitError: (e: unknown) =>
+    e instanceof Error &&
+    (e as { code?: string }).code === "seat_limit_reached",
 }));
 
 vi.mock("./entitlements", () => ({
@@ -129,9 +132,12 @@ vi.mock("./entitlements", () => ({
 }));
 
 // Import after mocks.
-const { syncSubscriptionFromStripe, changeOrgPlan, reactivateOrgSubscription, previewPlanChange } = await import(
-  "./subscriptions"
-);
+const {
+  syncSubscriptionFromStripe,
+  changeOrgPlan,
+  reactivateOrgSubscription,
+  previewPlanChange,
+} = await import("./subscriptions");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -187,9 +193,7 @@ describe("syncSubscriptionFromStripe", () => {
   });
 
   it("no org_id metadata — returns without touching DB at all", async () => {
-    getSubscriptionMock.mockResolvedValue(
-      makeSubscription({ metadata: {} }),
-    );
+    getSubscriptionMock.mockResolvedValue(makeSubscription({ metadata: {} }));
 
     await syncSubscriptionFromStripe("sub_test_001");
 
@@ -215,12 +219,16 @@ describe("syncSubscriptionFromStripe", () => {
     );
     dbMocks.query.plans.findFirst.mockResolvedValue({ id: "plan-uuid-1" });
     // Prior row was still active before this sync.
-    dbMocks.query.subscriptions.findFirst.mockResolvedValue({ status: "active" });
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      status: "active",
+    });
 
     await syncSubscriptionFromStripe("sub_test_001");
 
     expect(emitSecurityEventMock).toHaveBeenCalledOnce();
-    const [event] = emitSecurityEventMock.mock.calls[0] as [Record<string, unknown>];
+    const [event] = emitSecurityEventMock.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
     expect(event.eventType).toBe("billing.subscription_canceled");
     expect(event.orgId).toBe("org-abc-123");
     expect(event.actorUserId).toBeNull(); // system / provider-confirmed
@@ -233,7 +241,9 @@ describe("syncSubscriptionFromStripe", () => {
     );
     dbMocks.query.plans.findFirst.mockResolvedValue({ id: "plan-uuid-1" });
     // Prior row was already canceled — no edge transition.
-    dbMocks.query.subscriptions.findFirst.mockResolvedValue({ status: "canceled" });
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      status: "canceled",
+    });
 
     await syncSubscriptionFromStripe("sub_test_001");
 
@@ -248,8 +258,12 @@ describe("syncSubscriptionFromStripe", () => {
 describe("changeOrgPlan audit emit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
-    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+    const upsertChain = {
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    dbMocks.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue(upsertChain),
+    });
   });
 
   it("active subscription + downgrade → swaps price in place and emits billing.plan_changed", async () => {
@@ -280,7 +294,8 @@ describe("changeOrgPlan audit emit", () => {
     expect(result).toBeNull();
 
     const planChangedCall = emitSecurityEventMock.mock.calls.find(
-      (c) => (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
+      (c) =>
+        (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
     );
     expect(planChangedCall).toBeDefined();
     const event = planChangedCall![0] as Record<string, unknown>;
@@ -307,7 +322,8 @@ describe("changeOrgPlan audit emit", () => {
 
     expect(result).toEqual({ checkoutUrl: "https://checkout.example/session" });
     const planChangedCall = emitSecurityEventMock.mock.calls.find(
-      (c) => (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
+      (c) =>
+        (c[0] as Record<string, unknown>).eventType === "billing.plan_changed",
     );
     expect(planChangedCall).toBeUndefined();
   });
@@ -320,8 +336,12 @@ describe("changeOrgPlan audit emit", () => {
 describe("reactivateOrgSubscription audit emit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
-    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+    const upsertChain = {
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    dbMocks.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue(upsertChain),
+    });
   });
 
   it("undoing a scheduled cancellation emits billing.subscription_reactivated", async () => {
@@ -339,7 +359,9 @@ describe("reactivateOrgSubscription audit emit", () => {
     await reactivateOrgSubscription("org-abc-123");
 
     const reactivatedCall = emitSecurityEventMock.mock.calls.find(
-      (c) => (c[0] as Record<string, unknown>).eventType === "billing.subscription_reactivated",
+      (c) =>
+        (c[0] as Record<string, unknown>).eventType ===
+        "billing.subscription_reactivated",
     );
     expect(reactivatedCall).toBeDefined();
     const event = reactivatedCall![0] as Record<string, unknown>;
@@ -356,8 +378,12 @@ describe("reactivateOrgSubscription audit emit", () => {
 describe("previewPlanChange — annual price misconfiguration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const upsertChain = { onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) };
-    dbMocks.insert.mockReturnValue({ values: vi.fn().mockReturnValue(upsertChain) });
+    const upsertChain = {
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    dbMocks.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue(upsertChain),
+    });
   });
 
   it("throws when annualCents is null for an annual-interval plan (bad-fallback fix)", async () => {
@@ -369,16 +395,16 @@ describe("previewPlanChange — annual price misconfiguration", () => {
       id: "plan-build-1",
       tier: "build",
       stripePriceIdMonthly: "price_build_month",
-      stripePriceIdAnnual: "price_build_year",   // annual price ID exists…
+      stripePriceIdAnnual: "price_build_year", // annual price ID exists…
       monthlyCents: 2000,
-      annualCents: null,                          // …but annualCents is not configured
+      annualCents: null, // …but annualCents is not configured
     });
     // No active subscription → triggers the checkout preview path that uses fullPriceCents.
     dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
 
-    await expect(previewPlanChange("org-abc-123", "build", "year")).rejects.toThrow(
-      /annualCents/,
-    );
+    await expect(
+      previewPlanChange("org-abc-123", "build", "year"),
+    ).rejects.toThrow(/annualCents/);
   });
 
   it("does not throw when annualCents is properly configured", async () => {
@@ -485,7 +511,9 @@ describe("previewPlanChange — card lookup error visibility", () => {
     expect(result.requiresCheckout).toBe(true);
     expect(result.card).toBeNull();
     const cardWarn = loggerMock.warn.mock.calls.find(
-      (c) => typeof c[1] === "string" && c[1].includes("plan-change preview card lookup failed"),
+      (c) =>
+        typeof c[1] === "string" &&
+        c[1].includes("plan-change preview card lookup failed"),
     );
     expect(cardWarn).toBeUndefined();
   });

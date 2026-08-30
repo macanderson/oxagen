@@ -142,7 +142,9 @@ export async function agentDebugTraceHandler(
   );
   // Top frames come from the primary error's stack; fall back to any error's.
   const topFrames = (
-    primaryError ? parseStackFrames(primaryError.stack, MAX_TOP_FRAMES) : allFramesFromErrors
+    primaryError
+      ? parseStackFrames(primaryError.stack, MAX_TOP_FRAMES)
+      : allFramesFromErrors
   ).slice(0, MAX_TOP_FRAMES);
 
   const failureText: string[] = [
@@ -160,8 +162,11 @@ export async function agentDebugTraceHandler(
   });
 
   const errorClass =
-    primaryError?.errorClass ?? classFromFailureReason(failingStep?.failureReason ?? tree.failureReason);
-  const message = clampMessage(primaryError?.message ?? failingStep?.failureReason ?? tree.failureReason);
+    primaryError?.errorClass ??
+    classFromFailureReason(failingStep?.failureReason ?? tree.failureReason);
+  const message = clampMessage(
+    primaryError?.message ?? failingStep?.failureReason ?? tree.failureReason,
+  );
 
   const frame: AgentDebugTraceOutput = {
     executionId: root.publicId,
@@ -210,18 +215,24 @@ export async function agentDebugTraceHandler(
 }
 
 /** The most actionable captured error: fatal > error > warn, then most recent. */
-function pickPrimaryError(events: ExecutionErrorEvent[]): ExecutionErrorEvent | null {
+function pickPrimaryError(
+  events: ExecutionErrorEvent[],
+): ExecutionErrorEvent | null {
   if (events.length === 0) return null;
   const rank = { fatal: 3, error: 2, warn: 1 } as const;
   return (
     [...events].sort(
-      (a, b) => rank[b.severity] - rank[a.severity] || b.createdAt.localeCompare(a.createdAt),
+      (a, b) =>
+        rank[b.severity] - rank[a.severity] ||
+        b.createdAt.localeCompare(a.createdAt),
     )[0] ?? null
   );
 }
 
 /** Best-effort error class from a failure reason like "TypeError: x" — else null. */
-function classFromFailureReason(reason: string | null | undefined): string | null {
+function classFromFailureReason(
+  reason: string | null | undefined,
+): string | null {
   if (!reason) return null;
   const m = reason.match(/^([A-Z][A-Za-z0-9_]*(?:Error|Exception))\b/);
   return m?.[1] ?? null;
@@ -286,7 +297,10 @@ async function summarizeDiagnosis(
     message: frame.message,
     topFrames: frame.topFrames.map((f) => f.raw),
     suspectFiles: frame.suspectFiles,
-    errorEvents: frame.errorEvents.map((e) => ({ errorClass: e.errorClass, message: e.message })),
+    errorEvents: frame.errorEvents.map((e) => ({
+      errorClass: e.errorClass,
+      message: e.message,
+    })),
     logsSample: frame.logsSample.map((l) => `[${l.level}] ${l.message}`),
   });
   try {

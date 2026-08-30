@@ -65,22 +65,28 @@ import {
 // ── Canonical JSON + digest primitives ──────────────────────────────────────
 
 /**
- * DELIBERATELY LOCAL AND MINIMAL.
+ * DELIBERATELY LOCAL AND MINIMAL — and now a KNOWN DUPLICATE.
  *
- * PR 0B (`@oxagen/run-evidence`, branch `codex/run-evidence-contract`) is
- * building the shared JCS/RFC-8785 canonical-JSON and sha256 digest helpers,
- * but it is NOT merged, so this package must not depend on it yet. The surface
- * here is kept intentionally small and RFC 8785-compatible — object keys
- * sorted by UTF-16 code unit, no insignificant whitespace, exact UTF-8 bytes,
- * `sha256:<64 lowercase hex>` at every boundary — so it can be swapped for
- * `@oxagen/run-evidence` with an import change and no digest drift. The
- * empty-object vector is pinned in run-spec-v2.test.ts to catch drift at the
- * swap.
+ * `@oxagen/run-evidence` has since landed with its own JCS/RFC-8785 helpers
+ * (`jcsBytes`, `digestJcs`, built on the `canonicalize` package). This module
+ * still carries its own copy: agent-runner takes no dependency on that package,
+ * and consolidating the two is a dependency and digest-compatibility change,
+ * not a comment fix. Until that consolidation is proven vector by vector,
+ * treat these as two implementations that MUST agree, and change neither
+ * casually.
+ *
+ * The surface here is intentionally small and RFC 8785-compatible — object
+ * keys sorted by UTF-16 code unit, no insignificant whitespace, exact UTF-8
+ * bytes, `sha256:<64 lowercase hex>` at every boundary. The empty-object vector
+ * is pinned in run-spec-v2.test.ts so any drift fails a test rather than a
+ * production manifest.
  *
  * Two deliberate narrowings versus full JCS, both fail-closed: only safe
- * integers are accepted (the ES6 number-serialization algorithm for floats
- * lands with the shared package — until then a float must not enter a digest
- * input), and non-JSON values are refused rather than coerced.
+ * integers are accepted (this implementation has no ES6 float-serialization
+ * step, so a float must never enter a digest input here), and non-JSON values
+ * are refused rather than coerced. `@oxagen/run-evidence` DOES serialize
+ * floats, so the two agree only on the values this one accepts — which is
+ * exactly why the consolidation needs vectors, not an import swap.
  */
 export function canonicalJson(value: unknown): string {
   return writeCanonical(value, "");

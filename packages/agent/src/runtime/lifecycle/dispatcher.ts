@@ -46,6 +46,15 @@ async function withTimeout<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    // An ALREADY-aborted signal never dispatches another "abort" event, so the
+    // listener below would never fire and the call would run out its full
+    // timeout. Reject up front instead.
+    if (signal?.aborted) {
+      reject(
+        new LifecycleDispatchError("lifecycle_cancelled", "turn was cancelled"),
+      );
+      return;
+    }
     const timer = setTimeout(
       () =>
         reject(
@@ -127,6 +136,9 @@ export async function dispatchLifecycleEvent(options: {
         break;
       } catch (caught) {
         error = caught;
+        // A cancelled turn must not keep retrying: every further attempt would
+        // burn another full timeout_ms before failing the same way.
+        if (options.signal?.aborted) break;
       }
     }
 

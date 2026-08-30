@@ -6,7 +6,10 @@
     "resolved": true,
     "tests_status": {
       "FAIL_TO_PASS": { "success": ["test_ascii_validator"], "failure": [] },
-      "PASS_TO_PASS": { "success": ["test_help_text", "test_validate"], "failure": [] },
+      "PASS_TO_PASS": {
+        "success": ["test_help_text", "test_validate"],
+        "failure": []
+      },
       "FAIL_TO_FAIL": { "success": [], "failure": [] },
       "PASS_TO_FAIL": { "success": [], "failure": [] }
     }

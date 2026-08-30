@@ -17,7 +17,10 @@ vi.mock("@oxagen/ai", () => ({
 }));
 
 import { withTenantDb } from "@oxagen/database";
-import { fetchErrorEventsForExecution, fetchLogsForExecution } from "@oxagen/telemetry";
+import {
+  fetchErrorEventsForExecution,
+  fetchLogsForExecution,
+} from "@oxagen/telemetry";
 import { generateObjectFor } from "@oxagen/ai";
 import { agentTraceGetHandler } from "./agent.trace.get";
 import { agentDebugTraceHandler } from "./agent.debug.trace";
@@ -82,7 +85,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   // 1st withTenantDb call → root resolve; 2nd → tool-arg payloads.
   wtd
-    .mockResolvedValueOnce({ id: "uuid-root", publicId: "aex_root", status: "failed" })
+    .mockResolvedValueOnce({
+      id: "uuid-root",
+      publicId: "aex_root",
+      status: "failed",
+    })
     .mockResolvedValueOnce([{ path: "packages/agent/src/broken.ts" }]);
   traceGet.mockResolvedValue(failedTree());
   fetchErrors.mockResolvedValue([
@@ -92,7 +99,8 @@ beforeEach(() => {
       source: "runner",
       errorClass: "TypeError",
       message: "cannot read properties of undefined (reading 'x')",
-      stack: "TypeError: x\n    at handle (/repo/packages/agent/src/broken.ts:42:10)",
+      stack:
+        "TypeError: x\n    at handle (/repo/packages/agent/src/broken.ts:42:10)",
       capability: "execute_code",
       requestId: "req-1",
       fingerprint: "fp1",
@@ -121,14 +129,20 @@ describe("agentDebugTraceHandler", () => {
   });
 
   it("assembles a deterministic frame without calling the model", async () => {
-    const frame = await agentDebugTraceHandler({ executionId: "aex_root" }, CTX);
+    const frame = await agentDebugTraceHandler(
+      { executionId: "aex_root" },
+      CTX,
+    );
 
     expect(frame.executionId).toBe("aex_root");
     expect(frame.status).toBe("failed");
     expect(frame.errorClass).toBe("TypeError");
     expect(frame.message).toContain("cannot read properties");
     // Failing step is derived from the trace tree.
-    expect(frame.failingStep).toMatchObject({ stepId: "aes_2", toolName: "edit_file" });
+    expect(frame.failingStep).toMatchObject({
+      stepId: "aes_2",
+      toolName: "edit_file",
+    });
     // Top frame parsed from the captured error stack.
     expect(frame.topFrames[0]).toMatchObject({
       file: "/repo/packages/agent/src/broken.ts",
@@ -150,22 +164,36 @@ describe("agentDebugTraceHandler", () => {
       object: {
         problem: "edit_file dereferenced undefined",
         expectedBehavior: "edit applies cleanly",
-        rootCauseHypotheses: [{ id: "h1", statement: "missing null guard", evidence: "stack line 42" }],
+        rootCauseHypotheses: [
+          {
+            id: "h1",
+            statement: "missing null guard",
+            evidence: "stack line 42",
+          },
+        ],
         blastRadius: ["packages/agent/src/broken.ts"],
         diffBudget: 8,
       },
     } as never);
 
-    const frame = await agentDebugTraceHandler({ executionId: "aex_root", summarize: true }, CTX);
+    const frame = await agentDebugTraceHandler(
+      { executionId: "aex_root", summarize: true },
+      CTX,
+    );
 
     expect(genObject).toHaveBeenCalledTimes(1);
     expect(frame.diagnosis).toMatchObject({ diffBudget: 8 });
-    expect(frame.diagnosis?.rootCauseHypotheses[0]!.statement).toBe("missing null guard");
+    expect(frame.diagnosis?.rootCauseHypotheses[0]!.statement).toBe(
+      "missing null guard",
+    );
   });
 
   it("keeps the deterministic frame when the model call throws (summarize:true)", async () => {
     genObject.mockRejectedValue(new Error("gateway down"));
-    const frame = await agentDebugTraceHandler({ executionId: "aex_root", summarize: true }, CTX);
+    const frame = await agentDebugTraceHandler(
+      { executionId: "aex_root", summarize: true },
+      CTX,
+    );
     expect(frame.diagnosis).toBeNull();
     expect(frame.errorClass).toBe("TypeError"); // frame intact
   });

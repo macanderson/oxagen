@@ -201,8 +201,12 @@ describe("contributeFileBasedMcpTools — stdio server (security gate)", () => {
     });
     managedMocks.loadManagedConfig.mockReturnValue(null);
     managedMocks.getManagedServers.mockReturnValue({});
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
     mcpClientMocks.connectMcp.mockReset();
     mcpClientMocks.connectMcpStdio.mockReset().mockResolvedValue({});
@@ -241,7 +245,12 @@ describe("contributeFileBasedMcpTools — stdio server (security gate)", () => {
     const tools = await contributeFileBasedMcpTools(CTX);
     expect(mcpClientMocks.connectMcpStdio).toHaveBeenCalledTimes(1);
     const [args] = mcpClientMocks.connectMcpStdio.mock.calls[0] as unknown as [
-      { command: string; args?: string[]; env?: Record<string, string>; cwd?: string },
+      {
+        command: string;
+        args?: string[];
+        env?: Record<string, string>;
+        cwd?: string;
+      },
     ];
     expect(args.command).toBe("node");
     expect(args.args).toEqual(["server.js"]);
@@ -294,7 +303,10 @@ describe("contributeFileBasedMcpTools — stdio server (security gate)", () => {
     expect(tools).toEqual([]);
     expect(mcpClientMocks.connectMcpStdio).not.toHaveBeenCalled();
     expect(loggerMock.warn).toHaveBeenCalledTimes(1);
-    const [, msg] = loggerMock.warn.mock.calls[0] as unknown as [unknown, string];
+    const [, msg] = loggerMock.warn.mock.calls[0] as unknown as [
+      unknown,
+      string,
+    ];
     expect(msg).toContain("allowedCommands");
   });
 
@@ -385,8 +397,12 @@ describe("contributeFileBasedMcpTools — successful tool contribution (none aut
       source: "none" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
 
     mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
@@ -411,7 +427,8 @@ describe("contributeFileBasedMcpTools — successful tool contribution (none aut
   it("calls materializeMcpTools with the server prefix", async () => {
     await contributeFileBasedMcpTools(CTX);
     expect(mcpClientMocks.materializeMcpTools).toHaveBeenCalledTimes(1);
-    const [, prefix] = mcpClientMocks.materializeMcpTools.mock.calls[0] as unknown as [unknown, string];
+    const [, prefix] = mcpClientMocks.materializeMcpTools.mock
+      .calls[0] as unknown as [unknown, string];
     expect(prefix).toBe("file-mcp.openSrv");
   });
 
@@ -443,8 +460,12 @@ describe("contributeFileBasedMcpTools — bearer token auth", () => {
       source: "file" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
 
     mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
@@ -485,8 +506,12 @@ describe("contributeFileBasedMcpTools — header auth", () => {
       source: "file" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
 
     mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
@@ -545,40 +570,58 @@ describe("contributeFileBasedMcpTools — tool visibility and permission filteri
   it("applies filterToolVisibility to limit visible tools", async () => {
     // Only allow list_items through visibility filter
     permMocks.filterToolVisibility.mockReturnValue(["list_items"]);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
 
     const tools = await contributeFileBasedMcpTools(CTX);
     expect(permMocks.filterToolVisibility).toHaveBeenCalledTimes(1);
     // Only the visible tool should be contributed
-    expect(tools.map((t) => t.realName)).toContain("file-mcp.filteredSrv.list_items");
-    expect(tools.map((t) => t.realName)).not.toContain("file-mcp.filteredSrv.delete_item");
+    expect(tools.map((t) => t.realName)).toContain(
+      "file-mcp.filteredSrv.list_items",
+    );
+    expect(tools.map((t) => t.realName)).not.toContain(
+      "file-mcp.filteredSrv.delete_item",
+    );
   });
 
   it("applies getNonDeniedTools to remove denied tools", async () => {
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
     // Deny delete_item
     permMocks.getNonDeniedTools.mockImplementation(
-      (_s: string, tools: string[]) => tools.filter((t) => !t.startsWith("delete")),
+      (_s: string, tools: string[]) =>
+        tools.filter((t) => !t.startsWith("delete")),
     );
     managedMocks.checkToolDenied.mockReturnValue(null);
 
     const tools = await contributeFileBasedMcpTools(CTX);
     expect(permMocks.getNonDeniedTools).toHaveBeenCalledTimes(1);
-    expect(tools.map((t) => t.realName)).not.toContain("file-mcp.filteredSrv.delete_item");
+    expect(tools.map((t) => t.realName)).not.toContain(
+      "file-mcp.filteredSrv.delete_item",
+    );
   });
 
   it("applies managed policy tool denylist via checkToolDenied", async () => {
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     // Deny delete_item at managed policy level
-    managedMocks.checkToolDenied.mockImplementation((_s: string, tool: string) =>
-      tool === "delete_item" ? { reason: "policy" } : null,
+    managedMocks.checkToolDenied.mockImplementation(
+      (_s: string, tool: string) =>
+        tool === "delete_item" ? { reason: "policy" } : null,
     );
 
     const tools = await contributeFileBasedMcpTools(CTX);
     expect(managedMocks.checkToolDenied).toHaveBeenCalled();
-    expect(tools.map((t) => t.realName)).not.toContain("file-mcp.filteredSrv.delete_item");
+    expect(tools.map((t) => t.realName)).not.toContain(
+      "file-mcp.filteredSrv.delete_item",
+    );
   });
 });
 
@@ -589,7 +632,10 @@ describe("contributeFileBasedMcpTools — managed servers merged", () => {
       scopes: [],
       serverSources: {},
     });
-    managedMocks.loadManagedConfig.mockReturnValue({ managedPolicy: undefined, servers: {} });
+    managedMocks.loadManagedConfig.mockReturnValue({
+      managedPolicy: undefined,
+      servers: {},
+    });
     managedMocks.getManagedServers.mockReturnValue({
       managedSrv: httpServer({ url: "https://managed.mcp.example.com" }),
     });
@@ -598,8 +644,12 @@ describe("contributeFileBasedMcpTools — managed servers merged", () => {
       source: "none" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
     mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
     mcpClientMocks.materializeMcpTools.mockReset().mockResolvedValue({
@@ -636,8 +686,12 @@ describe("contributeFileBasedMcpTools — per-server error isolation", () => {
       source: "none" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
   });
 
@@ -646,12 +700,14 @@ describe("contributeFileBasedMcpTools — per-server error isolation", () => {
     // badSrv: connectMcp throws; goodSrv: succeeds.
     // Since iteration order matches Object.entries, badSrv will be first or second
     // depending on insertion order; the mock decides by endpoint URL.
-    mcpClientMocks.connectMcp.mockImplementation(async (args: { endpointUrl: string }) => {
-      if (args.endpointUrl === "https://bad.example.com") {
-        throw new Error("connection refused");
-      }
-      return {};
-    });
+    mcpClientMocks.connectMcp.mockImplementation(
+      async (args: { endpointUrl: string }) => {
+        if (args.endpointUrl === "https://bad.example.com") {
+          throw new Error("connection refused");
+        }
+        return {};
+      },
+    );
     mcpClientMocks.materializeMcpTools.mockResolvedValue({
       "file-mcp.goodSrv.ping": {
         description: "ping",
@@ -687,8 +743,12 @@ describe("contributeFileBasedMcpTools — tool without execute function is skipp
       source: "none" as const,
       expired: false,
     });
-    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
-    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    permMocks.filterToolVisibility.mockImplementation(
+      (tools: string[]) => tools,
+    );
+    permMocks.getNonDeniedTools.mockImplementation(
+      (_s: string, tools: string[]) => tools,
+    );
     managedMocks.checkToolDenied.mockReturnValue(null);
     mcpClientMocks.connectMcp.mockReset().mockResolvedValue({});
   });

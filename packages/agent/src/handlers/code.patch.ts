@@ -59,13 +59,15 @@ export async function codePatchHandler(
     const isAdd = isDevNull(patch.oldFileName);
     const isDelete = isDevNull(patch.newFileName);
     // For a delete the new side is /dev/null, so the real path is the old side.
-    const targetPath = stripGitPrefix(isDelete ? patch.oldFileName : patch.newFileName);
+    const targetPath = stripGitPrefix(
+      isDelete ? patch.oldFileName : patch.newFileName,
+    );
 
     // Path-traversal confinement: every target must resolve inside the
     // workspace root (throws SandboxWorkspaceError on `..`/absolute escapes).
     assertSafeWorkspacePath(targetPath);
 
-    const source = isAdd ? "" : files[targetPath] ?? "";
+    const source = isAdd ? "" : (files[targetPath] ?? "");
     const result = applyPatch(source, patch);
     if (result === false) {
       throw new Error(

@@ -349,15 +349,16 @@ export async function localize(
       ? Date.now() + opts.timeoutMs
       : Infinity;
 
+  // One gate per pass, owned here so its timer is released on EVERY exit —
+  // including the failure path, where `_localize` would otherwise never reach
+  // its own dispose call.
+  const gate = createDeadlineGate(deadline);
   try {
-    return await _localize(
-      issue,
-      graph,
-      opts.semanticFallback ?? true,
-      deadline,
-    );
+    return await _localize(issue, graph, opts.semanticFallback ?? true, gate);
   } catch {
     return EMPTY_MAP;
+  } finally {
+    gate.dispose();
   }
 }
 
@@ -365,14 +366,13 @@ async function _localize(
   issue: string,
   graph: CodeGraphProvider,
   semanticFallback: boolean,
-  deadline: number,
+  // The pass's shared wall-clock budget. Every safeQuery gates on this single
+  // timer's event, so short-circuiting after the deadline is deterministic
+  // regardless of monotonic/wall clock skew under load. Owned (and disposed) by
+  // the caller.
+  gate: DeadlineGate,
 ): Promise<LocalizationMap> {
   const scoreMap = new Map<string, FileScore>();
-
-  // One shared wall-clock budget for the whole pass. Every safeQuery gates on
-  // this single timer's event, so short-circuiting after the deadline is
-  // deterministic regardless of monotonic/wall clock skew under load.
-  const gate = createDeadlineGate(deadline);
 
   function touch(path: string): FileScore {
     let entry = scoreMap.get(path);
@@ -492,13 +492,7 @@ async function _localize(
 
   const distinctFiles = scoreMap.size;
   if (semanticFallback && distinctFiles < SEMANTIC_FALLBACK_THRESHOLD) {
-    const semResult = await safeQuery(
-      graph,
-      "semantic_search",
-      issue,
-      5,
-      gate,
-    );
+    const semResult = await safeQuery(graph, "semantic_search", issue, 5, gate);
     if (isHit(semResult)) {
       for (const p of parseGraphPaths(semResult)) {
         const e = touch(p);
@@ -522,8 +516,6 @@ async function _localize(
 
   const testHints = nearestTestDirs(ranked.map((f) => f.path));
   const renderedBlock = renderLocalizationMap(ranked, testHints);
-
-  gate.dispose();
 
   return {
     files: ranked,

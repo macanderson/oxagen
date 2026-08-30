@@ -44,7 +44,9 @@ const LLM_EVALUATOR = "anthropic/claude-haiku-4.5";
 describe("evaluatePrompt", () => {
   it("defaults to the local heuristic coordinator — no model call", async () => {
     const generateObject = vi.fn();
-    const ai = makeAi({ generateObject: generateObject as AgentAi["generateObject"] });
+    const ai = makeAi({
+      generateObject: generateObject as AgentAi["generateObject"],
+    });
 
     const result = await evaluatePrompt({ prompt: "fix the auth bug" }, ai);
 
@@ -75,7 +77,10 @@ describe("evaluatePrompt", () => {
     });
 
     const result = await evaluatePrompt(
-      { prompt: "please fix the login timeout bug in src/auth/session.ts", model: LLM_EVALUATOR },
+      {
+        prompt: "please fix the login timeout bug in src/auth/session.ts",
+        model: LLM_EVALUATOR,
+      },
       ai,
     );
 
@@ -90,10 +95,15 @@ describe("evaluatePrompt", () => {
 
   it("falls back to heuristic when ai.generateObject throws", async () => {
     const ai = makeAi({
-      generateObject: vi.fn().mockRejectedValue(new Error("gateway unavailable")),
+      generateObject: vi
+        .fn()
+        .mockRejectedValue(new Error("gateway unavailable")),
     });
 
-    const result = await evaluatePrompt({ prompt: "fix the auth bug", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "fix the auth bug", model: LLM_EVALUATOR },
+      ai,
+    );
 
     expect(result.fallback).toBe(true);
     // Auth-related prompt → precise tier heuristically
@@ -132,7 +142,10 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "rename the thing", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "rename the thing", model: LLM_EVALUATOR },
+      ai,
+    );
     expect(result.refinedPrompt).toBe("rename the thing");
   });
 
@@ -153,7 +166,10 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "do it", model: LLM_EVALUATOR }, ai);
+    const result = await evaluatePrompt(
+      { prompt: "do it", model: LLM_EVALUATOR },
+      ai,
+    );
     expect(result.completeness).toBe(100);
     expect(result.complexity).toBe(0);
   });
@@ -319,7 +335,13 @@ describe("judgeCompleteness", () => {
 
   it("puts the git diff and command outputs (evidence) into the judge prompt", async () => {
     const gen = vi.fn().mockResolvedValue({
-      object: { complete: true, confidence: 90, findings: [], remainingWork: [], reasoning: "ok" },
+      object: {
+        complete: true,
+        confidence: 90,
+        findings: [],
+        remainingWork: [],
+        reasoning: "ok",
+      },
       usage: emptyUsage(),
     });
     const ai = makeAi({ generateObject: gen });
@@ -331,7 +353,9 @@ describe("judgeCompleteness", () => {
         filesTouched: ["math_utils.py"],
         commandsRun: ["pytest -q"],
         diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
-        commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
+        commandOutputs: [
+          { command: "pytest -q", output: "2 passed in 0.01s", ok: true },
+        ],
         steps: 4,
         executorModel: "anthropic/claude-sonnet-5",
       },
@@ -348,11 +372,19 @@ describe("judgeCompleteness", () => {
 
   it("marks a command FAILED and preserves the failing tail of its output", async () => {
     const gen = vi.fn().mockResolvedValue({
-      object: { complete: false, confidence: 85, findings: ["tests fail"], remainingWork: ["fix"], reasoning: "failing tests" },
+      object: {
+        complete: false,
+        confidence: 85,
+        findings: ["tests fail"],
+        remainingWork: ["fix"],
+        reasoning: "failing tests",
+      },
       usage: emptyUsage(),
     });
     const ai = makeAi({ generateObject: gen });
-    const longOutput = "collecting…\n".repeat(500) + "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
+    const longOutput =
+      "collecting…\n".repeat(500) +
+      "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
 
     await judgeCompleteness(
       {
@@ -375,7 +407,10 @@ describe("judgeCompleteness", () => {
 
 describe("pickJudgePanel", () => {
   it("returns distinct cross-vendor models, excluding the executor", () => {
-    const panel = pickJudgePanel("anthropic/claude-opus-4-8", "openai/gpt-5,google/gemini-2.5-pro,anthropic/claude-opus-4-8,openai/gpt-5");
+    const panel = pickJudgePanel(
+      "anthropic/claude-opus-4-8",
+      "openai/gpt-5,google/gemini-2.5-pro,anthropic/claude-opus-4-8,openai/gpt-5",
+    );
     expect(panel).toContain("openai/gpt-5");
     expect(panel).toContain("google/gemini-2.5-pro");
     expect(panel).not.toContain("anthropic/claude-opus-4-8"); // executor excluded
@@ -418,16 +453,32 @@ describe("judgePanel", () => {
 
   it("is complete only on a strict majority; unions dissenting findings otherwise", async () => {
     // 2 of 3 say incomplete → panel INCOMPLETE, findings unioned.
-    const ai = judgeAi({ "openai/gpt-5": false, "google/gemini-2.5-pro": false, "x/y": true });
-    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    const ai = judgeAi({
+      "openai/gpt-5": false,
+      "google/gemini-2.5-pro": false,
+      "x/y": true,
+    });
+    const verdict = await judgePanel(base, ai, [
+      "openai/gpt-5",
+      "google/gemini-2.5-pro",
+      "x/y",
+    ]);
     expect(verdict.complete).toBe(false);
     expect(verdict.findings.length).toBeGreaterThanOrEqual(2);
     expect(verdict.model).toContain("panel(");
   });
 
   it("is complete when a majority agree it's complete", async () => {
-    const ai = judgeAi({ "openai/gpt-5": true, "google/gemini-2.5-pro": true, "x/y": false });
-    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    const ai = judgeAi({
+      "openai/gpt-5": true,
+      "google/gemini-2.5-pro": true,
+      "x/y": false,
+    });
+    const verdict = await judgePanel(base, ai, [
+      "openai/gpt-5",
+      "google/gemini-2.5-pro",
+      "x/y",
+    ]);
     expect(verdict.complete).toBe(true);
     expect(verdict.findings).toEqual([]);
   });
@@ -439,7 +490,8 @@ describe("judgePanel", () => {
     // would hide an out-of-credits account behind a falsely reassuring verdict.
     const ai = makeAi({
       generateObject: vi.fn().mockImplementation((args: { model: string }) => {
-        if (args.model === "google/gemini-2.5-pro") return Promise.reject(FATAL_ERROR);
+        if (args.model === "google/gemini-2.5-pro")
+          return Promise.reject(FATAL_ERROR);
         return Promise.resolve({
           object: {
             complete: true,
@@ -616,7 +668,9 @@ describe("enhancePrompt", () => {
 
   it("injects code graph results for matching symbols", async () => {
     const codeGraph = {
-      query: vi.fn().mockResolvedValue("src/auth/session.ts:5: loginUser function"),
+      query: vi
+        .fn()
+        .mockResolvedValue("src/auth/session.ts:5: loginUser function"),
     };
 
     const result = await enhancePrompt({
@@ -645,7 +699,9 @@ describe("enhancePrompt", () => {
 
   it("injects memory context when provider returns non-empty string", async () => {
     const memory = {
-      recallContext: vi.fn().mockResolvedValue("Remember: always run tests after changes"),
+      recallContext: vi
+        .fn()
+        .mockResolvedValue("Remember: always run tests after changes"),
       remember: vi.fn(),
     };
 
@@ -750,13 +806,15 @@ describe("enhancePrompt", () => {
         if (operation === "file_symbols" && q === "session.ts") {
           return "session.ts:\nfunction loginUser — session.ts:5";
         }
-        if (operation === "semantic_search") return "should-not-be-used.ts (0.99)";
+        if (operation === "semantic_search")
+          return "should-not-be-used.ts (0.99)";
         return "No symbols matching.";
       }),
     };
 
     const result = await enhancePrompt({
-      prompt: "where is `loginUser` defined and what does `session.ts` contain?",
+      prompt:
+        "where is `loginUser` defined and what does `session.ts` contain?",
       codeGraph,
     });
 
@@ -767,12 +825,16 @@ describe("enhancePrompt", () => {
   it("degrades gracefully when the code graph throws on the semantic query", async () => {
     const codeGraph = {
       query: vi.fn(async (operation: string) => {
-        if (operation === "semantic_search") throw new Error("gateway unavailable");
+        if (operation === "semantic_search")
+          throw new Error("gateway unavailable");
         return "No symbols matching.";
       }),
     };
 
-    const result = await enhancePrompt({ prompt: "do something conceptual", codeGraph });
+    const result = await enhancePrompt({
+      prompt: "do something conceptual",
+      codeGraph,
+    });
     expect(result.usedSemanticFallback).toBe(false);
     expect(result.prompt).toBe("do something conceptual");
   });

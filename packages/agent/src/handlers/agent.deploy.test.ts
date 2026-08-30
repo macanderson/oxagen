@@ -86,7 +86,9 @@ describe("agent.deploy handler", () => {
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
-    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+    expect((err as AgentManagedReadOnlyError).code).toBe(
+      "agent_managed_read_only",
+    );
     // The guard fires before any write — no insert/update/delete was issued.
     expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
   });
@@ -94,7 +96,10 @@ describe("agent.deploy handler", () => {
   it("throws when the agent is not found", async () => {
     fake.enqueue([]);
     await expect(
-      agentDeployHandler({ agentId: "missing", deploymentStatus: "inactive" }, CTX),
+      agentDeployHandler(
+        { agentId: "missing", deploymentStatus: "inactive" },
+        CTX,
+      ),
     ).rejects.toThrow(/not found/);
   });
 

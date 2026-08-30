@@ -19,7 +19,9 @@ export function resolveBaseURL(): string | undefined {
   // Use globalThis (not the bare `window` global) so this isomorphic module
   // typechecks in server packages whose tsconfig omits the DOM lib, while still
   // routing to the correct host in the browser.
-  const browser = (globalThis as { window?: { location?: { origin?: string } } }).window;
+  const browser = (
+    globalThis as { window?: { location?: { origin?: string } } }
+  ).window;
   if (browser?.location?.origin) return browser.location.origin;
   try {
     return loadEnv().BETTER_AUTH_URL;
@@ -50,7 +52,10 @@ export interface TwoFactorClientActions {
     totpURI?: string;
     backupCodes?: string[];
   }>;
-  verifyTotp: (args: { code: string; trustDevice?: boolean }) => AuthResult<unknown>;
+  verifyTotp: (args: {
+    code: string;
+    trustDevice?: boolean;
+  }) => AuthResult<unknown>;
   verifyBackupCode: (args: {
     code: string;
     trustDevice?: boolean;

@@ -99,7 +99,10 @@ describe("createClickHouseTraceStore — record", () => {
     await Promise.resolve();
 
     expect(pinoLogger.warn).toHaveBeenCalledTimes(1);
-    const [ctx, msg] = pinoLogger.warn.mock.calls[0] as [Record<string, unknown>, string];
+    const [ctx, msg] = pinoLogger.warn.mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
     expect(ctx.orgId).toBe("org-1");
     expect(msg).toContain("insertEvents failed");
   });

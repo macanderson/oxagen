@@ -72,7 +72,10 @@ export async function agentSandboxExecHandler(
       await markSessionStatus(ctx, row.id, "gone");
       throw new SandboxSessionGoneError(input.sessionId);
     }
-    const handle = await driver.restoreSession(row.snapshotId, specFromRow(row, ctx));
+    const handle = await driver.restoreSession(
+      row.snapshotId,
+      specFromRow(row, ctx),
+    );
     await rebindSession(ctx, row.id, handle.sandboxId);
     restored = true;
     result = await driver.execInSession({

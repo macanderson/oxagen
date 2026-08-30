@@ -13,6 +13,16 @@
 //   - Never remove a value that has ever shipped — audit rows referencing it
 //     must remain readable. Deprecate in comments instead.
 //   - Names are `<domain>.<event>`; outcomes live in SECURITY_OUTCOMES, not here.
+//
+// DECLARED ≠ EMITTED. A value in this list only reserves a name and widens the
+// DB CHECK; it does not mean any code path produces that row. Values with no
+// emitter anywhere in the repo are marked `RESERVED — no emitter` below. Do not
+// cite a RESERVED type as auditor evidence: querying it returns zero rows.
+//
+// Those RESERVED markers are HAND-MAINTAINED — no test asserts that an unmarked
+// value has a live emitter, so a type can lose its last emitter and keep reading
+// as covered. Re-verify by grepping the repo for the literal before relying on
+// one as evidence.
 
 // ---------------------------------------------------------------------------
 // SECURITY_EVENT_TYPES — typed const-union.
@@ -23,6 +33,8 @@ export const SECURITY_EVENT_TYPES = [
   "auth.sign_in",
   "auth.sign_in_failed",
   "auth.sign_out",
+  // RESERVED — no emitter. Better Auth hooks in packages/auth/src/auth.ts emit
+  // only sign_in and sign_out; nothing writes these three.
   "auth.token_refreshed",
   "auth.password_changed",
   "auth.email_verified",
@@ -68,6 +80,9 @@ export const SECURITY_EVENT_TYPES = [
   "plugin.installed",
   "plugin.uninstalled",
   "plugin.enabled_changed",
+  // RESERVED — no emitter. There is no org plugin denylist: the entitlement
+  // service explicitly has "no pre-approval / denylist"
+  // (packages/plugins/src/entitlements/entitlement-service.ts).
   "plugin.denylist_added",
   "plugin.denylist_removed",
   // Security policy
@@ -91,6 +106,10 @@ export const SECURITY_EVENT_TYPES = [
   //   finalization_grant_misuse  a one-shot finalization grant was presented
   //                             for a different attempt, digest, or capability
   //                             than the seal it was minted for
+  //
+  // Only the first is spelled by live code (EVENT_SEQUENCE_CONFLICT_EVENT in
+  // packages/agent-runner/src/run-store.ts). The other three are RESERVED — no
+  // emitter: the detectors that would raise them are not yet wired.
   "agent_run.event_sequence_conflict",
   "agent_run.forged_decision_reference",
   "agent_run.stale_deny_generation",
@@ -116,8 +135,13 @@ export const SECURITY_OUTCOMES = ["allow", "deny", "error", "success"] as const;
 export type SecurityOutcome = (typeof SECURITY_OUTCOMES)[number];
 
 // ---------------------------------------------------------------------------
-// Membership guards — O(1) lookups for runtime validation at trust boundaries
-// (e.g. accepting an event type off the wire before inserting).
+// Membership guards — O(1) narrowing for untrusted strings.
+//
+// Sole caller today is the audit-log filter parser
+// (apps/app/src/lib/audit-filters.ts), which drops unrecognised values out of a
+// user-supplied query string. The insert path does NOT call these: emitters are
+// typed against SecurityEventType at compile time and the DB CHECK constraint is
+// the runtime backstop.
 // ---------------------------------------------------------------------------
 
 const EVENT_TYPE_SET: ReadonlySet<string> = new Set(SECURITY_EVENT_TYPES);

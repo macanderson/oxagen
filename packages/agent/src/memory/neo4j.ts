@@ -1434,8 +1434,10 @@ export interface AttachEvidenceArgs {
 
 /**
  * Attach an :Evidence node to a memory and adjust confidence (schema §5/§7b).
- * Supporting evidence pulls confidence up by strength*100 (capped 100) and
- * refreshes last_evidence_at; refuting evidence pulls it down (floored 0).
+ * Supporting evidence pulls confidence up by strength*100 (capped 100);
+ * refuting evidence pulls it down (floored 0). EITHER direction stamps
+ * last_evidence_at, so a refutation also restarts the decay clock — the memory
+ * is treated as freshly examined, not as freshly confirmed.
  * Returns the created evidence id and the new confidence.
  */
 export async function attachEvidence(

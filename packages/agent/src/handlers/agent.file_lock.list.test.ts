@@ -12,7 +12,10 @@ describe("agentFileLockListHandler", () => {
   });
 
   it("lists every live lock (resourceKey undefined) when no path filter is given", async () => {
-    await agentFileLockListHandler({}, makeCTX({ orgId: "org_1", workspaceId: "ws_1" }));
+    await agentFileLockListHandler(
+      {},
+      makeCTX({ orgId: "org_1", workspaceId: "ws_1" }),
+    );
     expect(lease.listFileLeases).toHaveBeenCalledWith({
       orgId: "org_1",
       workspaceId: "ws_1",
@@ -26,7 +29,9 @@ describe("agentFileLockListHandler", () => {
       TEST_CTX,
     );
     expect(lease.listFileLeases).toHaveBeenCalledWith(
-      expect.objectContaining({ resourceKey: "github:oxageninc/oxagen-platform:src/a.ts" }),
+      expect.objectContaining({
+        resourceKey: "github:oxageninc/oxagen-platform:src/a.ts",
+      }),
     );
   });
 
@@ -52,7 +57,10 @@ describe("agentFileLockListHandler", () => {
         },
       ],
     });
-    const result = await agentFileLockListHandler({}, makeCTX({ workspaceId: "ws-1" }));
+    const result = await agentFileLockListHandler(
+      {},
+      makeCTX({ workspaceId: "ws-1" }),
+    );
     expect(result).toEqual({
       locks: [
         {

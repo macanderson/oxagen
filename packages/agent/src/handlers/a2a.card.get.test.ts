@@ -40,11 +40,20 @@ describe("a2a.card.get handler", () => {
 
   it("maps each active agent definition to an A2A skill after the baseline", async () => {
     fake.enqueue([
-      { publicId: "agt_1", slug: "researcher", name: "Researcher", description: "Digs" },
+      {
+        publicId: "agt_1",
+        slug: "researcher",
+        name: "Researcher",
+        description: "Digs",
+      },
       { publicId: "agt_2", slug: "writer", name: "Writer", description: null },
     ]);
     const card = await a2aCardGetHandler({ baseUrl: "https://x.test" }, CTX);
-    expect(card.skills.map((s) => s.id)).toEqual(["chat", "researcher", "writer"]);
+    expect(card.skills.map((s) => s.id)).toEqual([
+      "chat",
+      "researcher",
+      "writer",
+    ]);
     // A null description falls back to a generated one, never null.
     const writer = card.skills.find((s) => s.id === "writer")!;
     expect(typeof writer.description).toBe("string");

@@ -52,6 +52,11 @@ export async function telemetryErrorClusterHandler(
   };
 }
 
-function clampSampleMessage(message: string, max = SAMPLE_MESSAGE_CLAMP): string {
-  return message.length > max ? `${message.slice(0, max)}… [truncated]` : message;
+function clampSampleMessage(
+  message: string,
+  max = SAMPLE_MESSAGE_CLAMP,
+): string {
+  return message.length > max
+    ? `${message.slice(0, max)}… [truncated]`
+    : message;
 }

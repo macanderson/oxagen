@@ -35,7 +35,9 @@ export interface UsageDiscount {
  */
 export function usageVolumeDiscount(grantCents: number): UsageDiscount {
   if (!Number.isFinite(grantCents) || grantCents < 0) {
-    throw new RangeError(`usageVolumeDiscount: grantCents must be a non-negative number, got ${grantCents}`);
+    throw new RangeError(
+      `usageVolumeDiscount: grantCents must be a non-negative number, got ${grantCents}`,
+    );
   }
   const env = requireEnv([
     "OXAGEN_USAGE_DISCOUNT_PERCENT",

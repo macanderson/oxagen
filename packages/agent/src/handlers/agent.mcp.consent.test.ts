@@ -3,7 +3,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 // consent.resolve does an UPDATE ... RETURNING on approval_requests.
 const state = vi.hoisted(() => ({
-  updateReturning: [{ id: "apr_1", capabilityName: "mcp.srv_1.list_prs" }] as unknown[],
+  updateReturning: [
+    { id: "apr_1", capabilityName: "mcp.srv_1.list_prs" },
+  ] as unknown[],
 }));
 const returningMock = vi.fn(async () => state.updateReturning);
 const whereMock = vi.fn(() => ({ returning: returningMock }));
@@ -16,7 +18,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     db: () => fakeDb,
-    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
+    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) =>
+      fn(fakeDb),
     schema: {
       approvalRequests: {
         id: "a.id",
@@ -37,7 +40,9 @@ const runtimeMocks = vi.hoisted(() => ({
   recordConsent: vi.fn(async () => ({ consentId: "mcons_1" })),
   listConsents: vi.fn(async () => [] as unknown[]),
 }));
-vi.mock("../runtime/approval", () => ({ notifyResolution: runtimeMocks.notifyResolution }));
+vi.mock("../runtime/approval", () => ({
+  notifyResolution: runtimeMocks.notifyResolution,
+}));
 vi.mock("../runtime/consent", () => ({
   recordConsent: runtimeMocks.recordConsent,
   listConsents: runtimeMocks.listConsents,
@@ -51,7 +56,9 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.mcp.consent.resolve handler", () => {
   beforeEach(() => {
-    state.updateReturning = [{ id: "apr_1", capabilityName: "mcp.srv_1.list_prs" }];
+    state.updateReturning = [
+      { id: "apr_1", capabilityName: "mcp.srv_1.list_prs" },
+    ];
     updateMock.mockClear();
     returningMock.mockClear();
     runtimeMocks.notifyResolution.mockClear();
@@ -66,11 +73,15 @@ describe("agent.mcp.consent.resolve handler", () => {
     expect(out).toEqual({ approvalId: "apr_1", resolution: "granted" });
     // Per-tool grant (not wildcard) with a finite TTL.
     expect(runtimeMocks.recordConsent).toHaveBeenCalledTimes(1);
-    const arg = (runtimeMocks.recordConsent.mock.calls[0] as unknown as [{
-      toolName: string;
-      status: string;
-      ttlMs: number | null;
-    }])[0];
+    const arg = (
+      runtimeMocks.recordConsent.mock.calls[0] as unknown as [
+        {
+          toolName: string;
+          status: string;
+          ttlMs: number | null;
+        },
+      ]
+    )[0];
     expect(arg.toolName).toBe("list_prs");
     expect(arg.status).toBe("granted");
     expect(arg.ttlMs).toBeGreaterThan(0);
@@ -87,10 +98,14 @@ describe("agent.mcp.consent.resolve handler", () => {
       { approvalId: "apr_1", decision: "granted", grantAllTools: true },
       CTX,
     );
-    const arg = (runtimeMocks.recordConsent.mock.calls[0] as unknown as [{
-      toolName: string;
-      ttlMs: number | null;
-    }])[0];
+    const arg = (
+      runtimeMocks.recordConsent.mock.calls[0] as unknown as [
+        {
+          toolName: string;
+          ttlMs: number | null;
+        },
+      ]
+    )[0];
     expect(arg.toolName).toBe("*");
     expect(arg.ttlMs).toBeNull();
   });
@@ -102,7 +117,11 @@ describe("agent.mcp.consent.resolve handler", () => {
     );
     expect(out.resolution).toBe("denied");
     expect(
-      (runtimeMocks.recordConsent.mock.calls[0] as unknown as [{ status: string }])[0].status,
+      (
+        runtimeMocks.recordConsent.mock.calls[0] as unknown as [
+          { status: string },
+        ]
+      )[0].status,
     ).toBe("denied");
     expect(runtimeMocks.notifyResolution).toHaveBeenCalledWith({
       approvalId: "apr_1",

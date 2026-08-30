@@ -18,11 +18,18 @@ describe("runCodingAgent – stream error handling", () => {
             throw new Error("stream exploded");
           })(),
           steps: Promise.resolve([]),
-          usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+          usage: Promise.resolve({
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await expect(
@@ -39,11 +46,18 @@ describe("runCodingAgent – stream error handling", () => {
             throw "raw string failure";
           })(),
           steps: Promise.resolve([]),
-          usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+          usage: Promise.resolve({
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await expect(
@@ -62,11 +76,18 @@ describe("runCodingAgent – tool lifecycle events from stream parts", () => {
             for (const p of parts) yield p;
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
   }
 
@@ -74,8 +95,18 @@ describe("runCodingAgent – tool lifecycle events from stream parts", () => {
     const ws = new MemoryWorkspace({ "a.ts": "foo" });
     const events: CodingEvent[] = [];
     const ai = aiYielding([
-      { type: "tool-call", toolCallId: "c1", toolName: "read_file", input: { path: "a.ts" } },
-      { type: "tool-call", toolCallId: "c2", toolName: "glob", input: { pattern: "**/*.ts" } },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "read_file",
+        input: { path: "a.ts" },
+      },
+      {
+        type: "tool-call",
+        toolCallId: "c2",
+        toolName: "glob",
+        input: { pattern: "**/*.ts" },
+      },
       { type: "text-delta", text: "finished" },
     ]);
 
@@ -89,39 +120,90 @@ describe("runCodingAgent – tool lifecycle events from stream parts", () => {
     expect(result.text).toBe("finished");
     const toolCallEvents = events.filter((e) => e.type === "tool-call");
     expect(toolCallEvents).toHaveLength(2);
-    expect(toolCallEvents[0]).toMatchObject({ type: "tool-call", name: "read_file" });
-    expect(toolCallEvents[1]).toMatchObject({ type: "tool-call", name: "glob" });
+    expect(toolCallEvents[0]).toMatchObject({
+      type: "tool-call",
+      name: "read_file",
+    });
+    expect(toolCallEvents[1]).toMatchObject({
+      type: "tool-call",
+      name: "glob",
+    });
   });
 
   it("emits a tool-result event with ok flag and per-tool duration when the result part arrives", async () => {
     const ws = new MemoryWorkspace({});
     const events: CodingEvent[] = [];
     const ai = aiYielding([
-      { type: "tool-call", toolCallId: "c1", toolName: "bash", input: { command: "pytest" } },
-      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "pytest" }, output: "3 passed" },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "bash",
+        input: { command: "pytest" },
+      },
+      {
+        type: "tool-result",
+        toolCallId: "c1",
+        toolName: "bash",
+        input: { command: "pytest" },
+        output: "3 passed",
+      },
       { type: "text-delta", text: "ok" },
     ]);
 
-    await runCodingAgent({ workspace: ws, ai, instruction: "run tests", onEvent: (e) => events.push(e) });
+    await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "run tests",
+      onEvent: (e) => events.push(e),
+    });
 
     const results = events.filter((e) => e.type === "tool-result");
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ type: "tool-result", name: "bash", ok: true });
+    expect(results[0]).toMatchObject({
+      type: "tool-result",
+      name: "bash",
+      ok: true,
+    });
     expect((results[0] as { result: string }).result).toContain("3 passed");
-    expect((results[0] as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+    expect(
+      (results[0] as { durationMs: number }).durationMs,
+    ).toBeGreaterThanOrEqual(0);
   });
 
   it("skips preliminary tool-result parts (only the final result emits an event)", async () => {
     const ws = new MemoryWorkspace({});
     const events: CodingEvent[] = [];
     const ai = aiYielding([
-      { type: "tool-call", toolCallId: "c1", toolName: "bash", input: { command: "ls" } },
-      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "ls" }, output: "partial", preliminary: true },
-      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "ls" }, output: "full" },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "bash",
+        input: { command: "ls" },
+      },
+      {
+        type: "tool-result",
+        toolCallId: "c1",
+        toolName: "bash",
+        input: { command: "ls" },
+        output: "partial",
+        preliminary: true,
+      },
+      {
+        type: "tool-result",
+        toolCallId: "c1",
+        toolName: "bash",
+        input: { command: "ls" },
+        output: "full",
+      },
       { type: "text-delta", text: "ok" },
     ]);
 
-    await runCodingAgent({ workspace: ws, ai, instruction: "ls", onEvent: (e) => events.push(e) });
+    await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "ls",
+      onEvent: (e) => events.push(e),
+    });
 
     const results = events.filter((e) => e.type === "tool-result");
     expect(results).toHaveLength(1);
@@ -132,16 +214,36 @@ describe("runCodingAgent – tool lifecycle events from stream parts", () => {
     const ws = new MemoryWorkspace({});
     const events: CodingEvent[] = [];
     const ai = aiYielding([
-      { type: "tool-call", toolCallId: "c1", toolName: "edit_file", input: { path: "x" } },
-      { type: "tool-error", toolCallId: "c1", toolName: "edit_file", input: { path: "x" }, error: new Error("String not found") },
+      {
+        type: "tool-call",
+        toolCallId: "c1",
+        toolName: "edit_file",
+        input: { path: "x" },
+      },
+      {
+        type: "tool-error",
+        toolCallId: "c1",
+        toolName: "edit_file",
+        input: { path: "x" },
+        error: new Error("String not found"),
+      },
       { type: "text-delta", text: "ok" },
     ]);
 
-    await runCodingAgent({ workspace: ws, ai, instruction: "edit", onEvent: (e) => events.push(e) });
+    await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "edit",
+      onEvent: (e) => events.push(e),
+    });
 
     const results = events.filter((e) => e.type === "tool-result");
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ type: "tool-result", name: "edit_file", ok: false });
+    expect(results[0]).toMatchObject({
+      type: "tool-result",
+      name: "edit_file",
+      ok: false,
+    });
   });
 
   it("handles a stream with no tool parts without emitting tool events", async () => {
@@ -171,13 +273,22 @@ describe("runCodingAgent – default model and system", () => {
       stream(args: ModelRunArgs) {
         observed.push({ model: args.model, system: args.system });
         return {
-          fullStream: (async function* () { yield { type: "text-delta", text: "" }; })(),
+          fullStream: (async function* () {
+            yield { type: "text-delta", text: "" };
+          })(),
           steps: Promise.resolve([]),
-          usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+          usage: Promise.resolve({
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await runCodingAgent({ workspace: ws, ai, instruction: "go" });
@@ -201,20 +312,32 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
       stream(_args: ModelRunArgs) {
         const script = scripts[Math.min(call, scripts.length - 1)]!;
         call++;
-        const hasToolCall = (script.parts ?? []).some((p) => p["type"] === "tool-call");
-        const finishReason = script.finishReason ?? (hasToolCall ? "tool-calls" : "stop");
+        const hasToolCall = (script.parts ?? []).some(
+          (p) => p["type"] === "tool-call",
+        );
+        const finishReason =
+          script.finishReason ?? (hasToolCall ? "tool-calls" : "stop");
         return {
           fullStream: (async function* () {
             for (const p of script.parts ?? []) yield p;
             if (script.throwError) throw script.throwError;
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
-          response: Promise.resolve({ messages: [{ role: "assistant", content: "" }] }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
+          response: Promise.resolve({
+            messages: [{ role: "assistant", content: "" }],
+          }),
           finishReason: Promise.resolve(finishReason),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
     return { ai, calls: () => call };
   }
@@ -222,11 +345,33 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
   it("continues to the next step while finishReason is tool-calls, stops on stop", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     const { ai, calls } = scriptedAi([
-      { parts: [{ type: "tool-call", toolCallId: "c1", toolName: "read_file", input: { path: "a.ts" } }] }, // → tool-calls, loop
-      { parts: [{ type: "tool-call", toolCallId: "c2", toolName: "grep", input: { pattern: "x" } }] }, // → tool-calls, loop
+      {
+        parts: [
+          {
+            type: "tool-call",
+            toolCallId: "c1",
+            toolName: "read_file",
+            input: { path: "a.ts" },
+          },
+        ],
+      }, // → tool-calls, loop
+      {
+        parts: [
+          {
+            type: "tool-call",
+            toolCallId: "c2",
+            toolName: "grep",
+            input: { pattern: "x" },
+          },
+        ],
+      }, // → tool-calls, loop
       { parts: [{ type: "text-delta", text: "all done" }] }, // → stop
     ]);
-    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go" });
+    const result = await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "go",
+    });
     expect(calls()).toBe(3);
     expect(result.text).toBe("all done");
     expect(result.steps).toBe(3);
@@ -238,10 +383,17 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
     const ws = new MemoryWorkspace({});
     const overloaded = new Error("service unavailable (503) — overloaded");
     const { ai, calls } = scriptedAi([
-      { parts: [{ type: "text-delta", text: "partial" }], throwError: overloaded }, // step fails after emitting
+      {
+        parts: [{ type: "text-delta", text: "partial" }],
+        throwError: overloaded,
+      }, // step fails after emitting
       { parts: [{ type: "text-delta", text: "final answer" }] }, // retry succeeds
     ]);
-    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go" });
+    const result = await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "go",
+    });
     expect(calls()).toBe(2);
     // Only the SUCCESSFUL step's text is committed — the failed attempt's
     // "partial" delta is not double-counted into the return text.
@@ -260,8 +412,12 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
 
   it("does NOT retry a non-retryable error (bad request)", async () => {
     const ws = new MemoryWorkspace({});
-    const { ai, calls } = scriptedAi([{ throwError: { statusCode: 400, message: "bad request" } }]);
-    await expect(runCodingAgent({ workspace: ws, ai, instruction: "go" })).rejects.toBeTruthy();
+    const { ai, calls } = scriptedAi([
+      { throwError: { statusCode: 400, message: "bad request" } },
+    ]);
+    await expect(
+      runCodingAgent({ workspace: ws, ai, instruction: "go" }),
+    ).rejects.toBeTruthy();
     expect(calls()).toBe(1); // one attempt, no retry
   });
 
@@ -269,9 +425,16 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
     const ws = new MemoryWorkspace({});
     const ac = new AbortController();
     ac.abort();
-    const { ai, calls } = scriptedAi([{ parts: [{ type: "text-delta", text: "x" }] }]);
+    const { ai, calls } = scriptedAi([
+      { parts: [{ type: "text-delta", text: "x" }] },
+    ]);
     await expect(
-      runCodingAgent({ workspace: ws, ai, instruction: "go", signal: ac.signal }),
+      runCodingAgent({
+        workspace: ws,
+        ai,
+        instruction: "go",
+        signal: ac.signal,
+      }),
     ).rejects.toMatchObject({ name: "AbortError" });
     expect(calls()).toBe(0);
   });
@@ -280,9 +443,23 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     // Every step wants to call a tool → would loop forever without the cap.
     const { ai, calls } = scriptedAi([
-      { parts: [{ type: "tool-call", toolCallId: "c", toolName: "read_file", input: { path: "a.ts" } }] },
+      {
+        parts: [
+          {
+            type: "tool-call",
+            toolCallId: "c",
+            toolName: "read_file",
+            input: { path: "a.ts" },
+          },
+        ],
+      },
     ]);
-    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go", maxSteps: 3 });
+    const result = await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "go",
+      maxSteps: 3,
+    });
     expect(calls()).toBe(3);
     expect(result.steps).toBe(3);
   });
@@ -308,23 +485,44 @@ describe("runCodingAgent – loop detection", () => {
         return {
           fullStream: (async function* () {
             if (stop) {
-              yield { type: "text-delta", text: "giving up, different approach" };
+              yield {
+                type: "text-delta",
+                text: "giving up, different approach",
+              };
             } else {
               yield failPart;
             }
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
-          response: Promise.resolve({ messages: [{ role: "assistant", content: "" }] }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
+          response: Promise.resolve({
+            messages: [{ role: "assistant", content: "" }],
+          }),
           finishReason: Promise.resolve(stop ? "stop" : "tool-calls"),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
-    const result = await runCodingAgent({ workspace: ws, ai, instruction: "fix it", maxSteps: 10 });
+    const result = await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "fix it",
+      maxSteps: 10,
+    });
     // A nudge (role user, mentions the repeated tool) was injected into history.
     const nudge = result.messages.find(
-      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("edit_file") && m.content.includes("times"),
+      (m) =>
+        m.role === "user" &&
+        typeof m.content === "string" &&
+        m.content.includes("edit_file") &&
+        m.content.includes("times"),
     );
     expect(nudge).toBeTruthy();
   });
@@ -345,16 +543,27 @@ describe("runCodingAgent – extraTools + wrapTools seams (engine unification)",
             yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
           response: Promise.resolve({ messages: [] }),
           finishReason: Promise.resolve("stop"),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     const extraTools = {
-      mcp_search: { description: "external MCP tool", inputSchema: {}, execute: async () => "hit" },
+      mcp_search: {
+        description: "external MCP tool",
+        inputSchema: {},
+        execute: async () => "hit",
+      },
     } as unknown as import("ai").ToolSet;
 
     await runCodingAgent({

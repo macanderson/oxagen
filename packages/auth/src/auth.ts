@@ -465,9 +465,10 @@ export const auth = betterAuth({
   //   Encrypt OAuth access_token, refresh_token, id_token into *_enc bytea
   //   columns before any account row is written, and strip the plaintext
   //   values from the write. The plaintext columns still exist in the schema
-  //   (Better Auth writes to them directly on some internal paths), so a
-  //   Postgres trigger is the backstop that nulls each plaintext column
-  //   whenever its *_enc counterpart is set. See ./token-encryption.ts.
+  //   (Better Auth writes to them directly on some internal paths). The
+  //   Postgres trigger that was meant to be the backstop for those paths is
+  //   NOT in the Atlas migration set, so this hook is currently the only line
+  //   of defense — see the header of ./token-encryption.ts.
   //
   // session.create.after / session.delete.after
   //   Emit auth.sign_in / auth.sign_out into security.security_events for
@@ -484,9 +485,11 @@ export const auth = betterAuth({
   // ---------------------------------------------------------------------------
   databaseHooks: {
     // The account hook ALWAYS runs: it must strip the plaintext
-    // access_token / refresh_token / id_token fields on every write, so the
-    // DB trigger backstop (see ./token-encryption.ts) is never the only line
-    // of defense. When AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod,
+    // access_token / refresh_token / id_token fields on every write. With the
+    // DB trigger backstop missing from the Atlas migration set (see
+    // ./token-encryption.ts), this hook IS the only line of defense — a write
+    // path that skips it durably stores a plaintext OAuth token. When
+    // AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod,
     // enforced by the startup guard) the tokens are additionally encrypted
     // into the *_enc columns; locally without the key they're simply not
     // persisted.

@@ -44,6 +44,15 @@ export function resolveIsLocalEnv(signals: LocalEnvSignals): boolean {
   return (
     // Deterministic local signal — but never trust it on a real deployment.
     (!isVercelDeploy && localDevFlag) ||
+    // NOTE: unlike localDevFlag and e2eTest below, these two NODE_ENV branches
+    // are NOT guarded by !isVercelDeploy. Vercel builds and runs with
+    // NODE_ENV="production", so in practice they never fire on a deployment —
+    // but they are not structurally prevented from doing so. A deployed env
+    // file that sets NODE_ENV=development or =test WOULD turn off email
+    // verification, the OAuth token-encryption startup guard, and secure
+    // cookies. Guarding them is a behavior change (it would break any local
+    // runner that relies on NODE_ENV alone), so it is tracked rather than
+    // silently applied — do not remove this note without closing the gap.
     signals.nodeEnv === "development" ||
     signals.nodeEnv === "test" ||
     signals.vercelEnv === "development" ||

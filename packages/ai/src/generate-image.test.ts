@@ -91,7 +91,11 @@ describe("generateImageFor (@oxagen/ai)", () => {
   });
 
   it("writes a token_usage row tagged with the REAL model id (not a sentinel)", async () => {
-    await generateImageFor({ model: FAKE_MODEL, prompt: "a bull", telemetry: TELEMETRY });
+    await generateImageFor({
+      model: FAKE_MODEL,
+      prompt: "a bull",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
@@ -114,9 +118,16 @@ describe("generateImageFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith("bfl/flux-2-max", 1, "1536x1024");
+    expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith(
+      "bfl/flux-2-max",
+      1,
+      "1536x1024",
+    );
     expect(mocks.chargeImageCredits).toHaveBeenCalledTimes(1);
-    const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(chargeArg.orgId).toBe("00000000-0000-4000-8000-000000000001");
     expect(chargeArg.referenceId).toBe("msg_abc");
     expect(chargeArg.model).toBe("bfl/flux-2-max");
@@ -125,10 +136,21 @@ describe("generateImageFor (@oxagen/ai)", () => {
   });
 
   it("defaults size to 1024x1024 when the caller omits it", async () => {
-    await generateImageFor({ model: FAKE_MODEL, prompt: "a bull", telemetry: TELEMETRY });
+    await generateImageFor({
+      model: FAKE_MODEL,
+      prompt: "a bull",
+      telemetry: TELEMETRY,
+    });
 
-    expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith("bfl/flux-2-max", 1, "1024x1024");
-    const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith(
+      "bfl/flux-2-max",
+      1,
+      "1024x1024",
+    );
+    const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(chargeArg.size).toBe("1024x1024");
   });
 
@@ -143,10 +165,19 @@ describe("generateImageFor (@oxagen/ai)", () => {
     mocks.chargeImageCredits.mockImplementation(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 80_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 80_000,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
-    await generateImageFor({ model: FAKE_MODEL, prompt: "inngest image", telemetry: TELEMETRY });
+    await generateImageFor({
+      model: FAKE_MODEL,
+      prompt: "inngest image",
+      telemetry: TELEMETRY,
+    });
 
     expect(mocks.chargeImageCredits).toHaveBeenCalledTimes(1);
     expect(chargeSucceeded).toBe(true);
@@ -157,13 +188,22 @@ describe("generateImageFor (@oxagen/ai)", () => {
     mocks.chargeImageCredits.mockImplementation(async () => {
       requireScope();
       chargeSucceeded = true;
-      return { costUsdMicros: 80_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+      return {
+        costUsdMicros: 80_000,
+        creditsMetered: 1n,
+        creditsCharged: 1n,
+        shortfallCredits: 0n,
+      };
     });
 
     await runInTenantScope(
       { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
       async () => {
-        await generateImageFor({ model: FAKE_MODEL, prompt: "request image", telemetry: TELEMETRY });
+        await generateImageFor({
+          model: FAKE_MODEL,
+          prompt: "request image",
+          telemetry: TELEMETRY,
+        });
       },
     );
 
@@ -198,7 +238,11 @@ describe("generateImageFor (@oxagen/ai)", () => {
     mocks.generateImage.mockRejectedValueOnce(new Error("provider error"));
 
     await expect(
-      generateImageFor({ model: FAKE_MODEL, prompt: "fail", telemetry: TELEMETRY }),
+      generateImageFor({
+        model: FAKE_MODEL,
+        prompt: "fail",
+        telemetry: TELEMETRY,
+      }),
     ).rejects.toThrow("provider error");
   });
 });

@@ -24,7 +24,11 @@ import { parseVitestJson, shQuote, clipStr, MAX_STDERR_TAIL } from "./parse";
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
 /** Ceiling on ranked files reported back to the model. */
-export const TRACE_FILE_CAPS = { minimal: 12, standard: 20, verbose: 32 } as const;
+export const TRACE_FILE_CAPS = {
+  minimal: 12,
+  standard: 20,
+  verbose: 32,
+} as const;
 /** Top executed function names reported per file. */
 const TOP_FUNCTIONS_PER_FILE = 8;
 /** Failing assertions carried alongside the trace. */
@@ -92,13 +96,13 @@ export function buildTraceSummarizeCommand(opts: {
     "let scanned=0;const rows=[];",
     "for(const[abs,cov]of Object.entries(doc)){",
     "scanned++;",
-    "if(!abs.startsWith(root)||abs.includes(\"node_modules\"))continue;",
+    'if(!abs.startsWith(root)||abs.includes("node_modules"))continue;',
     "const f=cov.f||{},fnMap=cov.fnMap||{};",
     "const names=[];let n=0;",
     "for(const[id,count]of Object.entries(f)){",
     "if(!(count>0))continue;",
     "const meta=fnMap[id];",
-    'const name=meta&&meta.name;',
+    "const name=meta&&meta.name;",
     'if(name==="(empty-report)")continue;',
     "n++;",
     'if(name&&!name.startsWith("(anonymous"))names.push(name);',
@@ -142,7 +146,10 @@ export function parseTraceSummary(
           : [],
       });
     }
-    return { files, scanned: typeof doc.scanned === "number" ? doc.scanned : 0 };
+    return {
+      files,
+      scanned: typeof doc.scanned === "number" ? doc.scanned : 0,
+    };
   } catch {
     return null;
   }
@@ -168,7 +175,9 @@ export function buildTestTraceRunTool(
       "symbol X' (structure) use `code_graph`; this tool runs exactly one test file, never " +
       "a package or the repo.",
     inputSchema: z.object({
-      test_file: z.string().describe("The single test file to trace (repo-relative or absolute)."),
+      test_file: z
+        .string()
+        .describe("The single test file to trace (repo-relative or absolute)."),
       test_name: z
         .string()
         .optional()
@@ -191,7 +200,10 @@ export function buildTestTraceRunTool(
         max_files ?? TRACE_FILE_CAPS.standard,
         TRACE_FILE_CAPS.verbose,
       );
-      const timeout = Math.min(timeout_ms ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+      const timeout = Math.min(
+        timeout_ms ?? DEFAULT_TIMEOUT_MS,
+        MAX_TIMEOUT_MS,
+      );
       // Unique per-invocation dir keeps parallel turns from cross-reading.
       const coverageDir = `.oxagen-trace-${Date.now().toString(36)}-${process.pid}`;
       const runCommand = buildTraceCommand({
@@ -212,7 +224,11 @@ export function buildTestTraceRunTool(
           error: `Failed to run traced vitest: ${err instanceof Error ? err.message : String(err)}`,
         };
       }
-      deps.onEvent?.({ type: "command", command: runCommand, exitCode: run.exitCode });
+      deps.onEvent?.({
+        type: "command",
+        command: runCommand,
+        exitCode: run.exitCode,
+      });
 
       try {
         if (run.timedOut) {
@@ -231,7 +247,8 @@ export function buildTestTraceRunTool(
           root: workspace.root,
           maxFiles,
         });
-        let executedPath: { files: ExecutedFile[]; scanned: number } | null = null;
+        let executedPath: { files: ExecutedFile[]; scanned: number } | null =
+          null;
         try {
           const summary = await workspace.exec(summarizeCommand, {
             timeoutMs: 30_000,
@@ -243,7 +260,10 @@ export function buildTestTraceRunTool(
         }
 
         if (parsed.parseError) {
-          const tail = clipStr(run.stderr.slice(-MAX_STDERR_TAIL), MAX_STDERR_TAIL);
+          const tail = clipStr(
+            run.stderr.slice(-MAX_STDERR_TAIL),
+            MAX_STDERR_TAIL,
+          );
           return {
             testFile: test_file,
             parseError: true,
@@ -263,7 +283,9 @@ export function buildTestTraceRunTool(
           durationMs: parsed.durationMs,
           failures: parsed.failures,
           executedPath: executedPath ?? undefined,
-          traceDegraded: executedPath === null || undefined,
+          // Only reported when the trace actually degraded — `undefined` drops
+          // the key from the model-facing payload rather than saying "false".
+          traceDegraded: executedPath === null ? true : undefined,
           hint:
             parsed.failed > 0 && executedPath && executedPath.files.length > 0
               ? "Ground the debugging in executedPath: these files/functions actually ran during the failure — read the top entries before grepping elsewhere."

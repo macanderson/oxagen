@@ -199,14 +199,26 @@ describe("accumulateUsage", () => {
   });
 
   it("handles missing token fields gracefully", () => {
-    const result = accumulateUsage(emptyUsage(), "anthropic/claude-opus-4.8", {});
+    const result = accumulateUsage(
+      emptyUsage(),
+      "anthropic/claude-opus-4.8",
+      {},
+    );
     expect(result.inputTokens).toBe(0);
     expect(result.outputTokens).toBe(0);
   });
 
   it("prices a cache hit at the discounted rate — the SAME usage costs less with cachedInputTokens set", () => {
-    const usage = { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 1_000_000 };
-    const withCache = accumulateUsage(emptyUsage(), "anthropic/claude-sonnet-4.6", usage);
+    const usage = {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cachedInputTokens: 1_000_000,
+    };
+    const withCache = accumulateUsage(
+      emptyUsage(),
+      "anthropic/claude-sonnet-4.6",
+      usage,
+    );
     const withoutCache = accumulateUsage(
       emptyUsage(),
       "anthropic/claude-sonnet-4.6",

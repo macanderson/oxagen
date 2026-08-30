@@ -14,17 +14,22 @@
  * pins a contract the server doesn't actually implement does not protect
  * coverage — it blocks anyone from fixing it.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, test } from "vitest";
 
 const root = resolve(import.meta.dirname, "../../..");
 
+/**
+ * `lstatSync`, not `statSync`: a symlinked directory under the scanned tree
+ * (pnpm puts plenty of them there) would otherwise be followed, and a link that
+ * points at an ancestor recurses until the stack gives out.
+ */
 function filesUnder(directory: string): string[] {
   if (!existsSync(directory)) return [];
   return readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry);
-    return statSync(path).isDirectory() ? filesUnder(path) : [path];
+    return lstatSync(path).isDirectory() ? filesUnder(path) : [path];
   });
 }
 

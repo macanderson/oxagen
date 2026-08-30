@@ -104,7 +104,8 @@ export async function agentSubagentFanoutGetHandler(
     runs: runs.map((r) => ({
       runId: r.publicId,
       capabilityName: r.capabilityName,
-      status: r.status as AgentSubagentFanoutGetOutput["runs"][number]["status"],
+      status:
+        r.status as AgentSubagentFanoutGetOutput["runs"][number]["status"],
       errorReason: r.errorReason,
       startedAt: r.startedAt ? r.startedAt.toISOString() : null,
       completedAt: r.completedAt ? r.completedAt.toISOString() : null,

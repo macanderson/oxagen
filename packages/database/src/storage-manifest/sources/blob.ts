@@ -16,8 +16,14 @@
 // is not re-enumerated separately.
 //
 // This map is the documented override the task calls for. When a new asset kind
-// or reference table lands, update it here; a drift test in the manifest suite
-// keeps the CHECK-constraint kinds and this map in sync.
+// or reference table lands, update it here AND in GENERATED_ASSET_KINDS below.
+//
+// CAVEAT — the suite's blob test compares BLOB_ASSETS against
+// GENERATED_ASSET_KINDS, and both live in this file, so it catches only an
+// edit that updates one and forgets the other. It does NOT read the real
+// generated_assets_kind_check constraint in schema/content.ts, so a kind added
+// to that constraint and not to this file passes the suite silently. Adding a
+// kind to the CHECK therefore still requires a hand edit here.
 
 import type { ManifestColumn, ManifestTable } from "../types";
 
@@ -94,8 +100,10 @@ export const GENERATED_ASSET_KINDS: readonly string[] = [
 
 /**
  * Build the blob ManifestTables. Blobs have no columns; the referencing tables
- * and access model live in `meta`. Domain is assigned via the blob override map
- * (content). Deterministic — a pure function of the static inventory above.
+ * and access model live in `meta`. Every blob entry is in the `content` domain
+ * (the shared media domain), assigned directly here rather than through
+ * domains.ts — blob kinds are a fixed two-entry inventory, so there is nothing
+ * to look up. Deterministic — a pure function of the static inventory above.
  */
 export function collectBlobAssets(): ManifestTable[] {
   const tables: ManifestTable[] = BLOB_ASSETS.map((asset) => {

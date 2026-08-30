@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
 import { runCodingAgent, changedFilesFromDiff, isErrorResult } from "./engine";
-import type { AgentAi, ModelRunArgs, MemoryProvider, TraceStore } from "./ports";
+import type {
+  AgentAi,
+  ModelRunArgs,
+  MemoryProvider,
+  TraceStore,
+} from "./ports";
 import type { CodingEvent } from "./types";
 
 describe("changedFilesFromDiff", () => {
@@ -43,15 +48,25 @@ describe("runCodingAgent", () => {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
-            await edit.execute({ path: "a.ts", old_string: "foo", new_string: "bar" }, {});
+            await edit.execute(
+              { path: "a.ts", old_string: "foo", new_string: "bar" },
+              {},
+            );
             yield { type: "text-delta", text: "done" };
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 2, totalTokens: 3 }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     const result = await runCodingAgent({
@@ -74,7 +89,9 @@ describe("runCodingAgent", () => {
   it("injects recalled context into the system prompt and fires memory/trace hooks", async () => {
     const ws = new MemoryWorkspace({ "x.ts": "old_value" });
 
-    const recallContext = vi.fn().mockResolvedValue("- [constraint] use strict types");
+    const recallContext = vi
+      .fn()
+      .mockResolvedValue("- [constraint] use strict types");
     const remember = vi.fn().mockResolvedValue(undefined);
     const record = vi.fn();
 
@@ -87,21 +104,38 @@ describe("runCodingAgent", () => {
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         capturedSystem = args.system;
-        capturedMessages = args.messages as Array<{ role: string; content: unknown }>;
+        capturedMessages = args.messages as Array<{
+          role: string;
+          content: unknown;
+        }>;
         return {
           fullStream: (async function* () {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
-            await edit.execute({ path: "x.ts", old_string: "old_value", new_string: "fresh_value" }, {});
+            await edit.execute(
+              {
+                path: "x.ts",
+                old_string: "old_value",
+                new_string: "fresh_value",
+              },
+              {},
+            );
             yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
+          usage: Promise.resolve({
+            inputTokens: 10,
+            outputTokens: 5,
+            totalTokens: 15,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     await runCodingAgent({
@@ -123,7 +157,9 @@ describe("runCodingAgent", () => {
         m.content.includes("Recalled context (from prior sessions)"),
     );
     expect(recalledMsg).toBeDefined();
-    expect(String(recalledMsg?.content)).toContain("- [constraint] use strict types");
+    expect(String(recalledMsg?.content)).toContain(
+      "- [constraint] use strict types",
+    );
 
     // Wait a tick for fire-and-forget Promises to settle
     await Promise.resolve();
@@ -137,14 +173,19 @@ describe("runCodingAgent", () => {
 
     expect(record).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({ instruction: "update x", changedFiles: ["x.ts"] }),
+      expect.objectContaining({
+        instruction: "update x",
+        changedFiles: ["x.ts"],
+      }),
     );
   });
 
   it("surfaces a memory-recall failure via onError and still completes the turn", async () => {
     const ws = new MemoryWorkspace({ "a.ts": "foo" });
     // The memory store is down: recallContext rejects.
-    const recallContext = vi.fn().mockRejectedValue(new Error("neo4j unreachable"));
+    const recallContext = vi
+      .fn()
+      .mockRejectedValue(new Error("neo4j unreachable"));
     const memory: MemoryProvider = { recallContext, remember: vi.fn() };
     const onError = vi.fn();
 
@@ -155,11 +196,18 @@ describe("runCodingAgent", () => {
             yield { type: "text-delta", text: "done" };
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     const result = await runCodingAgent({
@@ -176,7 +224,10 @@ describe("runCodingAgent", () => {
     expect(recallContext).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: "memory-recall", error: expect.any(Error) }),
+      expect.objectContaining({
+        phase: "memory-recall",
+        error: expect.any(Error),
+      }),
     );
     expect(result.text).toBe("done");
   });
@@ -204,11 +255,18 @@ describe("runCodingAgent", () => {
             }
           })(),
           steps: Promise.resolve([{}]),
-          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          usage: Promise.resolve({
+            inputTokens: 1,
+            outputTokens: 1,
+            totalTokens: 2,
+          }),
           response: Promise.resolve({ messages: [] }),
         } as unknown as ReturnType<AgentAi["stream"]>;
       },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+      generateObject: async () => ({
+        object: {} as never,
+        usage: { totalTokens: 0 },
+      }),
     };
 
     const result = await runCodingAgent({
@@ -220,11 +278,16 @@ describe("runCodingAgent", () => {
     });
 
     expect(call).toBe(2); // it did retry
-    const deltas = events.filter((e) => e.type === "text").map((e) => (e as { delta: string }).delta);
+    const deltas = events
+      .filter((e) => e.type === "text")
+      .map((e) => (e as { delta: string }).delta);
     expect(deltas).toEqual(["full answer"]); // exactly once, no "par"/"tial"
     expect(result.text).toBe("full answer");
     // The raw SSE tap must also not replay the discarded attempt.
-    const rawText = rawParts.filter((p) => p.type === "text-delta").map((p) => p.text).join("");
+    const rawText = rawParts
+      .filter((p) => p.type === "text-delta")
+      .map((p) => p.text)
+      .join("");
     expect(rawText).toBe("full answer");
   });
 });

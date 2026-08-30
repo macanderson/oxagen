@@ -3,9 +3,27 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 const h = vi.hoisted(() => ({
   gatewayModels: [
-    { id: "anthropic/claude-opus-4.8", name: "Opus", vendor: "anthropic", released: "2026", capabilities: ["reasoning", "vision", "tools"] },
-    { id: "openai/gpt-5.2", name: "GPT", vendor: "openai", released: "2026", capabilities: ["reasoning", "vision", "tools"] },
-    { id: "google/gemini-3-pro", name: "Gemini", vendor: "google", released: "2026", capabilities: ["vision", "tools"] },
+    {
+      id: "anthropic/claude-opus-4.8",
+      name: "Opus",
+      vendor: "anthropic",
+      released: "2026",
+      capabilities: ["reasoning", "vision", "tools"],
+    },
+    {
+      id: "openai/gpt-5.2",
+      name: "GPT",
+      vendor: "openai",
+      released: "2026",
+      capabilities: ["reasoning", "vision", "tools"],
+    },
+    {
+      id: "google/gemini-3-pro",
+      name: "Gemini",
+      vendor: "google",
+      released: "2026",
+      capabilities: ["vision", "tools"],
+    },
   ],
   generateObjectFor: vi.fn(
     async (
@@ -49,7 +67,10 @@ vi.mock("@oxagen/ai", () => ({
 
 vi.mock("@oxagen/storage", () => ({ storage: () => ({ get: h.get }) }));
 
-import { agentFeatureVerifyHandler, pickJudgeModelId } from "./agent.feature.verify";
+import {
+  agentFeatureVerifyHandler,
+  pickJudgeModelId,
+} from "./agent.feature.verify";
 
 beforeEach(() => {
   h.generateObjectFor.mockClear();
@@ -59,11 +80,15 @@ beforeEach(() => {
 
 describe("pickJudgeModelId — independence from the builder", () => {
   it("excludes the builder's vendor (anthropic builder → non-anthropic judge)", () => {
-    expect(pickJudgeModelId("anthropic/claude-opus-4.8")).toBe("openai/gpt-5.2");
+    expect(pickJudgeModelId("anthropic/claude-opus-4.8")).toBe(
+      "openai/gpt-5.2",
+    );
   });
 
   it("excludes openai when the builder is openai", () => {
-    expect(pickJudgeModelId("openai/gpt-5.2")).toBe("anthropic/claude-opus-4.8");
+    expect(pickJudgeModelId("openai/gpt-5.2")).toBe(
+      "anthropic/claude-opus-4.8",
+    );
   });
 
   it("defaults to excluding anthropic when the builder is unknown", () => {

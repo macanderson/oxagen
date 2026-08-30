@@ -15,7 +15,9 @@ import { savePrior } from "../priors";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function makeCodeGraphProvider(overrides: Partial<CodeGraphProvider> = {}): CodeGraphProvider {
+function makeCodeGraphProvider(
+  overrides: Partial<CodeGraphProvider> = {},
+): CodeGraphProvider {
   return {
     query: vi.fn().mockResolvedValue(""),
     ...overrides,
@@ -97,10 +99,18 @@ describe("F1: Localization", () => {
     // Mock localize to return a non-empty renderedBlock.
     const mockLocalize = vi.spyOn(await import("../localize"), "localize");
     mockLocalize.mockResolvedValue({
-      files: [{ path: "packages/auth/index.ts", symbols: ["loginUser"], score: 5, reason: "traceback hit" }],
+      files: [
+        {
+          path: "packages/auth/index.ts",
+          symbols: ["loginUser"],
+          score: 5,
+          reason: "traceback hit",
+        },
+      ],
       testHints: ["packages/auth/test"],
       tracebackParsed: true,
-      renderedBlock: "## Candidate locations (deterministic)\n- **packages/auth/index.ts**",
+      renderedBlock:
+        "## Candidate locations (deterministic)\n- **packages/auth/index.ts**",
     });
 
     const result = await enhancePrompt({
@@ -316,7 +326,7 @@ describe("F9: Memory Recall Filtering", () => {
     setEnv("OXAGEN_RECALL_FILTER", "1");
 
     const memory = makeMemoryProvider(
-      "- use async/await patterns\n- always validate user input\n- unrelated lesson"
+      "- use async/await patterns\n- always validate user input\n- unrelated lesson",
     );
 
     const result = await enhancePrompt({
@@ -351,7 +361,7 @@ describe("F9: Memory Recall Filtering", () => {
 
     // Memory with no overlap to the issue "fix login".
     const memory = makeMemoryProvider(
-      "- handle XML parsing edge cases\n- optimize database queries\n- fix unicode encoding"
+      "- handle XML parsing edge cases\n- optimize database queries\n- fix unicode encoding",
     );
 
     const result = await enhancePrompt({
@@ -412,10 +422,18 @@ describe("Integration: F1 + F8 + F9", () => {
 
     const mockLocalize = vi.spyOn(await import("../localize"), "localize");
     mockLocalize.mockResolvedValue({
-      files: [{ path: "src/auth.ts", symbols: ["login"], score: 5, reason: "symbol hit" }],
+      files: [
+        {
+          path: "src/auth.ts",
+          symbols: ["login"],
+          score: 5,
+          reason: "symbol hit",
+        },
+      ],
       testHints: [],
       tracebackParsed: true,
-      renderedBlock: "## Candidate locations (deterministic)\n- **src/auth.ts**",
+      renderedBlock:
+        "## Candidate locations (deterministic)\n- **src/auth.ts**",
     });
 
     const result = await enhancePrompt({

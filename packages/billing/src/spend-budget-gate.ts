@@ -151,6 +151,9 @@ async function cachedSpend(
   const nowMs = deps.now();
   // The key omits the window end (which moves every call) so entries survive TTL;
   // include the period signature so a config change to period/windowDays misses.
+  // It also omits the window START, so a monthly budget can serve last month's
+  // total for up to ttlSpendMs after the calendar rollover — bounded staleness
+  // (15s by default) that the next refresh corrects.
   const key = `${budget.orgId}:${budget.workspaceId ?? "*"}:${budget.period}:${budget.windowDays ?? ""}`;
   const hit = spendCache.get(key);
   if (hit && hit.expiresAt > nowMs) return hit.value;
@@ -336,9 +339,11 @@ export interface SpendBudgetStatus {
 /**
  * Live status for every configured ceiling in the active scope — the app
  * Budgets panel's data. Reads spend FRESH (bypasses the gate's short-TTL cache)
- * so the panel is accurate, not up-to-15s stale. Never throws: a spend-read
- * failure yields a status with spentMicros = 0 and state 'ok' so the panel still
- * renders the configured ceiling.
+ * so the panel is accurate, not up-to-15s stale. A spend-read failure is
+ * swallowed per budget — that ceiling reports spentMicros = 0 and state 'ok' so
+ * the panel still renders it. A CONFIG-load failure is NOT swallowed and
+ * propagates to the caller: unlike the enforcement gate there is nothing safe to
+ * fail open to, and rendering an empty panel would read as "no budgets set".
  *
  * Loads DISABLED ceilings too (listSpendBudgets, not the enforcement path's
  * enabled-only getScopeBudgets) — the panel is the only surface that can re-enable

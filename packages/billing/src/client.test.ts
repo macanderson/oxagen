@@ -8,8 +8,16 @@
  *  - resetBillingProvider() clears back to null so billingProvider() re-creates
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { getBreaker, __resetBreakerRegistry, CircuitOpenError } from "@oxagen/telemetry";
-import { billingProvider, setBillingProvider, resetBillingProvider } from "./client";
+import {
+  getBreaker,
+  __resetBreakerRegistry,
+  CircuitOpenError,
+} from "@oxagen/telemetry";
+import {
+  billingProvider,
+  setBillingProvider,
+  resetBillingProvider,
+} from "./client";
 import type { BillingProvider } from "./provider";
 
 function makeStubProvider(): BillingProvider {
@@ -66,17 +74,29 @@ describe("billingProvider circuit breaker", () => {
     // instance, so billingProvider() reuses this one) with a no-op sink and a
     // 1-failure trip, then open it. The provider method must now fail fast
     // WITHOUT invoking the underlying StripeProvider (no env/network needed).
-    const b = getBreaker("stripe", { failureThreshold: 1, onTransition: () => undefined });
-    await expect(b.exec(() => Promise.reject(new Error("stripe down")))).rejects.toThrow();
+    const b = getBreaker("stripe", {
+      failureThreshold: 1,
+      onTransition: () => undefined,
+    });
+    await expect(
+      b.exec(() => Promise.reject(new Error("stripe down"))),
+    ).rejects.toThrow();
     expect(b.getState()).toBe("open");
 
     const provider = billingProvider();
-    await expect(provider.getSubscription("sub_1")).rejects.toBeInstanceOf(CircuitOpenError);
+    await expect(provider.getSubscription("sub_1")).rejects.toBeInstanceOf(
+      CircuitOpenError,
+    );
   });
 
   it("does not gate parseWebhookEvent on the breaker (sync signature verification)", async () => {
-    const b = getBreaker("stripe", { failureThreshold: 1, onTransition: () => undefined });
-    await expect(b.exec(() => Promise.reject(new Error("stripe down")))).rejects.toThrow();
+    const b = getBreaker("stripe", {
+      failureThreshold: 1,
+      onTransition: () => undefined,
+    });
+    await expect(
+      b.exec(() => Promise.reject(new Error("stripe down"))),
+    ).rejects.toThrow();
     expect(b.getState()).toBe("open");
 
     const provider = billingProvider();

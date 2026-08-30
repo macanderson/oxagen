@@ -105,8 +105,8 @@ export function decideAttemptTerminalAction(
   }
   // A denial is a DECIDED outcome, not a crash: the driver settled normally
   // and told us authorization refused it, so the attempt seals as `denied`
-  // (which `runStatusForTerminal` still drives the run to `failed`) with the
-  // denial itself preserved as evidence on the sealed attempt.
+  // — which `runStatusForTerminal` still maps to a `failed` RUN, while the
+  // denial itself is preserved as evidence on the sealed attempt.
   return {
     kind: "seal",
     status: input.outcome?.terminalStatus ?? "completed",

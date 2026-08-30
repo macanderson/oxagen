@@ -6,7 +6,11 @@ import { buildReplayEnv, formatEnvPrefix, runScriptFor } from "./replay-env";
 describe("buildReplayEnv", () => {
   it("maps a full best-of-N config to the run.sh env contract", () => {
     const env = buildReplayEnv({
-      models: ["anthropic/claude-fable-5", "anthropic/claude-fable-5", "openai/gpt-5.5-pro"],
+      models: [
+        "anthropic/claude-fable-5",
+        "anthropic/claude-fable-5",
+        "openai/gpt-5.5-pro",
+      ],
       candidates: 3,
       pipeline: true,
       verifyAuto: true,
@@ -20,7 +24,8 @@ describe("buildReplayEnv", () => {
     });
     expect(env).toEqual({
       OXAGEN_BEST_OF_N: "1",
-      OXAGEN_BEST_OF_N_MODELS: "anthropic/claude-fable-5,anthropic/claude-fable-5,openai/gpt-5.5-pro",
+      OXAGEN_BEST_OF_N_MODELS:
+        "anthropic/claude-fable-5,anthropic/claude-fable-5,openai/gpt-5.5-pro",
       OXAGEN_BEST_OF_N_CANDIDATES: "3",
       OXAGEN_BEST_OF_N_PIPELINE: "1",
       OXAGEN_BEST_OF_N_VERIFY: "1",
@@ -46,7 +51,10 @@ describe("buildReplayEnv", () => {
   });
 
   it("ignores unrecognised keys rather than forwarding them as env vars", () => {
-    const env = buildReplayEnv({ someUnknownFutureKey: "value", bundleGitSha: "abc123" });
+    const env = buildReplayEnv({
+      someUnknownFutureKey: "value",
+      bundleGitSha: "abc123",
+    });
     expect(env).toEqual({});
   });
 
@@ -100,13 +108,23 @@ describe("buildReplayEnv", () => {
   });
 
   it("still fills in the conventional mapping for any setting the raw pass didn't cover", () => {
-    const env = buildReplayEnv({ OXAGEN_EFFORT: "xhigh", evaluator: "anthropic/claude-sonnet-5" });
-    expect(env).toEqual({ OXAGEN_EFFORT: "xhigh", OXAGEN_LLM_EVALUATOR: "anthropic/claude-sonnet-5" });
+    const env = buildReplayEnv({
+      OXAGEN_EFFORT: "xhigh",
+      evaluator: "anthropic/claude-sonnet-5",
+    });
+    expect(env).toEqual({
+      OXAGEN_EFFORT: "xhigh",
+      OXAGEN_LLM_EVALUATOR: "anthropic/claude-sonnet-5",
+    });
   });
 
   it("ignores a raw-keyed value of the wrong type (object/array) rather than throwing", () => {
-    expect(() => buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string })).not.toThrow();
-    expect(buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string })).toEqual({});
+    expect(() =>
+      buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string }),
+    ).not.toThrow();
+    expect(
+      buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string }),
+    ).toEqual({});
   });
 });
 
@@ -118,7 +136,7 @@ describe("runScriptFor", () => {
 });
 
 describe("formatEnvPrefix", () => {
-  it("renders KEY=\"value\" pairs space-joined", () => {
+  it('renders KEY="value" pairs space-joined', () => {
     expect(formatEnvPrefix({ FOO: "1", BAR: "a b" })).toBe('FOO="1" BAR="a b"');
   });
 

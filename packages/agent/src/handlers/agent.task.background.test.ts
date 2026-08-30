@@ -21,13 +21,17 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // SELECT chain
-mocks.selectLimit.mockImplementation(async (): Promise<unknown> => mocks.selectResult() as unknown);
+mocks.selectLimit.mockImplementation(
+  async (): Promise<unknown> => mocks.selectResult() as unknown,
+);
 mocks.selectWhere.mockReturnValue({ limit: mocks.selectLimit });
 mocks.selectFrom.mockReturnValue({ where: mocks.selectWhere });
 mocks.selectSpy.mockReturnValue({ from: mocks.selectFrom });
 
 // INSERT chain: returning() yields the task publicId
-mocks.insertReturning.mockImplementation(async () => [{ publicId: "task_pub_1" }]);
+mocks.insertReturning.mockImplementation(async () => [
+  { publicId: "task_pub_1" },
+]);
 mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
 mocks.insertSpy.mockReturnValue({ values: mocks.insertValues });
 
@@ -46,9 +50,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
     ...real,
-  db: () => fakeDb,
-  withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) => fn(fakeDb),
-
+    db: () => fakeDb,
+    withTenantDb: async (fn: (tx: typeof fakeDb) => Promise<unknown>) =>
+      fn(fakeDb),
   };
 });
 
@@ -74,7 +78,11 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 // Recursively walk a drizzle SQL/condition object collecting referenced column
 // names (e.g. "org_id", "workspace_id"). Used to assert tenant-scoping
 // predicates without depending on drizzle's opaque internal chunk shape.
-function collectColumns(node: unknown, out: Set<string>, seen = new Set<unknown>()): void {
+function collectColumns(
+  node: unknown,
+  out: Set<string>,
+  seen = new Set<unknown>(),
+): void {
   if (!node || typeof node !== "object" || seen.has(node)) return;
   seen.add(node);
   const n = node as Record<string, unknown>;
@@ -82,8 +90,10 @@ function collectColumns(node: unknown, out: Set<string>, seen = new Set<unknown>
   for (const key of Object.keys(n)) {
     if (key === "table") continue;
     const value = n[key];
-    if (Array.isArray(value)) value.forEach((v) => collectColumns(v, out, seen));
-    else if (value && typeof value === "object") collectColumns(value, out, seen);
+    if (Array.isArray(value))
+      value.forEach((v) => collectColumns(v, out, seen));
+    else if (value && typeof value === "object")
+      collectColumns(value, out, seen);
   }
 }
 
@@ -98,7 +108,9 @@ describe("agentTaskBackgroundStartHandler", () => {
     mocks.insertReturning.mockClear();
     mocks.inngestSend.mockClear();
     // Restore default
-    mocks.insertReturning.mockImplementation(async () => [{ publicId: "task_pub_1" }]);
+    mocks.insertReturning.mockImplementation(async () => [
+      { publicId: "task_pub_1" },
+    ]);
   });
 
   it("inserts a backgroundTask row and fires an Inngest event", async () => {
@@ -110,7 +122,9 @@ describe("agentTaskBackgroundStartHandler", () => {
     expect(mocks.insertSpy).toHaveBeenCalledTimes(1);
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
 
-    const inngestArg = (mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    const inngestArg = (
+      mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>]
+    )[0];
     expect(inngestArg.name).toBe("agent/task.background.start");
     const data = inngestArg.data as Record<string, unknown>;
     expect(data.orgId).toBe("org_1");
@@ -131,9 +145,15 @@ describe("agentTaskBackgroundStartHandler", () => {
   });
 
   it("inserts with orgId and workspaceId scoped from context", async () => {
-    await agentTaskBackgroundStartHandler({ kind: "my-task", payload: {} }, CTX);
+    await agentTaskBackgroundStartHandler(
+      { kind: "my-task", payload: {} },
+      CTX,
+    );
 
-    const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+    const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(valuesArg.orgId).toBe("org_1");
     expect(valuesArg.workspaceId).toBe("ws_1");
     expect(valuesArg.createdByUserId).toBe("u_1");
@@ -166,7 +186,10 @@ describe("agentTaskBackgroundReadHandler", () => {
   it("returns the task row mapped to the expected output shape", async () => {
     mocks.selectResult.mockReturnValueOnce([taskRow]);
 
-    const result = await agentTaskBackgroundReadHandler({ taskId: "task_pub_1" }, CTX);
+    const result = await agentTaskBackgroundReadHandler(
+      { taskId: "task_pub_1" },
+      CTX,
+    );
 
     expect(result.taskId).toBe("task_pub_1");
     expect(result.kind).toBe("export");
@@ -208,7 +231,9 @@ describe("agentTaskBackgroundCancelHandler", () => {
   });
 
   it("cancels a pending task and fires Inngest cancel event", async () => {
-    mocks.selectResult.mockReturnValueOnce([{ id: "internal_id_1", status: "pending" }]);
+    mocks.selectResult.mockReturnValueOnce([
+      { id: "internal_id_1", status: "pending" },
+    ]);
 
     const result = await agentTaskBackgroundCancelHandler(
       { taskId: "task_pub_1", reason: "user requested" },
@@ -220,7 +245,9 @@ describe("agentTaskBackgroundCancelHandler", () => {
     expect(mocks.updateSpy).toHaveBeenCalledTimes(1);
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
 
-    const inngestArg = (mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    const inngestArg = (
+      mocks.inngestSend.mock.calls[0] as unknown as [Record<string, unknown>]
+    )[0];
     expect(inngestArg.name).toBe("agent/task.background.cancel");
     const data = inngestArg.data as Record<string, unknown>;
     expect(data.orgId).toBe("org_1");
@@ -228,7 +255,9 @@ describe("agentTaskBackgroundCancelHandler", () => {
   });
 
   it("returns already_completed without DB update when task is completed", async () => {
-    mocks.selectResult.mockReturnValueOnce([{ id: "id_2", status: "completed" }]);
+    mocks.selectResult.mockReturnValueOnce([
+      { id: "id_2", status: "completed" },
+    ]);
 
     const result = await agentTaskBackgroundCancelHandler(
       { taskId: "task_done" },
@@ -241,7 +270,9 @@ describe("agentTaskBackgroundCancelHandler", () => {
   });
 
   it("returns already_cancelled without DB update when task is already cancelled", async () => {
-    mocks.selectResult.mockReturnValueOnce([{ id: "id_3", status: "cancelled" }]);
+    mocks.selectResult.mockReturnValueOnce([
+      { id: "id_3", status: "cancelled" },
+    ]);
 
     const result = await agentTaskBackgroundCancelHandler(
       { taskId: "task_cancelled" },

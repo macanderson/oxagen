@@ -15,17 +15,27 @@ describe("canonicalStringify", () => {
   });
 
   it("sorts nested object keys recursively", () => {
-    const a = canonicalStringify({ outer: { z: 1, a: 2 }, list: [{ y: 1, x: 2 }] });
-    const b = canonicalStringify({ list: [{ x: 2, y: 1 }], outer: { a: 2, z: 1 } });
+    const a = canonicalStringify({
+      outer: { z: 1, a: 2 },
+      list: [{ y: 1, x: 2 }],
+    });
+    const b = canonicalStringify({
+      list: [{ x: 2, y: 1 }],
+      outer: { a: 2, z: 1 },
+    });
     expect(a).toBe(b);
   });
 
   it("preserves array order (order is meaningful)", () => {
-    expect(canonicalStringify([1, 2, 3])).not.toBe(canonicalStringify([3, 2, 1]));
+    expect(canonicalStringify([1, 2, 3])).not.toBe(
+      canonicalStringify([3, 2, 1]),
+    );
   });
 
   it("drops undefined object values like JSON.stringify", () => {
-    expect(canonicalStringify({ a: 1, b: undefined })).toBe(canonicalStringify({ a: 1 }));
+    expect(canonicalStringify({ a: 1, b: undefined })).toBe(
+      canonicalStringify({ a: 1 }),
+    );
   });
 
   it("renders undefined/function array elements as null (positional)", () => {

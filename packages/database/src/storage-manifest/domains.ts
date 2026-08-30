@@ -2,8 +2,10 @@
 //
 // Postgres tables carry their domain natively: the pg schema name IS the domain
 // (agent, billing, iam, ...), so postgres.ts assigns it directly and never
-// consults this module. ClickHouse tables, Neo4j node labels, and blob asset
-// kinds have no schema namespace, so their domain is assigned here by:
+// consults this module. Blob entries are a fixed two-kind inventory that
+// blob.ts pins to the `content` domain directly, so it does not consult this
+// module either. ClickHouse tables and Neo4j node labels have no schema
+// namespace, so their domain is assigned here by:
 //   1. an explicit override map (authoritative — hand-maintained, documented), then
 //   2. a name-prefix heuristic against the known pg domain set (best-effort), then
 //   3. a per-store fallback domain ("telemetry" / "graph" / "content").
@@ -99,22 +101,8 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   GraphNode: "graph", // the universal anchor label — no single business domain
 };
 
-/**
- * Explicit domain overrides for blob asset kinds. The blob store holds binary
- * bytes; each asset kind's domain is the Postgres domain that owns its
- * reference row (content.generated_assets → content; avatars → the owning
- * entity's domain, collapsed to `content` here as the shared media domain).
- */
-const BLOB_DOMAIN_OVERRIDES: Record<string, string> = {
-  avatar: "content",
-  image: "content",
-  video: "content",
-  document: "content",
-  spreadsheet: "content",
-  presentation: "content",
-  pdf: "content",
-  archive: "content",
-};
+/** Shared empty override table for stores that declare no overrides (blob). */
+const EMPTY_OVERRIDES: Record<string, string> = {};
 
 /** Per-store fallback domain when no override or heuristic matches. */
 const STORE_FALLBACK_DOMAIN: Record<Exclude<StoreKind, "postgres">, string> = {
@@ -143,18 +131,20 @@ function heuristicDomain(name: string): string | undefined {
 /**
  * Assign a platform domain to a non-Postgres table/label/asset-kind. Override
  * map first (authoritative), then the name-prefix heuristic, then the store
- * fallback. Pure and total.
+ * fallback. Pure and total. Blob is accepted for completeness of the store
+ * union but has no override map — blob.ts pins its two kinds directly, so this
+ * path always lands on the `content` fallback.
  */
 export function assignDomain(
   store: Exclude<StoreKind, "postgres">,
   name: string,
 ): string {
-  const overrides =
+  const overrides: Record<string, string> =
     store === "clickhouse"
       ? CLICKHOUSE_DOMAIN_OVERRIDES
       : store === "neo4j"
         ? NEO4J_DOMAIN_OVERRIDES
-        : BLOB_DOMAIN_OVERRIDES;
+        : EMPTY_OVERRIDES;
   return (
     overrides[name] ?? heuristicDomain(name) ?? STORE_FALLBACK_DOMAIN[store]
   );

@@ -75,7 +75,10 @@ describe("agent.execution.list handler", () => {
     setup([row(3), row(2), row(1)]);
     const out = await agentExecutionListHandler({ limit: 2 }, CTX);
     expect(out.executions).toHaveLength(2);
-    expect(out.executions.map((e) => e.executionId)).toEqual(["aex_3", "aex_2"]);
+    expect(out.executions.map((e) => e.executionId)).toEqual([
+      "aex_3",
+      "aex_2",
+    ]);
     // Cursor is the createdAt of the LAST returned row (aex_2), not the dropped one.
     expect(out.nextCursor).toBe(row(2).createdAt.toISOString());
   });

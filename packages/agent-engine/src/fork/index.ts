@@ -26,7 +26,11 @@
 import type { ModelMessage } from "ai";
 import type { Diagnosis, Hypothesis } from "../evaluate/diagnosis";
 import { extractDiagnosis, DIAGNOSIS_MARKER } from "../evaluate/diagnosis";
-import { parseHypothesisMarkers, pairWithProbes, survivors } from "../oracle/hypotheses";
+import {
+  parseHypothesisMarkers,
+  pairWithProbes,
+  survivors,
+} from "../oracle/hypotheses";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -64,7 +68,12 @@ export function messageText(m: ModelMessage): string {
   if (Array.isArray(m.content)) {
     const parts: string[] = [];
     for (const part of m.content) {
-      if (part && typeof part === "object" && "text" in part && typeof part.text === "string") {
+      if (
+        part &&
+        typeof part === "object" &&
+        "text" in part &&
+        typeof part.text === "string"
+      ) {
         parts.push(part.text);
       }
     }
@@ -183,7 +192,7 @@ export function buildTailInstruction(h: Hypothesis): string {
 
   parts.push(
     "Re-run the failing repro to flip it. Run the nearest touched tests.",
-    "Do not pursue other hypotheses or refactors."
+    "Do not pursue other hypotheses or refactors.",
   );
 
   return parts.filter((p) => p).join(" ");
@@ -207,7 +216,10 @@ export interface ForkPlan {
   readonly instruction: string;
 }
 
-export function planForks(snapshot: TrunkSnapshot, maxTails: number): ForkPlan[] {
+export function planForks(
+  snapshot: TrunkSnapshot,
+  maxTails: number,
+): ForkPlan[] {
   if (snapshot.hypotheses.length === 0) {
     return [];
   }

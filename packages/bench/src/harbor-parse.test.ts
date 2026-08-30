@@ -24,17 +24,23 @@ import {
 
 describe("agentNameFromHarborConfig", () => {
   it("derives 'oxagen' from the module:ClassName import path", () => {
-    const config: HarborRunConfig = { agents: [{ name: "oxagen_swe_bench:OxagenAgent" }] };
+    const config: HarborRunConfig = {
+      agents: [{ name: "oxagen_swe_bench:OxagenAgent" }],
+    };
     expect(agentNameFromHarborConfig(config)).toBe("oxagen");
   });
 
   it("lowercases the class name and replaces underscores with hyphens", () => {
-    const config: HarborRunConfig = { agents: [{ name: "some_pkg:Multi_WordAgent" }] };
+    const config: HarborRunConfig = {
+      agents: [{ name: "some_pkg:Multi_WordAgent" }],
+    };
     expect(agentNameFromHarborConfig(config)).toBe("multi-word");
   });
 
   it("does not hyphenate camelCase word boundaries (only underscores are replaced)", () => {
-    const config: HarborRunConfig = { agents: [{ name: "some_pkg:MultiWordAgent" }] };
+    const config: HarborRunConfig = {
+      agents: [{ name: "some_pkg:MultiWordAgent" }],
+    };
     expect(agentNameFromHarborConfig(config)).toBe("multiword");
   });
 
@@ -59,7 +65,9 @@ describe("bareTaskId", () => {
   });
 
   it("falls back to splitting task_name on the last slash", () => {
-    const trial: HarborTaskResult = { task_name: "swe-bench/django__django-11099" };
+    const trial: HarborTaskResult = {
+      task_name: "swe-bench/django__django-11099",
+    };
     expect(bareTaskId(trial)).toBe("django__django-11099");
   });
 
@@ -82,21 +90,31 @@ describe("rewardOf", () => {
   it("defaults to 0 when absent or non-finite", () => {
     expect(rewardOf({})).toBe(0);
     expect(rewardOf({ verifier_result: {} })).toBe(0);
-    expect(rewardOf({ verifier_result: { rewards: { reward: Number.NaN } } })).toBe(0);
+    expect(
+      rewardOf({ verifier_result: { rewards: { reward: Number.NaN } } }),
+    ).toBe(0);
   });
 });
 
 describe("agentSplitTokens", () => {
   it("reads the n_input/output/cache split reported by competitor adapters", () => {
     const trial: HarborTaskResult = {
-      agent_result: { n_input_tokens: 1000, n_output_tokens: 300, n_cache_tokens: 200 },
+      agent_result: {
+        n_input_tokens: 1000,
+        n_output_tokens: 300,
+        n_cache_tokens: 200,
+      },
     };
     expect(agentSplitTokens(trial)).toEqual({ in: 1000, out: 300, cache: 200 });
   });
 
   it("coerces null/absent split fields (the oxagen shape) to 0", () => {
     const trial: HarborTaskResult = {
-      agent_result: { n_input_tokens: null, n_output_tokens: null, n_cache_tokens: null },
+      agent_result: {
+        n_input_tokens: null,
+        n_output_tokens: null,
+        n_cache_tokens: null,
+      },
     };
     expect(agentSplitTokens(trial)).toEqual({ in: 0, out: 0, cache: 0 });
     expect(agentSplitTokens({})).toEqual({ in: 0, out: 0, cache: 0 });
@@ -118,7 +136,12 @@ describe("agentTotalTokens", () => {
 
   it("falls back to the sum of the split fields when no metadata total is present (the competitor path)", () => {
     const trial: HarborTaskResult = {
-      agent_result: { n_input_tokens: 1000, n_output_tokens: 300, n_cache_tokens: 200, metadata: {} },
+      agent_result: {
+        n_input_tokens: 1000,
+        n_output_tokens: 300,
+        n_cache_tokens: 200,
+        metadata: {},
+      },
     };
     expect(agentTotalTokens(trial)).toBe(1500);
   });
@@ -224,7 +247,9 @@ describe("durationSeconds", () => {
 
   it("returns 0 when timestamps are missing or unparseable", () => {
     expect(durationSeconds({})).toBe(0);
-    expect(durationSeconds({ started_at: "not-a-date", finished_at: "also-not" })).toBe(0);
+    expect(
+      durationSeconds({ started_at: "not-a-date", finished_at: "also-not" }),
+    ).toBe(0);
   });
 
   it("returns 0 rather than a negative duration when finish precedes start", () => {
@@ -320,7 +345,10 @@ describe("parseTrajectory", () => {
     ];
     const parsed = parseTrajectory(lines.join("\n"));
     expect(parsed.aggregateToolCalls).toEqual({ read_file: 2, code_graph: 1 });
-    expect(parsed.candidates[0]?.toolCalls).toEqual({ read_file: 2, code_graph: 1 });
+    expect(parsed.candidates[0]?.toolCalls).toEqual({
+      read_file: 2,
+      code_graph: 1,
+    });
   });
 
   it("marks the winning candidate and carries steps/changedFiles/failed per candidate", () => {
@@ -337,7 +365,13 @@ describe("parseTrajectory", () => {
     expect(parsed.winnerCandidateId).toBe("candidate-2");
     expect(parsed.winnerFiles).toBe(2);
     expect(parsed.candidates).toHaveLength(2);
-    expect(parsed.candidates[0]).toMatchObject({ id: "candidate-1", isWinner: false, failed: true, steps: 3, filesChanged: 0 });
+    expect(parsed.candidates[0]).toMatchObject({
+      id: "candidate-1",
+      isWinner: false,
+      failed: true,
+      steps: 3,
+      filesChanged: 0,
+    });
     expect(parsed.candidates[1]).toMatchObject({
       id: "candidate-2",
       model: "model-b",
@@ -353,7 +387,9 @@ describe("parseTrajectory", () => {
       '{"type":"candidate-start","id":"candidate-1","model":"model-from-start"}',
       '{"type":"result","winnerId":"candidate-1","winnerFiles":[],"candidates":[{"id":"candidate-1","changedFiles":[],"steps":1,"failed":false}]}',
     ];
-    expect(parseTrajectory(lines.join("\n")).candidates[0]?.model).toBe("model-from-start");
+    expect(parseTrajectory(lines.join("\n")).candidates[0]?.model).toBe(
+      "model-from-start",
+    );
   });
 
   it("ignores malformed JSON lines and non-object lines without throwing", () => {
@@ -399,7 +435,9 @@ describe("parseTrajectory", () => {
   });
 
   it("defaults candidates to [] when the result event omits the candidates array entirely", () => {
-    const parsed = parseTrajectory('{"type":"result","winnerId":"candidate-1"}');
+    const parsed = parseTrajectory(
+      '{"type":"result","winnerId":"candidate-1"}',
+    );
     expect(parsed.candidates).toEqual([]);
     expect(parsed.winnerCandidateId).toBe("candidate-1");
   });

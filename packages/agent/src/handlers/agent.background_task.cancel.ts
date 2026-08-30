@@ -2,7 +2,10 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import { getInngestClient } from "../dispatch/inngest-client";
-import type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput } from "@oxagen/oxagen/contracts/agent.background_task.cancel";
+import type {
+  AgentTaskBackgroundCancelInput,
+  AgentTaskBackgroundCancelOutput,
+} from "@oxagen/oxagen/contracts/agent.background_task.cancel";
 
 export type { AgentTaskBackgroundCancelInput, AgentTaskBackgroundCancelOutput };
 
@@ -12,7 +15,10 @@ export async function agentTaskBackgroundCancelHandler(
 ): Promise<AgentTaskBackgroundCancelOutput> {
   const [existing] = await withTenantDb((tx) =>
     tx
-      .select({ status: schema.backgroundTasks.status, id: schema.backgroundTasks.id })
+      .select({
+        status: schema.backgroundTasks.status,
+        id: schema.backgroundTasks.id,
+      })
       .from(schema.backgroundTasks)
       .where(
         and(
@@ -24,13 +30,19 @@ export async function agentTaskBackgroundCancelHandler(
       .limit(1),
   );
   if (!existing) throw new Error(`Background task ${input.taskId} not found`);
-  if (existing.status === "completed") return { taskId: input.taskId, status: "already_completed" };
-  if (existing.status === "cancelled") return { taskId: input.taskId, status: "already_cancelled" };
+  if (existing.status === "completed")
+    return { taskId: input.taskId, status: "already_completed" };
+  if (existing.status === "cancelled")
+    return { taskId: input.taskId, status: "already_cancelled" };
 
   await withTenantDb((tx) =>
     tx
       .update(schema.backgroundTasks)
-      .set({ status: "cancelled", failureReason: input.reason ?? "cancelled by user", completedAt: new Date() })
+      .set({
+        status: "cancelled",
+        failureReason: input.reason ?? "cancelled by user",
+        completedAt: new Date(),
+      })
       .where(eq(schema.backgroundTasks.id, existing.id)),
   );
 

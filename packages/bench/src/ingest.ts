@@ -1,9 +1,14 @@
 // Typed ingestion for the `bench` ClickHouse database — parses a Harbor
-// results directory (as produced by bench/{swe-bench,terminal-bench}/run.sh)
-// and inserts one benchmark_run row, one benchmark_run_result row per task,
-// and one benchmark_candidate row per best-of-N candidate. See
-// packages/bench/migrations/0001_bench_schema.sql for the schema and
-// docs/cli/eval-results-schema.md for how this relates to eval_runs/eval_results.
+// results directory and inserts one benchmark_run row, one
+// benchmark_run_result row per task, and one benchmark_candidate row per
+// best-of-N candidate. See packages/bench/migrations/0001_bench_schema.sql
+// for the schema.
+//
+// The harness that PRODUCES those results directories is not in this repo.
+// It lives at https://github.com/macanderson/agent-arena (its swe-bench and
+// terminal-bench runners write the layout documented on
+// `ingestBenchResultsDir` below). This package only reads what that harness
+// left on disk, so it never has to be in the same repo as the runner.
 //
 // This package never imports @oxagen/telemetry's raw `clickhouse()` client
 // directly — it goes through chBenchInsert/chBenchQuery, the thin unscoped
@@ -122,6 +127,11 @@ function parseChUInt(value: string | number | undefined): number {
  * rows it writes in this pass — a fresh query per row would not see
  * not-yet-flushed rows from the same batch anyway (inserts are batched at
  * the end of `ingestBenchResultsDir`, not streamed per row).
+ *
+ * ClickHouse has no autoincrement and no unique constraint, so this is
+ * read-then-write: two ingests running at the same time both read the same
+ * max and both write it. Ingestion is expected to be serial (a backfill
+ * script or a CI job), which is the tradeoff the schema header records.
  */
 async function nextPublicId(
   table: "benchmark_run" | "benchmark_run_result",
@@ -194,10 +204,12 @@ export async function insertBenchmarkCandidates(
  * Parse a Harbor results directory and insert it into bench.benchmark_run /
  * bench.benchmark_run_result / bench.benchmark_candidate.
  *
- * Directory shape (Harbor's own layout, see bench/swe-bench/run.sh):
+ * Directory shape (Harbor's own layout):
  *   <dir>/config.json                 Harbor run config
  *   <dir>/result.json                 Harbor run rollup (job id, timestamps)
- *   <dir>/bench-config.json           optional oxagen replay snapshot (see run.sh)
+ *   <dir>/bench-config.json           optional oxagen replay snapshot, written
+ *                                     by the agent-arena runner before it
+ *                                     invokes `harbor run`
  *   <dir>/<task>__<hash>/result.json  per-task trial result (absent = the
  *                                     trial never finished — skipped, not fatal)
  *   <dir>/<task>__<hash>/agent/oxagen.txt        best-of-N JSONL trajectory
@@ -230,6 +242,10 @@ export async function ingestBenchResultsDir(
   assertNoSecretValues(config, "config");
   assertNoSecretValues(conditions, "conditions");
 
+  // A results dir with no run-level result.json has no start time to recover,
+  // so we stamp "now". That value is also part of the idempotency key below,
+  // and it differs on every pass — so such a dir is NOT protected against
+  // double ingestion: each run of this function appends another run row.
   const startedAtIso = jobResult?.started_at ?? new Date().toISOString();
   const finishedAtIso = jobResult?.finished_at ?? startedAtIso;
 
@@ -307,8 +323,9 @@ export async function ingestBenchResultsDir(
 
     // Split fields are populated by Harbor's built-in competitor adapters;
     // the oxagen adapter leaves them null and reports one total in metadata,
-    // so `totalTok` is the authoritative number for every agent. cost_usd is
-    // recorded by Harbor for oxagen too — read it, don't hardcode 0.
+    // so `totalTok` is the authoritative number for every agent (see
+    // `agentTotalTokens`). cost_usd is recorded by Harbor for oxagen too —
+    // read it, don't hardcode 0.
     const split = agentSplitTokens(trial);
     const totalTok = agentTotalTokens(trial);
     const costUsd = agentCostUsd(trial);

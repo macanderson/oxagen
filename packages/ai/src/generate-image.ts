@@ -5,10 +5,16 @@ import {
   providerFromModelId,
   type Surface,
 } from "@oxagen/telemetry";
-import { chargeImageCredits, imageProviderCostUsdMicros } from "@oxagen/billing";
+import {
+  chargeImageCredits,
+  imageProviderCostUsdMicros,
+} from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.image" } });
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "ai.image" },
+});
 
 // Image models bill PER IMAGE, not per token. The real per-image cost (by model
 // + size) lives in IMAGE_RATE_CARD in @oxagen/billing; this module reads it via

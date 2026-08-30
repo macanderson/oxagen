@@ -99,7 +99,11 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
   });
 
   it("exposes the three text tiers and two media tiers", () => {
-    expect(TEXT_TIERS.map((t) => t.id)).toEqual(["fast", "balanced", "precise"]);
+    expect(TEXT_TIERS.map((t) => t.id)).toEqual([
+      "fast",
+      "balanced",
+      "precise",
+    ]);
     expect(TEXT_TIERS[0]?.name).toBe("Oxagen Fast");
     expect(MEDIA_TIERS.map((t) => t.id)).toEqual(["basic", "advanced"]);
   });
