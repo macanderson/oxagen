@@ -49,7 +49,7 @@ import {
   type RoleGrant,
 } from "@oxagen/oxagen/iam";
 import type { CapabilityEffect } from "@oxagen/oxagen";
-import { digestOfCanonicalJson } from "@oxagen/agent-runner/run-spec-v2";
+import { digestJcs } from "@oxagen/run-evidence";
 import {
   readLiveAuthority,
   type LiveAuthorityState,
@@ -395,7 +395,7 @@ export const persistAuthorizationDecision: PersistAuthorizationDecisionFn = (
   const decidedAt = args.decidedAt ?? new Date();
   const scopeKind = args.workspaceId === null ? "org" : "workspace";
 
-  const decisionDigest = digestOfCanonicalJson({
+  const decisionDigest = digestJcs({
     version: 1,
     org_id: args.orgId,
     workspace_id: args.workspaceId,
